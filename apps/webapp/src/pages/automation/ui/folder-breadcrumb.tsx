@@ -2,6 +2,10 @@ import { Link } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import { Fragment } from 'react'
 import { buildOrgPath } from '#/modules/org-path'
+import {
+	projectPath,
+	workflowsPath,
+} from '#/pages/automation/lib/automation-paths'
 import type { WorkflowFolder } from '#/pages/automation/lib/folders'
 
 export function FolderBreadcrumb({
@@ -16,7 +20,7 @@ export function FolderBreadcrumb({
 			<ol className="flex flex-wrap items-center gap-1 text-muted-foreground text-sm">
 				<li>
 					<Link
-						to={buildOrgPath(organizationSlug, '/automatisation')}
+						to={buildOrgPath(organizationSlug, workflowsPath())}
 						className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						Workflows
@@ -32,10 +36,7 @@ export function FolderBreadcrumb({
 								</span>
 							) : (
 								<Link
-									to={buildOrgPath(
-										organizationSlug,
-										`/automatisation/projets/${folder.id}`,
-									)}
+									to={buildOrgPath(organizationSlug, projectPath(folder.id))}
 									className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 								>
 									{folder.name}

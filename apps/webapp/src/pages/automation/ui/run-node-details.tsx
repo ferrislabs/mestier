@@ -196,7 +196,7 @@ export function RunNodeDetails({
 					<NdvPanel
 						title="Avant l’exécution"
 						caption={
-							node.kind === 'trigger' || !step
+							node.kind === 'trigger' || node.order === null || !step
 								? 'Entrée'
 								: `Entrée · ${formatItemCount(toItems(step.input).length)}`
 						}
@@ -228,7 +228,7 @@ export function RunNodeDetails({
 						<div className="grid gap-4">
 							{output}
 							{replay.error ? (
-								<p role="alert" className="text-sm text-destructive">
+								<p role="alert" className="text-sm text-state-alert">
 									{replay.error}
 								</p>
 							) : null}

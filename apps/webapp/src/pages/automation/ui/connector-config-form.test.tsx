@@ -74,7 +74,6 @@ function baseProps(
 		errors: [],
 		onConfigChange: vi.fn(),
 		onCredentialChange: vi.fn(),
-		onActivateField: vi.fn(),
 		onRequestCreateCredential: vi.fn(),
 		...overrides,
 	}
@@ -111,7 +110,7 @@ describe('ConnectorConfigForm — rendering every kind', () => {
 		)
 		expect(screen.getByText('Headers')).toBeDefined()
 		expect(
-			screen.getByRole('button', { name: /ajouter une entrée/i }),
+			screen.getByRole('button', { name: 'Ajouter un champ' }),
 		).toBeDefined()
 		expect(screen.getByRole('combobox', { name: 'Méthode' })).toBeDefined()
 	})
@@ -279,43 +278,6 @@ describe('ConnectorConfigForm — the typed credential slot', () => {
 	})
 })
 
-describe('ConnectorConfigForm — expression assistant wiring', () => {
-	it('hands each expression-enabled field its own control ref', () => {
-		const onFieldRef = vi.fn()
-		render(
-			<ConnectorConfigForm
-				{...baseProps({
-					descriptor: descriptor({
-						fields: [field({ name: 'url', label: 'URL', expression: true })],
-					}),
-					onFieldRef,
-				})}
-			/>,
-		)
-
-		expect(onFieldRef).toHaveBeenCalledWith('url', screen.getByLabelText('URL'))
-	})
-
-	it('reports a dropped path together with the field it landed on', () => {
-		const onInsertExpression = vi.fn()
-		render(
-			<ConnectorConfigForm
-				{...baseProps({
-					descriptor: descriptor({
-						fields: [field({ name: 'url', label: 'URL', expression: true })],
-					}),
-					onInsertExpression,
-				})}
-			/>,
-		)
-
-		const dataTransfer = { getData: () => 'trigger.id' }
-		fireEvent.drop(screen.getByLabelText('URL'), { dataTransfer })
-
-		expect(onInsertExpression).toHaveBeenCalledWith('url', 'trigger.id')
-	})
-})
-
 describe('ConnectorConfigForm — the signing_credential_id field', () => {
 	it('renders as a picker offering only generated-origin credentials, never a free-text input', async () => {
 		const user = userEvent.setup()
@@ -388,5 +350,199 @@ describe('ConnectorConfigForm — the signing_credential_id field', () => {
 		)
 
 		expect(onRequestCreateCredential).toHaveBeenCalledWith('signing')
+	})
+})
+
+describe('ConnectorConfigForm — the copy of a known connector', () => {
+	const httpFields = [
+		field({
+			name: 'method',
+			label: 'Méthode',
+			kind: { Select: { options: [{ value: 'GET', label: 'GET' }] } },
+		}),
+		field({ name: 'url', label: 'URL', expression: true }),
+		field({ name: 'body', label: 'Corps', kind: 'Json', expression: true }),
+	]
+
+	it('relabels the field the descriptor names too tersely', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({ kind: 'http.request', fields: httpFields }),
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('Corps de la requête')).toBeDefined()
+		expect(screen.queryByText('Corps')).toBeNull()
+	})
+
+	it('leaves a connector the table does not know as the descriptor wrote it', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({ fields: httpFields }),
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('Corps')).toBeDefined()
+	})
+
+	it('shows a hint and a placeholder from the table', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						kind: 'flow.condition',
+						fields: [
+							field({
+								name: 'predicate',
+								label: 'Condition',
+								expression: true,
+							}),
+						],
+					}),
+				})}
+			/>,
+		)
+
+		expect(
+			screen.getByText(
+				'Le flux continue par « vrai » si la condition est remplie, par « faux » sinon.',
+			),
+		).toBeDefined()
+		expect(screen.getByLabelText('Condition').getAttribute('placeholder')).toBe(
+			'Glissez une variable depuis la colonne Entrée',
+		)
+	})
+})
+
+describe('ConnectorConfigForm — where the identification sits', () => {
+	const fields = [
+		field({
+			name: 'method',
+			label: 'Méthode',
+			kind: { Select: { options: [{ value: 'GET', label: 'GET' }] } },
+		}),
+		field({ name: 'url', label: 'URL' }),
+		field({ name: 'body', label: 'Corps', kind: 'Json' }),
+	]
+
+	function order(): string[] {
+		return ['Méthode', 'URL', 'Identification', 'Corps de la requête'].sort(
+			(a, b) => {
+				const first = screen.getAllByText(a)[0]
+				const second = screen.getAllByText(b)[0]
+				return first.compareDocumentPosition(second) &
+					Node.DOCUMENT_POSITION_FOLLOWING
+					? -1
+					: 1
+			},
+		)
+	}
+
+	it('comes after the URL of an HTTP request, before its body', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						kind: 'http.request',
+						auth: { Optional: ['bearer_token'] },
+						fields,
+					}),
+				})}
+			/>,
+		)
+
+		expect(order()).toEqual([
+			'Méthode',
+			'URL',
+			'Identification',
+			'Corps de la requête',
+		])
+	})
+
+	it('stays first for any other connector', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						kind: 'odoo.create_partner',
+						auth: { Exactly: 'odoo_api' },
+						fields: [field({ name: 'name', label: 'Nom' })],
+					}),
+				})}
+			/>,
+		)
+
+		const picker = screen.getByText('Identification')
+		const name = screen.getByText('Nom')
+		expect(
+			picker.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+	})
+})
+
+describe('ConnectorConfigForm — the identification slot', () => {
+	it('shows the hint under the picker', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({ auth: { Exactly: 'odoo_api' } }),
+					credentialHint: 'La spec déclare : bearerAuth.',
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('La spec déclare : bearerAuth.')).toBeDefined()
+	})
+
+	it('flags an expired identification, in the list and under the picker', async () => {
+		const user = userEvent.setup()
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({ auth: { Exactly: 'odoo_api' } }),
+					credentials: [credential('c1', 'odoo_api')],
+					credentialId: 'c1',
+					credentialStatusOf: () => 'expired',
+				})}
+			/>,
+		)
+
+		expect(
+			screen.getByText(
+				'Cette identification est expirée. Renouvelez-la depuis Identifications.',
+			),
+		).toBeDefined()
+
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
+		expect(screen.getByRole('option', { name: 'c1 (expirée)' })).toBeDefined()
+	})
+})
+
+describe('ConnectorConfigForm — the preview of an expression', () => {
+	it('asks for the preview of each field, and shows it under an expression', () => {
+		const renderPreview = vi.fn((named: Schemas.FieldResponse) => (
+			<p>Aperçu de {named.name}</p>
+		))
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({ name: 'url', label: 'URL', expression: true }),
+							field({ name: 'name', label: 'Nom', expression: true }),
+						],
+					}),
+					config: { url: '{{ trigger.id }}', name: 'Atelier' },
+					renderPreview,
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('Aperçu de url')).toBeDefined()
+		expect(screen.queryByText('Aperçu de name')).toBeNull()
 	})
 })

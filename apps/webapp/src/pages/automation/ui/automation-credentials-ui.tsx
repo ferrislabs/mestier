@@ -2,9 +2,9 @@ import { Loader2, Plus } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
-import type { AuthScheme } from '#/hooks/use-automation'
 import type { ExternalService } from '#/pages/automation/feature/mocks/external-services'
 import type { CredentialFieldErrors } from '#/pages/automation/lib/credential-form'
+import type { LocalizedScheme } from '#/pages/automation/lib/credential-meta'
 import {
 	CredentialDialog,
 	type CredentialFormBinding,
@@ -18,10 +18,11 @@ export type { CredentialRow } from '#/pages/automation/ui/credentials-table'
 
 export interface AutomationCredentialsUIProps {
 	credentials: CredentialRow[]
-	authSchemes: AuthScheme[]
+	authSchemes: LocalizedScheme[]
 	services: readonly ExternalService[]
 	canManage: boolean
 	isLoading: boolean
+	schemesLoading: boolean
 	error: string | null
 
 	dialogOpen: boolean
@@ -41,6 +42,7 @@ export interface AutomationCredentialsUIProps {
 
 	onRotate: (row: CredentialRow) => void
 	rotatingId: string | null
+	isDeleting: boolean
 	onDelete: (row: CredentialRow) => void
 	onConnect: (row: CredentialRow) => void
 	onDisconnect: (row: CredentialRow) => void
@@ -52,6 +54,7 @@ export function AutomationCredentialsUI({
 	services,
 	canManage,
 	isLoading,
+	schemesLoading,
 	error,
 	dialogOpen,
 	dialogMode,
@@ -65,6 +68,7 @@ export function AutomationCredentialsUI({
 	onOpenChange,
 	onRotate,
 	rotatingId,
+	isDeleting,
 	onDelete,
 	onConnect,
 	onDisconnect,
@@ -111,6 +115,8 @@ export function AutomationCredentialsUI({
 				saveError={saveError}
 				revealedSecret={revealedSecret}
 				rotatingId={rotatingId}
+				isDeleting={isDeleting}
+				schemesLoading={schemesLoading}
 				onOpenChange={onOpenChange}
 				onRotate={onRotate}
 				onDelete={onDelete}

@@ -29,6 +29,19 @@ export function filterWorkflows<T extends ListedWorkflow>(
 	})
 }
 
+const COPY_NAME_SUFFIX = / \(copie\)$/
+
+export function copyName(name: string): string {
+	return `${name.replace(COPY_NAME_SUFFIX, '')} (copie)`
+}
+
+export function workflowFileName(name: string): string {
+	const slug = normalizeText(name)
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '')
+	return `${slug || 'workflow'}.json`
+}
+
 export function sortWorkflows<T extends ListedWorkflow>(
 	workflows: readonly T[],
 	sort: WorkflowSortKey,

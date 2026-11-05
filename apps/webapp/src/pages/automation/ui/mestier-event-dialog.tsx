@@ -101,7 +101,7 @@ export function MestierEventDialog({
 							) : (
 								groups.map((group) => (
 									<section
-										key={group.prefix}
+										key={group.id}
 										aria-label={group.label}
 										className="mb-1"
 									>

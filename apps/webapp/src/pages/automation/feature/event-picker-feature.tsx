@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Schemas } from '#/api/api.client'
-import { searchEvents } from '#/pages/automation/lib/event-search'
+import { firstEvent, searchEvents } from '#/pages/automation/lib/event-search'
 import { MestierEventDialog } from '#/pages/automation/ui/mestier-event-dialog'
 
 export function EventPickerFeature({
@@ -18,7 +18,7 @@ export function EventPickerFeature({
 }) {
 	const [query, setQuery] = useState('')
 	const [selectedName, setSelectedName] = useState(
-		initialEvent ?? events[0]?.name ?? '',
+		initialEvent ?? firstEvent(events)?.name ?? '',
 	)
 	const selected = events.find((event) => event.name === selectedName) ?? null
 

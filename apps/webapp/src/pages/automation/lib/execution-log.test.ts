@@ -98,7 +98,11 @@ describe('execution log', () => {
 	})
 
 	it('sorts by workflow name and falls back to the most recent', () => {
-		expect(sortRows(ROWS, 'workflow', 'asc').map((r) => r.runId)[0]).toBe('a1')
+		expect(sortRows(ROWS, 'workflow', 'asc').map((r) => r.runId)).toEqual([
+			'c3',
+			'a1',
+			'b2',
+		])
 		expect(sortRows(ROWS, 'started', 'desc').map((r) => r.runId)[2]).toBe('b2')
 	})
 
@@ -118,6 +122,80 @@ describe('execution log', () => {
 		expect(hasActiveFilters(DEFAULT_FILTERS)).toBe(false)
 		expect(hasActiveFilters({ ...DEFAULT_FILTERS, workflow: 'x' })).toBe(true)
 		expect(ALL).toBe('all')
+	})
+
+	it('sorts runs that started at the same instant by their identifier, latest first', () => {
+		const sameInstant = new Date(2026, 10, 5, 8, 0, 0).toISOString()
+		const rows = ['018f-a', '018f-c', '018f-b'].map((id) =>
+			buildRow(
+				run({ id, started_at: sameInstant, created_at: sameInstant }),
+				'Relance des devis',
+				NOW,
+			),
+		)
+		expect(sortRows(rows, 'started', 'desc').map((r) => r.runId)).toEqual([
+			'018f-c',
+			'018f-b',
+			'018f-a',
+		])
+		expect(sortRows(rows, 'started', 'asc').map((r) => r.runId)).toEqual([
+			'018f-c',
+			'018f-b',
+			'018f-a',
+		])
+		expect(sortRows(rows, 'workflow', 'asc').map((r) => r.runId)).toEqual([
+			'018f-c',
+			'018f-b',
+			'018f-a',
+		])
+	})
+
+	it('counts the duration of a running run from its start up to now', () => {
+		const built = buildRow(
+			run({
+				status: 'running',
+				started_at: new Date(NOW - 2200).toISOString(),
+				finished_at: null,
+			}),
+			'Relance des devis',
+			NOW,
+		)
+		expect(built.status).toBe('running')
+		expect(built.durationMs).toBe(2200)
+		const later = buildRow(
+			run({
+				status: 'running',
+				started_at: new Date(NOW - 2200).toISOString(),
+				finished_at: null,
+			}),
+			'Relance des devis',
+			NOW + 200,
+		)
+		expect(later.durationMs).toBe(2400)
+	})
+
+	it('has no duration for a run that has not started', () => {
+		const built = buildRow(
+			run({ status: 'pending', started_at: null, finished_at: null }),
+			'Relance des devis',
+			NOW,
+		)
+		expect(built.durationMs).toBeNull()
+	})
+
+	it('leaves running runs out of the median duration', () => {
+		const running = buildRow(
+			run({
+				status: 'running',
+				started_at: new Date(NOW - 60_000).toISOString(),
+				finished_at: null,
+			}),
+			'Relance des devis',
+			NOW,
+		)
+		expect(summarize([...ROWS.slice(0, 2), running]).medianDurationMs).toBe(
+			3000,
+		)
 	})
 
 	it('carries node counts and the event label into the row', () => {

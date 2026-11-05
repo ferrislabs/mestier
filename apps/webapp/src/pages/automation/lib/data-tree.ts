@@ -30,6 +30,9 @@ export function resolveTriggerExample(
 	events: readonly Schemas.EventDescriptorResponse[],
 	eventNames: string[],
 ): unknown {
-	const selected = new Set(eventNames)
-	return events.find((event) => selected.has(event.name))?.payload_example
+	for (const name of eventNames) {
+		const event = events.find((candidate) => candidate.name === name)
+		if (event) return event.payload_example
+	}
+	return undefined
 }

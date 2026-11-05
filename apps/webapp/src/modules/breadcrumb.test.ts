@@ -125,6 +125,64 @@ describe('buildBreadcrumbItems', () => {
 	})
 })
 
+describe('buildBreadcrumbItems for the automatisation module', () => {
+	it('shows Workflows once on the workflow list', () => {
+		expect(labelsOf('/o/baptiste/automatisation/workflows')).toEqual([
+			'Baptiste',
+			'Workflows',
+		])
+	})
+
+	it('shows Workflows once in the editor', () => {
+		expect(labelsOf('/o/baptiste/automatisation/workflows/wf-1')).toEqual([
+			'Baptiste',
+			'Workflows',
+		])
+		expect(labelsOf('/o/baptiste/automatisation/workflows/nouveau')).toEqual([
+			'Baptiste',
+			'Workflows',
+		])
+	})
+
+	it('shows Workflows once on a project page', () => {
+		expect(labelsOf('/o/baptiste/automatisation/projets/ventes')).toEqual([
+			'Baptiste',
+			'Workflows',
+		])
+	})
+
+	it('names the other sections after the module', () => {
+		expect(labelsOf('/o/baptiste/automatisation/executions')).toEqual([
+			'Baptiste',
+			'Workflows',
+			'Exécutions',
+		])
+		expect(labelsOf('/o/baptiste/automatisation/collections/col-1')).toEqual([
+			'Baptiste',
+			'Workflows',
+			'Collections',
+		])
+		expect(labelsOf('/o/baptiste/automatisation/identifications')).toEqual([
+			'Baptiste',
+			'Workflows',
+			'Identifications',
+		])
+	})
+
+	it('links the module crumb to its base path', () => {
+		const items = buildBreadcrumbItems({
+			pathname: '/o/baptiste/automatisation/workflows',
+			organizationName: 'Baptiste',
+			organizationSlug: 'baptiste',
+		})
+
+		expect(items.map((item) => item.to)).toEqual([
+			'/o/baptiste',
+			'/o/baptiste/automatisation',
+		])
+	})
+})
+
 describe('matchingTargets', () => {
 	it('sorts shortest to longest, whatever the input order', () => {
 		const targets: NavTarget[] = [

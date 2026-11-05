@@ -6,9 +6,11 @@ import {
 import type { RunNodeView } from '#/pages/automation/lib/run-view'
 
 export function runNodeAppearance(
-	node: Pick<RunNodeView, 'kind' | 'trigger' | 'family'> | undefined,
+	node:
+		| Pick<RunNodeView, 'kind' | 'trigger' | 'family' | 'connector'>
+		| undefined,
 ): ConnectorAppearance {
 	if (node?.kind === 'trigger')
 		return triggerAppearance(node.trigger?.kind === 'Manual')
-	return connectorAppearance(node?.family)
+	return connectorAppearance(node?.family, node?.connector?.kind)
 }

@@ -22,7 +22,7 @@ import {
 	AlertDialogTrigger,
 } from '#/components/ui/alert-dialog'
 import { Badge } from '#/components/ui/badge'
-import { Button } from '#/components/ui/button'
+import { Button, buttonVariants } from '#/components/ui/button'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -32,6 +32,10 @@ import {
 } from '#/components/ui/dropdown-menu'
 import { Switch } from '#/components/ui/switch'
 import { buildOrgPath } from '#/modules/org-path'
+import {
+	workflowExecutionsSearch,
+	workflowPath,
+} from '#/pages/automation/lib/automation-paths'
 import { formatAgo, minutesSince } from '#/pages/automation/lib/format'
 import { RunStatusLabel } from '#/pages/automation/ui/run-status-label'
 
@@ -74,7 +78,7 @@ export function WorkflowListRow({
 		<li className="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-3 transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1fr)_200px_200px_auto]">
 			<div className="min-w-0">
 				<Link
-					to={buildOrgPath(organizationSlug, `/automatisation/${workflow.id}`)}
+					to={buildOrgPath(organizationSlug, workflowPath(workflow.id))}
 					className="block truncate font-medium text-base outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
 				>
 					{workflow.name}
@@ -143,8 +147,9 @@ export function WorkflowListRow({
 									<Link
 										to={buildOrgPath(
 											organizationSlug,
-											`/automatisation/${workflow.id}/executions`,
+											workflowPath(workflow.id),
 										)}
+										search={workflowExecutionsSearch()}
 									>
 										<History />
 										Historique d’exécution
@@ -175,7 +180,9 @@ export function WorkflowListRow({
 						</DropdownMenu>
 						<AlertDialogContent>
 							<AlertDialogHeader>
-								<AlertDialogTitle>Supprimer {workflow.name} ?</AlertDialogTitle>
+								<AlertDialogTitle>
+									Supprimer « {workflow.name} » ?
+								</AlertDialogTitle>
 								<AlertDialogDescription>
 									Ce workflow sera supprimé définitivement. Cette action est
 									irréversible.
@@ -183,7 +190,10 @@ export function WorkflowListRow({
 							</AlertDialogHeader>
 							<AlertDialogFooter>
 								<AlertDialogCancel>Annuler</AlertDialogCancel>
-								<AlertDialogAction onClick={() => onDelete(workflow)}>
+								<AlertDialogAction
+									className={buttonVariants({ variant: 'destructive' })}
+									onClick={() => onDelete(workflow)}
+								>
 									Supprimer
 								</AlertDialogAction>
 							</AlertDialogFooter>

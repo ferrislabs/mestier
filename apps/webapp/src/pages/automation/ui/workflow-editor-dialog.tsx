@@ -16,7 +16,7 @@ import type { WorkflowFormValues } from '#/pages/automation/types'
 
 export interface WorkflowEditorDialogProps {
 	open: boolean
-	editingName: string | null
+	editingName: string
 	values: WorkflowFormValues
 	isPending: boolean
 	error: string | null
@@ -41,13 +41,10 @@ export function WorkflowEditorDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden">
 				<DialogHeader className="border-b pb-4">
-					<DialogTitle>
-						{editingName ? `Modifier ${editingName}` : 'Nouveau workflow'}
-					</DialogTitle>
+					<DialogTitle>Modifier {editingName}</DialogTitle>
 					<DialogDescription>
 						Un workflow automatise une suite d’actions déclenchées par un
-						événement de l’organisation. Le déclencheur se choisit une fois le
-						workflow créé.
+						événement de l’organisation.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -81,7 +78,7 @@ export function WorkflowEditorDialog({
 					<RequirePermission permission="MANAGE_AUTOMATION">
 						<Button disabled={!canSubmit} onClick={onSubmit}>
 							{isPending ? <Loader2 className="animate-spin" /> : null}
-							{editingName ? 'Enregistrer' : 'Créer'}
+							Enregistrer
 						</Button>
 					</RequirePermission>
 				</DialogFooter>

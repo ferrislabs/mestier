@@ -9,6 +9,7 @@ import {
 	subscribePlacements,
 	type WorkflowPlacement,
 } from '#/pages/automation/feature/mocks/workflow-placements'
+import { NEW_WORKFLOW_ID } from '#/pages/automation/lib/automation-paths'
 import type { WorkflowFolder } from '#/pages/automation/lib/folders'
 
 export function useWorkflowFolders(): {
@@ -24,6 +25,14 @@ export function useWorkflowPlacements(): {
 } {
 	const data = useSyncExternalStore(subscribePlacements, readPlacements)
 	return { data, isLoading: false }
+}
+
+const NO_TAGS: readonly string[] = []
+
+export function useWorkflowTags(workflowId: string | null): readonly string[] {
+	const placements = useWorkflowPlacements()
+	if (workflowId === null || workflowId === NEW_WORKFLOW_ID) return NO_TAGS
+	return placements.data[workflowId]?.tags ?? NO_TAGS
 }
 
 export function useArchivedWorkflowIds(): ReadonlySet<string> {

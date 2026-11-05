@@ -40,7 +40,7 @@ function PageHeader({
 	return (
 		<header
 			className={cn(
-				'flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between',
+				'flex flex-wrap items-end justify-between gap-4',
 				className,
 			)}
 			{...props}
@@ -52,17 +52,17 @@ function PageHeader({
 						{eyebrow}
 					</p>
 				) : null}
-				<h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+				<h1 className="text-2xl font-semibold tracking-tight text-foreground">
 					{title}
 				</h1>
 				{description ? (
-					<p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-						{description}
-					</p>
+					<p className="mt-1 text-sm text-muted-foreground">{description}</p>
 				) : null}
 				{children}
 			</div>
-			{actions ? <div className="shrink-0">{actions}</div> : null}
+			{actions ? (
+				<div className="flex items-center gap-2">{actions}</div>
+			) : null}
 		</header>
 	)
 }

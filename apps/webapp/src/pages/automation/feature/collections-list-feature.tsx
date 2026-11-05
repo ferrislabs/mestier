@@ -7,6 +7,7 @@ import {
 	useCollections,
 	useRemoveCollection,
 } from '#/pages/automation/feature/use-collections'
+import { collectionPath } from '#/pages/automation/lib/automation-paths'
 import { CollectionsList } from '#/pages/automation/ui/collections-list'
 
 export function CollectionsListFeature() {
@@ -34,7 +35,7 @@ export function CollectionsListFeature() {
 						void navigate({
 							to: buildOrgPath(
 								activeOrganization.slug,
-								`/automatisation/collections/${collection.id}`,
+								collectionPath(collection.id),
 							),
 						})
 					}}

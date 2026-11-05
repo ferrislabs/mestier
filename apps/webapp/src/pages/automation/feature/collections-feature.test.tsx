@@ -105,5 +105,24 @@ describe('CollectionDetailFeature', () => {
 		)
 
 		expect(screen.getByText('Collection introuvable')).toBeDefined()
+		expect(
+			screen
+				.getByRole('link', { name: 'Voir les collections' })
+				.getAttribute('href'),
+		).toBe('/o/atelier-bois/automatisation/collections')
+	})
+
+	it('links the breadcrumb back to the collections', async () => {
+		const collection = readCollections()[0]
+		if (!collection) throw new Error('the mock store ships presets')
+		await renderWithRouter(
+			<Providers>
+				<CollectionDetailFeature collectionId={collection.id} />
+			</Providers>,
+		)
+
+		expect(
+			screen.getByRole('link', { name: 'Collections' }).getAttribute('href'),
+		).toBe('/o/atelier-bois/automatisation/collections')
 	})
 })

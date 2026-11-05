@@ -38,6 +38,80 @@ const graph: Schemas.GraphDto = {
 }
 
 describe('editor nodes', () => {
+	it('names and describes a known connector after the copy table', () => {
+		const known = new Map<string, Schemas.ConnectorDescriptorResponse>([
+			[
+				'flow.condition',
+				{
+					kind: 'flow.condition',
+					label: 'Condition',
+					family: 'flow',
+					version: 1,
+					auth: 'None',
+					fields: [],
+					branches: ['Then', 'Else'],
+					output_example: null,
+				},
+			],
+			[
+				'mestier.support.add_badge',
+				{
+					kind: 'mestier.support.add_badge',
+					label: 'Ajouter un badge',
+					family: 'mestier',
+					version: 1,
+					auth: 'None',
+					fields: [],
+					branches: [],
+					output_example: null,
+				},
+			],
+		])
+		const lookupKnown: EditorLookup = { descriptors: known, events: [] }
+
+		const condition = connectorNode(
+			{ id: 'c1', kind: 'flow.condition', version: 1, config: {} },
+			{ x: 0, y: 0 },
+			lookupKnown,
+		)
+		const badge = connectorNode(
+			{ id: 'c2', kind: 'mestier.support.add_badge', version: 1, config: {} },
+			{ x: 0, y: 0 },
+			lookupKnown,
+		)
+
+		expect(condition.data).toMatchObject({
+			label: 'Si',
+			subtitle: 'Condition',
+			typeLabel: 'Si',
+			family: 'flow',
+		})
+		expect(badge.data).toMatchObject({
+			label: 'Ajouter un badge au ticket',
+			subtitle: 'Action Mestier',
+		})
+	})
+
+	it('describes an unknown connector with the descriptor label and a generic subtitle', () => {
+		const node = connectorNode(graph.connectors[0], { x: 0, y: 0 }, lookup)
+		expect(node.data).toMatchObject({
+			label: 'Condition',
+			subtitle: 'Connecteur',
+			typeLabel: 'Condition',
+		})
+	})
+
+	it('types a trigger after its kind rather than a generic word', () => {
+		const manual = triggerNode(graph.triggers[0], { x: 0, y: 0 }, lookup)
+		const events = triggerNode(
+			{ id: 't2', kind: { Events: ['quote.sent'] } },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		expect(manual.data.typeLabel).toBe('Clic')
+		expect(events.data.typeLabel).toBe('Event Mestier')
+	})
+
 	it('names a connector after its descriptor and a trigger after its kind', () => {
 		const nodes = toEditorNodes(
 			graph,

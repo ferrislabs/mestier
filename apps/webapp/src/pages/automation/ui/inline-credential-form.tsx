@@ -1,9 +1,9 @@
 import { Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
-import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import {
 	Select,
 	SelectContent,
@@ -11,7 +11,15 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { isSelectKind } from '#/pages/automation/lib/connector-config'
+import {
+	buildCredentialFieldErrors,
+	credentialFormDefaults,
+	credentialPayload,
+	translateCredentialMessage,
+	visibleCredentialFields,
+} from '#/pages/automation/lib/credential-form'
+import { localizeScheme } from '#/pages/automation/lib/credential-meta'
+import { CredentialFieldRows } from '#/pages/automation/ui/credential-dialog'
 
 type Origin = 'supplied' | 'generated'
 
@@ -32,63 +40,96 @@ export function InlineCredentialForm({
 	onSubmit,
 	onCancel,
 }: InlineCredentialFormProps) {
+	const baseId = useId()
+	const schemes = authSchemes.map(localizeScheme)
 	const [name, setName] = useState('')
-	const [kind, setKind] = useState(authSchemes[0]?.kind ?? '')
+	const [kind, setKind] = useState(schemes[0]?.kind ?? '')
 	const [origin, setOrigin] = useState<Origin>(lockOrigin ?? 'supplied')
-	const [data, setData] = useState<Record<string, string>>({})
+	const [data, setData] = useState<Record<string, string>>(() =>
+		credentialFormDefaults(schemes[0]),
+	)
+	const [showErrors, setShowErrors] = useState(false)
 
-	const scheme = authSchemes.find((candidate) => candidate.kind === kind)
-	const showData = origin === 'supplied' && scheme !== undefined
-	const missingRequiredField =
-		showData &&
-		scheme.fields.some(
-			(field) => field.required && (data[field.name] ?? '').trim() === '',
+	const scheme = schemes.find((candidate) => candidate.kind === kind)
+	const fieldErrors = buildCredentialFieldErrors(
+		{ kind, name, description: '', origin, data },
+		scheme,
+		'create',
+	)
+	const errorOf = (key: string) => (showErrors ? fieldErrors[key] : undefined)
+	const nameError = errorOf('name')
+
+	function pickKind(next: string) {
+		setKind(next)
+		setData(
+			credentialFormDefaults(
+				schemes.find((candidate) => candidate.kind === next),
+			),
 		)
-	const canSubmit =
-		!isPending && name.trim() !== '' && kind !== '' && !missingRequiredField
+	}
 
 	function handleSubmit() {
-		if (!canSubmit) return
+		if (isPending) return
+		if (kind === '' || Object.keys(fieldErrors).length > 0) {
+			setShowErrors(true)
+			return
+		}
 		onSubmit({
 			kind,
 			name: name.trim(),
 			origin,
-			data: origin === 'supplied' ? data : undefined,
+			data:
+				origin === 'supplied'
+					? scheme
+						? credentialPayload(scheme, data)
+						: data
+					: undefined,
 		})
 	}
 
 	return (
-		<div className="flex flex-col gap-4">
-			<Field label="Nom" htmlFor="inline-credential-name">
+		<div className="grid gap-4">
+			<div className="grid gap-2">
+				<Label htmlFor={`${baseId}-name`}>Nom</Label>
 				<Input
-					id="inline-credential-name"
+					id={`${baseId}-name`}
 					value={name}
 					onChange={(event) => setName(event.target.value)}
+					placeholder={scheme ? `Ex. ${scheme.label} – fournisseur` : undefined}
+					aria-invalid={nameError ? true : undefined}
+					aria-describedby={nameError ? `${baseId}-name-error` : undefined}
 				/>
-			</Field>
+				{nameError ? (
+					<p id={`${baseId}-name-error`} className="text-state-alert text-xs">
+						{nameError}
+					</p>
+				) : null}
+			</div>
 
-			<Field label="Type" htmlFor="inline-credential-kind">
-				<Select value={kind} onValueChange={setKind}>
-					<SelectTrigger id="inline-credential-kind" className="w-full">
+			<div className="grid gap-2">
+				<Label htmlFor={`${baseId}-kind`}>Type</Label>
+				<Select value={kind} onValueChange={pickKind}>
+					<SelectTrigger id={`${baseId}-kind`} className="w-full">
 						<SelectValue placeholder="Choisir un type" />
 					</SelectTrigger>
 					<SelectContent>
-						{authSchemes.map((candidate) => (
+						{schemes.map((candidate) => (
 							<SelectItem key={candidate.kind} value={candidate.kind}>
 								{candidate.label}
 							</SelectItem>
 						))}
 					</SelectContent>
 				</Select>
-			</Field>
+			</div>
 
 			{lockOrigin ? null : (
-				<Field label="Origine" htmlFor="inline-credential-origin">
+				<div className="grid gap-2">
+					<Label htmlFor={`${baseId}-origin`}>Origine</Label>
 					<Select
 						value={origin}
 						onValueChange={(next) => setOrigin(next as Origin)}
 					>
-						<SelectTrigger id="inline-credential-origin" className="w-full">
+						<SelectTrigger id={`${baseId}-origin`} className="w-full">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -100,80 +141,35 @@ export function InlineCredentialForm({
 							</SelectItem>
 						</SelectContent>
 					</Select>
-				</Field>
+				</div>
 			)}
 
-			{showData
-				? scheme.fields.map((field) => (
-						<CredentialDataField
-							key={field.name}
-							field={field}
-							value={data[field.name] ?? ''}
-							onChange={(value) => setData({ ...data, [field.name]: value })}
-						/>
-					))
-				: null}
+			{origin === 'supplied' && scheme ? (
+				<CredentialFieldRows
+					fields={visibleCredentialFields(scheme.fields, data)}
+					data={data}
+					baseId={baseId}
+					stored={false}
+					errorOf={errorOf}
+					onChange={setData}
+				/>
+			) : null}
 
-			{error ? <p className="text-sm text-destructive">{error}</p> : null}
+			{error ? (
+				<p className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+					{translateCredentialMessage(error, scheme?.fields)}
+				</p>
+			) : null}
 
 			<div className="flex justify-end gap-2">
-				<Button type="button" variant="ghost" onClick={onCancel}>
+				<Button type="button" variant="outline" onClick={onCancel}>
 					Annuler
 				</Button>
-				<Button type="button" disabled={!canSubmit} onClick={handleSubmit}>
+				<Button type="button" disabled={isPending} onClick={handleSubmit}>
 					{isPending ? <Loader2 className="animate-spin" /> : null}
 					Créer
 				</Button>
 			</div>
 		</div>
-	)
-}
-
-function CredentialDataField({
-	field,
-	value,
-	onChange,
-}: {
-	field: Schemas.FieldResponse
-	value: string
-	onChange: (value: string) => void
-}) {
-	const id = `inline-credential-field-${field.name}`
-
-	if (isSelectKind(field.kind)) {
-		return (
-			<Field label={field.label} htmlFor={id}>
-				<Select value={value} onValueChange={onChange}>
-					<SelectTrigger id={id} className="w-full">
-						<SelectValue placeholder="Choisir…" />
-					</SelectTrigger>
-					<SelectContent>
-						{field.kind.Select.options.map((option) => (
-							<SelectItem key={option.value} value={option.value}>
-								{option.label}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-			</Field>
-		)
-	}
-
-	return (
-		<Field label={field.label} htmlFor={id}>
-			<Input
-				id={id}
-				type={
-					field.secret
-						? 'password'
-						: field.kind === 'Number'
-							? 'number'
-							: 'text'
-				}
-				value={value}
-				autoComplete="off"
-				onChange={(event) => onChange(event.target.value)}
-			/>
-		</Field>
 	)
 }

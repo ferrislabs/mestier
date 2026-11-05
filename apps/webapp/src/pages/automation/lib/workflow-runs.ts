@@ -67,15 +67,25 @@ export function runDurationMs(run: {
 	return Number.isFinite(ms) && ms >= 0 ? ms : null
 }
 
-export function formatRunDuration(ms: number | null): string {
-	if (ms === null) return '—'
-	if (ms < 1000) return `${ms}ms`
-	if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
+export function elapsedMsSince(
+	startedAt: string | null | undefined,
+	now: number,
+): number | null {
+	if (!startedAt) return null
+	const ms = now - new Date(startedAt).getTime()
+	return Number.isFinite(ms) ? Math.max(0, ms) : null
+}
 
-	const totalSeconds = Math.round(ms / 1000)
-	const minutes = Math.floor(totalSeconds / 60)
-	const seconds = totalSeconds % 60
-	return seconds === 0 ? `${minutes}min` : `${minutes}min ${seconds}s`
+export function runElapsedMs(
+	run: {
+		status: string
+		started_at?: string | null
+		finished_at?: string | null
+	},
+	now: number,
+): number | null {
+	if (run.finished_at) return runDurationMs(run)
+	return run.status === 'running' ? elapsedMsSince(run.started_at, now) : null
 }
 
 export function runTriggerLabel(
@@ -99,25 +109,12 @@ export function triggerEventLabel(
 }
 
 const STATUS_PRIORITY: Record<string, number> = {
+	dead: 5,
 	failed: 4,
-	running: 3,
+	in_flight: 3,
 	pending: 2,
-	cancelled: 1,
-	succeeded: 0,
-}
-
-const RUN_STATUS_BORDER: Record<string, string> = {
-	running: 'border-amber-500',
-	succeeded: 'border-emerald-500',
-	failed: 'border-destructive',
-}
-
-export function runStatusBorderClass(
-	status: string | null | undefined,
-): string | null {
-	if (!status) return null
-
-	return RUN_STATUS_BORDER[status] ?? null
+	succeeded: 1,
+	skipped: 0,
 }
 
 export function representativeStepByConnector(
@@ -284,25 +281,6 @@ export function groupRunSteps(
 	}))
 
 	return buildStepTreeLevel(entries, 0, '')
-}
-
-export const RUN_STATUS_LABEL: Record<string, string> = {
-	pending: 'En attente',
-	running: 'En cours',
-	succeeded: 'Réussi',
-	failed: 'Échoué',
-	cancelled: 'Annulé',
-}
-
-export const RUN_STATUS_TONE: Record<
-	string,
-	'neutral' | 'warning' | 'success' | 'error' | 'brand'
-> = {
-	pending: 'neutral',
-	running: 'brand',
-	succeeded: 'success',
-	failed: 'error',
-	cancelled: 'neutral',
 }
 
 /** Replay is refused (409) while a run is still pending or running — the

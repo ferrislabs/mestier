@@ -1,4 +1,17 @@
 import type { Schemas } from '#/api/api.client'
+import {
+	isFieldVisible,
+	isSelectKind,
+	isSigningCredentialField,
+} from '#/pages/automation/lib/connector-config'
+import { connectorCopy } from '#/pages/automation/lib/connector-copy'
+
+export function connectorTypeLabel(
+	kind: string,
+	descriptor: Schemas.ConnectorDescriptorResponse | undefined,
+): string {
+	return connectorCopy(kind)?.label ?? descriptor?.label ?? kind
+}
 
 export interface ParameterEntry {
 	id: string
@@ -17,20 +30,59 @@ export function isExpressionValue(value: unknown): boolean {
 	return typeof value === 'string' && value.includes('{{')
 }
 
+const NO_CREDENTIAL = 'Aucune identification'
+
+const CREDENTIAL_ENTRY_ID = 'credential_id'
+
+function credentialValue(
+	id: unknown,
+	names: ReadonlyMap<string, string>,
+): string {
+	if (typeof id !== 'string' || id === '') return NO_CREDENTIAL
+	return names.get(id) ?? id
+}
+
+function fieldValue(
+	field: Schemas.FieldResponse,
+	value: unknown,
+	credentialNames: ReadonlyMap<string, string>,
+): string {
+	if (isSigningCredentialField(field))
+		return credentialValue(value, credentialNames)
+	if (isSelectKind(field.kind)) {
+		const option = field.kind.Select.options.find(
+			(candidate) => candidate.value === value,
+		)
+		if (option) return option.label
+	}
+	return displayValue(value)
+}
+
 export function parameterEntries(
 	connector: Schemas.PlacedConnectorDto | null,
 	descriptor: Schemas.ConnectorDescriptorResponse | undefined,
+	credentialNames: ReadonlyMap<string, string> = new Map(),
 ): ParameterEntry[] {
 	if (!connector) return []
 	const known = new Set<string>()
 	const entries: ParameterEntry[] = []
+	if (descriptor && descriptor.auth !== 'None') {
+		known.add(CREDENTIAL_ENTRY_ID)
+		entries.push({
+			id: CREDENTIAL_ENTRY_ID,
+			label: 'Identification',
+			value: credentialValue(connector.credential_id, credentialNames),
+			template: connector.credential_id ?? null,
+			expression: false,
+		})
+	}
 	for (const field of descriptor?.fields ?? []) {
 		known.add(field.name)
-		if (field.secret) continue
+		if (field.secret || !isFieldVisible(field, connector.config)) continue
 		entries.push({
 			id: field.name,
 			label: field.label,
-			value: displayValue(connector.config[field.name]),
+			value: fieldValue(field, connector.config[field.name], credentialNames),
 			template: connector.config[field.name],
 			expression: isExpressionValue(connector.config[field.name]),
 		})

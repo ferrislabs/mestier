@@ -4,10 +4,13 @@ import {
 	GitBranch,
 	Globe,
 	type LucideIcon,
-	MousePointerClick,
 	Wrench,
 	Zap,
 } from 'lucide-react'
+import {
+	connectorCopy,
+	triggerCopy,
+} from '#/pages/automation/lib/connector-copy'
 
 export interface ConnectorAppearance {
 	icon: LucideIcon
@@ -27,20 +30,14 @@ const FALLBACK: ConnectorAppearance = { icon: Wrench, hue: 220 }
 
 export function connectorAppearance(
 	family: string | undefined,
+	kind?: string,
 ): ConnectorAppearance {
+	const copy = kind ? connectorCopy(kind) : undefined
+	if (copy) return { icon: copy.icon, hue: copy.hue }
 	return (family && BY_FAMILY[family]) || FALLBACK
 }
 
-const MANUAL_TRIGGER_APPEARANCE: ConnectorAppearance = {
-	icon: MousePointerClick,
-	hue: 220,
-}
-
-const EVENT_TRIGGER_APPEARANCE: ConnectorAppearance = {
-	icon: Activity,
-	hue: 165,
-}
-
 export function triggerAppearance(manual: boolean): ConnectorAppearance {
-	return manual ? MANUAL_TRIGGER_APPEARANCE : EVENT_TRIGGER_APPEARANCE
+	const copy = triggerCopy(manual ? 'manual' : 'events')
+	return { icon: copy.icon, hue: copy.hue }
 }

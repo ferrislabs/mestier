@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { Folder, FolderOpen } from 'lucide-react'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import { projectPath } from '#/pages/automation/lib/automation-paths'
 import type { WorkflowFolder } from '#/pages/automation/lib/folders'
 
 export interface ProjectsSidebarEntry {
@@ -31,10 +32,7 @@ export function ProjectsSidebar({
 					return (
 						<li key={folder.id}>
 							<Link
-								to={buildOrgPath(
-									organizationSlug,
-									`/automatisation/projets/${folder.id}`,
-								)}
+								to={buildOrgPath(organizationSlug, projectPath(folder.id))}
 								aria-current={active ? 'page' : undefined}
 								className={cn(
 									'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] text-nav-muted outline-none transition-colors hover:bg-nav-active hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-ring',

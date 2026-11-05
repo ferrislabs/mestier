@@ -1,6 +1,6 @@
 import { CircleDashed } from 'lucide-react'
 import { cn } from '#/lib/utils'
-import { toExecutionStatus } from '#/pages/automation/lib/execution-status'
+import { toAnyExecutionStatus } from '#/pages/automation/lib/execution-status'
 import { ExecutionStatusLabel } from '#/pages/automation/ui/execution-status'
 
 export function RunStatusLabel({
@@ -29,7 +29,7 @@ export function RunStatusLabel({
 	}
 	return (
 		<ExecutionStatusLabel
-			status={toExecutionStatus(status)}
+			status={toAnyExecutionStatus(status)}
 			detail={detail}
 			className={className}
 		/>

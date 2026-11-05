@@ -10,6 +10,7 @@ import {
 } from '#/components/ui/dropdown-menu'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import { buildOrgPath } from '#/modules/org-path'
+import { collectionPath } from '#/pages/automation/lib/automation-paths'
 import {
 	describeSource,
 	formatImportDate,
@@ -66,7 +67,7 @@ export function CollectionsList({
 									<Link
 										to={buildOrgPath(
 											organizationSlug,
-											`/automatisation/collections/${collection.id}`,
+											collectionPath(collection.id),
 										)}
 										className="truncate font-medium text-base outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
 									>

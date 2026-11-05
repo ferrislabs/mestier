@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Folder } from 'lucide-react'
 import { buildOrgPath } from '#/modules/org-path'
+import { projectPath } from '#/pages/automation/lib/automation-paths'
 import type { WorkflowFolder } from '#/pages/automation/lib/folders'
 
 export function FolderRow({
@@ -21,10 +22,7 @@ export function FolderRow({
 			/>
 			<div className="min-w-0">
 				<Link
-					to={buildOrgPath(
-						organizationSlug,
-						`/automatisation/projets/${folder.id}`,
-					)}
+					to={buildOrgPath(organizationSlug, projectPath(folder.id))}
 					className="block truncate font-medium text-base outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
 				>
 					{folder.name}

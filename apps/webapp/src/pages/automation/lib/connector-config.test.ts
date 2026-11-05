@@ -5,8 +5,12 @@ import {
 	isJsonMapRepresentable,
 	isSelectKind,
 	isSigningCredentialField,
+	JSON_ENTRY_KINDS,
 	jsonEntriesFromValue,
-	nextJsonEntryKey,
+	jsonEntryValue,
+	numberFieldError,
+	numberFieldValue,
+	parseRawJson,
 	SIGNING_CREDENTIAL_FIELD_NAME,
 	valueFromJsonEntries,
 	visibleFields,
@@ -154,6 +158,17 @@ describe('isJsonMapRepresentable', () => {
 	})
 })
 
+describe('JSON_ENTRY_KINDS', () => {
+	it('offers the four types of the prototype, in its order', () => {
+		expect(JSON_ENTRY_KINDS).toEqual([
+			{ value: 'string', label: 'Texte' },
+			{ value: 'number', label: 'Nombre' },
+			{ value: 'boolean', label: 'Booléen' },
+			{ value: 'json', label: 'JSON' },
+		])
+	})
+})
+
 describe('jsonEntriesFromValue', () => {
 	it('lists no entries for an absent or non-map value', () => {
 		expect(jsonEntriesFromValue(undefined)).toEqual([])
@@ -161,17 +176,98 @@ describe('jsonEntriesFromValue', () => {
 		expect(jsonEntriesFromValue('{{ trigger.items }}')).toEqual([])
 	})
 
-	it('turns each own key into an entry, string values kept verbatim', () => {
+	it('turns each own key into a text entry, string values kept verbatim', () => {
 		expect(
 			jsonEntriesFromValue({ 'Content-Type': 'application/json' }),
-		).toEqual([{ key: 'Content-Type', value: 'application/json' }])
+		).toEqual([
+			{ key: 'Content-Type', value: 'application/json', kind: 'string' },
+		])
 	})
 
-	it('stringifies a non-string value so it stays editable as text', () => {
+	it('types a number and a boolean after the value they hold', () => {
 		expect(jsonEntriesFromValue({ retries: 3, active: true })).toEqual([
-			{ key: 'retries', value: '3' },
-			{ key: 'active', value: 'true' },
+			{ key: 'retries', value: '3', kind: 'number' },
+			{ key: 'active', value: 'true', kind: 'boolean' },
 		])
+	})
+
+	it('keeps a number written as a string typed as text', () => {
+		expect(jsonEntriesFromValue({ code: '5' })).toEqual([
+			{ key: 'code', value: '5', kind: 'string' },
+		])
+	})
+
+	it('shows an object, a list or null as JSON text', () => {
+		expect(
+			jsonEntriesFromValue({ meta: { a: 1 }, tags: ['x'], none: null }),
+		).toEqual([
+			{ key: 'meta', value: '{"a":1}', kind: 'json' },
+			{ key: 'tags', value: '["x"]', kind: 'json' },
+			{ key: 'none', value: 'null', kind: 'json' },
+		])
+	})
+})
+
+describe('jsonEntryValue', () => {
+	it('keeps a text entry as a string, even when it looks like a number', () => {
+		expect(jsonEntryValue({ key: 'code', value: '5', kind: 'string' })).toEqual(
+			{ value: '5', error: null },
+		)
+	})
+
+	it('reads a number', () => {
+		expect(
+			jsonEntryValue({ key: 'retries', value: ' 3.5 ', kind: 'number' }),
+		).toEqual({ value: 3.5, error: null })
+	})
+
+	it('flags a number that is not one', () => {
+		expect(jsonEntryValue({ key: 'n', value: 'abc', kind: 'number' })).toEqual({
+			value: 'abc',
+			error: 'Nombre invalide.',
+		})
+	})
+
+	it('reads a boolean', () => {
+		expect(
+			jsonEntryValue({ key: 'ok', value: 'false', kind: 'boolean' }),
+		).toEqual({ value: false, error: null })
+	})
+
+	it('flags a boolean that is neither true nor false', () => {
+		expect(
+			jsonEntryValue({ key: 'ok', value: 'oui', kind: 'boolean' }),
+		).toEqual({ value: 'oui', error: 'Saisissez true ou false.' })
+	})
+
+	it('reads a JSON value', () => {
+		expect(
+			jsonEntryValue({ key: 'meta', value: '{"a":1}', kind: 'json' }),
+		).toEqual({ value: { a: 1 }, error: null })
+	})
+
+	it('flags JSON that does not parse', () => {
+		expect(jsonEntryValue({ key: 'meta', value: '{a', kind: 'json' })).toEqual({
+			value: '{a',
+			error: 'JSON invalide.',
+		})
+	})
+
+	it('sends null for an empty entry that is not text', () => {
+		expect(jsonEntryValue({ key: 'n', value: '  ', kind: 'number' })).toEqual({
+			value: null,
+			error: null,
+		})
+	})
+
+	it('keeps an expression as a string whatever the type, without an error', () => {
+		expect(
+			jsonEntryValue({
+				key: 'montant',
+				value: '{{ connectors.c1.output.total }}',
+				kind: 'number',
+			}),
+		).toEqual({ value: '{{ connectors.c1.output.total }}', error: null })
 	})
 })
 
@@ -181,54 +277,103 @@ describe('valueFromJsonEntries', () => {
 	})
 
 	it('drops entries whose key is blank', () => {
-		expect(valueFromJsonEntries([{ key: '', value: 'orphan' }])).toBeUndefined()
+		expect(
+			valueFromJsonEntries([{ key: '', value: 'orphan', kind: 'string' }]),
+		).toBeUndefined()
 		expect(
 			valueFromJsonEntries([
-				{ key: 'a', value: 'kept' },
-				{ key: '  ', value: 'ignored' },
+				{ key: 'a', value: 'kept', kind: 'string' },
+				{ key: '  ', value: 'ignored', kind: 'string' },
 			]),
 		).toEqual({ a: 'kept' })
 	})
 
-	it('parses a value that is valid JSON, so numbers and booleans round-trip', () => {
+	it('trims the key', () => {
 		expect(
-			valueFromJsonEntries([
-				{ key: 'retries', value: '3' },
-				{ key: 'active', value: 'true' },
-			]),
-		).toEqual({ retries: 3, active: true })
+			valueFromJsonEntries([{ key: ' a ', value: 'v', kind: 'string' }]),
+		).toEqual({ a: 'v' })
 	})
 
-	it('keeps a value that is not valid JSON as a plain string', () => {
+	it('types each value after its entry, so a text "5" stays a string', () => {
 		expect(
 			valueFromJsonEntries([
-				{ key: 'Content-Type', value: 'application/json' },
+				{ key: 'retries', value: '3', kind: 'number' },
+				{ key: 'active', value: 'true', kind: 'boolean' },
+				{ key: 'code', value: '5', kind: 'string' },
 			]),
-		).toEqual({ 'Content-Type': 'application/json' })
+		).toEqual({ retries: 3, active: true, code: '5' })
 	})
 
 	it('keeps a whole expression as a string rather than trying to parse it', () => {
 		expect(
 			valueFromJsonEntries([
-				{ key: 'Authorization', value: '{{ connectors.c1.output.token }}' },
+				{
+					key: 'Authorization',
+					value: '{{ connectors.c1.output.token }}',
+					kind: 'string',
+				},
 			]),
 		).toEqual({ Authorization: '{{ connectors.c1.output.token }}' })
 	})
 })
 
-describe('nextJsonEntryKey', () => {
-	it('proposes "key" when it is free', () => {
-		expect(nextJsonEntryKey([])).toBe('key')
-		expect(nextJsonEntryKey([{ key: 'other', value: 'v' }])).toBe('key')
+describe('parseRawJson', () => {
+	it('is empty for a blank text, so the field returns to absent', () => {
+		expect(parseRawJson('  \n')).toEqual({ state: 'empty' })
 	})
 
-	it('numbers the proposal once "key" is already used', () => {
-		expect(nextJsonEntryKey([{ key: 'key', value: 'v' }])).toBe('key_2')
-		expect(
-			nextJsonEntryKey([
-				{ key: 'key', value: 'v' },
-				{ key: 'key_2', value: 'v' },
-			]),
-		).toBe('key_3')
+	it('parses valid JSON', () => {
+		expect(parseRawJson('{"a": 1}')).toEqual({
+			state: 'valid',
+			value: { a: 1 },
+		})
+		expect(parseRawJson('[1, 2]')).toEqual({ state: 'valid', value: [1, 2] })
+	})
+
+	it('accepts a bare expression, as a drop would write it', () => {
+		expect(parseRawJson(' {{ trigger.items }} ')).toEqual({
+			state: 'valid',
+			value: '{{ trigger.items }}',
+		})
+	})
+
+	it('rejects text that is neither JSON nor an expression', () => {
+		expect(parseRawJson('{"a": ')).toEqual({ state: 'invalid' })
+		expect(parseRawJson('{"a": {{ x }}}')).toEqual({ state: 'invalid' })
+	})
+})
+
+describe('numberFieldValue', () => {
+	it('is undefined for a blank text, so the field returns to absent', () => {
+		expect(numberFieldValue('')).toBeUndefined()
+		expect(numberFieldValue('   ')).toBeUndefined()
+	})
+
+	it('reads a number as a number', () => {
+		expect(numberFieldValue('42')).toBe(42)
+		expect(numberFieldValue('-3.5')).toBe(-3.5)
+	})
+
+	it('keeps an expression as text, so a variable can feed the number', () => {
+		expect(numberFieldValue('{{ connectors.c1.output.id }}')).toBe(
+			'{{ connectors.c1.output.id }}',
+		)
+	})
+
+	it('keeps text that is not a number as typed, for the server to refuse', () => {
+		expect(numberFieldValue('abc')).toBe('abc')
+	})
+})
+
+describe('numberFieldError', () => {
+	it('flags text that is neither a number nor an expression', () => {
+		expect(numberFieldError('abc')).toBe('Nombre invalide.')
+		expect(numberFieldError('1.2.3')).toBe('Nombre invalide.')
+	})
+
+	it('accepts a blank text, a number and an expression', () => {
+		expect(numberFieldError('')).toBeNull()
+		expect(numberFieldError('12')).toBeNull()
+		expect(numberFieldError('{{ trigger.id }}')).toBeNull()
 	})
 })

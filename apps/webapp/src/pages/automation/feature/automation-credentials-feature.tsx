@@ -17,8 +17,15 @@ import { useExternalServices } from '#/pages/automation/feature/use-external-ser
 import {
 	buildCredentialFieldErrors,
 	buildCredentialFormErrors,
+	credentialErrorMessage,
+	credentialPayload,
 	emptyCredentialForm,
 } from '#/pages/automation/lib/credential-form'
+import {
+	kindLabel,
+	localizeScheme,
+	newestFirst,
+} from '#/pages/automation/lib/credential-meta'
 import type { CredentialFormValues } from '#/pages/automation/types'
 import {
 	AutomationCredentialsUI,
@@ -63,7 +70,9 @@ function AutomationCredentialsWorkspace({
 	const metaActions = useCredentialMetaActions()
 	const { rememberKinds } = metaActions
 
-	const authSchemes = catalogue.data?.data.auth_schemes ?? []
+	const authSchemes = (catalogue.data?.data.auth_schemes ?? []).map(
+		localizeScheme,
+	)
 	const items = credentials.data?.data ?? []
 
 	useEffect(() => {
@@ -71,13 +80,15 @@ function AutomationCredentialsWorkspace({
 	}, [items, rememberKinds])
 	const scheme = authSchemes.find((candidate) => candidate.kind === values.kind)
 
-	const rows: CredentialRow[] = items.map((credential) => ({
+	const rows: CredentialRow[] = newestFirst(items).map((credential) => ({
 		id: credential.id,
 		name: credential.name,
 		kind: credential.kind,
-		kindLabel:
+		kindLabel: kindLabel(
+			credential.kind,
 			authSchemes.find((candidate) => candidate.kind === credential.kind)
-				?.label ?? credential.kind,
+				?.label,
+		),
 		origin: credential.origin === 'generated' ? 'generated' : 'supplied',
 		createdAt: credential.created_at,
 		updatedAt: credential.updated_at,
@@ -90,22 +101,45 @@ function AutomationCredentialsWorkspace({
 	const formErrors = buildCredentialFormErrors(values, scheme, mode)
 	const fieldErrors = buildCredentialFieldErrors(values, scheme, mode)
 
-	const listError =
-		credentials.error?.message ?? deleteCredential.error?.message ?? null
+	const listError = credentialErrorMessage(credentials.error ?? catalogue.error)
+	const saveError = credentialErrorMessage(
+		createCredential.error ??
+			updateCredential.error ??
+			deleteCredential.error ??
+			rotateCredential.error,
+		scheme?.fields,
+	)
+	const submittedData = (data: Record<string, string>) =>
+		scheme ? credentialPayload(scheme, data) : data
+
+	const resetMutations = () => {
+		createCredential.reset()
+		updateCredential.reset()
+		deleteCredential.reset()
+		rotateCredential.reset()
+	}
 
 	const handleSubmit = async () => {
 		if (formErrors.length > 0) return
 
 		if (mode === 'create') {
-			const created = await createCredential.mutateAsync({
-				path: { organization_id: organizationId },
-				body: {
-					kind: values.kind,
-					name: values.name.trim(),
-					origin: values.origin,
-					data: values.origin === 'supplied' ? values.data : undefined,
-				},
-			})
+			let created: Awaited<ReturnType<typeof createCredential.mutateAsync>>
+			try {
+				created = await createCredential.mutateAsync({
+					path: { organization_id: organizationId },
+					body: {
+						kind: values.kind,
+						name: values.name.trim(),
+						origin: values.origin,
+						data:
+							values.origin === 'supplied'
+								? submittedData(values.data)
+								: undefined,
+					},
+				})
+			} catch {
+				return
+			}
 			metaActions.patch(created.data.id, {
 				description: values.description.trim(),
 			})
@@ -121,13 +155,17 @@ function AutomationCredentialsWorkspace({
 		const hasData = Object.values(values.data).some(
 			(value) => value.trim() !== '',
 		)
-		await updateCredential.mutateAsync({
-			path: { organization_id: organizationId, credential_id: editingId },
-			body: {
-				name: values.name.trim(),
-				data: hasData ? values.data : undefined,
-			},
-		})
+		try {
+			await updateCredential.mutateAsync({
+				path: { organization_id: organizationId, credential_id: editingId },
+				body: {
+					name: values.name.trim(),
+					data: hasData ? submittedData(values.data) : undefined,
+				},
+			})
+		} catch {
+			return
+		}
 		metaActions.patch(editingId, { description: values.description.trim() })
 		setDialogOpen(false)
 	}
@@ -149,9 +187,23 @@ function AutomationCredentialsWorkspace({
 			})
 			setRevealedSecret(String(rotated.data.secret))
 			setDialogOpen(true)
+		} catch {
+			return
 		} finally {
 			setRotatingId(null)
 		}
+	}
+
+	const handleDelete = async (row: CredentialRow) => {
+		try {
+			await deleteCredential.mutateAsync({
+				path: { organization_id: organizationId, credential_id: row.id },
+			})
+		} catch {
+			return
+		}
+		metaActions.forget(row.id)
+		setDialogOpen(false)
 	}
 
 	return (
@@ -161,6 +213,7 @@ function AutomationCredentialsWorkspace({
 			services={services.data}
 			canManage={canManage}
 			isLoading={credentials.isLoading}
+			schemesLoading={catalogue.isLoading}
 			error={listError}
 			dialogOpen={dialogOpen}
 			dialogMode={mode}
@@ -172,13 +225,10 @@ function AutomationCredentialsWorkspace({
 				onSubmit: () => void handleSubmit(),
 			}}
 			fieldErrors={fieldErrors}
-			saveError={
-				createCredential.error?.message ??
-				updateCredential.error?.message ??
-				null
-			}
+			saveError={saveError}
 			revealedSecret={revealedSecret}
 			onOpenCreate={() => {
+				resetMutations()
 				setMode('create')
 				setEditingId(null)
 				setValues(emptyCredentialForm())
@@ -186,6 +236,7 @@ function AutomationCredentialsWorkspace({
 				setDialogOpen(true)
 			}}
 			onEdit={(row) => {
+				resetMutations()
 				setMode('edit')
 				setEditingId(row.id)
 				setValues({
@@ -204,13 +255,8 @@ function AutomationCredentialsWorkspace({
 			}}
 			onRotate={(row) => void handleRotate(row)}
 			rotatingId={rotatingId}
-			onDelete={(row) => {
-				deleteCredential.mutate({
-					path: { organization_id: organizationId, credential_id: row.id },
-				})
-				metaActions.forget(row.id)
-				setDialogOpen(false)
-			}}
+			isDeleting={deleteCredential.isPending}
+			onDelete={(row) => void handleDelete(row)}
 			onConnect={(row) =>
 				metaActions.patch(row.id, {
 					status: 'valid',

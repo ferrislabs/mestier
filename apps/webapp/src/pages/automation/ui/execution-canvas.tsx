@@ -9,8 +9,9 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useMemo } from 'react'
 import type { Schemas } from '#/api/api.client'
+import { branchLabel } from '#/pages/automation/lib/branch-labels'
 import { formatItemCount } from '#/pages/automation/lib/format'
-import type { NodePosition } from '#/pages/automation/lib/graph'
+import { GRID_SIZE, type NodePosition } from '#/pages/automation/lib/graph'
 import { runNodeAppearance } from '#/pages/automation/lib/run-appearance'
 import { type RunView, realEdgeId } from '#/pages/automation/lib/run-view'
 import type { ExecutionFlowNodeType } from '#/pages/automation/ui/execution-flow-node'
@@ -21,8 +22,6 @@ import '#/pages/automation/ui/automation.css'
 const NODE_TYPES = { execution: ExecutionFlowNode }
 
 const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 1 }
-
-const GRID_SIZE = 20
 
 const ARIA_LABELS = {
 	'controls.ariaLabel': 'Contrôles du canevas',
@@ -70,7 +69,7 @@ function ExecutionFlow({
 								? [{ id: null, open: false }]
 								: branches.map((branch) => ({
 										id: branch,
-										label: branch,
+										label: branchLabel(branch),
 										open: false,
 									})),
 						execution: { status: node.status, note: node.note },

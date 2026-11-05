@@ -10,6 +10,10 @@ import {
 } from '#/components/ui/table'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import {
+	workflowExecutionsSearch,
+	workflowPath,
+} from '#/pages/automation/lib/automation-paths'
 import type {
 	ExecutionRow,
 	ExecutionSortKey,
@@ -176,8 +180,9 @@ export function ExecutionsTable({
 								<Link
 									to={buildOrgPath(
 										organizationSlug,
-										`/automatisation/${row.workflowId}/executions/${row.runId}`,
+										workflowPath(row.workflowId),
 									)}
+									search={workflowExecutionsSearch(row.runId)}
 									aria-label={`Ouvrir l’exécution ${row.shortId} de ${row.workflowName}`}
 									className="rounded font-mono text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 								>

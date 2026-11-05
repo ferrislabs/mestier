@@ -1,16 +1,20 @@
 import type { Schemas } from '#/api/api.client'
+import { connectorCopy } from '#/pages/automation/lib/connector-copy'
 import {
 	type ExecutionStatus,
 	toExecutionStatus,
+	toStepExecutionStatus,
 } from '#/pages/automation/lib/execution-status'
 import { formatMilliseconds } from '#/pages/automation/lib/format'
 import { toItems } from '#/pages/automation/lib/items'
 import {
+	elapsedMsSince,
 	groupRunSteps,
 	isTerminalRunStatus,
 	type RunStepTreeNode,
 	representativeStepByConnector,
 	runDurationMs,
+	runElapsedMs,
 } from '#/pages/automation/lib/workflow-runs'
 
 export interface RunNodeView {
@@ -34,6 +38,7 @@ export interface RunStepView {
 	label: string
 	plainLabel: string
 	family: string | undefined
+	connectorKind: string | undefined
 	status: ExecutionStatus
 	detail: string
 }
@@ -68,6 +73,8 @@ export function realEdgeId(edge: Schemas.EdgeDto): string {
 	return `${edge.from}->${edge.to}:${edge.branch ?? ''}`
 }
 
+const UNKNOWN_SUBTITLE = 'Connecteur'
+
 function stepDuration(step: Schemas.RunStepResponse): number | null {
 	return runDurationMs(step)
 }
@@ -101,6 +108,7 @@ function noteFor(status: ExecutionStatus, durationMs: number | null): string {
 function stepDetail(
 	status: ExecutionStatus,
 	step: Schemas.RunStepResponse,
+	now: number,
 ): string {
 	switch (status) {
 		case 'success': {
@@ -109,12 +117,22 @@ function stepDetail(
 		}
 		case 'error':
 			return step.error ?? 'Erreur inconnue'
-		case 'running':
-			return 'En cours'
+		case 'running': {
+			const elapsed = elapsedMsSince(step.started_at, now)
+			return elapsed === null
+				? 'En cours'
+				: `En cours · ${formatMilliseconds(elapsed)}`
+		}
 		default:
 			return ''
 	}
 }
+
+const EXECUTED_STATUSES: ReadonlySet<ExecutionStatus> = new Set([
+	'success',
+	'error',
+	'running',
+])
 
 function iterationSuffix(step: Schemas.RunStepResponse): string {
 	if (step.iteration_path === '') return ''
@@ -145,6 +163,7 @@ function edgeItemCount(
 export function buildRunView(
 	run: Schemas.RunDetailResponse,
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>,
+	now: number = Date.now(),
 ): RunView {
 	const graph = run.graph ?? { connectors: [], edges: [], triggers: [] }
 	const best = representativeStepByConnector(run.steps)
@@ -172,18 +191,21 @@ export function buildRunView(
 	const connectorNodes: RunNodeView[] = graph.connectors.map((connector) => {
 		const descriptor = descriptors.get(connector.kind)
 		const step = best.get(connector.id) ?? null
-		const status: ExecutionStatus = step
-			? toExecutionStatus(step.status)
-			: runFinished
-				? 'skipped'
-				: 'waiting'
+		const reportedStatus: ExecutionStatus = step
+			? toStepExecutionStatus(step.status)
+			: 'waiting'
+		const status: ExecutionStatus =
+			runFinished && reportedStatus === 'waiting' ? 'skipped' : reportedStatus
 		const durationMs = step ? stepDuration(step) : null
 		return {
 			id: connector.id,
 			kind: 'connector',
-			label: descriptor?.label ?? connector.id,
+			label:
+				connectorCopy(connector.kind)?.label ??
+				descriptor?.label ??
+				connector.id,
 			family: descriptor?.family,
-			subtitle: descriptor?.family ?? connector.kind,
+			subtitle: connectorCopy(connector.kind)?.subtitle ?? UNKNOWN_SUBTITLE,
 			status,
 			durationMs,
 			step,
@@ -202,37 +224,53 @@ export function buildRunView(
 			right.started_at ?? right.created_at,
 		),
 	)
-	const steps: RunStepView[] = ordered.map((step) => {
+	const executed = ordered.filter((step) =>
+		EXECUTED_STATUSES.has(toStepExecutionStatus(step.status)),
+	)
+	const steps: RunStepView[] = executed.map((step) => {
 		const node = byId.get(step.connector_id)
-		const status = toExecutionStatus(step.status)
+		const status = toStepExecutionStatus(step.status)
 		return {
 			stepId: step.id,
 			nodeId: step.connector_id,
 			label: `${node?.label ?? step.connector_id}${iterationSuffix(step)}`,
 			plainLabel: node?.label ?? step.connector_id,
 			family: node?.family,
+			connectorKind: node?.connector?.kind,
 			status,
-			detail: stepDetail(status, step),
+			detail: stepDetail(status, step, now),
 		}
 	})
+	const failed = steps.find((step) => step.status === 'error') ?? null
+	const orderOf = new Map<string, number>()
+	steps.forEach((step, index) => {
+		if (!orderOf.has(step.nodeId)) orderOf.set(step.nodeId, index + 1)
+	})
 
+	const unreachedDetail = (node: RunNodeView): string => {
+		if (node.status === 'waiting') return 'Pas encore atteint'
+		const reason = skipReason(node.id, graph, failed?.nodeId ?? null)
+		return reason.type === 'after-error'
+			? `Arrêt sur « ${byId.get(reason.failedNodeId)?.label ?? reason.failedNodeId} »`
+			: 'Aucun élément reçu'
+	}
 	const pending: RunStepView[] = connectorNodes
-		.filter((node) => node.step === null)
+		.filter((node) => !orderOf.has(node.id))
 		.map((node) => ({
 			stepId: node.id,
 			nodeId: node.id,
 			label: node.label,
 			plainLabel: node.label,
 			family: node.family,
+			connectorKind: node.connector?.kind,
 			status: node.status,
-			detail: node.status === 'waiting' ? 'Pas encore atteint' : 'Non appelé',
+			detail: unreachedDetail(node),
 		}))
 
 	const reached = (id: string) => {
 		const node = byId.get(id)
-		return node !== undefined && node.kind === 'trigger'
-			? node.status !== 'waiting'
-			: node?.step != null
+		if (node === undefined) return false
+		return node.kind === 'trigger' ? node.status !== 'waiting' : orderOf.has(id)
 	}
 	const traversedEdges = new Set(
 		graph.edges
@@ -269,24 +307,19 @@ export function buildRunView(
 		if (count !== null) edgeCounts.set(id, count)
 	}
 
-	const orderOf = new Map<string, number>()
-	steps.forEach((step, index) => {
-		if (!orderOf.has(step.nodeId)) orderOf.set(step.nodeId, index + 1)
-	})
-
 	return {
 		nodes: nodes.map((node) => ({
 			...node,
 			order: orderOf.get(node.id) ?? null,
 		})),
 		steps,
-		stepGroups: toGroups(groupRunSteps(ordered)),
+		stepGroups: toGroups(groupRunSteps(executed)),
 		pending,
 		traversedEdges,
 		edgeCounts,
-		failed: steps.find((step) => step.status === 'error') ?? null,
+		failed,
 		status: toExecutionStatus(run.status),
-		durationMs: runDurationMs(run),
+		durationMs: runElapsedMs(run, now),
 	}
 }
 

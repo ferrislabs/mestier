@@ -9,6 +9,9 @@ import {
 } from '#/pages/automation/feature/connector-parameters-feature'
 import { EventPickerFeature } from '#/pages/automation/feature/event-picker-feature'
 import { useCollections } from '#/pages/automation/feature/use-collections'
+import { identificationsPath } from '#/pages/automation/lib/automation-paths'
+import { branchLabel } from '#/pages/automation/lib/branch-labels'
+import { collectionCredentialHint } from '#/pages/automation/lib/connector-field-copy'
 import type {
 	EditorEdge,
 	EditorNode,
@@ -19,6 +22,7 @@ import { appearanceOf } from '#/pages/automation/lib/node-appearance'
 import type { NodeIssue } from '#/pages/automation/lib/node-issues'
 import {
 	type NodeInputView,
+	nodeDescription,
 	outputViewFromPayload,
 	outputViewFromStep,
 } from '#/pages/automation/lib/node-view'
@@ -116,26 +120,35 @@ export function NodeDetailsFeature({
 	const byId = new Map(nodes.map((candidate) => [candidate.id, candidate]))
 	const entries = upstreamEntries(node.id, nodes, edges, sources)
 	const neighbours = neighboursOf(node.id, edges)
-	const toNavItem = (neighbour: Neighbour): NdvNavItem[] => {
-		const target = byId.get(neighbour.id)
-		if (!target) return []
-		const look = appearanceOf(target.data)
-		return [
-			{
-				id: target.id,
-				label: target.data.label,
-				icon: look.icon,
-				hue: look.hue,
-				branch: neighbour.handle ?? undefined,
-			},
-		]
-	}
+	const toNavItem =
+		(withBranch: boolean) =>
+		(neighbour: Neighbour): NdvNavItem[] => {
+			const target = byId.get(neighbour.id)
+			if (!target) return []
+			const look = appearanceOf(target.data)
+			return [
+				{
+					id: target.id,
+					label: target.data.label,
+					icon: look.icon,
+					hue: look.hue,
+					branch:
+						withBranch && neighbour.handle
+							? branchLabel(neighbour.handle)
+							: undefined,
+				},
+			]
+		}
 	const evaluateContext = useMemo(
 		() => evaluateContextFor(node.id, nodes, edges, sources),
 		[node.id, nodes, edges, sources],
 	)
 	const eventNames = trigger ? triggerEventNames(trigger) : []
-	const currentEvent = findEvent(sources.events, eventNames[0] ?? '') ?? null
+	const chosenEvents = eventNames.flatMap((name) => {
+		const event = findEvent(sources.events, name)
+		return event ? [event] : []
+	})
+	const currentEvent = chosenEvents[0] ?? null
 	const step = connector ? sources.runSteps.get(connector.id) : undefined
 	const inputFallback: NodeInputView = trigger
 		? { state: 'trigger' }
@@ -164,10 +177,7 @@ export function NodeDetailsFeature({
 					if (!open) onClose()
 				}}
 				title={node.data.label}
-				description={
-					node.data.subtitle ||
-					`${node.data.typeLabel} · ${node.data.family ?? ''}`
-				}
+				description={nodeDescription(node.data)}
 				heading={
 					<div
 						key={`${node.id}:${node.data.label}:${node.data.subtitle}`}
@@ -200,7 +210,7 @@ export function NodeDetailsFeature({
 				input={
 					trigger && trigger.kind !== 'Manual' ? (
 						<EventInputPanel
-							event={currentEvent}
+							events={chosenEvents}
 							onChooseEvent={() => setPicking({ replacing: null })}
 						/>
 					) : (
@@ -229,6 +239,7 @@ export function NodeDetailsFeature({
 						)}
 						{connector && descriptor ? (
 							<ConnectorParametersFeature
+								key={node.id}
 								descriptor={descriptor}
 								config={connector.config}
 								credentialId={connector.credential_id ?? null}
@@ -236,6 +247,11 @@ export function NodeDetailsFeature({
 								authSchemes={authSchemes}
 								errors={node.data.errors}
 								bindingIssues={fieldIssues}
+								credentialHint={
+									operation
+										? collectionCredentialHint(operation.collection.security)
+										: undefined
+								}
 								evaluateContext={evaluateContext}
 								onConfigChange={(config) => onUpdateConnector({ config })}
 								onCredentialChange={(credentialId) =>
@@ -274,8 +290,10 @@ export function NodeDetailsFeature({
 				}
 				previous={neighbours.previous
 					.sort(byVerticalPosition(byId))
-					.flatMap(toNavItem)}
-				next={neighbours.next.sort(byVerticalPosition(byId)).flatMap(toNavItem)}
+					.flatMap(toNavItem(false))}
+				next={neighbours.next
+					.sort(byVerticalPosition(byId))
+					.flatMap(toNavItem(true))}
 				onNavigate={onNavigate}
 				output={
 					successExample && !step ? (
@@ -295,10 +313,7 @@ export function NodeDetailsFeature({
 							errorAction={
 								<Button asChild variant="outline" size="sm">
 									<Link
-										to={buildOrgPath(
-											organizationSlug,
-											'/automatisation/credentials',
-										)}
+										to={buildOrgPath(organizationSlug, identificationsPath())}
 									>
 										Ouvrir les identifications
 									</Link>

@@ -1,22 +1,17 @@
-import { Check, ChevronsUpDown, Plus, Unlink } from 'lucide-react'
-import { useState } from 'react'
+import { Plus, TriangleAlert, Unlink } from 'lucide-react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
-import {
-	Command,
-	CommandEmpty,
-	CommandGroup,
-	CommandInput,
-	CommandItem,
-	CommandList,
-} from '#/components/ui/command'
 import { Label } from '#/components/ui/label'
 import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from '#/components/ui/popover'
-import { cn } from '#/lib/utils'
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '#/components/ui/select'
+import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
+
+const NONE_VALUE = '__none__'
 
 export interface CredentialPickerFieldProps {
 	label: string
@@ -25,6 +20,8 @@ export interface CredentialPickerFieldProps {
 	value: string | null
 	error: string | null
 	optional?: boolean
+	hint?: string
+	statusOf?: (credentialId: string) => CredentialStatus
 	onChange: (credentialId: string | null) => void
 	onCreateNew: () => void
 }
@@ -36,114 +33,66 @@ export function CredentialPickerField({
 	value,
 	error,
 	optional = false,
+	hint,
+	statusOf,
 	onChange,
 	onCreateNew,
 }: CredentialPickerFieldProps) {
-	const [open, setOpen] = useState(false)
 	const selected =
 		credentials.find((credential) => credential.id === value) ?? null
-
-	function createNew() {
-		setOpen(false)
-		onCreateNew()
-	}
+	const isExpired = (credentialId: string) =>
+		statusOf?.(credentialId) === 'expired'
 
 	return (
 		<div className="grid gap-2">
 			<Label htmlFor={htmlFor}>{label}</Label>
-			<Popover open={open} onOpenChange={setOpen}>
-				<PopoverTrigger asChild>
-					<Button
-						id={htmlFor}
-						type="button"
-						variant="outline"
-						role="combobox"
-						aria-expanded={open}
-						aria-invalid={error !== null}
-						className="w-full justify-between font-normal"
-					>
-						<span
-							className={cn(
-								'truncate',
-								selected === null && 'text-muted-foreground',
-							)}
-						>
-							{selected
-								? selected.name
-								: credentials.length === 0
-									? 'Aucune identification'
-									: 'Choisir une identification…'}
-						</span>
-						<ChevronsUpDown className="size-4 shrink-0 opacity-50" />
-					</Button>
-				</PopoverTrigger>
-				<PopoverContent align="start" className="w-72 p-0">
-					<Command>
-						<CommandInput
-							autoFocus
-							placeholder="Rechercher une identification…"
-						/>
-						<CommandList>
-							<CommandEmpty>
-								<p className="px-2 py-4 text-center text-sm text-muted-foreground">
-									{credentials.length === 0
-										? 'Aucune identification disponible'
-										: 'Aucun résultat'}
-								</p>
-							</CommandEmpty>
-							<CommandGroup>
-								{optional ? (
-									<CommandItem
-										value="__none__"
-										onSelect={() => {
-											onChange(null)
-											setOpen(false)
-										}}
-									>
-										<Check
-											className={cn(
-												'size-4',
-												selected === null ? 'opacity-100' : 'opacity-0',
-											)}
-										/>
-										Aucune identification
-									</CommandItem>
-								) : null}
-								{credentials.map((credential) => (
-									<CommandItem
-										key={credential.id}
-										value={credential.name}
-										onSelect={() => {
-											onChange(credential.id)
-											setOpen(false)
-										}}
-									>
-										<Check
-											className={cn(
-												'size-4',
-												credential.id === value ? 'opacity-100' : 'opacity-0',
-											)}
-										/>
-										{credential.name}
-									</CommandItem>
-								))}
-							</CommandGroup>
-						</CommandList>
-						<div className="border-t p-1">
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								className="w-full justify-start"
-								onClick={createNew}
-							>
-								<Plus className="size-4" />
-								Créer une identification
-							</Button>
-						</div>
-					</Command>
-				</PopoverContent>
-			</Popover>
+			<Select
+				value={selected?.id ?? ''}
+				disabled={credentials.length === 0}
+				onValueChange={(next) => onChange(next === NONE_VALUE ? null : next)}
+			>
+				<SelectTrigger
+					id={htmlFor}
+					className="w-full"
+					aria-invalid={error !== null ? true : undefined}
+				>
+					<SelectValue
+						placeholder={
+							credentials.length === 0
+								? 'Aucune identification'
+								: 'Choisir une identification'
+						}
+					/>
+				</SelectTrigger>
+				<SelectContent>
+					{optional ? (
+						<SelectItem value={NONE_VALUE}>Aucune identification</SelectItem>
+					) : null}
+					{credentials.map((credential) => (
+						<SelectItem key={credential.id} value={credential.id}>
+							{credential.name}
+							{isExpired(credential.id) ? ' (expirée)' : ''}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+			{selected && isExpired(selected.id) ? (
+				<p className="flex items-start gap-1.5 text-sm text-state-alert">
+					<TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+					Cette identification est expirée. Renouvelez-la depuis
+					Identifications.
+				</p>
+			) : null}
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				className="-ml-2 justify-self-start text-muted-foreground"
+				onClick={onCreateNew}
+			>
+				<Plus />
+				Créer une identification
+			</Button>
 			{error ? (
 				<p
 					role="alert"
@@ -153,6 +102,7 @@ export function CredentialPickerField({
 					{error}
 				</p>
 			) : null}
+			{hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
 		</div>
 	)
 }

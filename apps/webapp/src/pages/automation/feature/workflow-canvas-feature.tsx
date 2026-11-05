@@ -1,7 +1,5 @@
-import { AlertCircle, Loader2 } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
-import { SectionCard } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAutomationCredentials,
@@ -11,27 +9,18 @@ import {
 	useCreateCredential,
 	useEvaluateExpression,
 	useRunPolling,
-	useSaveWorkflowVersion,
-	useWorkflow,
-	type WorkflowDetail,
 } from '#/hooks/use-automation'
 import {
 	type LastRunData,
 	WorkflowCanvas,
 } from '#/pages/automation/feature/editor-canvas-feature'
-import {
-	readNodeMeta,
-	writeNodeMeta,
-} from '#/pages/automation/feature/mocks/node-meta'
 import { RunNowFeature } from '#/pages/automation/feature/run-now-feature'
-import type { GraphChange } from '#/pages/automation/feature/use-workflow-graph'
-import { WorkflowTopBarFeature } from '#/pages/automation/feature/workflow-top-bar-feature'
-import { readLayout } from '#/pages/automation/lib/graph'
-import { mergedLayout } from '#/pages/automation/lib/layout'
 import {
-	type GraphValidation,
-	projectGraphErrors,
-} from '#/pages/automation/lib/validation'
+	type EditorSession,
+	WorkflowTopBarFeature,
+} from '#/pages/automation/feature/workflow-top-bar-feature'
+import { NEW_WORKFLOW_ID } from '#/pages/automation/lib/automation-paths'
+import { typographicEventLabels } from '#/pages/automation/lib/event-search'
 import {
 	aggregateConnectorStatuses,
 	connectorOutputsFromSteps,
@@ -39,41 +28,10 @@ import {
 	latestRunId,
 	representativeStepByConnector,
 } from '#/pages/automation/lib/workflow-runs'
-
-const EMPTY_VALIDATION: GraphValidation = {
-	connectorErrors: new Map(),
-	graphErrors: [],
-}
+import { WorkflowLoading } from '#/pages/automation/ui/workflow-not-found'
 
 export interface WorkflowCanvasFeatureProps {
-	workflowId: string
-}
-
-export function WorkflowCanvasFeature({
-	workflowId,
-}: WorkflowCanvasFeatureProps) {
-	const { activeOrganization } = useActiveOrganization()
-
-	return (
-		<WorkflowCanvasWorkspace
-			key={`${activeOrganization.id}:${workflowId}`}
-			organizationId={activeOrganization.id}
-			organizationSlug={activeOrganization.slug}
-			workflowId={workflowId}
-		/>
-	)
-}
-
-function extractGraphErrors(
-	error: unknown,
-): Schemas.GraphErrorResponse[] | null {
-	if (!(error instanceof Error)) return null
-	const status = (error as { status?: number }).status
-	if (status !== 422) return null
-
-	const data = (error as { data?: { details?: { errors?: unknown } } }).data
-	const errors = data?.details?.errors
-	return Array.isArray(errors) ? (errors as Schemas.GraphErrorResponse[]) : null
+	session: EditorSession
 }
 
 function descriptorsByKind(
@@ -82,26 +40,29 @@ function descriptorsByKind(
 	return new Map(connectors.map((connector) => [connector.kind, connector]))
 }
 
-function WorkflowCanvasWorkspace({
-	organizationId,
-	organizationSlug,
-	workflowId,
-}: {
-	organizationId: string
-	organizationSlug: string
-	workflowId: string
-}) {
-	const workflowQuery = useWorkflow(organizationId, workflowId)
+export function WorkflowCanvasFeature({ session }: WorkflowCanvasFeatureProps) {
+	const { activeOrganization } = useActiveOrganization()
+	const organizationId = activeOrganization.id
+	const workflowId = session.workflowId
 	const catalogueQuery = useConnectorCatalogue(organizationId)
 	const credentialsQuery = useAutomationCredentials(organizationId)
 	const eventsQuery = useAutomationEvents(organizationId)
 	const runsQuery = useAutomationRuns(organizationId)
-	const latestId = latestRunId(runsQuery.data?.data ?? [], workflowId)
+	const latestId = workflowId
+		? latestRunId(runsQuery.data?.data ?? [], workflowId)
+		: null
 	const runDetailQuery = useRunPolling(organizationId, latestId)
+	const createCredential = useCreateCredential(organizationId)
+	const { mutateAsync: evaluate } = useEvaluateExpression()
+	const [runDialogOpen, setRunDialogOpen] = useState(false)
 	const connectors = catalogueQuery.data?.data.connectors
 	const descriptors = useMemo(
 		() => descriptorsByKind(connectors ?? []),
 		[connectors],
+	)
+	const events = useMemo(
+		() => typographicEventLabels(eventsQuery.data?.data ?? []),
+		[eventsQuery.data],
 	)
 	const runDetail = runDetailQuery.data?.data
 	const lastRun = useMemo<LastRunData | null>(
@@ -128,114 +89,7 @@ function WorkflowCanvasWorkspace({
 				: new Map<string, Schemas.RunStepResponse>(),
 		[runDetail],
 	)
-
-	if (
-		workflowQuery.isLoading ||
-		catalogueQuery.isLoading ||
-		credentialsQuery.isLoading ||
-		eventsQuery.isLoading
-	) {
-		return (
-			<div className="flex min-h-0 flex-1 flex-col">
-				<WorkflowTopBarFeature workflowId={workflowId} view="editor" />
-				<div className="flex min-h-0 flex-1 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
-					<Loader2 className="size-5 animate-spin" />
-					Chargement du workflow…
-				</div>
-			</div>
-		)
-	}
-
-	if (workflowQuery.isError || !workflowQuery.data?.data) {
-		return (
-			<div className="flex min-h-0 flex-1 flex-col">
-				<SectionCard className="m-6 flex min-h-72 flex-col items-center justify-center gap-3 p-8 text-center">
-					<AlertCircle className="size-6 text-destructive" />
-					<div>
-						<p className="font-semibold">Impossible de charger le workflow</p>
-						<p className="mt-1 text-sm text-muted-foreground">
-							{workflowQuery.error?.message ??
-								'Réessayez dans quelques instants.'}
-						</p>
-					</div>
-				</SectionCard>
-			</div>
-		)
-	}
-
-	return (
-		<WorkflowCanvasLoaded
-			organizationId={organizationId}
-			organizationSlug={organizationSlug}
-			workflowId={workflowId}
-			workflow={workflowQuery.data.data as WorkflowDetail}
-			descriptors={descriptors}
-			authSchemes={catalogueQuery.data?.data.auth_schemes ?? []}
-			credentials={credentialsQuery.data?.data ?? []}
-			events={eventsQuery.data?.data ?? []}
-			lastRun={lastRun}
-			runStatuses={runStatuses}
-			runSteps={runSteps}
-			running={
-				runDetail !== undefined && !isTerminalRunStatus(runDetail.status)
-			}
-		/>
-	)
-}
-
-function WorkflowCanvasLoaded({
-	organizationId,
-	organizationSlug,
-	workflowId,
-	workflow,
-	descriptors,
-	authSchemes,
-	credentials,
-	events,
-	lastRun,
-	runStatuses,
-	runSteps,
-	running,
-}: {
-	organizationId: string
-	organizationSlug: string
-	workflowId: string
-	workflow: WorkflowDetail
-	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
-	authSchemes: Schemas.AuthSchemeResponse[]
-	credentials: Schemas.CredentialResponse[]
-	events: Schemas.EventDescriptorResponse[]
-	lastRun: LastRunData | null
-	runStatuses: Map<string, string>
-	runSteps: Map<string, Schemas.RunStepResponse>
-	running: boolean
-}) {
-	const saveVersion = useSaveWorkflowVersion()
-	const createCredential = useCreateCredential(organizationId)
-	const { mutateAsync: evaluate } = useEvaluateExpression()
-
-	const [initial] = useState(() => {
-		const graph = workflow.current_version?.graph ?? {
-			connectors: [],
-			edges: [],
-			triggers: [],
-		}
-		const layout = mergedLayout(graph, readLayout(workflow.layout))
-		return { graph, layout, meta: readNodeMeta(workflowId) }
-	})
-
-	const pending = useRef({ graph: initial.graph, layout: initial.layout })
-	const [runDialogOpen, setRunDialogOpen] = useState(false)
-	const [isDirty, setDirty] = useState(false)
-	const [validation, setValidation] =
-		useState<GraphValidation>(EMPTY_VALIDATION)
-	const [saveError, setSaveError] = useState<string | null>(null)
-
-	const handleChange = ({ graph, layout, meta }: GraphChange) => {
-		pending.current = { graph, layout }
-		writeNodeMeta(workflowId, meta)
-		setDirty(true)
-	}
+	const [initial] = useState(() => session.snapshot())
 
 	const handleCreateCredential = async (
 		body: Schemas.CreateCredentialRequest,
@@ -258,43 +112,25 @@ function WorkflowCanvasLoaded({
 		[evaluate, organizationId],
 	)
 
-	const handleSave = async () => {
-		setValidation(EMPTY_VALIDATION)
-		setSaveError(null)
-		try {
-			await saveVersion.mutateAsync({
-				path: { organization_id: organizationId, workflow_id: workflowId },
-				body: {
-					graph: pending.current.graph,
-					layout: Object.fromEntries(pending.current.layout),
-				},
-			})
-			setDirty(false)
-		} catch (error) {
-			const errors = extractGraphErrors(error)
-			if (errors) {
-				setValidation(projectGraphErrors(errors))
-				return
-			}
-			setSaveError(
-				error instanceof Error && error.message
-					? `L’enregistrement a échoué : ${error.message}`
-					: 'L’enregistrement a échoué.',
-			)
-		}
+	const topBarId = workflowId ?? NEW_WORKFLOW_ID
+	const { validation, saveError } = session
+
+	if (
+		catalogueQuery.isLoading ||
+		credentialsQuery.isLoading ||
+		eventsQuery.isLoading
+	) {
+		return (
+			<div className="flex min-h-0 flex-1 flex-col">
+				<WorkflowTopBarFeature workflowId={topBarId} view="editor" />
+				<WorkflowLoading />
+			</div>
+		)
 	}
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<WorkflowTopBarFeature
-				workflowId={workflowId}
-				view="editor"
-				save={{
-					dirty: isDirty,
-					isSaving: saveVersion.isPending,
-					onSave: () => void handleSave(),
-				}}
-			/>
+			<WorkflowTopBarFeature workflowId={topBarId} view="editor" />
 			{validation.graphErrors.length > 0 || saveError ? (
 				<div
 					role="alert"
@@ -312,7 +148,7 @@ function WorkflowCanvasLoaded({
 				graph={initial.graph}
 				layout={initial.layout}
 				meta={initial.meta}
-				organizationSlug={organizationSlug}
+				organizationSlug={activeOrganization.slug}
 				descriptors={descriptors}
 				connectorErrors={validation.connectorErrors}
 				events={events}
@@ -320,16 +156,25 @@ function WorkflowCanvasLoaded({
 				runStatuses={runStatuses}
 				runSteps={runSteps}
 				onEvaluateExpression={handleEvaluateExpression}
-				credentials={credentials}
-				authSchemes={authSchemes}
+				credentials={credentialsQuery.data?.data ?? []}
+				authSchemes={catalogueQuery.data?.data.auth_schemes ?? []}
 				onCreateCredential={handleCreateCredential}
-				testRun={{ running, start: () => setRunDialogOpen(true) }}
-				onChange={handleChange}
+				canTest={workflowId !== null}
+				testRun={{
+					running:
+						runDetail !== undefined && !isTerminalRunStatus(runDetail.status),
+					start: () => {
+						if (workflowId) setRunDialogOpen(true)
+					},
+				}}
+				onChange={session.onGraphChange}
 			/>
-			<RunNowFeature
-				workflowId={workflowId}
-				controlled={{ open: runDialogOpen, onOpenChange: setRunDialogOpen }}
-			/>
+			{workflowId ? (
+				<RunNowFeature
+					workflowId={workflowId}
+					controlled={{ open: runDialogOpen, onOpenChange: setRunDialogOpen }}
+				/>
+			) : null}
 		</div>
 	)
 }

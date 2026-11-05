@@ -43,10 +43,25 @@ describe('resolveTriggerExample', () => {
 		},
 	]
 
-	it('returns the payload example of the first selected event, in catalogue order', () => {
+	it('returns the payload example of the first selected event, in selection order', () => {
 		expect(
 			resolveTriggerExample(events, ['invoice.paid', 'quote.accepted']),
+		).toEqual({ invoice_id: 'i1' })
+	})
+
+	it('does not depend on the order the catalogue came in', () => {
+		expect(
+			resolveTriggerExample([...events].reverse(), [
+				'quote.accepted',
+				'invoice.paid',
+			]),
 		).toEqual({ quote_id: 'q1' })
+	})
+
+	it('skips a selected event the catalogue does not know', () => {
+		expect(
+			resolveTriggerExample(events, ['unknown.event', 'invoice.paid']),
+		).toEqual({ invoice_id: 'i1' })
 	})
 
 	it('is undefined when nothing is selected', () => {

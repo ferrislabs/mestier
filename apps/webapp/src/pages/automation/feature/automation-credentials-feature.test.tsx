@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
@@ -9,7 +9,10 @@ import {
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { AutomationCredentialsFeature } from '#/pages/automation/feature/automation-credentials-feature'
-import { patchCredentialMeta } from '#/pages/automation/feature/mocks/credential-meta'
+import {
+	credentialMetaOf,
+	patchCredentialMeta,
+} from '#/pages/automation/feature/mocks/credential-meta'
 import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 /**
@@ -64,6 +67,50 @@ const AUTH_SCHEMES = [
 			{
 				name: 'token',
 				label: 'Token',
+				required: true,
+				kind: 'Text',
+				expression: false,
+				secret: true,
+			},
+		],
+	},
+	{
+		kind: 'http_header',
+		label: 'HTTP header',
+		fields: [
+			{
+				name: 'header_name',
+				label: 'Header name',
+				required: true,
+				kind: 'Text',
+				expression: false,
+				secret: false,
+			},
+			{
+				name: 'header_value',
+				label: 'Header value',
+				required: true,
+				kind: 'Text',
+				expression: false,
+				secret: true,
+			},
+		],
+	},
+	{
+		kind: 'odoo_api',
+		label: 'Odoo API key',
+		fields: [
+			{
+				name: 'base_url',
+				label: 'Instance URL',
+				required: true,
+				kind: 'Text',
+				expression: false,
+				secret: false,
+			},
+			{
+				name: 'api_key',
+				label: 'API key',
 				required: true,
 				kind: 'Text',
 				expression: false,
@@ -197,7 +244,7 @@ describe('AutomationCredentialsFeature — creation', () => {
 		await user.click(
 			await screen.findByRole('button', { name: 'Nouvelle identification' }),
 		)
-		await user.click(screen.getByRole('button', { name: /Bearer token/ }))
+		await user.click(screen.getByRole('button', { name: /^Bearer/ }))
 		await user.type(screen.getByLabelText('Nom'), 'Signature sortante')
 		await user.click(screen.getByRole('combobox', { name: 'Origine' }))
 		await user.click(
@@ -225,9 +272,9 @@ describe('AutomationCredentialsFeature — creation', () => {
 		await user.click(
 			await screen.findByRole('button', { name: 'Nouvelle identification' }),
 		)
-		await user.click(screen.getByRole('button', { name: /Bearer token/ }))
+		await user.click(screen.getByRole('button', { name: /^Bearer/ }))
 		await user.type(screen.getByLabelText('Nom'), 'Odoo')
-		await user.type(screen.getByLabelText('Token'), 'shh')
+		await user.type(screen.getByLabelText('Jeton'), 'shh')
 		await user.click(
 			screen.getByRole('button', { name: 'Créer l’identification' }),
 		)
@@ -244,7 +291,7 @@ describe('AutomationCredentialsFeature — creation', () => {
 		await user.click(
 			await screen.findByRole('button', { name: 'Nouvelle identification' }),
 		)
-		await user.click(screen.getByRole('button', { name: /Bearer token/ }))
+		await user.click(screen.getByRole('button', { name: /^Bearer/ }))
 		await user.type(screen.getByLabelText('Nom'), 'Sans token')
 		await user.click(
 			screen.getByRole('button', { name: 'Créer l’identification' }),
@@ -303,7 +350,7 @@ describe('AutomationCredentialsFeature — deletion refused', () => {
 			api.mockGet(CREDENTIALS_PATH, () => ({ data: [credential()] }))
 			api.mockMutation('delete', CREDENTIAL_PATH, () => {
 				throw new Error(
-					'credential is still referenced by workflow(s): Créer une facture Odoo',
+					'Conflict: credential is still referenced by workflow(s): Créer une facture Odoo',
 				)
 			})
 		})
@@ -318,7 +365,7 @@ describe('AutomationCredentialsFeature — deletion refused', () => {
 
 		expect(
 			await screen.findByText(
-				'credential is still referenced by workflow(s): Créer une facture Odoo',
+				'Impossible de la supprimer : elle est encore utilisée par Créer une facture Odoo.',
 			),
 		).toBeDefined()
 	})
@@ -400,5 +447,418 @@ describe('AutomationCredentialsFeature — mocked status and usage', () => {
 		expect(
 			(await screen.findByLabelText(/Description/)) as HTMLTextAreaElement,
 		).toHaveProperty('value', 'Pour les relances.')
+	})
+})
+
+describe('AutomationCredentialsFeature — order of the table', () => {
+	it('lists the most recently created identification first', async () => {
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [
+					credential({
+						id: 'old',
+						name: 'Ancienne',
+						created_at: '2026-01-01T00:00:00Z',
+					}),
+					credential({
+						id: 'new',
+						name: 'Récente',
+						created_at: '2026-08-01T00:00:00Z',
+					}),
+					credential({
+						id: 'mid',
+						name: 'Intermédiaire',
+						created_at: '2026-04-01T00:00:00Z',
+					}),
+				],
+			}))
+		})
+
+		await screen.findByText('Récente')
+		const names = screen
+			.getAllByRole('row')
+			.slice(1)
+			.map((row) => within(row).getAllByRole('button')[0]?.textContent)
+
+		expect(names).toEqual(['Récente', 'Intermédiaire', 'Ancienne'])
+	})
+})
+
+describe('AutomationCredentialsFeature — type labels', () => {
+	it('names the type in French in the table', async () => {
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [
+					credential({ id: 'a', name: 'Un', kind: 'bearer_token' }),
+					credential({ id: 'b', name: 'Deux', kind: 'http_header' }),
+					credential({ id: 'c', name: 'Trois', kind: 'odoo_api' }),
+				],
+			}))
+		})
+
+		await screen.findByText('Un')
+		expect(screen.getByText('Bearer')).toBeDefined()
+		expect(screen.getByText('Clé d’API dans un en-tête')).toBeDefined()
+		expect(screen.getByText('Clé d’API Odoo')).toBeDefined()
+	})
+
+	it('never shows the technical code while the catalogue is still loading', async () => {
+		renderFeature((api) => {
+			api.mockGet(CONNECTORS_PATH, () => new Promise(() => {}))
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential({ kind: 'bearer_token' })],
+			}))
+		})
+
+		await screen.findByText('Signature sortante')
+
+		expect(screen.getByText('Bearer')).toBeDefined()
+		expect(screen.queryByText('bearer_token')).toBeNull()
+	})
+
+	it('shows a loading state, not the type picker, when editing before the catalogue is there', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CONNECTORS_PATH, () => new Promise(() => {}))
+			api.mockGet(CREDENTIALS_PATH, () => ({ data: [credential()] }))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+
+		const dialog = await screen.findByRole('dialog')
+		expect(within(dialog).getByText('Chargement…')).toBeDefined()
+		expect(within(dialog).getByText('Signature sortante')).toBeDefined()
+		expect(within(dialog).queryByText(/Choisissez comment Mestier/)).toBeNull()
+	})
+})
+
+describe('AutomationCredentialsFeature — dialog wording', () => {
+	it('says where the type can be used, without the webhook that does not exist yet', async () => {
+		const user = userEvent.setup()
+		renderFeature(() => {})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /^Bearer/ }))
+
+		expect(
+			screen.getByText(
+				'Utilisable dans : Requête HTTP et opérations de collection.',
+			),
+		).toBeDefined()
+		expect(screen.queryByText(/Webhook/)).toBeNull()
+	})
+
+	it('offers the French categories and types, and finds a type by what it does', async () => {
+		const user = userEvent.setup()
+		renderFeature(() => {})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+
+		expect(screen.getByText('Requêtes HTTP')).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: /Clé d’API dans un en-tête/ }),
+		).toBeDefined()
+		expect(screen.getByRole('button', { name: /Clé d’API Odoo/ })).toBeDefined()
+
+		await user.type(
+			screen.getByRole('searchbox', {
+				name: 'Rechercher un type d’identification',
+			}),
+			'http_header',
+		)
+
+		expect(screen.getByText(/Aucun type ne correspond/)).toBeDefined()
+	})
+
+	it('prefills the header name with its default and labels the fields in French', async () => {
+		const user = userEvent.setup()
+		renderFeature(() => {})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(
+			screen.getByRole('button', { name: /Clé d’API dans un en-tête/ }),
+		)
+
+		expect(
+			(screen.getByLabelText('Nom de l’en-tête') as HTMLInputElement).value,
+		).toBe('X-API-Key')
+		expect(screen.getByLabelText('Valeur')).toBeDefined()
+		expect(screen.getByLabelText('Nom')).toHaveProperty(
+			'placeholder',
+			'Ex. Clé d’API dans un en-tête – fournisseur',
+		)
+	})
+
+	it('sends the prefilled default along with what was typed', async () => {
+		const user = userEvent.setup()
+		const api = renderFeature((fake) => {
+			fake.mockMutation('post', CREDENTIALS_PATH, () => ({
+				data: credential({ origin: 'supplied' }),
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(
+			screen.getByRole('button', { name: /Clé d’API dans un en-tête/ }),
+		)
+		await user.type(screen.getByLabelText('Nom'), 'API tarifs')
+		await user.type(screen.getByLabelText('Valeur'), 'sk-123')
+		await user.click(
+			screen.getByRole('button', { name: 'Créer l’identification' }),
+		)
+
+		await waitFor(() => {
+			expect(
+				api.calls.some(
+					(c) => c.method === 'post' && c.path === CREDENTIALS_PATH,
+				),
+			).toBe(true)
+		})
+		const call = api.calls.find(
+			(c) => c.method === 'post' && c.path === CREDENTIALS_PATH,
+		)
+		expect((call?.params as { body: unknown }).body).toEqual({
+			kind: 'http_header',
+			name: 'API tarifs',
+			origin: 'supplied',
+			data: { header_name: 'X-API-Key', header_value: 'sk-123' },
+		})
+	})
+
+	it('puts the Odoo placeholders in the form', async () => {
+		const user = userEvent.setup()
+		renderFeature(() => {})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /Clé d’API Odoo/ }))
+
+		expect(screen.getByLabelText('URL de l’instance')).toHaveProperty(
+			'placeholder',
+			'https://exemple.odoo.com',
+		)
+		expect(screen.getByLabelText('Clé d’API')).toBeDefined()
+	})
+
+	it('words the edit subtitle like the prototype', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({ data: [credential()] }))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+
+		expect(
+			await screen.findByText(
+				'Modifiez son nom, sa description ou ses paramètres de connexion.',
+			),
+		).toBeDefined()
+		expect(screen.queryByText(/Laissez les champs vides/)).toBeNull()
+	})
+})
+
+describe('AutomationCredentialsFeature — errors in French', () => {
+	it('says the name is taken without the prefix or the constraint name', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockMutation('post', CREDENTIALS_PATH, () => {
+				throw new Error('Conflict: uq_automation_credential_name')
+			})
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /^Bearer/ }))
+		await user.type(screen.getByLabelText('Nom'), 'Doublon')
+		await user.type(screen.getByLabelText('Jeton'), 'shh')
+		await user.click(
+			screen.getByRole('button', { name: 'Créer l’identification' }),
+		)
+
+		expect(
+			await screen.findByText(
+				'Une identification de ce type porte déjà ce nom.',
+			),
+		).toBeDefined()
+		expect(screen.queryByText(/Conflict/)).toBeNull()
+		expect(screen.queryByText(/uq_automation/)).toBeNull()
+	})
+
+	it('names the missing field the server complains about by its French label', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockMutation('post', CREDENTIALS_PATH, () => {
+				throw new Error('Conflict: missing field `token`')
+			})
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+		await user.click(screen.getByRole('button', { name: /^Bearer/ }))
+		await user.type(screen.getByLabelText('Nom'), 'X')
+		await user.type(screen.getByLabelText('Jeton'), 'shh')
+		await user.click(
+			screen.getByRole('button', { name: 'Créer l’identification' }),
+		)
+
+		expect(
+			await screen.findByText('Le champ « Jeton » est obligatoire.'),
+		).toBeDefined()
+	})
+
+	it('explains a failed list load in French', async () => {
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => {
+				throw new Error('HTTP 500: Internal Server Error')
+			})
+		})
+
+		expect(
+			await screen.findByText(
+				'Une erreur est survenue. Réessayez dans un instant.',
+			),
+		).toBeDefined()
+	})
+})
+
+describe('AutomationCredentialsFeature — deleting a used credential', () => {
+	const refused = () => {
+		throw new Error(
+			'Conflict: credential is still referenced by workflow(s): Relance devis',
+		)
+	}
+
+	it('keeps the dialog open, the description and the confirmation when the server refuses', async () => {
+		patchCredentialMeta('cred-keep', { description: 'Pour les relances.' })
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential({ id: 'cred-keep' })],
+			}))
+			api.mockMutation('delete', CREDENTIAL_PATH, refused)
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(await screen.findByRole('button', { name: 'Supprimer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Supprimer définitivement' }),
+		)
+
+		expect(
+			await screen.findByText(
+				'Impossible de la supprimer : elle est encore utilisée par Relance devis.',
+			),
+		).toBeDefined()
+		expect(screen.getByRole('dialog')).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: 'Supprimer définitivement' }),
+		).toBeDefined()
+		expect(credentialMetaOf('cred-keep').description).toBe('Pour les relances.')
+		expect(screen.queryByText(/Conflict/)).toBeNull()
+	})
+
+	it('does not repeat the refusal in the banner of the list', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({ data: [credential()] }))
+			api.mockMutation('delete', CREDENTIAL_PATH, refused)
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(await screen.findByRole('button', { name: 'Supprimer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Supprimer définitivement' }),
+		)
+
+		await screen.findByText(/Impossible de la supprimer/)
+		expect(screen.getAllByText(/Impossible de la supprimer/)).toHaveLength(1)
+	})
+
+	it('forgets the description and closes the dialog once the server accepts', async () => {
+		patchCredentialMeta('cred-gone', { description: 'À oublier.' })
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential({ id: 'cred-gone' })],
+			}))
+			api.mockMutation('delete', CREDENTIAL_PATH, () => ({}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(await screen.findByRole('button', { name: 'Supprimer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Supprimer définitivement' }),
+		)
+
+		await waitFor(() => {
+			expect(screen.queryByRole('dialog')).toBeNull()
+		})
+		expect(credentialMetaOf('cred-gone').description).toBe('')
+	})
+
+	it('does not show a previous refusal when the dialog is opened again', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({ data: [credential()] }))
+			api.mockMutation('delete', CREDENTIAL_PATH, refused)
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(await screen.findByRole('button', { name: 'Supprimer' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Supprimer définitivement' }),
+		)
+		await screen.findByText(/Impossible de la supprimer/)
+
+		await user.keyboard('{Escape}')
+		await waitFor(() => {
+			expect(screen.queryByRole('dialog')).toBeNull()
+		})
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await screen.findByRole('dialog')
+
+		expect(screen.queryByText(/Impossible de la supprimer/)).toBeNull()
+	})
+})
+
+describe('AutomationCredentialsFeature — catalogue not there yet', () => {
+	it('shows a loading state, not an empty type picker, when creating before the catalogue is there', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CONNECTORS_PATH, () => new Promise(() => {}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle identification' }),
+		)
+
+		const dialog = await screen.findByRole('dialog')
+		expect(within(dialog).getByText('Chargement…')).toBeDefined()
+		expect(within(dialog).queryByText(/Aucun type ne correspond/)).toBeNull()
 	})
 })

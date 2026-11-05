@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { CredentialSecretReveal } from '#/pages/automation/ui/credential-secret-reveal'
+import {
+	CredentialSecretReveal,
+	SecretRevealField,
+} from '#/pages/automation/ui/credential-secret-reveal'
 
 describe('CredentialSecretReveal', () => {
 	it('shows the secret and warns it will not be shown again', () => {
@@ -23,6 +26,7 @@ describe('CredentialSecretReveal', () => {
 		await user.click(screen.getByRole('button', { name: /Copier/ }))
 
 		expect(writeText).toHaveBeenCalledWith('s3cr3t-value')
+		expect(screen.getByRole('button', { name: /Copié/ })).toBeDefined()
 	})
 
 	it('calls onDone when the user continues', async () => {
@@ -33,5 +37,15 @@ describe('CredentialSecretReveal', () => {
 		await user.click(screen.getByRole('button', { name: /Continuer/ }))
 
 		expect(onDone).toHaveBeenCalledTimes(1)
+	})
+})
+
+describe('SecretRevealField', () => {
+	it('shows the secret read-only under its label', () => {
+		render(<SecretRevealField secret="s3cr3t-value" />)
+
+		const input = screen.getByLabelText('Secret') as HTMLInputElement
+		expect(input.value).toBe('s3cr3t-value')
+		expect(input.readOnly).toBe(true)
 	})
 })

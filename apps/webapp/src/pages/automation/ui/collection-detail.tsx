@@ -12,6 +12,7 @@ import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import { collectionsPath } from '#/pages/automation/lib/automation-paths'
 import {
 	describeSource,
 	formatImportDate,
@@ -53,7 +54,7 @@ export function CollectionDetail({
 	onUpdate: (autoCheck: boolean) => void
 }) {
 	const [openOperationId, setOpenOperationId] = useState<string | null>(null)
-	const listPath = buildOrgPath(organizationSlug, '/automatisation/collections')
+	const listPath = buildOrgPath(organizationSlug, collectionsPath())
 
 	if (!collection) {
 		return (

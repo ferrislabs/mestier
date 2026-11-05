@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type {
@@ -44,7 +44,6 @@ function baseProps(
 		sort: 'updated',
 		onSortChange: vi.fn(),
 		onResetFilters: vi.fn(),
-		onCreate: vi.fn(),
 		onRename: vi.fn(),
 		onToggleEnabled: vi.fn(),
 		onDuplicate: vi.fn(),
@@ -127,6 +126,19 @@ describe('AutomationWorkflowsList — empty state', () => {
 		expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
 	})
 
+	it('draws the first-workflow state like the no-result state', async () => {
+		await render({ workflows: [], hasWorkflowsInScope: false })
+
+		const card = screen.getByText('Aucun workflow').parentElement
+		expect(card?.className).toContain('border-dashed')
+		expect(card?.className).toContain('py-14')
+		expect(card?.querySelector('svg')).not.toBeNull()
+		expect(screen.getByText('Aucun workflow').className).toContain('text-base')
+		expect(
+			screen.queryByRole('button', { name: 'Réinitialiser les filtres' }),
+		).toBeNull()
+	})
+
 	it('offers to reset the filters when they hide every workflow', async () => {
 		const user = userEvent.setup()
 		const props = baseProps({ workflows: [], query: 'zzz' })
@@ -145,14 +157,28 @@ describe('AutomationWorkflowsList — empty state', () => {
 })
 
 describe('AutomationWorkflowsList — create', () => {
-	it('calls onCreate from the header action', async () => {
-		const user = userEvent.setup()
-		const props = baseProps()
-		await render(props)
+	it('links the header action to a new draft in the editor', async () => {
+		await render()
 
-		await user.click(screen.getByRole('button', { name: 'Nouveau workflow' }))
+		const link = screen.getByRole('link', { name: 'Nouveau workflow' })
 
-		expect(props.onCreate).toHaveBeenCalled()
+		expect(link.getAttribute('href')).toBe(
+			'/o/atelier-bois/automatisation/workflows/nouveau',
+		)
+		expect(
+			screen.queryByRole('button', { name: 'Nouveau workflow' }),
+		).toBeNull()
+	})
+
+	it('keeps the same link on a project page', async () => {
+		const ventes = { id: 'ventes', name: 'Ventes', parentId: null }
+		await render({ folder: ventes, folderPath: [ventes] })
+
+		expect(
+			screen
+				.getByRole('link', { name: 'Nouveau workflow' })
+				.getAttribute('href'),
+		).toBe('/o/atelier-bois/automatisation/workflows/nouveau')
 	})
 })
 
@@ -182,6 +208,42 @@ describe('AutomationWorkflowsList — row actions', () => {
 		expect(labels.indexOf('Archiver')).toBeGreaterThan(
 			labels.indexOf('Renommer'),
 		)
+	})
+
+	it('draws every entry with an icon and sets the destructive ones apart after a separator', async () => {
+		const user = userEvent.setup()
+		await render()
+
+		await user.click(screen.getByRole('button', { name: /Actions pour/ }))
+
+		const items = screen.getAllByRole('menuitem')
+		expect(items.map((item) => item.textContent)).toEqual([
+			'Dupliquer',
+			'Exporter',
+			'Historique d’exécution',
+			'Renommer',
+			'Archiver',
+			'Supprimer',
+		])
+		for (const item of items) {
+			expect(item.querySelector('svg')).not.toBeNull()
+		}
+		const destructive = items.filter(
+			(item) => item.getAttribute('data-variant') === 'destructive',
+		)
+		expect(destructive.map((item) => item.textContent)).toEqual([
+			'Archiver',
+			'Supprimer',
+		])
+		const separator = screen.getByRole('separator')
+		expect(
+			separator.compareDocumentPosition(destructive[0] as HTMLElement) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+		expect(
+			separator.compareDocumentPosition(items[3] as HTMLElement) &
+				Node.DOCUMENT_POSITION_PRECEDING,
+		).toBeTruthy()
 	})
 
 	it('calls onDuplicate, onExport and onArchive with the row', async () => {
@@ -235,23 +297,24 @@ describe('AutomationWorkflowsList — row actions', () => {
 		expect(props.onDelete).not.toHaveBeenCalled()
 		expect(
 			screen.getByRole('alertdialog', {
-				name: /Supprimer Créer une facture Odoo/,
+				name: 'Supprimer « Créer une facture Odoo » ?',
 			}),
 		).toBeDefined()
 
-		await user.click(screen.getByRole('button', { name: 'Supprimer' }))
+		const confirm = screen.getByRole('button', { name: 'Supprimer' })
+		expect(confirm.className).toContain('bg-destructive')
+
+		await user.click(confirm)
 
 		expect(props.onDelete).toHaveBeenCalledWith(workflow())
 	})
 })
 
 describe('AutomationWorkflowsList — permission gating', () => {
-	it('offers no create button to a caller without MANAGE_AUTOMATION', async () => {
+	it('offers no create link to a caller without MANAGE_AUTOMATION', async () => {
 		await render({}, ['VIEW_AUTOMATION'])
 
-		expect(
-			screen.queryByRole('button', { name: 'Nouveau workflow' }),
-		).toBeNull()
+		expect(screen.queryByRole('link', { name: 'Nouveau workflow' })).toBeNull()
 	})
 
 	it('offers no row actions menu to a caller without MANAGE_AUTOMATION', async () => {
@@ -289,13 +352,35 @@ describe('AutomationWorkflowsList — projects', () => {
 		).toBeDefined()
 	})
 
+	it('links the breadcrumb back to the workflow list and to the parent projects', async () => {
+		const ventes = { id: 'ventes', name: 'Ventes', parentId: null }
+		const europe = { id: 'europe', name: 'Europe', parentId: 'ventes' }
+		await render({ folder: europe, folderPath: [ventes, europe] })
+
+		const breadcrumb = screen.getByRole('navigation', {
+			name: 'Emplacement du projet',
+		})
+		expect(
+			within(breadcrumb)
+				.getByRole('link', { name: 'Workflows' })
+				.getAttribute('href'),
+		).toBe('/o/atelier-bois/automatisation/workflows')
+		expect(
+			within(breadcrumb)
+				.getByRole('link', { name: 'Ventes' })
+				.getAttribute('href'),
+		).toBe('/o/atelier-bois/automatisation/projets/ventes')
+	})
+
 	it('says so when the project does not exist', async () => {
 		await render({ folderMissing: true })
 
 		expect(screen.getByText('Projet introuvable')).toBeDefined()
 		expect(
-			screen.getByRole('link', { name: 'Voir tous les workflows' }),
-		).toBeDefined()
+			screen
+				.getByRole('link', { name: 'Voir tous les workflows' })
+				.getAttribute('href'),
+		).toBe('/o/atelier-bois/automatisation/workflows')
 	})
 })
 
@@ -306,7 +391,7 @@ describe('AutomationWorkflowsList — reaching the editor', () => {
 		const link = screen.getByRole('link', { name: /Créer une facture Odoo/ })
 
 		expect(link.getAttribute('href')).toBe(
-			'/o/atelier-bois/automatisation/workflow-1',
+			'/o/atelier-bois/automatisation/workflows/workflow-1',
 		)
 	})
 
@@ -317,7 +402,7 @@ describe('AutomationWorkflowsList — reaching the editor', () => {
 
 		const history = screen.getByRole('menuitem', { name: /Historique/ })
 		expect(history.getAttribute('href')).toBe(
-			'/o/atelier-bois/automatisation/workflow-1/executions',
+			'/o/atelier-bois/automatisation/workflows/workflow-1?vue=executions',
 		)
 	})
 

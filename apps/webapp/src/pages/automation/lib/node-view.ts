@@ -1,5 +1,10 @@
 import type { Schemas } from '#/api/api.client'
+import {
+	describeConnector,
+	triggerCopy,
+} from '#/pages/automation/lib/connector-copy'
 import { toItems } from '#/pages/automation/lib/items'
+import { isManualTrigger } from '#/pages/automation/lib/trigger-events'
 
 export interface OutputBranch {
 	id: string
@@ -39,4 +44,28 @@ export function outputViewFromPayload(payload: unknown): NodeOutputView {
 		return { state: 'not-executed' }
 	}
 	return readyView(payload)
+}
+
+interface DescribedNode {
+	subtitle: string
+	typeLabel: string
+	family?: string
+	connector?: Schemas.PlacedConnectorDto
+	trigger?: Schemas.PlacedTriggerDto
+}
+
+function typeSubtitle(node: DescribedNode): string {
+	if (node.trigger) {
+		return triggerCopy(isManualTrigger(node.trigger) ? 'manual' : 'events')
+			.subtitle
+	}
+	return describeConnector({
+		kind: node.connector?.kind ?? '',
+		family: node.family ?? '',
+		label: node.typeLabel,
+	}).subtitle
+}
+
+export function nodeDescription(node: DescribedNode): string {
+	return node.subtitle || `${node.typeLabel} · ${typeSubtitle(node)}`
 }

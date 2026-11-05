@@ -1,10 +1,8 @@
-import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAutomationRuns,
 	useAutomationWorkflows,
-	useCreateWorkflow,
 	useDeleteWorkflow,
 	useUpdateWorkflow,
 	type Workflow,
@@ -58,7 +56,7 @@ export function AutomationWorkflowsFeature({
 }
 
 interface Draft {
-	id: string | null
+	id: string
 	values: WorkflowFormValues
 }
 
@@ -72,32 +70,12 @@ function AutomationWorkflowsWorkspace({
 	folderId?: string
 }) {
 	const [draft, setDraft] = useState<Draft | null>(null)
-	const navigate = useNavigate()
-	const wantsNew = useSearch({
-		strict: false,
-		select: (search) => (search as { nouveau?: unknown }).nouveau,
-	})
-	// The side nav's "Nouveau workflow" lands here with `?nouveau=1`: open the
-	// create dialog once, then drop the param so a reload does not reopen it.
-	useEffect(() => {
-		if (!wantsNew) return
-		setDraft({ id: null, values: EMPTY_WORKFLOW_FORM })
-		void navigate({
-			to: '.',
-			search: (current: Record<string, unknown>) => ({
-				...current,
-				nouveau: undefined,
-			}),
-			replace: true,
-		})
-	}, [wantsNew, navigate])
 	const [query, setQuery] = useState('')
 	const [tag, setTag] = useState(ALL_TAGS)
 	const [sort, setSort] = useState<WorkflowSortKey>('updated')
 
 	const workflows = useAutomationWorkflows(organizationId)
 	const runs = useAutomationRuns(organizationId)
-	const createWorkflow = useCreateWorkflow(organizationId)
 	const updateWorkflow = useUpdateWorkflow()
 	const deleteWorkflow = useDeleteWorkflow()
 
@@ -156,12 +134,9 @@ function AutomationWorkflowsWorkspace({
 		}),
 	)
 
-	const isPending = createWorkflow.isPending || updateWorkflow.isPending
-
 	const error =
 		workflows.error ??
 		runs.error ??
-		createWorkflow.error ??
 		updateWorkflow.error ??
 		deleteWorkflow.error
 	const errorMessage = error?.message ?? actionError
@@ -206,23 +181,13 @@ function AutomationWorkflowsWorkspace({
 	const submitDraft = async () => {
 		if (!draft) return
 
-		if (draft.id === null) {
-			await createWorkflow.mutateAsync({
-				path: { organization_id: organizationId },
-				body: {
-					name: draft.values.name.trim(),
-					description: draft.values.description.trim() || null,
-				},
-			})
-		} else {
-			await updateWorkflow.mutateAsync({
-				path: { organization_id: organizationId, workflow_id: draft.id },
-				body: {
-					name: draft.values.name.trim(),
-					description: draft.values.description.trim() || null,
-				},
-			})
-		}
+		await updateWorkflow.mutateAsync({
+			path: { organization_id: organizationId, workflow_id: draft.id },
+			body: {
+				name: draft.values.name.trim(),
+				description: draft.values.description.trim() || null,
+			},
+		})
 
 		setDraft(null)
 	}
@@ -250,7 +215,6 @@ function AutomationWorkflowsWorkspace({
 					setQuery('')
 					setTag(ALL_TAGS)
 				}}
-				onCreate={() => setDraft({ id: null, values: EMPTY_WORKFLOW_FORM })}
 				onRename={(row) =>
 					setDraft({
 						id: row.id,
@@ -276,12 +240,10 @@ function AutomationWorkflowsWorkspace({
 			<WorkflowEditorDialog
 				open={draft !== null}
 				editingName={
-					draft?.id
-						? (rows.find((row) => row.id === draft.id)?.name ?? null)
-						: null
+					draft ? (rows.find((row) => row.id === draft.id)?.name ?? '') : ''
 				}
 				values={draft?.values ?? EMPTY_WORKFLOW_FORM}
-				isPending={isPending}
+				isPending={updateWorkflow.isPending}
 				error={error?.message ?? null}
 				onOpenChange={(open) => {
 					if (!open) setDraft(null)

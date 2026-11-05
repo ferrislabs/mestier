@@ -15,6 +15,7 @@ import {
 	SidebarMenuItem,
 } from '#/components/ui/sidebar'
 import { usePermissions } from '#/hooks/use-permissions'
+import { cn } from '#/lib/utils'
 import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 import { resolveModule } from '#/modules/resolve-module'
 import type { AppModule, NavTarget } from '#/modules/types'
@@ -78,7 +79,11 @@ export function ModuleNav({
 	)
 
 	return (
-		<Sidebar collapsible="icon" className={className} {...props}>
+		<Sidebar
+			collapsible="icon"
+			className={cn('border-nav-border bg-sidebar', className)}
+			{...props}
+		>
 			<SidebarHeader className="h-12 flex-row items-center gap-2 p-0 pr-2 pl-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
 				<Link
 					to={buildOrgPath(organizationSlug, activeModule.basePath)}
@@ -113,7 +118,7 @@ export function ModuleNav({
 				</div>
 			) : null}
 
-			<SidebarContent className="px-2 pt-1 pb-2">
+			<SidebarContent className="gap-0 px-2 pb-2">
 				{activeModule.sidebar ? (
 					<>
 						<div className="group-data-[collapsible=icon]:hidden">

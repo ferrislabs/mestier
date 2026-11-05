@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
 	ALL_TAGS,
 	collectTags,
+	copyName,
 	filterWorkflows,
 	sortWorkflows,
+	workflowFileName,
 } from '#/pages/automation/lib/workflow-list'
 
 const WORKFLOWS = [
@@ -53,5 +55,36 @@ describe('workflow list', () => {
 			'Fin d’intervention',
 		)
 		expect(sortWorkflows(WORKFLOWS, 'name-desc')[0]?.name).toBe('Ticket urgent')
+	})
+})
+
+describe('copyName', () => {
+	it('suffixes the name of an original with (copie)', () => {
+		expect(copyName('Relance des devis')).toBe('Relance des devis (copie)')
+	})
+
+	it('does not stack the suffix when copying a copy', () => {
+		expect(copyName('Relance des devis (copie)')).toBe(
+			'Relance des devis (copie)',
+		)
+	})
+
+	it('keeps a (copie) that is not a trailing suffix', () => {
+		expect(copyName('Ma (copie) du devis')).toBe('Ma (copie) du devis (copie)')
+	})
+})
+
+describe('workflowFileName', () => {
+	it('slugs the name into a readable .json file name', () => {
+		expect(workflowFileName('Fin d’intervention')).toBe(
+			'fin-d-intervention.json',
+		)
+		expect(workflowFileName('Créer une facture Odoo')).toBe(
+			'creer-une-facture-odoo.json',
+		)
+	})
+
+	it('falls back to a generic name when nothing readable is left', () => {
+		expect(workflowFileName('  ??  ')).toBe('workflow.json')
 	})
 })

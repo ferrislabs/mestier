@@ -4,6 +4,10 @@ import {
 	useSaveWorkflowVersion,
 } from '#/hooks/use-automation'
 import { downloadJson } from '#/pages/automation/lib/download'
+import {
+	copyName,
+	workflowFileName,
+} from '#/pages/automation/lib/workflow-list'
 
 const WORKFLOW_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
@@ -32,7 +36,7 @@ export function useWorkflowActions(organizationId: string) {
 		const created = await createWorkflow.mutateAsync({
 			path: { organization_id: organizationId },
 			body: {
-				name: `${source.name} (copie)`,
+				name: copyName(source.name),
 				description: source.description,
 			},
 		})
@@ -54,7 +58,7 @@ export function useWorkflowActions(organizationId: string) {
 
 	async function exportWorkflow(source: WorkflowSource): Promise<void> {
 		const detail = await fetchDetail(source.id)
-		downloadJson(`${source.id}.json`, {
+		downloadJson(workflowFileName(source.name), {
 			name: source.name,
 			description: source.description,
 			tags: source.tags,

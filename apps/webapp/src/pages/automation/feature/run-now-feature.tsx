@@ -10,6 +10,7 @@ import {
 	useWorkflow,
 } from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
+import { workflowExecutionsLocation } from '#/pages/automation/lib/automation-paths'
 import { RunNowDialog } from '#/pages/automation/ui/run-now-dialog'
 
 export interface RunNowControl {
@@ -87,12 +88,10 @@ function RunNowWorkspace({
 	}
 
 	function handleOpenHistory() {
+		const location = workflowExecutionsLocation(workflowId)
 		void navigate({
-			to: buildOrgPath(
-				organizationSlug,
-				'/automatisation/$workflowId/executions',
-			),
-			params: { workflowId },
+			to: buildOrgPath(organizationSlug, location.to),
+			search: location.search,
 		})
 	}
 

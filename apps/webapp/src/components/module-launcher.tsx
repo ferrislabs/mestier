@@ -117,7 +117,7 @@ function ModuleTile({
 				className={cn(tileClassName, 'cursor-not-allowed opacity-60')}
 			>
 				<span className="module-tile flex size-11 items-center justify-center">
-					<ModuleIcon module={module} glyph size="lg" />
+					<ModuleIcon module={module} glyph className="[&_svg]:size-[22px]" />
 				</span>
 				<span className="w-full whitespace-nowrap text-[11.5px] leading-tight">
 					{module.label}
@@ -135,7 +135,7 @@ function ModuleTile({
 			className={cn(tileClassName, 'hover:bg-accent', active && 'bg-accent')}
 		>
 			<span className="module-tile flex size-11 items-center justify-center">
-				<ModuleIcon module={module} glyph size="lg" />
+				<ModuleIcon module={module} glyph className="[&_svg]:size-[22px]" />
 			</span>
 			<span
 				className={cn(

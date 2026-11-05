@@ -19,6 +19,7 @@ import {
 } from '#/pages/automation/ui/execution-steps'
 
 export interface ExecutionDetailHeader {
+	runId: string
 	shortId: string
 	startedAt: string
 	trigger: string
@@ -119,7 +120,7 @@ function ExecutionDetail({
 				<div className="relative min-w-0 flex-1">
 					{detail.graph ? (
 						<ExecutionCanvas
-							key={header.shortId}
+							key={header.runId}
 							graph={detail.graph}
 							layout={detail.layout}
 							descriptors={detail.descriptors}

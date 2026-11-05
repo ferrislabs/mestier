@@ -1,5 +1,9 @@
 // MOCK: home activity feed — no backend endpoint yet. Replace with an endpoint aggregating what each module wants followed (late invoices, pending leave requests, unread channels…).
 import type { ModuleId } from '#/modules/types'
+import {
+	identificationsPath,
+	workflowsPath,
+} from '#/pages/automation/lib/automation-paths'
 import type { ActivityState } from '#/pages/home/types'
 
 export interface MockActivity {
@@ -23,7 +27,7 @@ export const MOCK_HOME_ACTIVITY: MockActivity[] = [
 			'Étape « Envoyer l’e-mail de relance » : identification SMTP expirée',
 		state: 'failed',
 		when: 'Il y a 2 heures',
-		to: '/automatisation',
+		to: workflowsPath(),
 	},
 	{
 		id: 'auto-smtp',
@@ -31,7 +35,7 @@ export const MOCK_HOME_ACTIVITY: MockActivity[] = [
 		title: 'Identification « SMTP atelier » expirée',
 		context: 'Utilisée par 3 workflows',
 		state: 'late',
-		to: '/automatisation/credentials',
+		to: identificationsPath(),
 	},
 	{
 		id: 'crm-f112',

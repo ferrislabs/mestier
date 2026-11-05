@@ -5,14 +5,14 @@ import {
 	aggregateConnectorStatuses,
 	canReplay,
 	connectorOutputsFromSteps,
-	formatRunDuration,
+	elapsedMsSince,
 	groupRunSteps,
 	isTerminalRunStatus,
 	latestRunByWorkflow,
 	latestRunId,
 	representativeStepByConnector,
 	runDurationMs,
-	runStatusBorderClass,
+	runElapsedMs,
 	runTriggerLabel,
 	triggerEventLabel,
 } from '#/pages/automation/lib/workflow-runs'
@@ -193,25 +193,89 @@ describe('runDurationMs', () => {
 	})
 })
 
-describe('formatRunDuration', () => {
-	it('renders an unknown duration as an em dash', () => {
-		expect(formatRunDuration(null)).toBe('—')
+describe('elapsedMsSince', () => {
+	const NOW = new Date('2026-08-01T00:00:03.200Z').getTime()
+
+	it('is the time elapsed since the start', () => {
+		expect(elapsedMsSince('2026-08-01T00:00:01.000Z', NOW)).toBe(2200)
 	})
 
-	it('renders sub-second durations in milliseconds', () => {
-		expect(formatRunDuration(340)).toBe('340ms')
+	it('is null without a start', () => {
+		expect(elapsedMsSince(null, NOW)).toBeNull()
+		expect(elapsedMsSince(undefined, NOW)).toBeNull()
 	})
 
-	it('renders sub-minute durations with one decimal of seconds', () => {
-		expect(formatRunDuration(1500)).toBe('1.5s')
+	it('never goes negative when the clock is behind the server', () => {
+		expect(elapsedMsSince('2026-08-01T00:00:09.000Z', NOW)).toBe(0)
 	})
 
-	it('renders minute-scale durations as minutes and seconds', () => {
-		expect(formatRunDuration(125_000)).toBe('2min 5s')
+	it('is null for an unreadable date', () => {
+		expect(elapsedMsSince('not a date', NOW)).toBeNull()
+	})
+})
+
+describe('runElapsedMs', () => {
+	const NOW = new Date('2026-08-01T00:00:03.200Z').getTime()
+
+	it('is the final duration of a finished run, whatever the clock says', () => {
+		expect(
+			runElapsedMs(
+				{
+					status: 'succeeded',
+					started_at: '2026-08-01T00:00:00.000Z',
+					finished_at: '2026-08-01T00:00:01.500Z',
+				},
+				NOW,
+			),
+		).toBe(1500)
 	})
 
-	it('drops the seconds when they are exactly zero', () => {
-		expect(formatRunDuration(120_000)).toBe('2min')
+	it('counts from the start while the run is running', () => {
+		expect(
+			runElapsedMs(
+				{
+					status: 'running',
+					started_at: '2026-08-01T00:00:01.000Z',
+					finished_at: null,
+				},
+				NOW,
+			),
+		).toBe(2200)
+	})
+
+	it('has no duration for a run that has not started', () => {
+		expect(
+			runElapsedMs(
+				{ status: 'pending', started_at: null, finished_at: null },
+				NOW,
+			),
+		).toBeNull()
+	})
+
+	it('has no duration for a pending run waiting for its next attempt', () => {
+		expect(
+			runElapsedMs(
+				{
+					status: 'pending',
+					started_at: '2026-08-01T00:00:01.000Z',
+					finished_at: null,
+				},
+				NOW,
+			),
+		).toBeNull()
+	})
+
+	it('has no duration for a settled run that never recorded its end', () => {
+		expect(
+			runElapsedMs(
+				{
+					status: 'failed',
+					started_at: '2026-08-01T00:00:01.000Z',
+					finished_at: null,
+				},
+				NOW,
+			),
+		).toBeNull()
 	})
 })
 
@@ -254,13 +318,57 @@ describe('aggregateConnectorStatuses', () => {
 		expect(statuses.get('c1')).toBe('failed')
 	})
 
-	it('surfaces running over pending when nothing has failed', () => {
+	it('surfaces in_flight over pending when nothing has failed', () => {
 		const statuses = aggregateConnectorStatuses([
 			step({ connector_id: 'c1', iteration_path: 'c2[0]', status: 'pending' }),
-			step({ connector_id: 'c1', iteration_path: 'c2[1]', status: 'running' }),
+			step({
+				connector_id: 'c1',
+				iteration_path: 'c2[1]',
+				status: 'in_flight',
+			}),
 		])
 
-		expect(statuses.get('c1')).toBe('running')
+		expect(statuses.get('c1')).toBe('in_flight')
+	})
+
+	it('surfaces a dead step over every other status', () => {
+		const statuses = aggregateConnectorStatuses([
+			step({ connector_id: 'c1', iteration_path: 'c2[0]', status: 'failed' }),
+			step({ connector_id: 'c1', iteration_path: 'c2[1]', status: 'dead' }),
+			step({
+				connector_id: 'c1',
+				iteration_path: 'c2[2]',
+				status: 'succeeded',
+			}),
+			step({
+				connector_id: 'c1',
+				iteration_path: 'c2[3]',
+				status: 'in_flight',
+			}),
+		])
+
+		expect(statuses.get('c1')).toBe('dead')
+	})
+
+	it('lets a step that ran win over a skipped one', () => {
+		const statuses = aggregateConnectorStatuses([
+			step({ connector_id: 'c1', iteration_path: 'c2[0]', status: 'skipped' }),
+			step({
+				connector_id: 'c1',
+				iteration_path: 'c2[1]',
+				status: 'succeeded',
+			}),
+		])
+
+		expect(statuses.get('c1')).toBe('succeeded')
+	})
+
+	it('keeps a connector that was only skipped as skipped', () => {
+		const statuses = aggregateConnectorStatuses([
+			step({ connector_id: 'c1', status: 'skipped' }),
+		])
+
+		expect(statuses.get('c1')).toBe('skipped')
 	})
 
 	it('has no entry for a connector with no step yet', () => {
@@ -371,30 +479,6 @@ describe('canReplay', () => {
 	})
 })
 
-describe('runStatusBorderClass', () => {
-	it('marks a step in progress amber', () => {
-		expect(runStatusBorderClass('running')).toBe('border-amber-500')
-	})
-
-	it('marks a succeeded step green', () => {
-		expect(runStatusBorderClass('succeeded')).toBe('border-emerald-500')
-	})
-
-	it('marks a failed step red', () => {
-		expect(runStatusBorderClass('failed')).toBe('border-destructive')
-	})
-
-	it('leaves a pending or cancelled step unmarked', () => {
-		expect(runStatusBorderClass('pending')).toBeNull()
-		expect(runStatusBorderClass('cancelled')).toBeNull()
-	})
-
-	it('leaves a connector with no step at all unmarked', () => {
-		expect(runStatusBorderClass(null)).toBeNull()
-		expect(runStatusBorderClass(undefined)).toBeNull()
-	})
-})
-
 describe('representativeStepByConnector', () => {
 	function step(
 		connectorId: string,
@@ -427,7 +511,9 @@ describe('representativeStepByConnector', () => {
 		const steps = [
 			step('c1', 'succeeded'),
 			step('c1', 'failed', { error: 'boom' }),
-			step('c2', 'running'),
+			step('c2', 'in_flight'),
+			step('c3', 'dead', { error: 'définitif' }),
+			step('c3', 'skipped'),
 		]
 		const statuses = aggregateConnectorStatuses(steps)
 		const representative = representativeStepByConnector(steps)

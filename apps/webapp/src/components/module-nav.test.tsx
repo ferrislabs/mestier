@@ -172,6 +172,30 @@ describe('ModuleNav', () => {
 		expect(annonce.getAttribute('aria-disabled')).toBe('true')
 	})
 
+	it('starts the nav list right under the primary action, without an extra top padding or a gap between its blocks', async () => {
+		const { container } = await renderNav('/o/dupont/crm/customers')
+
+		const corps = container.querySelector('[data-slot="sidebar-content"]')
+		const classes = corps?.className.split(' ') ?? []
+
+		expect(classes).toContain('px-2')
+		expect(classes).toContain('pb-2')
+		expect(classes).not.toContain('pt-1')
+		expect(classes).toContain('gap-0')
+		expect(classes).not.toContain('gap-2')
+	})
+
+	it('draws the right edge of the sidebar with the nav border over the nav background', async () => {
+		const { container } = await renderNav('/o/dupont/crm/customers')
+
+		const bord = container.querySelector('[data-slot="sidebar-container"]')
+		const classes = bord?.className.split(' ') ?? []
+
+		expect(classes).toContain('group-data-[side=left]:border-r')
+		expect(classes).toContain('border-nav-border')
+		expect(classes).toContain('bg-sidebar')
+	})
+
 	it('keeps the foot of the nav for the account menu alone', async () => {
 		const { container } = await renderNav('/o/dupont/crm/customers')
 

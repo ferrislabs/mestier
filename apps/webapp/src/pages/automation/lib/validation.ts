@@ -45,3 +45,54 @@ export function connectorLevelErrors(
 		.filter((error) => error.field === null)
 		.map((error) => error.message)
 }
+
+function placedDefinitions(graph: Schemas.GraphDto): Map<string, string> {
+	return new Map([
+		...graph.triggers.map(
+			(trigger) => [trigger.id, JSON.stringify(trigger)] as const,
+		),
+		...graph.connectors.map(
+			(connector) => [connector.id, JSON.stringify(connector)] as const,
+		),
+	])
+}
+
+function edgeKey(edge: Schemas.EdgeDto): string {
+	return `${edge.from}>${edge.to}:${edge.branch ?? ''}`
+}
+
+function touchedNodeIds(
+	previous: Schemas.GraphDto,
+	next: Schemas.GraphDto,
+): Set<string> {
+	const touched = new Set<string>()
+	const before = placedDefinitions(previous)
+	const after = placedDefinitions(next)
+	for (const [id, definition] of before) {
+		if (after.get(id) !== definition) touched.add(id)
+	}
+	const beforeEdges = new Set(previous.edges.map(edgeKey))
+	const afterEdges = new Set(next.edges.map(edgeKey))
+	for (const edge of [...previous.edges, ...next.edges]) {
+		if (beforeEdges.has(edgeKey(edge)) !== afterEdges.has(edgeKey(edge))) {
+			touched.add(edge.from)
+			touched.add(edge.to)
+		}
+	}
+	return touched
+}
+
+export function pruneCorrectedErrors(
+	validation: GraphValidation,
+	previous: Schemas.GraphDto,
+	next: Schemas.GraphDto,
+): GraphValidation {
+	if (validation.connectorErrors.size === 0) return validation
+	const touched = touchedNodeIds(previous, next)
+	const kept = new Map(
+		[...validation.connectorErrors].filter(([id]) => !touched.has(id)),
+	)
+	return kept.size === validation.connectorErrors.size
+		? validation
+		: { ...validation, connectorErrors: kept }
+}
