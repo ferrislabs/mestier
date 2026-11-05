@@ -100,3 +100,13 @@
 	max-width: 14px;
 	max-height: 14px;
 }
+
+::view-transition-group(*) {
+	animation-duration: 340ms;
+	animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 220ms;
+}

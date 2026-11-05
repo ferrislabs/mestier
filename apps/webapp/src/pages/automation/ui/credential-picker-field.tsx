@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus, Unlink } from 'lucide-react'
 import { useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
@@ -10,7 +10,7 @@ import {
 	CommandItem,
 	CommandList,
 } from '#/components/ui/command'
-import { Field } from '#/components/ui/field'
+import { Label } from '#/components/ui/label'
 import {
 	Popover,
 	PopoverContent,
@@ -49,7 +49,8 @@ export function CredentialPickerField({
 	}
 
 	return (
-		<Field label={label} htmlFor={htmlFor}>
+		<div className="grid gap-2">
+			<Label htmlFor={htmlFor}>{label}</Label>
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
 					<Button
@@ -144,10 +145,14 @@ export function CredentialPickerField({
 				</PopoverContent>
 			</Popover>
 			{error ? (
-				<p role="alert" className="text-sm text-destructive">
+				<p
+					role="alert"
+					className="flex items-start gap-1.5 text-state-alert text-xs"
+				>
+					<Unlink className="mt-0.5 size-3.5 shrink-0" aria-hidden />
 					{error}
 				</p>
 			) : null}
-		</Field>
+		</div>
 	)
 }

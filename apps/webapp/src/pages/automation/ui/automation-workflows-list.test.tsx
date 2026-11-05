@@ -47,6 +47,9 @@ function baseProps(
 		onCreate: vi.fn(),
 		onRename: vi.fn(),
 		onToggleEnabled: vi.fn(),
+		onDuplicate: vi.fn(),
+		onExport: vi.fn(),
+		onArchive: vi.fn(),
 		onDelete: vi.fn(),
 		...overrides,
 	}
@@ -163,6 +166,38 @@ describe('AutomationWorkflowsList — row actions', () => {
 		await user.click(screen.getByRole('menuitem', { name: 'Renommer' }))
 
 		expect(props.onRename).toHaveBeenCalledWith(workflow())
+	})
+
+	it('lists the prototype actions first, in order', async () => {
+		const user = userEvent.setup()
+		await render()
+
+		await user.click(screen.getByRole('button', { name: /Actions pour/ }))
+
+		const labels = screen
+			.getAllByRole('menuitem')
+			.map((item) => item.textContent)
+		expect(labels.slice(0, 2)).toEqual(['Dupliquer', 'Exporter'])
+		expect(labels).toContain('Archiver')
+		expect(labels.indexOf('Archiver')).toBeGreaterThan(
+			labels.indexOf('Renommer'),
+		)
+	})
+
+	it('calls onDuplicate, onExport and onArchive with the row', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await render(props)
+
+		for (const [name, handler] of [
+			['Dupliquer', props.onDuplicate],
+			['Exporter', props.onExport],
+			['Archiver', props.onArchive],
+		] as const) {
+			await user.click(screen.getByRole('button', { name: /Actions pour/ }))
+			await user.click(screen.getByRole('menuitem', { name }))
+			expect(handler).toHaveBeenCalledWith(workflow())
+		}
 	})
 
 	it('toggles an enabled workflow from its switch, with the row', async () => {

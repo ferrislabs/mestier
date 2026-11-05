@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
 	connectorAppearance,
 	TRIGGER_APPEARANCE,
+	triggerAppearance,
 } from '#/pages/automation/lib/connector-appearance'
 
 describe('connectorAppearance', () => {
@@ -17,5 +18,9 @@ describe('connectorAppearance', () => {
 			connectorAppearance(undefined),
 		)
 		expect(connectorAppearance('unknown')).not.toEqual(TRIGGER_APPEARANCE)
+	})
+
+	it('tells a manual trigger from an event trigger', () => {
+		expect(triggerAppearance(true)).not.toEqual(triggerAppearance(false))
 	})
 })

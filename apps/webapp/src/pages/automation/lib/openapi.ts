@@ -1,3 +1,4 @@
+import { parse as parseYaml } from 'yaml'
 import type {
 	Collection,
 	CollectionOperation,
@@ -35,15 +36,11 @@ export function slugify(value: string): string {
 export function readSpecText(source: string): unknown {
 	const trimmed = source.trim()
 	if (trimmed === '') throw new OpenApiError('Le fichier est vide.')
-	if (!trimmed.startsWith('{'))
-		throw new OpenApiError(
-			'Seules les specs JSON sont prises en charge pour le moment. Convertissez la spec YAML en JSON.',
-		)
 	try {
-		return JSON.parse(trimmed)
+		return trimmed.startsWith('{') ? JSON.parse(trimmed) : parseYaml(trimmed)
 	} catch {
 		throw new OpenApiError(
-			'Le contenu n’est pas un JSON valide. Vérifiez le fichier.',
+			'Le contenu n’est ni du JSON ni du YAML valide. Vérifiez le fichier.',
 		)
 	}
 }

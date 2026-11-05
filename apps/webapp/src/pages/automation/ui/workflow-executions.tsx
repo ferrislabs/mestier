@@ -14,6 +14,7 @@ import {
 import { ExecutionStatusLabel } from '#/pages/automation/ui/execution-status'
 import {
 	type ExecutionStepEntry,
+	type ExecutionStepItem,
 	ExecutionSteps,
 } from '#/pages/automation/ui/execution-steps'
 
@@ -33,7 +34,7 @@ export interface ExecutionDetailData {
 	layout: Map<string, NodePosition>
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	view: RunView
-	steps: ExecutionStepEntry[]
+	steps: ExecutionStepItem[]
 	pending: ExecutionStepEntry[]
 	failure: { label: string; message: string; nodeId: string } | null
 }

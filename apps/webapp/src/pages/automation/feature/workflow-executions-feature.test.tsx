@@ -27,6 +27,8 @@ const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
 const RUN_REPLAY_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay'
+const EVALUATE_PATH =
+	'/api/v1/organizations/{organization_id}/automation/expressions/evaluate'
 const MY_PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
 
@@ -423,5 +425,217 @@ describe('WorkflowExecutionsFeature — replay', () => {
 		expect(
 			screen.queryByRole('button', { name: /Relancer depuis ici/ }),
 		).toBeNull()
+	})
+})
+
+describe('WorkflowExecutionsFeature — the header and the list labels', () => {
+	const CURRENT_VERSION = {
+		id: 'v1',
+		version: 1,
+		workflow_id: 'workflow-1',
+		created_at: new Date(2026, 9, 28, 11, 5).toISOString(),
+		graph: {
+			connectors: [],
+			edges: [],
+			triggers: [{ id: 't1', kind: { Events: ['quote.accepted'] } }],
+		},
+	}
+
+	function withCurrentVersion(api: FakeApi) {
+		api.mockGet(WORKFLOW_PATH, () => ({
+			data: {
+				id: 'workflow-1',
+				organization_id: 'org-1',
+				name: 'Créer une facture Odoo',
+				description: null,
+				enabled: true,
+				layout: null,
+				current_version: CURRENT_VERSION,
+				created_at: '2026-08-01T00:00:00Z',
+				updated_at: '2026-08-01T00:00:00Z',
+			},
+			pagination: null,
+		}))
+	}
+
+	it('writes the current version as a date and flags it as current', async () => {
+		render(withCurrentVersion)
+
+		expect(
+			await screen.findByText('Version du 28 oct. 2026 à 11:05'),
+		).toBeDefined()
+		expect(screen.getByText('· actuelle')).toBeDefined()
+	})
+
+	it('names an event-triggered run after the event of the workflow trigger', async () => {
+		render((api) => {
+			withCurrentVersion(api)
+			api.mockGet(EVENTS_PATH, () => ({
+				data: [
+					{
+						name: 'quote.accepted',
+						label: 'Devis accepté',
+						payload_example: null,
+						subject_kind: 'quote',
+						version: 1,
+					},
+				],
+				pagination: null,
+			}))
+			api.mockGet(RUNS_PATH, () => ({
+				data: [run({ trigger_event_id: 'evt-1' })],
+				pagination: null,
+			}))
+		})
+
+		const list = await screen.findByRole('complementary', {
+			name: 'Liste des exécutions',
+		})
+		await waitFor(() => {
+			expect(within(list).getByText(/Devis accepté/)).toBeDefined()
+		})
+	})
+
+	it('names a run without trigger event a manual test', async () => {
+		render()
+
+		const list = await screen.findByRole('complementary', {
+			name: 'Liste des exécutions',
+		})
+		expect(within(list).getByText(/Test manuel/)).toBeDefined()
+	})
+
+	it('shows the not-found page when the workflow does not exist', async () => {
+		render((api) => {
+			api.mockGet(WORKFLOW_PATH, () => {
+				throw new Error('not found')
+			})
+		})
+
+		expect(await screen.findByText('Workflow introuvable')).toBeDefined()
+	})
+})
+
+describe('WorkflowExecutionsFeature — loops', () => {
+	it('folds the iterations of a looped step under a single loop', async () => {
+		render((api) => {
+			api.mockGet(RUN_PATH, () => ({
+				data: runDetail({
+					steps: [0, 1].map((index) => ({
+						id: `s${index}`,
+						connector_id: 'c1',
+						iteration_path: `c1[${index}]`,
+						attempts: 1,
+						status: 'succeeded',
+						created_at: `2026-08-05T00:00:0${index + 1}Z`,
+						started_at: `2026-08-05T00:00:0${index + 1}Z`,
+						output: { id: index },
+					})),
+				}),
+				pagination: null,
+			}))
+		})
+
+		expect(await screen.findByText('2 itérations')).toBeDefined()
+		expect(screen.getByText('Itération 1')).toBeDefined()
+		expect(screen.getByText('Itération 2')).toBeDefined()
+	})
+})
+
+describe('WorkflowExecutionsFeature — node parameters', () => {
+	function withExpression(api: FakeApi) {
+		api.mockGet(CONNECTORS_PATH, () => ({
+			data: {
+				auth_schemes: [],
+				connectors: [
+					{
+						...descriptor('test.simple', 'Étape simple'),
+						fields: [
+							{
+								name: 'url',
+								label: 'Adresse',
+								kind: 'Text',
+								required: true,
+								secret: false,
+								expression: true,
+							},
+						],
+					},
+				],
+			},
+			pagination: null,
+		}))
+		api.mockGet(RUN_PATH, () => ({
+			data: runDetail({
+				trigger_payload: { client: 'Hugo' },
+				graph: {
+					...GRAPH,
+					connectors: [
+						{
+							id: 'c1',
+							kind: 'test.simple',
+							version: 1,
+							config: { url: 'https://{{ trigger.client }}' },
+						},
+					],
+				},
+				steps: [
+					{
+						id: 's1',
+						connector_id: 'c1',
+						iteration_path: '',
+						attempts: 1,
+						status: 'succeeded',
+						created_at: '2026-08-05T00:00:01Z',
+						started_at: '2026-08-05T00:00:01Z',
+						finished_at: '2026-08-05T00:00:02Z',
+						input: [{ client: 'Hugo' }, { client: 'Nadia' }],
+						output: { id: 1 },
+					},
+				],
+			}),
+			pagination: null,
+		}))
+		api.mockMutation('post', EVALUATE_PATH, (params) => ({
+			data: {
+				value: `resolved:${JSON.stringify(
+					(params as { body: { context: { loop: unknown } } }).body.context
+						.loop,
+				)}`,
+			},
+		}))
+	}
+
+	it('resolves expressions through the engine for the selected input item', async () => {
+		render(withExpression)
+
+		await openStep('Étape simple')
+		const dialog = await screen.findByRole('dialog')
+
+		expect(
+			await within(dialog).findByText(/resolved:\{"index":0/),
+		).toBeDefined()
+		expect(within(dialog).getByText('Expression')).toBeDefined()
+		expect(within(dialog).getByText('1 sur 2')).toBeDefined()
+
+		await userEvent.click(
+			within(dialog).getByRole('button', { name: 'Élément suivant' }),
+		)
+
+		expect(
+			await within(dialog).findByText(/resolved:\{"index":1/),
+		).toBeDefined()
+	})
+
+	it('numbers the step and shows what the previous nodes produced', async () => {
+		render(withExpression)
+
+		await openStep('Étape simple')
+		const dialog = await screen.findByRole('dialog')
+
+		expect(within(dialog).getByText(/étape 1/)).toBeDefined()
+		expect(
+			within(dialog).getByText(/Résultats des nœuds précédents/),
+		).toBeDefined()
 	})
 })

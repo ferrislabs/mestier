@@ -140,6 +140,9 @@ export function ExecutionsTable({
 						<TableHead className="px-4 text-muted-foreground">
 							Déclencheur
 						</TableHead>
+						<TableHead className="px-4 text-muted-foreground max-xl:hidden">
+							Nœuds
+						</TableHead>
 						<TableHead className="px-4 text-muted-foreground max-lg:hidden">
 							Détail
 						</TableHead>
@@ -193,6 +196,9 @@ export function ExecutionsTable({
 							</TableCell>
 							<TableCell className="px-4 py-2.5 text-muted-foreground">
 								{row.trigger}
+							</TableCell>
+							<TableCell className="px-4 py-2.5 text-muted-foreground tabular-nums max-xl:hidden">
+								{row.stepsDone} / {row.stepsTotal}
 							</TableCell>
 							<TableCell className="w-full max-w-0 px-4 py-2.5 max-lg:hidden">
 								{row.failure ? (

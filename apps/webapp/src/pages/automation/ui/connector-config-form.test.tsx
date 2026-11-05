@@ -74,7 +74,7 @@ function baseProps(
 		errors: [],
 		onConfigChange: vi.fn(),
 		onCredentialChange: vi.fn(),
-		onOpenExpression: vi.fn(),
+		onActivateField: vi.fn(),
 		onRequestCreateCredential: vi.fn(),
 		...overrides,
 	}

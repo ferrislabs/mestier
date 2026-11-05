@@ -3,6 +3,7 @@ import type { Schemas } from '#/api/api.client'
 import {
 	computeFallbackLayout,
 	mergedLayout,
+	tidyLayout,
 } from '#/pages/automation/lib/layout'
 
 function connector(id: string): Schemas.PlacedConnectorDto {
@@ -142,5 +143,55 @@ describe('mergedLayout', () => {
 		expect(layout.get('b')).toEqual(
 			computeFallbackLayout(graph, new Set(['a'])).get('b'),
 		)
+	})
+})
+
+describe('tidyLayout', () => {
+	const node = (
+		id: string,
+		x: number,
+		y: number,
+		outputs: string[] = [''],
+	) => ({
+		id,
+		position: { x, y },
+		trigger: id.startsWith('t'),
+		outputs,
+	})
+
+	it('lines a chain up in columns on the grid', () => {
+		const result = tidyLayout(
+			[node('t1', 3, 7), node('c1', 400, 90), node('c2', 50, 500)],
+			[
+				{ source: 't1', target: 'c1' },
+				{ source: 'c1', target: 'c2' },
+			],
+		)
+		expect(result.get('t1')).toEqual({ x: 0, y: 0 })
+		expect(result.get('c1')).toEqual({ x: 220, y: 0 })
+		expect(result.get('c2')).toEqual({ x: 440, y: 0 })
+	})
+
+	it('spreads the two branches of a node on both sides of its row', () => {
+		const result = tidyLayout(
+			[node('c1', 0, 0, ['Then', 'Else']), node('c2', 0, 0), node('c3', 0, 0)],
+			[
+				{ source: 'c1', target: 'c2', sourceHandle: 'Then' },
+				{ source: 'c1', target: 'c3', sourceHandle: 'Else' },
+			],
+		)
+		const then = result.get('c2')
+		const otherwise = result.get('c3')
+		expect(then && otherwise && then.y < otherwise.y).toBe(true)
+	})
+
+	it('stacks unrelated components under each other', () => {
+		const result = tidyLayout([node('t1', 0, 0), node('c1', 0, 0)], [])
+		expect(result.get('t1')?.y).toBe(0)
+		expect(result.get('c1')?.y).toBe(200)
+	})
+
+	it('is empty for no nodes', () => {
+		expect(tidyLayout([], []).size).toBe(0)
 	})
 })

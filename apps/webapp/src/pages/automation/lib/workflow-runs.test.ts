@@ -14,6 +14,7 @@ import {
 	runDurationMs,
 	runStatusBorderClass,
 	runTriggerLabel,
+	triggerEventLabel,
 } from '#/pages/automation/lib/workflow-runs'
 
 function run(overrides: Partial<Run> = {}): Run {
@@ -215,8 +216,14 @@ describe('formatRunDuration', () => {
 })
 
 describe('runTriggerLabel', () => {
-	it('names a run with no trigger event as manual', () => {
-		expect(runTriggerLabel({ trigger_event_id: null })).toBe('Manuel')
+	it('names a run with no trigger event as a manual test', () => {
+		expect(runTriggerLabel({ trigger_event_id: null })).toBe('Test manuel')
+	})
+
+	it('names an event-triggered run after its event when the label is known', () => {
+		expect(
+			runTriggerLabel({ trigger_event_id: 'evt-1' }, 'Devis accepté'),
+		).toBe('Devis accepté')
 	})
 
 	it('names a run carrying a trigger event as event-triggered', () => {
@@ -432,5 +439,34 @@ describe('representativeStepByConnector', () => {
 
 	it('has nothing to say about a connector with no step', () => {
 		expect(representativeStepByConnector([]).get('c1')).toBeUndefined()
+	})
+})
+
+describe('triggerEventLabel', () => {
+	const labels = new Map([['quote.accepted', 'Devis accepté']])
+
+	it('resolves the label of a single-event trigger', () => {
+		expect(
+			triggerEventLabel(
+				[{ id: 't1', kind: { Events: ['quote.accepted'] } }],
+				labels,
+			),
+		).toBe('Devis accepté')
+	})
+
+	it('falls back to the raw event name when it has no label', () => {
+		expect(
+			triggerEventLabel(
+				[{ id: 't1', kind: { Events: ['task.done'] } }],
+				labels,
+			),
+		).toBe('task.done')
+	})
+
+	it('has no label for a manual or multi-event trigger', () => {
+		expect(triggerEventLabel([{ id: 't1', kind: 'Manual' }], labels)).toBeNull()
+		expect(
+			triggerEventLabel([{ id: 't1', kind: { Events: ['a', 'b'] } }], labels),
+		).toBeNull()
 	})
 })

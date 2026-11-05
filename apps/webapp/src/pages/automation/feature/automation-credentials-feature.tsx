@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAutomationCredentials,
@@ -9,8 +9,13 @@ import {
 	useUpdateCredential,
 } from '#/hooks/use-automation'
 import { useHasPermission } from '#/hooks/use-permissions'
+import {
+	useCredentialMeta,
+	useCredentialMetaActions,
+} from '#/pages/automation/feature/use-credential-meta'
 import { useExternalServices } from '#/pages/automation/feature/use-external-services'
 import {
+	buildCredentialFieldErrors,
 	buildCredentialFormErrors,
 	emptyCredentialForm,
 } from '#/pages/automation/lib/credential-form'
@@ -54,8 +59,16 @@ function AutomationCredentialsWorkspace({
 	const [revealedSecret, setRevealedSecret] = useState<string | null>(null)
 	const [rotatingId, setRotatingId] = useState<string | null>(null)
 
+	const meta = useCredentialMeta()
+	const metaActions = useCredentialMetaActions()
+	const { rememberKinds } = metaActions
+
 	const authSchemes = catalogue.data?.data.auth_schemes ?? []
 	const items = credentials.data?.data ?? []
+
+	useEffect(() => {
+		rememberKinds(items)
+	}, [items, rememberKinds])
 	const scheme = authSchemes.find((candidate) => candidate.kind === values.kind)
 
 	const rows: CredentialRow[] = items.map((credential) => ({
@@ -66,10 +79,16 @@ function AutomationCredentialsWorkspace({
 			authSchemes.find((candidate) => candidate.kind === credential.kind)
 				?.label ?? credential.kind,
 		origin: credential.origin === 'generated' ? 'generated' : 'supplied',
+		createdAt: credential.created_at,
 		updatedAt: credential.updated_at,
+		description: meta.data[credential.id]?.description ?? '',
+		usedByWorkflows: meta.data[credential.id]?.usedByWorkflows ?? 0,
+		status: meta.data[credential.id]?.status ?? 'valid',
+		account: meta.data[credential.id]?.account,
 	}))
 
 	const formErrors = buildCredentialFormErrors(values, scheme, mode)
+	const fieldErrors = buildCredentialFieldErrors(values, scheme, mode)
 
 	const listError =
 		credentials.error?.message ?? deleteCredential.error?.message ?? null
@@ -86,6 +105,9 @@ function AutomationCredentialsWorkspace({
 					origin: values.origin,
 					data: values.origin === 'supplied' ? values.data : undefined,
 				},
+			})
+			metaActions.patch(created.data.id, {
+				description: values.description.trim(),
 			})
 			if (values.origin === 'generated') {
 				setRevealedSecret(String(created.data.secret))
@@ -106,6 +128,7 @@ function AutomationCredentialsWorkspace({
 				data: hasData ? values.data : undefined,
 			},
 		})
+		metaActions.patch(editingId, { description: values.description.trim() })
 		setDialogOpen(false)
 	}
 
@@ -120,6 +143,7 @@ function AutomationCredentialsWorkspace({
 			setValues({
 				kind: row.kind,
 				name: row.name,
+				description: row.description,
 				origin: 'generated',
 				data: {},
 			})
@@ -147,7 +171,7 @@ function AutomationCredentialsWorkspace({
 				onChange: (patch) => setValues((current) => ({ ...current, ...patch })),
 				onSubmit: () => void handleSubmit(),
 			}}
-			formErrors={formErrors}
+			fieldErrors={fieldErrors}
 			saveError={
 				createCredential.error?.message ??
 				updateCredential.error?.message ??
@@ -167,6 +191,7 @@ function AutomationCredentialsWorkspace({
 				setValues({
 					kind: row.kind,
 					name: row.name,
+					description: row.description,
 					origin: row.origin,
 					data: {},
 				})
@@ -183,8 +208,21 @@ function AutomationCredentialsWorkspace({
 				deleteCredential.mutate({
 					path: { organization_id: organizationId, credential_id: row.id },
 				})
+				metaActions.forget(row.id)
 				setDialogOpen(false)
 			}}
+			onConnect={(row) =>
+				metaActions.patch(row.id, {
+					status: 'valid',
+					account: `autorisé le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+				})
+			}
+			onDisconnect={(row) =>
+				metaActions.patch(row.id, {
+					status: 'not-connected',
+					account: undefined,
+				})
+			}
 		/>
 	)
 }

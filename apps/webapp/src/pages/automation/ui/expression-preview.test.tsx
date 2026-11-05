@@ -3,52 +3,41 @@ import { describe, expect, it } from 'vitest'
 import { ExpressionPreview } from '#/pages/automation/ui/expression-preview'
 
 describe('ExpressionPreview', () => {
-	it('renders nothing when no field is active', () => {
+	it('renders nothing while idle', () => {
 		const { container } = render(
-			<ExpressionPreview fieldLabel={null} state={{ status: 'idle' }} />,
+			<ExpressionPreview state={{ status: 'idle' }} />,
 		)
 
 		expect(container.textContent).toBe('')
 	})
 
-	it('names the active field while idle', () => {
-		render(<ExpressionPreview fieldLabel="URL" state={{ status: 'idle' }} />)
+	it('shows a placeholder while the evaluation is in flight', () => {
+		render(<ExpressionPreview state={{ status: 'loading' }} />)
 
-		expect(screen.getByText(/URL/)).toBeDefined()
-	})
-
-	it('shows a loading state while the evaluation is in flight', () => {
-		render(<ExpressionPreview fieldLabel="URL" state={{ status: 'loading' }} />)
-
-		expect(screen.getByText(/valuation en cours/)).toBeDefined()
+		expect(screen.getByText('Aperçu : …')).toBeDefined()
 	})
 
 	it('shows the resolved value as JSON', () => {
 		render(
-			<ExpressionPreview
-				fieldLabel="URL"
-				state={{ status: 'resolved', value: { id: 42 } }}
-			/>,
+			<ExpressionPreview state={{ status: 'resolved', value: { id: 42 } }} />,
 		)
 
-		expect(screen.getByText('{"id":42}')).toBeDefined()
+		expect(screen.getByText('Aperçu : {"id":42}')).toBeDefined()
 	})
 
-	it('shows a string value without JSON quoting noise lost', () => {
+	it('shows a string value without quoting it', () => {
 		render(
 			<ExpressionPreview
-				fieldLabel="URL"
 				state={{ status: 'resolved', value: 'https://example.test' }}
 			/>,
 		)
 
-		expect(screen.getByText('"https://example.test"')).toBeDefined()
+		expect(screen.getByText('Aperçu : https://example.test')).toBeDefined()
 	})
 
 	it('names the missing path as an alert, never a silent null', () => {
 		render(
 			<ExpressionPreview
-				fieldLabel="URL"
 				state={{
 					status: 'error',
 					message: 'missing path: trigger.customer.id',

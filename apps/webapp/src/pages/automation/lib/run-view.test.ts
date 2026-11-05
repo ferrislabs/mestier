@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
-import { buildRunView, realEdgeId } from '#/pages/automation/lib/run-view'
+import {
+	buildRunView,
+	realEdgeId,
+	skipReason,
+} from '#/pages/automation/lib/run-view'
 
 const GRAPH: Schemas.GraphDto = {
 	triggers: [{ id: 't1', kind: { Events: ['quote.accepted'] } }],
@@ -142,5 +146,85 @@ describe('buildRunView', () => {
 
 		expect(view.nodes).toEqual([])
 		expect(view.steps).toEqual([])
+	})
+
+	it('counts the items carried by each traversed edge', () => {
+		const view = buildRunView(
+			{
+				...run('succeeded', [
+					step({ id: 's1', connector_id: 'c1', output: [{ a: 1 }, { a: 2 }] }),
+					step({ id: 's2', connector_id: 'c2', output: { sent: true } }),
+				]),
+				trigger_payload: { number: 'DV-1' },
+			},
+			DESCRIPTORS,
+		)
+
+		expect(view.edgeCounts.get(realEdgeId({ from: 't1', to: 'c1' }))).toBe(1)
+		expect(view.edgeCounts.get(realEdgeId({ from: 'c1', to: 'c2' }))).toBe(2)
+		expect(view.edgeCounts.has(realEdgeId({ from: 'c2', to: 'c3' }))).toBe(
+			false,
+		)
+	})
+
+	it('groups looped steps by connector and iteration, in execution order', () => {
+		const view = buildRunView(
+			run('succeeded', [
+				step({ id: 's0', connector_id: 'c1' }),
+				step({
+					id: 's1',
+					connector_id: 'c2',
+					iteration_path: 'c1[0]',
+					started_at: '2026-08-01T10:00:01Z',
+				}),
+				step({
+					id: 's2',
+					connector_id: 'c2',
+					iteration_path: 'c1[1]',
+					started_at: '2026-08-01T10:00:02Z',
+				}),
+			]),
+			DESCRIPTORS,
+		)
+
+		const [first, loop] = view.stepGroups
+		expect(first?.kind).toBe('step')
+		expect(loop?.kind).toBe('loop')
+		if (loop?.kind !== 'loop') return
+		expect(loop.label).toBe('Facture Odoo')
+		expect(loop.iterations.map((iteration) => iteration.index)).toEqual([0, 1])
+		expect(
+			loop.iterations[1]?.children.map((child) =>
+				child.kind === 'step' ? child.step.plainLabel : null,
+			),
+		).toEqual(['c2'])
+	})
+
+	it('numbers nodes by the order of their first step', () => {
+		const view = buildRunView(
+			run('succeeded', [
+				step({ id: 's1', connector_id: 'c1' }),
+				step({
+					id: 's2',
+					connector_id: 'c2',
+					started_at: '2026-08-01T10:00:02Z',
+				}),
+			]),
+			DESCRIPTORS,
+		)
+
+		expect(view.nodes.find((node) => node.id === 'c2')?.order).toBe(2)
+		expect(view.nodes.find((node) => node.id === 'c3')?.order).toBeNull()
+	})
+})
+
+describe('skipReason', () => {
+	it('blames the failed node for everything downstream of it', () => {
+		expect(skipReason('c3', GRAPH, 'c2')).toEqual({
+			type: 'after-error',
+			failedNodeId: 'c2',
+		})
+		expect(skipReason('c1', GRAPH, 'c2')).toEqual({ type: 'no-items' })
+		expect(skipReason('c3', GRAPH, null)).toEqual({ type: 'no-items' })
 	})
 })

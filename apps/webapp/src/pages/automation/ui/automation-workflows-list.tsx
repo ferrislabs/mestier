@@ -50,6 +50,9 @@ export interface AutomationWorkflowsListProps {
 	onCreate: () => void
 	onRename: (workflow: WorkflowRow) => void
 	onToggleEnabled: (workflow: WorkflowRow) => void
+	onDuplicate: (workflow: WorkflowRow) => void
+	onExport: (workflow: WorkflowRow) => void
+	onArchive: (workflow: WorkflowRow) => void
 	onDelete: (workflow: WorkflowRow) => void
 }
 
@@ -74,6 +77,9 @@ export function AutomationWorkflowsList({
 	onCreate,
 	onRename,
 	onToggleEnabled,
+	onDuplicate,
+	onExport,
+	onArchive,
 	onDelete,
 }: AutomationWorkflowsListProps) {
 	if (folderMissing) {
@@ -180,6 +186,9 @@ export function AutomationWorkflowsList({
 							organizationSlug={organizationSlug}
 							onRename={onRename}
 							onToggleEnabled={onToggleEnabled}
+							onDuplicate={onDuplicate}
+							onExport={onExport}
+							onArchive={onArchive}
 							onDelete={onDelete}
 						/>
 					))}

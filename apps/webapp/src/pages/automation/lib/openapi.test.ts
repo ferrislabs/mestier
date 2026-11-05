@@ -188,11 +188,16 @@ test('exampleOf builds a sample payload from the schema', () => {
 	])
 })
 
-test('YAML specs are refused with a clear message until a YAML parser is available', () => {
-	assert.throws(
-		() => readSpecText('openapi: 3.1.0\ninfo:\n  title: Mini\n'),
-		/JSON/,
+test('YAML specs are accepted', () => {
+	const document = readSpecText(
+		'openapi: 3.1.0\ninfo:\n  title: Mini\n  version: "1"\npaths:\n  /ping:\n    get:\n      responses:\n        "200":\n          description: ok\n',
 	)
+	const collection = parseOpenApi(
+		document,
+		{ kind: 'file', fileName: 'mini.yaml' },
+		'',
+	)
+	assert.equal(collection.operations[0]?.id, 'get-ping')
 })
 
 test('Swagger 2.0, invalid text and empty specs are refused with a clear message', () => {

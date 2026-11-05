@@ -4,6 +4,7 @@ export interface ParameterEntry {
 	id: string
 	label: string
 	value: string
+	template: unknown
 	expression: boolean
 }
 
@@ -30,6 +31,7 @@ export function parameterEntries(
 			id: field.name,
 			label: field.label,
 			value: displayValue(connector.config[field.name]),
+			template: connector.config[field.name],
 			expression: isExpressionValue(connector.config[field.name]),
 		})
 	}
@@ -39,6 +41,7 @@ export function parameterEntries(
 			id: key,
 			label: key,
 			value: displayValue(value),
+			template: value,
 			expression: isExpressionValue(value),
 		})
 	}

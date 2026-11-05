@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -21,7 +21,6 @@ export function EditorTopBar({
 	onViewChange,
 	enabled,
 	onEnabledChange,
-	actions,
 	save,
 }: {
 	organizationSlug: string
@@ -33,7 +32,6 @@ export function EditorTopBar({
 	onViewChange: (view: EditorView) => void
 	enabled: boolean
 	onEnabledChange: (enabled: boolean) => void
-	actions?: ReactNode
 	save?: { dirty: boolean; isSaving: boolean; onSave: () => void }
 }) {
 	const [draft, setDraft] = useState(name)
@@ -116,7 +114,6 @@ export function EditorTopBar({
 							onCheckedChange={onEnabledChange}
 						/>
 					</div>
-					{actions}
 					{save ? (
 						<Button
 							size="sm"

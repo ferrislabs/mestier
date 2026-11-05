@@ -2,6 +2,8 @@ import { ArrowLeft, Link2, Lock } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import type { AuthScheme } from '#/hooks/use-automation'
 import { credentialAppearance } from '#/pages/automation/lib/credential-appearance'
+import { schemeDescription } from '#/pages/automation/lib/credential-meta'
+import { kindTransitionStyle } from '#/pages/automation/ui/credential-kind-names'
 import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
 
 export function CredentialKindAside({
@@ -34,15 +36,21 @@ export function CredentialKindAside({
 				</Button>
 			)}
 			<div className="grid gap-3">
-				<span className="w-fit">
+				<span
+					className="w-fit"
+					style={kindTransitionStyle('icon', scheme.kind)}
+				>
 					<KindIconTile icon={appearance.icon} hue={appearance.hue} size="lg" />
 				</span>
 				<div>
-					<p className="w-fit font-semibold text-base">{scheme.label}</p>
+					<p
+						className="w-fit font-semibold text-base"
+						style={kindTransitionStyle('label', scheme.kind)}
+					>
+						{scheme.label}
+					</p>
 					<p className="mt-1 text-muted-foreground text-sm leading-snug">
-						{scheme.fields.length === 0
-							? 'Aucun champ à renseigner.'
-							: scheme.fields.map((field) => field.label).join(', ')}
+						{schemeDescription(scheme)}
 					</p>
 				</div>
 			</div>

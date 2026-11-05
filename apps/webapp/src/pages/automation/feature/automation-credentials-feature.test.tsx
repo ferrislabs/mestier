@@ -9,6 +9,7 @@ import {
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { AutomationCredentialsFeature } from '#/pages/automation/feature/automation-credentials-feature'
+import { patchCredentialMeta } from '#/pages/automation/feature/mocks/credential-meta'
 import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
 /**
@@ -249,7 +250,7 @@ describe('AutomationCredentialsFeature — creation', () => {
 			screen.getByRole('button', { name: 'Créer l’identification' }),
 		)
 
-		expect(screen.getByText('Token est requis')).toBeDefined()
+		expect(screen.getAllByText('Champ obligatoire.').length).toBeGreaterThan(0)
 		expect(
 			api.calls.some((c) => c.method === 'post' && c.path === CREDENTIALS_PATH),
 		).toBe(false)
@@ -339,5 +340,65 @@ describe('AutomationCredentialsFeature — permission gating', () => {
 		expect(
 			screen.queryByRole('button', { name: 'Signature sortante' }),
 		).toBeNull()
+	})
+})
+
+describe('AutomationCredentialsFeature — mocked status and usage', () => {
+	it('shows the usage and status columns with the mocked values', async () => {
+		patchCredentialMeta('cred-meta', {
+			usedByWorkflows: 2,
+			status: 'expired',
+			description: 'Clé du fournisseur de tarifs.',
+		})
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential({ id: 'cred-meta', origin: 'supplied' })],
+			}))
+		})
+
+		expect(await screen.findByText('Utilisée par 2 workflows')).toBeDefined()
+		expect(screen.getByText('Expirée')).toBeDefined()
+		expect(screen.getByText('Clé du fournisseur de tarifs.')).toBeDefined()
+		expect(screen.getByText('Statut')).toBeDefined()
+		expect(screen.getByText('Utilisation')).toBeDefined()
+	})
+
+	it('warns about the nodes that will fail before deleting a used credential', async () => {
+		patchCredentialMeta('cred-used', { usedByWorkflows: 1 })
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential({ id: 'cred-used' })],
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+		await user.click(await screen.findByRole('button', { name: 'Supprimer' }))
+
+		expect(
+			await screen.findByText(
+				/Utilisée par 1 workflow : leurs nœuds échoueront/,
+			),
+		).toBeDefined()
+	})
+
+	it('keeps the description in the dialog as client-side metadata', async () => {
+		patchCredentialMeta('cred-desc', { description: 'Pour les relances.' })
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(CREDENTIALS_PATH, () => ({
+				data: [credential({ id: 'cred-desc' })],
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Signature sortante' }),
+		)
+
+		expect(
+			(await screen.findByLabelText(/Description/)) as HTMLTextAreaElement,
+		).toHaveProperty('value', 'Pour les relances.')
 	})
 })

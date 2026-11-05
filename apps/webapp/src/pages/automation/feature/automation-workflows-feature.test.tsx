@@ -2,13 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { AutomationWorkflowsFeature } from '#/pages/automation/feature/automation-workflows-feature'
+import { resetPlacementsMock } from '#/pages/automation/feature/mocks/workflow-placements'
 import { renderWithRouter } from '#/test/render-with-router'
 import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
@@ -342,5 +343,135 @@ describe('AutomationWorkflowsFeature — projects', () => {
 		await renderFeature(() => {}, 'inconnu')
 
 		expect(await screen.findByText('Projet introuvable')).toBeDefined()
+	})
+})
+
+describe('AutomationWorkflowsFeature — seeded placements', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		resetPlacementsMock()
+	})
+
+	it('puts a workflow with a known name in its project, shown with its path on the root page', async () => {
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+				data: [workflow({ name: 'Relance des devis' })],
+				pagination: null,
+			}))
+		})
+
+		expect(await screen.findByText('Ventes › Relances')).toBeDefined()
+		expect(screen.getByText('Ventes')).toBeDefined()
+	})
+
+	it('lists that workflow inside its project page and counts it in the parent project', async () => {
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+				data: [workflow({ name: 'Relance des devis' })],
+				pagination: null,
+			}))
+		}, 'ventes-relances')
+
+		expect(await screen.findByText('Relance des devis')).toBeDefined()
+		expect(
+			screen.queryByText('Ce projet ne contient encore aucun workflow.'),
+		).toBeNull()
+	})
+})
+
+describe('AutomationWorkflowsFeature — row actions', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		resetPlacementsMock()
+	})
+
+	it('archives a workflow client-side without calling the delete endpoint', async () => {
+		const user = userEvent.setup()
+		const api = await renderFeature(() => {})
+
+		await user.click(
+			await screen.findByRole('button', { name: /Actions pour/ }),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Archiver' }))
+
+		await waitFor(() => {
+			expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
+		})
+		expect(api.calls.some((call) => call.method === 'delete')).toBe(false)
+	})
+
+	it('duplicates a workflow by creating a copy and saving its graph as the first version', async () => {
+		const user = userEvent.setup()
+		const graph = { triggers: [], connectors: [], edges: [] }
+		const api = await renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: {
+					...workflow(),
+					current_version: {
+						id: 'v1',
+						version: 1,
+						workflow_id: 'workflow-1',
+						created_at: '2026-08-01T00:00:00Z',
+						graph,
+					},
+					layout: null,
+				},
+			}))
+			fakeApi.mockMutation('post', WORKFLOWS_PATH, () => ({
+				data: workflow({
+					id: 'workflow-2',
+					name: 'Créer une facture Odoo (copie)',
+				}),
+			}))
+			fakeApi.mockMutation(
+				'put',
+				'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions',
+				() => ({ data: {} }),
+			)
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: /Actions pour/ }),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Dupliquer' }))
+
+		await waitFor(() => {
+			expect(
+				api.calls.find((call) => call.method === 'put')?.params,
+			).toMatchObject({
+				path: { organization_id: 'org-1', workflow_id: 'workflow-2' },
+				body: { graph },
+			})
+		})
+		expect(
+			api.calls.find((call) => call.method === 'post')?.params,
+		).toMatchObject({
+			body: { name: 'Créer une facture Odoo (copie)' },
+		})
+	})
+
+	it('exports a workflow as a JSON download built from its current version', async () => {
+		const user = userEvent.setup()
+		const click = vi.fn()
+		const createObjectURL = vi.fn(() => 'blob:export')
+		Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() })
+		vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(click)
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: {
+					...workflow(),
+					current_version: null,
+					layout: null,
+				},
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: /Actions pour/ }),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Exporter' }))
+
+		await waitFor(() => expect(click).toHaveBeenCalled())
+		expect(createObjectURL).toHaveBeenCalled()
 	})
 })

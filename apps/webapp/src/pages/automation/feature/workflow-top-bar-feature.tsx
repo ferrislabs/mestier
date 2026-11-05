@@ -3,7 +3,6 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useUpdateWorkflow, useWorkflow } from '#/hooks/use-automation'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { buildOrgPath } from '#/modules/org-path'
-import { RunNowFeature } from '#/pages/automation/feature/run-now-feature'
 import { useWorkflowPlacements } from '#/pages/automation/feature/use-workflow-folders'
 import {
 	EditorTopBar,
@@ -63,7 +62,6 @@ export function WorkflowTopBarFeature({
 			onViewChange={changeView}
 			enabled={workflow?.enabled ?? false}
 			onEnabledChange={(enabled) => patch({ enabled })}
-			actions={<RunNowFeature workflowId={workflowId} bare />}
 			save={save}
 		/>
 	)

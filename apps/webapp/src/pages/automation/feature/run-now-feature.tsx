@@ -12,12 +12,17 @@ import {
 import { buildOrgPath } from '#/modules/org-path'
 import { RunNowDialog } from '#/pages/automation/ui/run-now-dialog'
 
-export interface RunNowFeatureProps {
-	workflowId: string
-	bare?: boolean
+export interface RunNowControl {
+	open: boolean
+	onOpenChange: (open: boolean) => void
 }
 
-export function RunNowFeature({ workflowId, bare }: RunNowFeatureProps) {
+export interface RunNowFeatureProps {
+	workflowId: string
+	controlled?: RunNowControl
+}
+
+export function RunNowFeature({ workflowId, controlled }: RunNowFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 
 	return (
@@ -26,7 +31,7 @@ export function RunNowFeature({ workflowId, bare }: RunNowFeatureProps) {
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
 			workflowId={workflowId}
-			bare={bare}
+			controlled={controlled}
 		/>
 	)
 }
@@ -47,19 +52,21 @@ function RunNowWorkspace({
 	organizationId,
 	organizationSlug,
 	workflowId,
-	bare,
+	controlled,
 }: {
 	organizationId: string
 	organizationSlug: string
 	workflowId: string
-	bare?: boolean
+	controlled?: RunNowControl
 }) {
 	const eventsQuery = useAutomationEvents(organizationId)
 	const workflowQuery = useWorkflow(organizationId, workflowId)
 	const startRun = useStartRun()
 	const navigate = useNavigate()
 
-	const [open, setOpen] = useState(false)
+	const [innerOpen, setInnerOpen] = useState(false)
+	const open = controlled ? controlled.open : innerOpen
+	const setOpen = controlled ? controlled.onOpenChange : setInnerOpen
 	const [startError, setStartError] = useState<string | null>(null)
 
 	async function handleConfirm(payload: unknown) {
@@ -103,16 +110,7 @@ function RunNowWorkspace({
 		/>
 	)
 
-	if (bare) {
-		return (
-			<>
-				<Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-					Exécuter maintenant
-				</Button>
-				{dialog}
-			</>
-		)
-	}
+	if (controlled) return dialog
 
 	return (
 		<div className="flex items-center justify-between gap-2 border-b px-4 py-2">

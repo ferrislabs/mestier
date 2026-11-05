@@ -57,6 +57,9 @@ describe('execution log', () => {
 		expect(row?.durationMs).toBe(2000)
 		expect(row?.failure).toBe('SMTP expiré')
 		expect(row?.version).toBe('Version 12345678')
+		expect(row?.stepsDone).toBe(0)
+		expect(row?.stepsTotal).toBe(0)
+		expect(ROWS[0]?.trigger).toBe('Test manuel')
 	})
 
 	it('filters by status, workflow, trigger and period', () => {
@@ -111,9 +114,22 @@ describe('execution log', () => {
 	})
 
 	it('lists distinct triggers and detects active filters', () => {
-		expect(distinctTriggers(ROWS)).toEqual(['Événement', 'Manuel'])
+		expect(distinctTriggers(ROWS)).toEqual(['Événement', 'Test manuel'])
 		expect(hasActiveFilters(DEFAULT_FILTERS)).toBe(false)
 		expect(hasActiveFilters({ ...DEFAULT_FILTERS, workflow: 'x' })).toBe(true)
 		expect(ALL).toBe('all')
+	})
+
+	it('carries node counts and the event label into the row', () => {
+		const built = buildRow(
+			run({ trigger_event_id: 'evt' }),
+			'Relance des devis',
+			NOW,
+			{ done: 3, total: 5 },
+			'Devis accepté',
+		)
+		expect(built.stepsDone).toBe(3)
+		expect(built.stepsTotal).toBe(5)
+		expect(built.trigger).toBe('Devis accepté')
 	})
 })

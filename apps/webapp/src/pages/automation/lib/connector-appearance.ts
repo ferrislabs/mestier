@@ -4,6 +4,7 @@ import {
 	GitBranch,
 	Globe,
 	type LucideIcon,
+	MousePointerClick,
 	Wrench,
 	Zap,
 } from 'lucide-react'
@@ -28,4 +29,18 @@ export function connectorAppearance(
 	family: string | undefined,
 ): ConnectorAppearance {
 	return (family && BY_FAMILY[family]) || FALLBACK
+}
+
+const MANUAL_TRIGGER_APPEARANCE: ConnectorAppearance = {
+	icon: MousePointerClick,
+	hue: 220,
+}
+
+const EVENT_TRIGGER_APPEARANCE: ConnectorAppearance = {
+	icon: Activity,
+	hue: 165,
+}
+
+export function triggerAppearance(manual: boolean): ConnectorAppearance {
+	return manual ? MANUAL_TRIGGER_APPEARANCE : EVENT_TRIGGER_APPEARANCE
 }

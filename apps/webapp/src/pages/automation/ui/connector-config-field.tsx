@@ -1,9 +1,15 @@
-import { Plus, Trash2, Variable } from 'lucide-react'
-import { type DragEvent, useEffect, useRef, useState } from 'react'
+import { Plus, Trash2, Unlink } from 'lucide-react'
+import {
+	type DragEvent,
+	type ReactNode,
+	useEffect,
+	useRef,
+	useState,
+} from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Checkbox } from '#/components/ui/checkbox'
-import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import {
 	Select,
 	SelectContent,
@@ -12,6 +18,7 @@ import {
 	SelectValue,
 } from '#/components/ui/select'
 import { Textarea } from '#/components/ui/textarea'
+import { cn } from '#/lib/utils'
 import {
 	isJsonMapRepresentable,
 	isSelectKind,
@@ -21,78 +28,69 @@ import {
 	valueFromJsonEntries,
 } from '#/pages/automation/lib/connector-config'
 import { insertExpressionAtCursor } from '#/pages/automation/lib/expression'
+import { isExpression } from '#/pages/automation/lib/parameters'
 
 type FieldControlElement = HTMLInputElement | HTMLTextAreaElement
 
 export interface ConnectorConfigFieldProps {
 	field: Schemas.FieldResponse
 	value: unknown
-	error: string | null
+	issues: readonly string[]
+	preview?: ReactNode
 	onChange: (value: unknown) => void
-	onOpenExpression: () => void
+	onActivate?: () => void
 	controlRef?: (element: FieldControlElement | null) => void
 	onDropExpression?: (path: string) => void
+}
+
+function textOf(value: unknown): string {
+	return typeof value === 'string' ? value : ''
 }
 
 export function ConnectorConfigField({
 	field,
 	value,
-	error,
+	issues,
+	preview,
 	onChange,
-	onOpenExpression,
+	onActivate,
 	controlRef,
 	onDropExpression,
 }: ConnectorConfigFieldProps) {
 	const id = `connector-field-${field.name}`
-	const showFieldLevelExpressionButton =
-		field.expression && field.kind !== 'Json'
+	const expression = field.expression && isExpression(textOf(value))
 
 	return (
-		<Field label={field.label} htmlFor={id}>
-			<div className="flex items-center gap-2">
-				<div className="min-w-0 flex-1">
-					{renderControl({
-						id,
-						field,
-						value,
-						invalid: error !== null,
-						onChange,
-						controlRef,
-						onDropExpression: field.expression ? onDropExpression : undefined,
-						onOpenExpression,
-					})}
-				</div>
-				{showFieldLevelExpressionButton ? (
-					<ExpressionButton label={field.label} onClick={onOpenExpression} />
-				) : null}
+		<div className="grid gap-2" onFocusCapture={onActivate}>
+			<div className="flex items-center justify-between gap-2">
+				<Label htmlFor={id}>{field.label}</Label>
+				{expression && (
+					<span className="rounded-sm bg-accent px-1.5 py-0.5 font-mono text-[10px] text-accent-foreground">
+						Expression
+					</span>
+				)}
 			</div>
-			{error ? (
-				<p role="alert" className="text-sm text-destructive">
-					{error}
+			{renderControl({
+				id,
+				field,
+				value,
+				invalid: issues.length > 0,
+				onChange,
+				controlRef,
+				onDropExpression: field.expression ? onDropExpression : undefined,
+			})}
+			{expression && preview}
+			{issues.map((issue) => (
+				<p
+					key={issue}
+					role="alert"
+					className="flex items-start gap-1.5 text-state-alert text-xs"
+				>
+					<Unlink className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+					{issue}
 				</p>
-			) : null}
-		</Field>
-	)
-}
-
-function ExpressionButton({
-	label,
-	onClick,
-}: {
-	label: string
-	onClick: () => void
-}) {
-	return (
-		<button
-			type="button"
-			aria-label={`Insérer une donnée dans ${label}`}
-			title="Insérer une donnée disponible (clic pour parcourir, ou glisser-déposer)"
-			onClick={onClick}
-			className="flex h-8 shrink-0 items-center gap-1 rounded-md border px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-		>
-			<Variable className="size-3.5" />
-			Donnée
-		</button>
+			))}
+		</div>
 	)
 }
 
@@ -116,7 +114,6 @@ function renderControl({
 	onChange,
 	controlRef,
 	onDropExpression,
-	onOpenExpression,
 }: {
 	id: string
 	field: Schemas.FieldResponse
@@ -125,7 +122,6 @@ function renderControl({
 	onChange: (value: unknown) => void
 	controlRef?: (element: FieldControlElement | null) => void
 	onDropExpression?: (path: string) => void
-	onOpenExpression: () => void
 }) {
 	if (isSelectKind(field.kind)) {
 		return (
@@ -183,19 +179,23 @@ function renderControl({
 				onChange={onChange}
 				controlRef={controlRef}
 				onDropExpression={onDropExpression}
-				onOpenExpression={onOpenExpression}
 			/>
 		)
 	}
 
+	const text = typeof value === 'string' ? value : ''
 	return (
 		<Input
 			id={id}
 			ref={controlRef}
 			type={field.secret ? 'password' : 'text'}
-			value={typeof value === 'string' ? value : ''}
+			value={text}
 			aria-invalid={invalid}
 			autoComplete="off"
+			className={cn(
+				field.expression && 'expression-drop',
+				isExpression(text) && 'font-mono',
+			)}
 			onChange={(event) => onChange(event.target.value)}
 			{...dropHandlers(onDropExpression)}
 		/>
@@ -222,7 +222,6 @@ function JsonField({
 	onChange,
 	controlRef,
 	onDropExpression,
-	onOpenExpression,
 }: {
 	id: string
 	field: Schemas.FieldResponse
@@ -231,7 +230,6 @@ function JsonField({
 	onChange: (value: unknown) => void
 	controlRef?: (element: FieldControlElement | null) => void
 	onDropExpression?: (path: string) => void
-	onOpenExpression: () => void
 }) {
 	const nextRowId = useRef(0)
 	function toRows(entries: JsonEntry[]): JsonRow[] {
@@ -397,7 +395,10 @@ function JsonField({
 					ref={controlRef}
 					value={rawText}
 					aria-invalid={invalid || rawInvalid}
-					className="font-mono text-xs"
+					className={cn(
+						'font-mono text-xs',
+						field.expression && 'expression-drop',
+					)}
 					onChange={(event) => {
 						const raw = event.target.value
 						setRawText(raw)
@@ -416,9 +417,6 @@ function JsonField({
 					}}
 					{...dropHandlers(onDropExpression)}
 				/>
-				{field.expression ? (
-					<ExpressionButton label={field.label} onClick={onOpenExpression} />
-				) : null}
 			</div>
 			{rawInvalid ? (
 				<p className="text-xs text-destructive">JSON invalide</p>

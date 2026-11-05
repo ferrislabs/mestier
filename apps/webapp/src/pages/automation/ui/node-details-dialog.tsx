@@ -10,12 +10,9 @@ import {
 	DialogTitle,
 } from '#/components/ui/dialog'
 import { cn } from '#/lib/utils'
+import { isPendingEdit } from '#/pages/automation/ui/inline-edit-field'
 import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
 import { type NdvNavItem, NdvNodeNav } from '#/pages/automation/ui/ndv-node-nav'
-
-function isPendingEdit(target: EventTarget | null): boolean {
-	return target instanceof HTMLElement && target.dataset.pendingEdit === 'true'
-}
 
 export function NodeDetailsDialog({
 	open,

@@ -25,6 +25,8 @@ export interface ExecutionRow {
 	trigger: string
 	status: ExecutionStatus
 	durationMs: number | null
+	stepsDone: number
+	stepsTotal: number
 	failure: string | null
 	version: string
 }
@@ -77,6 +79,8 @@ export function buildRow(
 	run: Run,
 	workflowName: string,
 	now: number = Date.now(),
+	nodes: { done: number; total: number } = { done: 0, total: 0 },
+	eventLabel: string | null = null,
 ): ExecutionRow {
 	const startedIso = run.started_at ?? run.created_at
 	return {
@@ -87,7 +91,9 @@ export function buildRow(
 		workflowName,
 		startedLabel: formatStartedAt(startedIso, now),
 		startedMs: new Date(startedIso).getTime() || 0,
-		trigger: runTriggerLabel(run),
+		trigger: runTriggerLabel(run, eventLabel),
+		stepsDone: nodes.done,
+		stepsTotal: nodes.total,
 		status: toExecutionStatus(run.status),
 		durationMs: runDurationMs(run),
 		failure: run.error ?? null,

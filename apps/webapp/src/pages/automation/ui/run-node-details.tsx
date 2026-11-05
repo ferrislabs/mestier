@@ -19,15 +19,19 @@ import {
 	formatMilliseconds,
 } from '#/pages/automation/lib/format'
 import { toItems } from '#/pages/automation/lib/items'
-import type { ParameterEntry } from '#/pages/automation/lib/run-node'
+import type { RunUpstreamEntry } from '#/pages/automation/lib/run-upstream'
 import type { RunNodeView } from '#/pages/automation/lib/run-view'
 import { DataViewer } from '#/pages/automation/ui/data-viewer'
-import { ExecutionParametersPanel } from '#/pages/automation/ui/execution-parameters-panel'
+import {
+	type ExecutionParameterEntry,
+	ExecutionParametersPanel,
+} from '#/pages/automation/ui/execution-parameters-panel'
 import { ExecutionStatusLabel } from '#/pages/automation/ui/execution-status'
 import { ErrorBox } from '#/pages/automation/ui/ndv-error-box'
 import type { NdvNavItem } from '#/pages/automation/ui/ndv-node-nav'
 import { NdvEmptyState, NdvPanel } from '#/pages/automation/ui/ndv-panel'
 import { NodeDetailsDialog } from '#/pages/automation/ui/node-details-dialog'
+import { VariablesPanel } from '#/pages/automation/ui/variables-panel'
 
 export interface RunNodeReplay {
 	available: boolean
@@ -43,9 +47,16 @@ export interface RunNodeDetailsProps {
 	typeLabel: string
 	icon: LucideIcon
 	hue: number
-	parameters: readonly ParameterEntry[]
+	parameters: readonly ExecutionParameterEntry[]
+	itemIndex: number
+	itemCount: number
+	onItemIndexChange: (index: number) => void
 	triggerPayload: unknown
+	triggerLabel: string
 	sources: readonly string[]
+	notice: string | null
+	upstream: readonly RunUpstreamEntry[]
+	notRunLabel: (entryId: string) => string
 	previous: readonly NdvNavItem[]
 	next: readonly NdvNavItem[]
 	replay: RunNodeReplay
@@ -55,9 +66,11 @@ export interface RunNodeDetailsProps {
 }
 
 function statusDetail(node: RunNodeView): string | undefined {
-	return node.durationMs === null
-		? undefined
-		: formatMilliseconds(node.durationMs)
+	const position = node.order === null ? null : `étape ${node.order}`
+	if (node.durationMs === null) return position ?? undefined
+	return [position, formatMilliseconds(node.durationMs)]
+		.filter(Boolean)
+		.join(' · ')
 }
 
 export function RunNodeDetails({
@@ -68,8 +81,15 @@ export function RunNodeDetails({
 	icon,
 	hue,
 	parameters,
+	itemIndex,
+	itemCount,
+	onItemIndexChange,
 	triggerPayload,
+	triggerLabel,
 	sources,
+	notice,
+	upstream,
+	notRunLabel,
 	previous,
 	next,
 	replay,
@@ -87,11 +107,15 @@ export function RunNodeDetails({
 		node.kind === 'trigger' ? (
 			<NdvEmptyState
 				title="Point de départ"
-				text="Ce déclencheur a démarré l’exécution. Les données qu’il a émises sont dans la colonne « Après l’exécution »."
+				text={`Ce déclencheur a démarré l’exécution (${triggerLabel}). Les données qu’il a émises sont dans la colonne « Après l’exécution ».`}
 			/>
-		) : step ? (
+		) : (
 			<div className="grid min-w-0 gap-3 [&>*]:min-w-0">
-				{sources.length > 0 && (
+				{notice ? (
+					<p className="rounded-md border border-border border-dashed bg-card px-3 py-2 text-sm">
+						{notice}
+					</p>
+				) : (
 					<p className="text-muted-foreground text-sm">
 						Reçu de{' '}
 						<span className="font-medium text-foreground">
@@ -99,17 +123,13 @@ export function RunNodeDetails({
 						</span>
 					</p>
 				)}
-				<DataViewer items={toItems(step.input)} />
+				<VariablesPanel
+					upstream={upstream}
+					mode="execution"
+					intro="Résultats des nœuds précédents pendant cette exécution. Un clic copie l’expression d’une clé."
+					notRunLabel={(entry) => notRunLabel(entry.id)}
+				/>
 			</div>
-		) : (
-			<NdvEmptyState
-				title="Aucune donnée reçue"
-				text={
-					node.status === 'waiting'
-						? 'Pas encore atteint : l’exécution n’est pas encore arrivée à ce nœud.'
-						: 'Non appelé : la branche qui mène à ce nœud n’a transmis aucun élément.'
-				}
-			/>
 		)
 
 	const output = (() => {
@@ -190,6 +210,9 @@ export function RunNodeDetails({
 						nodeLabel={node.label}
 						version={versionLabel}
 						entries={parameters}
+						itemIndex={Math.min(itemIndex, Math.max(0, itemCount - 1))}
+						itemCount={itemCount}
+						onItemIndexChange={onItemIndexChange}
 					/>
 				}
 				output={
@@ -234,7 +257,9 @@ export function RunNodeDetails({
 			<AlertDialog open={confirming} onOpenChange={setConfirming}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Relancer depuis {node.id} ?</AlertDialogTitle>
+						<AlertDialogTitle>
+							Relancer depuis « {node.label} » ?
+						</AlertDialogTitle>
 						<AlertDialogDescription>
 							Cette étape et toutes celles en aval seront rejouées. Les étapes
 							en amont ne seront pas ré-exécutées : leur résultat est relu tel

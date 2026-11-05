@@ -1,12 +1,13 @@
-import { Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Lock } from 'lucide-react'
+import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
 import { NdvPanel } from '#/pages/automation/ui/ndv-panel'
 
-export interface ExecutionParameterEntry {
+export type ExecutionParameterEntry = {
 	id: string
 	label: string
 	value: string
-	expression: boolean
+	resolved: string | null
 }
 
 function ValueBox({ value, mono }: { value: string; mono?: boolean }) {
@@ -27,11 +28,18 @@ export function ExecutionParametersPanel({
 	nodeLabel,
 	version,
 	entries,
+	itemIndex,
+	itemCount,
+	onItemIndexChange,
 }: {
 	nodeLabel: string
 	version: string
 	entries: readonly ExecutionParameterEntry[]
+	itemIndex: number
+	itemCount: number
+	onItemIndexChange: (index: number) => void
 }) {
+	const hasExpressions = entries.some((entry) => entry.resolved !== null)
 	return (
 		<NdvPanel
 			title="Paramètres"
@@ -54,6 +62,36 @@ export function ExecutionParametersPanel({
 					<p className="font-medium text-sm">Nom du nœud</p>
 					<ValueBox value={nodeLabel} />
 				</div>
+				{hasExpressions && itemCount > 1 && (
+					<div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-1.5">
+						<span className="text-muted-foreground text-xs">
+							Expressions résolues pour l’élément{' '}
+							<span className="font-medium text-foreground tabular-nums">
+								{itemIndex + 1} sur {itemCount}
+							</span>
+						</span>
+						<span className="flex gap-1">
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Élément précédent"
+								disabled={itemIndex === 0}
+								onClick={() => onItemIndexChange(itemIndex - 1)}
+							>
+								<ChevronLeft />
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Élément suivant"
+								disabled={itemIndex >= itemCount - 1}
+								onClick={() => onItemIndexChange(itemIndex + 1)}
+							>
+								<ChevronRight />
+							</Button>
+						</span>
+					</div>
+				)}
 				{entries.length === 0 ? (
 					<p className="text-muted-foreground text-sm">
 						Ce nœud n’a pas de paramètre.
@@ -63,13 +101,23 @@ export function ExecutionParametersPanel({
 						<div key={entry.id} className="grid gap-2">
 							<div className="flex items-center justify-between gap-2">
 								<p className="font-medium text-sm">{entry.label}</p>
-								{entry.expression && (
+								{entry.resolved !== null && (
 									<span className="rounded-sm bg-accent px-1.5 py-0.5 font-mono text-[10px] text-accent-foreground">
 										Expression
 									</span>
 								)}
 							</div>
-							<ValueBox value={entry.value} mono={entry.expression} />
+							{entry.resolved === null ? (
+								<ValueBox value={entry.value} />
+							) : (
+								<div className="grid gap-1.5">
+									<ValueBox value={entry.value} mono />
+									<p className="text-muted-foreground text-xs">
+										Valeur utilisée
+									</p>
+									<ValueBox value={entry.resolved} />
+								</div>
+							)}
 						</div>
 					))
 				)}

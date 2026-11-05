@@ -1,5 +1,14 @@
 import { Link } from '@tanstack/react-router'
-import { Ellipsis, Folder, History, Pencil, Trash2 } from 'lucide-react'
+import {
+	Archive,
+	Copy,
+	Download,
+	Ellipsis,
+	Folder,
+	History,
+	Pencil,
+	Trash2,
+} from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
@@ -47,12 +56,18 @@ export function WorkflowListRow({
 	organizationSlug,
 	onRename,
 	onToggleEnabled,
+	onDuplicate,
+	onExport,
+	onArchive,
 	onDelete,
 }: {
 	workflow: WorkflowRow
 	organizationSlug: string
 	onRename: (workflow: WorkflowRow) => void
 	onToggleEnabled: (workflow: WorkflowRow) => void
+	onDuplicate: (workflow: WorkflowRow) => void
+	onExport: (workflow: WorkflowRow) => void
+	onArchive: (workflow: WorkflowRow) => void
 	onDelete: (workflow: WorkflowRow) => void
 }) {
 	return (
@@ -116,6 +131,14 @@ export function WorkflowListRow({
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end">
+								<DropdownMenuItem onSelect={() => onDuplicate(workflow)}>
+									<Copy />
+									Dupliquer
+								</DropdownMenuItem>
+								<DropdownMenuItem onSelect={() => onExport(workflow)}>
+									<Download />
+									Exporter
+								</DropdownMenuItem>
 								<DropdownMenuItem asChild>
 									<Link
 										to={buildOrgPath(
@@ -132,6 +155,13 @@ export function WorkflowListRow({
 									Renommer
 								</DropdownMenuItem>
 								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									variant="destructive"
+									onSelect={() => onArchive(workflow)}
+								>
+									<Archive />
+									Archiver
+								</DropdownMenuItem>
 								<AlertDialogTrigger asChild>
 									<DropdownMenuItem
 										variant="destructive"

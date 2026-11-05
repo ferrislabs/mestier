@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AuthScheme } from '#/hooks/use-automation'
 import {
+	buildCredentialFieldErrors,
 	buildCredentialFormErrors,
 	emptyCredentialForm,
 } from '#/pages/automation/lib/credential-form'
@@ -11,6 +12,7 @@ describe('emptyCredentialForm', () => {
 		expect(emptyCredentialForm()).toEqual({
 			kind: '',
 			name: '',
+			description: '',
 			origin: 'supplied',
 			data: {},
 		})
@@ -41,6 +43,7 @@ describe('buildCredentialFormErrors', () => {
 		return {
 			kind: 'bearer_token',
 			name: 'Ma clé',
+			description: '',
 			origin: 'supplied' as const,
 			data: {},
 			...overrides,
@@ -93,5 +96,61 @@ describe('buildCredentialFormErrors', () => {
 			'create',
 		)
 		expect(errors).toEqual([])
+	})
+})
+
+describe('buildCredentialFieldErrors', () => {
+	const scheme: AuthScheme = {
+		kind: 'smtp',
+		label: 'SMTP',
+		fields: [
+			{
+				name: 'port',
+				label: 'Port',
+				required: true,
+				kind: 'Number',
+				expression: false,
+				secret: false,
+			},
+			{
+				name: 'token',
+				label: 'Jeton',
+				required: true,
+				kind: 'Text',
+				expression: false,
+				secret: true,
+			},
+		],
+	}
+	const base: CredentialFormValues = {
+		kind: 'smtp',
+		name: '',
+		description: '',
+		origin: 'supplied',
+		data: {},
+	}
+
+	it('keys each message by the field it belongs to', () => {
+		expect(buildCredentialFieldErrors(base, scheme, 'create')).toEqual({
+			name: 'Donnez un nom à cette identification.',
+			port: 'Champ obligatoire.',
+			token: 'Champ obligatoire.',
+		})
+	})
+
+	it('expects whole numbers in number fields', () => {
+		expect(
+			buildCredentialFieldErrors(
+				{ ...base, name: 'x', data: { port: '25a', token: 't' } },
+				scheme,
+				'create',
+			),
+		).toEqual({ port: 'Nombre entier attendu.' })
+	})
+
+	it('only checks the name on edit while no data is replaced', () => {
+		expect(
+			buildCredentialFieldErrors({ ...base, name: 'x' }, scheme, 'edit'),
+		).toEqual({})
 	})
 })

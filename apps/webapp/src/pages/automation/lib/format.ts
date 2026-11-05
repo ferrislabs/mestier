@@ -85,3 +85,9 @@ export function formatStartedAt(iso: string, now: number = Date.now()): string {
 	if (dayDiff === 1) return `Hier à ${time}`
 	return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} à ${time}`
 }
+
+export function formatVersionLabel(iso: string): string {
+	const date = new Date(iso)
+	if (Number.isNaN(date.getTime())) return 'Version'
+	return `Version du ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} à ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}

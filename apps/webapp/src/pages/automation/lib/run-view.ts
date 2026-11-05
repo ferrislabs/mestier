@@ -4,8 +4,11 @@ import {
 	toExecutionStatus,
 } from '#/pages/automation/lib/execution-status'
 import { formatMilliseconds } from '#/pages/automation/lib/format'
+import { toItems } from '#/pages/automation/lib/items'
 import {
+	groupRunSteps,
 	isTerminalRunStatus,
+	type RunStepTreeNode,
 	representativeStepByConnector,
 	runDurationMs,
 } from '#/pages/automation/lib/workflow-runs'
@@ -22,22 +25,40 @@ export interface RunNodeView {
 	connector: Schemas.PlacedConnectorDto | null
 	trigger: Schemas.PlacedTriggerDto | null
 	note: string
+	order: number | null
 }
 
 export interface RunStepView {
 	stepId: string
 	nodeId: string
 	label: string
+	plainLabel: string
 	family: string | undefined
 	status: ExecutionStatus
 	detail: string
 }
 
+export interface RunStepLeafGroup {
+	kind: 'step'
+	step: RunStepView
+}
+
+export interface RunStepLoopGroup {
+	kind: 'loop'
+	id: string
+	label: string
+	iterations: { index: number; path: string; children: RunStepGroup[] }[]
+}
+
+export type RunStepGroup = RunStepLeafGroup | RunStepLoopGroup
+
 export interface RunView {
 	nodes: RunNodeView[]
 	steps: RunStepView[]
+	stepGroups: RunStepGroup[]
 	pending: RunStepView[]
 	traversedEdges: Set<string>
+	edgeCounts: Map<string, number>
 	failed: RunStepView | null
 	status: ExecutionStatus
 	durationMs: number | null
@@ -102,6 +123,25 @@ function iterationSuffix(step: Schemas.RunStepResponse): string {
 	return match ? ` · itération ${Number(match[1]) + 1}` : ''
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function edgeItemCount(
+	source: RunNodeView | undefined,
+	edge: Schemas.EdgeDto,
+	triggerPayload: unknown,
+): number | null {
+	if (!source) return null
+	if (source.kind === 'trigger')
+		return Math.max(1, toItems(triggerPayload).length)
+	const output = source.step?.output
+	if (output === undefined || output === null) return null
+	if (edge.branch && isRecord(output) && edge.branch in output)
+		return toItems(output[edge.branch]).length
+	return toItems(output).length
+}
+
 export function buildRunView(
 	run: Schemas.RunDetailResponse,
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>,
@@ -125,6 +165,7 @@ export function buildRunView(
 			connector: null,
 			trigger,
 			note: status === 'success' ? 'Démarré' : 'En attente',
+			order: null,
 		}
 	})
 
@@ -149,6 +190,7 @@ export function buildRunView(
 			connector,
 			trigger: null,
 			note: noteFor(status, durationMs),
+			order: null,
 		}
 	})
 
@@ -167,6 +209,7 @@ export function buildRunView(
 			stepId: step.id,
 			nodeId: step.connector_id,
 			label: `${node?.label ?? step.connector_id}${iterationSuffix(step)}`,
+			plainLabel: node?.label ?? step.connector_id,
 			family: node?.family,
 			status,
 			detail: stepDetail(status, step),
@@ -179,6 +222,7 @@ export function buildRunView(
 			stepId: node.id,
 			nodeId: node.id,
 			label: node.label,
+			plainLabel: node.label,
 			family: node.family,
 			status: node.status,
 			detail: node.status === 'waiting' ? 'Pas encore atteint' : 'Non appelé',
@@ -196,13 +240,78 @@ export function buildRunView(
 			.map(realEdgeId),
 	)
 
+	const stepById = new Map(steps.map((step) => [step.stepId, step]))
+	const toGroups = (tree: readonly RunStepTreeNode[]): RunStepGroup[] =>
+		tree.flatMap((entry): RunStepGroup[] => {
+			if (entry.kind === 'step') {
+				const step = stepById.get(entry.step.id)
+				return step ? [{ kind: 'step', step }] : []
+			}
+			return [
+				{
+					kind: 'loop',
+					id: `${entry.connectorId}:${entry.iterations[0]?.path ?? ''}`,
+					label: byId.get(entry.connectorId)?.label ?? entry.connectorId,
+					iterations: entry.iterations.map((iteration) => ({
+						index: iteration.index,
+						path: iteration.path,
+						children: toGroups(iteration.children),
+					})),
+				},
+			]
+		})
+
+	const edgeCounts = new Map<string, number>()
+	for (const edge of graph.edges) {
+		const id = realEdgeId(edge)
+		if (!traversedEdges.has(id)) continue
+		const count = edgeItemCount(byId.get(edge.from), edge, run.trigger_payload)
+		if (count !== null) edgeCounts.set(id, count)
+	}
+
+	const orderOf = new Map<string, number>()
+	steps.forEach((step, index) => {
+		if (!orderOf.has(step.nodeId)) orderOf.set(step.nodeId, index + 1)
+	})
+
 	return {
-		nodes,
+		nodes: nodes.map((node) => ({
+			...node,
+			order: orderOf.get(node.id) ?? null,
+		})),
 		steps,
+		stepGroups: toGroups(groupRunSteps(ordered)),
 		pending,
 		traversedEdges,
+		edgeCounts,
 		failed: steps.find((step) => step.status === 'error') ?? null,
 		status: toExecutionStatus(run.status),
 		durationMs: runDurationMs(run),
 	}
+}
+
+export type SkipReason =
+	| { type: 'after-error'; failedNodeId: string }
+	| { type: 'no-items' }
+
+export function skipReason(
+	nodeId: string,
+	graph: Schemas.GraphDto,
+	failedNodeId: string | null,
+): SkipReason {
+	if (failedNodeId === null) return { type: 'no-items' }
+	const downstream = new Set<string>()
+	let frontier = [failedNodeId]
+	while (frontier.length > 0) {
+		const next: string[] = []
+		for (const edge of graph.edges) {
+			if (!frontier.includes(edge.from) || downstream.has(edge.to)) continue
+			downstream.add(edge.to)
+			next.push(edge.to)
+		}
+		frontier = next
+	}
+	return downstream.has(nodeId)
+		? { type: 'after-error', failedNodeId }
+		: { type: 'no-items' }
 }

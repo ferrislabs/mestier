@@ -78,10 +78,24 @@ export function formatRunDuration(ms: number | null): string {
 	return seconds === 0 ? `${minutes}min` : `${minutes}min ${seconds}s`
 }
 
-export function runTriggerLabel(run: {
-	trigger_event_id?: string | null
-}): string {
-	return run.trigger_event_id ? 'Événement' : 'Manuel'
+export function runTriggerLabel(
+	run: { trigger_event_id?: string | null },
+	eventLabel: string | null = null,
+): string {
+	if (run.trigger_event_id) return eventLabel ?? 'Événement'
+	return 'Test manuel'
+}
+
+export function triggerEventLabel(
+	triggers: readonly Schemas.PlacedTriggerDto[],
+	eventLabels: ReadonlyMap<string, string>,
+): string | null {
+	const names = triggers.flatMap((trigger) =>
+		trigger.kind === 'Manual' ? [] : trigger.kind.Events,
+	)
+	const [only] = names
+	if (names.length !== 1 || only === undefined) return null
+	return eventLabels.get(only) ?? only
 }
 
 const STATUS_PRIORITY: Record<string, number> = {

@@ -43,9 +43,16 @@ describe('run node helpers', () => {
 				id: 'to',
 				label: 'Destinataire',
 				value: '{{ trigger.email }}',
+				template: '{{ trigger.email }}',
 				expression: true,
 			},
-			{ id: 'extra', label: 'extra', value: '1', expression: false },
+			{
+				id: 'extra',
+				label: 'extra',
+				value: '1',
+				template: 1,
+				expression: false,
+			},
 		])
 		expect(parameterEntries(null, DESCRIPTOR)).toEqual([])
 	})

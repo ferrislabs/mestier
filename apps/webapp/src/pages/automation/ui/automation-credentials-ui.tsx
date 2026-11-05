@@ -4,6 +4,7 @@ import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import type { AuthScheme } from '#/hooks/use-automation'
 import type { ExternalService } from '#/pages/automation/feature/mocks/external-services'
+import type { CredentialFieldErrors } from '#/pages/automation/lib/credential-form'
 import {
 	CredentialDialog,
 	type CredentialFormBinding,
@@ -27,7 +28,7 @@ export interface AutomationCredentialsUIProps {
 	dialogMode: 'create' | 'edit'
 	editing: CredentialRow | null
 	form: CredentialFormBinding
-	formErrors: string[]
+	fieldErrors: CredentialFieldErrors
 	saveError: string | null
 	/** Base64, shown exactly once — right after a `generated` credential is
 	 * created or rotated. `null` the rest of the time, including every
@@ -41,6 +42,8 @@ export interface AutomationCredentialsUIProps {
 	onRotate: (row: CredentialRow) => void
 	rotatingId: string | null
 	onDelete: (row: CredentialRow) => void
+	onConnect: (row: CredentialRow) => void
+	onDisconnect: (row: CredentialRow) => void
 }
 
 export function AutomationCredentialsUI({
@@ -54,7 +57,7 @@ export function AutomationCredentialsUI({
 	dialogMode,
 	editing,
 	form,
-	formErrors,
+	fieldErrors,
 	saveError,
 	revealedSecret,
 	onOpenCreate,
@@ -63,6 +66,8 @@ export function AutomationCredentialsUI({
 	onRotate,
 	rotatingId,
 	onDelete,
+	onConnect,
+	onDisconnect,
 }: AutomationCredentialsUIProps) {
 	return (
 		<PageShell className="gap-0">
@@ -102,13 +107,15 @@ export function AutomationCredentialsUI({
 				authSchemes={authSchemes}
 				services={services}
 				form={form}
-				formErrors={formErrors}
+				fieldErrors={fieldErrors}
 				saveError={saveError}
 				revealedSecret={revealedSecret}
 				rotatingId={rotatingId}
 				onOpenChange={onOpenChange}
 				onRotate={onRotate}
 				onDelete={onDelete}
+				onConnect={onConnect}
+				onDisconnect={onDisconnect}
 			/>
 		</PageShell>
 	)

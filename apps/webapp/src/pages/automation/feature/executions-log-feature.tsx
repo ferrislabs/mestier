@@ -1,11 +1,12 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAutomationRuns,
 	useAutomationWorkflows,
 } from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
+import { mockNodeCounts } from '#/pages/automation/feature/mocks/execution-node-counts'
 import {
 	ALL,
 	buildRow,
@@ -21,7 +22,10 @@ import {
 	statusCounts,
 	summarize,
 } from '#/pages/automation/lib/execution-log'
+import { isTerminalRunStatus } from '#/pages/automation/lib/workflow-runs'
 import { AutomationExecutionsLog } from '#/pages/automation/ui/automation-executions-log'
+
+const LIVE_POLL_MS = 3000
 
 export type ExecutionsLogFilters = Omit<ExecutionFilters, 'query'>
 
@@ -58,6 +62,16 @@ function ExecutionsLogWorkspace({
 	const [direction, setDirection] = useState<SortDirection>('desc')
 	const runsQuery = useAutomationRuns(organizationId)
 	const workflowsQuery = useAutomationWorkflows(organizationId)
+	const { refetch: refetchRuns } = runsQuery
+	const hasLiveRun = (runsQuery.data?.data ?? []).some(
+		(run) => !isTerminalRunStatus(run.status),
+	)
+
+	useEffect(() => {
+		if (!hasLiveRun) return
+		const timer = window.setInterval(() => void refetchRuns(), LIVE_POLL_MS)
+		return () => window.clearInterval(timer)
+	}, [hasLiveRun, refetchRuns])
 
 	const workflowList = useMemo(
 		() =>
@@ -70,7 +84,12 @@ function ExecutionsLogWorkspace({
 	const rows = useMemo(() => {
 		const names = new Map(workflowList.map((item) => [item.id, item.name]))
 		return (runsQuery.data?.data ?? []).map((run) =>
-			buildRow(run, names.get(run.workflow_id) ?? 'Workflow supprimé'),
+			buildRow(
+				run,
+				names.get(run.workflow_id) ?? 'Workflow supprimé',
+				Date.now(),
+				mockNodeCounts(run),
+			),
 		)
 	}, [runsQuery.data, workflowList])
 

@@ -4,6 +4,7 @@ import type { Collection } from '#/pages/automation/lib/collections'
 import { parseOpenApi } from '#/pages/automation/lib/openapi'
 
 const DELAY_MS = 150
+const STORAGE_KEY = 'mestier:automation-collections:v1'
 
 function presetCollections(): Collection[] {
 	return COLLECTION_PRESETS.map((preset) =>
@@ -11,11 +12,30 @@ function presetCollections(): Collection[] {
 	)
 }
 
-let collections: Collection[] = presetCollections()
+function readStored(): Collection[] {
+	try {
+		const stored = localStorage.getItem(STORAGE_KEY)
+		return stored ? (JSON.parse(stored) as Collection[]) : presetCollections()
+	} catch {
+		return presetCollections()
+	}
+}
+
+function persist(next: Collection[]): boolean {
+	try {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+		return true
+	} catch {
+		return false
+	}
+}
+
+let collections: Collection[] = readStored()
 const listeners = new Set<() => void>()
 
 function publish(next: Collection[]) {
 	collections = next
+	persist(next)
 	for (const listener of listeners) listener()
 }
 

@@ -8,15 +8,31 @@ import {
 	TableRow,
 } from '#/components/ui/table'
 import { credentialAppearance } from '#/pages/automation/lib/credential-appearance'
+import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
+import { formatUsage } from '#/pages/automation/lib/format'
+import { CredentialStatusLabel } from '#/pages/automation/ui/credential-status-label'
 import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
 
 export interface CredentialRow {
 	id: string
 	name: string
+	description: string
 	kind: string
 	kindLabel: string
 	origin: 'supplied' | 'generated'
+	createdAt: string
 	updatedAt: string
+	usedByWorkflows: number
+	status: CredentialStatus
+	account?: string
+}
+
+export function formatCredentialDate(iso: string): string {
+	return new Date(iso).toLocaleDateString('fr-FR', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+	})
 }
 
 export function CredentialsTable({
@@ -47,8 +63,9 @@ export function CredentialsTable({
 						</TableHead>
 						<TableHead className="px-4 text-muted-foreground">Type</TableHead>
 						<TableHead className="px-4 text-muted-foreground">
-							Origine
+							Utilisation
 						</TableHead>
+						<TableHead className="px-4 text-muted-foreground">Statut</TableHead>
 						<TableHead className="px-4 text-muted-foreground">
 							Modifiée le
 						</TableHead>
@@ -87,23 +104,32 @@ export function CredentialsTable({
 													{credential.name}
 												</span>
 											)}
+											{credential.description && (
+												<span className="block truncate text-muted-foreground text-sm">
+													{credential.description}
+												</span>
+											)}
 										</span>
 									</span>
 								</TableCell>
 								<TableCell className="px-4">
 									<span className="block text-sm">{credential.kindLabel}</span>
+									<span className="block max-w-64 truncate font-mono text-muted-foreground text-xs">
+										{credential.account
+											? `Connecté : ${credential.account}`
+											: credential.origin === 'generated'
+												? 'Générée par Mestier'
+												: 'Fournie'}
+									</span>
 								</TableCell>
 								<TableCell className="px-4 text-muted-foreground">
-									{credential.origin === 'generated'
-										? 'Générée par Mestier'
-										: 'Fournie'}
+									{formatUsage(credential.usedByWorkflows)}
+								</TableCell>
+								<TableCell className="px-4">
+									<CredentialStatusLabel status={credential.status} />
 								</TableCell>
 								<TableCell className="px-4 text-muted-foreground">
-									{new Date(credential.updatedAt).toLocaleDateString('fr-FR', {
-										day: 'numeric',
-										month: 'short',
-										year: 'numeric',
-									})}
+									{formatCredentialDate(credential.updatedAt)}
 								</TableCell>
 							</TableRow>
 						)

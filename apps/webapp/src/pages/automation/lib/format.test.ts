@@ -6,6 +6,7 @@ import {
 	formatMilliseconds,
 	formatStartedAt,
 	formatUsage,
+	formatVersionLabel,
 	minutesSince,
 } from '#/pages/automation/lib/format'
 
@@ -62,5 +63,12 @@ describe('format', () => {
 			formatStartedAt(new Date(2026, 9, 1, 8, 0, 0).toISOString(), now),
 		).toBe('1 oct. 2026 à 08:00:00')
 		expect(formatStartedAt('nope', now)).toBe('—')
+	})
+
+	it('formatVersionLabel reads like the prototype version column', () => {
+		expect(
+			formatVersionLabel(new Date(2026, 9, 28, 11, 5, 0).toISOString()),
+		).toBe('Version du 28 oct. 2026 à 11:05')
+		expect(formatVersionLabel('nope')).toBe('Version')
 	})
 })

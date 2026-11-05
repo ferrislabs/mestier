@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Schemas } from '#/api/api.client'
 import {
 	isSigningCredentialField,
@@ -10,6 +11,7 @@ import {
 	generatedCredentials,
 	isCredentialRequired,
 } from '#/pages/automation/lib/credential-picker'
+import type { NodeIssue } from '#/pages/automation/lib/node-issues'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
 import {
 	connectorLevelErrors,
@@ -28,9 +30,12 @@ export interface ConnectorConfigFormProps {
 	credentialId: string | null
 	credentials: Schemas.CredentialResponse[]
 	errors: ConnectorValidationError[]
+	bindingIssues?: readonly NodeIssue[]
+	activeFieldName?: string | null
+	preview?: ReactNode
 	onConfigChange: (config: Record<string, unknown>) => void
 	onCredentialChange: (credentialId: string | null) => void
-	onOpenExpression: (field: Schemas.FieldResponse) => void
+	onActivateField: (field: Schemas.FieldResponse) => void
 	onRequestCreateCredential: (purpose: CredentialCreationPurpose) => void
 	onFieldRef?: (name: string, element: FieldControlElement | null) => void
 	onInsertExpression?: (name: string, path: string) => void
@@ -42,14 +47,27 @@ export function ConnectorConfigForm({
 	credentialId,
 	credentials,
 	errors,
+	bindingIssues = [],
+	activeFieldName = null,
+	preview,
 	onConfigChange,
 	onCredentialChange,
-	onOpenExpression,
+	onActivateField,
 	onRequestCreateCredential,
 	onFieldRef,
 	onInsertExpression,
 }: ConnectorConfigFormProps) {
 	const levelErrors = connectorLevelErrors(errors)
+
+	function issuesOf(name: string): string[] {
+		const server = fieldErrorMessage(errors, name)
+		return [
+			...(server ? [server] : []),
+			...bindingIssues
+				.filter((issue) => issue.parameter === name)
+				.map((issue) => issue.message),
+		]
+	}
 
 	function setField(name: string, value: unknown) {
 		onConfigChange(
@@ -60,7 +78,7 @@ export function ConnectorConfigForm({
 	}
 
 	return (
-		<div className="flex flex-col gap-5">
+		<div className="grid gap-4">
 			{descriptor.auth !== 'None' ? (
 				<CredentialPickerField
 					label="Identification"
@@ -97,9 +115,10 @@ export function ConnectorConfigForm({
 						key={field.name}
 						field={field}
 						value={config[field.name]}
-						error={fieldErrorMessage(errors, field.name)}
+						issues={issuesOf(field.name)}
+						preview={activeFieldName === field.name ? preview : undefined}
 						onChange={(value) => setField(field.name, value)}
-						onOpenExpression={() => onOpenExpression(field)}
+						onActivate={() => onActivateField(field)}
 						controlRef={
 							onFieldRef
 								? (element) => onFieldRef(field.name, element)

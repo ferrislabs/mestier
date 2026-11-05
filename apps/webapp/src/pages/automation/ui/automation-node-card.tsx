@@ -4,13 +4,12 @@ import {
 	Check,
 	LoaderCircle,
 	Plus,
-	Trash2,
 	TriangleAlert,
 	Unlink,
 	X,
 	Zap,
 } from 'lucide-react'
-import { type CSSProperties, Fragment, type ReactNode } from 'react'
+import { type CSSProperties, Fragment } from 'react'
 import {
 	Tooltip,
 	TooltipContent,
@@ -20,7 +19,7 @@ import { cn } from '#/lib/utils'
 import type { ExecutionStatus } from '#/pages/automation/lib/execution-status'
 import '#/pages/automation/ui/automation.css'
 
-export type NodeCardRunStatus = 'success' | 'error'
+export type RunStatus = 'success' | 'error'
 
 export type NodeCardOutput = {
 	id: string | null
@@ -49,14 +48,11 @@ const EXECUTION_NOTE: Record<ExecutionStatus, string> = {
 	cancelled: 'text-muted-foreground',
 }
 
-export const ADD_BUTTON =
-	'nodrag nopan flex size-[24px] items-center justify-center rounded-md border-2 border-muted-foreground/70 border-dashed bg-card text-muted-foreground outline-none transition-colors hover:border-ring hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
-
 function outputOffset(index: number, count: number): string {
 	return `${((index + 1) / (count + 1)) * 100}%`
 }
 
-function StatusBadge({ status }: { status: NodeCardRunStatus }) {
+function StatusBadge({ status }: { status: RunStatus }) {
 	const isSuccess = status === 'success'
 	return (
 		<span
@@ -132,18 +128,6 @@ function BindingBadge({ issues }: { issues: readonly string[] }) {
 	)
 }
 
-function ErrorBadge({ label }: { label: string }) {
-	return (
-		<span
-			role="img"
-			aria-label={label}
-			className="absolute -top-2 -right-2 flex size-[20px] items-center justify-center rounded-full border-2 border-background bg-state-alert text-primary-foreground"
-		>
-			<TriangleAlert className="size-3" strokeWidth={2.75} />
-		</span>
-	)
-}
-
 export function AutomationNodeCard({
 	label,
 	subtitle,
@@ -158,10 +142,6 @@ export function AutomationNodeCard({
 	hasInput,
 	outputs,
 	execution = null,
-	errorLabel = null,
-	deleteLabel,
-	onDelete,
-	renderAdd,
 	onOpen,
 	onAddAfter,
 }: {
@@ -170,7 +150,7 @@ export function AutomationNodeCard({
 	icon: LucideIcon
 	hue: number
 	trigger: boolean
-	status: NodeCardRunStatus | null
+	status: RunStatus | null
 	needsSetup: boolean
 	disabled: boolean
 	bindingIssues: readonly string[]
@@ -178,10 +158,6 @@ export function AutomationNodeCard({
 	hasInput: boolean
 	outputs: readonly NodeCardOutput[]
 	execution?: NodeCardExecution | null
-	errorLabel?: string | null
-	deleteLabel?: string
-	onDelete?: () => void
-	renderAdd?: (output: NodeCardOutput) => ReactNode
 	onOpen: () => void
 	onAddAfter: (outputId: string | null) => void
 }) {
@@ -190,7 +166,7 @@ export function AutomationNodeCard({
 	return (
 		<div
 			className={cn(
-				'node-tone group relative size-[100px]',
+				'node-tone relative size-[100px]',
 				dimmed && 'opacity-55 grayscale',
 			)}
 			style={{ '--node-hue': hue } as CSSProperties}
@@ -215,14 +191,11 @@ export function AutomationNodeCard({
 					trigger
 						? 'rounded-l-[calc(var(--radius)*3.5)] rounded-r-lg'
 						: 'rounded-lg',
-					(status === 'error' ||
-						errorLabel !== null ||
-						(bindingIssues.length > 0 && !needsSetup)) &&
+					(status === 'error' || (bindingIssues.length > 0 && !needsSetup)) &&
 						'border-2 border-state-alert',
 					needsSetup && 'border-2 border-state-today border-dashed',
 					!execution &&
 						status !== 'error' &&
-						errorLabel === null &&
 						!needsSetup &&
 						bindingIssues.length === 0 &&
 						'border-border',
@@ -254,22 +227,7 @@ export function AutomationNodeCard({
 					role="img"
 				/>
 			)}
-			{onDelete && (
-				<button
-					type="button"
-					aria-label={deleteLabel}
-					onClick={(event) => {
-						event.stopPropagation()
-						onDelete()
-					}}
-					className="nodrag nopan absolute -top-2 -left-2 flex size-[20px] items-center justify-center rounded-full border border-border bg-card text-muted-foreground opacity-0 shadow-xs outline-none transition-opacity hover:text-state-alert focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
-				>
-					<Trash2 className="size-3" aria-hidden />
-				</button>
-			)}
-			{errorLabel !== null ? (
-				<ErrorBadge label={errorLabel} />
-			) : execution ? (
+			{execution ? (
 				<ExecutionBadge status={execution.status} />
 			) : needsSetup ? (
 				<SetupBadge />
@@ -303,18 +261,14 @@ export function AutomationNodeCard({
 								style={{ top }}
 							>
 								<span className="ml-1 h-0 w-[28px] border-muted-foreground/70 border-t-2 border-dashed" />
-								{renderAdd ? (
-									renderAdd(output)
-								) : (
-									<button
-										type="button"
-										aria-label={`Ajouter un nœud après « ${label} »${output.label ? ` (${output.label})` : ''}`}
-										onClick={() => onAddAfter(output.id)}
-										className={ADD_BUTTON}
-									>
-										<Plus className="size-3.5" aria-hidden />
-									</button>
-								)}
+								<button
+									type="button"
+									aria-label={`Ajouter un nœud après « ${label} »${output.label ? ` (${output.label})` : ''}`}
+									onClick={() => onAddAfter(output.id)}
+									className="nodrag nopan flex size-[24px] items-center justify-center rounded-md border-2 border-muted-foreground/70 border-dashed bg-card text-muted-foreground outline-none transition-colors hover:border-ring hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+								>
+									<Plus className="size-3.5" aria-hidden />
+								</button>
 							</div>
 						)}
 					</Fragment>

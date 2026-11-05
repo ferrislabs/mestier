@@ -9,11 +9,9 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useMemo } from 'react'
 import type { Schemas } from '#/api/api.client'
-import {
-	connectorAppearance,
-	TRIGGER_APPEARANCE,
-} from '#/pages/automation/lib/connector-appearance'
+import { formatItemCount } from '#/pages/automation/lib/format'
 import type { NodePosition } from '#/pages/automation/lib/graph'
+import { runNodeAppearance } from '#/pages/automation/lib/run-appearance'
 import { type RunView, realEdgeId } from '#/pages/automation/lib/run-view'
 import type { ExecutionFlowNodeType } from '#/pages/automation/ui/execution-flow-node'
 import { ExecutionFlowNode } from '#/pages/automation/ui/execution-flow-node'
@@ -52,10 +50,7 @@ function ExecutionFlow({
 	const nodes = useMemo<ExecutionFlowNodeType[]>(
 		() =>
 			view.nodes.map((node) => {
-				const appearance =
-					node.kind === 'trigger'
-						? TRIGGER_APPEARANCE
-						: connectorAppearance(node.family)
+				const appearance = runNodeAppearance(node)
 				const branches =
 					node.connector !== null
 						? (descriptors.get(node.connector.kind)?.branches ?? [])
@@ -103,10 +98,20 @@ function ExecutionFlow({
 				const intoRunning =
 					view.nodes.find((node) => node.id === edge.to)?.status === 'running'
 				const stroke = intoRunning ? RUNNING_STROKE : TRAVERSED_STROKE
+				const count = view.edgeCounts.get(base.id)
 				return {
 					...base,
 					animated: intoRunning,
 					style: { stroke, strokeWidth: 2.5 },
+					...(count === undefined
+						? {}
+						: {
+								label: formatItemCount(count),
+								labelStyle: { fill: stroke, fontSize: 11, fontWeight: 600 },
+								labelBgStyle: { fill: 'var(--background)' },
+								labelBgPadding: [6, 3] as [number, number],
+								labelBgBorderRadius: 4,
+							}),
 				}
 			}),
 		[graph, view],

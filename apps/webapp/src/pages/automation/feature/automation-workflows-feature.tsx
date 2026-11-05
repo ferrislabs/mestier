@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAutomationRuns,
@@ -8,8 +8,11 @@ import {
 	useUpdateWorkflow,
 	type Workflow,
 } from '#/hooks/use-automation'
+import { useWorkflowActions } from '#/pages/automation/feature/use-workflow-actions'
 import {
+	useArchivedWorkflowIds,
 	useWorkflowFolders,
+	useWorkflowPlacementActions,
 	useWorkflowPlacements,
 } from '#/pages/automation/feature/use-workflow-folders'
 import {
@@ -80,8 +83,18 @@ function AutomationWorkflowsWorkspace({
 
 	const folders = useWorkflowFolders()
 	const placements = useWorkflowPlacements()
+	const archived = useArchivedWorkflowIds()
+	const placementActions = useWorkflowPlacementActions()
+	const workflowActions = useWorkflowActions(organizationId)
+	const [actionError, setActionError] = useState<string | null>(null)
 
-	const items: Workflow[] = workflows.data?.data ?? []
+	const allItems: Workflow[] = workflows.data?.data ?? []
+	const items = allItems.filter((workflow) => !archived.has(workflow.id))
+	const { rememberNames } = placementActions
+
+	useEffect(() => {
+		rememberNames(allItems)
+	}, [allItems, rememberNames])
 	const latestRuns = latestRunByWorkflow(runs.data?.data ?? [])
 
 	const folder = folderId ? findFolder(folders.data, folderId) : undefined
@@ -131,6 +144,44 @@ function AutomationWorkflowsWorkspace({
 		createWorkflow.error ??
 		updateWorkflow.error ??
 		deleteWorkflow.error
+	const errorMessage = error?.message ?? actionError
+
+	const sourceOf = (row: WorkflowRow) => ({
+		id: row.id,
+		name: row.name,
+		description: row.description,
+		tags: row.tags,
+	})
+
+	const duplicate = async (row: WorkflowRow) => {
+		setActionError(null)
+		try {
+			const copyId = await workflowActions.duplicate(sourceOf(row))
+			placementActions.place(copyId, {
+				folderId: folderIdOf(row.id),
+				tags: row.tags,
+			})
+		} catch (caught) {
+			setActionError(
+				caught instanceof Error && caught.message
+					? caught.message
+					: 'La duplication a échoué.',
+			)
+		}
+	}
+
+	const exportRow = async (row: WorkflowRow) => {
+		setActionError(null)
+		try {
+			await workflowActions.exportWorkflow(sourceOf(row))
+		} catch (caught) {
+			setActionError(
+				caught instanceof Error && caught.message
+					? caught.message
+					: 'L’export a échoué.',
+			)
+		}
+	}
 
 	const submitDraft = async () => {
 		if (!draft) return
@@ -162,7 +213,7 @@ function AutomationWorkflowsWorkspace({
 				organizationSlug={organizationSlug}
 				workflows={visible}
 				isLoading={workflows.isLoading}
-				error={error?.message ?? null}
+				error={errorMessage}
 				folder={folder ?? null}
 				folderPath={folderId ? folderPath(folders.data, folderId) : []}
 				folderMissing={folderId !== undefined && folder === undefined}
@@ -192,6 +243,9 @@ function AutomationWorkflowsWorkspace({
 						body: { enabled: !row.enabled },
 					})
 				}
+				onDuplicate={(row) => void duplicate(row)}
+				onExport={(row) => void exportRow(row)}
+				onArchive={(row) => placementActions.archive(row.id)}
 				onDelete={(row) =>
 					void deleteWorkflow.mutateAsync({
 						path: { organization_id: organizationId, workflow_id: row.id },

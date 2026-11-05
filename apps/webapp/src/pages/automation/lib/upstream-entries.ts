@@ -1,0 +1,180 @@
+import type { LucideIcon } from 'lucide-react'
+import type { Schemas } from '#/api/api.client'
+import {
+	connectorAppearance,
+	triggerAppearance,
+} from '#/pages/automation/lib/connector-appearance'
+import {
+	resolveTriggerExample,
+	toEvaluateContext,
+} from '#/pages/automation/lib/data-tree'
+import type {
+	EditorEdge,
+	EditorNode,
+} from '#/pages/automation/lib/editor-nodes'
+import { upstreamOf } from '#/pages/automation/lib/graph'
+import { toItems } from '#/pages/automation/lib/items'
+import {
+	isManualTrigger,
+	triggerEventNames,
+} from '#/pages/automation/lib/trigger-events'
+
+export interface UpstreamEntry {
+	id: string
+	label: string
+	icon: LucideIcon
+	hue: number
+	rootPath: string
+	distance: number
+	direct: boolean
+	branch?: string
+	items: readonly unknown[]
+	executed: boolean
+	status: 'success' | 'error' | null
+	error: string | null
+}
+
+export interface LastRunData {
+	triggerPayload: unknown
+	connectorOutputs: Record<string, unknown>
+}
+
+export interface UpstreamSources {
+	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
+	events: readonly Schemas.EventDescriptorResponse[]
+	lastRun: LastRunData | null
+	runSteps: Map<string, Schemas.RunStepResponse>
+}
+
+export function connectorOutputExample(
+	node: EditorNode,
+	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>,
+): unknown {
+	const connector = node.data.connector
+	if (!connector) return null
+	const descriptor = descriptors.get(connector.kind)
+	const mirrored = descriptor?.output_mirrors_field
+	if (mirrored) return connector.config[mirrored] ?? {}
+	return descriptor?.output_example ?? null
+}
+
+export function connectorOutput(
+	node: EditorNode,
+	sources: UpstreamSources,
+): unknown {
+	return (
+		sources.lastRun?.connectorOutputs[node.id] ??
+		connectorOutputExample(node, sources.descriptors)
+	)
+}
+
+function stepOutcome(
+	step: Schemas.RunStepResponse | undefined,
+): Pick<UpstreamEntry, 'status' | 'error'> {
+	if (!step) return { status: null, error: null }
+	if (step.error) return { status: 'error', error: step.error }
+	return { status: step.output === undefined ? null : 'success', error: null }
+}
+
+function triggerEntry(
+	triggers: readonly EditorNode[],
+	distance: number,
+	handle: string | null,
+	sources: UpstreamSources,
+): UpstreamEntry | null {
+	const first = triggers[0]
+	if (!first?.data.trigger) return null
+	const names = triggers.flatMap((trigger) =>
+		trigger.data.trigger ? triggerEventNames(trigger.data.trigger) : [],
+	)
+	const example = resolveTriggerExample(sources.events, [...new Set(names)])
+	const appearance = triggerAppearance(isManualTrigger(first.data.trigger))
+	const payload = sources.lastRun ? sources.lastRun.triggerPayload : example
+	return {
+		id: 'trigger',
+		label: first.data.label,
+		icon: appearance.icon,
+		hue: appearance.hue,
+		rootPath: 'trigger',
+		distance,
+		direct: distance === 1,
+		branch: handle ?? undefined,
+		items: payload === undefined || payload === null ? [] : toItems(payload),
+		executed: sources.lastRun !== null,
+		status: sources.lastRun ? 'success' : null,
+		error: null,
+	}
+}
+
+export function upstreamEntries(
+	nodeId: string,
+	nodes: readonly EditorNode[],
+	edges: readonly EditorEdge[],
+	sources: UpstreamSources,
+): UpstreamEntry[] {
+	const byId = new Map(nodes.map((node) => [node.id, node]))
+	const links = upstreamOf(nodeId, edges)
+	const triggers = nodes.filter((node) => node.data.kind === 'trigger')
+	const farthest = links.reduce((max, link) => Math.max(max, link.distance), 0)
+	const triggerLink = links.find((link) => byId.get(link.id)?.data.trigger)
+
+	const entries: UpstreamEntry[] = []
+	if (byId.get(nodeId)?.data.kind === 'connector') {
+		const entry = triggerEntry(
+			triggers,
+			triggerLink?.distance ?? farthest + 1,
+			triggerLink?.handle ?? null,
+			sources,
+		)
+		if (entry) entries.push(entry)
+	}
+	for (const link of links) {
+		const source = byId.get(link.id)
+		if (!source?.data.connector) continue
+		const appearance = connectorAppearance(source.data.family)
+		const real = sources.lastRun?.connectorOutputs[source.id]
+		const output = real ?? connectorOutputExample(source, sources.descriptors)
+		entries.push({
+			id: source.id,
+			label: source.data.label,
+			icon: appearance.icon,
+			hue: appearance.hue,
+			rootPath: `connectors.${source.id}.output`,
+			distance: link.distance,
+			direct: link.distance === 1,
+			branch: link.handle ?? undefined,
+			items: output === undefined || output === null ? [] : toItems(output),
+			executed: real !== undefined,
+			...stepOutcome(sources.runSteps.get(source.id)),
+		})
+	}
+	return entries.sort((a, b) => a.distance - b.distance)
+}
+
+export function evaluateContextFor(
+	nodeId: string,
+	nodes: readonly EditorNode[],
+	edges: readonly EditorEdge[],
+	sources: UpstreamSources,
+): Schemas.EvaluateContextBody {
+	const byId = new Map(nodes.map((node) => [node.id, node]))
+	const names = nodes.flatMap((node) =>
+		node.data.trigger ? triggerEventNames(node.data.trigger) : [],
+	)
+	const trigger = sources.lastRun
+		? sources.lastRun.triggerPayload
+		: resolveTriggerExample(sources.events, [...new Set(names)])
+	const connectors = upstreamOf(nodeId, edges).flatMap((link) => {
+		const source = byId.get(link.id)
+		return source?.data.connector
+			? [
+					{
+						id: source.id,
+						label: source.data.label,
+						output: connectorOutput(source, sources),
+					},
+				]
+			: []
+	})
+	return toEvaluateContext({ trigger, connectors })
+}
