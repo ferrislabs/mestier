@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
+import type { ComponentType } from 'react'
 import type { PermissionName } from '#/hooks/use-permissions'
 
 export type ModuleId =
@@ -73,5 +74,7 @@ export interface AppModule {
 	 * modules. Defaults to `primary`.
 	 */
 	railPlacement?: 'primary' | 'utility'
+	/** Extra block under the module's sections in the side nav (e.g. a folder tree). */
+	sidebarExtra?: ComponentType
 	requiredPermission?: PermissionName
 }

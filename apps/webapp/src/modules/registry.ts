@@ -34,6 +34,7 @@ import {
 	Workflow,
 } from 'lucide-react'
 import type { AppModule } from '#/modules/types'
+import { ProjectsSidebarFeature } from '#/pages/automation/feature/projects-sidebar-feature'
 
 export const MODULES: AppModule[] = [
 	{
@@ -342,6 +343,7 @@ export const MODULES: AppModule[] = [
 		status: 'available',
 		hasOverview: true,
 		requiredPermission: 'VIEW_AUTOMATION',
+		sidebarExtra: ProjectsSidebarFeature,
 		sections: [
 			{
 				id: 'workflows',

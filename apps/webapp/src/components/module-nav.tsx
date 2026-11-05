@@ -105,6 +105,11 @@ export function ModuleNav({
 						))}
 					</SidebarMenu>
 				</SidebarGroup>
+				{activeModule.sidebarExtra ? (
+					<div className="group-data-[collapsible=icon]:hidden">
+						<activeModule.sidebarExtra />
+					</div>
+				) : null}
 			</SidebarContent>
 
 			<SidebarFooter className="gap-1 border-nav-border border-t p-2">
