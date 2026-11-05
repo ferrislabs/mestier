@@ -52,10 +52,7 @@ export function ProjectsTable({
 							>
 								<TableCell className="max-w-72 py-2.5 pl-4">
 									<Link
-										to={buildOrgPath(
-											organizationSlug,
-											'/planification/projects/$projectId',
-										)}
+										to={buildOrgPath(organizationSlug, '/projet/$projectId')}
 										params={{ projectId: row.project.id }}
 										className="block truncate font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset"
 									>

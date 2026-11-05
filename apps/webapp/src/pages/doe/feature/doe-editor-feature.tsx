@@ -523,10 +523,7 @@ export function DoeEditorFeature({
 				onOpenChange={setDeleteOpen}
 				onDeleted={() => {
 					void navigate({
-						to: buildOrgPath(
-							organizationSlug,
-							'/planification/projects/$projectId',
-						),
+						to: buildOrgPath(organizationSlug, '/projet/$projectId'),
 						params: { projectId },
 					})
 				}}

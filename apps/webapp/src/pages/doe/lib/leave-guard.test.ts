@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { leavesEditor } from '#/pages/doe/lib/leave-guard'
 
-const doe = '/o/menuiserie-duval/planification/projects/p-lapalisse/doe'
+const doe = '/o/menuiserie-duval/projet/p-lapalisse/doe'
 
 describe('leavesEditor', () => {
 	it('stays on the editor when only the tab changes', () => {
@@ -33,7 +33,7 @@ describe('leavesEditor', () => {
 			leavesEditor({
 				current: { pathname: doe },
 				next: {
-					pathname: '/o/menuiserie-duval/planification/projects/p-ferry/doe',
+					pathname: '/o/menuiserie-duval/projet/p-ferry/doe',
 				},
 			}),
 		).toBe(true)

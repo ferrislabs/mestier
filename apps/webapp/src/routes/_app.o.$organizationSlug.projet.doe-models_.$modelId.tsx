@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { DoeModelPageFeature } from '#/pages/doe-models/feature/doe-model-page-feature'
 
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/planification/doe-models_/$modelId',
+	'/_app/o/$organizationSlug/projet/doe-models_/$modelId',
 )({
 	component: DoeModelPage,
 })

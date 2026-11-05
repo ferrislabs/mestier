@@ -80,10 +80,7 @@ export function DoeSidebar({
 		>
 			<div className="shrink-0 border-border border-b px-4 py-4">
 				<Link
-					to={buildOrgPath(
-						organizationSlug,
-						'/planification/projects/$projectId',
-					)}
+					to={buildOrgPath(organizationSlug, '/projet/$projectId')}
 					params={{ projectId }}
 					aria-label={`Retour à l’aperçu du projet ${projectName}`}
 					className="-ml-1 inline-flex max-w-full items-center gap-1.5 rounded-sm px-1 text-[13px] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
@@ -124,7 +121,7 @@ export function DoeSidebar({
 							<Link
 								to={buildOrgPath(
 									organizationSlug,
-									'/planification/projects/$projectId/doe/preview',
+									'/projet/$projectId/doe/preview',
 								)}
 								params={{ projectId }}
 							>
@@ -189,10 +186,7 @@ export function DoeSidebar({
 				}))}
 				renderLink={(item, props) => (
 					<Link
-						to={buildOrgPath(
-							organizationSlug,
-							'/planification/projects/$projectId/doe',
-						)}
+						to={buildOrgPath(organizationSlug, '/projet/$projectId/doe')}
 						params={{ projectId }}
 						search={tabSearch(item.id)}
 						{...props}

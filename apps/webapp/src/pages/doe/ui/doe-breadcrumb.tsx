@@ -17,20 +17,14 @@ export function DoeBreadcrumb({
 		<nav aria-label="Chemin du DOE" className="mb-1">
 			<ol className="flex flex-wrap items-center gap-1.5 font-semibold text-[11px] text-muted-foreground uppercase tracking-wide">
 				<li>
-					<Link
-						to={buildOrgPath(organizationSlug, '/planification/projects')}
-						className={LINK}
-					>
+					<Link to={buildOrgPath(organizationSlug, '/projet')} className={LINK}>
 						Projets
 					</Link>
 				</li>
 				<li aria-hidden>/</li>
 				<li className="min-w-0 truncate">
 					<Link
-						to={buildOrgPath(
-							organizationSlug,
-							'/planification/projects/$projectId',
-						)}
+						to={buildOrgPath(organizationSlug, '/projet/$projectId')}
 						params={{ projectId }}
 						className={LINK}
 					>

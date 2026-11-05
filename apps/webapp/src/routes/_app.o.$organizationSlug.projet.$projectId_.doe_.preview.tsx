@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { DoePreviewFeature } from '#/pages/doe/feature/doe-preview-feature'
 
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/planification/projects/$projectId_/doe_/preview',
+	'/_app/o/$organizationSlug/projet/$projectId_/doe_/preview',
 )({
 	component: DoePreviewPage,
 })

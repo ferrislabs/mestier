@@ -169,10 +169,7 @@ function Links({
 				{invoice.project_id && project && (
 					<Row label="Projet">
 						<Link
-							to={buildOrgPath(
-								activeOrganization.slug,
-								'/planification/projects/$projectId',
-							)}
+							to={buildOrgPath(activeOrganization.slug, '/projet/$projectId')}
 							params={{ projectId: project.id }}
 							className="rounded-sm font-medium outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 						>

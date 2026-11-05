@@ -15,6 +15,9 @@ import { useMember } from '#/hooks/use-reference-catalog'
 import { buildBreadcrumbItems } from '#/modules/breadcrumb'
 import { splitOrgPath } from '#/modules/org-path'
 import { customerDisplayName } from '#/pages/customers/types'
+import { DoeModelCrumbFeature } from '#/pages/projet/feature/doe-model-crumb-feature'
+import { ProjetCrumbsFeature } from '#/pages/projet/feature/projet-crumbs-feature'
+import { doeModelIdOf, projectIdOf } from '#/pages/projet/lib/project-path'
 
 export function AppBreadcrumb() {
 	const location = useLocation()
@@ -34,6 +37,10 @@ export function AppBreadcrumb() {
 		? member.data.data.display_name
 		: 'Temps de travail'
 
+	const projectId = projectIdOf(modulePath)
+	const modelId = doeModelIdOf(modulePath)
+	const hasTail = projectId !== null || modelId !== null
+
 	const items = buildBreadcrumbItems({
 		pathname: location.pathname,
 		organizationName: activeOrganization.name,
@@ -45,7 +52,8 @@ export function AppBreadcrumb() {
 		<Breadcrumb className="min-w-0 flex-1">
 			<BreadcrumbList className="flex-nowrap overflow-hidden">
 				{items.map((item, index) => {
-					const isLast = index === items.length - 1
+					const isEnd = index === items.length - 1
+					const isLast = isEnd && !hasTail
 
 					return (
 						<Fragment key={item.id}>
@@ -62,10 +70,12 @@ export function AppBreadcrumb() {
 									</BreadcrumbLink>
 								)}
 							</BreadcrumbItem>
-							{isLast ? null : <BreadcrumbSeparator />}
+							{isEnd ? null : <BreadcrumbSeparator />}
 						</Fragment>
 					)
 				})}
+				{projectId ? <ProjetCrumbsFeature /> : null}
+				{modelId ? <DoeModelCrumbFeature modelId={modelId} /> : null}
 			</BreadcrumbList>
 		</Breadcrumb>
 	)
@@ -78,6 +88,7 @@ function getDetailLabel(
 ): string | undefined {
 	if (getCustomerId(pathname)) return customerLabel
 	if (/^\/crm\/quotes\/[^/]+$/.test(pathname)) return 'Fiche devis'
+	if (pathname === '/projet/new') return 'Nouveau projet'
 	if (getMemberWorkTimeId(pathname)) return memberLabel
 	return undefined
 }

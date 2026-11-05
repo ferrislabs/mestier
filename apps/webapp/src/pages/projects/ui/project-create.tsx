@@ -101,9 +101,7 @@ export function ProjectCreate({
 					</p>
 					<div className="flex gap-2">
 						<Button type="button" variant="outline" asChild>
-							<Link
-								to={buildOrgPath(organizationSlug, '/planification/projects')}
-							>
+							<Link to={buildOrgPath(organizationSlug, '/projet')}>
 								Annuler
 							</Link>
 						</Button>

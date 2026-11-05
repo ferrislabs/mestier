@@ -126,7 +126,7 @@ export function DoeEmptyState({
 				</p>
 				<p className="mt-2">
 					<Link
-						to={buildOrgPath(organizationSlug, '/planification/doe-models')}
+						to={buildOrgPath(organizationSlug, '/projet/doe-models')}
 						className="rounded-sm font-medium text-primary underline underline-offset-4 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						Gérer les modèles de DOE

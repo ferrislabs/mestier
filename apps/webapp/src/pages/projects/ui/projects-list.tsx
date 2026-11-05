@@ -68,10 +68,7 @@ export function ProjectsList({
 	onStartFromTemplate,
 }: ProjectsListProps) {
 	const copy = EMPTY_COPY[empty]
-	const newProjectPath = buildOrgPath(
-		organizationSlug,
-		'/planification/projects/new',
-	)
+	const newProjectPath = buildOrgPath(organizationSlug, '/projet/new')
 	return (
 		<Page>
 			<PageHeader

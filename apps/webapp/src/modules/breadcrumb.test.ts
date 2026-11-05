@@ -97,15 +97,26 @@ describe('buildBreadcrumbItems', () => {
 		])
 	})
 
-	it('resolves the planification trails', () => {
-		expect(labelsOf('/o/baptiste/planification/projects')).toEqual([
+	it('resolves the projet trails', () => {
+		expect(labelsOf('/o/baptiste/projet')).toEqual(['Baptiste', 'Projet'])
+		expect(labelsOf('/o/baptiste/projet/new', 'Nouveau projet')).toEqual([
 			'Baptiste',
-			'Planification',
-			'Projets',
+			'Projet',
+			'Nouveau projet',
 		])
-		expect(
-			labelsOf('/o/baptiste/planification/projects/abc-123', 'Cuisine Dupont'),
-		).toEqual(['Baptiste', 'Planification', 'Projets', 'Cuisine Dupont'])
+		expect(labelsOf('/o/baptiste/projet/doe-models')).toEqual([
+			'Baptiste',
+			'Projet',
+			'Modèles de DOE',
+		])
+		expect(labelsOf('/o/baptiste/projet/doe-models/m1')).toEqual([
+			'Baptiste',
+			'Projet',
+			'Modèles de DOE',
+		])
+	})
+
+	it('resolves the planification trails', () => {
 		expect(labelsOf('/o/baptiste/planification/board')).toEqual([
 			'Baptiste',
 			'Planification',

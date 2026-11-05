@@ -38,10 +38,7 @@ export function ProjectCreateFeature({
 		})
 		await saveProjectExtras(created.data.id, extrasOfForm(form))
 		await navigate({
-			to: buildOrgPath(
-				activeOrganization.slug,
-				'/planification/projects/$projectId',
-			),
+			to: buildOrgPath(activeOrganization.slug, '/projet/$projectId'),
 			params: { projectId: created.data.id },
 		})
 	}

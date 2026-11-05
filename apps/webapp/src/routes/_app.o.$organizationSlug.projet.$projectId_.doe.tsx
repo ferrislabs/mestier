@@ -3,7 +3,7 @@ import { DoeFeature } from '#/pages/doe/feature/doe-feature'
 import { tabSearch, validateDoeSearch } from '#/pages/doe/lib/rubriques'
 
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/planification/projects/$projectId_/doe',
+	'/_app/o/$organizationSlug/projet/$projectId_/doe',
 )({
 	validateSearch: validateDoeSearch,
 	component: DoePage,

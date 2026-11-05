@@ -43,19 +43,14 @@ describe('moved template and DOE routes', () => {
 		)
 	})
 
-	it('sends the DOE models to Settings › Modèles', async () => {
+	it('sends the old DOE models address to the projet module', async () => {
 		expect(await settlesAt('/o/acme/planification/doe-models')).toBe(
-			'/o/acme/settings',
-		)
-		expect(await settledHash('/o/acme/planification/doe-models')).toBe(
-			'modeles',
+			'/o/acme/projet/doe-models',
 		)
 	})
 
 	it('sends the DOE list to the projects', async () => {
-		expect(await settlesAt('/o/acme/planification/does')).toBe(
-			'/o/acme/planification/projects',
-		)
+		expect(await settlesAt('/o/acme/planification/does')).toBe('/o/acme/projet')
 	})
 
 	/** #468: the address the module split left behind still resolves. */
@@ -66,11 +61,11 @@ describe('moved template and DOE routes', () => {
 	})
 
 	it('still resolves the project page and its DOE tab', () => {
-		expect(routeIdFor('/o/acme/planification/projects/p1')).toBe(
-			'/_app/o/$organizationSlug/planification/projects/$projectId',
+		expect(routeIdFor('/o/acme/projet/p1')).toBe(
+			'/_app/o/$organizationSlug/projet/$projectId',
 		)
-		expect(routeIdFor('/o/acme/planification/projects/p1/doe')).toBe(
-			'/_app/o/$organizationSlug/planification/projects/$projectId_/doe',
+		expect(routeIdFor('/o/acme/projet/p1/doe')).toBe(
+			'/_app/o/$organizationSlug/projet/$projectId_/doe',
 		)
 	})
 })

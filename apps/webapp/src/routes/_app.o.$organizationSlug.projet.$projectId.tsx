@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ProjectDetailFeature } from '#/pages/projects/feature/project-detail-feature'
 
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/planification/projects/$projectId',
+	'/_app/o/$organizationSlug/projet/$projectId',
 )({
 	component: ProjectDetailPage,
 })

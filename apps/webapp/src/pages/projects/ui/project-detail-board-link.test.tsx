@@ -125,9 +125,7 @@ describe('ProjectDetailUI — carte DOE', () => {
 
 		const link = screen.getByRole('link', { name: 'Ouvrir le DOE · indice B' })
 
-		expect(link.getAttribute('href')).toBe(
-			'/o/acme/planification/projects/project-1/doe',
-		)
+		expect(link.getAttribute('href')).toBe('/o/acme/projet/project-1/doe')
 	})
 
 	it('still offers to create the DOE when there is none yet', async () => {

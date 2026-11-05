@@ -28,11 +28,8 @@ export function DoePreview({
 	isDownloading,
 	onDownload,
 }: DoePreviewProps) {
-	const projectsPath = buildOrgPath(organizationSlug, '/planification/projects')
-	const editorPath = buildOrgPath(
-		organizationSlug,
-		'/planification/projects/$projectId/doe',
-	)
+	const projectsPath = buildOrgPath(organizationSlug, '/projet')
+	const editorPath = buildOrgPath(organizationSlug, '/projet/$projectId/doe')
 
 	if (projectName === null) {
 		return (

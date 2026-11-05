@@ -175,7 +175,7 @@ describe('ProjectsList', () => {
 
 		expect(
 			screen.getByRole('link', { name: /Jardin Duval/ }).getAttribute('href'),
-		).toBe('/o/atelier-vert/planification/projects/project-1')
+		).toBe('/o/atelier-vert/projet/project-1')
 	})
 
 	it('shows the state of each project DOE', async () => {

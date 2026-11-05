@@ -1,5 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 import type * as React from 'react'
 
 import { ModuleIcon } from '#/components/module-icon'
@@ -69,6 +69,21 @@ export function ModuleNav({
 				grantedPermissions.includes(section.requiredPermission)),
 	)
 
+	const sections = (
+		<SidebarGroup className="p-0">
+			<SidebarMenu className="gap-px">
+				{visibleSections.map((section) => (
+					<NavEntry
+						key={section.id}
+						target={section}
+						organizationSlug={organizationSlug}
+						fallbackIcon={activeModule.icon}
+					/>
+				))}
+			</SidebarMenu>
+		</SidebarGroup>
+	)
+
 	return (
 		<Sidebar collapsible="icon" className={className} {...props}>
 			<SidebarHeader className="h-12 flex-row items-center gap-2 p-0 pr-2 pl-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
@@ -92,19 +107,31 @@ export function ModuleNav({
 				/>
 			</SidebarHeader>
 
+			{activeModule.primaryAction ? (
+				<div className="px-3 pt-1 pb-3 group-data-[collapsible=icon]:hidden">
+					<Link
+						to={buildOrgPath(organizationSlug, activeModule.primaryAction.to)}
+						className="flex h-9 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-nav-primary px-3 font-medium text-[13px] text-nav-primary-foreground outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-nav"
+					>
+						<Plus className="size-4" strokeWidth={2} aria-hidden />
+						<span className="truncate">{activeModule.primaryAction.label}</span>
+					</Link>
+				</div>
+			) : null}
+
 			<SidebarContent className="px-2 pt-1">
-				<SidebarGroup className="p-0">
-					<SidebarMenu className="gap-px">
-						{visibleSections.map((section) => (
-							<NavEntry
-								key={section.id}
-								target={section}
-								organizationSlug={organizationSlug}
-								fallbackIcon={activeModule.icon}
-							/>
-						))}
-					</SidebarMenu>
-				</SidebarGroup>
+				{activeModule.sidebar ? (
+					<>
+						<div className="group-data-[collapsible=icon]:hidden">
+							<activeModule.sidebar />
+						</div>
+						<div className="hidden group-data-[collapsible=icon]:block">
+							{sections}
+						</div>
+					</>
+				) : (
+					sections
+				)}
 				{activeModule.sidebarExtra ? (
 					<div className="group-data-[collapsible=icon]:hidden">
 						<activeModule.sidebarExtra />

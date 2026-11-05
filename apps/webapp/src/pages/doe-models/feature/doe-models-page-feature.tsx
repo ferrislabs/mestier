@@ -110,7 +110,7 @@ function DoeModelsPageWorkspace({
 
 	const openModel = (modelId: string) =>
 		navigate({
-			to: buildOrgPath(organizationSlug, '/planification/doe-models/$modelId'),
+			to: buildOrgPath(organizationSlug, '/projet/doe-models/$modelId'),
 			params: { modelId },
 		})
 
@@ -223,10 +223,7 @@ function DoeModelsPageWorkspace({
 						.then(() => {
 							setCreatingDoeFor(null)
 							return navigate({
-								to: buildOrgPath(
-									organizationSlug,
-									'/planification/projects/$projectId/doe',
-								),
+								to: buildOrgPath(organizationSlug, '/projet/$projectId/doe'),
 								params: { projectId },
 							})
 						})

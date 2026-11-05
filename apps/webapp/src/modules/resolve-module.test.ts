@@ -51,10 +51,14 @@ describe('resolveModule', () => {
 	it('resolves planification pages to the planification module', () => {
 		expect(resolveModule('/planification').id).toBe('planification')
 		expect(resolveModule('/planification/board').id).toBe('planification')
-		expect(resolveModule('/planification/projects').id).toBe('planification')
-		expect(resolveModule('/planification/projects/abc-123').id).toBe(
-			'planification',
-		)
+		expect(resolveModule('/planification/maintenance').id).toBe('planification')
+	})
+
+	it('resolves projet pages to the projet module', () => {
+		expect(resolveModule('/projet').id).toBe('projet')
+		expect(resolveModule('/projet/abc-123').id).toBe('projet')
+		expect(resolveModule('/projet/abc-123/doe/preview').id).toBe('projet')
+		expect(resolveModule('/projet/doe-models/m1').id).toBe('projet')
 	})
 
 	/**
@@ -64,6 +68,6 @@ describe('resolveModule', () => {
 	 */
 	it('keeps the planning and planification modules apart', () => {
 		expect(resolveModule('/planning/calendar').id).toBe('planning')
-		expect(resolveModule('/planification/projects').id).toBe('planification')
+		expect(resolveModule('/planification/board').id).toBe('planification')
 	})
 })

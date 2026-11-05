@@ -7,7 +7,7 @@ export const Route = createFileRoute(
 )({
 	beforeLoad: ({ params }) => {
 		throw redirect({
-			to: buildOrgPath(params.organizationSlug, '/planification/projects'),
+			to: buildOrgPath(params.organizationSlug, '/projet'),
 		})
 	},
 })

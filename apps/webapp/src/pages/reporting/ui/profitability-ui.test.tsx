@@ -306,9 +306,7 @@ describe('ProfitabilityUI', () => {
 		const jardinLinks = screen.getAllByRole('link', { name: /Jardin Duval/i })
 		expect(jardinLinks.length).toBeGreaterThan(0)
 		for (const link of jardinLinks) {
-			expect(link.getAttribute('href')).toBe(
-				'/o/atelier-vert/planification/projects/project-1',
-			)
+			expect(link.getAttribute('href')).toBe('/o/atelier-vert/projet/project-1')
 		}
 
 		const terrasseLinks = screen.getAllByRole('link', {
@@ -317,7 +315,7 @@ describe('ProfitabilityUI', () => {
 		expect(terrasseLinks.length).toBeGreaterThan(0)
 		for (const link of terrasseLinks) {
 			expect(link.getAttribute('href')).toBe(
-				'/o/atelier-vert/planification/projects/project-incomplete',
+				'/o/atelier-vert/projet/project-incomplete',
 			)
 		}
 	})

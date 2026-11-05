@@ -26,7 +26,7 @@ export function ProjectHeader({
 					<ol className="flex items-center gap-1.5 font-semibold text-[11px] text-muted-foreground uppercase tracking-[0.08em]">
 						<li>
 							<Link
-								to={buildOrgPath(organizationSlug, '/planification/projects')}
+								to={buildOrgPath(organizationSlug, '/projet')}
 								className="rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 							>
 								Projets
@@ -74,10 +74,7 @@ export function ProjectSubHeader({
 		<header className="mb-6 flex flex-wrap items-end justify-between gap-4">
 			<div className="min-w-0">
 				<Link
-					to={buildOrgPath(
-						organizationSlug,
-						'/planification/projects/$projectId',
-					)}
+					to={buildOrgPath(organizationSlug, '/projet/$projectId')}
 					params={{ projectId }}
 					className="inline-flex items-center gap-1 rounded-sm font-medium text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 				>

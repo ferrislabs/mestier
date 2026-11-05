@@ -5,6 +5,7 @@ import type { PermissionName } from '#/hooks/use-permissions'
 export type ModuleId =
 	| 'home'
 	| 'crm'
+	| 'projet'
 	| 'purchase'
 	| 'hr'
 	| 'planning'
@@ -74,7 +75,15 @@ export interface AppModule {
 	 * modules. Defaults to `primary`.
 	 */
 	railPlacement?: 'primary' | 'utility'
+	/**
+	 * Replaces the sections list in the side nav while it is expanded (e.g. a
+	 * project switcher). The sections stay the source of truth for the
+	 * collapsed rail, the breadcrumb and the landing path.
+	 */
+	sidebar?: ComponentType
 	/** Extra block under the module's sections in the side nav (e.g. a folder tree). */
 	sidebarExtra?: ComponentType
+	/** Call-to-action pinned under the module's mark in the side nav. */
+	primaryAction?: { label: string; to: string }
 	requiredPermission?: PermissionName
 }

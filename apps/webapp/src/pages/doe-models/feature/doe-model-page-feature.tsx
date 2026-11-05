@@ -198,10 +198,7 @@ function DoeModelWorkspace({
 						.then(() => {
 							setCreatingDoe(false)
 							return navigate({
-								to: buildOrgPath(
-									organizationSlug,
-									'/planification/projects/$projectId/doe',
-								),
+								to: buildOrgPath(organizationSlug, '/projet/$projectId/doe'),
 								params: { projectId },
 							})
 						})

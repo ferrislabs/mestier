@@ -2,9 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ProjectCreateFeature } from '#/pages/projects/feature/project-create-feature'
 import { parseNewSearch } from '#/pages/projects/lib/project-form'
 
-export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/planification/projects/new',
-)({
+export const Route = createFileRoute('/_app/o/$organizationSlug/projet/new')({
 	validateSearch: parseNewSearch,
 	component: NewProjectPage,
 })

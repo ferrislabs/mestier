@@ -47,12 +47,7 @@ export function DoeFeature({ projectId, tab, onTabChange }: DoeFeatureProps) {
 					</div>
 					<div className="flex gap-2">
 						<Button asChild variant="outline">
-							<Link
-								to={buildOrgPath(
-									activeOrganization.slug,
-									'/planification/projects',
-								)}
-							>
+							<Link to={buildOrgPath(activeOrganization.slug, '/projet')}>
 								<ArrowLeft />
 								Retour aux projets
 							</Link>

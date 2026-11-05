@@ -16,7 +16,9 @@ import {
 	KanbanSquare,
 	KeyRound,
 	Landmark,
+	Layers,
 	LayoutDashboard,
+	LayoutTemplate,
 	Library,
 	LifeBuoy,
 	MessagesSquare,
@@ -35,6 +37,7 @@ import {
 } from 'lucide-react'
 import type { AppModule } from '#/modules/types'
 import { ProjectsSidebarFeature } from '#/pages/automation/feature/projects-sidebar-feature'
+import { ProjetSidebarFeature } from '#/pages/projet/feature/projet-sidebar-feature'
 
 export const MODULES: AppModule[] = [
 	{
@@ -134,6 +137,35 @@ export const MODULES: AppModule[] = [
 				to: '/crm/settings',
 				icon: Settings2,
 				requiredPermission: 'MANAGE_ORG',
+			},
+		],
+	},
+	{
+		id: 'projet',
+		label: 'Projet',
+		icon: FolderKanban,
+		hue: 175,
+		basePath: '/projet',
+		status: 'available',
+		hasOverview: true,
+		requiredPermission: 'MANAGE_PLANNING',
+		sidebar: ProjetSidebarFeature,
+		primaryAction: { label: 'Nouveau projet', to: '/projet/new' },
+		sections: [
+			{
+				id: 'projects',
+				label: 'Projets',
+				to: '/projet',
+				icon: Layers,
+				exact: true,
+				requiredPermission: 'MANAGE_PLANNING',
+			},
+			{
+				id: 'doe-models',
+				label: 'Modèles de DOE',
+				to: '/projet/doe-models',
+				icon: LayoutTemplate,
+				requiredPermission: 'MANAGE_PLANNING',
 			},
 		],
 	},
@@ -260,24 +292,7 @@ export const MODULES: AppModule[] = [
 		basePath: '/planification',
 		status: 'available',
 		hasOverview: false,
-		/**
-		 * The work half of the split (#468): what is to be done and where it
-		 * stands, as opposed to the Planning module's who-is-where-when.
-		 *
-		 * The Board comes after the project list rather than first even though
-		 * it is the screen the chantier exists for: `moduleLandingPath` takes a
-		 * module's first navigable section, so leading with it would silently
-		 * redirect `/planification` away from the project list #468 landed it
-		 * on.
-		 */
 		sections: [
-			{
-				id: 'projects',
-				label: 'Projets',
-				to: '/planification/projects',
-				icon: FolderKanban,
-				requiredPermission: 'MANAGE_PLANNING',
-			},
 			{
 				id: 'maintenance',
 				label: 'Entretien',

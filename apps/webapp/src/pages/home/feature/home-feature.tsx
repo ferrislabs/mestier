@@ -147,10 +147,7 @@ export function HomeFeature() {
 			items: (projects.data?.data ?? []).map((project) => ({
 				id: project.id,
 				label: project.name,
-				to: buildOrgPath(
-					activeOrganization.slug,
-					`/planification/projects/${project.id}`,
-				),
+				to: buildOrgPath(activeOrganization.slug, `/projet/${project.id}`),
 			})),
 		},
 		{

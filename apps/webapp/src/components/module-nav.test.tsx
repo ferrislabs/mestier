@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -217,5 +217,52 @@ describe('ModuleNav', () => {
 			await screen.findByRole('button', { name: 'Agrandir' }),
 		).toBeDefined()
 		expect(screen.queryByRole('button', { name: 'Réduire' })).toBeNull()
+	})
+
+	it('pins the primary action of the module under its mark', async () => {
+		await renderNav('/o/dupont/projet')
+
+		const action = screen.getByRole('link', { name: 'Nouveau projet' })
+		expect(action.getAttribute('href')).toBe('/o/dupont/projet/new')
+	})
+
+	it('shows no primary action on a module that defines none', async () => {
+		await renderNav('/o/dupont/crm/customers')
+
+		expect(screen.queryByRole('link', { name: 'Nouveau projet' })).toBeNull()
+	})
+
+	it('replaces the sections by the module sidebar while expanded', async () => {
+		await renderNav('/o/dupont/projet')
+
+		const sidebar = screen.getByRole('navigation', {
+			name: 'Navigation Projet',
+		})
+
+		expect(sidebar.parentElement?.className).toContain(
+			'group-data-[collapsible=icon]:hidden',
+		)
+		expect(sidebar.textContent).toContain('Tous les projets')
+		expect(sidebar.textContent).toContain('Modèles de DOE')
+	})
+
+	it('keeps the sections for the collapsed rail only', async () => {
+		await renderNav('/o/dupont/projet', ['MANAGE_PLANNING'])
+
+		await waitFor(() =>
+			expect(
+				screen.getAllByRole('link', { name: /^Modèles de DOE/ }),
+			).toHaveLength(2),
+		)
+		const links = screen.getAllByRole('link', { name: /^Modèles de DOE/ })
+		const railLink = links.find(
+			(link) => !link.closest('nav[aria-label="Navigation Projet"]'),
+		)
+
+		expect(links).toHaveLength(2)
+		expect(railLink?.getAttribute('href')).toBe('/o/dupont/projet/doe-models')
+		expect(railLink?.closest('div')?.parentElement?.className).toContain(
+			'group-data-[collapsible=icon]:block',
+		)
 	})
 })

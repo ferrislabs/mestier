@@ -88,7 +88,7 @@ function MissionPreview({
 }) {
 	const missionsPath = buildOrgPath(
 		organizationSlug,
-		'/planification/projects/$projectId/missions',
+		'/projet/$projectId/missions',
 	)
 	if (missions.length === 0)
 		return (
@@ -178,10 +178,7 @@ function DoeCard({
 			{canOpenDoe && !isLoading ? (
 				<Button size="sm" className="w-fit" asChild>
 					<Link
-						to={buildOrgPath(
-							organizationSlug,
-							'/planification/projects/$projectId/doe',
-						)}
+						to={buildOrgPath(organizationSlug, '/projet/$projectId/doe')}
 						params={{ projectId }}
 					>
 						<FileText aria-hidden />
@@ -248,10 +245,7 @@ export function ProjectDetailUI({
 	const archived = status === 'archived'
 	const period = periodLabel(extras.startDate, extras.endDate)
 	const projectPath = (suffix: string) =>
-		buildOrgPath(
-			organizationSlug,
-			`/planification/projects/$projectId${suffix}`,
-		)
+		buildOrgPath(organizationSlug, `/projet/$projectId${suffix}`)
 
 	return (
 		<Page>

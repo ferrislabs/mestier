@@ -6,7 +6,7 @@ import {
 } from '#/pages/projects/lib/mission-list'
 
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/planification/projects/$projectId_/missions',
+	'/_app/o/$organizationSlug/projet/$projectId_/missions',
 )({
 	validateSearch: parseMissionSearch,
 	component: MissionsPage,

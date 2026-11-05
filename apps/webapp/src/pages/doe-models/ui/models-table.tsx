@@ -56,7 +56,7 @@ export function ModelsTable({
 										<Link
 											to={buildOrgPath(
 												organizationSlug,
-												'/planification/doe-models/$modelId',
+												'/projet/doe-models/$modelId',
 											)}
 											params={{ modelId: model.id }}
 											className={cn(

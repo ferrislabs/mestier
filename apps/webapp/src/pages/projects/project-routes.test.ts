@@ -35,57 +35,90 @@ async function settledSearch(href: string): Promise<string> {
 	return router.state.location.searchStr
 }
 
-const PROJECT_LIST = '/_app/o/$organizationSlug/planification/projects/'
-const PROJECT_DETAIL =
-	'/_app/o/$organizationSlug/planification/projects/$projectId'
+const PROJECT_LIST = '/_app/o/$organizationSlug/projet/'
+const PROJECT_DETAIL = '/_app/o/$organizationSlug/projet/$projectId'
 
 describe('project routes', () => {
-	/**
-	 * The regression `pages/hr/hr-routes.test.ts` exists for: a bare
-	 * `foo.tsx` becomes the *parent* of `foo.$id.tsx` under file-based
-	 * routing, rendering itself with no `<Outlet/>` and silently swallowing
-	 * the child. `planning.projects.tsx` was exactly that bare file before
-	 * `planning.projects.index.tsx` renamed it, and #468 carried the pair
-	 * over to `planification.projects.*` unchanged. Asserted on the whole
-	 * match chain, not on its last entry: the child route matches perfectly
-	 * well either way, which is exactly why the failure is invisible on
-	 * `.at(-1)` alone.
-	 */
 	it("opens a project's own page without the list in front of it", () => {
-		const chain = matchChain('/o/acme/planification/projects/project-1')
+		const chain = matchChain('/o/acme/projet/project-1')
 
 		expect(chain.at(-1)).toBe(PROJECT_DETAIL)
 		expect(chain).not.toContain(PROJECT_LIST)
 	})
 
 	it('still lists projects at the collection path', () => {
-		expect(matchChain('/o/acme/planification/projects').at(-1)).toBe(
-			PROJECT_LIST,
+		expect(matchChain('/o/acme/projet').at(-1)).toBe(PROJECT_LIST)
+	})
+
+	it('keeps the creation and the model pages ahead of the project id', () => {
+		expect(matchChain('/o/acme/projet/new').at(-1)).toBe(
+			'/_app/o/$organizationSlug/projet/new',
 		)
+		expect(matchChain('/o/acme/projet/doe-models').at(-1)).toBe(
+			'/_app/o/$organizationSlug/projet/doe-models',
+		)
+		expect(matchChain('/o/acme/projet/doe-models/m1').at(-1)).toBe(
+			'/_app/o/$organizationSlug/projet/doe-models_/$modelId',
+		)
+	})
+
+	it.each([
+		['missions', '$projectId_/missions'],
+		['settings', '$projectId_/settings'],
+		['doe', '$projectId_/doe'],
+		['doe/preview', '$projectId_/doe_/preview'],
+	])("opens the project's %s page on its own", (suffix, routeSuffix) => {
+		const chain = matchChain(`/o/acme/projet/project-1/${suffix}`)
+
+		expect(chain.at(-1)).toBe(`/_app/o/$organizationSlug/projet/${routeSuffix}`)
+		expect(chain).not.toContain(PROJECT_DETAIL)
 	})
 })
 
-/**
- * #468 moved projects out of the Planning module. Both addresses are
- * bookmarked and pasted into chat, so the old ones stay reachable rather
- * than 404.
- */
-describe('project routes moved out of planning', () => {
-	it('redirects the old list address', async () => {
-		expect(await settlesAt('/o/acme/planning/projects')).toBe(
-			'/o/acme/planification/projects',
-		)
+describe('project routes moved to the projet module', () => {
+	it.each([
+		['/o/acme/planification/projects', '/o/acme/projet'],
+		['/o/acme/planification/projects/new', '/o/acme/projet/new'],
+		['/o/acme/planification/projects/project-1', '/o/acme/projet/project-1'],
+		[
+			'/o/acme/planification/projects/project-1/missions',
+			'/o/acme/projet/project-1/missions',
+		],
+		[
+			'/o/acme/planification/projects/project-1/settings',
+			'/o/acme/projet/project-1/settings',
+		],
+		[
+			'/o/acme/planification/projects/project-1/doe',
+			'/o/acme/projet/project-1/doe',
+		],
+		[
+			'/o/acme/planification/projects/project-1/doe/preview',
+			'/o/acme/projet/project-1/doe/preview',
+		],
+		['/o/acme/planification/doe-models', '/o/acme/projet/doe-models'],
+		['/o/acme/planification/doe-models/m1', '/o/acme/projet/doe-models/m1'],
+		['/o/acme/planification/does', '/o/acme/projet'],
+		['/o/acme/planning/projects', '/o/acme/projet'],
+		['/o/acme/planning/projects/project-1', '/o/acme/projet/project-1'],
+	])('redirects %s to %s', async (from, to) => {
+		expect(await settlesAt(from)).toBe(to)
 	})
 
 	it('carries the old list search along', async () => {
 		expect(await settledSearch('/o/acme/planning/projects?archived=true')).toBe(
 			'?archived=true',
 		)
+		expect(
+			await settledSearch('/o/acme/planification/projects?archived=true'),
+		).toBe('?archived=true')
 	})
 
-	it('redirects the old detail address, parameter included', async () => {
-		expect(await settlesAt('/o/acme/planning/projects/project-1')).toBe(
-			'/o/acme/planification/projects/project-1',
-		)
+	it('carries the old sub-page search along', async () => {
+		expect(
+			await settledSearch(
+				'/o/acme/planification/projects/project-1/missions?statut=en-cours',
+			),
+		).toBe('?statut=en-cours')
 	})
 })

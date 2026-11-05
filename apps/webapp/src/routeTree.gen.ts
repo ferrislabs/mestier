@@ -20,6 +20,7 @@ import { Route as AppOOrganizationSlugReportingRouteImport } from './routes/_app
 import { Route as AppOOrganizationSlugChatRouteImport } from './routes/_app.o.$organizationSlug.chat'
 import { Route as AppOOrganizationSlugSupportIndexRouteImport } from './routes/_app.o.$organizationSlug.support.index'
 import { Route as AppOOrganizationSlugPurchaseIndexRouteImport } from './routes/_app.o.$organizationSlug.purchase.index'
+import { Route as AppOOrganizationSlugProjetIndexRouteImport } from './routes/_app.o.$organizationSlug.projet.index'
 import { Route as AppOOrganizationSlugPlanningIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.index'
 import { Route as AppOOrganizationSlugPlanificationIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.index'
 import { Route as AppOOrganizationSlugHrIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.index'
@@ -29,13 +30,15 @@ import { Route as AppOOrganizationSlugAutomatisationIndexRouteImport } from './r
 import { Route as AppOOrganizationSlugSupportTableRouteImport } from './routes/_app.o.$organizationSlug.support.table'
 import { Route as AppOOrganizationSlugSupportIntegrationRouteImport } from './routes/_app.o.$organizationSlug.support.integration'
 import { Route as AppOOrganizationSlugPurchaseSuppliersRouteImport } from './routes/_app.o.$organizationSlug.purchase.suppliers'
+import { Route as AppOOrganizationSlugProjetNewRouteImport } from './routes/_app.o.$organizationSlug.projet.new'
+import { Route as AppOOrganizationSlugProjetDoeModelsRouteImport } from './routes/_app.o.$organizationSlug.projet.doe-models'
+import { Route as AppOOrganizationSlugProjetProjectIdRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId'
 import { Route as AppOOrganizationSlugPlanningTeamRouteImport } from './routes/_app.o.$organizationSlug.planning.team'
 import { Route as AppOOrganizationSlugPlanningReportsRouteImport } from './routes/_app.o.$organizationSlug.planning.reports'
 import { Route as AppOOrganizationSlugPlanningProjectTemplatesRouteImport } from './routes/_app.o.$organizationSlug.planning.project-templates'
 import { Route as AppOOrganizationSlugPlanningCalendarRouteImport } from './routes/_app.o.$organizationSlug.planning.calendar'
 import { Route as AppOOrganizationSlugPlanificationProjectTemplatesRouteImport } from './routes/_app.o.$organizationSlug.planification.project-templates'
 import { Route as AppOOrganizationSlugPlanificationDoesRouteImport } from './routes/_app.o.$organizationSlug.planification.does'
-import { Route as AppOOrganizationSlugPlanificationDoeModelsRouteImport } from './routes/_app.o.$organizationSlug.planification.doe-models'
 import { Route as AppOOrganizationSlugPlanificationBoardRouteImport } from './routes/_app.o.$organizationSlug.planification.board'
 import { Route as AppOOrganizationSlugHrWorkTimeRouteImport } from './routes/_app.o.$organizationSlug.hr.work-time'
 import { Route as AppOOrganizationSlugHrRightsRouteImport } from './routes/_app.o.$organizationSlug.hr.rights'
@@ -52,6 +55,7 @@ import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesIndexRouteImport }
 import { Route as AppOOrganizationSlugPlanningProjectsIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.projects.index'
 import { Route as AppOOrganizationSlugPlanificationProjectsIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.index'
 import { Route as AppOOrganizationSlugPlanificationMaintenanceIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.index'
+import { Route as AppOOrganizationSlugPlanificationDoeModelsIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.doe-models.index'
 import { Route as AppOOrganizationSlugHrTeamIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.team.index'
 import { Route as AppOOrganizationSlugHrExtraIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.extra.index'
 import { Route as AppOOrganizationSlugHrAbsencesIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.absences.index'
@@ -63,13 +67,16 @@ import { Route as AppOOrganizationSlugAutomatisationExecutionsIndexRouteImport }
 import { Route as AppOOrganizationSlugAutomatisationCollectionsIndexRouteImport } from './routes/_app.o.$organizationSlug.automatisation.collections.index'
 import { Route as AppOOrganizationSlugSupportTicketsTicketIdRouteImport } from './routes/_app.o.$organizationSlug.support.tickets.$ticketId'
 import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRouteImport } from './routes/_app.o.$organizationSlug.purchase.supplier-invoices.$supplierInvoiceId'
+import { Route as AppOOrganizationSlugProjetDoeModelsModelIdRouteImport } from './routes/_app.o.$organizationSlug.projet.doe-models_.$modelId'
+import { Route as AppOOrganizationSlugProjetProjectIdSettingsRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId_.settings'
+import { Route as AppOOrganizationSlugProjetProjectIdMissionsRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId_.missions'
+import { Route as AppOOrganizationSlugProjetProjectIdDoeRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId_.doe'
 import { Route as AppOOrganizationSlugPlanningProjectsProjectIdRouteImport } from './routes/_app.o.$organizationSlug.planning.projects.$projectId'
-import { Route as AppOOrganizationSlugPlanificationProjectsNewRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.new'
-import { Route as AppOOrganizationSlugPlanificationProjectsProjectIdRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.$projectId'
+import { Route as AppOOrganizationSlugPlanificationProjectsSplatRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.$'
 import { Route as AppOOrganizationSlugPlanificationMaintenanceValidationRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.validation'
 import { Route as AppOOrganizationSlugPlanificationMaintenanceRecapRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.recap'
 import { Route as AppOOrganizationSlugPlanificationMaintenanceContractsRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.contracts'
-import { Route as AppOOrganizationSlugPlanificationDoeModelsModelIdRouteImport } from './routes/_app.o.$organizationSlug.planification.doe-models_.$modelId'
+import { Route as AppOOrganizationSlugPlanificationDoeModelsModelIdRouteImport } from './routes/_app.o.$organizationSlug.planification.doe-models.$modelId'
 import { Route as AppOOrganizationSlugHrExtraNewRouteImport } from './routes/_app.o.$organizationSlug.hr.extra.new'
 import { Route as AppOOrganizationSlugHrAbsencesNewRouteImport } from './routes/_app.o.$organizationSlug.hr.absences.new'
 import { Route as AppOOrganizationSlugCrmQuotesNewRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.new'
@@ -83,13 +90,10 @@ import { Route as AppOOrganizationSlugAutomatisationProjetsProjectIdRouteImport 
 import { Route as AppOOrganizationSlugAutomatisationCollectionsCollectionIdRouteImport } from './routes/_app.o.$organizationSlug.automatisation.collections.$collectionId'
 import { Route as AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRouteImport } from './routes/_app.o.$organizationSlug.automatisation.$workflowId.executions'
 import { Route as AppOOrganizationSlugHrTeamMemberIdIndexRouteImport } from './routes/_app.o.$organizationSlug.hr.team.$memberId.index'
-import { Route as AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.$projectId_.settings'
-import { Route as AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.$projectId_.missions'
-import { Route as AppOOrganizationSlugPlanificationProjectsProjectIdDoeRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.$projectId_.doe'
+import { Route as AppOOrganizationSlugProjetProjectIdDoePreviewRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId_.doe_.preview'
 import { Route as AppOOrganizationSlugHrTeamMemberIdWorkTimeRouteImport } from './routes/_app.o.$organizationSlug.hr.team.$memberId.work-time'
 import { Route as AppOOrganizationSlugCrmQuotesQuoteIdHandoverRouteImport } from './routes/_app.o.$organizationSlug.crm.quotes.$quoteId.handover'
 import { Route as AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRouteImport } from './routes/_app.o.$organizationSlug.automatisation.$workflowId.executions.$runId'
-import { Route as AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.$projectId_.doe_.preview'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -152,6 +156,12 @@ const AppOOrganizationSlugPurchaseIndexRoute =
     path: '/purchase/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugProjetIndexRoute =
+  AppOOrganizationSlugProjetIndexRouteImport.update({
+    id: '/projet/',
+    path: '/projet/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugPlanningIndexRoute =
   AppOOrganizationSlugPlanningIndexRouteImport.update({
     id: '/planning/',
@@ -206,6 +216,24 @@ const AppOOrganizationSlugPurchaseSuppliersRoute =
     path: '/purchase/suppliers',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugProjetNewRoute =
+  AppOOrganizationSlugProjetNewRouteImport.update({
+    id: '/projet/new',
+    path: '/projet/new',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugProjetDoeModelsRoute =
+  AppOOrganizationSlugProjetDoeModelsRouteImport.update({
+    id: '/projet/doe-models',
+    path: '/projet/doe-models',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugProjetProjectIdRoute =
+  AppOOrganizationSlugProjetProjectIdRouteImport.update({
+    id: '/projet/$projectId',
+    path: '/projet/$projectId',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugPlanningTeamRoute =
   AppOOrganizationSlugPlanningTeamRouteImport.update({
     id: '/planning/team',
@@ -240,12 +268,6 @@ const AppOOrganizationSlugPlanificationDoesRoute =
   AppOOrganizationSlugPlanificationDoesRouteImport.update({
     id: '/planification/does',
     path: '/planification/does',
-    getParentRoute: () => AppOOrganizationSlugRoute,
-  } as any)
-const AppOOrganizationSlugPlanificationDoeModelsRoute =
-  AppOOrganizationSlugPlanificationDoeModelsRouteImport.update({
-    id: '/planification/doe-models',
-    path: '/planification/doe-models',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugPlanificationBoardRoute =
@@ -344,6 +366,12 @@ const AppOOrganizationSlugPlanificationMaintenanceIndexRoute =
     path: '/planification/maintenance/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugPlanificationDoeModelsIndexRoute =
+  AppOOrganizationSlugPlanificationDoeModelsIndexRouteImport.update({
+    id: '/planification/doe-models/',
+    path: '/planification/doe-models/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugHrTeamIndexRoute =
   AppOOrganizationSlugHrTeamIndexRouteImport.update({
     id: '/hr/team/',
@@ -412,22 +440,40 @@ const AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute =
       getParentRoute: () => AppOOrganizationSlugRoute,
     } as any,
   )
+const AppOOrganizationSlugProjetDoeModelsModelIdRoute =
+  AppOOrganizationSlugProjetDoeModelsModelIdRouteImport.update({
+    id: '/projet/doe-models_/$modelId',
+    path: '/projet/doe-models/$modelId',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugProjetProjectIdSettingsRoute =
+  AppOOrganizationSlugProjetProjectIdSettingsRouteImport.update({
+    id: '/projet/$projectId_/settings',
+    path: '/projet/$projectId/settings',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugProjetProjectIdMissionsRoute =
+  AppOOrganizationSlugProjetProjectIdMissionsRouteImport.update({
+    id: '/projet/$projectId_/missions',
+    path: '/projet/$projectId/missions',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugProjetProjectIdDoeRoute =
+  AppOOrganizationSlugProjetProjectIdDoeRouteImport.update({
+    id: '/projet/$projectId_/doe',
+    path: '/projet/$projectId/doe',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugPlanningProjectsProjectIdRoute =
   AppOOrganizationSlugPlanningProjectsProjectIdRouteImport.update({
     id: '/planning/projects/$projectId',
     path: '/planning/projects/$projectId',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
-const AppOOrganizationSlugPlanificationProjectsNewRoute =
-  AppOOrganizationSlugPlanificationProjectsNewRouteImport.update({
-    id: '/planification/projects/new',
-    path: '/planification/projects/new',
-    getParentRoute: () => AppOOrganizationSlugRoute,
-  } as any)
-const AppOOrganizationSlugPlanificationProjectsProjectIdRoute =
-  AppOOrganizationSlugPlanificationProjectsProjectIdRouteImport.update({
-    id: '/planification/projects/$projectId',
-    path: '/planification/projects/$projectId',
+const AppOOrganizationSlugPlanificationProjectsSplatRoute =
+  AppOOrganizationSlugPlanificationProjectsSplatRouteImport.update({
+    id: '/planification/projects/$',
+    path: '/planification/projects/$',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugPlanificationMaintenanceValidationRoute =
@@ -450,7 +496,7 @@ const AppOOrganizationSlugPlanificationMaintenanceContractsRoute =
   } as any)
 const AppOOrganizationSlugPlanificationDoeModelsModelIdRoute =
   AppOOrganizationSlugPlanificationDoeModelsModelIdRouteImport.update({
-    id: '/planification/doe-models_/$modelId',
+    id: '/planification/doe-models/$modelId',
     path: '/planification/doe-models/$modelId',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
@@ -532,22 +578,10 @@ const AppOOrganizationSlugHrTeamMemberIdIndexRoute =
     path: '/hr/team/$memberId/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
-const AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRoute =
-  AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRouteImport.update({
-    id: '/planification/projects/$projectId_/settings',
-    path: '/planification/projects/$projectId/settings',
-    getParentRoute: () => AppOOrganizationSlugRoute,
-  } as any)
-const AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRoute =
-  AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRouteImport.update({
-    id: '/planification/projects/$projectId_/missions',
-    path: '/planification/projects/$projectId/missions',
-    getParentRoute: () => AppOOrganizationSlugRoute,
-  } as any)
-const AppOOrganizationSlugPlanificationProjectsProjectIdDoeRoute =
-  AppOOrganizationSlugPlanificationProjectsProjectIdDoeRouteImport.update({
-    id: '/planification/projects/$projectId_/doe',
-    path: '/planification/projects/$projectId/doe',
+const AppOOrganizationSlugProjetProjectIdDoePreviewRoute =
+  AppOOrganizationSlugProjetProjectIdDoePreviewRouteImport.update({
+    id: '/projet/$projectId_/doe_/preview',
+    path: '/projet/$projectId/doe/preview',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute =
@@ -569,14 +603,6 @@ const AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute =
       path: '/$runId',
       getParentRoute: () =>
         AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRoute,
-    } as any,
-  )
-const AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRoute =
-  AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRouteImport.update(
-    {
-      id: '/planification/projects/$projectId_/doe_/preview',
-      path: '/planification/projects/$projectId/doe/preview',
-      getParentRoute: () => AppOOrganizationSlugRoute,
     } as any,
   )
 
@@ -601,13 +627,15 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/hr/rights': typeof AppOOrganizationSlugHrRightsRoute
   '/o/$organizationSlug/hr/work-time': typeof AppOOrganizationSlugHrWorkTimeRoute
   '/o/$organizationSlug/planification/board': typeof AppOOrganizationSlugPlanificationBoardRoute
-  '/o/$organizationSlug/planification/doe-models': typeof AppOOrganizationSlugPlanificationDoeModelsRoute
   '/o/$organizationSlug/planification/does': typeof AppOOrganizationSlugPlanificationDoesRoute
   '/o/$organizationSlug/planification/project-templates': typeof AppOOrganizationSlugPlanificationProjectTemplatesRoute
   '/o/$organizationSlug/planning/calendar': typeof AppOOrganizationSlugPlanningCalendarRoute
   '/o/$organizationSlug/planning/project-templates': typeof AppOOrganizationSlugPlanningProjectTemplatesRoute
   '/o/$organizationSlug/planning/reports': typeof AppOOrganizationSlugPlanningReportsRoute
   '/o/$organizationSlug/planning/team': typeof AppOOrganizationSlugPlanningTeamRoute
+  '/o/$organizationSlug/projet/$projectId': typeof AppOOrganizationSlugProjetProjectIdRoute
+  '/o/$organizationSlug/projet/doe-models': typeof AppOOrganizationSlugProjetDoeModelsRoute
+  '/o/$organizationSlug/projet/new': typeof AppOOrganizationSlugProjetNewRoute
   '/o/$organizationSlug/purchase/suppliers': typeof AppOOrganizationSlugPurchaseSuppliersRoute
   '/o/$organizationSlug/support/integration': typeof AppOOrganizationSlugSupportIntegrationRoute
   '/o/$organizationSlug/support/table': typeof AppOOrganizationSlugSupportTableRoute
@@ -617,6 +645,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/hr/': typeof AppOOrganizationSlugHrIndexRoute
   '/o/$organizationSlug/planification/': typeof AppOOrganizationSlugPlanificationIndexRoute
   '/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
+  '/o/$organizationSlug/projet/': typeof AppOOrganizationSlugProjetIndexRoute
   '/o/$organizationSlug/purchase/': typeof AppOOrganizationSlugPurchaseIndexRoute
   '/o/$organizationSlug/support/': typeof AppOOrganizationSlugSupportIndexRoute
   '/o/$organizationSlug/automatisation/$workflowId/executions': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRouteWithChildren
@@ -635,9 +664,12 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/planification/maintenance/contracts': typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   '/o/$organizationSlug/planification/maintenance/recap': typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
   '/o/$organizationSlug/planification/maintenance/validation': typeof AppOOrganizationSlugPlanificationMaintenanceValidationRoute
-  '/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
-  '/o/$organizationSlug/planification/projects/new': typeof AppOOrganizationSlugPlanificationProjectsNewRoute
+  '/o/$organizationSlug/planification/projects/$': typeof AppOOrganizationSlugPlanificationProjectsSplatRoute
   '/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
+  '/o/$organizationSlug/projet/$projectId/doe': typeof AppOOrganizationSlugProjetProjectIdDoeRoute
+  '/o/$organizationSlug/projet/$projectId/missions': typeof AppOOrganizationSlugProjetProjectIdMissionsRoute
+  '/o/$organizationSlug/projet/$projectId/settings': typeof AppOOrganizationSlugProjetProjectIdSettingsRoute
+  '/o/$organizationSlug/projet/doe-models/$modelId': typeof AppOOrganizationSlugProjetDoeModelsModelIdRoute
   '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   '/o/$organizationSlug/support/tickets/$ticketId': typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
   '/o/$organizationSlug/automatisation/collections/': typeof AppOOrganizationSlugAutomatisationCollectionsIndexRoute
@@ -649,6 +681,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/hr/absences/': typeof AppOOrganizationSlugHrAbsencesIndexRoute
   '/o/$organizationSlug/hr/extra/': typeof AppOOrganizationSlugHrExtraIndexRoute
   '/o/$organizationSlug/hr/team/': typeof AppOOrganizationSlugHrTeamIndexRoute
+  '/o/$organizationSlug/planification/doe-models/': typeof AppOOrganizationSlugPlanificationDoeModelsIndexRoute
   '/o/$organizationSlug/planification/maintenance/': typeof AppOOrganizationSlugPlanificationMaintenanceIndexRoute
   '/o/$organizationSlug/planification/projects/': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   '/o/$organizationSlug/planning/projects/': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
@@ -656,11 +689,8 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/automatisation/$workflowId/executions/$runId': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute
   '/o/$organizationSlug/crm/quotes/$quoteId/handover': typeof AppOOrganizationSlugCrmQuotesQuoteIdHandoverRoute
   '/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
-  '/o/$organizationSlug/planification/projects/$projectId/doe': typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoeRoute
-  '/o/$organizationSlug/planification/projects/$projectId/missions': typeof AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRoute
-  '/o/$organizationSlug/planification/projects/$projectId/settings': typeof AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRoute
+  '/o/$organizationSlug/projet/$projectId/doe/preview': typeof AppOOrganizationSlugProjetProjectIdDoePreviewRoute
   '/o/$organizationSlug/hr/team/$memberId/': typeof AppOOrganizationSlugHrTeamMemberIdIndexRoute
-  '/o/$organizationSlug/planification/projects/$projectId/doe/preview': typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRoute
 }
 export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
@@ -681,13 +711,15 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/hr/rights': typeof AppOOrganizationSlugHrRightsRoute
   '/o/$organizationSlug/hr/work-time': typeof AppOOrganizationSlugHrWorkTimeRoute
   '/o/$organizationSlug/planification/board': typeof AppOOrganizationSlugPlanificationBoardRoute
-  '/o/$organizationSlug/planification/doe-models': typeof AppOOrganizationSlugPlanificationDoeModelsRoute
   '/o/$organizationSlug/planification/does': typeof AppOOrganizationSlugPlanificationDoesRoute
   '/o/$organizationSlug/planification/project-templates': typeof AppOOrganizationSlugPlanificationProjectTemplatesRoute
   '/o/$organizationSlug/planning/calendar': typeof AppOOrganizationSlugPlanningCalendarRoute
   '/o/$organizationSlug/planning/project-templates': typeof AppOOrganizationSlugPlanningProjectTemplatesRoute
   '/o/$organizationSlug/planning/reports': typeof AppOOrganizationSlugPlanningReportsRoute
   '/o/$organizationSlug/planning/team': typeof AppOOrganizationSlugPlanningTeamRoute
+  '/o/$organizationSlug/projet/$projectId': typeof AppOOrganizationSlugProjetProjectIdRoute
+  '/o/$organizationSlug/projet/doe-models': typeof AppOOrganizationSlugProjetDoeModelsRoute
+  '/o/$organizationSlug/projet/new': typeof AppOOrganizationSlugProjetNewRoute
   '/o/$organizationSlug/purchase/suppliers': typeof AppOOrganizationSlugPurchaseSuppliersRoute
   '/o/$organizationSlug/support/integration': typeof AppOOrganizationSlugSupportIntegrationRoute
   '/o/$organizationSlug/support/table': typeof AppOOrganizationSlugSupportTableRoute
@@ -697,6 +729,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/hr': typeof AppOOrganizationSlugHrIndexRoute
   '/o/$organizationSlug/planification': typeof AppOOrganizationSlugPlanificationIndexRoute
   '/o/$organizationSlug/planning': typeof AppOOrganizationSlugPlanningIndexRoute
+  '/o/$organizationSlug/projet': typeof AppOOrganizationSlugProjetIndexRoute
   '/o/$organizationSlug/purchase': typeof AppOOrganizationSlugPurchaseIndexRoute
   '/o/$organizationSlug/support': typeof AppOOrganizationSlugSupportIndexRoute
   '/o/$organizationSlug/automatisation/$workflowId/executions': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRouteWithChildren
@@ -715,9 +748,12 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/planification/maintenance/contracts': typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   '/o/$organizationSlug/planification/maintenance/recap': typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
   '/o/$organizationSlug/planification/maintenance/validation': typeof AppOOrganizationSlugPlanificationMaintenanceValidationRoute
-  '/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
-  '/o/$organizationSlug/planification/projects/new': typeof AppOOrganizationSlugPlanificationProjectsNewRoute
+  '/o/$organizationSlug/planification/projects/$': typeof AppOOrganizationSlugPlanificationProjectsSplatRoute
   '/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
+  '/o/$organizationSlug/projet/$projectId/doe': typeof AppOOrganizationSlugProjetProjectIdDoeRoute
+  '/o/$organizationSlug/projet/$projectId/missions': typeof AppOOrganizationSlugProjetProjectIdMissionsRoute
+  '/o/$organizationSlug/projet/$projectId/settings': typeof AppOOrganizationSlugProjetProjectIdSettingsRoute
+  '/o/$organizationSlug/projet/doe-models/$modelId': typeof AppOOrganizationSlugProjetDoeModelsModelIdRoute
   '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   '/o/$organizationSlug/support/tickets/$ticketId': typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
   '/o/$organizationSlug/automatisation/collections': typeof AppOOrganizationSlugAutomatisationCollectionsIndexRoute
@@ -729,6 +765,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/hr/absences': typeof AppOOrganizationSlugHrAbsencesIndexRoute
   '/o/$organizationSlug/hr/extra': typeof AppOOrganizationSlugHrExtraIndexRoute
   '/o/$organizationSlug/hr/team': typeof AppOOrganizationSlugHrTeamIndexRoute
+  '/o/$organizationSlug/planification/doe-models': typeof AppOOrganizationSlugPlanificationDoeModelsIndexRoute
   '/o/$organizationSlug/planification/maintenance': typeof AppOOrganizationSlugPlanificationMaintenanceIndexRoute
   '/o/$organizationSlug/planification/projects': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   '/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
@@ -736,11 +773,8 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/automatisation/$workflowId/executions/$runId': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute
   '/o/$organizationSlug/crm/quotes/$quoteId/handover': typeof AppOOrganizationSlugCrmQuotesQuoteIdHandoverRoute
   '/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
-  '/o/$organizationSlug/planification/projects/$projectId/doe': typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoeRoute
-  '/o/$organizationSlug/planification/projects/$projectId/missions': typeof AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRoute
-  '/o/$organizationSlug/planification/projects/$projectId/settings': typeof AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRoute
+  '/o/$organizationSlug/projet/$projectId/doe/preview': typeof AppOOrganizationSlugProjetProjectIdDoePreviewRoute
   '/o/$organizationSlug/hr/team/$memberId': typeof AppOOrganizationSlugHrTeamMemberIdIndexRoute
-  '/o/$organizationSlug/planification/projects/$projectId/doe/preview': typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -765,13 +799,15 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/hr/rights': typeof AppOOrganizationSlugHrRightsRoute
   '/_app/o/$organizationSlug/hr/work-time': typeof AppOOrganizationSlugHrWorkTimeRoute
   '/_app/o/$organizationSlug/planification/board': typeof AppOOrganizationSlugPlanificationBoardRoute
-  '/_app/o/$organizationSlug/planification/doe-models': typeof AppOOrganizationSlugPlanificationDoeModelsRoute
   '/_app/o/$organizationSlug/planification/does': typeof AppOOrganizationSlugPlanificationDoesRoute
   '/_app/o/$organizationSlug/planification/project-templates': typeof AppOOrganizationSlugPlanificationProjectTemplatesRoute
   '/_app/o/$organizationSlug/planning/calendar': typeof AppOOrganizationSlugPlanningCalendarRoute
   '/_app/o/$organizationSlug/planning/project-templates': typeof AppOOrganizationSlugPlanningProjectTemplatesRoute
   '/_app/o/$organizationSlug/planning/reports': typeof AppOOrganizationSlugPlanningReportsRoute
   '/_app/o/$organizationSlug/planning/team': typeof AppOOrganizationSlugPlanningTeamRoute
+  '/_app/o/$organizationSlug/projet/$projectId': typeof AppOOrganizationSlugProjetProjectIdRoute
+  '/_app/o/$organizationSlug/projet/doe-models': typeof AppOOrganizationSlugProjetDoeModelsRoute
+  '/_app/o/$organizationSlug/projet/new': typeof AppOOrganizationSlugProjetNewRoute
   '/_app/o/$organizationSlug/purchase/suppliers': typeof AppOOrganizationSlugPurchaseSuppliersRoute
   '/_app/o/$organizationSlug/support/integration': typeof AppOOrganizationSlugSupportIntegrationRoute
   '/_app/o/$organizationSlug/support/table': typeof AppOOrganizationSlugSupportTableRoute
@@ -781,6 +817,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/hr/': typeof AppOOrganizationSlugHrIndexRoute
   '/_app/o/$organizationSlug/planification/': typeof AppOOrganizationSlugPlanificationIndexRoute
   '/_app/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
+  '/_app/o/$organizationSlug/projet/': typeof AppOOrganizationSlugProjetIndexRoute
   '/_app/o/$organizationSlug/purchase/': typeof AppOOrganizationSlugPurchaseIndexRoute
   '/_app/o/$organizationSlug/support/': typeof AppOOrganizationSlugSupportIndexRoute
   '/_app/o/$organizationSlug/automatisation/$workflowId/executions': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRouteWithChildren
@@ -795,13 +832,16 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/crm/quotes/new': typeof AppOOrganizationSlugCrmQuotesNewRoute
   '/_app/o/$organizationSlug/hr/absences/new': typeof AppOOrganizationSlugHrAbsencesNewRoute
   '/_app/o/$organizationSlug/hr/extra/new': typeof AppOOrganizationSlugHrExtraNewRoute
-  '/_app/o/$organizationSlug/planification/doe-models_/$modelId': typeof AppOOrganizationSlugPlanificationDoeModelsModelIdRoute
+  '/_app/o/$organizationSlug/planification/doe-models/$modelId': typeof AppOOrganizationSlugPlanificationDoeModelsModelIdRoute
   '/_app/o/$organizationSlug/planification/maintenance/contracts': typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   '/_app/o/$organizationSlug/planification/maintenance/recap': typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
   '/_app/o/$organizationSlug/planification/maintenance/validation': typeof AppOOrganizationSlugPlanificationMaintenanceValidationRoute
-  '/_app/o/$organizationSlug/planification/projects/$projectId': typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
-  '/_app/o/$organizationSlug/planification/projects/new': typeof AppOOrganizationSlugPlanificationProjectsNewRoute
+  '/_app/o/$organizationSlug/planification/projects/$': typeof AppOOrganizationSlugPlanificationProjectsSplatRoute
   '/_app/o/$organizationSlug/planning/projects/$projectId': typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
+  '/_app/o/$organizationSlug/projet/$projectId_/doe': typeof AppOOrganizationSlugProjetProjectIdDoeRoute
+  '/_app/o/$organizationSlug/projet/$projectId_/missions': typeof AppOOrganizationSlugProjetProjectIdMissionsRoute
+  '/_app/o/$organizationSlug/projet/$projectId_/settings': typeof AppOOrganizationSlugProjetProjectIdSettingsRoute
+  '/_app/o/$organizationSlug/projet/doe-models_/$modelId': typeof AppOOrganizationSlugProjetDoeModelsModelIdRoute
   '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   '/_app/o/$organizationSlug/support/tickets/$ticketId': typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
   '/_app/o/$organizationSlug/automatisation/collections/': typeof AppOOrganizationSlugAutomatisationCollectionsIndexRoute
@@ -813,6 +853,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/hr/absences/': typeof AppOOrganizationSlugHrAbsencesIndexRoute
   '/_app/o/$organizationSlug/hr/extra/': typeof AppOOrganizationSlugHrExtraIndexRoute
   '/_app/o/$organizationSlug/hr/team/': typeof AppOOrganizationSlugHrTeamIndexRoute
+  '/_app/o/$organizationSlug/planification/doe-models/': typeof AppOOrganizationSlugPlanificationDoeModelsIndexRoute
   '/_app/o/$organizationSlug/planification/maintenance/': typeof AppOOrganizationSlugPlanificationMaintenanceIndexRoute
   '/_app/o/$organizationSlug/planification/projects/': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   '/_app/o/$organizationSlug/planning/projects/': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
@@ -820,11 +861,8 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/automatisation/$workflowId/executions/$runId': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute
   '/_app/o/$organizationSlug/crm/quotes/$quoteId/handover': typeof AppOOrganizationSlugCrmQuotesQuoteIdHandoverRoute
   '/_app/o/$organizationSlug/hr/team/$memberId/work-time': typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
-  '/_app/o/$organizationSlug/planification/projects/$projectId_/doe': typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoeRoute
-  '/_app/o/$organizationSlug/planification/projects/$projectId_/missions': typeof AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRoute
-  '/_app/o/$organizationSlug/planification/projects/$projectId_/settings': typeof AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRoute
+  '/_app/o/$organizationSlug/projet/$projectId_/doe_/preview': typeof AppOOrganizationSlugProjetProjectIdDoePreviewRoute
   '/_app/o/$organizationSlug/hr/team/$memberId/': typeof AppOOrganizationSlugHrTeamMemberIdIndexRoute
-  '/_app/o/$organizationSlug/planification/projects/$projectId_/doe_/preview': typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -849,13 +887,15 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/rights'
     | '/o/$organizationSlug/hr/work-time'
     | '/o/$organizationSlug/planification/board'
-    | '/o/$organizationSlug/planification/doe-models'
     | '/o/$organizationSlug/planification/does'
     | '/o/$organizationSlug/planification/project-templates'
     | '/o/$organizationSlug/planning/calendar'
     | '/o/$organizationSlug/planning/project-templates'
     | '/o/$organizationSlug/planning/reports'
     | '/o/$organizationSlug/planning/team'
+    | '/o/$organizationSlug/projet/$projectId'
+    | '/o/$organizationSlug/projet/doe-models'
+    | '/o/$organizationSlug/projet/new'
     | '/o/$organizationSlug/purchase/suppliers'
     | '/o/$organizationSlug/support/integration'
     | '/o/$organizationSlug/support/table'
@@ -865,6 +905,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/'
     | '/o/$organizationSlug/planification/'
     | '/o/$organizationSlug/planning/'
+    | '/o/$organizationSlug/projet/'
     | '/o/$organizationSlug/purchase/'
     | '/o/$organizationSlug/support/'
     | '/o/$organizationSlug/automatisation/$workflowId/executions'
@@ -883,9 +924,12 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planification/maintenance/contracts'
     | '/o/$organizationSlug/planification/maintenance/recap'
     | '/o/$organizationSlug/planification/maintenance/validation'
-    | '/o/$organizationSlug/planification/projects/$projectId'
-    | '/o/$organizationSlug/planification/projects/new'
+    | '/o/$organizationSlug/planification/projects/$'
     | '/o/$organizationSlug/planning/projects/$projectId'
+    | '/o/$organizationSlug/projet/$projectId/doe'
+    | '/o/$organizationSlug/projet/$projectId/missions'
+    | '/o/$organizationSlug/projet/$projectId/settings'
+    | '/o/$organizationSlug/projet/doe-models/$modelId'
     | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
     | '/o/$organizationSlug/support/tickets/$ticketId'
     | '/o/$organizationSlug/automatisation/collections/'
@@ -897,6 +941,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/absences/'
     | '/o/$organizationSlug/hr/extra/'
     | '/o/$organizationSlug/hr/team/'
+    | '/o/$organizationSlug/planification/doe-models/'
     | '/o/$organizationSlug/planification/maintenance/'
     | '/o/$organizationSlug/planification/projects/'
     | '/o/$organizationSlug/planning/projects/'
@@ -904,11 +949,8 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/automatisation/$workflowId/executions/$runId'
     | '/o/$organizationSlug/crm/quotes/$quoteId/handover'
     | '/o/$organizationSlug/hr/team/$memberId/work-time'
-    | '/o/$organizationSlug/planification/projects/$projectId/doe'
-    | '/o/$organizationSlug/planification/projects/$projectId/missions'
-    | '/o/$organizationSlug/planification/projects/$projectId/settings'
+    | '/o/$organizationSlug/projet/$projectId/doe/preview'
     | '/o/$organizationSlug/hr/team/$memberId/'
-    | '/o/$organizationSlug/planification/projects/$projectId/doe/preview'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/invite/$token'
@@ -929,13 +971,15 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/rights'
     | '/o/$organizationSlug/hr/work-time'
     | '/o/$organizationSlug/planification/board'
-    | '/o/$organizationSlug/planification/doe-models'
     | '/o/$organizationSlug/planification/does'
     | '/o/$organizationSlug/planification/project-templates'
     | '/o/$organizationSlug/planning/calendar'
     | '/o/$organizationSlug/planning/project-templates'
     | '/o/$organizationSlug/planning/reports'
     | '/o/$organizationSlug/planning/team'
+    | '/o/$organizationSlug/projet/$projectId'
+    | '/o/$organizationSlug/projet/doe-models'
+    | '/o/$organizationSlug/projet/new'
     | '/o/$organizationSlug/purchase/suppliers'
     | '/o/$organizationSlug/support/integration'
     | '/o/$organizationSlug/support/table'
@@ -945,6 +989,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr'
     | '/o/$organizationSlug/planification'
     | '/o/$organizationSlug/planning'
+    | '/o/$organizationSlug/projet'
     | '/o/$organizationSlug/purchase'
     | '/o/$organizationSlug/support'
     | '/o/$organizationSlug/automatisation/$workflowId/executions'
@@ -963,9 +1008,12 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planification/maintenance/contracts'
     | '/o/$organizationSlug/planification/maintenance/recap'
     | '/o/$organizationSlug/planification/maintenance/validation'
-    | '/o/$organizationSlug/planification/projects/$projectId'
-    | '/o/$organizationSlug/planification/projects/new'
+    | '/o/$organizationSlug/planification/projects/$'
     | '/o/$organizationSlug/planning/projects/$projectId'
+    | '/o/$organizationSlug/projet/$projectId/doe'
+    | '/o/$organizationSlug/projet/$projectId/missions'
+    | '/o/$organizationSlug/projet/$projectId/settings'
+    | '/o/$organizationSlug/projet/doe-models/$modelId'
     | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
     | '/o/$organizationSlug/support/tickets/$ticketId'
     | '/o/$organizationSlug/automatisation/collections'
@@ -977,6 +1025,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/hr/absences'
     | '/o/$organizationSlug/hr/extra'
     | '/o/$organizationSlug/hr/team'
+    | '/o/$organizationSlug/planification/doe-models'
     | '/o/$organizationSlug/planification/maintenance'
     | '/o/$organizationSlug/planification/projects'
     | '/o/$organizationSlug/planning/projects'
@@ -984,11 +1033,8 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/automatisation/$workflowId/executions/$runId'
     | '/o/$organizationSlug/crm/quotes/$quoteId/handover'
     | '/o/$organizationSlug/hr/team/$memberId/work-time'
-    | '/o/$organizationSlug/planification/projects/$projectId/doe'
-    | '/o/$organizationSlug/planification/projects/$projectId/missions'
-    | '/o/$organizationSlug/planification/projects/$projectId/settings'
+    | '/o/$organizationSlug/projet/$projectId/doe/preview'
     | '/o/$organizationSlug/hr/team/$memberId'
-    | '/o/$organizationSlug/planification/projects/$projectId/doe/preview'
   id:
     | '__root__'
     | '/_app'
@@ -1012,13 +1058,15 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/hr/rights'
     | '/_app/o/$organizationSlug/hr/work-time'
     | '/_app/o/$organizationSlug/planification/board'
-    | '/_app/o/$organizationSlug/planification/doe-models'
     | '/_app/o/$organizationSlug/planification/does'
     | '/_app/o/$organizationSlug/planification/project-templates'
     | '/_app/o/$organizationSlug/planning/calendar'
     | '/_app/o/$organizationSlug/planning/project-templates'
     | '/_app/o/$organizationSlug/planning/reports'
     | '/_app/o/$organizationSlug/planning/team'
+    | '/_app/o/$organizationSlug/projet/$projectId'
+    | '/_app/o/$organizationSlug/projet/doe-models'
+    | '/_app/o/$organizationSlug/projet/new'
     | '/_app/o/$organizationSlug/purchase/suppliers'
     | '/_app/o/$organizationSlug/support/integration'
     | '/_app/o/$organizationSlug/support/table'
@@ -1028,6 +1076,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/hr/'
     | '/_app/o/$organizationSlug/planification/'
     | '/_app/o/$organizationSlug/planning/'
+    | '/_app/o/$organizationSlug/projet/'
     | '/_app/o/$organizationSlug/purchase/'
     | '/_app/o/$organizationSlug/support/'
     | '/_app/o/$organizationSlug/automatisation/$workflowId/executions'
@@ -1042,13 +1091,16 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/crm/quotes/new'
     | '/_app/o/$organizationSlug/hr/absences/new'
     | '/_app/o/$organizationSlug/hr/extra/new'
-    | '/_app/o/$organizationSlug/planification/doe-models_/$modelId'
+    | '/_app/o/$organizationSlug/planification/doe-models/$modelId'
     | '/_app/o/$organizationSlug/planification/maintenance/contracts'
     | '/_app/o/$organizationSlug/planification/maintenance/recap'
     | '/_app/o/$organizationSlug/planification/maintenance/validation'
-    | '/_app/o/$organizationSlug/planification/projects/$projectId'
-    | '/_app/o/$organizationSlug/planification/projects/new'
+    | '/_app/o/$organizationSlug/planification/projects/$'
     | '/_app/o/$organizationSlug/planning/projects/$projectId'
+    | '/_app/o/$organizationSlug/projet/$projectId_/doe'
+    | '/_app/o/$organizationSlug/projet/$projectId_/missions'
+    | '/_app/o/$organizationSlug/projet/$projectId_/settings'
+    | '/_app/o/$organizationSlug/projet/doe-models_/$modelId'
     | '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
     | '/_app/o/$organizationSlug/support/tickets/$ticketId'
     | '/_app/o/$organizationSlug/automatisation/collections/'
@@ -1060,6 +1112,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/hr/absences/'
     | '/_app/o/$organizationSlug/hr/extra/'
     | '/_app/o/$organizationSlug/hr/team/'
+    | '/_app/o/$organizationSlug/planification/doe-models/'
     | '/_app/o/$organizationSlug/planification/maintenance/'
     | '/_app/o/$organizationSlug/planification/projects/'
     | '/_app/o/$organizationSlug/planning/projects/'
@@ -1067,11 +1120,8 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/automatisation/$workflowId/executions/$runId'
     | '/_app/o/$organizationSlug/crm/quotes/$quoteId/handover'
     | '/_app/o/$organizationSlug/hr/team/$memberId/work-time'
-    | '/_app/o/$organizationSlug/planification/projects/$projectId_/doe'
-    | '/_app/o/$organizationSlug/planification/projects/$projectId_/missions'
-    | '/_app/o/$organizationSlug/planification/projects/$projectId_/settings'
+    | '/_app/o/$organizationSlug/projet/$projectId_/doe_/preview'
     | '/_app/o/$organizationSlug/hr/team/$memberId/'
-    | '/_app/o/$organizationSlug/planification/projects/$projectId_/doe_/preview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1158,6 +1208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPurchaseIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/projet/': {
+      id: '/_app/o/$organizationSlug/projet/'
+      path: '/projet'
+      fullPath: '/o/$organizationSlug/projet/'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/planning/': {
       id: '/_app/o/$organizationSlug/planning/'
       path: '/planning'
@@ -1221,6 +1278,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPurchaseSuppliersRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/projet/new': {
+      id: '/_app/o/$organizationSlug/projet/new'
+      path: '/projet/new'
+      fullPath: '/o/$organizationSlug/projet/new'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetNewRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/projet/doe-models': {
+      id: '/_app/o/$organizationSlug/projet/doe-models'
+      path: '/projet/doe-models'
+      fullPath: '/o/$organizationSlug/projet/doe-models'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetDoeModelsRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/projet/$projectId': {
+      id: '/_app/o/$organizationSlug/projet/$projectId'
+      path: '/projet/$projectId'
+      fullPath: '/o/$organizationSlug/projet/$projectId'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetProjectIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/planning/team': {
       id: '/_app/o/$organizationSlug/planning/team'
       path: '/planning/team'
@@ -1261,13 +1339,6 @@ declare module '@tanstack/react-router' {
       path: '/planification/does'
       fullPath: '/o/$organizationSlug/planification/does'
       preLoaderRoute: typeof AppOOrganizationSlugPlanificationDoesRouteImport
-      parentRoute: typeof AppOOrganizationSlugRoute
-    }
-    '/_app/o/$organizationSlug/planification/doe-models': {
-      id: '/_app/o/$organizationSlug/planification/doe-models'
-      path: '/planification/doe-models'
-      fullPath: '/o/$organizationSlug/planification/doe-models'
-      preLoaderRoute: typeof AppOOrganizationSlugPlanificationDoeModelsRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/planification/board': {
@@ -1382,6 +1453,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPlanificationMaintenanceIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/planification/doe-models/': {
+      id: '/_app/o/$organizationSlug/planification/doe-models/'
+      path: '/planification/doe-models'
+      fullPath: '/o/$organizationSlug/planification/doe-models/'
+      preLoaderRoute: typeof AppOOrganizationSlugPlanificationDoeModelsIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/hr/team/': {
       id: '/_app/o/$organizationSlug/hr/team/'
       path: '/hr/team'
@@ -1459,6 +1537,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/projet/doe-models_/$modelId': {
+      id: '/_app/o/$organizationSlug/projet/doe-models_/$modelId'
+      path: '/projet/doe-models/$modelId'
+      fullPath: '/o/$organizationSlug/projet/doe-models/$modelId'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetDoeModelsModelIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/projet/$projectId_/settings': {
+      id: '/_app/o/$organizationSlug/projet/$projectId_/settings'
+      path: '/projet/$projectId/settings'
+      fullPath: '/o/$organizationSlug/projet/$projectId/settings'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetProjectIdSettingsRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/projet/$projectId_/missions': {
+      id: '/_app/o/$organizationSlug/projet/$projectId_/missions'
+      path: '/projet/$projectId/missions'
+      fullPath: '/o/$organizationSlug/projet/$projectId/missions'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetProjectIdMissionsRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/projet/$projectId_/doe': {
+      id: '/_app/o/$organizationSlug/projet/$projectId_/doe'
+      path: '/projet/$projectId/doe'
+      fullPath: '/o/$organizationSlug/projet/$projectId/doe'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetProjectIdDoeRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/planning/projects/$projectId': {
       id: '/_app/o/$organizationSlug/planning/projects/$projectId'
       path: '/planning/projects/$projectId'
@@ -1466,18 +1572,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPlanningProjectsProjectIdRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
-    '/_app/o/$organizationSlug/planification/projects/new': {
-      id: '/_app/o/$organizationSlug/planification/projects/new'
-      path: '/planification/projects/new'
-      fullPath: '/o/$organizationSlug/planification/projects/new'
-      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectsNewRouteImport
-      parentRoute: typeof AppOOrganizationSlugRoute
-    }
-    '/_app/o/$organizationSlug/planification/projects/$projectId': {
-      id: '/_app/o/$organizationSlug/planification/projects/$projectId'
-      path: '/planification/projects/$projectId'
-      fullPath: '/o/$organizationSlug/planification/projects/$projectId'
-      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdRouteImport
+    '/_app/o/$organizationSlug/planification/projects/$': {
+      id: '/_app/o/$organizationSlug/planification/projects/$'
+      path: '/planification/projects/$'
+      fullPath: '/o/$organizationSlug/planification/projects/$'
+      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectsSplatRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/planification/maintenance/validation': {
@@ -1501,8 +1600,8 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPlanificationMaintenanceContractsRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
-    '/_app/o/$organizationSlug/planification/doe-models_/$modelId': {
-      id: '/_app/o/$organizationSlug/planification/doe-models_/$modelId'
+    '/_app/o/$organizationSlug/planification/doe-models/$modelId': {
+      id: '/_app/o/$organizationSlug/planification/doe-models/$modelId'
       path: '/planification/doe-models/$modelId'
       fullPath: '/o/$organizationSlug/planification/doe-models/$modelId'
       preLoaderRoute: typeof AppOOrganizationSlugPlanificationDoeModelsModelIdRouteImport
@@ -1599,25 +1698,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugHrTeamMemberIdIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
-    '/_app/o/$organizationSlug/planification/projects/$projectId_/settings': {
-      id: '/_app/o/$organizationSlug/planification/projects/$projectId_/settings'
-      path: '/planification/projects/$projectId/settings'
-      fullPath: '/o/$organizationSlug/planification/projects/$projectId/settings'
-      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRouteImport
-      parentRoute: typeof AppOOrganizationSlugRoute
-    }
-    '/_app/o/$organizationSlug/planification/projects/$projectId_/missions': {
-      id: '/_app/o/$organizationSlug/planification/projects/$projectId_/missions'
-      path: '/planification/projects/$projectId/missions'
-      fullPath: '/o/$organizationSlug/planification/projects/$projectId/missions'
-      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRouteImport
-      parentRoute: typeof AppOOrganizationSlugRoute
-    }
-    '/_app/o/$organizationSlug/planification/projects/$projectId_/doe': {
-      id: '/_app/o/$organizationSlug/planification/projects/$projectId_/doe'
-      path: '/planification/projects/$projectId/doe'
-      fullPath: '/o/$organizationSlug/planification/projects/$projectId/doe'
-      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoeRouteImport
+    '/_app/o/$organizationSlug/projet/$projectId_/doe_/preview': {
+      id: '/_app/o/$organizationSlug/projet/$projectId_/doe_/preview'
+      path: '/projet/$projectId/doe/preview'
+      fullPath: '/o/$organizationSlug/projet/$projectId/doe/preview'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetProjectIdDoePreviewRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/hr/team/$memberId/work-time': {
@@ -1640,13 +1725,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/o/$organizationSlug/automatisation/$workflowId/executions/$runId'
       preLoaderRoute: typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRouteImport
       parentRoute: typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRoute
-    }
-    '/_app/o/$organizationSlug/planification/projects/$projectId_/doe_/preview': {
-      id: '/_app/o/$organizationSlug/planification/projects/$projectId_/doe_/preview'
-      path: '/planification/projects/$projectId/doe/preview'
-      fullPath: '/o/$organizationSlug/planification/projects/$projectId/doe/preview'
-      preLoaderRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRouteImport
-      parentRoute: typeof AppOOrganizationSlugRoute
     }
   }
 }
@@ -1729,13 +1807,15 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugHrRightsRoute: typeof AppOOrganizationSlugHrRightsRoute
   AppOOrganizationSlugHrWorkTimeRoute: typeof AppOOrganizationSlugHrWorkTimeRoute
   AppOOrganizationSlugPlanificationBoardRoute: typeof AppOOrganizationSlugPlanificationBoardRoute
-  AppOOrganizationSlugPlanificationDoeModelsRoute: typeof AppOOrganizationSlugPlanificationDoeModelsRoute
   AppOOrganizationSlugPlanificationDoesRoute: typeof AppOOrganizationSlugPlanificationDoesRoute
   AppOOrganizationSlugPlanificationProjectTemplatesRoute: typeof AppOOrganizationSlugPlanificationProjectTemplatesRoute
   AppOOrganizationSlugPlanningCalendarRoute: typeof AppOOrganizationSlugPlanningCalendarRoute
   AppOOrganizationSlugPlanningProjectTemplatesRoute: typeof AppOOrganizationSlugPlanningProjectTemplatesRoute
   AppOOrganizationSlugPlanningReportsRoute: typeof AppOOrganizationSlugPlanningReportsRoute
   AppOOrganizationSlugPlanningTeamRoute: typeof AppOOrganizationSlugPlanningTeamRoute
+  AppOOrganizationSlugProjetProjectIdRoute: typeof AppOOrganizationSlugProjetProjectIdRoute
+  AppOOrganizationSlugProjetDoeModelsRoute: typeof AppOOrganizationSlugProjetDoeModelsRoute
+  AppOOrganizationSlugProjetNewRoute: typeof AppOOrganizationSlugProjetNewRoute
   AppOOrganizationSlugPurchaseSuppliersRoute: typeof AppOOrganizationSlugPurchaseSuppliersRoute
   AppOOrganizationSlugSupportIntegrationRoute: typeof AppOOrganizationSlugSupportIntegrationRoute
   AppOOrganizationSlugSupportTableRoute: typeof AppOOrganizationSlugSupportTableRoute
@@ -1744,6 +1824,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugHrIndexRoute: typeof AppOOrganizationSlugHrIndexRoute
   AppOOrganizationSlugPlanificationIndexRoute: typeof AppOOrganizationSlugPlanificationIndexRoute
   AppOOrganizationSlugPlanningIndexRoute: typeof AppOOrganizationSlugPlanningIndexRoute
+  AppOOrganizationSlugProjetIndexRoute: typeof AppOOrganizationSlugProjetIndexRoute
   AppOOrganizationSlugPurchaseIndexRoute: typeof AppOOrganizationSlugPurchaseIndexRoute
   AppOOrganizationSlugSupportIndexRoute: typeof AppOOrganizationSlugSupportIndexRoute
   AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute: typeof AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute
@@ -1761,9 +1842,12 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugPlanificationMaintenanceContractsRoute: typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   AppOOrganizationSlugPlanificationMaintenanceRecapRoute: typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
   AppOOrganizationSlugPlanificationMaintenanceValidationRoute: typeof AppOOrganizationSlugPlanificationMaintenanceValidationRoute
-  AppOOrganizationSlugPlanificationProjectsProjectIdRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdRoute
-  AppOOrganizationSlugPlanificationProjectsNewRoute: typeof AppOOrganizationSlugPlanificationProjectsNewRoute
+  AppOOrganizationSlugPlanificationProjectsSplatRoute: typeof AppOOrganizationSlugPlanificationProjectsSplatRoute
   AppOOrganizationSlugPlanningProjectsProjectIdRoute: typeof AppOOrganizationSlugPlanningProjectsProjectIdRoute
+  AppOOrganizationSlugProjetProjectIdDoeRoute: typeof AppOOrganizationSlugProjetProjectIdDoeRoute
+  AppOOrganizationSlugProjetProjectIdMissionsRoute: typeof AppOOrganizationSlugProjetProjectIdMissionsRoute
+  AppOOrganizationSlugProjetProjectIdSettingsRoute: typeof AppOOrganizationSlugProjetProjectIdSettingsRoute
+  AppOOrganizationSlugProjetDoeModelsModelIdRoute: typeof AppOOrganizationSlugProjetDoeModelsModelIdRoute
   AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
   AppOOrganizationSlugSupportTicketsTicketIdRoute: typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
   AppOOrganizationSlugAutomatisationCollectionsIndexRoute: typeof AppOOrganizationSlugAutomatisationCollectionsIndexRoute
@@ -1775,16 +1859,14 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugHrAbsencesIndexRoute: typeof AppOOrganizationSlugHrAbsencesIndexRoute
   AppOOrganizationSlugHrExtraIndexRoute: typeof AppOOrganizationSlugHrExtraIndexRoute
   AppOOrganizationSlugHrTeamIndexRoute: typeof AppOOrganizationSlugHrTeamIndexRoute
+  AppOOrganizationSlugPlanificationDoeModelsIndexRoute: typeof AppOOrganizationSlugPlanificationDoeModelsIndexRoute
   AppOOrganizationSlugPlanificationMaintenanceIndexRoute: typeof AppOOrganizationSlugPlanificationMaintenanceIndexRoute
   AppOOrganizationSlugPlanificationProjectsIndexRoute: typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   AppOOrganizationSlugPlanningProjectsIndexRoute: typeof AppOOrganizationSlugPlanningProjectsIndexRoute
   AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
   AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute: typeof AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute
-  AppOOrganizationSlugPlanificationProjectsProjectIdDoeRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoeRoute
-  AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRoute
-  AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRoute
+  AppOOrganizationSlugProjetProjectIdDoePreviewRoute: typeof AppOOrganizationSlugProjetProjectIdDoePreviewRoute
   AppOOrganizationSlugHrTeamMemberIdIndexRoute: typeof AppOOrganizationSlugHrTeamMemberIdIndexRoute
-  AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRoute: typeof AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRoute
 }
 
 const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
@@ -1806,8 +1888,6 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugHrWorkTimeRoute: AppOOrganizationSlugHrWorkTimeRoute,
   AppOOrganizationSlugPlanificationBoardRoute:
     AppOOrganizationSlugPlanificationBoardRoute,
-  AppOOrganizationSlugPlanificationDoeModelsRoute:
-    AppOOrganizationSlugPlanificationDoeModelsRoute,
   AppOOrganizationSlugPlanificationDoesRoute:
     AppOOrganizationSlugPlanificationDoesRoute,
   AppOOrganizationSlugPlanificationProjectTemplatesRoute:
@@ -1819,6 +1899,11 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugPlanningReportsRoute:
     AppOOrganizationSlugPlanningReportsRoute,
   AppOOrganizationSlugPlanningTeamRoute: AppOOrganizationSlugPlanningTeamRoute,
+  AppOOrganizationSlugProjetProjectIdRoute:
+    AppOOrganizationSlugProjetProjectIdRoute,
+  AppOOrganizationSlugProjetDoeModelsRoute:
+    AppOOrganizationSlugProjetDoeModelsRoute,
+  AppOOrganizationSlugProjetNewRoute: AppOOrganizationSlugProjetNewRoute,
   AppOOrganizationSlugPurchaseSuppliersRoute:
     AppOOrganizationSlugPurchaseSuppliersRoute,
   AppOOrganizationSlugSupportIntegrationRoute:
@@ -1832,6 +1917,7 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugPlanificationIndexRoute,
   AppOOrganizationSlugPlanningIndexRoute:
     AppOOrganizationSlugPlanningIndexRoute,
+  AppOOrganizationSlugProjetIndexRoute: AppOOrganizationSlugProjetIndexRoute,
   AppOOrganizationSlugPurchaseIndexRoute:
     AppOOrganizationSlugPurchaseIndexRoute,
   AppOOrganizationSlugSupportIndexRoute: AppOOrganizationSlugSupportIndexRoute,
@@ -1863,12 +1949,18 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugPlanificationMaintenanceRecapRoute,
   AppOOrganizationSlugPlanificationMaintenanceValidationRoute:
     AppOOrganizationSlugPlanificationMaintenanceValidationRoute,
-  AppOOrganizationSlugPlanificationProjectsProjectIdRoute:
-    AppOOrganizationSlugPlanificationProjectsProjectIdRoute,
-  AppOOrganizationSlugPlanificationProjectsNewRoute:
-    AppOOrganizationSlugPlanificationProjectsNewRoute,
+  AppOOrganizationSlugPlanificationProjectsSplatRoute:
+    AppOOrganizationSlugPlanificationProjectsSplatRoute,
   AppOOrganizationSlugPlanningProjectsProjectIdRoute:
     AppOOrganizationSlugPlanningProjectsProjectIdRoute,
+  AppOOrganizationSlugProjetProjectIdDoeRoute:
+    AppOOrganizationSlugProjetProjectIdDoeRoute,
+  AppOOrganizationSlugProjetProjectIdMissionsRoute:
+    AppOOrganizationSlugProjetProjectIdMissionsRoute,
+  AppOOrganizationSlugProjetProjectIdSettingsRoute:
+    AppOOrganizationSlugProjetProjectIdSettingsRoute,
+  AppOOrganizationSlugProjetDoeModelsModelIdRoute:
+    AppOOrganizationSlugProjetDoeModelsModelIdRoute,
   AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute:
     AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute,
   AppOOrganizationSlugSupportTicketsTicketIdRoute:
@@ -1889,6 +1981,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugHrAbsencesIndexRoute,
   AppOOrganizationSlugHrExtraIndexRoute: AppOOrganizationSlugHrExtraIndexRoute,
   AppOOrganizationSlugHrTeamIndexRoute: AppOOrganizationSlugHrTeamIndexRoute,
+  AppOOrganizationSlugPlanificationDoeModelsIndexRoute:
+    AppOOrganizationSlugPlanificationDoeModelsIndexRoute,
   AppOOrganizationSlugPlanificationMaintenanceIndexRoute:
     AppOOrganizationSlugPlanificationMaintenanceIndexRoute,
   AppOOrganizationSlugPlanificationProjectsIndexRoute:
@@ -1899,16 +1993,10 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute,
   AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute:
     AppOOrganizationSlugHrTeamMemberIdWorkTimeRoute,
-  AppOOrganizationSlugPlanificationProjectsProjectIdDoeRoute:
-    AppOOrganizationSlugPlanificationProjectsProjectIdDoeRoute,
-  AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRoute:
-    AppOOrganizationSlugPlanificationProjectsProjectIdMissionsRoute,
-  AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRoute:
-    AppOOrganizationSlugPlanificationProjectsProjectIdSettingsRoute,
+  AppOOrganizationSlugProjetProjectIdDoePreviewRoute:
+    AppOOrganizationSlugProjetProjectIdDoePreviewRoute,
   AppOOrganizationSlugHrTeamMemberIdIndexRoute:
     AppOOrganizationSlugHrTeamMemberIdIndexRoute,
-  AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRoute:
-    AppOOrganizationSlugPlanificationProjectsProjectIdDoePreviewRoute,
 }
 
 const AppOOrganizationSlugRouteWithChildren =

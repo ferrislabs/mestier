@@ -105,7 +105,7 @@ function CreateDoeForm({
 				<div className="grid gap-3 rounded-md border border-dashed p-4 text-[13px]">
 					<p>{noTargetMessage}</p>
 					<Link
-						to={buildOrgPath(organizationSlug, '/planification/projects/new')}
+						to={buildOrgPath(organizationSlug, '/projet/new')}
 						onClick={onClose}
 						className={buttonVariants({
 							variant: 'outline',
