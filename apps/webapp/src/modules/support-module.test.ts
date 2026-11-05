@@ -11,10 +11,14 @@ describe('support module', () => {
 		expect(supportModule?.requiredPermission).toBe('VIEW_SUPPORT')
 	})
 
-	it('holds one Tickets section gated on VIEW_SUPPORT', () => {
-		expect(supportModule?.sections).toHaveLength(1)
-		expect(supportModule?.sections[0].label).toBe('Tickets')
-		expect(supportModule?.sections[0].requiredPermission).toBe('VIEW_SUPPORT')
+	it('holds the Tickets and Intégration API sections, both gated on VIEW_SUPPORT', () => {
+		expect(supportModule?.sections.map((section) => section.label)).toEqual([
+			'Tickets',
+			'Intégration API',
+		])
+		for (const section of supportModule?.sections ?? []) {
+			expect(section.requiredPermission).toBe('VIEW_SUPPORT')
+		}
 	})
 
 	it('offers the kanban and the table as the tabs of that section', () => {
