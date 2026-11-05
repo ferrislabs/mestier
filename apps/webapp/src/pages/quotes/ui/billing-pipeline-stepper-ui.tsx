@@ -32,24 +32,37 @@ const LABEL_TONE_BY_STATE: Record<BillingPipelineStep['state'], string> = {
 
 interface BillingPipelineStepperUiProps {
 	steps: BillingPipelineStep[]
+	orientation?: 'horizontal' | 'vertical'
 }
 
 /** Pure horizontal stepper for a quote's billing progress. No hooks, no
  * fetch — every step is already resolved by `computeBillingPipelineSteps`. */
 export function BillingPipelineStepperUi({
 	steps,
+	orientation = 'horizontal',
 }: BillingPipelineStepperUiProps) {
+	const vertical = orientation === 'vertical'
 	return (
-		<ol className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-0">
+		<ol
+			className={cn(
+				'flex flex-col',
+				vertical ? 'gap-3' : 'gap-4 sm:flex-row sm:items-start sm:gap-0',
+			)}
+		>
 			{steps.map((step, index) => {
 				const Icon = ICON_BY_STATE[step.state]
 				const isLast = index === steps.length - 1
 				return (
 					<li
 						key={step.id}
-						className="flex flex-1 items-start gap-3 sm:flex-col sm:items-stretch sm:gap-2"
+						className={cn(
+							'flex flex-1 gap-3',
+							vertical
+								? 'items-center'
+								: 'items-start sm:flex-col sm:items-stretch sm:gap-2',
+						)}
 					>
-						<div className="flex items-center sm:w-full">
+						<div className={cn('flex items-center', !vertical && 'sm:w-full')}>
 							<span
 								className={cn(
 									'flex size-7 shrink-0 items-center justify-center rounded-full border-2',
@@ -58,7 +71,7 @@ export function BillingPipelineStepperUi({
 							>
 								<Icon className="size-4" />
 							</span>
-							{!isLast ? (
+							{!isLast && !vertical ? (
 								<span
 									className={cn(
 										'hidden h-0.5 flex-1 sm:ml-2 sm:block',

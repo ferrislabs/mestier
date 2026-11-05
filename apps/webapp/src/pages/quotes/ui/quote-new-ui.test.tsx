@@ -8,6 +8,12 @@ import { wrapWithPermissions } from '#/test/with-permissions'
 import { emptyQuoteLine, type QuoteFormValues } from '../types'
 import { QuoteNewUI } from './quote-new-ui'
 
+class ResizeObserverStub {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+globalThis.ResizeObserver ??= ResizeObserverStub
 Element.prototype.scrollIntoView ??= () => {}
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
@@ -21,6 +27,7 @@ function organization(overrides: Partial<Organization> = {}): Organization {
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
 		field_clock_enabled: false,
+		mcp_enabled: false,
 		vat_on_debits: false,
 		missing_legal_identity_fields: [],
 		...overrides,
@@ -78,29 +85,37 @@ function baseProps() {
 		vatEnabled: false,
 		onChange: vi.fn(),
 		onLineChange: vi.fn(),
-		onSelectCatalogItem: vi.fn(),
-		onAddLine: vi.fn(),
+		onAddLine: vi.fn(() => 'line-2'),
+		onAddCatalogItem: vi.fn(() => 'line-2'),
+		onMoveLine: vi.fn(),
+		onDuplicateLine: vi.fn(() => 'line-2'),
 		onRemoveLine: vi.fn(),
 		onUploadLinePhoto: vi.fn(),
 		onSubmit: vi.fn(),
 	}
 }
 
-describe('QuoteNewUI', () => {
-	it('shows the form empty: no customer selected, no title yet', async () => {
-		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(<QuoteNewUI {...props} />, {
-				permissions: ['MANAGE_QUOTES'],
-				organization: props.organization,
-			}),
-		)
+async function renderUi(
+	props: ReturnType<typeof baseProps>,
+	permissions: string[] = ['MANAGE_QUOTES'],
+) {
+	return renderWithRouter(
+		wrapWithPermissions(<QuoteNewUI {...props} />, {
+			permissions,
+			organization: props.organization,
+		}),
+	)
+}
 
-		expect(screen.getByText('Sélectionner un client')).toBeDefined()
+describe('QuoteNewUI', () => {
+	it('shows the form empty: no customer selected, no object yet', async () => {
+		await renderUi(baseProps())
+
+		expect(screen.getByText('Choisir un client')).toBeDefined()
 		expect(
 			(
 				screen.getByPlaceholderText(
-					'Ex. Rénovation salle de bain',
+					'Remplacement de 4 fenêtres',
 				) as HTMLInputElement
 			).value,
 		).toBe('')
@@ -108,37 +123,22 @@ describe('QuoteNewUI', () => {
 
 	it('selects a customer from the list and reports the choice', async () => {
 		const user = userEvent.setup()
-		const onChange = vi.fn()
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(<QuoteNewUI {...props} onChange={onChange} />, {
-				permissions: ['MANAGE_QUOTES'],
-				organization: props.organization,
-			}),
-		)
+		await renderUi(props)
 
-		await user.click(
-			screen.getByText('Sélectionner un client').closest('button') as Element,
-		)
-		await user.click(screen.getByRole('option', { name: 'Menuiserie Dupont' }))
+		await user.click(screen.getByRole('combobox', { name: /^Client/ }))
+		await user.click(screen.getByRole('option', { name: /Menuiserie Dupont/ }))
 
-		expect(onChange).toHaveBeenCalledWith({ customerId: 'customer-1' })
+		expect(props.onChange).toHaveBeenCalledWith({ customerId: 'customer-1' })
 	})
 
 	it('shows the customer and its billing address once set on the form', async () => {
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(
-				<QuoteNewUI
-					{...props}
-					values={values({
-						customerId: 'customer-1',
-						customerContextId: 'context-1',
-					})}
-				/>,
-				{ permissions: ['MANAGE_QUOTES'], organization: props.organization },
-			),
-		)
+		props.values = values({
+			customerId: 'customer-1',
+			customerContextId: 'context-1',
+		})
+		await renderUi(props)
 
 		expect(
 			screen.getByText('Menuiserie Dupont', { selector: 'span' }),
@@ -146,51 +146,76 @@ describe('QuoteNewUI', () => {
 		expect(screen.getByText('5 rue des Forges')).toBeDefined()
 	})
 
-	it('types into the title field and reports what was typed', async () => {
+	it('types into the object field and reports what was typed', async () => {
 		const user = userEvent.setup()
-		const onChange = vi.fn()
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(<QuoteNewUI {...props} onChange={onChange} />, {
-				permissions: ['MANAGE_QUOTES'],
-				organization: props.organization,
-			}),
-		)
+		await renderUi(props)
 
 		await user.type(
-			screen.getByPlaceholderText('Ex. Rénovation salle de bain'),
+			screen.getByPlaceholderText('Remplacement de 4 fenêtres'),
 			'x',
 		)
 
-		expect(onChange).toHaveBeenCalledWith({ title: 'x' })
+		expect(props.onChange).toHaveBeenCalledWith({ title: 'x' })
+	})
+
+	it('explains what is missing instead of submitting an incomplete quote', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await renderUi(props)
+
+		await user.click(screen.getByRole('button', { name: 'Créer le devis' }))
+
+		expect(props.onSubmit).not.toHaveBeenCalled()
+		expect(screen.getByText('Choisis un client.')).toBeDefined()
+		expect(screen.getByText('L’objet du devis est obligatoire.')).toBeDefined()
+	})
+
+	it('submits a complete quote', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		props.values = values({
+			title: 'Salle de bain',
+			customerId: 'customer-1',
+			customerContextId: 'context-1',
+			lines: [{ ...emptyQuoteLine(), label: 'Pose', unitPrice: '10' }],
+		})
+		await renderUi(props)
+
+		await user.click(screen.getByRole('button', { name: 'Créer le devis' }))
+
+		expect(props.onSubmit).toHaveBeenCalledTimes(1)
 	})
 
 	it('hides the submit button when the caller lacks MANAGE_QUOTES', async () => {
-		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(<QuoteNewUI {...props} />, {
-				permissions: [],
-				organization: props.organization,
-			}),
-		)
+		await renderUi(baseProps(), [])
 
 		expect(
-			screen.getByPlaceholderText('Ex. Rénovation salle de bain'),
+			screen.getByPlaceholderText('Remplacement de 4 fenêtres'),
 		).toBeDefined()
 		expect(screen.queryByRole('button', { name: 'Créer le devis' })).toBeNull()
 	})
 
 	it('shows a notice when the organization has no customer yet', async () => {
 		const props = baseProps()
-		await renderWithRouter(
-			wrapWithPermissions(<QuoteNewUI {...props} customers={[]} />, {
-				permissions: ['MANAGE_QUOTES'],
-				organization: props.organization,
-			}),
-		)
+		props.customers = []
+		await renderUi(props)
 
 		expect(
 			screen.getByText('Aucun client n’existe encore dans cette organisation.'),
 		).toBeDefined()
+	})
+
+	it('estimates the totals from the lines', async () => {
+		const props = baseProps()
+		props.values = values({
+			lines: [
+				{ ...emptyQuoteLine(), label: 'Pose', quantity: '2', unitPrice: '10' },
+			],
+		})
+		await renderUi(props)
+
+		expect(screen.getAllByText('20,00 €').length).toBeGreaterThan(0)
+		expect(screen.getByText('Estimation, non enregistrée')).toBeDefined()
 	})
 })

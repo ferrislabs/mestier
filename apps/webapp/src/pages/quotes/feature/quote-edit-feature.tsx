@@ -1,8 +1,5 @@
-import { Link, useNavigate } from '@tanstack/react-router'
-import { AlertCircle, Loader2 } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { Button } from '#/components/ui/button'
-import { PageShell, SectionCard } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { type CatalogItem, useCatalogItems } from '#/hooks/use-catalog-items'
 import {
@@ -10,6 +7,7 @@ import {
 	useCustomers,
 	useUploadFile,
 } from '#/hooks/use-customers'
+import { useFileUrls } from '#/hooks/use-file-url'
 import {
 	useInvoicesByProject,
 	useProjectBillingSummary,
@@ -19,21 +17,42 @@ import { useProjects } from '#/hooks/use-projects'
 import {
 	type Quote,
 	type QuoteStatus,
+	useCreateQuote,
 	useDeleteQuote,
 	useQuote,
 	useUpdateQuote,
 } from '#/hooks/use-quotes'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
+import { downloadAuthenticatedFile } from '#/lib/download-file'
 import { buildOrgPath } from '#/modules/org-path'
+import { invoiceKindLabel } from '#/pages/invoices/types'
 import { computeBillingPipelineSteps } from '#/pages/quotes/lib/billing-pipeline'
+import {
+	duplicateItem,
+	moveItem,
+	newLineId,
+} from '#/pages/quotes/lib/doc-lines'
+import { isValidQuoteLine } from '#/pages/quotes/lib/new-quote-form'
+import {
+	buildQuoteHistory,
+	buildQuotePaper,
+	previewQuoteTotals,
+	savedQuoteTotals,
+} from '#/pages/quotes/lib/quote-document'
+import {
+	copyQuoteLine,
+	lineFromCatalogItem,
+} from '#/pages/quotes/lib/quote-lines'
 import {
 	centsToEuros,
 	emptyQuoteLine,
 	eurosToCents,
+	formatCents,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
 	quoteLineTotalCents,
 } from '#/pages/quotes/types'
+import { DetailError, DetailLoading } from '#/pages/quotes/ui/doc/detail-shell'
 import { QuoteEditUI } from '#/pages/quotes/ui/quote-edit-ui'
 
 interface QuoteEditFeatureProps {
@@ -43,13 +62,15 @@ interface QuoteEditFeatureProps {
 export function QuoteEditFeature({ quoteId }: QuoteEditFeatureProps) {
 	const quote = useQuote(quoteId)
 
-	if (quote.isLoading) return <QuoteEditLoading />
+	if (quote.isLoading) return <DetailLoading label="Chargement du devis…" />
 
 	if (quote.isError) {
 		return (
-			<QuoteEditError
+			<DetailError
 				title="Impossible de charger le devis"
 				message={quote.error.message}
+				backTo="/crm/quotes"
+				backLabel="Retour aux devis"
 				onRetry={() => void quote.refetch()}
 			/>
 		)
@@ -57,9 +78,11 @@ export function QuoteEditFeature({ quoteId }: QuoteEditFeatureProps) {
 
 	if (!quote.data?.data) {
 		return (
-			<QuoteEditError
+			<DetailError
 				title="Devis introuvable"
 				message="Aucun devis ne correspond à cet identifiant."
+				backTo="/crm/quotes"
+				backLabel="Retour aux devis"
 			/>
 		)
 	}
@@ -82,6 +105,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	)
 	const missingLegalIdentityFields =
 		activeOrganization.missing_legal_identity_fields
+	const vatEnabled = activeOrganization.vat_status?.type === 'subject'
 	const canViewInvoices = useHasPermission('VIEW_INVOICES')
 	const projectFromQuote = useProjects(quote.organization_id, {
 		quoteId: quote.id,
@@ -107,16 +131,36 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	const visibleBillingSteps = canViewInvoices
 		? billingSteps
 		: billingSteps.slice(0, 2)
+	const linkedInvoices = canViewInvoices
+		? (projectInvoices.data?.data ?? [])
+				.filter((invoice) => invoice.kind !== 'CREDIT_NOTE')
+				.map((invoice) => ({
+					id: invoice.id,
+					label: invoice.number ?? 'Brouillon',
+					kindLabel: invoiceKindLabel(invoice.kind),
+					status: invoice.status,
+					dueAt: invoice.due_at ?? null,
+					grossCents: invoice.gross_cents,
+				}))
+		: []
 	const updateQuote = useUpdateQuote()
+	const createQuote = useCreateQuote(quote.organization_id)
 	const deleteQuote = useDeleteQuote(quote.organization_id)
 	const uploadFile = useUploadFile()
-	const [status, setStatus] = useState<QuoteStatus>(quote.status)
 	const [values, setValues] = useState<QuoteFormValues>(() =>
 		quoteToForm(quote, catalogItems),
 	)
+	const [isDownloading, setIsDownloading] = useState(false)
+	const [downloadError, setDownloadError] = useState<string | null>(null)
 	const customerContexts = useCustomerContexts(
 		values.customerId,
 		Boolean(values.customerId),
+	)
+	const photoPreviews = useFileUrls(
+		values.lines.flatMap((line) => line.photoKeys),
+	)
+	const photoUrls = Object.fromEntries(
+		photoPreviews.map((preview) => [preview.key, preview.url]),
 	)
 
 	// Reloads the form when the server's quote changes, and only then. The
@@ -129,7 +173,6 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		if (loadedVersion.current === version) return
 		loadedVersion.current = version
 
-		setStatus(quote.status)
 		setValues(quoteToForm(quote, catalogItems))
 	}, [catalogItems, quote])
 
@@ -147,40 +190,33 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		})
 	}
 
-	const selectCatalogItem = (index: number, catalogItemId: string) => {
-		const catalogItem = catalogItems.find((item) => item.id === catalogItemId)
-		if (!catalogItem) {
-			updateLine(index, {
-				catalogItemId: '',
-				catalogItemType: 'CUSTOM',
-				serviceRateId: '',
-			})
-			return
-		}
-
-		updateLine(index, {
-			catalogItemId: catalogItem.id,
-			catalogItemType: catalogItem.type,
-			serviceRateId: catalogItem.type === 'SERVICE' ? catalogItem.sourceId : '',
-			label: catalogItem.label,
-			unit: catalogItem.unit,
-			unitPrice: centsToEuros(catalogItem.unitPriceCents),
-			vatRateBp:
-				catalogItem.defaultVatRateBp !== null
-					? String(catalogItem.defaultVatRateBp)
-					: values.lines[index]?.vatRateBp || '',
-			notes: catalogItem.description || values.lines[index]?.notes || '',
-		})
+	const appendLine = (line: QuoteLineFormValues) => {
+		setValues((current) => ({ ...current, lines: [...current.lines, line] }))
+		return line.clientId
 	}
 
-	const addLine = () => {
+	const addLine = () =>
+		appendLine(emptyQuoteLine(newLineId(values.lines.length)))
+
+	const addCatalogItem = (item: CatalogItem) =>
+		appendLine(lineFromCatalogItem(item, newLineId(values.lines.length)))
+
+	const moveLine = (index: number, delta: -1 | 1) => {
 		setValues((current) => ({
 			...current,
-			lines: [
-				...current.lines,
-				emptyQuoteLine(`line-${Date.now()}-${current.lines.length}`),
-			],
+			lines: moveItem(current.lines, index, delta),
 		}))
+	}
+
+	const duplicateLine = (index: number) => {
+		const clientId = newLineId(values.lines.length)
+		setValues((current) => ({
+			...current,
+			lines: duplicateItem(current.lines, index, (line) =>
+				copyQuoteLine(line, clientId),
+			),
+		}))
+		return clientId
 	}
 
 	const removeLine = (index: number) => {
@@ -210,31 +246,38 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		Boolean(values.title.trim()) &&
 		Boolean(values.customerId) &&
 		Boolean(values.customerContextId) &&
-		values.lines.every((line) => {
-			const quantity = Number(line.quantity.replace(',', '.'))
-			return (
-				line.label.trim() &&
-				Number.isFinite(quantity) &&
-				quantity > 0 &&
-				line.unitPrice.trim() &&
-				eurosToCents(line.unitPrice) >= 0
-			)
-		})
+		values.lines.every(isValidQuoteLine)
 
 	// Sending is refused server-side when the organization's legal identity
 	// is incomplete (#310, enforced again on export by #314) — caught here
-	// too, independently of whatever status happens to be locally selected,
-	// so the warning and the disabled "Envoyer" button show up before a
+	// too, so the warning and the disabled "Envoyer" button show up before a
 	// request is even attempted.
 	const identityIncompleteForSending =
 		!quote.reference && missingLegalIdentityFields.length > 0
-	const blockedBySentIdentity =
-		status === 'SENT' && identityIncompleteForSending
 
-	const canSave = hasValidContent && !blockedBySentIdentity
+	const canSave = hasValidContent
 	const canSend = hasValidContent && !identityIncompleteForSending
 
-	const totalCents = values.lines.reduce(
+	const savedValues = quoteToForm(quote, catalogItems)
+	const isDirty = JSON.stringify(values) !== JSON.stringify(savedValues)
+	const previewTotals = previewQuoteTotals(values, vatEnabled)
+	const totals = isDirty ? previewTotals : savedQuoteTotals(quote)
+	const savedCustomer = customers.data?.data.find(
+		(customer) => customer.id === quote.customer_id,
+	)
+	const paper = buildQuotePaper({
+		quote,
+		values,
+		customer: customers.data?.data.find(
+			(customer) => customer.id === values.customerId,
+		),
+		context: customerContexts.data?.data.find(
+			(context) => context.id === values.customerContextId,
+		),
+		organization: activeOrganization,
+		totals,
+	})
+	const totalLines = values.lines.reduce(
 		(sum, line) => sum + quoteLineTotalCents(line),
 		0,
 	)
@@ -244,44 +287,35 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		catalog.serviceRates.error?.message ??
 		catalog.products.error?.message ??
 		updateQuote.error?.message ??
+		createQuote.error?.message ??
 		deleteQuote.error?.message ??
 		uploadFile.error?.message ??
-		null
+		downloadError
 
 	const buildUpdateBody = (targetStatus: QuoteStatus) => ({
 		title: values.title.trim(),
 		customer_id: values.customerId,
 		customer_context_id: values.customerContextId,
 		status: targetStatus,
-		lines: values.lines.map((line) => ({
-			service_rate_id: line.serviceRateId || null,
-			label: line.label.trim(),
-			quantity: line.quantity.replace(',', '.').trim(),
-			unit: line.unit,
-			unit_price_cents: eurosToCents(line.unitPrice),
-			vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
-			notes: line.notes.trim() || null,
-			photo_keys: line.photoKeys,
-		})),
+		lines: quoteLineBodies(values.lines),
 	})
 
 	const saveQuote = async () => {
 		if (!canSave) return
 		await updateQuote.mutateAsync({
 			path: { quote_id: quote.id },
-			body: buildUpdateBody(status),
+			body: buildUpdateBody(quote.status),
 		})
 	}
 
-	// Built on the literal `'SENT'` rather than on `setStatus` + `saveQuote`:
-	// `setStatus` only lands on the *next* render, so a save fired right
-	// after it would still read the old `status` from this render's closure.
-	const sendQuote = async () => {
-		if (!canSend) return
-		setStatus('SENT')
+	// Every transition goes through the same write as a save, on the literal
+	// target: the form is saved with it, as the old inline status select did.
+	const transitionTo = async (target: QuoteStatus) => {
+		if (!hasValidContent) return
+		if (target === 'SENT' && identityIncompleteForSending) return
 		await updateQuote.mutateAsync({
 			path: { quote_id: quote.id },
-			body: buildUpdateBody('SENT'),
+			body: buildUpdateBody(target),
 		})
 	}
 
@@ -292,14 +326,50 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		await navigate({ to: buildOrgPath(activeOrganization.slug, '/crm/quotes') })
 	}
 
+	const duplicateCurrentQuote = async () => {
+		if (!hasValidContent) return
+		const created = await createQuote.mutateAsync({
+			path: { organization_id: quote.organization_id },
+			body: {
+				title: values.title.trim(),
+				customer_id: values.customerId,
+				customer_context_id: values.customerContextId,
+				lines: quoteLineBodies(values.lines),
+			},
+		})
+		await navigate({
+			to: buildOrgPath(activeOrganization.slug, '/crm/quotes/$quoteId'),
+			params: { quoteId: created.data.id },
+		})
+	}
+
+	const downloadPdf = async () => {
+		setDownloadError(null)
+		setIsDownloading(true)
+		try {
+			await downloadAuthenticatedFile(
+				`/api/v1/quotes/${quote.id}/pdf`,
+				`${quote.reference ?? quote.id}.pdf`,
+			)
+		} catch (err) {
+			setDownloadError(
+				err instanceof Error ? err.message : 'Téléchargement impossible',
+			)
+		} finally {
+			setIsDownloading(false)
+		}
+	}
+
 	return (
 		<QuoteEditUI
 			quote={quote}
 			values={values}
-			status={status}
+			customer={savedCustomer}
 			customers={customers.data?.data ?? []}
 			customerContexts={customerContexts.data?.data ?? []}
 			catalogItems={catalogItems}
+			photoUrls={photoUrls}
+			vatEnabled={vatEnabled}
 			customUnits={(catalog.customUnits.data?.data ?? []).map(
 				(customUnit) => customUnit.code,
 			)}
@@ -312,9 +382,17 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 			}
 			isSaving={updateQuote.isPending}
 			isDeleting={deleteQuote.isPending}
+			isDuplicating={createQuote.isPending}
 			isUploading={uploadFile.isPending}
+			isDownloading={isDownloading}
 			billingSteps={visibleBillingSteps}
-			totalCents={totalCents}
+			linkedInvoices={linkedInvoices}
+			paper={paper}
+			history={buildQuoteHistory(quote)}
+			totals={savedQuoteTotals(quote)}
+			unsavedNotice={
+				isDirty ? `Aperçu non enregistré : ${formatCents(totalLines)} HT` : null
+			}
 			canSave={canSave}
 			canSend={canSend}
 			identityIncompleteForSending={identityIncompleteForSending}
@@ -325,17 +403,33 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 				}
 				updateValues(patch)
 			}}
-			onStatusChange={setStatus}
 			onLineChange={updateLine}
-			onSelectCatalogItem={selectCatalogItem}
 			onAddLine={addLine}
+			onAddCatalogItem={addCatalogItem}
+			onMoveLine={moveLine}
+			onDuplicateLine={duplicateLine}
 			onRemoveLine={removeLine}
 			onUploadLinePhoto={uploadLinePhoto}
 			onSave={saveQuote}
-			onSend={sendQuote}
+			onTransition={transitionTo}
 			onDelete={deleteCurrentQuote}
+			onDuplicate={duplicateCurrentQuote}
+			onDownloadPdf={downloadPdf}
 		/>
 	)
+}
+
+function quoteLineBodies(lines: QuoteLineFormValues[]) {
+	return lines.map((line) => ({
+		service_rate_id: line.serviceRateId || null,
+		label: line.label.trim(),
+		quantity: line.quantity.replace(',', '.').trim(),
+		unit: line.unit,
+		unit_price_cents: eurosToCents(line.unitPrice),
+		vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
+		notes: line.notes.trim() || null,
+		photo_keys: line.photoKeys,
+	}))
 }
 
 function quoteToForm(
@@ -371,51 +465,4 @@ function quoteToForm(
 		customerContextId: quote.customer_context_id,
 		lines: lines.length ? lines : [emptyQuoteLine()],
 	}
-}
-
-function QuoteEditLoading() {
-	return (
-		<PageShell>
-			<SectionCard className="flex min-h-72 items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
-				<Loader2 className="size-5 animate-spin" />
-				Chargement du devis…
-			</SectionCard>
-		</PageShell>
-	)
-}
-
-function QuoteEditError({
-	title,
-	message,
-	onRetry,
-}: {
-	title: string
-	message: string
-	onRetry?: () => void
-}) {
-	const { activeOrganization } = useActiveOrganization()
-
-	return (
-		<PageShell>
-			<SectionCard className="flex min-h-72 flex-col items-center justify-center gap-3 p-8 text-center">
-				<AlertCircle className="size-6 text-destructive" />
-				<div>
-					<p className="font-semibold">{title}</p>
-					<p className="mt-1 text-sm text-muted-foreground">{message}</p>
-				</div>
-				<div className="flex gap-2">
-					<Button asChild variant="outline">
-						<Link to={buildOrgPath(activeOrganization.slug, '/crm/quotes')}>
-							Retour aux devis
-						</Link>
-					</Button>
-					{onRetry ? (
-						<Button type="button" onClick={onRetry}>
-							Réessayer
-						</Button>
-					) : null}
-				</div>
-			</SectionCard>
-		</PageShell>
-	)
 }

@@ -6,13 +6,12 @@ import {
 } from '#/components/data-view'
 
 export const INVOICE_FILTER_OPTIONS: DataViewOption[] = [
-	{ value: 'all', label: 'Tous les statuts' },
-	{ value: 'DRAFT', label: 'Brouillons' },
-	{ value: 'ISSUED', label: 'Émises' },
-	{ value: 'PARTIALLY_PAID', label: 'Partiellement payées' },
-	{ value: 'PAID', label: 'Payées' },
-	{ value: 'CANCELLED', label: 'Annulées' },
-	{ value: 'OVERDUE', label: 'En retard' },
+	{ value: 'all', label: 'Toutes' },
+	{ value: 'unpaid', label: 'À payer' },
+	{ value: 'overdue', label: 'En retard' },
+	{ value: 'paid', label: 'Payées' },
+	{ value: 'draft', label: 'Brouillons' },
+	{ value: 'cancelled', label: 'Annulées' },
 ]
 
 export const DEFAULT_INVOICE_LIST_STATE: DataViewUrlState = {

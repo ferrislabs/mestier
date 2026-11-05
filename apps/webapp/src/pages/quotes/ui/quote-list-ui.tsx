@@ -1,20 +1,13 @@
 import { Link } from '@tanstack/react-router'
-import {
-	AlertCircle,
-	FileText,
-	MoreHorizontal,
-	Plus,
-	RefreshCw,
-	Trash2,
-} from 'lucide-react'
+import { MoreHorizontal, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
 	DataViewPagination,
 	type DataViewSortOption,
-	DataViewToolbar,
 	getPaginationViewModel,
 	useDataView,
 } from '#/components/data-view'
+import { EmptyState } from '#/components/empty-state'
 import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
@@ -34,17 +27,27 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
+import { Input } from '#/components/ui/input'
+import { PageHeader, PageShell } from '#/components/ui/surface'
 import {
-	MetricCard,
-	PageHeader,
-	PageShell,
-	SectionCard,
-	SectionHeader,
-	StatusBadge,
-} from '#/components/ui/surface'
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '#/components/ui/table'
+import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import type { Customer } from '#/hooks/use-customers'
 import type { PaginationMetadata, Quote } from '#/hooks/use-quotes'
+import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import {
+	formatDocumentDate,
+	normalizeText,
+	plural,
+} from '#/pages/quotes/lib/doc-format'
+import { computeQuoteTiles } from '#/pages/quotes/lib/quote-tiles'
 import {
 	getQuoteListUrlState,
 	isValidQuoteFilter,
@@ -55,15 +58,16 @@ import {
 import {
 	customerDisplayName,
 	formatCents,
-	formatDate,
 	quoteReferenceLabel,
 	quoteStatusLabel,
 } from '#/pages/quotes/types'
+import { QuoteStatusBadge } from '#/pages/quotes/ui/doc/badges'
+import { AccountLink } from '#/pages/quotes/ui/doc/doc-links'
+import { Money, StatTile } from '#/pages/quotes/ui/doc/primitives'
 
 interface QuoteListUIProps {
 	organizationSlug: string
 	organizationName: string
-	/** Needed to search a quote by customer name and to label each row. */
 	customers: Customer[]
 	quotes: Quote[]
 	quotesPagination?: PaginationMetadata | null
@@ -78,13 +82,34 @@ interface QuoteListUIProps {
 	onQuoteDelete?: (quote: Quote) => Promise<unknown>
 }
 
+const STATUS_TOGGLES = QUOTE_FILTER_OPTIONS.map((option) => ({
+	value: option.value,
+	label: option.value === 'all' ? 'Tous' : quoteStatusLabel(option.value),
+}))
+
+function Dash() {
+	return (
+		<span className="text-muted-foreground">
+			<span aria-hidden>—</span>
+			<span className="sr-only">Non renseigné</span>
+		</span>
+	)
+}
+
+function summaryOf(total: number, waiting: number): string {
+	if (total === 0) return 'Aucun devis pour l’instant'
+	const count = `${total} ${plural(total, 'devis', 'devis')}`
+	return waiting === 0
+		? `${count}, aucun en attente de réponse`
+		: `${count}, ${waiting} en attente de réponse`
+}
+
 /**
  * The quote list. Composing a quote lives on its own page, reached by the
  * "Nouveau devis" link, so nothing here knows about the form.
  */
 export function QuoteListUI({
 	organizationSlug,
-	organizationName,
 	customers,
 	quotes,
 	quotesPagination,
@@ -111,16 +136,7 @@ export function QuoteListUI({
 			? initialQuoteListState.sort
 			: 'created-desc',
 	)
-	const stats = useMemo(() => {
-		return {
-			total: quotesPagination?.total ?? quotes.length,
-			draft: quotes.filter((quote) => quote.status === 'DRAFT').length,
-			accepted: quotes.filter((quote) => quote.status === 'ACCEPTED').length,
-			revenue: quotes
-				.filter((quote) => quote.status === 'ACCEPTED')
-				.reduce((sum, quote) => sum + quote.gross_cents, 0),
-		}
-	}, [quotes, quotesPagination])
+	const tiles = useMemo(() => computeQuoteTiles(quotes), [quotes])
 
 	const quotePaginationView = getPaginationViewModel(
 		quotesPagination,
@@ -183,6 +199,9 @@ export function QuoteListUI({
 	const isDeletingSelectedQuote =
 		Boolean(quoteToDelete) && deletingQuoteId === quoteToDelete?.id
 
+	const filtered = quoteSearch.trim() !== '' || quoteStatusFilter !== 'all'
+	const noQuotes = (quotesPagination?.total ?? quotes.length) === 0 && !filtered
+
 	const resetQuoteDataView = () => {
 		setQuoteSearch('')
 		setQuoteStatusFilter('all')
@@ -190,253 +209,317 @@ export function QuoteListUI({
 		onQuotePageChange(1)
 	}
 
+	const toggleStatus = (status: string) => {
+		setQuoteStatusFilter(quoteStatusFilter === status ? 'all' : status)
+		onQuotePageChange(1)
+	}
+
+	const newQuoteLink = (
+		<Button size="sm" asChild>
+			<Link to={buildOrgPath(organizationSlug, '/crm/quotes/new')}>
+				<Plus aria-hidden /> Nouveau devis
+			</Link>
+		</Button>
+	)
+
 	return (
-		<PageShell>
+		<PageShell className="max-w-7xl gap-0">
 			<PageHeader
-				eyebrow={organizationName}
+				className="mb-6"
 				title="Devis"
-				description="Pilotez les devis de l'organisation et créez un nouveau document quand le contexte client est prêt."
+				description={summaryOf(
+					quotesPagination?.total ?? quotes.length,
+					tiles.pending.count,
+				)}
 				actions={
 					<div className="flex items-center gap-2">
-						<Button
-							type="button"
-							variant="outline"
-							onClick={onRetry}
-							disabled={!onRetry}
-						>
-							<RefreshCw />
-							Actualiser
-						</Button>
-						<RequirePermission permission="MANAGE_QUOTES">
-							<Button asChild type="button">
-								<Link to={buildOrgPath(organizationSlug, '/crm/quotes/new')}>
-									<Plus />
-									Nouveau devis
-								</Link>
+						{onRetry ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={onRetry}
+							>
+								<RefreshCw aria-hidden /> Actualiser
 							</Button>
+						) : null}
+						<RequirePermission permission="MANAGE_QUOTES">
+							{newQuoteLink}
 						</RequirePermission>
 					</div>
 				}
 			/>
 
 			{error ? (
-				<SectionCard className="flex flex-col gap-3 border-destructive/30 bg-destructive-soft p-5 text-destructive sm:flex-row sm:items-center sm:justify-between">
-					<div className="flex items-center gap-3">
-						<AlertCircle className="size-5 shrink-0" />
-						<p className="text-sm font-medium">{error}</p>
-					</div>
+				<div
+					role="alert"
+					className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-state-alert/30 bg-state-alert/8 px-4 py-3 text-sm"
+				>
+					<p className="font-medium text-state-alert">{error}</p>
 					{onRetry ? (
 						<Button onClick={onRetry} variant="outline" size="sm">
 							Réessayer
 						</Button>
 					) : null}
-				</SectionCard>
+				</div>
 			) : null}
 
-			<section>
-				<p className="mb-3 text-sm text-muted-foreground">Suivi des devis</p>
-				<div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-					<MetricCard
-						label="Total devis"
-						value={stats.total}
-						hint="Tous statuts"
-					/>
-					<MetricCard
-						label="Brouillons"
-						value={stats.draft}
-						hint="À finaliser"
-					/>
-					<MetricCard
-						label="Acceptés"
-						value={stats.accepted}
-						hint="Validés client"
-					/>
-					<MetricCard
-						label="Accepté TTC"
-						value={formatCents(stats.revenue)}
-						hint="D'après l'API"
-					/>
-				</div>
+			<section
+				aria-label="Chiffres clés des devis"
+				className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+			>
+				<StatTile
+					label="En attente de réponse"
+					value={tiles.pending.count}
+					hint={
+						<>
+							<Money cents={tiles.pending.netCents} /> HT
+						</>
+					}
+					pressed={quoteStatusFilter === 'SENT'}
+					onClick={() => toggleStatus('SENT')}
+				/>
+				<StatTile
+					label="Acceptés"
+					value={tiles.accepted.count}
+					hint={
+						<>
+							<Money cents={tiles.accepted.netCents} /> HT
+						</>
+					}
+					pressed={quoteStatusFilter === 'ACCEPTED'}
+					onClick={() => toggleStatus('ACCEPTED')}
+				/>
+				<StatTile
+					label="Taux d’acceptation"
+					value={
+						tiles.acceptanceRate === null ? (
+							<>
+								<span aria-hidden>—</span>
+								<span className="sr-only">Aucun devis tranché</span>
+							</>
+						) : (
+							`${tiles.acceptanceRate} %`
+						)
+					}
+					hint="Acceptés sur les devis tranchés"
+				/>
+				<StatTile
+					label="Brouillons"
+					value={tiles.drafts}
+					hint="À finaliser et envoyer"
+					pressed={quoteStatusFilter === 'DRAFT'}
+					onClick={() => toggleStatus('DRAFT')}
+				/>
 			</section>
 
-			<SectionCard>
-				<SectionHeader
-					title={`Devis (${quoteDataView.filteredCount})`}
-					description="Liste paginée des devis de l'organisation, avec recherche, statut et tri."
-				/>
-				<div className="border-b p-4">
-					<DataViewToolbar
-						search={quoteSearch}
-						onSearchChange={(value) => {
-							setQuoteSearch(value)
+			<div className="mb-3 flex flex-wrap items-center gap-2">
+				<div className="relative w-full max-w-xs">
+					<Search
+						className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+						aria-hidden
+					/>
+					<Input
+						type="search"
+						value={quoteSearch}
+						onChange={(event) => {
+							setQuoteSearch(event.target.value)
 							onQuotePageChange(1)
 						}}
-						searchPlaceholder="Rechercher un devis…"
-						filter={quoteStatusFilter}
-						onFilterChange={(value) => {
-							setQuoteStatusFilter(value)
-							onQuotePageChange(1)
-						}}
-						filterOptions={QUOTE_FILTER_OPTIONS}
-						sort={quoteSort}
-						onSortChange={(value) => {
-							setQuoteSort(value)
-							onQuotePageChange(1)
-						}}
-						sortOptions={QUOTE_SORT_OPTIONS}
-						filteredCount={quoteDataView.filteredCount}
-						totalCount={quoteDataView.totalCount}
-						onReset={resetQuoteDataView}
+						placeholder="Rechercher un numéro, un objet, un client"
+						aria-label="Rechercher un devis"
+						className="h-8 bg-card pl-8"
 					/>
 				</div>
-				{isLoading ? (
-					<p className="p-5 text-sm text-muted-foreground">Chargement…</p>
-				) : quoteDataView.rows.length === 0 ? (
-					<div className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
-						<div className="flex size-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-							<FileText className="size-5" />
-						</div>
-						<div>
-							<p className="font-medium">
-								{quoteSearch || quoteStatusFilter !== 'all'
-									? 'Aucun devis ne correspond aux critères.'
-									: 'Aucun devis enregistré.'}
-							</p>
-							<p className="mt-1 text-sm text-muted-foreground">
-								Créez un devis depuis l'action principale pour alimenter cette
-								vue.
-							</p>
-						</div>
-						{quoteSearch || quoteStatusFilter !== 'all' ? (
-							<Button
-								type="button"
-								variant="outline"
-								onClick={resetQuoteDataView}
-							>
-								Réinitialiser la vue
+				<ToggleGroup
+					type="single"
+					variant="outline"
+					size="sm"
+					value={quoteStatusFilter}
+					onValueChange={(value) => {
+						if (isValidQuoteFilter(value)) {
+							setQuoteStatusFilter(value)
+							onQuotePageChange(1)
+						}
+					}}
+					aria-label="Filtrer par statut"
+					className="flex-wrap"
+				>
+					{STATUS_TOGGLES.map((status) => (
+						<ToggleGroupItem key={status.value} value={status.value}>
+							{status.label}
+						</ToggleGroupItem>
+					))}
+				</ToggleGroup>
+			</div>
+
+			{isLoading ? (
+				<div className="rounded-lg border bg-card px-6 py-12 text-center text-muted-foreground text-sm">
+					Chargement…
+				</div>
+			) : quoteDataView.rows.length === 0 ? (
+				<EmptyState
+					title={
+						noQuotes
+							? 'Aucun devis pour l’instant'
+							: 'Aucun devis ne correspond'
+					}
+					hint={
+						noQuotes
+							? 'Crée un devis pour un client.'
+							: 'Vérifie l’orthographe, le statut ou le client recherché.'
+					}
+				>
+					{noQuotes ? (
+						<RequirePermission permission="MANAGE_QUOTES">
+							{newQuoteLink}
+						</RequirePermission>
+					) : (
+						filtered && (
+							<Button variant="outline" size="sm" onClick={resetQuoteDataView}>
+								Réinitialiser les filtres
 							</Button>
-						) : (
-							<RequirePermission permission="MANAGE_QUOTES">
-								<Button asChild type="button">
-									<Link to={buildOrgPath(organizationSlug, '/crm/quotes/new')}>
-										<Plus />
-										Nouveau devis
-									</Link>
-								</Button>
-							</RequirePermission>
-						)}
-					</div>
-				) : (
-					<ul className="divide-y">
-						{quoteDataView.rows.map((quote) => {
-							const customer = customers.find((item) => {
-								return item.id === quote.customer_id
-							})
-
-							return (
-								<li key={quote.id} className="group relative">
-									<Link
-										to={buildOrgPath(organizationSlug, '/crm/quotes/$quoteId')}
-										params={{ quoteId: quote.id }}
-										className="grid gap-4 px-5 py-4 pr-14 transition hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-center"
+						)
+					)}
+				</EmptyState>
+			) : (
+				<div className="overflow-hidden rounded-lg border bg-card">
+					<Table>
+						<TableHeader>
+							<TableRow className="hover:bg-transparent">
+								<TableHead className="pl-4">Numéro</TableHead>
+								<TableHead>Objet</TableHead>
+								<TableHead>Client</TableHead>
+								<TableHead className="max-lg:hidden">Émission</TableHead>
+								<TableHead className="text-right">Total HT</TableHead>
+								<TableHead className="text-right max-md:hidden">
+									Total TTC
+								</TableHead>
+								<TableHead className="pr-4">Statut</TableHead>
+								{onQuoteDelete ? (
+									<TableHead className="w-10">
+										<span className="sr-only">Actions</span>
+									</TableHead>
+								) : null}
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{quoteDataView.rows.map((quote) => {
+								const customer = customers.find(
+									(item) => item.id === quote.customer_id,
+								)
+								return (
+									<TableRow
+										key={quote.id}
+										className="relative cursor-pointer focus-within:bg-muted/50"
 									>
-										<div className="flex min-w-0 items-center gap-4">
-											<div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-primary">
-												<FileText className="size-5" />
-											</div>
-											<div className="min-w-0">
-												<div className="flex min-w-0 items-center gap-2">
-													<p className="truncate font-semibold">
-														{quoteReferenceLabel(quote.reference)} ·{' '}
-														{quote.title}
-													</p>
-													<StatusBadge tone={statusTone(quote.status)}>
-														{quoteStatusLabel(quote.status)}
-													</StatusBadge>
-												</div>
-												<p className="mt-1 truncate text-xs text-muted-foreground">
-													{customer
-														? customerDisplayName(customer)
-														: 'Client inconnu'}
-												</p>
-											</div>
-										</div>
-
-										<div className="text-sm">
-											<p className="font-medium">
-												{quote.lines.length} ligne
-												{quote.lines.length > 1 ? 's' : ''}
-											</p>
-											<p className="mt-1 text-xs text-muted-foreground">
-												{formatDate(quote.created_at)}
-											</p>
-										</div>
-
-										<p className="text-lg font-bold sm:text-right">
-											{formatCents(quote.gross_cents)}
-										</p>
-									</Link>
-
-									{onQuoteDelete ? (
-										<div className="absolute right-3 top-1/2 z-20 -translate-y-1/2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-											<DropdownMenu>
-												<DropdownMenuTrigger asChild>
-													<Button
-														type="button"
-														variant="ghost"
-														size="icon-sm"
-														className="text-muted-foreground"
-														disabled={deletingQuoteId === quote.id}
-													>
-														<MoreHorizontal />
-														<span className="sr-only">Actions</span>
-													</Button>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align="end">
-													<DropdownMenuItem asChild>
-														<Link
-															to={buildOrgPath(
-																organizationSlug,
-																'/crm/quotes/$quoteId',
-															)}
-															params={{ quoteId: quote.id }}
-														>
-															Modifier
-														</Link>
-													</DropdownMenuItem>
-													<DropdownMenuSeparator />
-													<DropdownMenuItem
-														variant="destructive"
-														disabled={deletingQuoteId === quote.id}
-														onClick={() => setQuoteToDelete(quote)}
-													>
-														<Trash2 />
-														Supprimer
-													</DropdownMenuItem>
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</div>
-									) : null}
-								</li>
-							)
-						})}
-					</ul>
-				)}
-				{!isLoading ? (
-					<div className="border-t p-4">
-						<DataViewPagination
-							page={quoteDataView.page}
-							pageCount={quoteDataView.pageCount}
-							pageSize={quotePageSize}
-							from={quoteDataView.from}
-							to={quoteDataView.to}
-							totalCount={quoteDataView.totalCount}
-							onPageChange={onQuotePageChange}
-							onPageSizeChange={onQuotePageSizeChange}
-						/>
-					</div>
-				) : null}
-			</SectionCard>
+										<TableCell className="py-2.5 pl-4">
+											<Link
+												to={buildOrgPath(
+													organizationSlug,
+													'/crm/quotes/$quoteId',
+												)}
+												params={{ quoteId: quote.id }}
+												className={cn(
+													'whitespace-nowrap font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset',
+													!quote.reference && 'text-muted-foreground italic',
+												)}
+											>
+												{quote.reference ?? 'Brouillon'}
+											</Link>
+										</TableCell>
+										<TableCell className="max-w-56">
+											<span className="block truncate" title={quote.title}>
+												{quote.title || <Dash />}
+											</span>
+										</TableCell>
+										<TableCell className="max-w-44">
+											{customer ? (
+												<AccountLink
+													customerId={customer.id}
+													className="relative z-10 block truncate"
+												>
+													{customerDisplayName(customer)}
+												</AccountLink>
+											) : (
+												<Dash />
+											)}
+										</TableCell>
+										<TableCell className="whitespace-nowrap text-muted-foreground max-lg:hidden">
+											{formatDocumentDate(quote.created_at)}
+										</TableCell>
+										<TableCell className="text-right">
+											<Money cents={quote.net_cents} />
+										</TableCell>
+										<TableCell className="text-right max-md:hidden">
+											<Money cents={quote.gross_cents} />
+										</TableCell>
+										<TableCell className="pr-4">
+											<QuoteStatusBadge status={quote.status} />
+										</TableCell>
+										{onQuoteDelete ? (
+											<TableCell className="relative z-10 pr-2">
+												<RequirePermission permission="MANAGE_QUOTES">
+													<DropdownMenu>
+														<DropdownMenuTrigger asChild>
+															<Button
+																type="button"
+																variant="ghost"
+																size="icon-sm"
+																className="text-muted-foreground"
+																disabled={deletingQuoteId === quote.id}
+															>
+																<MoreHorizontal aria-hidden />
+																<span className="sr-only">Actions</span>
+															</Button>
+														</DropdownMenuTrigger>
+														<DropdownMenuContent align="end">
+															<DropdownMenuItem asChild>
+																<Link
+																	to={buildOrgPath(
+																		organizationSlug,
+																		'/crm/quotes/$quoteId',
+																	)}
+																	params={{ quoteId: quote.id }}
+																>
+																	Modifier
+																</Link>
+															</DropdownMenuItem>
+															<DropdownMenuSeparator />
+															<DropdownMenuItem
+																variant="destructive"
+																disabled={deletingQuoteId === quote.id}
+																onClick={() => setQuoteToDelete(quote)}
+															>
+																<Trash2 aria-hidden />
+																Supprimer
+															</DropdownMenuItem>
+														</DropdownMenuContent>
+													</DropdownMenu>
+												</RequirePermission>
+											</TableCell>
+										) : null}
+									</TableRow>
+								)
+							})}
+						</TableBody>
+					</Table>
+				</div>
+			)}
+			{!isLoading ? (
+				<div className="mt-3">
+					<DataViewPagination
+						page={quoteDataView.page}
+						pageCount={quoteDataView.pageCount}
+						pageSize={quotePageSize}
+						from={quoteDataView.from}
+						to={quoteDataView.to}
+						totalCount={quoteDataView.totalCount}
+						onPageChange={onQuotePageChange}
+						onPageSizeChange={onQuotePageSizeChange}
+					/>
+				</div>
+			) : null}
 
 			<AlertDialog
 				open={Boolean(quoteToDelete)}
@@ -449,7 +532,7 @@ export function QuoteListUI({
 						<AlertDialogTitle>Supprimer ce devis ?</AlertDialogTitle>
 						<AlertDialogDescription>
 							{quoteToDelete
-								? `Le devis ${quoteToDelete.reference} sera supprimé de la liste. Cette action est irréversible.`
+								? `Le devis ${quoteReferenceLabel(quoteToDelete.reference)} sera supprimé de la liste. Cette action est irréversible.`
 								: 'Ce devis sera supprimé de la liste. Cette action est irréversible.'}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
@@ -482,13 +565,6 @@ export function QuoteListUI({
 	)
 }
 
-function statusTone(status: Quote['status']) {
-	if (status === 'ACCEPTED') return 'success'
-	if (status === 'SENT') return 'brand'
-	if (status === 'DECLINED' || status === 'CANCELLED') return 'error'
-	return 'neutral'
-}
-
 const QUOTE_SORT_OPTIONS: DataViewSortOption<Quote>[] = [
 	{
 		value: 'created-desc',
@@ -519,15 +595,16 @@ function quoteMatchesSearch(
 ): boolean {
 	const customer = customers.find((item) => item.id === quote.customer_id)
 	const customerName = customer
-		? customerDisplayName(customer).toLowerCase()
+		? normalizeText(customerDisplayName(customer))
 		: ''
+	const wanted = normalizeText(query)
 	return (
-		quote.id.toLowerCase().includes(query) ||
-		(quote.reference?.toLowerCase().includes(query) ?? false) ||
-		quote.title.toLowerCase().includes(query) ||
-		quoteStatusLabel(quote.status).toLowerCase().includes(query) ||
-		formatCents(quote.gross_cents).toLowerCase().includes(query) ||
-		customerName.includes(query)
+		quote.id.toLowerCase().includes(wanted) ||
+		normalizeText(quote.reference ?? '').includes(wanted) ||
+		normalizeText(quote.title).includes(wanted) ||
+		normalizeText(quoteStatusLabel(quote.status)).includes(wanted) ||
+		formatCents(quote.gross_cents).toLowerCase().includes(wanted) ||
+		customerName.includes(wanted)
 	)
 }
 
@@ -538,16 +615,4 @@ function quoteMatchesStatusFilter(quote: Quote, filter: string): boolean {
 
 function dateValue(value: string): number {
 	return new Date(value).getTime()
-}
-
-export namespace QuoteListUI {
-	export function Loading() {
-		return (
-			<PageShell>
-				<SectionCard className="flex items-center justify-center p-12 text-sm text-muted-foreground">
-					Chargement…
-				</SectionCard>
-			</PageShell>
-		)
-	}
 }

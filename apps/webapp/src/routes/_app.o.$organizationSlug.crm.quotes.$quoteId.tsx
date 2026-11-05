@@ -9,5 +9,5 @@ export const Route = createFileRoute(
 
 function QuoteEditPage() {
 	const { quoteId } = Route.useParams()
-	return <QuoteEditFeature quoteId={quoteId} />
+	return <QuoteEditFeature key={quoteId} quoteId={quoteId} />
 }

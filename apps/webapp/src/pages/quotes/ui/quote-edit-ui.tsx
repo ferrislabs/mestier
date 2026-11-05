@@ -1,467 +1,368 @@
-import { Link } from '@tanstack/react-router'
-import {
-	AlertCircle,
-	ArrowLeft,
-	ArrowRightLeft,
-	FileText,
-	Loader2,
-	Send,
-	Trash2,
-} from 'lucide-react'
+import { Eye, Pencil } from 'lucide-react'
 import { useState } from 'react'
-import { RequirePermission } from '#/components/require-permission'
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-	AlertDialogTrigger,
-} from '#/components/ui/alert-dialog'
-import { Button } from '#/components/ui/button'
-import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
-import {
-	PageHeader,
-	PageShell,
-	SectionCard,
-	SectionHeader,
-} from '#/components/ui/surface'
+import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
-import { useFileUrls } from '#/hooks/use-file-url'
-import type { Quote, QuoteStatus } from '#/hooks/use-quotes'
+import type { InvoiceStatus } from '#/hooks/use-invoices'
+import type { Quote } from '#/hooks/use-quotes'
 import { buildOrgPath } from '#/modules/org-path'
+import { invoiceDisplayState } from '#/pages/invoices/types'
 import type { BillingPipelineStep } from '#/pages/quotes/lib/billing-pipeline'
+import { formatDocumentDate } from '#/pages/quotes/lib/doc-format'
+import { vatNoticeOf } from '#/pages/quotes/lib/paper-parties'
 import {
 	customerDisplayName,
-	formatCents,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
-	quoteReferenceLabel,
-	quoteStatusLabel,
 } from '#/pages/quotes/types'
-import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
 import { BillingPipelineStepperUi } from '#/pages/quotes/ui/billing-pipeline-stepper-ui'
-import { QuoteLinesTable } from '#/pages/quotes/ui/quote-lines-table'
-import { QuoteTotalsFooter } from '#/pages/quotes/ui/quote-totals-footer'
+import {
+	InvoiceStateBadge,
+	QuoteStatusBadge,
+} from '#/pages/quotes/ui/doc/badges'
+import {
+	BackLink,
+	DetailShell,
+	SideSection,
+} from '#/pages/quotes/ui/doc/detail-shell'
+import { AccountLink, InvoiceLink } from '#/pages/quotes/ui/doc/doc-links'
+import {
+	DocumentPaper,
+	type PaperDocument,
+} from '#/pages/quotes/ui/doc/document-paper'
+import {
+	type HistoryEntry,
+	HistoryList,
+} from '#/pages/quotes/ui/doc/history-list'
+import { LockBanner, Money } from '#/pages/quotes/ui/doc/primitives'
+import { type DocTotals, TotalsPanel } from '#/pages/quotes/ui/doc/totals-panel'
+import { QuoteActionsPanel } from '#/pages/quotes/ui/quote-actions-panel'
+import { QuoteEditForm } from '#/pages/quotes/ui/quote-edit-form'
 import { LEGAL_IDENTITY_FIELD_LABELS } from '#/pages/settings/types'
 
-export const QUOTE_STATUSES: QuoteStatus[] = [
-	'DRAFT',
-	'SENT',
-	'ACCEPTED',
-	'DECLINED',
-	'CANCELLED',
-]
+type Mode = 'edit' | 'preview'
+
+export interface LinkedInvoice {
+	id: string
+	label: string
+	kindLabel: string
+	status: InvoiceStatus
+	dueAt: string | null
+	grossCents: number
+}
 
 interface QuoteEditUIProps {
 	quote: Quote
 	values: QuoteFormValues
-	status: QuoteStatus
+	customer: Customer | undefined
 	customers: Customer[]
 	customerContexts: CustomerContext[]
 	catalogItems: CatalogItem[]
+	photoUrls: Record<string, string | undefined>
+	vatEnabled: boolean
 	customUnits: string[]
 	error: string | null
 	isLoading: boolean
 	isSaving: boolean
 	isDeleting: boolean
+	isDuplicating: boolean
 	isUploading: boolean
+	isDownloading: boolean
 	billingSteps: BillingPipelineStep[]
-	totalCents: number
+	linkedInvoices: LinkedInvoice[]
+	paper: PaperDocument
+	history: HistoryEntry[]
+	totals: DocTotals
+	unsavedNotice: string | null
 	canSave: boolean
 	canSend: boolean
 	identityIncompleteForSending: boolean
 	onChange: (patch: Partial<QuoteFormValues>) => void
-	onStatusChange: (status: QuoteStatus) => void
 	onLineChange: (index: number, patch: Partial<QuoteLineFormValues>) => void
-	onSelectCatalogItem: (index: number, catalogItemId: string) => void
-	onAddLine: () => void
+	onAddLine: () => string
+	onAddCatalogItem: (item: CatalogItem) => string
+	onMoveLine: (index: number, delta: -1 | 1) => void
+	onDuplicateLine: (index: number) => string
 	onRemoveLine: (index: number) => void
 	onUploadLinePhoto: (index: number, file: File) => Promise<void>
 	onSave: () => void
-	onSend: () => void
+	onTransition: (status: Quote['status']) => void
 	onDelete: () => void
+	onDuplicate: () => void
+	onDownloadPdf: () => void
 }
 
-/**
- * The quote composer for an existing quote, on the same classic
- * settings-form layout as `InvoiceNewUI`: an "Informations" card, a "Lignes"
- * card, and a sticky summary aside — rather than the click-to-edit paper
- * document the create screen still uses. This screen carries state a fresh
- * draft doesn't: a billing pipeline stepper, an inline status selector, a
- * legal-identity warning, and delete/send/"transform to project" actions.
- */
+function ModeToggle({
+	mode,
+	onChange,
+}: {
+	mode: Mode
+	onChange: (mode: Mode) => void
+}) {
+	return (
+		<ToggleGroup
+			type="single"
+			variant="outline"
+			size="sm"
+			value={mode}
+			onValueChange={(value) => {
+				if (value === 'edit' || value === 'preview') onChange(value)
+			}}
+			aria-label="Affichage du devis"
+		>
+			<ToggleGroupItem value="edit">
+				<Pencil aria-hidden /> Édition
+			</ToggleGroupItem>
+			<ToggleGroupItem value="preview">
+				<Eye aria-hidden /> Aperçu
+			</ToggleGroupItem>
+		</ToggleGroup>
+	)
+}
+
 export function QuoteEditUI({
 	quote,
 	values,
-	status,
+	customer,
 	customers,
 	customerContexts,
 	catalogItems,
+	photoUrls,
+	vatEnabled,
 	customUnits,
 	error,
 	isLoading,
 	isSaving,
 	isDeleting,
+	isDuplicating,
 	isUploading,
+	isDownloading,
 	billingSteps,
-	totalCents,
+	linkedInvoices,
+	paper,
+	history,
+	totals,
+	unsavedNotice,
 	canSave,
 	canSend,
 	identityIncompleteForSending,
 	onChange,
-	onStatusChange,
 	onLineChange,
-	onSelectCatalogItem,
 	onAddLine,
+	onAddCatalogItem,
+	onMoveLine,
+	onDuplicateLine,
 	onRemoveLine,
 	onUploadLinePhoto,
 	onSave,
-	onSend,
+	onTransition,
 	onDelete,
+	onDuplicate,
+	onDownloadPdf,
 }: QuoteEditUIProps) {
 	const { activeOrganization } = useActiveOrganization()
-	const vatEnabled = activeOrganization.vat_status?.type === 'subject'
+	const [mode, setMode] = useState<Mode>(
+		quote.status === 'DRAFT' ? 'edit' : 'preview',
+	)
+	const draft = quote.status === 'DRAFT'
+	const label = quote.reference ?? 'sans numéro'
 	const missingLegalIdentityFields =
 		activeOrganization.missing_legal_identity_fields
-	// Only one line open at a time, so a long quote stays readable. Opening on
-	// the first line matches the create form.
-	const [openLineId, setOpenLineId] = useState<string | null>(
-		values.lines[0]?.clientId ?? null,
-	)
-	const photoPreviews = useFileUrls(
-		values.lines.flatMap((line) => line.photoKeys),
-	)
-	const photoUrls = Object.fromEntries(
-		photoPreviews.map((preview) => [preview.key, preview.url]),
-	)
 
-	return (
-		<PageShell>
-			<PageHeader
-				eyebrow={quoteReferenceLabel(quote.reference)}
-				title={quote.title}
-				description="Visualisez et modifiez le contenu du devis."
-				actions={
-					<div className="flex flex-col gap-2 sm:flex-row">
-						<Button asChild variant="outline">
-							<Link to={buildOrgPath(activeOrganization.slug, '/crm/quotes')}>
-								<ArrowLeft />
-								Retour
-							</Link>
-						</Button>
-						{quote.status === 'ACCEPTED' ? (
-							<RequirePermission permission="MANAGE_QUOTES">
-								<Button asChild variant="outline">
-									<Link
-										to={buildOrgPath(
-											activeOrganization.slug,
-											`/crm/quotes/${quote.id}/handover`,
-										)}
+	const main = (
+		<>
+			<div className="grid gap-3">
+				<BackLink to="/crm/quotes" label="Devis" />
+				<div className="flex flex-wrap items-start justify-between gap-3">
+					<div className="min-w-0">
+						<div className="flex flex-wrap items-center gap-2.5">
+							<h1 className="font-semibold text-2xl tracking-tight">
+								{quote.reference
+									? `Devis ${quote.reference}`
+									: 'Brouillon de devis'}
+							</h1>
+							<QuoteStatusBadge status={quote.status} />
+						</div>
+						<p className="mt-1 text-muted-foreground text-sm">
+							{customer && (
+								<>
+									<AccountLink
+										customerId={customer.id}
+										className="font-medium text-foreground"
 									>
-										<ArrowRightLeft />
-										Transformer en projet
-									</Link>
-								</Button>
-							</RequirePermission>
-						) : null}
-						<RequirePermission permission="MANAGE_QUOTES">
-							<AlertDialog>
-								<AlertDialogTrigger asChild>
-									<Button
-										type="button"
-										variant="destructive"
-										disabled={isDeleting || isSaving}
-									>
-										{isDeleting ? (
-											<Loader2 className="animate-spin" />
-										) : (
-											<Trash2 />
-										)}
-										Supprimer
-									</Button>
-								</AlertDialogTrigger>
-								<AlertDialogContent>
-									<AlertDialogHeader>
-										<AlertDialogTitle>Supprimer ce devis ?</AlertDialogTitle>
-										<AlertDialogDescription>
-											Le devis {quoteReferenceLabel(quote.reference)} sera
-											supprimé de la liste. Cette action est irréversible.
-										</AlertDialogDescription>
-									</AlertDialogHeader>
-									<AlertDialogFooter>
-										<AlertDialogCancel disabled={isDeleting}>
-											Annuler
-										</AlertDialogCancel>
-										<AlertDialogAction
-											disabled={isDeleting}
-											className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
-											onClick={(event) => {
-												event.preventDefault()
-												void onDelete()
-											}}
-										>
-											{isDeleting ? (
-												<Loader2 className="animate-spin" />
-											) : (
-												<Trash2 />
-											)}
-											Supprimer
-										</AlertDialogAction>
-									</AlertDialogFooter>
-								</AlertDialogContent>
-							</AlertDialog>
-						</RequirePermission>
+										{customerDisplayName(customer)}
+									</AccountLink>
+									{quote.title && ' · '}
+								</>
+							)}
+							{quote.title}
+						</p>
 					</div>
-				}
-			/>
+					<ModeToggle mode={mode} onChange={setMode} />
+				</div>
+			</div>
 
 			{error ? (
-				<div className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+				<div
+					role="alert"
+					className="rounded-lg border border-state-alert/30 bg-state-alert/8 px-4 py-3 text-sm text-state-alert"
+				>
 					{error}
 				</div>
 			) : null}
 
 			{identityIncompleteForSending ? (
-				<div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-					<AlertCircle className="mt-0.5 size-4 shrink-0" />
+				<LockBanner tone="warn" title="Ce devis ne peut pas être envoyé">
 					<p>
-						Ce devis ne peut pas être envoyé : l'identité légale de
-						l'organisation est incomplète. Il manque{' '}
+						L’identité légale de l’organisation est incomplète. Il manque{' '}
 						{missingLegalIdentityFields
 							.map((field) => LEGAL_IDENTITY_FIELD_LABELS[field] ?? field)
 							.join(', ')}
 						.{' '}
 						<a
 							href={`${buildOrgPath(activeOrganization.slug, '/settings')}#organisation`}
-							className="font-medium underline underline-offset-2"
+							className="rounded-sm font-medium text-foreground underline underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
 						>
 							Compléter dans les paramètres
 						</a>
 					</p>
-				</div>
+				</LockBanner>
 			) : null}
 
-			<SectionCard className="border shadow-sm">
-				<div className="p-5 sm:p-6">
-					<BillingPipelineStepperUi steps={billingSteps} />
+			{mode === 'edit' ? (
+				<QuoteEditForm
+					organizationSlug={activeOrganization.slug}
+					idPrefix={`quote-${quote.id}`}
+					values={values}
+					customers={customers}
+					customerContexts={customerContexts}
+					catalogItems={catalogItems}
+					photoUrls={photoUrls}
+					vatEnabled={vatEnabled}
+					customUnits={customUnits}
+					isLoading={isLoading}
+					isUploading={isUploading}
+					onChange={onChange}
+					onLineChange={onLineChange}
+					onAddLine={onAddLine}
+					onAddCatalogItem={onAddCatalogItem}
+					onMoveLine={onMoveLine}
+					onDuplicateLine={onDuplicateLine}
+					onRemoveLine={onRemoveLine}
+					onUploadLinePhoto={onUploadLinePhoto}
+				/>
+			) : (
+				<div className="overflow-x-auto rounded-lg bg-muted/50 p-3 sm:p-6">
+					<DocumentPaper document={paper} />
 				</div>
-			</SectionCard>
-
-			<div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-				<div className="space-y-5">
-					<SectionCard>
-						<SectionHeader
-							title="Informations"
-							description="Statut, client et adresse de facturation."
-						/>
-						<div className="grid gap-4 p-5 md:grid-cols-2">
-							<FieldBlock label="Statut" htmlFor="quote-edit-status">
-								<Select
-									value={status}
-									onValueChange={(value) =>
-										onStatusChange(value as QuoteStatus)
-									}
-								>
-									<SelectTrigger id="quote-edit-status" className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{QUOTE_STATUSES.map((value) => (
-											<SelectItem key={value} value={value}>
-												{quoteStatusLabel(value)}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</FieldBlock>
-							<FieldBlock label="Client" htmlFor="quote-edit-customer">
-								<Select
-									value={values.customerId}
-									onValueChange={(customerId) => onChange({ customerId })}
-								>
-									<SelectTrigger id="quote-edit-customer" className="w-full">
-										<SelectValue placeholder="Sélectionner un client" />
-									</SelectTrigger>
-									<SelectContent>
-										{customers.map((customer) => (
-											<SelectItem key={customer.id} value={customer.id}>
-												{customerDisplayName(customer)}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</FieldBlock>
-							<FieldBlock
-								label="Adresse de facturation"
-								htmlFor="quote-edit-billing-address"
-							>
-								<BillingAddressField
-									id="quote-edit-billing-address"
-									value={values.customerContextId}
-									addresses={customerContexts}
-									hasCustomer={Boolean(values.customerId)}
-									isLoading={isLoading}
-									onChange={(customerContextId) =>
-										onChange({ customerContextId })
-									}
-								/>
-							</FieldBlock>
-							<FieldBlock label="Objet du devis" htmlFor="quote-edit-title">
-								<Input
-									id="quote-edit-title"
-									value={values.title}
-									onChange={(event) => onChange({ title: event.target.value })}
-									placeholder="Ex. Rénovation salle de bain"
-								/>
-							</FieldBlock>
-						</div>
-					</SectionCard>
-
-					<SectionCard>
-						<SectionHeader title={`Lignes (${values.lines.length})`} />
-						<QuoteLinesTable
-							lines={values.lines}
-							catalogItems={catalogItems}
-							photosByLine={Object.fromEntries(
-								values.lines.map((line) => [
-									line.clientId,
-									line.photoKeys.map((key) => ({ key, url: photoUrls[key] })),
-								]),
-							)}
-							isUploading={isUploading}
-							openLineId={openLineId}
-							vatEnabled={vatEnabled}
-							customUnits={customUnits}
-							onOpenLineChange={(clientId, open) =>
-								setOpenLineId(open ? clientId : null)
-							}
-							onLineChange={(clientId, patch) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								if (index !== -1) onLineChange(index, patch)
-							}}
-							onSelectCatalogItem={(clientId, catalogItemId) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								if (index !== -1) onSelectCatalogItem(index, catalogItemId)
-							}}
-							onRemoveLine={(clientId) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								if (index !== -1) onRemoveLine(index)
-							}}
-							onAddLine={onAddLine}
-							onUploadLinePhoto={(clientId, file) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								if (index !== -1) void onUploadLinePhoto(index, file)
-							}}
-							onRemoveLinePhoto={(clientId, key) => {
-								const index = values.lines.findIndex(
-									(line) => line.clientId === clientId,
-								)
-								const line = values.lines[index]
-								if (index === -1 || !line) return
-								onLineChange(index, {
-									photoKeys: line.photoKeys.filter(
-										(photoKey) => photoKey !== key,
-									),
-								})
-							}}
-						/>
-					</SectionCard>
-				</div>
-
-				<aside className="h-fit rounded-lg border bg-card p-5 shadow-sm xl:sticky xl:top-5">
-					<p className="text-sm font-semibold">Résumé</p>
-					{/* The quote's actual totals — read from what was last saved, never
-					    recomputed here (CLAUDE.md): the screen and the PDF must never be
-					    able to disagree. `totalCents` (from the in-memory draft) only
-					    surfaces as the small notice below when it disagrees with what
-					    is saved. */}
-					<QuoteTotalsFooter
-						netCents={quote.net_cents}
-						vatBreakdown={quote.vat_breakdown.map((line) => ({
-							rateBp: line.rate_bp,
-							vatCents: line.vat_cents,
-						}))}
-						grossCents={quote.gross_cents}
-						vatExemptionNotice={
-							quote.vat_breakdown.length === 0 &&
-							activeOrganization.vat_status?.type === 'not_subject'
-								? `TVA non applicable, ${activeOrganization.vat_status.basis}`
-								: null
-						}
-						notice={
-							totalCents !== quote.net_cents
-								? `Aperçu non enregistré : ${formatCents(totalCents)}`
-								: null
-						}
-					/>
-					<div className="mt-5 flex flex-col gap-2">
-						<RequirePermission permission="MANAGE_QUOTES">
-							<Button
-								type="button"
-								variant="outline"
-								className="w-full"
-								disabled={!canSave || isSaving || isDeleting}
-								onClick={onSave}
-							>
-								{isSaving ? <Loader2 className="animate-spin" /> : <FileText />}
-								Enregistrer
-							</Button>
-						</RequirePermission>
-						{quote.status === 'DRAFT' ? (
-							<RequirePermission permission="MANAGE_QUOTES">
-								<Button
-									type="button"
-									className="w-full"
-									disabled={!canSend || isSaving || isDeleting}
-									onClick={onSend}
-								>
-									{isSaving ? <Loader2 className="animate-spin" /> : <Send />}
-									Envoyer le devis
-								</Button>
-							</RequirePermission>
-						) : null}
-					</div>
-				</aside>
-			</div>
-		</PageShell>
+			)}
+		</>
 	)
-}
 
-function FieldBlock({
-	label,
-	htmlFor,
-	children,
-}: {
-	label: string
-	htmlFor: string
-	children: React.ReactNode
-}) {
+	const side = (
+		<>
+			<SideSection title="État">
+				<div className="grid gap-1.5">
+					<QuoteStatusBadge status={quote.status} />
+					<p className="text-muted-foreground text-sm">
+						{draft ? 'Le numéro est attribué à l’envoi.' : `Numéro ${label}`}
+					</p>
+					<p className="text-muted-foreground text-sm">
+						Créé le {formatDocumentDate(quote.created_at)}
+					</p>
+				</div>
+			</SideSection>
+			<SideSection title="Totaux">
+				<TotalsPanel
+					totals={totals}
+					vatNotice={
+						totals.vat.length === 0 ? vatNoticeOf(activeOrganization) : null
+					}
+					notice={unsavedNotice}
+				/>
+			</SideSection>
+			<SideSection title="Actions">
+				<QuoteActionsPanel
+					organizationSlug={activeOrganization.slug}
+					quoteId={quote.id}
+					status={quote.status}
+					label={label}
+					canSave={canSave}
+					canSend={canSend}
+					identityIncompleteForSending={identityIncompleteForSending}
+					isSaving={isSaving}
+					isDeleting={isDeleting}
+					isDuplicating={isDuplicating}
+					isDownloading={isDownloading}
+					onSave={onSave}
+					onTransition={onTransition}
+					onDelete={onDelete}
+					onDuplicate={onDuplicate}
+					onDownloadPdf={onDownloadPdf}
+				/>
+			</SideSection>
+			<SideSection title="Facturation">
+				<BillingPipelineStepperUi steps={billingSteps} orientation="vertical" />
+				{linkedInvoices.length > 0 && (
+					<div className="grid gap-1.5">
+						<p className="text-muted-foreground text-xs">Factures liées</p>
+						<ul className="grid divide-y rounded-md border">
+							{linkedInvoices.map((invoice) => (
+								<li
+									key={invoice.id}
+									className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-3 py-2 text-sm"
+								>
+									<span className="min-w-0 truncate">
+										<InvoiceLink invoiceId={invoice.id} className="font-medium">
+											{invoice.label}
+										</InvoiceLink>
+										<span className="ml-1.5 text-muted-foreground text-xs">
+											{invoice.kindLabel}
+										</span>
+									</span>
+									<Money cents={invoice.grossCents} className="text-right" />
+									<InvoiceStateBadge
+										state={invoiceDisplayState({
+											status: invoice.status,
+											due_at: invoice.dueAt,
+										})}
+									/>
+								</li>
+							))}
+						</ul>
+					</div>
+				)}
+			</SideSection>
+			<SideSection title="Liaisons">
+				<dl className="grid gap-2.5">
+					<div className="grid gap-0.5">
+						<dt className="text-muted-foreground text-xs">Client</dt>
+						<dd className="min-w-0 truncate text-sm">
+							{customer ? (
+								<AccountLink customerId={customer.id} className="font-medium">
+									{customerDisplayName(customer)}
+								</AccountLink>
+							) : (
+								<span className="text-muted-foreground">Client inconnu</span>
+							)}
+						</dd>
+					</div>
+				</dl>
+			</SideSection>
+			<SideSection title="Historique">
+				<HistoryList entries={history} />
+			</SideSection>
+		</>
+	)
+
 	return (
-		<div className="flex min-w-0 flex-col gap-2">
-			<Label htmlFor={htmlFor}>{label}</Label>
-			{children}
-		</div>
+		<DetailShell
+			roomy
+			main={main}
+			side={side}
+			mainLabel="Contenu du devis"
+			sideLabel="État et actions du devis"
+		/>
 	)
 }

@@ -1,17 +1,19 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { QuoteTotalsFooter } from './quote-totals-footer'
+import { TotalsPanel } from './totals-panel'
 
-describe('QuoteTotalsFooter', () => {
+describe('TotalsPanel', () => {
 	it('reads HT, each VAT rate charged, then TTC', () => {
 		render(
-			<QuoteTotalsFooter
-				netCents={31500}
-				vatBreakdown={[
-					{ rateBp: 1000, vatCents: 30 },
-					{ rateBp: 2000, vatCents: 2400 },
-				]}
-				grossCents={33930}
+			<TotalsPanel
+				totals={{
+					netCents: 31500,
+					vat: [
+						{ rateBp: 1000, vatCents: 30 },
+						{ rateBp: 2000, vatCents: 2400 },
+					],
+					grossCents: 33930,
+				}}
 			/>,
 		)
 
@@ -27,11 +29,9 @@ describe('QuoteTotalsFooter', () => {
 
 	it('explains the missing VAT line rather than leaving it unsaid', () => {
 		render(
-			<QuoteTotalsFooter
-				netCents={10000}
-				vatBreakdown={[]}
-				grossCents={10000}
-				vatExemptionNotice="TVA non applicable, art. 293 B du CGI"
+			<TotalsPanel
+				totals={{ netCents: 10000, vat: [], grossCents: 10000 }}
+				vatNotice="TVA non applicable, art. 293 B du CGI"
 			/>,
 		)
 
@@ -42,14 +42,23 @@ describe('QuoteTotalsFooter', () => {
 
 	it('surfaces a notice about the figures it is showing', () => {
 		render(
-			<QuoteTotalsFooter
-				netCents={10000}
-				vatBreakdown={[]}
-				grossCents={10000}
+			<TotalsPanel
+				totals={{ netCents: 10000, vat: [], grossCents: 10000 }}
 				notice="Estimation, non enregistrée"
 			/>,
 		)
 
 		expect(screen.getByText('Estimation, non enregistrée')).toBeDefined()
+	})
+
+	it('labels the gross total of a credit note', () => {
+		render(
+			<TotalsPanel
+				totals={{ netCents: 10000, vat: [], grossCents: 10000 }}
+				grossLabel="Total TTC crédité"
+			/>,
+		)
+
+		expect(screen.getByText('Total TTC crédité')).toBeDefined()
 	})
 })
