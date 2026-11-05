@@ -18,6 +18,8 @@
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
     "@faker-js/faker": "^10.3.0",
+    "@fontsource-variable/figtree": "^5.3.0",
+    "@fontsource-variable/geist": "^5.3.0",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/match-sorter-utils": "latest",
     "@tanstack/react-form": "latest",

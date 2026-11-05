@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router'
+import { LayoutGrid } from 'lucide-react'
 import { useState } from 'react'
 
-import { Button } from '#/components/ui/button'
+import { ModuleIcon } from '#/components/module-icon'
 import {
 	Popover,
 	PopoverContent,
@@ -15,36 +16,15 @@ import { useVisibleModules } from '#/modules/use-visible-modules'
 interface ModuleLauncherProps {
 	activeModuleId: ModuleId
 	organizationSlug: string
+	className?: string
 }
 
 const tileClassName =
-	'flex h-24 w-full flex-col items-center justify-center gap-2 rounded-none p-2 text-center text-xs font-medium transition-colors'
-
-const markClassName = 'flex size-11 items-center justify-center rounded-none'
-
-/** Nine-dot grid: the app-switching affordance. */
-function AppsGridIcon() {
-	const positions = [5, 12, 19]
-
-	return (
-		<svg
-			viewBox="0 0 24 24"
-			fill="currentColor"
-			aria-hidden="true"
-			className="size-5"
-		>
-			{positions.map((cy) =>
-				positions.map((cx) => (
-					<circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.9" />
-				)),
-			)}
-		</svg>
-	)
-}
+	'flex w-full flex-col items-center gap-1.5 rounded-md px-1.5 pt-2 pb-1.5 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 /**
- * App launcher, modelled on Google's app grid: one button opens the full list
- * of modules, available and announced alike.
+ * App launcher: one button opens the grid of every module, available and
+ * announced alike.
  *
  * Open state is driven here rather than delegated to `PopoverClose`: closing is
  * triggered by the click on the link, which no longer depends on the execution
@@ -53,6 +33,7 @@ function AppsGridIcon() {
 export function ModuleLauncher({
 	activeModuleId,
 	organizationSlug,
+	className,
 }: ModuleLauncherProps) {
 	const [open, setOpen] = useState(false)
 	const modules = useVisibleModules()
@@ -60,24 +41,22 @@ export function ModuleLauncher({
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon"
+				<button
+					type="button"
 					aria-label="Changer de module"
-					className="border border-foreground/20 text-muted-foreground"
+					className={cn(
+						'inline-flex size-8 shrink-0 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+						className,
+					)}
 				>
-					<AppsGridIcon />
-				</Button>
+					<LayoutGrid className="size-[18px]" strokeWidth={1.8} />
+				</button>
 			</PopoverTrigger>
-			<PopoverContent
-				align="end"
-				sideOffset={8}
-				className="w-80 rounded-none p-4 shadow-none"
-			>
-				<p className="mb-3 px-1 text-xs font-medium text-muted-foreground">
-					Modules Mestier
-				</p>
-				<ul aria-label="Modules" className="grid grid-cols-3 gap-1">
+			<PopoverContent align="start" sideOffset={6} className="w-auto p-1.5">
+				<ul
+					aria-label="Modules"
+					className="grid grid-cols-[repeat(4,minmax(4.5rem,auto))] gap-0.5"
+				>
 					{modules.map((module) => (
 						<li key={module.id}>
 							<ModuleTile
@@ -107,25 +86,20 @@ function ModuleTile({
 	organizationSlug,
 	onNavigate,
 }: ModuleTileProps) {
-	const Icon = module.icon
-
 	if (module.status !== 'available') {
 		return (
 			<button
 				type="button"
 				aria-disabled="true"
-				className={cn(
-					tileClassName,
-					'cursor-not-allowed text-muted-foreground',
-				)}
+				className={cn(tileClassName, 'cursor-not-allowed opacity-60')}
 			>
-				<span className={cn(markClassName, 'bg-muted text-muted-foreground')}>
-					<Icon className="size-5" />
+				<span className="module-tile flex size-11 items-center justify-center">
+					<ModuleIcon module={module} glyph size="lg" />
 				</span>
-				<span className="w-full truncate text-[11px] leading-tight">
+				<span className="w-full whitespace-nowrap text-[11.5px] leading-tight">
 					{module.label}
 				</span>
-				<span className="text-[9px] font-normal">bientôt</span>
+				<span className="text-[9px] text-muted-foreground">bientôt</span>
 			</button>
 		)
 	}
@@ -135,27 +109,19 @@ function ModuleTile({
 			to={buildOrgPath(organizationSlug, module.basePath)}
 			onClick={onNavigate}
 			aria-current={active ? 'page' : undefined}
-			className={cn(
-				tileClassName,
-				// Not `hover:bg-muted`: too close to the icon's own resting
-				// `bg-brand-soft` to read as a hover at all on an unselected
-				// tile. `/5` still wasn't enough contrast against it either —
-				// `/10` is the first opacity that reads clearly on both.
-				'hover:bg-foreground/10',
-				active ? 'text-primary' : 'text-foreground',
-			)}
+			className={cn(tileClassName, 'hover:bg-accent', active && 'bg-accent')}
 		>
+			<span className="module-tile flex size-11 items-center justify-center">
+				<ModuleIcon module={module} glyph size="lg" />
+			</span>
 			<span
 				className={cn(
-					markClassName,
-					active
-						? 'bg-primary text-primary-foreground'
-						: 'bg-brand-soft text-primary',
+					'w-full whitespace-nowrap text-[11.5px] leading-tight',
+					active && 'font-semibold',
 				)}
 			>
-				<Icon className="size-5" />
+				{module.label}
 			</span>
-			<span className="w-full truncate text-[11px]">{module.label}</span>
 		</Link>
 	)
 }

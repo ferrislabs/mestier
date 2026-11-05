@@ -12,6 +12,7 @@ import { FullscreenMessage } from '#/components/org-gate'
 import { ScopeBar } from '#/components/scope-bar'
 import { Button } from '#/components/ui/button'
 import { SidebarInset, SidebarProvider } from '#/components/ui/sidebar'
+import { UserMenu } from '#/components/user-menu'
 import {
 	ActiveOrganizationProvider,
 	useActiveOrganization,
@@ -64,36 +65,30 @@ function AppShell() {
 	const { activeOrganization } = useActiveOrganization()
 	const scope = resolveScope(location.pathname)
 	// The homepage is its own launcher (app-launcher-ui.tsx's icon grid) — the
-	// left rail would just duplicate it, so it's the one screen without one.
+	// side nav would just duplicate it, so it's the one screen without one.
 	const isHome = splitOrgPath(location.pathname).path === '/'
 
 	return (
-		<SidebarProvider
-			defaultOpen={false}
-			className="h-svh flex-col overflow-hidden"
-		>
-			{/* The header spans the full width, above the sidebar rather than
-			 * beside it — `ModuleNav`'s own fixed container is offset below it
-			 * (see its `top-(--app-header-height)` override) so the two never
-			 * occupy the same band instead of one merely painting over the
-			 * other. `SidebarProvider` still wraps both: `AppHeader`'s
-			 * `SidebarTrigger` needs its context regardless of layout. */}
-			<AppHeader />
-			<div className="flex min-h-0 flex-1">
-				{isHome ? null : (
-					<ModuleNav organizationSlug={activeOrganization.slug} />
-				)}
-				<SidebarInset className="min-h-0">
-					<ScopeBar
-						label={scope.label}
-						tabs={scope.tabs}
-						organizationSlug={activeOrganization.slug}
-					/>
-					<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-						<Outlet />
-					</div>
-				</SidebarInset>
-			</div>
+		<SidebarProvider className="h-svh overflow-hidden">
+			{isHome ? null : (
+				<ModuleNav
+					organizationSlug={activeOrganization.slug}
+					footer={
+						<UserMenu showIdentity side="top" className="hover:bg-nav-active" />
+					}
+				/>
+			)}
+			<SidebarInset className="min-h-0 min-w-0">
+				<AppHeader />
+				<ScopeBar
+					label={scope.label}
+					tabs={scope.tabs}
+					organizationSlug={activeOrganization.slug}
+				/>
+				<div className="app-canvas flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+					<Outlet />
+				</div>
+			</SidebarInset>
 		</SidebarProvider>
 	)
 }

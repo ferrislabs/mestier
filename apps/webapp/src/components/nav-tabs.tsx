@@ -12,10 +12,9 @@ interface NavTabsProps {
 	organizationSlug: string
 }
 
-// Material indicator: a thick rounded line under the active tab, not a solid
-// background or a container border.
+// A line under the active tab, not a solid background or a container border.
 const tabClassName =
-	'relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-t-lg px-4 py-3.5 text-sm font-medium transition-colors after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-t-full after:bg-primary after:opacity-0 after:transition-opacity'
+	'relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-t-md px-3 py-2.5 text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-t-full after:bg-primary after:opacity-0 after:transition-opacity'
 
 /**
  * Navigation tabs for a scope.
@@ -29,7 +28,7 @@ const tabClassName =
 export function NavTabs({ label, tabs, organizationSlug }: NavTabsProps) {
 	return (
 		<nav aria-label={label} className="min-w-0 flex-1">
-			<ul className="flex items-center gap-1 overflow-x-auto">
+			<ul className="flex items-center gap-0.5 overflow-x-auto">
 				{tabs.map((tab) => (
 					<li key={tab.id} className="shrink-0">
 						{tab.status === 'coming-soon' ? (
@@ -57,7 +56,7 @@ export function NavTabs({ label, tabs, organizationSlug }: NavTabsProps) {
 								}}
 								className={cn(
 									tabClassName,
-									'text-muted-foreground hover:bg-muted/60 hover:text-foreground data-[active=true]:text-primary data-[active=true]:after:opacity-100',
+									'text-muted-foreground hover:text-foreground data-[active=true]:text-foreground data-[active=true]:after:opacity-100',
 								)}
 							>
 								{tab.icon ? <tab.icon className="size-4" /> : null}

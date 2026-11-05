@@ -2,18 +2,20 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type * as React from 'react'
 
+import { ModuleIcon } from '#/components/module-icon'
+import { ModuleLauncher } from '#/components/module-launcher'
 import {
 	Sidebar,
 	SidebarContent,
 	SidebarFooter,
 	SidebarGroup,
+	SidebarHeader,
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
 	useSidebar,
 } from '#/components/ui/sidebar'
 import { usePermissions } from '#/hooks/use-permissions'
-import { cn } from '#/lib/utils'
 import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 import { MODULES } from '#/modules/registry'
 import { resolveModule } from '#/modules/resolve-module'
@@ -21,20 +23,26 @@ import type { AppModule, NavTarget } from '#/modules/types'
 
 interface ModuleNavProps extends React.ComponentProps<typeof Sidebar> {
 	organizationSlug: string
+	/** Account menu, rendered at the foot of the nav. */
+	footer?: React.ReactNode
 }
+
+const itemClassName =
+	'h-8 gap-2.5 text-[13px] text-nav-muted hover:bg-nav-active hover:text-nav-foreground data-[active=true]:bg-nav-active data-[active=true]:font-medium data-[active=true]:text-nav-active-foreground'
 
 /**
  * Navigation for the active module, in the left column.
  *
  * It is not for switching modules — each module is its own app, the way
  * Calendar and Docs each own their nav rather than sharing a cross-app rail;
- * switching is the header {@link ModuleLauncher}'s job. It lists the current
- * module's screens; their second level, when they have one, is rendered as
- * horizontal tabs by the {@link ScopeBar}. No brand header of its own —
- * that lives in {@link AppHeader} now, common to every module.
+ * switching is the {@link ModuleLauncher}'s job, which sits in this column's
+ * header next to the module's own mark. It lists the current module's screens;
+ * their second level, when they have one, is rendered as horizontal tabs by the
+ * {@link ScopeBar}.
  */
 export function ModuleNav({
 	organizationSlug,
+	footer,
 	className,
 	...props
 }: ModuleNavProps) {
@@ -62,23 +70,31 @@ export function ModuleNav({
 	)
 
 	return (
-		<Sidebar
-			collapsible="icon"
-			{...props}
-			// `AppHeader` now spans the full width above this nav (see
-			// `_app.o.$organizationSlug.tsx`) rather than beside it — the
-			// sidebar's own fixed container defaults to the full viewport
-			// height (`inset-y-0 h-svh`); overridden (`!`, `inset-y-0`'s own
-			// utility would otherwise win) so it starts below the header
-			// instead of underneath it.
-			className={cn(
-				'top-(--app-header-height)! h-[calc(100svh-var(--app-header-height))]!',
-				className,
-			)}
-		>
-			<SidebarContent className="pt-3">
-				<SidebarGroup>
-					<SidebarMenu>
+		<Sidebar collapsible="icon" className={className} {...props}>
+			<SidebarHeader className="h-12 flex-row items-center gap-2 p-0 pr-2 pl-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+				<Link
+					to={buildOrgPath(organizationSlug, activeModule.basePath)}
+					// The module's own mark is a way back to its entry, not one of its
+					// sections: only the section matching the route is `aria-current`.
+					activeOptions={{ exact: true }}
+					activeProps={{ 'aria-current': undefined }}
+					className="flex min-w-0 items-center gap-2 rounded-md font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				>
+					<ModuleIcon module={activeModule} size="sm" />
+					<span className="truncate text-[15px] group-data-[collapsible=icon]:hidden">
+						{activeModule.label}
+					</span>
+				</Link>
+				<ModuleLauncher
+					activeModuleId={activeModule.id}
+					organizationSlug={organizationSlug}
+					className="ml-auto text-nav-muted hover:bg-nav-active hover:text-nav-foreground group-data-[collapsible=icon]:hidden"
+				/>
+			</SidebarHeader>
+
+			<SidebarContent className="px-2 pt-1">
+				<SidebarGroup className="p-0">
+					<SidebarMenu className="gap-px">
 						{visibleSections.map((section) => (
 							<NavEntry
 								key={section.id}
@@ -91,8 +107,8 @@ export function ModuleNav({
 				</SidebarGroup>
 			</SidebarContent>
 
-			<SidebarFooter>
-				<SidebarMenu>
+			<SidebarFooter className="gap-1 border-nav-border border-t p-2">
+				<SidebarMenu className="gap-px">
 					{utilityModules.map((module) => (
 						<UtilityEntry
 							key={module.id}
@@ -101,34 +117,22 @@ export function ModuleNav({
 							organizationSlug={organizationSlug}
 						/>
 					))}
-					{/* Replaces the old edge-drag rail — a 4px invisible hitbox,
-					 * `tabIndex={-1}`, discoverable only by accident. Same toggle,
-					 * as an actual button instead of a hidden one. */}
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							onClick={toggleSidebar}
 							tooltip={state === 'expanded' ? 'Réduire' : 'Agrandir'}
-							className={pillClassName}
+							className={itemClassName}
 						>
 							{state === 'expanded' ? <PanelLeftClose /> : <PanelLeftOpen />}
 							<span>{state === 'expanded' ? 'Réduire' : 'Agrandir'}</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				</SidebarMenu>
+				{footer}
 			</SidebarFooter>
 		</Sidebar>
 	)
 }
-
-// Sharp-cornered, not a pill: a left rule was tried first, but padding
-// between the button and the sidebar's own edge kept it from ever sitting
-// flush — reading as a misaligned accent rather than a deliberate one. A
-// background fill has no edge to miss.
-const pillClassName =
-	'rounded-none! font-medium ' +
-	'hover:bg-muted! ' +
-	'data-[active=true]:bg-brand-soft! data-[active=true]:font-semibold data-[active=true]:text-brand-muted ' +
-	'group-data-[collapsible=icon]:rounded-none!'
 
 interface NavEntryProps {
 	target: NavTarget
@@ -145,11 +149,11 @@ function NavEntry({ target, organizationSlug, fallbackIcon }: NavEntryProps) {
 				<SidebarMenuButton
 					aria-disabled
 					tooltip={`${target.label} · bientôt`}
-					className={pillClassName}
+					className={itemClassName}
 				>
 					<Icon />
 					<span>{target.label}</span>
-					<span className="ml-auto rounded-md border border-sidebar-border px-1.5 py-0.5 text-[10px] font-medium group-data-[collapsible=icon]:hidden">
+					<span className="ml-auto rounded-md border border-nav-border px-1.5 py-0.5 text-[10px] font-medium group-data-[collapsible=icon]:hidden">
 						bientôt
 					</span>
 				</SidebarMenuButton>
@@ -162,7 +166,7 @@ function NavEntry({ target, organizationSlug, fallbackIcon }: NavEntryProps) {
 			<SidebarMenuButton
 				asChild
 				tooltip={target.label}
-				className={pillClassName}
+				className={itemClassName}
 			>
 				<Link
 					to={buildOrgPath(organizationSlug, target.to)}
@@ -172,7 +176,7 @@ function NavEntry({ target, organizationSlug, fallbackIcon }: NavEntryProps) {
 					<Icon />
 					<span>{target.label}</span>
 					{target.badge !== undefined ? (
-						<span className="ml-auto rounded-md bg-sidebar-accent px-1.5 py-0.5 text-xs font-semibold group-data-[collapsible=icon]:hidden">
+						<span className="tabular ml-auto text-[11px] text-nav-muted group-data-[collapsible=icon]:hidden">
 							{target.badge}
 						</span>
 					) : null}
@@ -197,7 +201,7 @@ function UtilityEntry({ module, active, organizationSlug }: UtilityEntryProps) {
 				asChild
 				isActive={active}
 				tooltip={module.label}
-				className={pillClassName}
+				className={itemClassName}
 			>
 				<Link to={buildOrgPath(organizationSlug, module.basePath)}>
 					<Icon />

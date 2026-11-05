@@ -54,6 +54,11 @@ export interface AppModule {
 	id: ModuleId
 	label: string
 	icon: LucideIcon
+	/**
+	 * Hue (0-360) of the module's mark in the launcher and the side nav. Colour
+	 * identity only: the lightness and chroma come from the active theme.
+	 */
+	hue?: number
 	basePath: string
 	status: ModuleStatus
 	/** Intra-module navigation, rendered in the left column. */

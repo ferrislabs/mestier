@@ -48,16 +48,13 @@ export function OrgSwitcher() {
 					<button
 						type="button"
 						aria-label="Changer d'organisation"
-						className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+						className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[13px] font-medium text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						<span className="max-w-40 truncate">{activeOrganization.name}</span>
 						<ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
 					</button>
 				</DropdownMenuTrigger>
-				<DropdownMenuContent
-					align="start"
-					className="min-w-72 rounded-none shadow-none"
-				>
+				<DropdownMenuContent align="start" className="min-w-72">
 					<DropdownMenuLabel className="text-xs text-muted-foreground">
 						Organisation active
 					</DropdownMenuLabel>
@@ -87,7 +84,7 @@ export function OrgSwitcher() {
 						onClick={() => setCreateOpen(true)}
 						className="gap-2 p-2"
 					>
-						<div className="flex aspect-square size-7 items-center justify-center rounded-none border border-dashed text-muted-foreground">
+						<div className="flex aspect-square size-7 items-center justify-center rounded-md border border-dashed text-muted-foreground">
 							<Plus className="size-4" />
 						</div>
 						<span className="font-medium">Créer une organisation</span>
@@ -119,7 +116,7 @@ function OrganizationMark({ organization, className }: OrganizationMarkProps) {
 	return (
 		<div
 			className={cn(
-				'flex aspect-square size-7 items-center justify-center rounded-none bg-primary text-xs font-semibold text-primary-foreground',
+				'flex aspect-square size-7 items-center justify-center rounded-md bg-primary text-xs font-semibold text-primary-foreground',
 				className,
 			)}
 		>
