@@ -14,6 +14,7 @@ function matchChain(pathname: string): string[] {
 
 const TEAM_LIST = '/_app/o/$organizationSlug/hr/team/'
 const MEMBER_WORK_TIME = '/_app/o/$organizationSlug/hr/team/$memberId/work-time'
+const MEMBER_DETAIL = '/_app/o/$organizationSlug/hr/team/$memberId/'
 
 describe('hr routes', () => {
 	/**
@@ -43,12 +44,24 @@ describe('hr routes', () => {
 	it('keeps the other hr sections reachable', () => {
 		for (const [path, routeId] of [
 			['/o/acme/hr/work-time', '/_app/o/$organizationSlug/hr/work-time'],
-			['/o/acme/hr/absences', '/_app/o/$organizationSlug/hr/absences'],
+			['/o/acme/hr/absences', '/_app/o/$organizationSlug/hr/absences/'],
+			['/o/acme/hr/absences/new', '/_app/o/$organizationSlug/hr/absences/new'],
 			['/o/acme/hr/equipment', '/_app/o/$organizationSlug/hr/equipment'],
+			['/o/acme/hr/planning', '/_app/o/$organizationSlug/hr/planning'],
+			['/o/acme/hr/extra', '/_app/o/$organizationSlug/hr/extra/'],
+			['/o/acme/hr/extra/new', '/_app/o/$organizationSlug/hr/extra/new'],
+			['/o/acme/hr/rights', '/_app/o/$organizationSlug/hr/rights'],
 		]) {
 			const chain = matchChain(path)
 			expect(chain.at(-1)).toBe(routeId)
 			expect(chain).not.toContain(TEAM_LIST)
 		}
+	})
+
+	it("opens a member's file without the team list in front of it", () => {
+		const chain = matchChain('/o/acme/hr/team/member-1')
+
+		expect(chain.at(-1)).toBe(MEMBER_DETAIL)
+		expect(chain).not.toContain(TEAM_LIST)
 	})
 })
