@@ -379,6 +379,9 @@ mod tests {
                             version: 1,
                             credential_id: None,
                             config,
+                            name: None,
+                            description: None,
+                            disabled: false,
                         }],
                         edges: vec![Edge {
                             from: "t1".to_string(),
@@ -388,6 +391,8 @@ mod tests {
                         triggers: vec![PlacedTrigger {
                             id: "t1".to_string(),
                             kind: TriggerKind::Manual,
+                            name: None,
+                            description: None,
                         }],
                     },
                     layout: None,
@@ -501,6 +506,9 @@ mod tests {
                                 version: 1,
                                 credential_id: None,
                                 config,
+                                name: None,
+                                description: None,
+                                disabled: false,
                             }],
                             edges: vec![Edge {
                                 from: "t1".to_string(),
@@ -510,6 +518,8 @@ mod tests {
                             triggers: vec![PlacedTrigger {
                                 id: "t1".to_string(),
                                 kind: TriggerKind::Manual,
+                                name: None,
+                                description: None,
                             }],
                         },
                         layout: None,

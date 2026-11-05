@@ -47,10 +47,11 @@ pub async fn handler(
     require_manage_automation(&state, &identity, organization_id).await?;
     find_run_in_org(&state, organization_id, run_id).await?;
 
-    let replayed = state
+    state
         .usecase
         .replay_run_from_step(organization_id, run_id, payload.connector_id)
         .await?;
+    let replayed = find_run_in_org(&state, organization_id, run_id).await?;
 
     Ok(Response::OK(RunResponse::from(replayed)))
 }

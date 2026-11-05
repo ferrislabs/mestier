@@ -17,6 +17,32 @@ use crate::domain::automation::expression::parse_template;
 
 use super::graph::{Branch, Edge, Graph, PlacedConnector, TriggerKind};
 
+pub const MAX_NODE_NAME_LENGTH: usize = 120;
+pub const MAX_NODE_DESCRIPTION_LENGTH: usize = 500;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NodeRef {
+    Connector(String),
+    Trigger(String),
+}
+
+impl NodeRef {
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Connector(id) | Self::Trigger(id) => id,
+        }
+    }
+}
+
+impl std::fmt::Display for NodeRef {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Connector(id) => write!(formatter, "connector `{id}`"),
+            Self::Trigger(id) => write!(formatter, "trigger `{id}`"),
+        }
+    }
+}
+
 /// Every way a graph can be refused. Each variant names the connector at
 /// fault (`connector_id`) and, when the mistake is inside one field, the
 /// field too — that is what lets the editor put the error on the field
@@ -134,6 +160,52 @@ pub enum GraphError {
 
     #[error("trigger `{trigger_id}` subscribes to unknown event `{name}`")]
     UnknownEventName { trigger_id: String, name: String },
+
+    #[error("{node} has an empty name")]
+    EmptyNodeName { node: NodeRef },
+
+    #[error("{node} has a name longer than {MAX_NODE_NAME_LENGTH} characters")]
+    NodeNameTooLong { node: NodeRef },
+
+    #[error("{node} has a description longer than {MAX_NODE_DESCRIPTION_LENGTH} characters")]
+    NodeDescriptionTooLong { node: NodeRef },
+
+    #[error("{node} reuses the name `{name}`, already given to another node")]
+    DuplicateNodeName { node: NodeRef, name: String },
+}
+
+fn validate_node_labels(graph: &Graph, errors: &mut Vec<GraphError>) {
+    let connectors = graph
+        .connectors
+        .iter()
+        .map(|c| (NodeRef::Connector(c.id.clone()), &c.name, &c.description));
+    let triggers = graph
+        .triggers
+        .iter()
+        .map(|t| (NodeRef::Trigger(t.id.clone()), &t.name, &t.description));
+
+    let mut seen_names: HashSet<String> = HashSet::new();
+    for (node, name, description) in connectors.chain(triggers) {
+        if let Some(name) = name {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                errors.push(GraphError::EmptyNodeName { node: node.clone() });
+            } else if trimmed.chars().count() > MAX_NODE_NAME_LENGTH {
+                errors.push(GraphError::NodeNameTooLong { node: node.clone() });
+            } else if !seen_names.insert(trimmed.to_lowercase()) {
+                errors.push(GraphError::DuplicateNodeName {
+                    node: node.clone(),
+                    name: trimmed.to_owned(),
+                });
+            }
+        }
+        if description
+            .as_ref()
+            .is_some_and(|text| text.chars().count() > MAX_NODE_DESCRIPTION_LENGTH)
+        {
+            errors.push(GraphError::NodeDescriptionTooLong { node });
+        }
+    }
 }
 
 /// Rejects the JSON type an expression-free field's literal value carries
@@ -550,6 +622,8 @@ pub fn validate_graph(
         }
     }
 
+    validate_node_labels(graph, &mut errors);
+
     if errors.is_empty() {
         Ok(())
     } else {
@@ -576,6 +650,9 @@ mod tests {
             version: 1,
             credential_id: None,
             config,
+            name: None,
+            description: None,
+            disabled: false,
         }
     }
 
@@ -591,6 +668,8 @@ mod tests {
         graph.triggers.push(PlacedTrigger {
             id: "t0".to_string(),
             kind: TriggerKind::Manual,
+            name: None,
+            description: None,
         });
         graph.edges.push(Edge {
             from: "t0".to_string(),
@@ -598,6 +677,276 @@ mod tests {
             branch: None,
         });
         graph
+    }
+
+    fn labelled(
+        mut connector: super::super::graph::PlacedConnector,
+        name: Option<&str>,
+        description: Option<&str>,
+    ) -> super::super::graph::PlacedConnector {
+        connector.name = name.map(str::to_owned);
+        connector.description = description.map(str::to_owned);
+        connector
+    }
+
+    fn node_errors(graph: &Graph) -> Vec<GraphError> {
+        let catalogue = connector_catalogue();
+        match validate_graph(graph, &catalogue, &[], &EventCatalogue::new()) {
+            Ok(()) => Vec::new(),
+            Err(errors) => errors,
+        }
+    }
+
+    fn connector_ref(id: &str) -> NodeRef {
+        NodeRef::Connector(id.to_string())
+    }
+
+    fn trigger_ref(id: &str) -> NodeRef {
+        NodeRef::Trigger(id.to_string())
+    }
+
+    #[test]
+    fn named_and_described_nodes_are_valid() {
+        let graph = with_trigger(
+            graph_of(vec![labelled(
+                condition("c1", "{{ true }}"),
+                Some("Is it paid"),
+                Some("Stops unpaid quotes"),
+            )]),
+            "c1",
+        );
+
+        assert_eq!(node_errors(&graph), Vec::new());
+    }
+
+    #[test]
+    fn a_blank_node_name_is_refused_for_a_connector_and_a_trigger() {
+        let mut graph = with_trigger(
+            graph_of(vec![labelled(
+                condition("c1", "{{ true }}"),
+                Some("   "),
+                None,
+            )]),
+            "c1",
+        );
+        graph.triggers[0].name = Some(String::new());
+
+        let errors = node_errors(&graph);
+
+        assert!(
+            errors.contains(&GraphError::EmptyNodeName {
+                node: connector_ref("c1")
+            }),
+            "{errors:?}"
+        );
+        assert!(
+            errors.contains(&GraphError::EmptyNodeName {
+                node: trigger_ref("t0")
+            }),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn a_node_name_holds_at_most_120_characters_after_trimming() {
+        let fits = format!("  {}  ", "é".repeat(120));
+        let too_long = "é".repeat(121);
+        let graph = with_trigger(
+            graph_of(vec![
+                labelled(condition("c1", "{{ true }}"), Some(&fits), None),
+                labelled(condition("c2", "{{ true }}"), Some(&too_long), None),
+            ]),
+            "c1",
+        );
+
+        let errors = node_errors(&graph);
+
+        assert!(
+            !errors.contains(&GraphError::NodeNameTooLong {
+                node: connector_ref("c1")
+            }),
+            "{errors:?}"
+        );
+        assert!(
+            errors.contains(&GraphError::NodeNameTooLong {
+                node: connector_ref("c2")
+            }),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn a_node_description_holds_at_most_500_characters() {
+        let fits = "é".repeat(500);
+        let too_long = "é".repeat(501);
+        let mut graph = with_trigger(
+            graph_of(vec![
+                labelled(condition("c1", "{{ true }}"), None, Some(&fits)),
+                labelled(condition("c2", "{{ true }}"), None, Some(&too_long)),
+            ]),
+            "c1",
+        );
+        graph.triggers[0].description = Some("x".repeat(501));
+
+        let errors = node_errors(&graph);
+
+        assert!(
+            !errors.contains(&GraphError::NodeDescriptionTooLong {
+                node: connector_ref("c1")
+            }),
+            "{errors:?}"
+        );
+        assert!(
+            errors.contains(&GraphError::NodeDescriptionTooLong {
+                node: connector_ref("c2")
+            }),
+            "{errors:?}"
+        );
+        assert!(
+            errors.contains(&GraphError::NodeDescriptionTooLong {
+                node: trigger_ref("t0")
+            }),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn two_connectors_cannot_share_a_name_ignoring_case_and_padding() {
+        let graph = with_trigger(
+            graph_of(vec![
+                labelled(condition("c1", "{{ true }}"), Some("Is it paid"), None),
+                labelled(condition("c2", "{{ true }}"), Some("  IS IT PAID "), None),
+            ]),
+            "c1",
+        );
+
+        let errors = node_errors(&graph);
+
+        assert!(
+            errors.contains(&GraphError::DuplicateNodeName {
+                node: connector_ref("c2"),
+                name: "IS IT PAID".to_string(),
+            }),
+            "{errors:?}"
+        );
+        assert!(
+            !errors
+                .iter()
+                .any(|error| matches!(error, GraphError::DuplicateNodeName { node, .. } if *node == connector_ref("c1"))),
+            "the first holder of a name is not at fault: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn a_trigger_and_a_connector_cannot_share_a_name() {
+        let mut graph = with_trigger(
+            graph_of(vec![labelled(
+                condition("c1", "{{ true }}"),
+                Some("Start"),
+                None,
+            )]),
+            "c1",
+        );
+        graph.triggers[0].name = Some("start".to_string());
+
+        let errors = node_errors(&graph);
+
+        assert!(
+            errors.contains(&GraphError::DuplicateNodeName {
+                node: trigger_ref("t0"),
+                name: "start".to_string(),
+            }),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn unnamed_nodes_never_collide() {
+        let mut graph = with_trigger(
+            graph_of(vec![
+                condition("c1", "{{ true }}"),
+                condition("c2", "{{ true }}"),
+            ]),
+            "c1",
+        );
+        graph.edges.push(Edge {
+            from: "t0".to_string(),
+            to: "c2".to_string(),
+            branch: None,
+        });
+
+        assert_eq!(node_errors(&graph), Vec::new());
+    }
+
+    #[test]
+    fn a_blank_name_is_not_also_reported_as_a_duplicate() {
+        let graph = with_trigger(
+            graph_of(vec![
+                labelled(condition("c1", "{{ true }}"), Some(" "), None),
+                labelled(condition("c2", "{{ true }}"), Some("  "), None),
+            ]),
+            "c1",
+        );
+
+        let errors = node_errors(&graph);
+
+        assert!(
+            !errors
+                .iter()
+                .any(|error| matches!(error, GraphError::DuplicateNodeName { .. })),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn node_label_errors_read_like_the_other_graph_errors() {
+        assert_eq!(
+            GraphError::DuplicateNodeName {
+                node: connector_ref("c2"),
+                name: "Is it paid".to_string(),
+            }
+            .to_string(),
+            "connector `c2` reuses the name `Is it paid`, already given to another node"
+        );
+        assert_eq!(
+            GraphError::EmptyNodeName {
+                node: trigger_ref("t1")
+            }
+            .to_string(),
+            "trigger `t1` has an empty name"
+        );
+        assert_eq!(
+            GraphError::NodeNameTooLong {
+                node: connector_ref("c1")
+            }
+            .to_string(),
+            "connector `c1` has a name longer than 120 characters"
+        );
+        assert_eq!(
+            GraphError::NodeDescriptionTooLong {
+                node: connector_ref("c1")
+            }
+            .to_string(),
+            "connector `c1` has a description longer than 500 characters"
+        );
+    }
+
+    #[test]
+    fn a_disabled_connector_is_validated_like_any_other() {
+        let mut connector = condition("c1", "{{ true }}");
+        connector.disabled = true;
+        connector.config.clear();
+        let graph = with_trigger(graph_of(vec![connector]), "c1");
+
+        let errors = node_errors(&graph);
+
+        assert!(
+            errors.contains(&GraphError::MissingRequiredField {
+                connector_id: "c1".to_string(),
+                field: "predicate".to_string(),
+            }),
+            "{errors:?}"
+        );
     }
 
     #[test]
@@ -638,6 +987,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
             }]),
             "c1",
         );
@@ -665,6 +1017,9 @@ mod tests {
                 version: 99,
                 credential_id: None,
                 config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
             }]),
             "c1",
         );
@@ -694,6 +1049,9 @@ mod tests {
             version: 1,
             credential_id: None,
             config,
+            name: None,
+            description: None,
+            disabled: false,
         }]);
 
         let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
@@ -718,6 +1076,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
             }]),
             "c1",
         );
@@ -749,6 +1110,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config,
+                name: None,
+                description: None,
+                disabled: false,
             }]),
             "c1",
         );
@@ -872,6 +1236,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config,
+                name: None,
+                description: None,
+                disabled: false,
             }]),
             "c1",
         );
@@ -900,6 +1267,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config,
+                name: None,
+                description: None,
+                disabled: false,
             }]),
             "c1",
         );
@@ -962,6 +1332,9 @@ mod tests {
             version: 1,
             credential_id,
             config: serde_json::Map::new(),
+            name: None,
+            description: None,
+            disabled: false,
         }
     }
 
@@ -992,6 +1365,9 @@ mod tests {
                     version: 1,
                     credential_id: None,
                     config: serde_json::Map::new(),
+                    name: None,
+                    description: None,
+                    disabled: false,
                 }],
                 edges: vec![],
                 triggers: vec![],
@@ -1030,6 +1406,9 @@ mod tests {
                 version: 1,
                 credential_id: Some(id),
                 config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
             }],
             edges: vec![],
             triggers: vec![],
@@ -1173,6 +1552,9 @@ mod tests {
                     m.insert("predicate".to_string(), json!("{{ true }}"));
                     m
                 },
+                name: None,
+                description: None,
+                disabled: false,
             }]),
             "c1",
         );
@@ -1270,6 +1652,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config,
+                name: None,
+                description: None,
+                disabled: false,
             },
             condition("c2", "{{ true }}"),
         ]);
@@ -1483,6 +1868,9 @@ mod tests {
             version: 1,
             credential_id: None,
             config,
+            name: None,
+            description: None,
+            disabled: false,
         }
     }
 
@@ -1571,6 +1959,9 @@ mod tests {
             version: 1,
             credential_id: None,
             config: serde_json::Map::new(),
+            name: None,
+            description: None,
+            disabled: false,
         };
 
         Graph {
@@ -1682,6 +2073,9 @@ mod tests {
                         version: 1,
                         credential_id: None,
                         config: serde_json::Map::new(),
+                        name: None,
+                        description: None,
+                        disabled: false,
                     },
                     super::super::graph::PlacedConnector {
                         id: "body".to_string(),
@@ -1689,6 +2083,9 @@ mod tests {
                         version: 1,
                         credential_id: None,
                         config,
+                        name: None,
+                        description: None,
+                        disabled: false,
                     },
                 ],
                 edges: vec![Edge {
@@ -1708,6 +2105,8 @@ mod tests {
         PlacedTrigger {
             id: id.to_string(),
             kind: TriggerKind::Manual,
+            name: None,
+            description: None,
         }
     }
 
@@ -1715,6 +2114,8 @@ mod tests {
         PlacedTrigger {
             id: id.to_string(),
             kind: TriggerKind::Events(names.into_iter().map(String::from).collect()),
+            name: None,
+            description: None,
         }
     }
 

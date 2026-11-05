@@ -31,6 +31,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{
+    error::AutomationError,
     paths::WorkflowVersionsPath,
     require_manage_automation,
     response::{GraphDto, GraphErrorResponse, WorkflowLayoutDto, WorkflowVersionResponse},
@@ -57,7 +58,7 @@ pub struct GraphInvalidDetails {
 }
 
 pub enum SaveVersionError {
-    Api(ApiError),
+    Automation(AutomationError),
     /// The graph is invalid: one entry per `mestier_core::GraphError`,
     /// naming the connector and (when there is one) the field at fault.
     GraphInvalid(Vec<GraphErrorResponse>),
@@ -65,20 +66,26 @@ pub enum SaveVersionError {
 
 impl From<ApiError> for SaveVersionError {
     fn from(error: ApiError) -> Self {
-        Self::Api(error)
+        Self::Automation(error.into())
     }
 }
 
 impl From<common::CoreError> for SaveVersionError {
     fn from(error: common::CoreError) -> Self {
-        Self::Api(error.into())
+        Self::Automation(error.into())
+    }
+}
+
+impl From<mestier_core::WorkflowRefusal> for SaveVersionError {
+    fn from(refusal: mestier_core::WorkflowRefusal) -> Self {
+        Self::Automation(refusal.into())
     }
 }
 
 impl IntoResponse for SaveVersionError {
     fn into_response(self) -> AxumResponse {
         match self {
-            Self::Api(error) => error.into_response(),
+            Self::Automation(error) => error.into_response(),
             Self::GraphInvalid(errors) => {
                 let body = GraphInvalidBody {
                     code: "E_GRAPH_INVALID",
@@ -107,6 +114,7 @@ impl IntoResponse for SaveVersionError {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Workflow not found"),
+        (status = 409, description = "E_WORKFLOW_ARCHIVED: an archived workflow cannot be saved until it is unarchived"),
         (status = 422, description = "The graph is invalid — errors name the connector and field at fault", body = inline(GraphInvalidBody)),
     ),
     security(("bearer_auth" = []))
@@ -121,7 +129,9 @@ pub async fn handler(
     Json(payload): Json<SaveWorkflowVersionRequest>,
 ) -> Result<Response<WorkflowVersionResponse>, SaveVersionError> {
     require_manage_automation(&state, &identity, organization_id).await?;
-    find_workflow_in_org(&state, organization_id, workflow_id).await?;
+    find_workflow_in_org(&state, organization_id, workflow_id)
+        .await?
+        .ensure_not_archived()?;
     let actor = handlers::resolve_user_id(&state, &identity).await?;
 
     let graph: mestier_core::Graph = payload.graph.into();
@@ -199,5 +209,28 @@ mod tests {
         let response = SaveVersionError::from(ApiError::NotFound).into_response();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn an_archived_workflow_answers_409_with_its_own_code() {
+        let response =
+            SaveVersionError::from(mestier_core::WorkflowRefusal::Archived).into_response();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(json["code"], "E_WORKFLOW_ARCHIVED");
+    }
+
+    #[tokio::test]
+    async fn a_core_conflict_for_an_archived_workflow_is_recognised_too() {
+        let core = common::CoreError::from(mestier_core::WorkflowRefusal::Archived);
+
+        let response = SaveVersionError::from(core).into_response();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(json["code"], "E_WORKFLOW_ARCHIVED");
     }
 }

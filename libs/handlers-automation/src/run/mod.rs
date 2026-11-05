@@ -4,7 +4,7 @@
 use axum::Router;
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState};
-use mestier_core::{OrganizationId, Run};
+use mestier_core::{OrganizationId, RunOverview};
 use uuid::Uuid;
 
 pub mod get_one;
@@ -26,10 +26,10 @@ pub(crate) async fn find_run_in_org(
     state: &AppState,
     organization_id: OrganizationId,
     run_id: Uuid,
-) -> Result<Run, ApiError> {
+) -> Result<RunOverview, ApiError> {
     state
         .usecase
-        .find_run(organization_id, run_id)
+        .find_run_overview(organization_id, run_id)
         .await?
         .ok_or(ApiError::NotFound)
 }

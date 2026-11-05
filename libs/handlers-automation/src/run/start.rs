@@ -1,11 +1,14 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{AppState, DataEnvelope, Response};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use utoipa::ToSchema;
 
-use crate::{paths::WorkflowRunsPath, require_manage_automation, workflow::find_workflow_in_org};
+use crate::{
+    error::AutomationError, paths::WorkflowRunsPath, require_manage_automation,
+    workflow::find_workflow_in_org,
+};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartRunRequest {
@@ -36,7 +39,7 @@ pub struct StartedRunResponse {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Workflow not found"),
-        (status = 409, description = "The workflow has no saved version to run"),
+        (status = 409, description = "E_WORKFLOW_ARCHIVED when the workflow is archived; otherwise the workflow has no saved version to run"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -48,7 +51,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<StartRunRequest>,
-) -> Result<Response<StartedRunResponse>, ApiError> {
+) -> Result<Response<StartedRunResponse>, AutomationError> {
     require_manage_automation(&state, &identity, organization_id).await?;
     find_workflow_in_org(&state, organization_id, workflow_id).await?;
     let actor = handlers::resolve_user_id(&state, &identity).await?;

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.workflow\n             SET enabled = $2, archived_at = CASE WHEN $3 THEN now() END\n             WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5affcfe0aca0bc9e70f0936e05047f5660c7e60319f1627763cc3fc4b9d308d8"
+}

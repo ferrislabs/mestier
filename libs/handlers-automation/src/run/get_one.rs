@@ -42,7 +42,7 @@ pub async fn handler(
         .await?;
     let graph = state
         .usecase
-        .find_workflow_version_by_id(organization_id, run.workflow_version_id)
+        .find_workflow_version_by_id(organization_id, run.run.workflow_version_id)
         .await?
         .map(|version| GraphDto::from(version.graph));
 

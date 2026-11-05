@@ -2,10 +2,11 @@
 //! composes into a traversal. Kept separate and side-effect free so the
 //! shape of "what comes next" is unit-testable without a database.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use serde_json::{Map, Value};
 
+use super::ConnectorOutcome;
 use crate::domain::automation::expression::{ExpressionContext, ExpressionError, parse_template};
 use crate::domain::automation::workflow::{Branch, Graph, PlacedConnector};
 
@@ -87,6 +88,41 @@ pub fn descendants_via<'a>(graph: &'a Graph, start: &[&'a str]) -> HashSet<&'a s
     visited
 }
 
+pub fn pass_through_output(
+    graph: &Graph,
+    connector_id: &str,
+    connector_outputs: &BTreeMap<String, Value>,
+    trigger_payload: Option<&Value>,
+) -> Value {
+    let from_predecessor = graph
+        .edges
+        .iter()
+        .filter(|edge| edge.to == connector_id)
+        .find_map(|edge| {
+            if let Some(produced) = connector_outputs.get(&edge.from) {
+                return Some(produced.get("output").cloned().unwrap_or(Value::Null));
+            }
+            graph
+                .triggers
+                .iter()
+                .any(|trigger| trigger.id == edge.from)
+                .then(|| trigger_payload.cloned().unwrap_or(Value::Null))
+        });
+
+    from_predecessor.unwrap_or_else(|| trigger_payload.cloned().unwrap_or(Value::Null))
+}
+
+pub fn disabled_outcome(kind: &str, output: Value) -> ConnectorOutcome {
+    match kind {
+        "flow.condition" => ConnectorOutcome::Branch {
+            taken: Branch::Then,
+            output,
+        },
+        "flow.loop" => ConnectorOutcome::Iterate { items: Vec::new() },
+        _ => ConnectorOutcome::Produced(output),
+    }
+}
+
 /// Renders a loop-nesting stack as `run_step.iteration_path`: empty outside
 /// any loop, `"c2[3]"` inside one, `"c2[3].c5[1]"` nested — outermost loop
 /// first.
@@ -129,6 +165,9 @@ mod tests {
             version: 1,
             credential_id: None,
             config: Map::new(),
+            name: None,
+            description: None,
+            disabled: false,
         }
     }
 
@@ -347,9 +386,148 @@ mod tests {
             triggers: vec![PlacedTrigger {
                 id: "t1".to_string(),
                 kind: TriggerKind::Manual,
+                name: None,
+                description: None,
             }],
         };
 
         assert_eq!(roots(&graph), vec!["c1"]);
+    }
+
+    fn trigger(id: &str) -> crate::domain::automation::workflow::PlacedTrigger {
+        crate::domain::automation::workflow::PlacedTrigger {
+            id: id.to_string(),
+            kind: crate::domain::automation::workflow::TriggerKind::Manual,
+            name: None,
+            description: None,
+        }
+    }
+
+    fn outputs(entries: &[(&str, Value)]) -> BTreeMap<String, Value> {
+        entries
+            .iter()
+            .map(|(id, output)| ((*id).to_string(), json!({ "output": output })))
+            .collect()
+    }
+
+    #[test]
+    fn a_disabled_connector_after_a_connector_passes_that_connectors_output() {
+        let graph = Graph {
+            connectors: vec![
+                connector("c1", "http.request"),
+                connector("c2", "http.request"),
+            ],
+            edges: vec![edge("t1", "c1", None), edge("c1", "c2", None)],
+            triggers: vec![trigger("t1")],
+        };
+        let produced = outputs(&[("c1", json!({ "status": 200 }))]);
+
+        let passed =
+            pass_through_output(&graph, "c2", &produced, Some(&json!({ "from": "trigger" })));
+
+        assert_eq!(passed, json!({ "status": 200 }));
+    }
+
+    #[test]
+    fn a_disabled_connector_straight_after_the_trigger_passes_the_trigger_payload() {
+        let graph = Graph {
+            connectors: vec![connector("c1", "http.request")],
+            edges: vec![edge("t1", "c1", None)],
+            triggers: vec![trigger("t1")],
+        };
+        let payload = json!({ "quote": 42 });
+
+        let passed = pass_through_output(&graph, "c1", &BTreeMap::new(), Some(&payload));
+
+        assert_eq!(passed, payload);
+    }
+
+    #[test]
+    fn with_several_predecessors_the_first_edge_that_produced_something_wins() {
+        let graph = Graph {
+            connectors: vec![
+                connector("a", "http.request"),
+                connector("b", "http.request"),
+                connector("merge", "http.request"),
+            ],
+            edges: vec![
+                edge("t1", "a", None),
+                edge("t1", "b", None),
+                edge("b", "merge", None),
+                edge("a", "merge", None),
+            ],
+            triggers: vec![trigger("t1")],
+        };
+        let produced = outputs(&[("a", json!("from a")), ("b", json!("from b"))]);
+
+        assert_eq!(
+            pass_through_output(&graph, "merge", &produced, None),
+            json!("from b"),
+            "b's edge comes first in the edge list"
+        );
+    }
+
+    #[test]
+    fn a_predecessor_that_never_ran_is_stepped_over() {
+        let graph = Graph {
+            connectors: vec![
+                connector("skipped", "http.request"),
+                connector("ran", "http.request"),
+                connector("merge", "http.request"),
+            ],
+            edges: vec![
+                edge("t1", "skipped", None),
+                edge("t1", "ran", None),
+                edge("skipped", "merge", None),
+                edge("ran", "merge", None),
+            ],
+            triggers: vec![trigger("t1")],
+        };
+        let produced = outputs(&[("ran", json!("only me"))]);
+
+        assert_eq!(
+            pass_through_output(&graph, "merge", &produced, None),
+            json!("only me")
+        );
+    }
+
+    #[test]
+    fn with_no_predecessor_and_no_payload_the_output_is_null() {
+        let graph = Graph {
+            connectors: vec![connector("c1", "http.request")],
+            edges: vec![],
+            triggers: Vec::new(),
+        };
+
+        assert_eq!(
+            pass_through_output(&graph, "c1", &BTreeMap::new(), None),
+            Value::Null
+        );
+        assert_eq!(
+            pass_through_output(&graph, "c1", &BTreeMap::new(), Some(&json!({ "a": 1 }))),
+            json!({ "a": 1 }),
+            "a root connector with no trigger edge falls back to the payload"
+        );
+    }
+
+    #[test]
+    fn a_disabled_condition_takes_its_main_branch_and_a_disabled_loop_iterates_nothing() {
+        let output = json!({ "matched": false, "items": [1, 2] });
+
+        assert_eq!(
+            disabled_outcome("flow.condition", output.clone()),
+            ConnectorOutcome::Branch {
+                taken: Branch::Then,
+                output: output.clone()
+            }
+        );
+        assert_eq!(
+            disabled_outcome("flow.loop", output.clone()),
+            ConnectorOutcome::Iterate { items: Vec::new() }
+        );
+        assert_eq!(
+            disabled_outcome("http.request", output.clone()),
+            ConnectorOutcome::Produced(output)
+        );
     }
 }

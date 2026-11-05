@@ -31,6 +31,9 @@ fn connector(id: &str, kind: &str, config: Value) -> PlacedConnector {
         version: 1,
         credential_id: None,
         config: configuration(config),
+        name: None,
+        description: None,
+        disabled: false,
     }
 }
 
@@ -81,6 +84,8 @@ fn reference_graph(members: &[Uuid]) -> Graph {
         triggers: vec![PlacedTrigger {
             id: "t1".to_owned(),
             kind: TriggerKind::Events(vec!["ticket.created".to_owned()]),
+            name: None,
+            description: None,
         }],
     }
 }

@@ -37,6 +37,17 @@ pub struct Run {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunOverview {
+    pub run: Run,
+    pub number: i64,
+    pub steps_done: i32,
+    pub steps_total: i32,
+    pub trigger_event_name: Option<String>,
+    pub failed_connector_id: Option<String>,
+    pub workflow_version_created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunStatus {
     Pending,

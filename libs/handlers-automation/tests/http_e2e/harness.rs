@@ -116,6 +116,47 @@ impl App {
         format!("{}/{workflow_id}/versions", self.workflows_url())
     }
 
+    pub fn folders_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/folders",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn folder_url(&self, folder_id: &str) -> String {
+        format!("{}/{folder_id}", self.folders_url())
+    }
+
+    pub fn runs_url(&self, workflow_id: &str) -> String {
+        format!("{}/{workflow_id}/runs", self.workflows_url())
+    }
+
+    pub fn run_log_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/runs",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn run_url(&self, run_id: &str) -> String {
+        format!("{}/{run_id}", self.run_log_url())
+    }
+
+    pub fn run_replay_url(&self, run_id: &str) -> String {
+        format!("{}/replay", self.run_url(run_id))
+    }
+
+    pub fn other_organization_id(&self) -> Uuid {
+        self.other_organization_id
+    }
+
+    pub fn other_organization_workflows_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/workflows",
+            self.base_url, self.other_organization_id
+        )
+    }
+
     pub fn settings_url(&self) -> String {
         format!(
             "{}/api/v1/organizations/{}/automation/settings",

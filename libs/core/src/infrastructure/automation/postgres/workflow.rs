@@ -5,8 +5,12 @@ use uuid::Uuid;
 
 use crate::{
     domain::automation::{
+        folder::FolderRefusal,
         ports::WorkflowRepository,
-        workflow::{Graph, Workflow, WorkflowLayout, WorkflowReference, WorkflowVersion},
+        workflow::{
+            ArchiveScope, Graph, Workflow, WorkflowLayout, WorkflowReference, WorkflowTags,
+            WorkflowVersion,
+        },
     },
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
 };
@@ -30,6 +34,9 @@ struct WorkflowRow {
     enabled: bool,
     current_version_id: Option<Uuid>,
     layout: Option<serde_json::Value>,
+    folder_id: Option<Uuid>,
+    tags: Vec<String>,
+    archived_at: Option<chrono::DateTime<chrono::Utc>>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -50,6 +57,9 @@ impl TryFrom<WorkflowRow> for Workflow {
                 .ok()
         });
 
+        let tags = WorkflowTags::try_from(row.tags)
+            .map_err(|e| CoreError::Internal(format!("invalid workflow tags in database: {e}")))?;
+
         Ok(Self {
             id: row.id,
             org_id: OrganizationId(row.org_id),
@@ -58,6 +68,9 @@ impl TryFrom<WorkflowRow> for Workflow {
             enabled: row.enabled,
             current_version_id: row.current_version_id,
             layout,
+            folder_id: row.folder_id,
+            tags,
+            archived_at: row.archived_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
@@ -91,27 +104,46 @@ impl TryFrom<WorkflowVersionRow> for WorkflowVersion {
     }
 }
 
+const FOLDER_FOREIGN_KEY: &str = "fk_automation_workflow_folder";
+
+fn map_write_error(error: sqlx::Error) -> CoreError {
+    match &error {
+        sqlx::Error::Database(database)
+            if database.is_foreign_key_violation()
+                && database.constraint() == Some(FOLDER_FOREIGN_KEY) =>
+        {
+            FolderRefusal::Missing.into()
+        }
+        _ => map_sqlx_error(error),
+    }
+}
+
 impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
     async fn insert(&mut self, workflow: &Workflow) -> Result<Workflow, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             WorkflowRow,
             r#"INSERT INTO automation.workflow
-                   (id, org_id, name, description, enabled, current_version_id, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-               RETURNING id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at"#,
+                   (id, org_id, name, description, enabled, current_version_id,
+                    folder_id, tags, archived_at, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+               RETURNING id, org_id, name, description, enabled, current_version_id, layout,
+                         folder_id, tags, archived_at, created_at, updated_at"#,
             workflow.id,
             workflow.org_id.0,
             workflow.name,
             workflow.description,
             workflow.enabled,
             workflow.current_version_id,
+            workflow.folder_id,
+            workflow.tags.as_slice(),
+            workflow.archived_at,
             workflow.created_at,
             workflow.updated_at,
         )
         .fetch_one(&mut ***tx)
         .await
-        .map_err(map_sqlx_error)?;
+        .map_err(map_write_error)?;
 
         row.try_into()
     }
@@ -124,7 +156,8 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             WorkflowRow,
-            r#"SELECT id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at
+            r#"SELECT id, org_id, name, description, enabled, current_version_id, layout,
+                      folder_id, tags, archived_at, created_at, updated_at
                FROM automation.workflow WHERE org_id = $1 AND id = $2"#,
             org_id.0,
             id,
@@ -139,15 +172,20 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
     async fn list_by_organization(
         &mut self,
         org_id: OrganizationId,
+        scope: ArchiveScope,
     ) -> Result<Vec<Workflow>, CoreError> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             WorkflowRow,
-            r#"SELECT id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at
+            r#"SELECT id, org_id, name, description, enabled, current_version_id, layout,
+                      folder_id, tags, archived_at, created_at, updated_at
                FROM automation.workflow
                WHERE org_id = $1
+                 AND ((archived_at IS NULL AND $2) OR (archived_at IS NOT NULL AND $3))
                ORDER BY name"#,
             org_id.0,
+            scope.includes_active(),
+            scope.includes_archived(),
         )
         .fetch_all(&mut ***tx)
         .await
@@ -165,19 +203,24 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         let row = sqlx::query_as!(
             WorkflowRow,
             r#"UPDATE automation.workflow
-               SET name = $3, description = $4, enabled = $5, updated_at = $6
+               SET name = $3, description = $4, enabled = $5, folder_id = $6, tags = $7,
+                   archived_at = $8, updated_at = $9
                WHERE org_id = $1 AND id = $2
-               RETURNING id, org_id, name, description, enabled, current_version_id, layout, created_at, updated_at"#,
+               RETURNING id, org_id, name, description, enabled, current_version_id, layout,
+                         folder_id, tags, archived_at, created_at, updated_at"#,
             org_id.0,
             workflow.id,
             workflow.name,
             workflow.description,
             workflow.enabled,
+            workflow.folder_id,
+            workflow.tags.as_slice(),
+            workflow.archived_at,
             workflow.updated_at,
         )
         .fetch_optional(&mut ***tx)
         .await
-        .map_err(map_sqlx_error)?;
+        .map_err(map_write_error)?;
 
         row.map(Workflow::try_from)
             .transpose()?
@@ -438,6 +481,20 @@ mod tests {
         id
     }
 
+    async fn seed_folder(pool: &PgPool, org_id: OrganizationId, name: &str) -> Uuid {
+        let id = generate_uuid_v7();
+        sqlx::query!(
+            "INSERT INTO automation.workflow_folder (id, org_id, name) VALUES ($1, $2, $3)",
+            id,
+            org_id.0,
+            name,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        id
+    }
+
     async fn seed_organization(pool: &PgPool, label: &str) -> OrganizationId {
         let owner_id = generate_uuid_v7();
         sqlx::query!(
@@ -479,6 +536,9 @@ mod tests {
             enabled: true,
             current_version_id: None,
             layout: None,
+            folder_id: None,
+            tags: WorkflowTags::default(),
+            archived_at: None,
             created_at: now,
             updated_at: now,
         }
@@ -492,6 +552,9 @@ mod tests {
                 version: 1,
                 credential_id,
                 config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
             }],
             edges: Vec::new(),
             triggers: Vec::new(),
@@ -570,13 +633,114 @@ mod tests {
 
         let listed = with_tx(&pool, async |tx| {
             let mut repo = PgWorkflowRepository::new(&tx);
-            repo.list_by_organization(org_id).await
+            repo.list_by_organization(org_id, ArchiveScope::All).await
         })
         .await
         .unwrap();
 
         assert_eq!(listed.len(), 2);
         assert!(listed.iter().all(|w| w.org_id == org_id));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn listing_filters_on_the_archive_scope() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "scope").await;
+        let now = now_storable();
+        let archived = Workflow {
+            enabled: false,
+            archived_at: Some(now),
+            ..workflow(org_id, "Archived")
+        };
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&workflow(org_id, "Active")).await?;
+            repo.insert(&archived).await
+        })
+        .await
+        .unwrap();
+
+        let names = |scope| {
+            let pool = pool.clone();
+            async move {
+                with_tx(&pool, async |tx| {
+                    let mut repo = PgWorkflowRepository::new(&tx);
+                    repo.list_by_organization(org_id, scope).await
+                })
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|w| w.name)
+                .collect::<Vec<_>>()
+            }
+        };
+
+        assert_eq!(names(ArchiveScope::Active).await, ["Active"]);
+        assert_eq!(names(ArchiveScope::Archived).await, ["Archived"]);
+        assert_eq!(names(ArchiveScope::All).await, ["Active", "Archived"]);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn folder_tags_and_archive_round_trip_through_insert_update_and_find() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "classification").await;
+        let folder_id = seed_folder(&pool, org_id, "Facturation").await;
+        let tags = WorkflowTags::try_from(vec!["CRM".to_owned(), "relance".to_owned()]).unwrap();
+        let written = Workflow {
+            folder_id: Some(folder_id),
+            tags: tags.clone(),
+            ..workflow(org_id, "Classified")
+        };
+
+        let inserted = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&written).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(inserted, written);
+
+        let archived_at = now_storable();
+        let archived = Workflow {
+            enabled: false,
+            archived_at: Some(archived_at),
+            folder_id: None,
+            tags: WorkflowTags::default(),
+            ..inserted
+        };
+        let updated = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.update(org_id, &archived).await?;
+            repo.find_by_id(org_id, archived.id).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(updated, Some(archived));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn filing_a_workflow_under_a_folder_that_is_gone_reads_as_a_missing_folder() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "missing-folder").await;
+        let orphan = Workflow {
+            folder_id: Some(generate_uuid_v7()),
+            ..workflow(org_id, "Orphan")
+        };
+
+        let outcome = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&orphan).await
+        })
+        .await;
+
+        assert!(
+            matches!(&outcome, Err(CoreError::Conflict(m)) if FolderRefusal::from_conflict(m) == Some(FolderRefusal::Missing))
+        );
     }
 
     #[tokio::test]
@@ -902,6 +1066,9 @@ mod tests {
                         m.insert("predicate".to_string(), serde_json::json!("{{ true }}"));
                         m
                     },
+                    name: None,
+                    description: None,
+                    disabled: false,
                 },
                 PlacedConnector {
                     id: "c2".to_string(),
@@ -913,6 +1080,9 @@ mod tests {
                         m.insert("predicate".to_string(), serde_json::json!("{{ false }}"));
                         m
                     },
+                    name: None,
+                    description: None,
+                    disabled: false,
                 },
             ],
             edges: vec![Edge {
@@ -931,6 +1101,96 @@ mod tests {
         .unwrap();
 
         assert_eq!(version.graph, graph);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_jsonb_graph_stored_before_node_labels_existed_reads_back_with_the_defaults() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "legacy-graph").await;
+        let inserted = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&workflow(org_id, "Legacy")).await
+        })
+        .await
+        .unwrap();
+        let legacy_graph = serde_json::json!({
+            "connectors": [{
+                "id": "c1",
+                "kind": "flow.condition",
+                "version": 1,
+                "credential_id": null,
+                "config": { "predicate": "{{ true }}" }
+            }],
+            "edges": [{ "from": "t1", "to": "c1", "branch": null }],
+            "triggers": [{ "id": "t1", "kind": "Manual" }]
+        });
+        let version_id = generate_uuid_v7();
+        sqlx::query(
+            "INSERT INTO automation.workflow_version (id, workflow_id, version, graph) VALUES ($1, $2, 1, $3)",
+        )
+        .bind(version_id)
+        .bind(inserted.id)
+        .bind(&legacy_graph)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.find_version_by_id(org_id, version_id).await
+        })
+        .await
+        .unwrap()
+        .expect("the legacy version is found");
+
+        let connector = &found.graph.connectors[0];
+        assert_eq!(connector.name, None);
+        assert_eq!(connector.description, None);
+        assert!(!connector.disabled);
+        assert_eq!(found.graph.triggers[0].name, None);
+        assert_eq!(found.graph.triggers[0].description, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn node_labels_and_the_disabled_flag_round_trip_through_the_database() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "labelled-graph").await;
+        let inserted = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&workflow(org_id, "Labelled")).await
+        })
+        .await
+        .unwrap();
+        let mut graph = graph_with_credential(None);
+        graph.connectors[0].name = Some("Create the partner".to_string());
+        graph.connectors[0].description = Some("Needs the quote".to_string());
+        graph.connectors[0].disabled = true;
+        graph
+            .triggers
+            .push(crate::domain::automation::workflow::PlacedTrigger {
+                id: "t1".to_string(),
+                kind: crate::domain::automation::workflow::TriggerKind::Manual,
+                name: Some("Start".to_string()),
+                description: Some("By hand".to_string()),
+            });
+
+        let version = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert_version(org_id, inserted.id, &graph, None).await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(version.graph, graph);
+        let reread = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.find_version_by_id(org_id, version.id).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(reread.map(|v| v.graph), Some(graph));
     }
 
     fn layout_with(entries: &[(&str, f64, f64)]) -> WorkflowLayout {

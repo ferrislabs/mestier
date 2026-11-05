@@ -639,6 +639,9 @@ mod tests {
                 version: 1,
                 credential_id: Some(created.id),
                 config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
             }],
             edges: vec![Edge {
                 from: "t1".to_string(),
@@ -648,6 +651,8 @@ mod tests {
             triggers: vec![PlacedTrigger {
                 id: "t1".to_string(),
                 kind: TriggerKind::Manual,
+                name: None,
+                description: None,
             }],
         };
         with_tx(&pool, async |tx| {

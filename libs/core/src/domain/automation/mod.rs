@@ -2,6 +2,7 @@ pub mod catalogue;
 pub mod connector;
 pub mod credential;
 pub mod expression;
+pub mod folder;
 pub mod ports;
 pub mod run;
 pub mod secret;

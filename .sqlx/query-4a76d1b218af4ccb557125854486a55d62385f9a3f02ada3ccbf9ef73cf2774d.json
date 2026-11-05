@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT run_number AS \"run_number!\" FROM automation.run\n               WHERE trigger_event_id = $1 AND workflow_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "run_number!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4a76d1b218af4ccb557125854486a55d62385f9a3f02ada3ccbf9ef73cf2774d"
+}

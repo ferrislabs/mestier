@@ -17,8 +17,8 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use mestier_core::{
     AuthRequirement, AuthScheme, AutomationSettings, Credential, CredentialOrigin, Field,
-    FieldKind, NodePosition, OrganizationId, Run, RunStatus, RunStep, SelectOption, StepStatus,
-    VisibleWhen, Workflow, WorkflowVersion,
+    FieldKind, NodePosition, OrganizationId, RunOverview, RunStatus, RunStep, SelectOption,
+    StepStatus, VisibleWhen, Workflow, WorkflowFolder, WorkflowVersion,
 };
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::Value;
@@ -278,6 +278,25 @@ pub fn secret_value(origin: CredentialOrigin, plaintext: &[u8]) -> Value {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct FolderResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub parent_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<WorkflowFolder> for FolderResponse {
+    fn from(value: WorkflowFolder) -> Self {
+        Self {
+            id: value.id,
+            name: value.name.into_string(),
+            parent_id: value.parent_id,
+            created_at: value.created_at,
+        }
+    }
+}
+
 // --- workflows -------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
@@ -288,6 +307,9 @@ pub struct WorkflowResponse {
     pub description: Option<String>,
     pub enabled: bool,
     pub current_version_id: Option<Uuid>,
+    pub folder_id: Option<Uuid>,
+    pub tags: Vec<String>,
+    pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -301,6 +323,9 @@ impl From<Workflow> for WorkflowResponse {
             description: value.description,
             enabled: value.enabled,
             current_version_id: value.current_version_id,
+            folder_id: value.folder_id,
+            tags: value.tags.into_vec(),
+            archived_at: value.archived_at,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }
@@ -346,6 +371,12 @@ pub struct PlacedConnectorDto {
     pub version: u16,
     pub credential_id: Option<Uuid>,
     pub config: serde_json::Map<String, Value>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub disabled: bool,
 }
 
 impl From<mestier_core::PlacedConnector> for PlacedConnectorDto {
@@ -356,6 +387,9 @@ impl From<mestier_core::PlacedConnector> for PlacedConnectorDto {
             version: value.version,
             credential_id: value.credential_id,
             config: value.config,
+            name: value.name,
+            description: value.description,
+            disabled: value.disabled,
         }
     }
 }
@@ -368,6 +402,9 @@ impl From<PlacedConnectorDto> for mestier_core::PlacedConnector {
             version: value.version,
             credential_id: value.credential_id,
             config: value.config,
+            name: value.name,
+            description: value.description,
+            disabled: value.disabled,
         }
     }
 }
@@ -427,6 +464,10 @@ impl From<TriggerKindDto> for mestier_core::TriggerKind {
 pub struct PlacedTriggerDto {
     pub id: String,
     pub kind: TriggerKindDto,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 impl From<mestier_core::PlacedTrigger> for PlacedTriggerDto {
@@ -434,6 +475,8 @@ impl From<mestier_core::PlacedTrigger> for PlacedTriggerDto {
         Self {
             id: value.id,
             kind: value.kind.into(),
+            name: value.name,
+            description: value.description,
         }
     }
 }
@@ -443,6 +486,8 @@ impl From<PlacedTriggerDto> for mestier_core::PlacedTrigger {
         Self {
             id: value.id,
             kind: value.kind.into(),
+            name: value.name,
+            description: value.description,
         }
     }
 }
@@ -577,6 +622,9 @@ pub struct WorkflowDetailResponse {
     pub name: String,
     pub description: Option<String>,
     pub enabled: bool,
+    pub folder_id: Option<Uuid>,
+    pub tags: Vec<String>,
+    pub archived_at: Option<DateTime<Utc>>,
     pub layout: Option<WorkflowLayoutDto>,
     pub current_version: Option<WorkflowVersionResponse>,
     pub created_at: DateTime<Utc>,
@@ -591,6 +639,9 @@ impl WorkflowDetailResponse {
             name: workflow.name,
             description: workflow.description,
             enabled: workflow.enabled,
+            folder_id: workflow.folder_id,
+            tags: workflow.tags.into_vec(),
+            archived_at: workflow.archived_at,
             layout: workflow.layout.map(WorkflowLayoutDto::from),
             current_version: current_version.map(WorkflowVersionResponse::from),
             created_at: workflow.created_at,
@@ -609,6 +660,17 @@ pub struct GraphErrorResponse {
     pub trigger_id: Option<String>,
     pub field: Option<String>,
     pub message: String,
+}
+
+fn node_fault(
+    node: &mestier_core::NodeRef,
+    field: &str,
+) -> (Option<String>, Option<String>, Option<String>) {
+    let id = node.id().to_owned();
+    match node {
+        mestier_core::NodeRef::Connector(_) => (Some(id), None, Some(field.to_owned())),
+        mestier_core::NodeRef::Trigger(_) => (None, Some(id), Some(field.to_owned())),
+    }
 }
 
 impl From<&mestier_core::GraphError> for GraphErrorResponse {
@@ -670,6 +732,10 @@ impl From<&mestier_core::GraphError> for GraphErrorResponse {
             InertTrigger { trigger_id } => (None, Some(trigger_id.clone()), None),
             EmptyEventTrigger { trigger_id } => (None, Some(trigger_id.clone()), None),
             UnknownEventName { trigger_id, .. } => (None, Some(trigger_id.clone()), None),
+            EmptyNodeName { node } | NodeNameTooLong { node } | DuplicateNodeName { node, .. } => {
+                node_fault(node, "name")
+            }
+            NodeDescriptionTooLong { node } => node_fault(node, "description"),
         };
 
         Self {
@@ -697,23 +763,38 @@ pub struct RunResponse {
     pub started_at: Option<DateTime<Utc>>,
     pub finished_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub number: i64,
+    pub steps_done: i32,
+    pub steps_total: i32,
+    pub trigger_id: Option<String>,
+    pub trigger_event_name: Option<String>,
+    pub failed_connector_id: Option<String>,
+    pub workflow_version_created_at: DateTime<Utc>,
 }
 
-impl From<Run> for RunResponse {
-    fn from(value: Run) -> Self {
+impl From<RunOverview> for RunResponse {
+    fn from(value: RunOverview) -> Self {
+        let run = value.run;
         Self {
-            id: value.id,
-            organization_id: value.org_id,
-            workflow_id: value.workflow_id,
-            workflow_version_id: value.workflow_version_id,
-            trigger_event_id: value.trigger_event_id,
-            trigger_payload: value.trigger_payload,
-            status: run_status_str(value.status).to_owned(),
-            error: value.error,
-            next_attempt_at: value.next_attempt_at,
-            started_at: value.started_at,
-            finished_at: value.finished_at,
-            created_at: value.created_at,
+            id: run.id,
+            organization_id: run.org_id,
+            workflow_id: run.workflow_id,
+            workflow_version_id: run.workflow_version_id,
+            trigger_event_id: run.trigger_event_id,
+            trigger_payload: run.trigger_payload,
+            status: run_status_str(run.status).to_owned(),
+            error: run.error,
+            next_attempt_at: run.next_attempt_at,
+            started_at: run.started_at,
+            finished_at: run.finished_at,
+            created_at: run.created_at,
+            number: value.number,
+            steps_done: value.steps_done,
+            steps_total: value.steps_total,
+            trigger_id: run.trigger_id,
+            trigger_event_name: value.trigger_event_name,
+            failed_connector_id: value.failed_connector_id,
+            workflow_version_created_at: value.workflow_version_created_at,
         }
     }
 }
@@ -820,7 +901,7 @@ impl From<AutomationSettingsBody> for AutomationSettings {
 
 #[cfg(test)]
 mod tests {
-    use mestier_core::{GraphError, connector_catalogue, event_catalogue};
+    use mestier_core::{GraphError, Run, connector_catalogue, event_catalogue};
     use serde_json::json;
 
     use super::*;
@@ -834,6 +915,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
             }],
             edges: vec![mestier_core::Edge {
                 from: "t1".to_string(),
@@ -843,6 +927,8 @@ mod tests {
             triggers: vec![mestier_core::PlacedTrigger {
                 id: "t1".to_string(),
                 kind: mestier_core::TriggerKind::Manual,
+                name: None,
+                description: None,
             }],
         };
 
@@ -1096,5 +1182,218 @@ mod tests {
             serde_json::from_value(serde_json::Value::Object(oversized));
 
         assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn a_node_dto_without_the_new_fields_reads_with_their_defaults() {
+        let connector: PlacedConnectorDto = serde_json::from_value(json!({
+            "id": "c1",
+            "kind": "flow.condition",
+            "version": 1,
+            "credential_id": null,
+            "config": {}
+        }))
+        .expect("an older client payload still parses");
+        let trigger: PlacedTriggerDto = serde_json::from_value(json!({
+            "id": "t1",
+            "kind": "Manual"
+        }))
+        .expect("an older client payload still parses");
+
+        assert_eq!(connector.name, None);
+        assert_eq!(connector.description, None);
+        assert!(!connector.disabled);
+        assert_eq!(trigger.name, None);
+        assert_eq!(trigger.description, None);
+    }
+
+    #[test]
+    fn node_labels_and_the_disabled_flag_cross_the_wire_both_ways() {
+        let dto: GraphDto = serde_json::from_value(json!({
+            "connectors": [{
+                "id": "c1",
+                "kind": "flow.condition",
+                "version": 1,
+                "credential_id": null,
+                "config": {},
+                "name": "Is it paid",
+                "description": "Stops unpaid quotes",
+                "disabled": true
+            }],
+            "edges": [{ "from": "t1", "to": "c1", "branch": null }],
+            "triggers": [{
+                "id": "t1",
+                "kind": "Manual",
+                "name": "Start",
+                "description": "By hand"
+            }]
+        }))
+        .expect("parses");
+
+        let domain = mestier_core::Graph::from(dto.clone());
+        assert_eq!(domain.connectors[0].name.as_deref(), Some("Is it paid"));
+        assert_eq!(
+            domain.connectors[0].description.as_deref(),
+            Some("Stops unpaid quotes")
+        );
+        assert!(domain.connectors[0].disabled);
+        assert_eq!(domain.triggers[0].name.as_deref(), Some("Start"));
+        assert_eq!(domain.triggers[0].description.as_deref(), Some("By hand"));
+
+        let back = serde_json::to_value(GraphDto::from(domain)).unwrap();
+        assert_eq!(back["connectors"][0]["name"], "Is it paid");
+        assert_eq!(back["connectors"][0]["description"], "Stops unpaid quotes");
+        assert_eq!(back["connectors"][0]["disabled"], true);
+        assert_eq!(back["triggers"][0]["name"], "Start");
+        assert_eq!(back["triggers"][0]["description"], "By hand");
+        assert_eq!(GraphDto::from(mestier_core::Graph::from(dto.clone())), dto);
+    }
+
+    #[test]
+    fn a_graph_dto_always_serializes_the_node_fields() {
+        let dto = GraphDto::from(mestier_core::Graph {
+            connectors: vec![mestier_core::PlacedConnector {
+                id: "c1".to_string(),
+                kind: "flow.condition".to_string(),
+                version: 1,
+                credential_id: None,
+                config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
+            }],
+            edges: Vec::new(),
+            triggers: vec![mestier_core::PlacedTrigger {
+                id: "t1".to_string(),
+                kind: mestier_core::TriggerKind::Manual,
+                name: None,
+                description: None,
+            }],
+        });
+
+        let json = serde_json::to_value(dto).unwrap();
+
+        assert_eq!(json["connectors"][0]["name"], serde_json::Value::Null);
+        assert_eq!(
+            json["connectors"][0]["description"],
+            serde_json::Value::Null
+        );
+        assert_eq!(json["connectors"][0]["disabled"], false);
+        assert_eq!(json["triggers"][0]["name"], serde_json::Value::Null);
+        assert_eq!(json["triggers"][0]["description"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn node_label_errors_name_the_node_and_the_field_at_fault() {
+        let on_connector = GraphErrorResponse::from(&GraphError::NodeNameTooLong {
+            node: mestier_core::NodeRef::Connector("c1".to_string()),
+        });
+        let on_trigger = GraphErrorResponse::from(&GraphError::NodeDescriptionTooLong {
+            node: mestier_core::NodeRef::Trigger("t1".to_string()),
+        });
+        let duplicate = GraphErrorResponse::from(&GraphError::DuplicateNodeName {
+            node: mestier_core::NodeRef::Connector("c2".to_string()),
+            name: "Is it paid".to_string(),
+        });
+        let empty = GraphErrorResponse::from(&GraphError::EmptyNodeName {
+            node: mestier_core::NodeRef::Trigger("t1".to_string()),
+        });
+
+        assert_eq!(on_connector.connector_id.as_deref(), Some("c1"));
+        assert_eq!(on_connector.trigger_id, None);
+        assert_eq!(on_connector.field.as_deref(), Some("name"));
+        assert_eq!(on_trigger.connector_id, None);
+        assert_eq!(on_trigger.trigger_id.as_deref(), Some("t1"));
+        assert_eq!(on_trigger.field.as_deref(), Some("description"));
+        assert_eq!(duplicate.connector_id.as_deref(), Some("c2"));
+        assert_eq!(duplicate.field.as_deref(), Some("name"));
+        assert!(duplicate.message.contains("Is it paid"));
+        assert_eq!(empty.trigger_id.as_deref(), Some("t1"));
+        assert_eq!(empty.field.as_deref(), Some("name"));
+    }
+
+    fn overview() -> mestier_core::RunOverview {
+        let instant = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).expect("valid instant");
+        mestier_core::RunOverview {
+            run: Run {
+                id: Uuid::from_u128(1),
+                org_id: OrganizationId(Uuid::from_u128(2)),
+                workflow_id: Uuid::from_u128(3),
+                workflow_version_id: Uuid::from_u128(4),
+                trigger_event_id: Some(Uuid::from_u128(5)),
+                trigger_payload: None,
+                trigger_id: Some("t1".to_string()),
+                status: RunStatus::Failed,
+                error: Some("boom".to_string()),
+                next_attempt_at: None,
+                locked_at: None,
+                locked_by: None,
+                started_at: Some(instant),
+                finished_at: Some(instant),
+                created_at: instant,
+            },
+            number: 1285,
+            steps_done: 3,
+            steps_total: 5,
+            trigger_event_name: Some("quote.accepted".to_string()),
+            failed_connector_id: Some("c4".to_string()),
+            workflow_version_created_at: instant,
+        }
+    }
+
+    #[test]
+    fn a_run_response_carries_the_numbering_progress_and_trigger_fields() {
+        let json = serde_json::to_value(RunResponse::from(overview())).unwrap();
+
+        assert_eq!(json["number"], 1285);
+        assert_eq!(json["steps_done"], 3);
+        assert_eq!(json["steps_total"], 5);
+        assert_eq!(json["trigger_id"], "t1");
+        assert_eq!(json["trigger_event_name"], "quote.accepted");
+        assert_eq!(json["failed_connector_id"], "c4");
+        assert_eq!(json["workflow_version_created_at"], "2023-11-14T22:13:20Z");
+        assert_eq!(json["status"], "failed");
+        assert_eq!(json["error"], "boom");
+    }
+
+    #[test]
+    fn the_optional_run_fields_serialize_as_null_for_a_manual_successful_run() {
+        let mut manual = overview();
+        manual.run.trigger_event_id = None;
+        manual.run.trigger_id = None;
+        manual.run.status = RunStatus::Succeeded;
+        manual.run.error = None;
+        manual.trigger_event_name = None;
+        manual.failed_connector_id = None;
+
+        let json = serde_json::to_value(RunResponse::from(manual)).unwrap();
+
+        assert_eq!(json["trigger_id"], serde_json::Value::Null);
+        assert_eq!(json["trigger_event_name"], serde_json::Value::Null);
+        assert_eq!(json["failed_connector_id"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn a_run_detail_response_repeats_the_same_fields_beside_its_steps() {
+        let detail = RunDetailResponse {
+            run: RunResponse::from(overview()),
+            steps: Vec::new(),
+            graph: None,
+        };
+
+        let json = serde_json::to_value(detail).unwrap();
+
+        for field in [
+            "number",
+            "steps_done",
+            "steps_total",
+            "trigger_id",
+            "trigger_event_name",
+            "failed_connector_id",
+            "workflow_version_created_at",
+        ] {
+            assert!(json.get(field).is_some(), "{field} missing: {json}");
+        }
+        assert_eq!(json["steps"], json!([]));
     }
 }

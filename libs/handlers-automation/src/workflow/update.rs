@@ -1,25 +1,15 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::UpdateWorkflowCommand;
-use serde::{Deserialize, Deserializer};
+use mestier_core::{UpdateWorkflowCommand, WorkflowTags};
+use serde::Deserialize;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::{
-    paths::WorkflowPath, require_manage_automation, response::WorkflowResponse,
-    workflow::find_workflow_in_org,
+    error::AutomationError, paths::WorkflowPath, request::deserialize_present,
+    require_manage_automation, response::WorkflowResponse, workflow::find_workflow_in_org,
 };
-
-/// Distinguishes "the key is absent" (leave the field unchanged) from "the
-/// key is present" (apply it, `null` included) — same convention as
-/// `handlers-planning::task::update::deserialize_present`.
-fn deserialize_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Deserialize::deserialize(deserializer).map(Some)
-}
 
 /// Every field optional. `enabled` is #203's "enable/disable"; `name` and
 /// `description` come along for free since `UpdateWorkflowCommand` already
@@ -33,6 +23,13 @@ pub struct UpdateWorkflowRequest {
     pub description: Option<Option<String>>,
     #[serde(default)]
     pub enabled: Option<bool>,
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<Uuid>, nullable)]
+    pub folder_id: Option<Option<Uuid>>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub archived: Option<bool>,
 }
 
 #[utoipa::path(
@@ -46,10 +43,12 @@ pub struct UpdateWorkflowRequest {
     ),
     request_body = UpdateWorkflowRequest,
     responses(
-        (status = 200, description = "Workflow updated", body = inline(DataEnvelope<WorkflowResponse>)),
+        (status = 200, description = "Workflow updated. `archived: true` also disables it; `archived: false` leaves it disabled. updated_at only moves for a new name or description", body = inline(DataEnvelope<WorkflowResponse>)),
+        (status = 400, description = "Validation failed, including more than 10 tags or a tag outside 1 to 30 characters"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Workflow not found"),
+        (status = 409, description = "E_WORKFLOW_ARCHIVED when enabling an archived workflow; otherwise the folder does not exist in this organization"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -61,10 +60,15 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpdateWorkflowRequest>,
-) -> Result<Response<WorkflowResponse>, ApiError> {
+) -> Result<Response<WorkflowResponse>, AutomationError> {
     require_manage_automation(&state, &identity, organization_id).await?;
     find_workflow_in_org(&state, organization_id, workflow_id).await?;
 
+    let tags = payload
+        .tags
+        .map(WorkflowTags::try_from)
+        .transpose()
+        .map_err(|error| ApiError::Validation(error.to_string()))?;
     let updated = state
         .usecase
         .update_workflow(UpdateWorkflowCommand {
@@ -73,6 +77,9 @@ pub async fn handler(
             name: payload.name,
             description: payload.description,
             enabled: payload.enabled,
+            folder_id: payload.folder_id,
+            tags,
+            archived: payload.archived,
         })
         .await?;
 
@@ -120,5 +127,41 @@ mod tests {
         let request = parse(json!({ "enabled": false }));
 
         assert_eq!(request.enabled, Some(false));
+    }
+
+    #[test]
+    fn absent_classification_fields_leave_them_unset() {
+        let request = parse(json!({}));
+
+        assert_eq!(request.folder_id, None);
+        assert_eq!(request.tags, None);
+        assert_eq!(request.archived, None);
+    }
+
+    #[test]
+    fn a_null_folder_sends_the_workflow_to_the_root() {
+        let request = parse(json!({ "folder_id": null }));
+
+        assert_eq!(request.folder_id, Some(None));
+    }
+
+    #[test]
+    fn a_present_folder_is_kept() {
+        let folder = Uuid::from_u128(9);
+
+        let request = parse(json!({ "folder_id": folder }));
+
+        assert_eq!(request.folder_id, Some(Some(folder)));
+    }
+
+    #[test]
+    fn tags_and_archived_are_read_as_given() {
+        let request = parse(json!({ "tags": ["crm", "relance"], "archived": true }));
+
+        assert_eq!(
+            request.tags,
+            Some(vec!["crm".to_owned(), "relance".to_owned()])
+        );
+        assert_eq!(request.archived, Some(true));
     }
 }

@@ -4,11 +4,13 @@ use events::EventEnvelope;
 use uuid::Uuid;
 
 use crate::domain::automation::credential::Credential;
-use crate::domain::automation::run::{DueRun, Run, RunSettlement, RunStep};
+use crate::domain::automation::folder::WorkflowFolder;
+use crate::domain::automation::run::{DueRun, Run, RunOverview, RunSettlement, RunStep};
 use crate::domain::automation::secret::SealedSecret;
 use crate::domain::automation::settings::AutomationSettings;
 use crate::domain::automation::workflow::{
-    Graph, PlacedTrigger, Workflow, WorkflowLayout, WorkflowReference, WorkflowVersion,
+    ArchiveScope, Graph, PlacedTrigger, Workflow, WorkflowLayout, WorkflowReference,
+    WorkflowVersion,
 };
 
 /// Appends events to the durable log.
@@ -209,10 +211,10 @@ pub trait WorkflowRepository: Send {
     fn list_by_organization(
         &mut self,
         org_id: OrganizationId,
+        scope: ArchiveScope,
     ) -> impl Future<Output = Result<Vec<Workflow>, CoreError>> + Send;
 
-    /// Name, description and `enabled` only — `current_version_id` is moved
-    /// exclusively by [`Self::insert_version`].
+    /// `current_version_id` is moved exclusively by [`Self::insert_version`].
     fn update(
         &mut self,
         org_id: OrganizationId,
@@ -278,6 +280,42 @@ pub trait WorkflowRepository: Send {
     ) -> impl Future<Output = Result<Vec<WorkflowReference>, CoreError>> + Send;
 }
 
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait WorkflowFolderRepository: Send {
+    fn insert(
+        &mut self,
+        folder: &WorkflowFolder,
+    ) -> impl Future<Output = Result<WorkflowFolder, CoreError>> + Send;
+
+    fn find_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<WorkflowFolder>, CoreError>> + Send;
+
+    fn list_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<WorkflowFolder>, CoreError>> + Send;
+
+    fn lock_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<WorkflowFolder>, CoreError>> + Send;
+
+    fn update(
+        &mut self,
+        org_id: OrganizationId,
+        folder: &WorkflowFolder,
+    ) -> impl Future<Output = Result<WorkflowFolder, CoreError>> + Send;
+
+    fn delete(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
 /// Runs and their steps — see `domain::automation::run` for the model this
 /// persists, and its module doc for the at-least-once, never-replay-a-
 /// succeeded-step discipline every method here exists to uphold. `org_id` is
@@ -337,6 +375,17 @@ pub trait RunRepository: Send {
         &mut self,
         org_id: OrganizationId,
     ) -> impl Future<Output = Result<Vec<Run>, CoreError>> + Send;
+
+    fn overviews_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<RunOverview>, CoreError>> + Send;
+
+    fn overview_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        run_id: Uuid,
+    ) -> impl Future<Output = Result<Option<RunOverview>, CoreError>> + Send;
 
     /// Deletes the recorded steps for `connector_ids` (every iteration of
     /// each, inside a loop or not) so the engine finds no settled step for
