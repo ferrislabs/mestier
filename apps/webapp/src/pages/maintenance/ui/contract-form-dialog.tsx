@@ -44,7 +44,7 @@ export interface ContractFormDialogProps {
 }
 
 const SELECT =
-	'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm disabled:opacity-60'
+	'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30'
 
 function FieldError({ message }: { message?: string }) {
 	return message ? (
@@ -253,7 +253,10 @@ export function ContractFormDialog({
 							<section aria-label="Prestations" className="space-y-3">
 								<h3 className="text-sm font-semibold">Prestations</h3>
 								{draft.lines.map((line, index) => (
-									<div key={line.key} className="space-y-3 border p-3">
+									<div
+										key={line.key}
+										className="space-y-3 rounded-lg border bg-muted/30 p-3"
+									>
 										<div className="flex items-end gap-2">
 											<div className="min-w-0 flex-1 space-y-1">
 												<Label htmlFor={`${line.key}-label`}>

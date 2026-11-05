@@ -27,7 +27,6 @@ export function GridFeature(props: GridFeatureProps) {
 		<GridScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			{...props}
 		/>
 	)
@@ -35,11 +34,10 @@ export function GridFeature(props: GridFeatureProps) {
 
 function GridScreen({
 	organizationId,
-	organizationName,
 	season,
 	onSeasonChange,
 	today = todayIsoDate(),
-}: GridFeatureProps & { organizationId: string; organizationName: string }) {
+}: GridFeatureProps & { organizationId: string }) {
 	const gridQuery = useMaintenanceGrid(organizationId, season)
 	const record = useRecordMaintenanceIntervention()
 
@@ -91,7 +89,6 @@ function GridScreen({
 
 	return (
 		<GridUi
-			organizationName={organizationName}
 			season={season}
 			grid={grid}
 			currentWeek={currentWeek}

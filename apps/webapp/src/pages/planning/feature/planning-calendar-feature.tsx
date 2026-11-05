@@ -96,7 +96,6 @@ export function PlanningCalendarFeature({
 		<PlanningCalendarScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			organizationSlug={activeOrganization.slug}
 			view={view}
 			date={date}
@@ -108,7 +107,6 @@ export function PlanningCalendarFeature({
 
 interface PlanningCalendarScreenProps {
 	organizationId: string
-	organizationName: string
 	organizationSlug: string
 	view: PlanningView
 	date: string
@@ -128,7 +126,6 @@ const DEFAULT_TIME_ZONE = 'Europe/Paris'
 
 function PlanningCalendarScreen({
 	organizationId,
-	organizationName,
 	organizationSlug,
 	view,
 	date,
@@ -534,7 +531,6 @@ function PlanningCalendarScreen({
 	return (
 		<>
 			<PlanningCalendarUI
-				organizationName={organizationName}
 				organizationSlug={organizationSlug}
 				pendingReportsCount={pendingReportsCount}
 				view={view}

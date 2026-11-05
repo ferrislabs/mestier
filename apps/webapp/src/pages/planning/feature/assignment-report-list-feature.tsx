@@ -44,17 +44,14 @@ export function AssignmentReportListFeature() {
 		<AssignmentReportListScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 		/>
 	)
 }
 
 function AssignmentReportListScreen({
 	organizationId,
-	organizationName,
 }: {
 	organizationId: string
-	organizationName: string
 }) {
 	const [initialState] = useState(getAssignmentReportListUrlState)
 	const [page, setPage] = useState(initialState.page)
@@ -101,7 +98,6 @@ function AssignmentReportListScreen({
 
 	return (
 		<AssignmentReportListUI
-			organizationName={organizationName}
 			reports={reportsQuery.data?.data ?? []}
 			pagination={reportsQuery.data?.pagination}
 			page={page}

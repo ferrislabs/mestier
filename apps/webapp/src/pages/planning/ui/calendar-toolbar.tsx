@@ -95,113 +95,111 @@ export function CalendarToolbar({
 			: `${selectedMemberIds.length} personne${selectedMemberIds.length > 1 ? 's' : ''}`
 
 	return (
-		<div className="flex flex-col gap-4">
-			<div className="flex flex-wrap items-center gap-3">
+		<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+			<div className="flex items-center gap-1">
 				<Button
 					type="button"
 					variant="outline"
-					size="icon"
+					size="icon-sm"
 					aria-label="Période précédente"
 					onClick={() => onDateChange(shiftDate(view, date, -1))}
 				>
 					<ChevronLeft />
 				</Button>
-				<h2 className="text-2xl font-normal text-foreground md:text-3xl">
-					{formatWindowLabel(view, windowFrom, windowTo)}
-				</h2>
 				<Button
 					type="button"
 					variant="outline"
-					size="icon"
+					size="icon-sm"
 					aria-label="Période suivante"
 					onClick={() => onDateChange(shiftDate(view, date, 1))}
 				>
 					<ChevronRight />
 				</Button>
-
 				<Button
 					type="button"
-					variant="ghost"
+					variant="outline"
+					size="sm"
 					onClick={() => onDateChange(today ?? todayIsoDate())}
 				>
 					Aujourd’hui
 				</Button>
 			</div>
+			<h2 className="min-w-40 text-sm font-medium tabular text-foreground">
+				{formatWindowLabel(view, windowFrom, windowTo)}
+			</h2>
 
-			<div className="flex flex-wrap items-center justify-between gap-3">
+			<div className="ml-auto flex flex-wrap items-center gap-2">
 				<NatureSegments filter={filter} onFilterChange={onFilterChange} />
 
-				<div className="flex flex-wrap items-center gap-2">
-					<Select
-						value={view}
-						onValueChange={(value) => onViewChange(value as PlanningView)}
-					>
-						<SelectTrigger className="w-32" aria-label="Granularité">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{PLANNING_VIEWS.map((option) => (
-								<SelectItem key={option} value={option}>
-									{VIEW_LABELS[option]}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+				<Select
+					value={view}
+					onValueChange={(value) => onViewChange(value as PlanningView)}
+				>
+					<SelectTrigger size="sm" className="w-32" aria-label="Granularité">
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						{PLANNING_VIEWS.map((option) => (
+							<SelectItem key={option} value={option}>
+								{VIEW_LABELS[option]}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
 
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button type="button" variant="outline">
-								<Users />
-								{memberLabel}
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" className="w-64">
-							<DropdownMenuLabel>Filtrer par personne</DropdownMenuLabel>
-							<DropdownMenuSeparator />
-							{members.map((member) => (
-								<DropdownMenuCheckboxItem
-									key={member.id}
-									checked={selectedMemberIds.includes(member.id)}
-									onCheckedChange={() => onToggleMember(member.id)}
-								>
-									{member.name}
-								</DropdownMenuCheckboxItem>
-							))}
-							<DropdownMenuSeparator />
-							<DropdownMenuItem
-								disabled={selectedMemberIds.length === 0}
-								onClick={onResetMembers}
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button type="button" variant="outline" size="sm">
+							<Users />
+							{memberLabel}
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" className="w-64">
+						<DropdownMenuLabel>Filtrer par personne</DropdownMenuLabel>
+						<DropdownMenuSeparator />
+						{members.map((member) => (
+							<DropdownMenuCheckboxItem
+								key={member.id}
+								checked={selectedMemberIds.includes(member.id)}
+								onCheckedChange={() => onToggleMember(member.id)}
 							>
-								Toute l’équipe
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
+								{member.name}
+							</DropdownMenuCheckboxItem>
+						))}
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							disabled={selectedMemberIds.length === 0}
+							onClick={onResetMembers}
+						>
+							Toute l’équipe
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button type="button">
-								<Plus />
-								Ajouter
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end">
-							<RequirePermission permission="MANAGE_PLANNING">
-								<DropdownMenuItem onClick={() => onCreate('task')}>
-									<CalendarPlus />
-									Une tâche
-								</DropdownMenuItem>
-							</RequirePermission>
-							<RequirePermission permission="MANAGE_REFERENCE">
-								<DropdownMenuItem onClick={() => onCreate('leave')}>
-									Un congé
-								</DropdownMenuItem>
-								<DropdownMenuItem onClick={() => onCreate('absence')}>
-									Une absence
-								</DropdownMenuItem>
-							</RequirePermission>
-						</DropdownMenuContent>
-					</DropdownMenu>
-				</div>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button type="button" size="sm">
+							<Plus />
+							Ajouter
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<RequirePermission permission="MANAGE_PLANNING">
+							<DropdownMenuItem onClick={() => onCreate('task')}>
+								<CalendarPlus />
+								Une tâche
+							</DropdownMenuItem>
+						</RequirePermission>
+						<RequirePermission permission="MANAGE_REFERENCE">
+							<DropdownMenuItem onClick={() => onCreate('leave')}>
+								Un congé
+							</DropdownMenuItem>
+							<DropdownMenuItem onClick={() => onCreate('absence')}>
+								Une absence
+							</DropdownMenuItem>
+						</RequirePermission>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</div>
 		</div>
 	)
@@ -216,7 +214,7 @@ function NatureSegments({ filter, onFilterChange }: NatureSegmentsProps) {
 	return (
 		<fieldset
 			aria-label="Filtrer par nature"
-			className="inline-flex items-center gap-1 rounded-full border bg-card p-1"
+			className="inline-flex items-center gap-0.5 rounded-lg border bg-card p-0.5"
 		>
 			{CALENDAR_FILTER_OPTIONS.map((option) => {
 				const active = option.value === filter
@@ -227,7 +225,7 @@ function NatureSegments({ filter, onFilterChange }: NatureSegmentsProps) {
 						aria-pressed={active}
 						onClick={() => onFilterChange(option.value)}
 						className={cn(
-							'rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+							'rounded-md px-2.5 py-1 text-[13px] font-medium transition-colors',
 							active
 								? 'bg-primary text-primary-foreground'
 								: 'text-muted-foreground hover:bg-muted hover:text-foreground',

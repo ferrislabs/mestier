@@ -19,7 +19,7 @@ export interface MaintenanceGridProps {
 	onCellClick: (target: VisitEntryTarget) => void
 }
 
-const CELL = 'h-9 min-w-9 w-9 p-0 text-center align-middle text-xs'
+const CELL = 'h-10 w-10 min-w-10 p-0.5 text-center align-middle text-xs tabular'
 const STICKY = 'sticky left-0 z-[1] bg-card'
 
 /**
@@ -35,7 +35,7 @@ export function MaintenanceGrid({
 	const weeks = sheetWeeks(grid.contracts)
 
 	return (
-		<div className="overflow-x-auto border bg-card">
+		<div className="overflow-x-auto rounded-lg border bg-card">
 			<table className="border-separate border-spacing-0 text-sm">
 				<thead>
 					<tr>
@@ -43,7 +43,7 @@ export function MaintenanceGrid({
 							scope="col"
 							className={cn(
 								STICKY,
-								'z-[2] min-w-56 border-b px-3 py-2 text-left font-medium',
+								'z-[2] min-w-56 border-b px-3 py-2 text-left text-xs font-medium text-muted-foreground',
 							)}
 						>
 							Prestation
@@ -100,7 +100,7 @@ function ContractBlock({
 					className="border-b bg-muted/50 p-0 text-left font-normal"
 				>
 					<div className="sticky left-0 flex w-fit flex-wrap items-baseline gap-x-3 px-3 py-2">
-						<span className="font-semibold">{contractTitle(contract)}</span>
+						<span className="font-medium">{contractTitle(contract)}</span>
 						<span className="text-xs text-muted-foreground">
 							{[contract.site.city, seasonLabel(contract.season)]
 								.filter(Boolean)
@@ -224,7 +224,7 @@ function SheetCell({
 					title={cell.due ? `Échéance le ${cell.due.day}` : undefined}
 					onClick={onClick}
 					className={cn(
-						'flex h-9 w-full items-center justify-center hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-ring',
+						'flex h-9 w-full items-center justify-center rounded-md hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-ring',
 						CELL_STYLES[cell.state],
 					)}
 				>
@@ -233,7 +233,7 @@ function SheetCell({
 			) : (
 				<span
 					className={cn(
-						'flex h-9 w-full items-center justify-center',
+						'flex h-9 w-full items-center justify-center rounded-md',
 						CELL_STYLES[cell.state],
 					)}
 				>

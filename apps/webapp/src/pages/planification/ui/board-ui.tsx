@@ -1,12 +1,8 @@
-import { AlertCircle, KanbanSquare } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { EmptyState } from '#/components/empty-state'
 import { Button } from '#/components/ui/button'
-import {
-	PageHeader,
-	PageShell,
-	SectionCard,
-	StatusBadge,
-} from '#/components/ui/surface'
+import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
 import {
 	BoardColumns,
 	type BoardColumnsProps,
@@ -15,7 +11,6 @@ import {
 
 export interface BoardUIProps
 	extends Omit<BoardColumnsProps, 'columns' | 'isLoading'> {
-	organizationName: string
 	columns: BoardColumnVM[]
 	isLoading: boolean
 	error: string | null
@@ -51,7 +46,6 @@ export interface BoardUIProps
 }
 
 export function BoardUI({
-	organizationName,
 	columns,
 	isLoading,
 	error,
@@ -74,19 +68,13 @@ export function BoardUI({
 			<PageHeader
 				title="Tableau"
 				description="Cinq colonnes, une carte par tâche. Déplacez une carte pour la faire avancer, ou planifiez-la sans quitter l’écran."
-				eyebrow={organizationName}
-				leading={
-					<div className="flex size-12 items-center justify-center rounded-lg bg-brand-soft text-primary">
-						<KanbanSquare className="size-6" />
-					</div>
-				}
 			/>
 
 			{error ? (
-				<SectionCard className="flex flex-col gap-3 border-destructive/30 bg-destructive-soft p-5 text-destructive sm:flex-row sm:items-center sm:justify-between">
+				<SectionCard className="flex flex-col gap-3 border-destructive/30 bg-destructive-soft p-4 text-destructive sm:flex-row sm:items-center sm:justify-between">
 					<div className="flex items-center gap-3">
-						<AlertCircle className="size-5 shrink-0" />
-						<p className="text-sm font-medium">{error}</p>
+						<AlertCircle className="size-4 shrink-0" />
+						<p className="text-[13px] font-medium">{error}</p>
 					</div>
 					<Button onClick={onRetry} variant="outline" size="sm">
 						Réessayer
@@ -94,36 +82,32 @@ export function BoardUI({
 				</SectionCard>
 			) : null}
 
-			<SectionCard className="flex min-w-0 flex-col gap-4 overflow-hidden p-4">
-				<div className="min-w-0">
-					<div className="flex flex-wrap items-center gap-2">
-						<h2 className="font-semibold">Tâches</h2>
-						<StatusBadge tone="neutral">
-							{cardCount} carte{cardCount > 1 ? 's' : ''}
-						</StatusBadge>
-					</div>
-					<p className="mt-1 text-sm text-muted-foreground">
-						Sélectionnez une carte puis utilisez les flèches : gauche/droite
-						pour changer de colonne, haut/bas pour la réordonner.
-					</p>
-				</div>
-
+			<div className="flex min-w-0 flex-col gap-4">
 				{toolbar}
 
+				<p className="text-xs text-muted-foreground">
+					<span className="tabular font-medium text-foreground">
+						{cardCount} carte{cardCount > 1 ? 's' : ''}
+					</span>
+					{' · '}
+					Sélectionnez une carte puis utilisez les flèches : gauche/droite pour
+					changer de colonne, haut/bas pour la réordonner.
+				</p>
+
 				{truncationNotice ? (
-					<output className="block rounded-md border border-dashed bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+					<output className="block rounded-lg border border-dashed bg-card px-3 py-2 text-[13px] text-muted-foreground">
 						{truncationNotice}
 					</output>
 				) : null}
 
 				{isEmpty ? (
-					<div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-muted/25 p-10 text-center">
-						<p className="text-sm font-semibold">Aucune tâche</p>
-						<p className="text-sm text-muted-foreground">
-							{emptyReason ??
-								'Le tableau est vide : rien n’est encore à faire, ni en cours, ni terminé.'}
-						</p>
-					</div>
+					<EmptyState
+						title="Aucune tâche"
+						hint={
+							emptyReason ??
+							'Le tableau est vide : rien n’est encore à faire, ni en cours, ni terminé.'
+						}
+					/>
 				) : (
 					<BoardColumns
 						{...boardProps}
@@ -131,7 +115,7 @@ export function BoardUI({
 						isLoading={isLoading}
 					/>
 				)}
-			</SectionCard>
+			</div>
 
 			<output aria-live="polite" className="sr-only">
 				{announcement}

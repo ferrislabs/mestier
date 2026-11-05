@@ -104,7 +104,7 @@ export function QuickCreatePopover({
 			</PopoverAnchor>
 			<PopoverContent
 				align="start"
-				className="w-80 rounded-none p-4 shadow-lg"
+				className="w-80 p-4"
 				onInteractOutside={(event) => {
 					// The assignee picker below is its own Popover — its options
 					// render in a separate Radix popper, positioned outside this
@@ -182,7 +182,7 @@ function TimeSelect({
 			aria-label="Heure"
 			value={value}
 			onChange={(event) => onChange(event.target.value)}
-			className="h-9 flex-1 rounded-md border border-input bg-card px-2 text-sm"
+			className="h-8 flex-1 rounded-md border border-input bg-card px-2 text-[13px] shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
 		>
 			{TIME_OPTIONS.map((option) => (
 				<option key={option} value={option}>

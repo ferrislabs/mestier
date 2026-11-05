@@ -44,18 +44,11 @@ export function ValidationFeature() {
 		<ValidationScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 		/>
 	)
 }
 
-function ValidationScreen({
-	organizationId,
-	organizationName,
-}: {
-	organizationId: string
-	organizationName: string
-}) {
+function ValidationScreen({ organizationId }: { organizationId: string }) {
 	const queue = useProposedInterventions(organizationId)
 	const visits = queue.data?.data ?? []
 	const grids = useMaintenanceGrids(organizationId, seasonsOf(visits))
@@ -108,7 +101,6 @@ function ValidationScreen({
 
 	return (
 		<ValidationUI
-			organizationName={organizationName}
 			rows={rows}
 			totalCount={queue.data?.pagination?.total ?? rows.length}
 			isLoading={queue.isLoading}

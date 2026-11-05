@@ -219,28 +219,28 @@ function DayHeaderRow({ days }: { days: CalendarDayVM[] }) {
 				<div
 					key={day.date}
 					className={cn(
-						'flex-1 border-l px-2 py-3 text-center',
-						day.isToday && 'bg-brand-soft/60',
+						'flex-1 border-l px-2 py-2 text-center',
+						day.isToday && 'bg-state-today/10',
 					)}
 				>
 					<p
 						className={cn(
-							'text-xs font-medium capitalize',
-							day.isToday ? 'text-primary' : 'text-muted-foreground',
+							'text-[11px] font-medium capitalize',
+							day.isToday ? 'text-state-today' : 'text-muted-foreground',
 						)}
 					>
 						{day.weekdayLabel}
 					</p>
 					<p
 						className={cn(
-							'mt-0.5 text-2xl font-normal tabular-nums',
-							day.isToday ? 'text-primary' : 'text-foreground',
+							'mt-0.5 text-base font-semibold tabular-nums',
+							day.isToday ? 'text-state-today' : 'text-foreground',
 						)}
 					>
 						{day.dayLabel}
 					</p>
 					{day.isToday ? (
-						<span className="mx-auto mt-2 block h-0.5 w-10 rounded-full bg-primary" />
+						<span className="mx-auto mt-1.5 block h-0.5 w-8 rounded-full bg-state-today" />
 					) : null}
 				</div>
 			))}
@@ -269,7 +269,7 @@ function AllDayRow({ days, callbacks }: AllDayRowProps) {
 					key={day.date}
 					className={cn(
 						'flex flex-1 flex-col gap-1 border-l p-1.5',
-						day.isToday && 'bg-brand-soft/40',
+						day.isToday && 'bg-state-today/10',
 					)}
 				>
 					{day.allDayEvents.map((event) => (
@@ -277,7 +277,7 @@ function AllDayRow({ days, callbacks }: AllDayRowProps) {
 							<button
 								type="button"
 								className={cn(
-									'flex w-full items-center gap-1.5 overflow-hidden rounded-lg px-2 py-1 text-left text-[11px] font-medium transition-shadow hover:shadow-sm',
+									'flex w-full items-center gap-1.5 overflow-hidden rounded-md px-2 py-1 text-left text-[11px] font-medium transition-shadow hover:shadow-sm',
 									natureClassName(event.nature),
 								)}
 							>
@@ -405,7 +405,7 @@ function DayColumn({ day, callbacks, onSlotClick }: DayColumnProps) {
 			className={cn(
 				'relative flex-1 border-l',
 				day.isWeekend && 'bg-muted/20',
-				day.isToday && 'bg-brand-soft/25',
+				day.isToday && 'bg-state-today/6',
 			)}
 			onClick={onSlotClick}
 		>
@@ -443,7 +443,7 @@ function EventCard({ event, callbacks }: EventCardProps) {
 			<button
 				type="button"
 				className={cn(
-					'group absolute flex flex-col overflow-hidden rounded-xl px-2.5 py-2 text-left transition-shadow hover:shadow-md data-[state=open]:shadow-md data-[state=open]:ring-2 data-[state=open]:ring-current/30',
+					'group absolute flex flex-col overflow-hidden rounded-md px-2 py-1.5 text-left transition-shadow hover:shadow-sm data-[state=open]:shadow-sm data-[state=open]:ring-2 data-[state=open]:ring-current/30',
 					natureClassName(event.nature),
 				)}
 				style={{
@@ -454,7 +454,7 @@ function EventCard({ event, callbacks }: EventCardProps) {
 					marginLeft: '3px',
 				}}
 			>
-				<p className="truncate text-[13px] font-semibold leading-tight">
+				<p className="truncate text-[13px] font-medium leading-tight">
 					{event.title}
 				</p>
 				{showTime ? (
@@ -531,7 +531,7 @@ function NowLine({ model, controlledNow, gutterOffset }: NowLineProps) {
 		return (
 			<span
 				data-testid="calendar-now-label"
-				className="pointer-events-none absolute left-0 z-20 -translate-y-1/2 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold text-white tabular-nums"
+				className="pointer-events-none absolute left-0 z-20 -translate-y-1/2 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold text-destructive-foreground tabular-nums"
 				style={{ top: `${percent}%` }}
 			>
 				{formatClock(now, model.timeZone)}

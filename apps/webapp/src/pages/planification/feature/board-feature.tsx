@@ -89,7 +89,6 @@ export function BoardFeature({ filters, onFiltersChange }: BoardFeatureProps) {
 		<BoardScreen
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
-			organizationName={activeOrganization.name}
 			filters={filters}
 			onFiltersChange={onFiltersChange}
 		/>
@@ -98,12 +97,10 @@ export function BoardFeature({ filters, onFiltersChange }: BoardFeatureProps) {
 
 interface BoardScreenProps extends BoardFeatureProps {
 	organizationId: string
-	organizationName: string
 }
 
 function BoardScreen({
 	organizationId,
-	organizationName,
 	filters,
 	onFiltersChange,
 }: BoardScreenProps) {
@@ -296,7 +293,6 @@ function BoardScreen({
 
 	return (
 		<BoardUI
-			organizationName={organizationName}
 			columns={columns}
 			canMove={canMove}
 			isLoading={tasksQuery.isLoading || planningQuery.isLoading}

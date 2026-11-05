@@ -100,7 +100,7 @@ function DayCell({ day, spanOffset, callbacks }: DayCellProps) {
 				<span
 					className={cn(
 						'flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-sm tabular-nums',
-						day.isToday && 'bg-destructive font-semibold text-white',
+						day.isToday && 'bg-state-today font-semibold text-card',
 						!day.isToday && day.isOutsideMonth && 'text-muted-foreground/60',
 						!day.isToday && !day.isOutsideMonth && 'text-foreground',
 					)}
@@ -133,7 +133,7 @@ function EntryRow({ entry, callbacks }: EntryRowProps) {
 		<EventPopover detail={entry.detail} callbacks={callbacks}>
 			<button
 				type="button"
-				className="flex w-full items-center gap-1.5 rounded px-1 py-px text-left transition-colors hover:bg-muted data-[state=open]:bg-muted"
+				className="flex w-full items-center gap-1.5 rounded-md px-1 py-px text-left transition-colors hover:bg-muted data-[state=open]:bg-muted"
 			>
 				<span
 					aria-hidden="true"
@@ -173,8 +173,8 @@ function SpanBar({ span, callbacks }: SpanBarProps) {
 				className={cn(
 					'absolute flex items-center gap-1 overflow-hidden px-2 text-left text-[11px] font-medium leading-5',
 					natureBarClassName(span.nature),
-					span.continuesBefore ? 'rounded-l-none' : 'rounded-l-full',
-					span.continuesAfter ? 'rounded-r-none' : 'rounded-r-full',
+					span.continuesBefore ? 'rounded-l-none' : 'rounded-l-md',
+					span.continuesAfter ? 'rounded-r-none' : 'rounded-r-md',
 				)}
 				style={{
 					left: `calc(${span.startIndex * columnWidth}% + 4px)`,

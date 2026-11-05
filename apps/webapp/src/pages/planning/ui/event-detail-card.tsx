@@ -194,7 +194,7 @@ function ReadView({
 }: ReadViewProps) {
 	return (
 		<>
-			<h3 className="text-xl font-medium leading-tight text-foreground">
+			<h3 className="text-base font-semibold leading-tight text-foreground">
 				{event.title}
 			</h3>
 

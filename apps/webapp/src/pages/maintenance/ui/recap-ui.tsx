@@ -31,7 +31,6 @@ import {
 } from '#/pages/maintenance/lib/recap-lines'
 
 export interface RecapUIProps {
-	organizationName: string
 	/** Already worded: `S43 2026 · du 19 oct. au 25 oct.` */
 	weekLabel: string
 	groups: MaintenanceRecapGroup[]
@@ -61,7 +60,6 @@ export interface RecapUIProps {
  * here.
  */
 export function RecapUI({
-	organizationName,
 	weekLabel,
 	groups,
 	selected,
@@ -87,7 +85,6 @@ export function RecapUI({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Récap de la semaine"
 				description="Les prestations à faire dans la semaine, et celles restées en retard, par commune."
 				actions={
@@ -95,6 +92,7 @@ export function RecapUI({
 						<Button
 							type="button"
 							variant="outline"
+							size="sm"
 							disabled={isDownloadingPdf || Boolean(loadError)}
 							onClick={onDownloadPdf}
 						>
@@ -107,6 +105,7 @@ export function RecapUI({
 						</Button>
 						<Button
 							type="button"
+							size="sm"
 							disabled={selected.size === 0 || isPlanning}
 							onClick={onPlan}
 						>
@@ -125,17 +124,19 @@ export function RecapUI({
 				<Button
 					type="button"
 					variant="outline"
-					size="icon"
+					size="icon-sm"
 					aria-label="Semaine précédente"
 					onClick={onPreviousWeek}
 				>
 					<ChevronLeft />
 				</Button>
-				<p className="min-w-64 text-center text-sm font-medium">{weekLabel}</p>
+				<p className="min-w-64 text-center text-[13px] font-medium tabular">
+					{weekLabel}
+				</p>
 				<Button
 					type="button"
 					variant="outline"
-					size="icon"
+					size="icon-sm"
 					aria-label="Semaine suivante"
 					onClick={onNextWeek}
 				>
@@ -208,7 +209,7 @@ export function RecapUI({
 				) : (
 					groups.map((group) => (
 						<div key={group.town ?? ''} className="border-b last:border-b-0">
-							<h3 className="bg-muted/40 px-5 py-2 text-xs font-semibold uppercase text-muted-foreground">
+							<h3 className="bg-muted/40 px-5 py-2 text-xs font-medium text-muted-foreground">
 								{townLabel(group.town)} ({group.lines.length})
 							</h3>
 							<ul className="divide-y">
@@ -268,19 +269,19 @@ function RecapRow({
 			<dl className="grid shrink-0 grid-cols-3 gap-x-6 text-right text-xs text-muted-foreground">
 				<div>
 					<dt>Dernière</dt>
-					<dd className="mt-0.5 text-sm text-foreground">
+					<dd className="tabular mt-0.5 text-sm text-foreground">
 						{line.last_done_on ? formatShortDate(line.last_done_on) : 'Jamais'}
 					</dd>
 				</div>
 				<div>
 					<dt>Échéance</dt>
-					<dd className="mt-0.5 text-sm text-foreground">
+					<dd className="tabular mt-0.5 text-sm text-foreground">
 						{formatShortDate(line.due.on)}
 					</dd>
 				</div>
 				<div>
 					<dt>Prévu</dt>
-					<dd className="mt-0.5 text-sm text-foreground">
+					<dd className="tabular mt-0.5 text-sm text-foreground">
 						{hoursLabel(line.minutes_per_intervention)}
 					</dd>
 				</div>

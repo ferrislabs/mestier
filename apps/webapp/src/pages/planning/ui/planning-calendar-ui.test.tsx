@@ -36,7 +36,6 @@ function baseProps(
 	overrides: Partial<React.ComponentProps<typeof PlanningCalendarUI>> = {},
 ) {
 	return {
-		organizationName: 'Atelier Bois & Co',
 		organizationSlug: 'atelier-bois',
 		pendingReportsCount: null,
 		view: 'week' as const,

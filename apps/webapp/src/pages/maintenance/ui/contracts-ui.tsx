@@ -7,6 +7,7 @@ import {
 	Pencil,
 	Plus,
 } from 'lucide-react'
+import { EmptyState } from '#/components/empty-state'
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -19,7 +20,16 @@ import {
 } from '#/components/ui/alert-dialog'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
-import { PageHeader, PageShell } from '#/components/ui/surface'
+import { Checkbox } from '#/components/ui/checkbox'
+import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '#/components/ui/table'
 import { duplicateLabel } from '#/pages/maintenance/lib/contract-form'
 import {
 	lineSummaries,
@@ -41,7 +51,6 @@ export interface ContractRow {
 }
 
 export interface ContractsUiProps {
-	organizationName: string
 	season: number
 	/** The contracts of the season that are not drafts to review. */
 	rows: ContractRow[]
@@ -74,7 +83,6 @@ const euros = new Intl.NumberFormat('fr-FR', {
 })
 
 export function ContractsUi({
-	organizationName,
 	season,
 	rows,
 	draftRows,
@@ -102,7 +110,6 @@ export function ContractsUi({
 	return (
 		<PageShell>
 			<PageHeader
-				eyebrow={organizationName}
 				title="Contrats d'entretien"
 				description="Un contrat couvre une saison. Dupliquez-le pour l'année suivante."
 				actions={
@@ -116,18 +123,25 @@ export function ContractsUi({
 				}
 			/>
 
-			<label className="flex w-fit items-center gap-2 text-sm">
-				<input
-					type="checkbox"
+			<div className="flex w-fit items-center gap-2 text-[13px]">
+				<Checkbox
+					id="contracts-include-archived"
 					checked={includeArchived}
-					onChange={(event) => onIncludeArchivedChange(event.target.checked)}
+					onCheckedChange={(checked) =>
+						onIncludeArchivedChange(checked === true)
+					}
 				/>
-				Afficher les contrats archivés
-			</label>
+				<label htmlFor="contracts-include-archived">
+					Afficher les contrats archivés
+				</label>
+			</div>
 
 			{notice ? (
-				<output className="flex flex-wrap items-center gap-3 border border-emerald-600/40 bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
-					<span>{notice.message}</span>
+				<SectionCard
+					role="status"
+					className="flex flex-wrap items-center gap-3 border-success/30 bg-success-soft p-4 text-[13px] text-success"
+				>
+					<span className="font-medium">{notice.message}</span>
 					<Button
 						type="button"
 						variant="outline"
@@ -144,43 +158,44 @@ export function ContractsUi({
 					>
 						Fermer
 					</Button>
-				</output>
+				</SectionCard>
 			) : null}
 
 			{error ? (
-				<div
+				<SectionCard
 					role="alert"
-					className="flex items-center gap-2 border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+					className="flex items-center gap-3 border-destructive/30 bg-destructive-soft p-4 text-destructive"
 				>
-					<AlertCircle className="size-4" />
-					{error}
-				</div>
+					<AlertCircle className="size-4 shrink-0" />
+					<p className="text-[13px] font-medium">{error}</p>
+				</SectionCard>
 			) : null}
 
 			{isLoading ? (
-				<div className="flex items-center gap-2 text-sm text-muted-foreground">
+				<div className="flex items-center gap-2 text-[13px] text-muted-foreground">
 					<Loader2 className="size-4 animate-spin" />
 					Chargement des contrats
 				</div>
 			) : null}
 
 			{!isLoading && !error && nothingToShow ? (
-				<p className="border bg-card p-6 text-sm text-muted-foreground">
-					Aucun contrat pour la saison {season}.
-				</p>
+				<EmptyState
+					title={`Aucun contrat pour la saison ${season}.`}
+					hint="Créez un contrat ou dupliquez celui d'une saison précédente."
+				/>
 			) : null}
 
 			{draftRows.length > 0 ? (
 				<section
 					aria-labelledby="draft-contracts-title"
-					className="space-y-3 border border-amber-600/40 bg-amber-50/50 p-4 dark:bg-amber-950/20"
+					className="space-y-3 rounded-xl border border-warning/30 bg-warning-soft/40 p-4"
 				>
 					<div className="space-y-1">
 						<h2 className="flex items-center gap-2 text-base font-semibold">
 							<span id="draft-contracts-title">Brouillons à vérifier</span>
 							<Badge variant="outline">{draftRows.length}</Badge>
 						</h2>
-						<p className="text-sm text-muted-foreground">
+						<p className="text-[13px] text-muted-foreground">
 							Ces contrats n'ont aucune échéance tant qu'ils ne sont pas activés
 							: ils sont absents du récap. Relisez-les, corrigez-les si besoin,
 							puis activez-les.
@@ -216,7 +231,7 @@ export function ContractsUi({
 			) : null}
 
 			{!isLoading && !error && rows.length === 0 && draftRows.length > 0 ? (
-				<p className="text-sm text-muted-foreground">
+				<p className="text-[13px] text-muted-foreground">
 					Aucun contrat actif pour la saison {season}.
 				</p>
 			) : null}
@@ -287,28 +302,24 @@ function ContractsTable({
 	...actions
 }: ContractsTableProps) {
 	return (
-		<div className="overflow-x-auto border bg-card">
-			<table className="w-full text-sm">
-				<thead>
-					<tr className="border-b text-left text-muted-foreground">
-						<th scope="col" className="px-3 py-2 font-medium">
+		<div className="overflow-hidden rounded-lg border bg-card">
+			<Table>
+				<TableHeader>
+					<TableRow className="hover:bg-transparent">
+						<TableHead scope="col" className="pl-4">
 							Contrat
-						</th>
-						<th scope="col" className="px-3 py-2 font-medium">
-							Saison
-						</th>
-						<th scope="col" className="px-3 py-2 font-medium">
-							Prestations
-						</th>
-						<th scope="col" className="px-3 py-2 text-right font-medium">
+						</TableHead>
+						<TableHead scope="col">Saison</TableHead>
+						<TableHead scope="col">Prestations</TableHead>
+						<TableHead scope="col" className="text-right">
 							Montant
-						</th>
-						<th scope="col" className="px-3 py-2 font-medium">
+						</TableHead>
+						<TableHead scope="col" className="pr-4">
 							<span className="sr-only">Actions</span>
-						</th>
-					</tr>
-				</thead>
-				<tbody>
+						</TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
 					{rows.map((row) => (
 						<ContractTableRow
 							key={row.contract.id}
@@ -318,8 +329,8 @@ function ContractsTable({
 							{...actions}
 						/>
 					))}
-				</tbody>
-			</table>
+				</TableBody>
+			</Table>
 		</div>
 	)
 }
@@ -348,8 +359,8 @@ function ContractTableRow({
 	const place = placeLabel(row.customerName, row.siteLabel)
 
 	return (
-		<tr className="border-b align-top last:border-b-0">
-			<td className="px-3 py-3">
+		<TableRow className="align-top">
+			<TableCell className="py-3 pl-4 whitespace-normal">
 				<div className="font-medium">{place}</div>
 				<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 					{contract.reference ? <span>{contract.reference}</span> : null}
@@ -359,27 +370,27 @@ function ContractTableRow({
 					) : null}
 					{archived ? <Badge variant="secondary">Archivé</Badge> : null}
 				</div>
-			</td>
-			<td className="px-3 py-3 whitespace-nowrap">
+			</TableCell>
+			<TableCell className="py-3 tabular">
 				{contract.season.year}
 				<div className="text-xs text-muted-foreground">
 					{seasonLabel(contract.season)}
 				</div>
-			</td>
-			<td className="px-3 py-3">
+			</TableCell>
+			<TableCell className="py-3 whitespace-normal">
 				<ul className="space-y-0.5">
 					{lineSummaries(contract).map((summary, index) => (
 						// biome-ignore lint/suspicious/noArrayIndexKey: summaries are display strings that may repeat
 						<li key={index}>{summary}</li>
 					))}
 				</ul>
-			</td>
-			<td className="px-3 py-3 text-right whitespace-nowrap">
+			</TableCell>
+			<TableCell className="py-3 text-right tabular">
 				{contract.amount_cents == null
 					? '-'
 					: euros.format(contract.amount_cents / 100)}
-			</td>
-			<td className="px-3 py-3">
+			</TableCell>
+			<TableCell className="py-3 pr-4">
 				<div className="flex justify-end gap-1">
 					<Button
 						type="button"
@@ -434,7 +445,7 @@ function ContractTableRow({
 						</Button>
 					)}
 				</div>
-			</td>
-		</tr>
+			</TableCell>
+		</TableRow>
 	)
 }

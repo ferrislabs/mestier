@@ -20,12 +20,12 @@ export function GridLegend() {
 				<li
 					key={entry.state}
 					title={entry.hint}
-					className="flex items-center gap-2 text-sm text-muted-foreground"
+					className="flex items-center gap-2 text-[13px] text-muted-foreground"
 				>
 					<span
 						aria-hidden="true"
 						className={cn(
-							'inline-flex size-6 items-center justify-center text-xs',
+							'inline-flex size-6 items-center justify-center rounded-md text-xs tabular',
 							CELL_STYLES[entry.state],
 						)}
 					>

@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { EmptyState } from '#/components/empty-state'
 import { cn } from '#/lib/utils'
 import type { MinuteRange } from '#/pages/planning/lib/amplitude'
 import {
@@ -111,9 +112,7 @@ export function PlanningGrid({
 
 	if (resources.length === 0) {
 		return (
-			<div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
-				Aucune ressource à afficher pour cette organisation.
-			</div>
+			<EmptyState title="Aucune ressource à afficher pour cette organisation." />
 		)
 	}
 
@@ -128,7 +127,7 @@ export function PlanningGrid({
 				{model.rows.map((row) => (
 					<div
 						key={row.resourceId}
-						className="flex min-h-12 items-center truncate border-b px-3 py-2 text-sm font-medium last:border-b-0"
+						className="flex min-h-12 items-center truncate border-b px-3 py-2 text-[13px] font-medium last:border-b-0"
 						title={row.displayName}
 					>
 						<span className="truncate">{row.displayName}</span>
@@ -203,7 +202,7 @@ function TimeHeader({
 			{columns.map((date) => (
 				<div
 					key={date}
-					className="flex min-w-0 flex-1 items-center justify-center text-xs font-medium text-muted-foreground"
+					className="flex min-w-0 flex-1 items-center justify-center text-xs font-medium text-muted-foreground tabular"
 				>
 					{formatColumnLabel(date, view)}
 				</div>
@@ -372,7 +371,7 @@ function GridCell({
 								{segment.labels.slice(0, 4).map((label) => (
 									<span
 										key={label.id}
-										className="size-1 rounded-full ring-1 ring-white/70"
+										className="size-1 rounded-full ring-1 ring-card/70"
 										style={{ backgroundColor: label.color }}
 										title={label.name}
 									/>

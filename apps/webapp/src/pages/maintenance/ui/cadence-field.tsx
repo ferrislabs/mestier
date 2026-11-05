@@ -37,7 +37,7 @@ export function CadenceField({ idPrefix, value, onChange }: CadenceFieldProps) {
 				<select
 					id={`${idPrefix}-cadence`}
 					aria-label="Périodicité"
-					className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+					className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
 					value={value.kind}
 					onChange={(event) => {
 						const kind = event.target.value as CadenceKind
