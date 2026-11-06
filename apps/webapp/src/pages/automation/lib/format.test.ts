@@ -4,6 +4,7 @@ import {
 	formatDuration,
 	formatItemCount,
 	formatMilliseconds,
+	formatResumeNote,
 	formatStartedAt,
 	formatUsage,
 	formatVersionLabel,
@@ -63,6 +64,21 @@ describe('format', () => {
 			formatStartedAt(new Date(2026, 9, 1, 8, 0, 0).toISOString(), now),
 		).toBe('1 oct. 2026 à 08:00:00')
 		expect(formatStartedAt('nope', now)).toBe('—')
+	})
+
+	it('formatResumeNote gives the local date and time of the resume, in the style of the version', () => {
+		expect(
+			formatResumeNote(new Date(2026, 10, 8, 9, 30, 0).toISOString()),
+		).toBe('Reprise le 8 nov. 2026 à 09:30')
+		expect(formatResumeNote(new Date(2027, 0, 1, 0, 5, 59).toISOString())).toBe(
+			'Reprise le 1 janv. 2027 à 00:05',
+		)
+	})
+
+	it('formatResumeNote says nothing it cannot read', () => {
+		expect(formatResumeNote('nope')).toBeNull()
+		expect(formatResumeNote(null)).toBeNull()
+		expect(formatResumeNote(undefined)).toBeNull()
 	})
 
 	it('formatVersionLabel reads like the prototype version column', () => {

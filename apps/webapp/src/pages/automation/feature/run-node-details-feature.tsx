@@ -28,6 +28,7 @@ import {
 
 const NOT_RUN_LABELS: Partial<Record<RunNodeView['status'], string>> = {
 	running: 'en cours',
+	paused: 'en pause',
 	waiting: 'en attente',
 }
 

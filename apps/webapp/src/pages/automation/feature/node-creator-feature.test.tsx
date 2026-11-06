@@ -197,6 +197,17 @@ const CATALOGUE: Schemas.ConnectorDescriptorResponse[] = [
 	),
 	descriptorOf('mestier.support.add_badge', 'mestier', 'Ajouter un badge'),
 	descriptorOf('mestier.customer.create', 'mestier', 'Créer un client'),
+	descriptorOf('mestier.project.create', 'mestier', 'Créer un projet'),
+	descriptorOf(
+		'mestier.chat.post_message',
+		'mestier',
+		'Publier dans un canal Discussions',
+	),
+	descriptorOf('mestier.quote.search', 'mestier', 'Rechercher des devis'),
+	descriptorOf('mestier.note.add', 'mestier', 'Ajouter une note'),
+	descriptorOf('flow.wait', 'flow', 'Attendre'),
+	descriptorOf('flow.merge', 'flow', 'Fusionner'),
+	descriptorOf('smtp.send', 'smtp', 'E-mail SMTP'),
 ]
 
 function apiError(status: number, message: string) {
@@ -285,8 +296,22 @@ describe('NodeCreatorFeature — the catalogue it offers', () => {
 		await user.click(within(panel).getByRole('button', { name: /Outils/ }))
 
 		expect(rowsOf(panel)).toEqual([
+			'E-mail SMTPEnvoie un e-mail avec votre serveur SMTP',
 			'Requête HTTPAppelle une API externe',
 			'Créer une facture OdooCrée une facture client dans Odoo',
+		])
+	})
+
+	it('lists the logic nodes of the prototype, the wait and the merge between the condition and the extras', async () => {
+		const user = userEvent.setup()
+		const { panel } = await renderCreator()
+
+		await user.click(within(panel).getByRole('button', { name: /Logique/ }))
+
+		expect(rowsOf(panel)).toEqual([
+			'SiSépare le flux selon une condition',
+			'AttendreMet le workflow en pause pendant une durée',
+			'FusionnerRéunit les données de plusieurs branches',
 		])
 	})
 
@@ -299,8 +324,12 @@ describe('NodeCreatorFeature — the catalogue it offers', () => {
 		)
 
 		expect(rowsOf(panel)).toEqual([
-			'Créer un clientCrée un client dans Mestier',
+			'Créer un projetCrée un projet de chantier à partir d’un devis',
+			'Publier dans un canal DiscussionsEnvoie un message dans un canal Discussions',
 			'Ajouter un badge au ticketAjoute un badge de couleur à un ticket',
+			'Rechercher des devisRecherche des devis selon leur statut et leur ancienneté',
+			'Ajouter une noteAjoute une note interne sur un ticket',
+			'Créer un clientCrée un client dans Mestier',
 		])
 	})
 

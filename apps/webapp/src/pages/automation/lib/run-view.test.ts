@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
+import { formatResumeNote } from '#/pages/automation/lib/format'
 import {
 	buildRunView,
 	graphNodeNames,
@@ -510,6 +511,126 @@ describe('buildRunView — the statuses of a step', () => {
 			['c2', 'Aucun élément reçu'],
 			['c3', 'Aucun élément reçu'],
 		])
+	})
+})
+
+describe('buildRunView — a step that waits', () => {
+	const RESUME = '2026-08-03T10:00:00Z'
+	const PAUSE_NOTE = `En pause · ${formatResumeNote(RESUME)}`
+
+	function parkedSteps(resumeAt: string | null = RESUME) {
+		return [
+			step({ id: 's1', connector_id: 'c1' }),
+			step({
+				id: 's2',
+				connector_id: 'c2',
+				status: 'waiting',
+				resume_at: resumeAt,
+				started_at: '2026-08-01T10:00:02Z',
+				finished_at: null,
+			}),
+		]
+	}
+
+	it('numbers the waiting step among the steps that ran, saying when it resumes', () => {
+		const view = buildRunView(liveRun(parkedSteps()), DESCRIPTORS, NOW)
+
+		expect(view.steps.map((s) => [s.nodeId, s.status])).toEqual([
+			['t1', 'success'],
+			['c1', 'success'],
+			['c2', 'paused'],
+		])
+		expect(view.steps.find((s) => s.nodeId === 'c2')?.detail).toBe(PAUSE_NOTE)
+		expect(view.nodes.find((n) => n.id === 'c2')).toMatchObject({
+			status: 'paused',
+			note: PAUSE_NOTE,
+			order: 3,
+		})
+	})
+
+	it('keeps the nodes behind it as not reached yet', () => {
+		const view = buildRunView(liveRun(parkedSteps()), DESCRIPTORS, NOW)
+
+		expect(view.pending.map((s) => [s.nodeId, s.status, s.detail])).toEqual([
+			['c3', 'waiting', 'Pas encore atteint'],
+		])
+		expect(view.nodes.find((n) => n.id === 'c3')?.note).toBe('En attente')
+	})
+
+	it('reads the run as paused, until the earliest resume time of its waiting steps', () => {
+		const view = buildRunView(
+			liveRun([
+				...parkedSteps(),
+				step({
+					id: 's3',
+					connector_id: 'c3',
+					status: 'waiting',
+					resume_at: '2026-08-02T08:00:00Z',
+					iteration_path: 'c1[1]',
+					finished_at: null,
+				}),
+			]),
+			DESCRIPTORS,
+			NOW,
+		)
+
+		expect(view.status).toBe('paused')
+		expect(view.resumeAt).toBe('2026-08-02T08:00:00Z')
+	})
+
+	it('says only that the step is paused when the server gave no time', () => {
+		const view = buildRunView(liveRun(parkedSteps(null)), DESCRIPTORS, NOW)
+
+		expect(view.steps.find((s) => s.nodeId === 'c2')?.detail).toBe('En pause')
+		expect(view.nodes.find((n) => n.id === 'c2')?.note).toBe('En pause')
+		expect(view.status).toBe('paused')
+		expect(view.resumeAt).toBeNull()
+	})
+
+	it('keeps a run running when none of its steps waits', () => {
+		const view = buildRunView(
+			liveRun([
+				step({
+					connector_id: 'c1',
+					status: 'in_flight',
+					finished_at: null,
+				}),
+			]),
+			DESCRIPTORS,
+			NOW,
+		)
+
+		expect(view.status).toBe('running')
+		expect(view.resumeAt).toBeNull()
+	})
+
+	it('lets a waiting iteration decide the node over the ones that succeeded', () => {
+		const view = buildRunView(
+			liveRun([
+				step({ id: 's1', connector_id: 'c1', iteration_path: 'c1[0]' }),
+				step({
+					id: 's2',
+					connector_id: 'c1',
+					iteration_path: 'c1[1]',
+					status: 'waiting',
+					resume_at: RESUME,
+					finished_at: null,
+				}),
+			]),
+			DESCRIPTORS,
+			NOW,
+		)
+
+		expect(view.nodes.find((n) => n.id === 'c1')?.status).toBe('paused')
+	})
+
+	it('no longer calls it paused once the run has settled', () => {
+		const view = buildRunView(run('cancelled', parkedSteps()), DESCRIPTORS)
+
+		expect(view.status).toBe('cancelled')
+		expect(view.resumeAt).toBeNull()
+		expect(view.nodes.find((n) => n.id === 'c2')?.status).toBe('skipped')
+		expect(view.steps.map((s) => s.nodeId)).toEqual(['t1', 'c1'])
 	})
 })
 

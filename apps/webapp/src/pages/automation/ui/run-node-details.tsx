@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { LucideIcon } from 'lucide-react'
-import { LoaderCircle, RotateCcw } from 'lucide-react'
+import { CirclePause, LoaderCircle, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import {
@@ -17,6 +17,7 @@ import { Button } from '#/components/ui/button'
 import {
 	formatItemCount,
 	formatMilliseconds,
+	formatResumeNote,
 } from '#/pages/automation/lib/format'
 import { toItems } from '#/pages/automation/lib/items'
 import type { RunUpstreamEntry } from '#/pages/automation/lib/run-upstream'
@@ -148,6 +149,27 @@ export function RunNodeDetails({
 						}
 					/>
 				)
+			case 'paused': {
+				const resumeNote = formatResumeNote(step?.resume_at)
+				return (
+					<div className="flex flex-col items-center px-4 py-12 text-center">
+						<CirclePause
+							className="mb-3 size-8 text-muted-foreground"
+							aria-hidden
+						/>
+						<p className="font-medium text-base">En pause</p>
+						<p className="mt-1 max-w-xs text-muted-foreground text-sm">
+							Le workflow reprendra à la fin de la pause, puis transmettra les
+							éléments reçus.
+						</p>
+						{resumeNote && (
+							<p className="mt-2 font-medium text-sm tabular-nums">
+								{resumeNote}
+							</p>
+						)}
+					</div>
+				)
+			}
 			case 'running':
 				return (
 					<div className="flex flex-col items-center px-4 py-12 text-center">

@@ -18,6 +18,8 @@ export interface DisplayField extends Schemas.FieldResponse {
 
 const VARIABLE_PLACEHOLDER = 'Glissez une variable depuis la colonne Entrée'
 const NAME_PLACEHOLDER = 'Glissez une variable ou saisissez un nom'
+const RECIPIENTS_HINT =
+	'Séparez les adresses par une virgule ou un point-virgule : 50 destinataires au maximum.'
 
 const CONTACT_FIELDS: Record<string, FieldCopy> = {
 	name: { placeholder: NAME_PLACEHOLDER },
@@ -35,6 +37,13 @@ const FIELD_COPY: Record<string, Record<string, FieldCopy>> = {
 			placeholder: VARIABLE_PLACEHOLDER,
 			hint: `Le flux continue par « ${branchLabel('Then')} » si la condition est remplie, par « ${branchLabel('Else')} » sinon.`,
 		},
+	},
+	'flow.wait': {
+		duration: { defaultValue: 2 },
+		unit: { defaultValue: 'days' },
+	},
+	'flow.merge': {
+		mode: { defaultValue: 'append' },
 	},
 	'flow.loop': {
 		items: { hint: 'La liste à parcourir, ou une expression qui la désigne.' },
@@ -55,6 +64,39 @@ const FIELD_COPY: Record<string, Record<string, FieldCopy>> = {
 		ticket_id: { placeholder: VARIABLE_PLACEHOLDER },
 		label: { placeholder: 'Glissez une variable ou saisissez un libellé' },
 		tone: { defaultValue: 'neutral' },
+	},
+	'mestier.project.create': {
+		quote_id: {
+			placeholder: VARIABLE_PLACEHOLDER,
+			hint: 'Le devis doit être accepté.',
+		},
+		name: { placeholder: NAME_PLACEHOLDER },
+	},
+	'mestier.chat.post_message': {
+		channel: { defaultValue: '#general' },
+		message: { rows: 4, defaultValue: 'Nouveau devis à valider.' },
+	},
+	'mestier.quote.search': {
+		status: { defaultValue: 'SENT' },
+		since_days: { defaultValue: 7 },
+		limit: { defaultValue: 50 },
+	},
+	'mestier.note.add': {
+		ticket_id: { placeholder: VARIABLE_PLACEHOLDER },
+		body: {
+			rows: 3,
+			defaultValue: 'Relance envoyée le {{ format_date(now(), "%d/%m/%Y") }}',
+		},
+	},
+	'smtp.send': {
+		to: { placeholder: VARIABLE_PLACEHOLDER, hint: RECIPIENTS_HINT },
+		cc: { hint: RECIPIENTS_HINT },
+		subject: { defaultValue: 'Votre dossier chez Atelier Duval' },
+		body: {
+			rows: 7,
+			defaultValue: 'Bonjour,\n\nCordialement,\nAtelier Duval',
+		},
+		format: { defaultValue: 'text' },
 	},
 	'odoo.create_partner': CONTACT_FIELDS,
 	'odoo.update_partner': {

@@ -19,6 +19,7 @@ describe('RunStatusLabel', () => {
 		['in_flight', 'En cours'],
 		['dead', 'Échec'],
 		['skipped', 'Non appelé'],
+		['waiting', 'En pause'],
 	])('reads the step status %s as %s', (status, label) => {
 		render(<RunStatusLabel status={status} />)
 

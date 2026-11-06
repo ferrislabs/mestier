@@ -237,6 +237,38 @@ describe('ConnectorConfigForm — the typed credential slot', () => {
 		expect(onCredentialChange).toHaveBeenCalledWith('c1')
 	})
 
+	it('offers only the smtp credentials to the e-mail node, the identification first', async () => {
+		const user = userEvent.setup()
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						kind: 'smtp.send',
+						family: 'smtp',
+						auth: { Exactly: 'smtp' },
+						fields: [field({ name: 'to', label: 'Destinataire' })],
+					}),
+					credentials: [
+						credential('relais', 'smtp'),
+						credential('jeton', 'bearer_token'),
+						credential('secours', 'smtp'),
+					],
+				})}
+			/>,
+		)
+
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
+
+		expect(screen.getByRole('option', { name: 'relais' })).toBeDefined()
+		expect(screen.getByRole('option', { name: 'secours' })).toBeDefined()
+		expect(screen.queryByRole('option', { name: 'jeton' })).toBeNull()
+		const picker = screen.getByText('Identification')
+		expect(
+			picker.compareDocumentPosition(screen.getByText('Destinataire')) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+	})
+
 	it('renders no credential picker for a connector that needs none', () => {
 		render(
 			<ConnectorConfigForm
@@ -408,6 +440,105 @@ describe('ConnectorConfigForm — the copy of a known connector', () => {
 		).toBeDefined()
 		expect(screen.getByLabelText('Condition').getAttribute('placeholder')).toBe(
 			'Glissez une variable depuis la colonne Entrée',
+		)
+	})
+})
+
+describe('ConnectorConfigForm — the lot 7 nodes', () => {
+	const mergeFields = [
+		field({
+			name: 'mode',
+			label: 'Mode',
+			required: true,
+			kind: {
+				Select: {
+					options: [
+						{ value: 'append', label: 'Ajouter les éléments à la suite' },
+						{ value: 'combine_by_position', label: 'Combiner par position' },
+						{ value: 'combine_by_field', label: 'Combiner par champ' },
+					],
+				},
+			},
+		}),
+		field({
+			name: 'field',
+			label: 'Champ de jointure',
+			visible_when: { field: 'mode', any_of: ['combine_by_field'] },
+		}),
+	]
+
+	it('shows the join field of a merge only when it combines by field', () => {
+		const merge = descriptor({
+			kind: 'flow.merge',
+			family: 'flow',
+			fields: mergeFields,
+		})
+		const { rerender } = render(
+			<ConnectorConfigForm
+				{...baseProps({ descriptor: merge, config: { mode: 'append' } })}
+			/>,
+		)
+
+		expect(screen.queryByLabelText('Champ de jointure')).toBeNull()
+
+		rerender(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: merge,
+					config: { mode: 'combine_by_field' },
+				})}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Champ de jointure')).toBeDefined()
+	})
+
+	it('shows the duration of a wait as a number, the seeded value included', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						kind: 'flow.wait',
+						family: 'flow',
+						fields: [
+							field({
+								name: 'duration',
+								label: 'Durée',
+								kind: 'Number',
+								expression: true,
+								required: true,
+							}),
+						],
+					}),
+					config: { duration: 2 },
+				})}
+			/>,
+		)
+
+		expect((screen.getByLabelText('Durée') as HTMLInputElement).value).toBe('2')
+	})
+
+	it('draws the message of a channel post and the text of a note as text areas', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						kind: 'mestier.chat.post_message',
+						family: 'mestier',
+						fields: [
+							field({ name: 'channel', label: 'Canal', expression: true }),
+							field({ name: 'message', label: 'Message', expression: true }),
+						],
+					}),
+					config: { channel: '#general', message: 'Nouveau devis à valider.' },
+				})}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Canal').tagName).toBe('INPUT')
+		expect(screen.getByLabelText('Message').tagName).toBe('TEXTAREA')
+		expect((screen.getByLabelText('Message') as HTMLTextAreaElement).rows).toBe(
+			4,
 		)
 	})
 })

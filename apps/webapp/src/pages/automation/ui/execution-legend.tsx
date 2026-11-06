@@ -8,6 +8,7 @@ const LEGEND: readonly ExecutionStatus[] = [
 	'success',
 	'error',
 	'running',
+	'paused',
 	'skipped',
 ]
 

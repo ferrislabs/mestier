@@ -5,7 +5,10 @@ import {
 	toExecutionStatus,
 	toStepExecutionStatus,
 } from '#/pages/automation/lib/execution-status'
-import { formatMilliseconds } from '#/pages/automation/lib/format'
+import {
+	formatMilliseconds,
+	formatResumeNote,
+} from '#/pages/automation/lib/format'
 import { toItems } from '#/pages/automation/lib/items'
 import {
 	isEventsTrigger,
@@ -72,6 +75,7 @@ export interface RunView {
 	edgeCounts: Map<string, number>
 	failed: RunStepView | null
 	status: ExecutionStatus
+	resumeAt: string | null
 	durationMs: number | null
 }
 
@@ -152,7 +156,16 @@ function firedTrigger(
 	return graph.triggers.find(isManualTrigger) ?? graph.triggers[0]
 }
 
-function noteFor(status: ExecutionStatus, durationMs: number | null): string {
+function pausedNote(resumeAt: string | null | undefined): string {
+	const resume = formatResumeNote(resumeAt)
+	return resume === null ? 'En pause' : `En pause · ${resume}`
+}
+
+function noteFor(
+	status: ExecutionStatus,
+	durationMs: number | null,
+	resumeAt: string | null | undefined,
+): string {
 	switch (status) {
 		case 'success':
 			return durationMs === null ? 'Terminé' : formatMilliseconds(durationMs)
@@ -162,6 +175,8 @@ function noteFor(status: ExecutionStatus, durationMs: number | null): string {
 				: `Échec après ${formatMilliseconds(durationMs)}`
 		case 'running':
 			return 'En cours…'
+		case 'paused':
+			return pausedNote(resumeAt)
 		case 'waiting':
 			return 'En attente'
 		case 'cancelled':
@@ -189,6 +204,8 @@ function stepDetail(
 				? 'En cours'
 				: `En cours · ${formatMilliseconds(elapsed)}`
 		}
+		case 'paused':
+			return pausedNote(step.resume_at)
 		default:
 			return ''
 	}
@@ -198,6 +215,7 @@ const EXECUTED_STATUSES: ReadonlySet<ExecutionStatus> = new Set([
 	'success',
 	'error',
 	'running',
+	'paused',
 ])
 
 function iterationSuffix(step: Schemas.RunStepResponse): string {
@@ -237,6 +255,10 @@ export function buildRunView(
 	const runFinished = isTerminalRunStatus(run.status)
 	const runStarted = run.status !== 'pending'
 	const fired = firedTrigger(run, graph)
+	const stepStatus = (step: Schemas.RunStepResponse): ExecutionStatus => {
+		const status = toStepExecutionStatus(step.status)
+		return runFinished && status === 'paused' ? 'skipped' : status
+	}
 
 	const triggerNodes: RunNodeView[] = graph.triggers.map((trigger) => {
 		const status: ExecutionStatus =
@@ -265,9 +287,7 @@ export function buildRunView(
 	const connectorNodes: RunNodeView[] = graph.connectors.map((connector) => {
 		const descriptor = descriptors.get(connector.kind)
 		const step = best.get(connector.id) ?? null
-		const reportedStatus: ExecutionStatus = step
-			? toStepExecutionStatus(step.status)
-			: 'waiting'
+		const reportedStatus: ExecutionStatus = step ? stepStatus(step) : 'waiting'
 		const status: ExecutionStatus =
 			runFinished && reportedStatus === 'waiting' ? 'skipped' : reportedStatus
 		const durationMs = step ? stepDuration(step) : null
@@ -282,7 +302,7 @@ export function buildRunView(
 			step,
 			connector,
 			trigger: null,
-			note: noteFor(status, durationMs),
+			note: noteFor(status, durationMs, step?.resume_at),
 			order: null,
 		}
 	})
@@ -296,7 +316,7 @@ export function buildRunView(
 		),
 	)
 	const executed = ordered.filter((step) =>
-		EXECUTED_STATUSES.has(toStepExecutionStatus(step.status)),
+		EXECUTED_STATUSES.has(stepStatus(step)),
 	)
 	const triggerSteps: RunStepView[] = triggerNodes
 		.filter((node) => node.status === 'success')
@@ -326,6 +346,12 @@ export function buildRunView(
 	})
 	const steps: RunStepView[] = [...triggerSteps, ...connectorSteps]
 	const failed = steps.find((step) => step.status === 'error') ?? null
+	const waitingSteps = executed.filter((step) => stepStatus(step) === 'paused')
+	const resumeTimes = waitingSteps.flatMap((step) =>
+		step.resume_at ? [step.resume_at] : [],
+	)
+	const resumeAt = resumeTimes.length > 0 ? resumeTimes.sort()[0] : null
+	const runStatus = toExecutionStatus(run.status)
 	const orderOf = new Map<string, number>()
 	steps.forEach((step, index) => {
 		if (!orderOf.has(step.nodeId)) orderOf.set(step.nodeId, index + 1)
@@ -400,7 +426,9 @@ export function buildRunView(
 		traversedEdges,
 		edgeCounts,
 		failed,
-		status: toExecutionStatus(run.status),
+		status:
+			runStatus === 'running' && waitingSteps.length > 0 ? 'paused' : runStatus,
+		resumeAt,
 		durationMs: runElapsedMs(run, now),
 	}
 }

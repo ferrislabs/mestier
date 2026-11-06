@@ -20,6 +20,7 @@ export interface ExecutionListEntry {
 	startedAt: string
 	trigger: string
 	duration: string | null
+	resumeNote: string | null
 }
 
 const FILTERS: readonly { value: ExecutionFilter; label: string }[] = [
@@ -109,6 +110,7 @@ export function ExecutionList({
 												entry.status === 'success' && 'bg-(--auto-success)',
 												entry.status === 'error' && 'bg-state-alert',
 												entry.status === 'running' && 'bg-state-today',
+												entry.status === 'paused' && 'bg-muted-foreground/50',
 											)}
 										/>
 										<ExecutionStatusIcon
@@ -131,6 +133,11 @@ export function ExecutionList({
 													: ''}{' '}
 												· {entry.trigger}
 											</span>
+											{entry.resumeNote && (
+												<span className="block truncate text-muted-foreground text-xs">
+													{entry.resumeNote}
+												</span>
+											)}
 										</span>
 									</button>
 								</li>

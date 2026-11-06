@@ -1,4 +1,15 @@
-import { CalendarClock, Library, Webhook } from 'lucide-react'
+import {
+	CalendarClock,
+	FileSearch,
+	FolderPlus,
+	Library,
+	Mail,
+	Merge,
+	MessageSquare,
+	StickyNote,
+	Timer,
+	Webhook,
+} from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import {
 	CATEGORY_IDS,
@@ -26,7 +37,16 @@ const SERVER_KINDS = [
 	'odoo.create_partner',
 	'odoo.update_partner',
 	'odoo.create_invoice',
+	'flow.wait',
+	'flow.merge',
+	'mestier.note.add',
+	'mestier.quote.search',
+	'mestier.project.create',
+	'mestier.chat.post_message',
+	'smtp.send',
 ]
+
+const SHARED_HUE_KINDS = ['flow.merge']
 
 describe('connectorCopy', () => {
 	it('knows every kind of the server catalogue', () => {
@@ -36,8 +56,11 @@ describe('connectorCopy', () => {
 	})
 
 	it('gives each kind a distinct hue and a non-empty French copy', () => {
-		const hues = SERVER_KINDS.map((kind) => connectorCopy(kind)?.hue)
-		expect(new Set(hues).size).toBe(SERVER_KINDS.length)
+		const distinct = SERVER_KINDS.filter(
+			(kind) => !SHARED_HUE_KINDS.includes(kind),
+		)
+		const hues = distinct.map((kind) => connectorCopy(kind)?.hue)
+		expect(new Set(hues).size).toBe(distinct.length)
 		for (const kind of SERVER_KINDS) {
 			const copy = connectorCopy(kind)
 			expect(copy?.label.length).toBeGreaterThan(0)
@@ -75,6 +98,105 @@ describe('connectorCopy', () => {
 			hue: 265,
 			category: 'core',
 		})
+	})
+
+	it('copies the seven lot 7 nodes from the prototype', () => {
+		expect(connectorCopy('flow.wait')).toMatchObject({
+			label: 'Attendre',
+			subtitle: 'Pause',
+			description: 'Met le workflow en pause pendant une durée',
+			icon: Timer,
+			hue: 80,
+			category: 'flow',
+			internal: false,
+		})
+		expect(connectorCopy('flow.merge')).toMatchObject({
+			label: 'Fusionner',
+			subtitle: 'Fusion',
+			description: 'Réunit les données de plusieurs branches',
+			icon: Merge,
+			hue: 200,
+			category: 'flow',
+			internal: false,
+		})
+		expect(connectorCopy('mestier.quote.search')).toMatchObject({
+			label: 'Rechercher des devis',
+			subtitle: 'Action Mestier',
+			description: 'Recherche des devis selon leur statut et leur ancienneté',
+			icon: FileSearch,
+			hue: 235,
+			category: 'actions',
+		})
+		expect(connectorCopy('mestier.project.create')).toMatchObject({
+			label: 'Créer un projet',
+			subtitle: 'Action Mestier',
+			description: 'Crée un projet de chantier à partir d’un devis',
+			icon: FolderPlus,
+			hue: 150,
+			category: 'actions',
+		})
+		expect(connectorCopy('mestier.chat.post_message')).toMatchObject({
+			label: 'Publier dans un canal Discussions',
+			subtitle: 'Action Mestier',
+			description: 'Envoie un message dans un canal Discussions',
+			icon: MessageSquare,
+			hue: 300,
+			category: 'actions',
+		})
+		expect(connectorCopy('smtp.send')).toMatchObject({
+			label: 'E-mail SMTP',
+			subtitle: 'Envoyer un e-mail',
+			description: 'Envoie un e-mail avec votre serveur SMTP',
+			icon: Mail,
+			hue: 25,
+			category: 'core',
+		})
+	})
+
+	it('describes the note as one on a support ticket, not on a quote', () => {
+		expect(connectorCopy('mestier.note.add')).toMatchObject({
+			label: 'Ajouter une note',
+			subtitle: 'Action Mestier',
+			description: 'Ajoute une note interne sur un ticket',
+			icon: StickyNote,
+			hue: 85,
+			category: 'actions',
+		})
+	})
+
+	it('orders every category as the prototype does, the extras of the real app last', () => {
+		const labelsOf = (category: string) =>
+			SERVER_KINDS.filter((kind) => connectorCopy(kind)?.category === category)
+				.filter((kind) => !isInternalConnector(kind))
+				.sort(
+					(a, b) =>
+						(connectorCopy(a)?.order ?? 0) - (connectorCopy(b)?.order ?? 0),
+				)
+				.map((kind) => connectorCopy(kind)?.label)
+
+		expect(labelsOf('actions')).toEqual([
+			'Créer un projet',
+			'Assigner un ticket',
+			'Publier dans un canal Discussions',
+			'Ajouter un badge au ticket',
+			'Rechercher des devis',
+			'Ajouter une note',
+			'Créer un client',
+		])
+		expect(labelsOf('flow')).toEqual([
+			'Si',
+			'Attendre',
+			'Fusionner',
+			'Pour chaque',
+			'Configuration',
+		])
+		expect(labelsOf('core')).toEqual([
+			'E-mail SMTP',
+			'Requête HTTP',
+			'Créer un partenaire Odoo',
+			'Mettre à jour un partenaire Odoo',
+			'Créer une facture Odoo',
+		])
 	})
 
 	it('copies the collection operation from the prototype, filed under the collections', () => {

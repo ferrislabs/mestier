@@ -13,6 +13,7 @@ import {
 	HTTP_BASIC,
 	HTTP_HEADER,
 	ODOO_API,
+	SMTP,
 } from '#/pages/automation/test/credential-fixtures'
 
 vi.mock('#/pages/automation/ui/inline-credential-form', () => ({
@@ -121,7 +122,28 @@ function signingCreation() {
 	return creationButtons()[1] as HTMLElement
 }
 
+const SMTP_DESCRIPTOR: Schemas.ConnectorDescriptorResponse = {
+	...DESCRIPTOR,
+	auth: { Exactly: 'smtp' },
+	family: 'smtp',
+	fields: [],
+	kind: 'smtp.send',
+	label: 'E-mail SMTP',
+}
+
 describe('ConnectorParametersFeature — creating an identification from the node', () => {
+	it('offers only the smtp kind to the e-mail node', async () => {
+		const user = userEvent.setup()
+		renderFeature({
+			descriptor: SMTP_DESCRIPTOR,
+			credentialKinds: [BEARER_TOKEN, SMTP, ODOO_API],
+		})
+
+		await user.click(typedCreation())
+
+		expect(screen.getByText('Types : smtp')).toBeDefined()
+	})
+
 	it('offers only the kinds the connector accepts', async () => {
 		const user = userEvent.setup()
 		renderFeature()

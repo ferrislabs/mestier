@@ -91,3 +91,12 @@ export function formatVersionLabel(iso: string): string {
 	if (Number.isNaN(date.getTime())) return 'Version'
 	return `Version du ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} à ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
+
+export function formatResumeNote(
+	iso: string | null | undefined,
+): string | null {
+	if (!iso) return null
+	const date = new Date(iso)
+	if (Number.isNaN(date.getTime())) return null
+	return `Reprise le ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} à ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
