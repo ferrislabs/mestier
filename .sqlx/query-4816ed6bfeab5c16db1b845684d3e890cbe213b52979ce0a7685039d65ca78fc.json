@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM automation.webhook_route WHERE org_id = $1 AND workflow_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4816ed6bfeab5c16db1b845684d3e890cbe213b52979ce0a7685039d65ca78fc"
+}

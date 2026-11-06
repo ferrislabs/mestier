@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono::Utc;
+use chrono::{DateTime, SecondsFormat, Utc};
+use chrono_tz::Tz;
 use common::{CoreError, OrganizationId};
 use events::EventCatalogue;
 use mestier_macros::transactional;
@@ -11,7 +12,7 @@ use uuid::Uuid;
 
 use super::run::LoopStep;
 use crate::{
-    application::MestierUseCase,
+    application::{MestierUseCase, organization::resolve_timezone},
     domain::automation::{
         catalogue::event_catalogue,
         collection::{COLLECTION_OPERATION_KIND, Collection, NESTED_EXPRESSION_FIELDS},
@@ -27,7 +28,10 @@ use crate::{
             StoredOperation, disabled_outcome, format_iteration_path, next_after,
             pass_through_output, resolve_config_nested_within, resolve_config_within,
         },
-        workflow::{Branch, Graph, GraphError, PlacedConnector, TriggerKind, validate_graph},
+        workflow::{
+            Branch, Graph, GraphError, PlacedConnector, TriggerKind, next_due, recurrence_of,
+            sample_body, validate_graph,
+        },
     },
     infrastructure::automation::connectors::ConnectorDryRun,
 };
@@ -722,7 +726,12 @@ fn ensure_within_limits(graph: &Graph, payload: Option<&Value>) -> Result<(), Dr
     Ok(())
 }
 
-fn sample_payloads(graph: &Graph, events: &EventCatalogue) -> Vec<Value> {
+fn sample_payloads(
+    graph: &Graph,
+    events: &EventCatalogue,
+    organization_zone: Tz,
+    now: DateTime<Utc>,
+) -> Vec<Value> {
     graph
         .triggers
         .iter()
@@ -733,22 +742,37 @@ fn sample_payloads(graph: &Graph, events: &EventCatalogue) -> Vec<Value> {
                 .map(|event| event.payload_example.clone())
                 .unwrap_or_else(|| json!({})),
             TriggerKind::Manual => json!({}),
+            TriggerKind::Webhook { contract, .. } => sample_body(contract),
+            kind @ TriggerKind::Schedule { .. } => {
+                let scheduled_for = recurrence_of(kind, organization_zone)
+                    .map(|(rule, zone)| next_due(now, &rule, zone))
+                    .unwrap_or(now);
+                json!({ "scheduled_for": scheduled_for.to_rfc3339_opts(SecondsFormat::Secs, true) })
+            }
         })
         .collect()
 }
 
 impl MestierUseCase {
-    #[transactional(credential, collection)]
+    #[transactional(credential, collection, organization)]
     async fn dry_run_reference_data(
         &self,
         org_id: OrganizationId,
         collection_ids: &[Uuid],
-    ) -> Result<(Vec<Credential>, Vec<Collection>), CoreError> {
+        needs_organization_zone: bool,
+    ) -> Result<(Vec<Credential>, Vec<Collection>, Tz), CoreError> {
         let mut credentials = credential_repository;
         let mut collections = collection_repository;
+        let mut organizations = organization_repository;
+        let zone = if needs_organization_zone {
+            resolve_timezone(&mut organizations, org_id).await?
+        } else {
+            chrono_tz::UTC
+        };
         Ok((
             credentials.list_by_organization(org_id).await?,
             collections.find_many(org_id, collection_ids).await?,
+            zone,
         ))
     }
 
@@ -760,15 +784,19 @@ impl MestierUseCase {
         trigger_payload: Option<&Value>,
     ) -> Result<Vec<DryRunStep>, DryRunError> {
         ensure_within_limits(graph, trigger_payload)?;
-        let (credentials, collections) = self
-            .dry_run_reference_data(org_id, &graph.referenced_collection_ids())
+        let has_schedule = graph
+            .triggers
+            .iter()
+            .any(|trigger| matches!(trigger.kind, TriggerKind::Schedule { .. }));
+        let (credentials, collections, organization_zone) = self
+            .dry_run_reference_data(org_id, &graph.referenced_collection_ids(), has_schedule)
             .await?;
         let catalogue = connector_catalogue();
         let events = event_catalogue();
         validate_graph(graph, &catalogue, &credentials, &events, &collections)
             .map_err(DryRunError::InvalidGraph)?;
 
-        let sampled = sample_payloads(graph, &events);
+        let sampled = sample_payloads(graph, &events, organization_zone, Utc::now());
         let graph = graph.clone();
         let given = trigger_payload.cloned();
         let trigger_id = trigger_id.map(str::to_owned);
@@ -2510,5 +2538,145 @@ mod tests {
             matches!(&error, DryRunError::UnknownTrigger { trigger_id } if trigger_id == "ghost"),
             "{error:?}"
         );
+    }
+
+    fn dry_run_instant(text: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(text)
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    }
+
+    fn contract_key(
+        name: &str,
+        kind: crate::domain::automation::workflow::ContractKind,
+        example: &str,
+    ) -> crate::domain::automation::workflow::ContractKey {
+        crate::domain::automation::workflow::ContractKey {
+            name: name.to_owned(),
+            kind,
+            required: true,
+            example: example.to_owned(),
+        }
+    }
+
+    #[test]
+    fn a_webhook_trigger_samples_a_body_built_from_the_examples_of_its_contract() {
+        use crate::domain::automation::workflow::{ContractKind, OnInvalid, WebhookMethod};
+
+        let mut sampled = graph(vec![], vec![]);
+        sampled.triggers[0].kind = TriggerKind::Webhook {
+            method: WebhookMethod::Post,
+            path: "paiement-recu".to_owned(),
+            credential_id: None,
+            contract: vec![
+                contract_key("evenement", ContractKind::Text, "paiement.recu"),
+                contract_key("montant", ContractKind::Number, "2340"),
+                contract_key("lignes", ContractKind::List, ""),
+            ],
+            on_invalid: OnInvalid::Reject,
+        };
+
+        let payloads = sample_payloads(
+            &sampled,
+            &EventCatalogue::new(),
+            chrono_tz::UTC,
+            dry_run_instant("2026-11-06T07:00:00Z"),
+        );
+
+        assert_eq!(
+            payloads,
+            vec![json!({ "evenement": "paiement.recu", "montant": 2340, "lignes": [] })]
+        );
+    }
+
+    #[test]
+    fn a_schedule_trigger_samples_its_next_scheduled_instant_in_its_own_zone() {
+        let mut sampled = graph(vec![], vec![]);
+        let kind = |timezone: Option<&str>| TriggerKind::Schedule {
+            frequency: crate::domain::automation::workflow::Frequency::Daily,
+            time: "09:00".to_owned(),
+            weekday: None,
+            timezone: timezone.map(str::to_owned),
+        };
+        sampled.triggers[0].kind = kind(None);
+        sampled.triggers.push(trigger("t2"));
+        sampled.triggers[1].kind = kind(Some("America/New_York"));
+        let now = dry_run_instant("2026-11-06T07:00:00Z");
+
+        let payloads = sample_payloads(
+            &sampled,
+            &EventCatalogue::new(),
+            chrono_tz::Europe::Paris,
+            now,
+        );
+
+        assert_eq!(
+            payloads,
+            vec![
+                json!({ "scheduled_for": "2026-11-06T08:00:00Z" }),
+                json!({ "scheduled_for": "2026-11-06T14:00:00Z" }),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_webhook_and_a_schedule_trigger_feed_their_example_to_the_nodes_after_them() {
+        use crate::domain::automation::workflow::{
+            ContractKind, Frequency, OnInvalid, WebhookMethod,
+        };
+
+        let pool = crate::application::test_support::automation_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let usecase = use_case(pool);
+        let mut two = graph(
+            vec![
+                customer_node("c1", "{{ trigger.evenement }}"),
+                customer_node("c2", "{{ trigger.scheduled_for }}"),
+            ],
+            vec![edge("t1", "c1", None), edge("t2", "c2", None)],
+        );
+        two.triggers[0].kind = TriggerKind::Webhook {
+            method: WebhookMethod::Post,
+            path: "paiement-recu".to_owned(),
+            credential_id: None,
+            contract: vec![contract_key(
+                "evenement",
+                ContractKind::Text,
+                "paiement.recu",
+            )],
+            on_invalid: OnInvalid::Reject,
+        };
+        two.triggers.push(trigger("t2"));
+        two.triggers[1].kind = TriggerKind::Schedule {
+            frequency: Frequency::Daily,
+            time: "09:00".to_owned(),
+            weekday: None,
+            timezone: Some("UTC".to_owned()),
+        };
+
+        let sampled = usecase
+            .dry_run_graph(org_id, &two, None, None)
+            .await
+            .unwrap();
+        let given = usecase
+            .dry_run_graph(
+                org_id,
+                &two,
+                Some("t1"),
+                Some(&json!({ "evenement": "autre" })),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            first(&sampled, "c1").input,
+            Some(json!({ "name": "paiement.recu" }))
+        );
+        let scheduled = first(&sampled, "c2").input.clone().unwrap();
+        let instant = chrono::DateTime::parse_from_rfc3339(scheduled["name"].as_str().unwrap())
+            .expect("an RFC 3339 instant");
+        assert!(instant > chrono::Utc::now());
+        assert_eq!(first(&given, "c1").input, Some(json!({ "name": "autre" })));
     }
 }

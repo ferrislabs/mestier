@@ -6,18 +6,23 @@ use uuid::Uuid;
 use crate::{
     application::MestierUseCase,
     application::automation::folder::ensure_folder_exists,
+    application::organization::resolve_timezone,
     domain::automation::{
         catalogue::event_catalogue,
         connector::connector_catalogue,
         ports::{
-            CollectionRepository, CredentialRepository, SubscriptionRepository, WorkflowRepository,
+            CollectionRepository, CredentialRepository, ScheduleRepository, SubscriptionRepository,
+            WebhookRouteRepository, WorkflowRepository,
         },
         workflow::{
-            ArchiveScope, CreateWorkflowCommand, GraphError, SaveWorkflowVersionCommand,
-            UpdateWorkflowCommand, Workflow, WorkflowDescription, WorkflowInitialState,
-            WorkflowName, WorkflowVersion, validate_graph,
+            ArchiveScope, CreateWorkflowCommand, Graph, GraphError, SaveWorkflowVersionCommand,
+            TriggerKind, UpdateWorkflowCommand, Workflow, WorkflowDescription,
+            WorkflowInitialState, WorkflowName, WorkflowRefusal, WorkflowVersion, schedule_seeds,
+            validate_graph,
         },
     },
+    domain::organization::ports::OrganizationRepository,
+    infrastructure::automation::postgres::webhook_route::WEBHOOK_PATH_CONSTRAINT,
 };
 
 /// One line per [`GraphError`], joined for [`CoreError::Conflict`]. The
@@ -31,6 +36,22 @@ fn format_graph_errors(errors: &[GraphError]) -> String {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+async fn organization_zone_for(
+    organizations: &mut impl OrganizationRepository,
+    org_id: OrganizationId,
+    graph: &Graph,
+) -> Result<chrono_tz::Tz, CoreError> {
+    let schedules_something = graph
+        .triggers
+        .iter()
+        .any(|trigger| matches!(trigger.kind, TriggerKind::Schedule { .. }));
+    if schedules_something {
+        resolve_timezone(organizations, org_id).await
+    } else {
+        Ok(chrono_tz::UTC)
+    }
 }
 
 impl MestierUseCase {
@@ -108,13 +129,15 @@ impl MestierUseCase {
         repository.list_by_organization(org_id, scope).await
     }
 
-    #[transactional(workflow, workflow_folder)]
+    #[transactional(workflow, workflow_folder, schedule, organization)]
     pub async fn update_workflow(
         &self,
         command: UpdateWorkflowCommand,
     ) -> Result<Workflow, CoreError> {
         let mut repository = workflow_repository;
         let mut folders = workflow_folder_repository;
+        let mut schedules = schedule_repository;
+        let mut organizations = organization_repository;
         let existing = repository
             .find_by_id_for_update(command.org_id, command.id)
             .await?
@@ -124,9 +147,27 @@ impl MestierUseCase {
         }
 
         let org_id = command.org_id;
-        let updated = existing.apply(command, Utc::now())?;
+        let was_enabled = existing.enabled;
+        let now = Utc::now();
+        let updated = existing.apply(command, now)?;
+        let saved = repository.update(org_id, &updated).await?;
 
-        repository.update(org_id, &updated).await
+        if !was_enabled
+            && saved.enabled
+            && let Some(version_id) = saved.current_version_id
+            && let Some(version) = repository.find_version_by_id(org_id, version_id).await?
+        {
+            let zone = organization_zone_for(&mut organizations, org_id, &version.graph).await?;
+            schedules
+                .replace_workflow_schedules(
+                    org_id,
+                    saved.id,
+                    &schedule_seeds(&version.graph.triggers, zone, now),
+                )
+                .await?;
+        }
+
+        Ok(saved)
     }
 
     #[transactional(workflow)]
@@ -146,7 +187,15 @@ impl MestierUseCase {
     /// `current_version_id` to it, all inside one transaction (#199). A run
     /// (#200) reading the previous version therefore never observes a
     /// half-written one.
-    #[transactional(workflow, credential, subscription, collection)]
+    #[transactional(
+        workflow,
+        credential,
+        subscription,
+        collection,
+        webhook_route,
+        schedule,
+        organization
+    )]
     pub async fn save_workflow_version(
         &self,
         command: SaveWorkflowVersionCommand,
@@ -155,6 +204,9 @@ impl MestierUseCase {
         let mut credentials = credential_repository;
         let mut subscriptions = subscription_repository;
         let mut collections = collection_repository;
+        let mut routes = webhook_route_repository;
+        let mut schedules = schedule_repository;
+        let mut organizations = organization_repository;
 
         workflows
             .find_by_id(command.org_id, command.workflow_id)
@@ -192,6 +244,26 @@ impl MestierUseCase {
                 command.org_id,
                 command.workflow_id,
                 &command.graph.triggers,
+            )
+            .await?;
+
+        routes
+            .replace_workflow_routes(command.org_id, command.workflow_id, &command.graph.triggers)
+            .await
+            .map_err(|error| match error {
+                CoreError::Conflict(constraint) if constraint == WEBHOOK_PATH_CONSTRAINT => {
+                    WorkflowRefusal::WebhookPathTaken.into()
+                }
+                other => other,
+            })?;
+
+        let zone =
+            organization_zone_for(&mut organizations, command.org_id, &command.graph).await?;
+        schedules
+            .replace_workflow_schedules(
+                command.org_id,
+                command.workflow_id,
+                &schedule_seeds(&command.graph.triggers, zone, Utc::now()),
             )
             .await?;
 

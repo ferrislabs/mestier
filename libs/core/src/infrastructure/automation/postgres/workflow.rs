@@ -453,10 +453,17 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
                FROM automation.workflow w
                JOIN automation.workflow_version wv ON wv.workflow_id = w.id
                WHERE w.org_id = $1
-                 AND wv.graph @> jsonb_build_object(
-                       'connectors',
-                       jsonb_build_array(jsonb_build_object('credential_id', $2::text))
-                     )
+                 AND (
+                   wv.graph @> jsonb_build_object(
+                     'connectors',
+                     jsonb_build_array(jsonb_build_object('credential_id', $2::text))
+                   )
+                   OR EXISTS (
+                     SELECT 1
+                     FROM jsonb_array_elements(wv.graph -> 'triggers') AS trig(value)
+                     WHERE trig.value -> 'kind' -> 'Webhook' ->> 'credential_id' = $2::text
+                   )
+                 )
                ORDER BY w.name"#,
             org_id.0,
             credential_id.to_string(),
@@ -1027,6 +1034,48 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].id, referencing.id);
         assert_eq!(found[0].name, "References it");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn workflows_referencing_credential_names_the_workflow_whose_webhook_trigger_uses_it() {
+        use crate::application::automation::trigger_fixtures::{graph_of, webhook_with};
+        use crate::domain::automation::workflow::OnInvalid;
+
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "ref-trigger").await;
+        let credential_id = generate_uuid_v7();
+        let graph = graph_of(vec![(
+            "t1",
+            webhook_with(
+                "ref-trigger",
+                Some(credential_id),
+                Vec::new(),
+                OnInvalid::Reject,
+            ),
+        )]);
+        let referencing = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            let workflow = repo
+                .insert(&workflow(org_id, "Webhook with a credential"))
+                .await?;
+            repo.insert_version(org_id, workflow.id, &graph, None)
+                .await?;
+            Ok::<_, CoreError>(workflow)
+        })
+        .await
+        .unwrap();
+
+        let found = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.workflows_referencing_credential(org_id, credential_id)
+                .await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].id, referencing.id);
     }
 
     #[tokio::test]

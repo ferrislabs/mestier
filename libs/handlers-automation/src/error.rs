@@ -12,6 +12,7 @@ use serde::Serialize;
 pub enum Refusal {
     WorkflowArchived,
     FolderNotEmpty,
+    WebhookPathTaken,
 }
 
 impl Refusal {
@@ -19,6 +20,7 @@ impl Refusal {
         match self {
             Self::WorkflowArchived => "E_WORKFLOW_ARCHIVED",
             Self::FolderNotEmpty => "E_FOLDER_NOT_EMPTY",
+            Self::WebhookPathTaken => "E_WEBHOOK_PATH_TAKEN",
         }
     }
 
@@ -26,12 +28,15 @@ impl Refusal {
         match self {
             Self::WorkflowArchived => WorkflowRefusal::Archived.message(),
             Self::FolderNotEmpty => FolderRefusal::NotEmpty.message(),
+            Self::WebhookPathTaken => WorkflowRefusal::WebhookPathTaken.message(),
         }
     }
 
     fn from_conflict(message: &str) -> Option<Self> {
-        if WorkflowRefusal::from_conflict(message) == Some(WorkflowRefusal::Archived) {
-            return Some(Self::WorkflowArchived);
+        match WorkflowRefusal::from_conflict(message) {
+            Some(WorkflowRefusal::Archived) => return Some(Self::WorkflowArchived),
+            Some(WorkflowRefusal::WebhookPathTaken) => return Some(Self::WebhookPathTaken),
+            _ => {}
         }
         match FolderRefusal::from_conflict(message) {
             Some(FolderRefusal::NotEmpty) => Some(Self::FolderNotEmpty),
@@ -63,6 +68,7 @@ impl From<WorkflowRefusal> for AutomationError {
     fn from(refusal: WorkflowRefusal) -> Self {
         match refusal {
             WorkflowRefusal::Archived => Self::Refused(Refusal::WorkflowArchived),
+            WorkflowRefusal::WebhookPathTaken => Self::Refused(Refusal::WebhookPathTaken),
             WorkflowRefusal::ConflictingFlags => {
                 Self::Api(ApiError::Validation(refusal.message().to_owned()))
             }
@@ -295,5 +301,20 @@ mod tests {
 
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(json["code"], "E_NOT_FOUND");
+    }
+
+    #[tokio::test]
+    async fn a_webhook_path_another_workflow_holds_answers_409_with_its_own_code() {
+        let from_core = AutomationError::from(CoreError::from(WorkflowRefusal::WebhookPathTaken));
+        let direct = AutomationError::from(WorkflowRefusal::WebhookPathTaken);
+
+        for error in [from_core, direct] {
+            let (status, json) = body_of(error).await;
+
+            assert_eq!(status, StatusCode::CONFLICT);
+            assert_eq!(json["code"], "E_WEBHOOK_PATH_TAKEN");
+            assert_eq!(json["status"], 409);
+            assert!(json["message"].is_string());
+        }
     }
 }

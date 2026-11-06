@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.org_id,\n                   s.workflow_id,\n                   s.trigger_id,\n                   s.next_run_at,\n                   w.current_version_id AS \"workflow_version_id!\",\n                   trig.value AS \"trigger!\",\n                   o.timezone\n            FROM automation.schedule_state s\n            JOIN automation.workflow w\n              ON w.id = s.workflow_id\n             AND w.org_id = s.org_id\n             AND w.enabled\n             AND w.archived_at IS NULL\n             AND w.current_version_id IS NOT NULL\n            JOIN automation.workflow_version wv ON wv.id = w.current_version_id\n            JOIN organizations o ON o.id = s.org_id\n            CROSS JOIN LATERAL jsonb_array_elements(wv.graph -> 'triggers') AS trig(value)\n            WHERE s.next_run_at <= $1\n              AND trig.value ->> 'id' = s.trigger_id\n            ORDER BY s.next_run_at, s.workflow_id, s.trigger_id\n            LIMIT $2\n            FOR UPDATE OF s SKIP LOCKED\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "workflow_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "trigger_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "workflow_version_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "trigger!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "timezone",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      null,
+      false
+    ]
+  },
+  "hash": "e35838a141e7ff086c42b8bad1ff5271c0e00fa409a0977c3e17fe2f2f756a15"
+}

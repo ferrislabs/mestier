@@ -19,6 +19,8 @@ mod graph_nodes;
 mod harness;
 mod issuer;
 mod runs;
+mod triggers;
+mod webhooks;
 mod workflow_lifecycle;
 
 use serde_json::{Value, json};

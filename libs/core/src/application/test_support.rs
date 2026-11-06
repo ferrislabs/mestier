@@ -134,6 +134,7 @@ pub async fn automation_pool() -> PgPool {
     for statement in [
         "DELETE FROM automation.run_step",
         "DELETE FROM automation.run",
+        "DELETE FROM automation.schedule_state",
     ] {
         sqlx::query(statement)
             .execute(&pool)

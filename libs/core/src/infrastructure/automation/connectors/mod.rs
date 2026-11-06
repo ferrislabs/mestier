@@ -10,7 +10,7 @@ mod customer_create;
 mod flow_condition;
 mod flow_config;
 mod flow_loop;
-mod http_client;
+pub(crate) mod http_client;
 mod http_request;
 mod odoo;
 mod registry;

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE automation.schedule_state\n            SET next_run_at = $3,\n                last_run_at = COALESCE($4, last_run_at)\n            WHERE workflow_id = $1 AND trigger_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03edf04d7fdf113774fd6a224223ed7664c3987c1c7647c8e6b37def552e691f"
+}

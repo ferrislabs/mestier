@@ -23,15 +23,21 @@ impl ArchiveScope {
 pub enum WorkflowRefusal {
     Archived,
     ConflictingFlags,
+    WebhookPathTaken,
 }
 
 impl WorkflowRefusal {
-    const ALL: [Self; 2] = [Self::Archived, Self::ConflictingFlags];
+    const ALL: [Self; 3] = [
+        Self::Archived,
+        Self::ConflictingFlags,
+        Self::WebhookPathTaken,
+    ];
 
     pub fn message(self) -> &'static str {
         match self {
             Self::Archived => "the workflow is archived",
             Self::ConflictingFlags => "a workflow cannot be archived and enabled in one request",
+            Self::WebhookPathTaken => "a webhook path is already used by another workflow",
         }
     }
 

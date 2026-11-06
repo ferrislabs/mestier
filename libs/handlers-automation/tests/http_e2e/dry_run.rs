@@ -761,3 +761,82 @@ async fn a_collection_or_a_credential_of_another_organization_is_refused_like_a_
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_webhook_and_a_schedule_feed_their_example_to_the_nodes_after_them() {
+    let app = harness::start().await;
+    let graph = json!({
+        "connectors": [
+            customer("c1", "{{ trigger.evenement }}"),
+            customer("c2", "{{ trigger.scheduled_for }}"),
+        ],
+        "edges": [
+            edge("t1", "c1", Value::Null),
+            edge("t2", "c2", Value::Null),
+        ],
+        "triggers": [
+            { "id": "t1", "kind": { "Webhook": {
+                "method": "POST",
+                "path": "paiement-recu",
+                "contract": [
+                    { "name": "evenement", "kind": "Text", "required": true, "example": "paiement.recu" }
+                ]
+            } } },
+            { "id": "t2", "kind": { "Schedule": {
+                "frequency": "Daily", "time": "09:00", "timezone": "Europe/Paris"
+            } } },
+        ]
+    });
+    let before = rows(&app).await;
+
+    let steps = steps_of(dry_run(&app, &app.token, &json!({ "graph": graph })).await).await;
+
+    assert_eq!(
+        step(&steps, "c1")["input"],
+        json!({ "name": "paiement.recu" })
+    );
+    let instant = step(&steps, "c2")["input"]["name"]
+        .as_str()
+        .expect("an instant")
+        .to_owned();
+    assert!(
+        chrono::DateTime::parse_from_rfc3339(&instant).expect("an RFC 3339 instant")
+            > chrono::Utc::now()
+    );
+    assert_eq!(rows(&app).await, before);
+    let registered: i64 = sqlx::query_scalar(
+        "SELECT (SELECT count(*) FROM automation.webhook_route WHERE org_id = $1) \
+              + (SELECT count(*) FROM automation.schedule_state WHERE org_id = $1)",
+    )
+    .bind(app.organization_id)
+    .fetch_one(&app.pool)
+    .await
+    .expect("count the registrations");
+    assert_eq!(
+        registered, 0,
+        "a dry run registers no route and no schedule"
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_trigger_that_breaks_its_rules_is_refused_by_the_dry_run_with_its_field() {
+    let app = harness::start().await;
+    let graph = json!({
+        "connectors": [customer("c1", "Ada")],
+        "edges": [edge("t1", "c1", Value::Null)],
+        "triggers": [{ "id": "t1", "kind": { "Webhook": { "method": "POST", "path": "Bad Path" } } }]
+    });
+
+    let response = dry_run(&app, &app.token, &json!({ "graph": graph })).await;
+
+    assert_eq!(response.status(), 422);
+    let body: Value = response.json().await.expect("json");
+    assert_eq!(body["details"]["errors"][0]["trigger_id"], "t1");
+    assert_eq!(body["details"]["errors"][0]["field"], "path");
+
+    app.cleanup().await;
+}

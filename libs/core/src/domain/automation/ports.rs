@@ -12,8 +12,8 @@ use crate::domain::automation::run::{DueRun, Run, RunOverview, RunSettlement, Ru
 use crate::domain::automation::secret::SealedSecret;
 use crate::domain::automation::settings::AutomationSettings;
 use crate::domain::automation::workflow::{
-    ArchiveScope, Graph, PlacedTrigger, Workflow, WorkflowLayout, WorkflowReference,
-    WorkflowVersion,
+    ArchiveScope, DueSchedule, Graph, PlacedTrigger, ResolvedWebhook, ScheduleSeed, WebhookMethod,
+    Workflow, WorkflowLayout, WorkflowReference, WorkflowVersion,
 };
 
 /// Appends events to the durable log.
@@ -550,5 +550,51 @@ pub trait SubscriptionRepository: Send {
         org_id: OrganizationId,
         workflow_id: Uuid,
         triggers: &[PlacedTrigger],
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait WebhookRouteRepository: Send {
+    fn replace_workflow_routes(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        triggers: &[PlacedTrigger],
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn paths_held_by_other_workflows(
+        &mut self,
+        workflow_id: Uuid,
+        paths: &[String],
+    ) -> impl Future<Output = Result<Vec<String>, CoreError>> + Send;
+
+    fn resolve(
+        &mut self,
+        path: &str,
+        method: WebhookMethod,
+    ) -> impl Future<Output = Result<Option<ResolvedWebhook>, CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait ScheduleRepository: Send {
+    fn replace_workflow_schedules(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        schedules: &[ScheduleSeed],
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn claim_due(
+        &mut self,
+        now: DateTime<Utc>,
+        batch: i64,
+    ) -> impl Future<Output = Result<Vec<DueSchedule>, CoreError>> + Send;
+
+    fn advance(
+        &mut self,
+        workflow_id: Uuid,
+        trigger_id: &str,
+        last_run_at: Option<DateTime<Utc>>,
+        next_run_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM automation.schedule_state WHERE org_id = $1 AND workflow_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aa1364f9a2374d3d7c68015458d424f90cf2927f71a31399e711093b1f144845"
+}

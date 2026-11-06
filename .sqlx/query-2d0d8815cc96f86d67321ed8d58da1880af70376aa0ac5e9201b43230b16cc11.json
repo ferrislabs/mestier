@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO automation.webhook_route (path, org_id, workflow_id, trigger_id, method)\n             VALUES ($1, $2, $3, 't1', 'POST')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d0d8815cc96f86d67321ed8d58da1880af70376aa0ac5e9201b43230b16cc11"
+}

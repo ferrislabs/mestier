@@ -25,7 +25,8 @@ use axum::{
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use http::StatusCode;
 use mestier_core::{
-    SaveWorkflowVersionCommand, connector_catalogue, event_catalogue, validate_graph,
+    SaveWorkflowVersionCommand, WorkflowRefusal, connector_catalogue, event_catalogue,
+    validate_graph,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -59,6 +60,7 @@ pub struct GraphInvalidDetails {
 
 pub enum SaveVersionError {
     Automation(AutomationError),
+    WebhookPathTaken(Vec<GraphErrorResponse>),
     /// The graph is invalid: one entry per `mestier_core::GraphError`,
     /// naming the connector and (when there is one) the field at fault.
     GraphInvalid(Vec<GraphErrorResponse>),
@@ -95,6 +97,15 @@ impl IntoResponse for SaveVersionError {
                 };
                 (StatusCode::UNPROCESSABLE_ENTITY, Json(body)).into_response()
             }
+            Self::WebhookPathTaken(errors) => {
+                let body = GraphInvalidBody {
+                    code: "E_WEBHOOK_PATH_TAKEN",
+                    message: WorkflowRefusal::WebhookPathTaken.message().to_owned(),
+                    status: StatusCode::CONFLICT.as_u16(),
+                    details: GraphInvalidDetails { errors },
+                };
+                (StatusCode::CONFLICT, Json(body)).into_response()
+            }
         }
     }
 }
@@ -114,7 +125,7 @@ impl IntoResponse for SaveVersionError {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Workflow not found"),
-        (status = 409, description = "E_WORKFLOW_ARCHIVED: an archived workflow cannot be saved until it is unarchived"),
+        (status = 409, description = "E_WORKFLOW_ARCHIVED: an archived workflow cannot be saved until it is unarchived. E_WEBHOOK_PATH_TAKEN: another workflow already holds a webhook path of the graph; details.errors names the triggers", body = inline(GraphInvalidBody)),
         (status = 422, description = "The graph is invalid — errors name the connector and field at fault", body = inline(GraphInvalidBody)),
     ),
     security(("bearer_auth" = []))
@@ -147,6 +158,19 @@ pub async fn handler(
         let response: Vec<GraphErrorResponse> =
             errors.iter().map(GraphErrorResponse::from).collect();
         return Err(SaveVersionError::GraphInvalid(response));
+    }
+
+    let taken = state
+        .usecase
+        .taken_webhook_triggers(workflow_id, &graph)
+        .await?;
+    if !taken.is_empty() {
+        return Err(SaveVersionError::WebhookPathTaken(
+            taken
+                .into_iter()
+                .map(GraphErrorResponse::webhook_path_taken)
+                .collect(),
+        ));
     }
 
     let layout = payload.layout.map(mestier_core::WorkflowLayout::from);
@@ -236,5 +260,40 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
         assert_eq!(json["code"], "E_WORKFLOW_ARCHIVED");
+    }
+
+    #[tokio::test]
+    async fn a_webhook_path_another_workflow_holds_answers_409_naming_the_triggers() {
+        let response = SaveVersionError::WebhookPathTaken(vec![
+            GraphErrorResponse::webhook_path_taken("t1".to_owned()),
+            GraphErrorResponse::webhook_path_taken("t3".to_owned()),
+        ])
+        .into_response();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(json["code"], "E_WEBHOOK_PATH_TAKEN");
+        assert_eq!(json["status"], 409);
+        let errors = json["details"]["errors"].as_array().unwrap();
+        assert_eq!(errors.len(), 2);
+        assert_eq!(errors[0]["trigger_id"], "t1");
+        assert_eq!(errors[0]["field"], "path");
+        assert!(errors[0]["connector_id"].is_null());
+        assert_eq!(errors[1]["trigger_id"], "t3");
+    }
+
+    #[tokio::test]
+    async fn the_use_case_refusal_for_a_taken_path_is_recognised_too() {
+        let core = common::CoreError::from(mestier_core::WorkflowRefusal::WebhookPathTaken);
+
+        let response = SaveVersionError::from(core).into_response();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(json["code"], "E_WEBHOOK_PATH_TAKEN");
     }
 }
