@@ -57,6 +57,11 @@ impl Modify for SecurityAddon {
         automation::credential::update::handler,
         automation::credential::delete::handler,
         automation::credential::rotate::handler,
+        automation::collection::list::handler,
+        automation::collection::create::handler,
+        automation::collection::get_one::handler,
+        automation::collection::replace::handler,
+        automation::collection::delete::handler,
         automation::folder::list::handler,
         automation::folder::create::handler,
         automation::folder::update::handler,
@@ -359,6 +364,19 @@ impl Modify for SecurityAddon {
         automation::credential::create::CreateCredentialRequest,
         automation::credential::create::CredentialOriginRequest,
         automation::credential::update::UpdateCredentialRequest,
+        automation::collection::CollectionRequest,
+        automation::collection::CollectionResponse,
+        automation::collection::CollectionSummaryResponse,
+        automation::collection::CollectionVersionResponse,
+        automation::collection::CollectionSourceDto,
+        automation::collection::OperationDto,
+        automation::collection::ParameterDto,
+        automation::collection::ParameterLocationDto,
+        automation::collection::HttpMethodDto,
+        automation::collection::RequestBodyDto,
+        automation::collection::SecuritySchemeDto,
+        automation::collection::SecurityKindDto,
+        automation::collection::ApiKeyLocationDto,
         automation::folder::create::CreateFolderRequest,
         automation::folder::update::UpdateFolderRequest,
         automation::workflow::create::CreateWorkflowRequest,
@@ -705,6 +723,80 @@ mod tests {
             assert!(
                 json.contains(&format!("\"operationId\":\"{operation_id}\"")),
                 "{operation_id} is missing from the document"
+            );
+        }
+    }
+
+    #[test]
+    fn graph_nodes_carry_their_operation_reference_in_the_document() {
+        let document = serde_json::to_value(ApiDoc::openapi()).expect("the document serializes");
+        let schemas = &document["components"]["schemas"];
+
+        let node = &schemas["PlacedConnectorDto"]["properties"];
+        assert!(node["operation"].is_object(), "{node}");
+        let reference = &schemas["OperationRefDto"];
+        let mut required: Vec<&str> = reference["required"]
+            .as_array()
+            .expect("the reference has required properties")
+            .iter()
+            .map(|name| name.as_str().unwrap())
+            .collect();
+        required.sort_unstable();
+        assert_eq!(required, ["collection_id", "operation_id"]);
+        let mut properties: Vec<&str> = reference["properties"]
+            .as_object()
+            .expect("the reference has properties")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        properties.sort_unstable();
+        assert_eq!(properties, ["collection_id", "operation_id"]);
+    }
+
+    #[test]
+    fn every_collection_route_reaches_the_document() {
+        let document = ApiDoc::openapi();
+        let paths = &document.paths.paths;
+        let collections = "/api/v1/organizations/{organization_id}/automation/collections";
+        let collection =
+            "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}";
+
+        for path in [collections, collection] {
+            assert!(
+                paths.contains_key(path),
+                "{path} is missing from the document"
+            );
+        }
+
+        let json = serde_json::to_value(&document).expect("the document serializes");
+        for (path, method, operation_id) in [
+            (collections, "get", "listCollections"),
+            (collections, "post", "importCollection"),
+            (collection, "get", "getCollection"),
+            (collection, "put", "replaceCollection"),
+            (collection, "delete", "deleteCollection"),
+        ] {
+            assert_eq!(
+                json["paths"][path][method]["operationId"], operation_id,
+                "{method} {path}"
+            );
+        }
+
+        for schema in [
+            "CollectionRequest",
+            "CollectionResponse",
+            "CollectionSummaryResponse",
+            "CollectionVersionResponse",
+            "OperationDto",
+            "ParameterDto",
+            "RequestBodyDto",
+            "SecuritySchemeDto",
+            "SecurityKindDto",
+            "CollectionSourceDto",
+        ] {
+            assert!(
+                json["components"]["schemas"][schema].is_object(),
+                "{schema} is missing from the components"
             );
         }
     }

@@ -13,6 +13,7 @@ use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit
 use mestier_core::{OrganizationId, Permissions};
 
 pub mod catalogue;
+pub mod collection;
 pub mod credential;
 pub mod error;
 pub mod expression;
@@ -103,6 +104,7 @@ async fn require_manage_automation(
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .merge(catalogue::router(state))
+        .merge(collection::router(state))
         .merge(credential::router(state))
         .merge(folder::router(state))
         .merge(workflow::router(state))

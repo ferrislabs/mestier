@@ -65,6 +65,7 @@ pub mod domain {
     pub struct DayLog;
     pub struct Workflow;
     pub struct WorkflowFolder;
+    pub struct Collection;
     pub struct Run;
     pub struct Subscription;
 }

@@ -112,6 +112,7 @@ mod tests {
             run_id: Uuid::from_u128(2),
             config,
             credential_id: None,
+            operation: None,
         }
     }
 

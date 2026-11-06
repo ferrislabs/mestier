@@ -5,6 +5,7 @@
 //! `domain::automation::connector::catalogue` by an anti-drift test in
 //! `registry`.
 
+mod collection_operation;
 mod customer_create;
 mod flow_condition;
 mod flow_config;
@@ -17,6 +18,6 @@ mod support_add_badge;
 mod support_assign_ticket;
 mod task_recurrence_extend_horizon;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 
 pub use registry::{ConnectorRegistry, UnknownConnectorKind};

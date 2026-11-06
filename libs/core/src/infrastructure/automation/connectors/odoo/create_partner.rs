@@ -104,6 +104,7 @@ mod tests {
             run_id: Uuid::from_u128(2),
             config,
             credential_id,
+            operation: None,
         }
     }
 
@@ -253,6 +254,7 @@ mod tests {
                 run_id: Uuid::from_u128(2),
                 config: &cfg,
                 credential_id: Some(credential_id),
+                operation: None,
             })
             .await;
 
@@ -294,6 +296,7 @@ mod tests {
                 run_id: Uuid::from_u128(2),
                 config: &cfg,
                 credential_id: Some(credential_id),
+                operation: None,
             })
             .await;
 

@@ -1,4 +1,5 @@
 pub mod catalogue;
+pub mod collection;
 pub mod connector;
 pub mod credential;
 pub mod expression;

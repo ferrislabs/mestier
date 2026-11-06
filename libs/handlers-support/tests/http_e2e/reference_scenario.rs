@@ -34,6 +34,7 @@ fn connector(id: &str, kind: &str, config: Value) -> PlacedConnector {
         name: None,
         description: None,
         disabled: false,
+        operation: None,
     }
 }
 

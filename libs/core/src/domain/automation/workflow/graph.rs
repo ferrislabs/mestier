@@ -16,6 +16,22 @@ pub struct Graph {
     pub triggers: Vec<PlacedTrigger>,
 }
 
+impl Graph {
+    pub fn referenced_collection_ids(&self) -> Vec<Uuid> {
+        let mut ids: Vec<Uuid> = Vec::new();
+        for operation in self
+            .connectors
+            .iter()
+            .filter_map(|connector| connector.operation.as_ref())
+        {
+            if !ids.contains(&operation.collection_id) {
+                ids.push(operation.collection_id);
+            }
+        }
+        ids
+    }
+}
+
 /// One connector instance on the canvas.
 ///
 /// `id` is local to this graph (`"c1"`), assigned by the editor and never
@@ -35,6 +51,14 @@ pub struct PlacedConnector {
     pub description: Option<String>,
     #[serde(default)]
     pub disabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation: Option<OperationRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OperationRef {
+    pub collection_id: Uuid,
+    pub operation_id: String,
 }
 
 /// One connection between two connectors, by their graph-local `id`s.
@@ -108,6 +132,7 @@ mod tests {
                     name: None,
                     description: None,
                     disabled: false,
+                    operation: None,
                 },
                 PlacedConnector {
                     id: "c2".to_string(),
@@ -118,6 +143,7 @@ mod tests {
                     name: None,
                     description: None,
                     disabled: false,
+                    operation: None,
                 },
             ],
             edges: vec![
@@ -255,6 +281,92 @@ mod tests {
         assert!(!graph.connectors[0].disabled);
         assert_eq!(graph.triggers[0].name, None);
         assert_eq!(graph.triggers[0].description, None);
+    }
+
+    #[test]
+    fn a_graph_stored_before_operation_refs_existed_reads_back_without_one() {
+        let stored = json!({
+            "connectors": [{
+                "id": "c1",
+                "kind": "http.request",
+                "version": 1,
+                "credential_id": null,
+                "config": { "method": "GET", "url": "https://example.com" },
+                "name": null,
+                "description": null,
+                "disabled": false
+            }],
+            "edges": [],
+            "triggers": []
+        });
+
+        let graph: Graph = serde_json::from_value(stored).expect("an old graph still reads");
+
+        assert_eq!(graph.connectors[0].operation, None);
+    }
+
+    #[test]
+    fn a_node_without_an_operation_serializes_exactly_as_before() {
+        let graph = sample_graph();
+
+        let json = to_value(&graph).expect("graph serializes");
+
+        assert!(json["connectors"][0].get("operation").is_none());
+    }
+
+    #[test]
+    fn an_operation_ref_carries_the_collection_and_the_operation_and_nothing_else() {
+        let collection_id = Uuid::from_u128(42);
+        let mut graph = sample_graph();
+        graph.connectors[1].kind = "collection.operation".to_string();
+        graph.connectors[1].operation = Some(OperationRef {
+            collection_id,
+            operation_id: "getAddress".to_string(),
+        });
+
+        let json = to_value(&graph).expect("graph serializes");
+
+        assert_eq!(
+            json["connectors"][1]["operation"],
+            json!({
+                "collection_id": "00000000-0000-0000-0000-00000000002a",
+                "operation_id": "getAddress"
+            })
+        );
+        let decoded: Graph = serde_json::from_value(json).expect("graph deserializes");
+        assert_eq!(decoded, graph);
+    }
+
+    #[test]
+    fn the_collections_a_graph_names_are_listed_once_each() {
+        let first = Uuid::from_u128(1);
+        let second = Uuid::from_u128(2);
+        let mut graph = sample_graph();
+        graph.connectors[0].operation = Some(OperationRef {
+            collection_id: first,
+            operation_id: "a".to_string(),
+        });
+        graph.connectors[1].operation = Some(OperationRef {
+            collection_id: first,
+            operation_id: "b".to_string(),
+        });
+        graph.connectors.push(PlacedConnector {
+            id: "c3".to_string(),
+            kind: "collection.operation".to_string(),
+            version: 1,
+            credential_id: None,
+            config: serde_json::Map::new(),
+            name: None,
+            description: None,
+            disabled: false,
+            operation: Some(OperationRef {
+                collection_id: second,
+                operation_id: "c".to_string(),
+            }),
+        });
+
+        assert_eq!(graph.referenced_collection_ids(), vec![first, second]);
+        assert!(Graph::default().referenced_collection_ids().is_empty());
     }
 
     #[test]

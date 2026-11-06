@@ -577,6 +577,7 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }],
             edges: Vec::new(),
             triggers: Vec::new(),
@@ -1091,6 +1092,7 @@ mod tests {
                     name: None,
                     description: None,
                     disabled: false,
+                    operation: None,
                 },
                 PlacedConnector {
                     id: "c2".to_string(),
@@ -1105,6 +1107,7 @@ mod tests {
                     name: None,
                     description: None,
                     disabled: false,
+                    operation: None,
                 },
             ],
             edges: vec![Edge {

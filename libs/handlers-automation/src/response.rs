@@ -377,6 +377,32 @@ pub struct PlacedConnectorDto {
     pub description: Option<String>,
     #[serde(default)]
     pub disabled: bool,
+    #[serde(default)]
+    pub operation: Option<OperationRefDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct OperationRefDto {
+    pub collection_id: Uuid,
+    pub operation_id: String,
+}
+
+impl From<mestier_core::OperationRef> for OperationRefDto {
+    fn from(value: mestier_core::OperationRef) -> Self {
+        Self {
+            collection_id: value.collection_id,
+            operation_id: value.operation_id,
+        }
+    }
+}
+
+impl From<OperationRefDto> for mestier_core::OperationRef {
+    fn from(value: OperationRefDto) -> Self {
+        Self {
+            collection_id: value.collection_id,
+            operation_id: value.operation_id,
+        }
+    }
 }
 
 impl From<mestier_core::PlacedConnector> for PlacedConnectorDto {
@@ -390,6 +416,7 @@ impl From<mestier_core::PlacedConnector> for PlacedConnectorDto {
             name: value.name,
             description: value.description,
             disabled: value.disabled,
+            operation: value.operation.map(Into::into),
         }
     }
 }
@@ -405,6 +432,7 @@ impl From<PlacedConnectorDto> for mestier_core::PlacedConnector {
             name: value.name,
             description: value.description,
             disabled: value.disabled,
+            operation: value.operation.map(Into::into),
         }
     }
 }
@@ -702,6 +730,19 @@ impl From<&mestier_core::GraphError> for GraphErrorResponse {
                 field,
                 ..
             } => (Some(connector_id.clone()), None, Some(field.clone())),
+            UnknownCollection { connector_id, .. } | UnknownOperation { connector_id, .. } => (
+                Some(connector_id.clone()),
+                None,
+                Some("operation".to_owned()),
+            ),
+            MissingParameter {
+                connector_id,
+                field,
+            }
+            | UnknownParameter {
+                connector_id,
+                field,
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
             UnknownCredential { connector_id, .. } => (Some(connector_id.clone()), None, None),
             CredentialSchemeNotAccepted { connector_id, .. } => {
                 (Some(connector_id.clone()), None, None)
@@ -918,6 +959,7 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }],
             edges: vec![mestier_core::Edge {
                 from: "t1".to_string(),
@@ -955,9 +997,77 @@ mod tests {
         let graph: mestier_core::Graph = sent.into();
 
         assert_eq!(
-            mestier_core::validate_graph(&graph, &connector_catalogue(), &[], &event_catalogue()),
+            mestier_core::validate_graph(
+                &graph,
+                &connector_catalogue(),
+                &[],
+                &event_catalogue(),
+                &[]
+            ),
             Ok(())
         );
+    }
+
+    #[test]
+    fn a_node_carries_its_operation_reference_across_the_wire_and_back() {
+        let collection_id = Uuid::from_u128(77);
+        let sent = serde_json::from_value::<GraphDto>(json!({
+            "connectors": [{
+                "id": "c1",
+                "kind": "collection.operation",
+                "version": 1,
+                "credential_id": null,
+                "config": { "path": { "id": "42" } },
+                "operation": {
+                    "collection_id": "00000000-0000-0000-0000-00000000004d",
+                    "operation_id": "getAddress"
+                }
+            }],
+            "edges": [{ "from": "t1", "to": "c1", "branch": null }],
+            "triggers": [{ "id": "t1", "kind": "Manual" }]
+        }))
+        .expect("the editor's graph deserializes");
+
+        let domain: mestier_core::Graph = sent.clone().into();
+        let operation = domain.connectors[0]
+            .operation
+            .as_ref()
+            .expect("the reference reaches the domain");
+        assert_eq!(operation.collection_id, collection_id);
+        assert_eq!(operation.operation_id, "getAddress");
+
+        let back = serde_json::to_value(GraphDto::from(domain)).unwrap();
+        assert_eq!(
+            back["connectors"][0]["operation"],
+            json!({
+                "collection_id": "00000000-0000-0000-0000-00000000004d",
+                "operation_id": "getAddress"
+            })
+        );
+        assert_eq!(
+            GraphDto::from(mestier_core::Graph::from(sent.clone())),
+            sent
+        );
+    }
+
+    #[test]
+    fn a_node_sent_without_an_operation_reads_as_none_and_is_answered_with_null() {
+        let sent = serde_json::from_value::<GraphDto>(json!({
+            "connectors": [{
+                "id": "c1",
+                "kind": "flow.condition",
+                "version": 1,
+                "credential_id": null,
+                "config": { "predicate": "{{ true }}" }
+            }],
+            "edges": [],
+            "triggers": []
+        }))
+        .expect("an old payload deserializes");
+
+        assert_eq!(sent.connectors[0].operation, None);
+        let answered = serde_json::to_value(&sent).unwrap();
+        assert!(answered["connectors"][0]["operation"].is_null());
     }
 
     #[test]
@@ -994,6 +1104,51 @@ mod tests {
     }
 
     // --- GraphErrorResponse ----------------------------------------------
+
+    #[test]
+    fn collection_errors_name_the_node_and_the_field_at_fault() {
+        let collection_id = Uuid::from_u128(9);
+        let cases = [
+            (
+                GraphError::UnknownCollection {
+                    connector_id: "c1".to_string(),
+                    collection_id,
+                },
+                "operation",
+            ),
+            (
+                GraphError::UnknownOperation {
+                    connector_id: "c1".to_string(),
+                    collection_id,
+                    operation_id: "getAddress".to_string(),
+                },
+                "operation",
+            ),
+            (
+                GraphError::MissingParameter {
+                    connector_id: "c1".to_string(),
+                    field: "path.id".to_string(),
+                },
+                "path.id",
+            ),
+            (
+                GraphError::UnknownParameter {
+                    connector_id: "c1".to_string(),
+                    field: "query.sort".to_string(),
+                },
+                "query.sort",
+            ),
+        ];
+
+        for (error, field) in cases {
+            let response = GraphErrorResponse::from(&error);
+
+            assert_eq!(response.connector_id, Some("c1".to_string()), "{error}");
+            assert_eq!(response.trigger_id, None, "{error}");
+            assert_eq!(response.field, Some(field.to_string()), "{error}");
+            assert!(response.message.contains("c1"), "{}", response.message);
+        }
+    }
 
     #[test]
     fn a_missing_field_error_names_the_connector_and_the_field() {
@@ -1261,6 +1416,7 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }],
             edges: Vec::new(),
             triggers: vec![mestier_core::PlacedTrigger {

@@ -21,7 +21,7 @@ pub use archive::{ArchiveScope, WorkflowRefusal};
 pub use commands::{
     CreateWorkflowCommand, SaveWorkflowVersionCommand, UpdateWorkflowCommand, WorkflowInitialState,
 };
-pub use graph::{Branch, Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind};
+pub use graph::{Branch, Edge, Graph, OperationRef, PlacedConnector, PlacedTrigger, TriggerKind};
 pub use tags::{MAX_RAW_TAGS, MAX_TAG_LENGTH, MAX_TAGS, WorkflowTags, WorkflowTagsError};
 pub use text::{
     MAX_WORKFLOW_DESCRIPTION_LENGTH, MAX_WORKFLOW_NAME_LENGTH, WorkflowDescription,

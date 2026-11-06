@@ -12,6 +12,7 @@
 //! cargo test -p handlers-automation --test http_e2e -- --ignored
 //! ```
 
+mod collections;
 mod folders;
 mod graph_nodes;
 mod harness;

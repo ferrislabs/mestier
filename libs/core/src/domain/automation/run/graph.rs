@@ -168,6 +168,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }
     }
 

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT slug\n               FROM automation.collection\n               WHERE org_id = $1 AND (slug = $2 OR starts_with(slug, $2 || '-'))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slug",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c899669ab30d8021da78e441776818a183c8637d9eb675dec67537ec49aea722"
+}

@@ -138,8 +138,12 @@ pub async fn handler(
     let catalogue = connector_catalogue();
     let events = event_catalogue();
     let credentials = state.usecase.list_credentials(organization_id).await?;
+    let collections = state
+        .usecase
+        .find_collections(organization_id, &graph.referenced_collection_ids())
+        .await?;
 
-    if let Err(errors) = validate_graph(&graph, &catalogue, &credentials, &events) {
+    if let Err(errors) = validate_graph(&graph, &catalogue, &credentials, &events, &collections) {
         let response: Vec<GraphErrorResponse> =
             errors.iter().map(GraphErrorResponse::from).collect();
         return Err(SaveVersionError::GraphInvalid(response));

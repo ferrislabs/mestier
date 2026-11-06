@@ -1,3 +1,4 @@
+pub mod collection;
 pub mod credential;
 pub mod dispatcher;
 pub mod model;
@@ -8,6 +9,7 @@ pub mod subscription;
 pub mod workflow;
 pub mod workflow_folder;
 
+pub use collection::PgCollectionRepository;
 pub use credential::PgCredentialRepository;
 pub use dispatcher::PgEventDispatchRepository;
 pub use repository::PgEventLogRepository;

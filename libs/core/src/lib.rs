@@ -6,6 +6,12 @@ pub mod infrastructure;
 
 pub use application::supplier_invoice::{ImportSupplierInvoiceOutcome, TotalsMismatch};
 pub use application::*;
+pub use domain::automation::collection::{
+    ApiKeyLocation, Collection, CollectionDetail, CollectionDraft, CollectionDraftInput,
+    CollectionError, CollectionSource, CollectionSummary, CollectionVersion, HttpMethod,
+    ImportCollectionCommand, MAX_COLLECTION_BYTES, Operation, Parameter, ParameterLocation,
+    ReplaceCollectionCommand, RequestBody, SecurityKind, SecurityScheme,
+};
 pub use domain::automation::connector::{
     AuthRequirement, AuthScheme, ConnectorCatalogue, ConnectorCatalogueError, ConnectorDescriptor,
     Field, FieldKind, SelectOption, VisibleWhen, auth_scheme, auth_schemes, connector_catalogue,
@@ -32,7 +38,7 @@ pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
 pub use domain::automation::workflow::{
     ArchiveScope, Branch, CreateWorkflowCommand, Edge, Graph, GraphError, MAX_LAYOUT_ENTRIES,
     MAX_NODE_DESCRIPTION_LENGTH, MAX_NODE_NAME_LENGTH, MAX_RAW_TAGS, MAX_TAG_LENGTH, MAX_TAGS,
-    MAX_WORKFLOW_DESCRIPTION_LENGTH, MAX_WORKFLOW_NAME_LENGTH, NodePosition, NodeRef,
+    MAX_WORKFLOW_DESCRIPTION_LENGTH, MAX_WORKFLOW_NAME_LENGTH, NodePosition, NodeRef, OperationRef,
     PlacedConnector, PlacedTrigger, SaveWorkflowVersionCommand, TriggerKind, UpdateWorkflowCommand,
     Workflow, WorkflowDescription, WorkflowDescriptionError, WorkflowInitialState, WorkflowLayout,
     WorkflowName, WorkflowNameError, WorkflowReference, WorkflowRefusal, WorkflowTags,
@@ -90,9 +96,9 @@ pub use domain::{
     absence::ports::MockAbsenceRepository,
     assignment_report::ports::MockAssignmentReportRepository,
     automation::ports::{
-        MockAutomationSettingsRepository, MockCredentialRepository, MockEventDispatchRepository,
-        MockEventLogRepository, MockRunRepository, MockSubscriptionRepository,
-        MockWorkflowRepository,
+        MockAutomationSettingsRepository, MockCollectionRepository, MockCredentialRepository,
+        MockEventDispatchRepository, MockEventLogRepository, MockRunRepository,
+        MockSubscriptionRepository, MockWorkflowRepository,
     },
     custom_unit::ports::MockCustomUnitRepository,
     customer::ports::MockCustomerRepository,

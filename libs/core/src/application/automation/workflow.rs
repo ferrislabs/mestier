@@ -9,7 +9,9 @@ use crate::{
     domain::automation::{
         catalogue::event_catalogue,
         connector::connector_catalogue,
-        ports::{CredentialRepository, SubscriptionRepository, WorkflowRepository},
+        ports::{
+            CollectionRepository, CredentialRepository, SubscriptionRepository, WorkflowRepository,
+        },
         workflow::{
             ArchiveScope, CreateWorkflowCommand, GraphError, SaveWorkflowVersionCommand,
             UpdateWorkflowCommand, Workflow, WorkflowDescription, WorkflowInitialState,
@@ -144,7 +146,7 @@ impl MestierUseCase {
     /// `current_version_id` to it, all inside one transaction (#199). A run
     /// (#200) reading the previous version therefore never observes a
     /// half-written one.
-    #[transactional(workflow, credential, subscription)]
+    #[transactional(workflow, credential, subscription, collection)]
     pub async fn save_workflow_version(
         &self,
         command: SaveWorkflowVersionCommand,
@@ -152,6 +154,7 @@ impl MestierUseCase {
         let mut workflows = workflow_repository;
         let mut credentials = credential_repository;
         let mut subscriptions = subscription_repository;
+        let mut collections = collection_repository;
 
         workflows
             .find_by_id(command.org_id, command.workflow_id)
@@ -162,12 +165,16 @@ impl MestierUseCase {
         let catalogue = connector_catalogue();
         let events = event_catalogue();
         let organization_credentials = credentials.list_by_organization(command.org_id).await?;
+        let referenced_collections = collections
+            .find_many(command.org_id, &command.graph.referenced_collection_ids())
+            .await?;
 
         validate_graph(
             &command.graph,
             &catalogue,
             &organization_credentials,
             &events,
+            &referenced_collections,
         )
         .map_err(|errors| CoreError::Conflict(format_graph_errors(&errors)))?;
 
@@ -307,6 +314,7 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }],
             edges: vec![Edge {
                 from: "t1".to_string(),
@@ -565,6 +573,7 @@ mod tests {
                     name: None,
                     description: None,
                     disabled: false,
+                    operation: None,
                 },
                 PlacedConnector {
                     id: "c2".to_string(),
@@ -575,6 +584,7 @@ mod tests {
                     name: None,
                     description: None,
                     disabled: false,
+                    operation: None,
                 },
             ],
             edges: vec![
@@ -821,6 +831,7 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }],
             edges: Vec::new(),
             triggers: Vec::new(),
@@ -898,6 +909,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         });
         let error = usecase
             .save_workflow_version(SaveWorkflowVersionCommand {
@@ -1422,5 +1434,219 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(saved.version, 1);
+    }
+
+    mod operation_nodes {
+        use serde_json::{Map, json};
+
+        use super::*;
+        use crate::domain::automation::collection::{
+            CollectionDraft, CollectionDraftInput, CollectionSource, HttpMethod,
+            ImportCollectionCommand, Operation, Parameter, ParameterLocation,
+            ReplaceCollectionCommand,
+        };
+        use crate::domain::automation::workflow::OperationRef;
+
+        fn draft(path: &str, required: bool) -> CollectionDraft {
+            CollectionDraft::new(CollectionDraftInput {
+                title: "Addresses".to_owned(),
+                version: "1.0.0".to_owned(),
+                description: String::new(),
+                base_url: "https://api.example.com".to_owned(),
+                source: CollectionSource::Url {
+                    url: "https://api.example.com/openapi.json".to_owned(),
+                },
+                security: Vec::new(),
+                operations: vec![Operation {
+                    id: "getAddress".to_owned(),
+                    method: HttpMethod::Get,
+                    path: path.to_owned(),
+                    summary: String::new(),
+                    tag: String::new(),
+                    parameters: vec![Parameter {
+                        name: "limit".to_owned(),
+                        location: ParameterLocation::Query,
+                        required,
+                        description: String::new(),
+                        schema: json!({ "type": "integer" }),
+                    }],
+                    request_body: None,
+                    response: None,
+                    response_status: None,
+                }],
+                schemas: Map::new(),
+            })
+            .unwrap()
+        }
+
+        fn operation_graph(collection_id: Uuid, config: serde_json::Value) -> Graph {
+            let mut graph = valid_graph();
+            graph.connectors[0] = PlacedConnector {
+                id: "c1".to_string(),
+                kind: "collection.operation".to_string(),
+                version: 1,
+                credential_id: None,
+                config: config.as_object().cloned().unwrap(),
+                name: None,
+                description: None,
+                disabled: false,
+                operation: Some(OperationRef {
+                    collection_id,
+                    operation_id: "getAddress".to_owned(),
+                }),
+            };
+            graph
+        }
+
+        async fn save(
+            usecase: &MestierUseCase,
+            org_id: OrganizationId,
+            workflow_id: Uuid,
+            graph: Graph,
+        ) -> Result<WorkflowVersion, CoreError> {
+            usecase
+                .save_workflow_version(SaveWorkflowVersionCommand {
+                    org_id,
+                    workflow_id,
+                    graph,
+                    layout: None,
+                    created_by: None,
+                })
+                .await
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_node_on_a_stored_operation_saves_and_one_on_a_gone_collection_does_not() {
+            let pool = automation_pool().await;
+            let org_id = seed_organization(&pool, "save-operation").await;
+            let usecase = use_case(pool);
+            let workflow = usecase
+                .create_workflow(CreateWorkflowCommand {
+                    org_id,
+                    name: "Uses a collection".to_string(),
+                    description: None,
+                })
+                .await
+                .unwrap();
+            let collection = usecase
+                .import_collection(ImportCollectionCommand {
+                    org_id,
+                    draft: draft("/addresses", false),
+                })
+                .await
+                .unwrap();
+
+            let saved = save(
+                &usecase,
+                org_id,
+                workflow.id,
+                operation_graph(collection.id, json!({ "query": { "limit": 3 } })),
+            )
+            .await;
+            assert!(saved.is_ok(), "{saved:?}");
+
+            usecase
+                .delete_collection(org_id, collection.id)
+                .await
+                .unwrap();
+            let refused = save(
+                &usecase,
+                org_id,
+                workflow.id,
+                operation_graph(collection.id, json!({ "query": { "limit": 3 } })),
+            )
+            .await;
+
+            let Err(CoreError::Conflict(message)) = refused else {
+                panic!("expected a conflict, got {refused:?}");
+            };
+            assert!(message.contains("c1"), "{message}");
+            assert!(message.contains(&collection.id.to_string()), "{message}");
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_collection_of_another_organization_is_not_a_known_collection() {
+            let pool = automation_pool().await;
+            let org_id = seed_organization(&pool, "save-operation-own").await;
+            let stranger = seed_organization(&pool, "save-operation-stranger").await;
+            let usecase = use_case(pool);
+            let workflow = usecase
+                .create_workflow(CreateWorkflowCommand {
+                    org_id,
+                    name: "Borrows".to_string(),
+                    description: None,
+                })
+                .await
+                .unwrap();
+            let foreign = usecase
+                .import_collection(ImportCollectionCommand {
+                    org_id: stranger,
+                    draft: draft("/addresses", false),
+                })
+                .await
+                .unwrap();
+
+            let refused = save(
+                &usecase,
+                org_id,
+                workflow.id,
+                operation_graph(foreign.id, json!({})),
+            )
+            .await;
+
+            let Err(CoreError::Conflict(message)) = refused else {
+                panic!("expected a conflict, got {refused:?}");
+            };
+            assert!(message.contains("unknown collection"), "{message}");
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_required_parameter_added_later_fails_the_next_save_not_the_stored_version() {
+            let pool = automation_pool().await;
+            let org_id = seed_organization(&pool, "save-operation-update").await;
+            let usecase = use_case(pool);
+            let workflow = usecase
+                .create_workflow(CreateWorkflowCommand {
+                    org_id,
+                    name: "Follows the collection".to_string(),
+                    description: None,
+                })
+                .await
+                .unwrap();
+            let collection = usecase
+                .import_collection(ImportCollectionCommand {
+                    org_id,
+                    draft: draft("/addresses", false),
+                })
+                .await
+                .unwrap();
+            let graph = operation_graph(collection.id, json!({}));
+            let first = save(&usecase, org_id, workflow.id, graph.clone())
+                .await
+                .unwrap();
+
+            usecase
+                .replace_collection(ReplaceCollectionCommand {
+                    org_id,
+                    id: collection.id,
+                    draft: draft("/addresses", true),
+                })
+                .await
+                .unwrap();
+            let refused = save(&usecase, org_id, workflow.id, graph).await;
+
+            let Err(CoreError::Conflict(message)) = refused else {
+                panic!("expected a conflict, got {refused:?}");
+            };
+            assert!(message.contains("query.limit"), "{message}");
+            let current = usecase
+                .find_workflow_version_by_id(org_id, first.id)
+                .await
+                .unwrap();
+            assert_eq!(current.map(|version| version.version), Some(1));
+        }
     }
 }

@@ -127,6 +127,24 @@ impl App {
         format!("{}/{folder_id}", self.folders_url())
     }
 
+    pub fn collections_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/collections",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn collection_url(&self, collection_id: &str) -> String {
+        format!("{}/{collection_id}", self.collections_url())
+    }
+
+    pub fn other_organization_collections_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/collections",
+            self.base_url, self.other_organization_id
+        )
+    }
+
     pub fn runs_url(&self, workflow_id: &str) -> String {
         format!("{}/{workflow_id}/runs", self.workflows_url())
     }

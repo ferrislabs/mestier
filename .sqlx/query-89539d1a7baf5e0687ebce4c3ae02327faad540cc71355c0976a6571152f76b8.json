@@ -1,0 +1,105 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.collection\n               SET title = $3, version = $4, description = $5, base_url = $6,\n                   source_kind = $7, source_value = $8, imported_at = $9,\n                   security = $10, operations = $11, schemas = $12\n               WHERE org_id = $1 AND id = $2\n               RETURNING id, org_id, slug, title, version, description, base_url,\n                         source_kind, source_value, imported_at, security, operations, schemas",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "base_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "source_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "source_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "imported_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "security",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "operations",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "schemas",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "89539d1a7baf5e0687ebce4c3ae02327faad540cc71355c0976a6571152f76b8"
+}

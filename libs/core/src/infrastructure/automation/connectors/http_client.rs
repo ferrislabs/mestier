@@ -7,9 +7,13 @@
 
 use std::time::Duration;
 
+use common::OrganizationId;
 use reqwest::{Client, RequestBuilder, Response, Url, redirect::Policy};
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
+use uuid::Uuid;
 
+use crate::application::MestierUseCase;
+use crate::domain::automation::run::ConnectorOutcome;
 use crate::infrastructure::automation::webhook::{
     address_policy::{AddressVerdict, PrivateNetworkAccess, judge},
     resolver::GuardedResolver,
@@ -138,6 +142,49 @@ pub fn auth_from_credential(
         other => Err(AuthFromCredentialError::UnsupportedKind {
             kind: other.to_owned(),
         }),
+    }
+}
+
+pub async fn open_http_auth(
+    usecase: &MestierUseCase,
+    org_id: OrganizationId,
+    credential_id: Uuid,
+) -> Result<HttpAuth, String> {
+    let (credential, plaintext) = usecase
+        .open_credential(org_id, credential_id)
+        .await
+        .map_err(|error| format!("the auth credential is unusable: {error}"))?;
+
+    let fields = parse_credential_fields(&plaintext)
+        .ok_or_else(|| "the auth credential's data is not usable".to_owned())?;
+
+    auth_from_credential(&credential.kind, &fields).map_err(|error| error.to_string())
+}
+
+fn parse_credential_fields(plaintext: &[u8]) -> Option<Map<String, Value>> {
+    match serde_json::from_slice(plaintext).ok()? {
+        Value::Object(map) => Some(map),
+        _ => None,
+    }
+}
+
+/// Only `2xx` is a success — a redirect (never followed, `Policy::none()`)
+/// and every other status go back into the retry schedule, the body kept in
+/// the message so the run inspector shows *why* rather than just the code.
+pub fn outcome_for(captured: CapturedResponse) -> ConnectorOutcome {
+    if (200..300).contains(&captured.status) {
+        ConnectorOutcome::Produced(json!({
+            "status": captured.status,
+            "headers": captured.headers,
+            "body": captured.body,
+        }))
+    } else {
+        ConnectorOutcome::Failed {
+            error: format!(
+                "the endpoint answered {} with body: {}",
+                captured.status, captured.body
+            ),
+        }
     }
 }
 
