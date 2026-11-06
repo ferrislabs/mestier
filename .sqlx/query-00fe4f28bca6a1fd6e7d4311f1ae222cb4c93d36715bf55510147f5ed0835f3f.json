@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT data, data_nonce, data_ciphertext FROM automation.credential WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "data_nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 2,
+        "name": "data_ciphertext",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "00fe4f28bca6a1fd6e7d4311f1ae222cb4c93d36715bf55510147f5ed0835f3f"
+}

@@ -7,6 +7,8 @@ pub enum Offered {
     Bearer,
     Basic,
     Header,
+    Query,
+    Other,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,6 +16,7 @@ pub enum Identification {
     Anonymous,
     Credential,
     HeaderNamed(String),
+    QueryNamed(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -29,6 +32,7 @@ enum Declared<'a> {
     Bearer,
     Basic,
     HeaderKey(&'a str),
+    QueryKey(&'a str),
 }
 
 fn classify(scheme: &SecurityScheme) -> Result<Declared<'_>, String> {
@@ -44,6 +48,10 @@ fn classify(scheme: &SecurityScheme) -> Result<Declared<'_>, String> {
             location: ApiKeyLocation::Header,
             parameter_name,
         } => Ok(Declared::HeaderKey(parameter_name)),
+        SecurityKind::ApiKey {
+            location: ApiKeyLocation::Query,
+            parameter_name,
+        } => Ok(Declared::QueryKey(parameter_name)),
         SecurityKind::ApiKey { location, .. } => Err(format!(
             "api_key in {}",
             match location {
@@ -64,6 +72,8 @@ impl Offered {
             Self::Bearer => "bearer",
             Self::Basic => "basic",
             Self::Header => "a header key",
+            Self::Query => "a query key",
+            Self::Other => "another kind of credential",
         }
     }
 }
@@ -110,6 +120,9 @@ pub fn select_identification(
             }
             (Offered::Header, Declared::HeaderKey(name)) => {
                 Some(Identification::HeaderNamed((*name).to_owned()))
+            }
+            (Offered::Query, Declared::QueryKey(name)) => {
+                Some(Identification::QueryNamed((*name).to_owned()))
             }
             _ => None,
         })
@@ -160,7 +173,13 @@ mod tests {
             select_identification(&[], None),
             Ok(Identification::Anonymous)
         );
-        for offered in [Offered::Bearer, Offered::Basic, Offered::Header] {
+        for offered in [
+            Offered::Bearer,
+            Offered::Basic,
+            Offered::Header,
+            Offered::Query,
+            Offered::Other,
+        ] {
             assert_eq!(
                 select_identification(&[], Some(offered)),
                 Ok(Identification::Credential)
@@ -263,18 +282,54 @@ mod tests {
     }
 
     #[test]
-    fn an_api_key_in_the_query_or_a_cookie_is_refused() {
-        for location in [ApiKeyLocation::Query, ApiKeyLocation::Cookie] {
-            let schemes = [api_key("key", location, "api_key")];
+    fn an_api_key_in_the_query_takes_a_query_credential_under_the_declared_name() {
+        let schemes = [api_key("key", ApiKeyLocation::Query, "api_key")];
 
-            let refusal = select_identification(&schemes, Some(Offered::Header)).unwrap_err();
+        assert_eq!(
+            select_identification(&schemes, Some(Offered::Query)),
+            Ok(Identification::QueryNamed("api_key".to_owned()))
+        );
+        assert_eq!(
+            select_identification(&schemes, None),
+            Ok(Identification::Anonymous)
+        );
+    }
+
+    #[test]
+    fn an_api_key_in_the_query_refuses_a_credential_of_another_shape() {
+        let schemes = [api_key("key", ApiKeyLocation::Query, "api_key")];
+
+        for offered in [
+            Offered::Header,
+            Offered::Bearer,
+            Offered::Basic,
+            Offered::Other,
+        ] {
+            let refusal = select_identification(&schemes, Some(offered)).unwrap_err();
 
             assert!(
-                matches!(refusal, SecurityRefusal::Unsupported { .. }),
-                "{refusal:?}"
+                matches!(refusal, SecurityRefusal::Mismatch { .. }),
+                "{offered:?}: {refusal:?}"
             );
-            assert!(refusal.to_string().contains("api_key"));
         }
+        let header = [api_key("key", ApiKeyLocation::Header, "X-Key")];
+        assert!(matches!(
+            select_identification(&header, Some(Offered::Query)),
+            Err(SecurityRefusal::Mismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn an_api_key_in_a_cookie_is_still_refused() {
+        let schemes = [api_key("key", ApiKeyLocation::Cookie, "session")];
+
+        let refusal = select_identification(&schemes, Some(Offered::Header)).unwrap_err();
+
+        assert!(
+            matches!(refusal, SecurityRefusal::Unsupported { .. }),
+            "{refusal:?}"
+        );
+        assert!(refusal.to_string().contains("api_key"));
     }
 
     #[test]

@@ -140,9 +140,8 @@ impl OdooClient {
     ) -> Result<Value, String> {
         let (metadata, plaintext) = self
             .usecase
-            .open_credential(org_id, credential_id)
-            .await
-            .map_err(|error| format!("the Odoo credential is unusable: {error}"))?;
+            .open_credential_for_run(org_id, credential_id)
+            .await?;
 
         let fields = match serde_json::from_slice(&plaintext) {
             Ok(Value::Object(map)) => map,

@@ -19,8 +19,9 @@ use crate::infrastructure::automation::webhook::{
 };
 
 use super::http_client::{
-    DEFAULT_TIMEOUT, build_guarded_client, describe_reqwest_error, open_http_auth, outcome_for,
-    read_response, refuse_literal_private_address,
+    DEFAULT_TIMEOUT, PreparedRequest, build_guarded_client, client_for_auth,
+    describe_reqwest_error, open_http_auth, outcome_for, read_response,
+    refuse_literal_private_address, send,
 };
 
 pub struct HttpRequestConnector {
@@ -77,18 +78,18 @@ impl Connector for HttpRequestConnector {
                 error: "`url` must resolve to a string".to_owned(),
             };
         };
-        if let Some(access) = self.access {
-            let parsed = match Url::parse(url) {
-                Ok(parsed) => parsed,
-                Err(error) => {
-                    return ConnectorOutcome::Failed {
-                        error: format!("`url` is not a valid URL: {error}"),
-                    };
-                }
-            };
-            if let Err(error) = refuse_literal_private_address(&parsed, access) {
-                return ConnectorOutcome::Failed { error };
+        let url = match Url::parse(url) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                return ConnectorOutcome::Failed {
+                    error: format!("`url` is not a valid URL: {error}"),
+                };
             }
+        };
+        if let Some(access) = self.access
+            && let Err(error) = refuse_literal_private_address(&url, access)
+        {
+            return ConnectorOutcome::Failed { error };
         }
         let timeout = input
             .config
@@ -101,27 +102,22 @@ impl Connector for HttpRequestConnector {
             Ok(headers) => headers,
             Err(error) => return ConnectorOutcome::Failed { error },
         };
-        let body = input.config.get("body").filter(|v| !v.is_null());
+        let body = input.config.get("body").filter(|v| !v.is_null()).cloned();
 
-        let mut request = self.client.request(method, url).timeout(timeout);
-        let has_content_type = headers
-            .iter()
-            .any(|(name, _)| name.eq_ignore_ascii_case("content-type"));
-        for (name, value) in &headers {
-            request = request.header(name, value);
-        }
+        let mut request = PreparedRequest::new(method, url, headers, body);
 
-        if let Some(credential_id) = input.credential_id {
-            match self.open_auth(input.org_id, credential_id).await {
-                Ok(auth) => request = auth.apply(request),
+        let auth = match input.credential_id {
+            Some(credential_id) => match self.open_auth(input.org_id, credential_id).await {
+                Ok(auth) => Some(auth),
                 Err(error) => return ConnectorOutcome::Failed { error },
-            }
+            },
+            None => None,
+        };
+        if let Some(auth) = &auth
+            && let Err(error) = auth.prepare(&mut request)
+        {
+            return ConnectorOutcome::Failed { error };
         }
-
-        let body_bytes = body.map(|value| {
-            serde_json::to_vec(value)
-                .expect("a serde_json::Value serializes into a JSON body without failing")
-        });
 
         if let Some(signing_id) = input
             .config
@@ -132,27 +128,23 @@ impl Connector for HttpRequestConnector {
                 .sign_headers(
                     input.org_id,
                     signing_id,
-                    body_bytes.as_deref().unwrap_or(b""),
+                    request.body_bytes().as_deref().unwrap_or(b""),
                 )
                 .await
             {
                 Ok((timestamp, signature)) => {
-                    request = request
-                        .header("x-mestier-timestamp", timestamp.to_string())
-                        .header("x-mestier-signature", signature);
+                    request.set_header("x-mestier-timestamp", timestamp.to_string());
+                    request.set_header("x-mestier-signature", signature);
                 }
                 Err(error) => return ConnectorOutcome::Failed { error },
             }
         }
 
-        if let Some(bytes) = body_bytes {
-            if !has_content_type {
-                request = request.header("content-type", "application/json");
-            }
-            request = request.body(bytes);
-        }
-
-        let response = match request.send().await {
+        let client = match client_for_auth(&self.client, self.access, auth.as_ref()) {
+            Ok(client) => client,
+            Err(error) => return ConnectorOutcome::Failed { error },
+        };
+        let response = match send(&client, &request, timeout, auth.as_ref()).await {
             Ok(response) => response,
             Err(error) => {
                 return ConnectorOutcome::Failed {
@@ -188,9 +180,8 @@ impl HttpRequestConnector {
 
         let (_, secret) = self
             .usecase
-            .open_credential(org_id, signing_id)
-            .await
-            .map_err(|error| format!("the signing credential is unusable: {error}"))?;
+            .open_credential_for_run(org_id, signing_id)
+            .await?;
 
         let timestamp = Utc::now().timestamp();
         let signature = sign(&secret, timestamp, body);
@@ -596,6 +587,8 @@ mod tests {
         let (credential, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
+                    description: None,
+                    expires_at: None,
                     org_id,
                     kind: "bearer_token".to_owned(),
                     name: "API token".to_owned(),
@@ -632,6 +625,286 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
+    async fn a_node_whose_credential_was_deleted_fails_naming_it_and_sends_nothing() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "auth-deleted").await;
+        let usecase = usecase_with_cipher(pool);
+        let (credential, _secret) = usecase
+            .create_credential(
+                crate::domain::automation::credential::CreateCredentialCommand {
+                    description: None,
+                    expires_at: None,
+                    org_id,
+                    kind: "bearer_token".to_owned(),
+                    name: "Jeton fournisseur".to_owned(),
+                    origin: crate::domain::automation::credential::CredentialOrigin::Supplied,
+                    data: Some(json!({ "token": "abc123" })),
+                },
+            )
+            .await
+            .unwrap();
+        usecase
+            .delete_credential(org_id, credential.id)
+            .await
+            .unwrap();
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let cfg = config(&[("method", json!("GET")), ("url", json!(server.url))]);
+        let connector = HttpRequestConnector::with_client(usecase, test_client());
+
+        let outcome = connector
+            .execute(ConnectorInput {
+                org_id,
+                run_id: Uuid::from_u128(2),
+                config: &cfg,
+                credential_id: Some(credential.id),
+                operation: None,
+            })
+            .await;
+
+        let ConnectorOutcome::Failed { error } = outcome else {
+            panic!("a deleted credential fails the node");
+        };
+        assert_eq!(error, "credential `Jeton fournisseur` no longer exists");
+        assert!(server.requests().is_empty(), "nothing leaves the process");
+    }
+
+    async fn credential_of(
+        usecase: &MestierUseCase,
+        org_id: OrganizationId,
+        kind: &str,
+        data: Value,
+    ) -> Uuid {
+        usecase
+            .create_credential(
+                crate::domain::automation::credential::CreateCredentialCommand {
+                    description: None,
+                    expires_at: None,
+                    org_id,
+                    kind: kind.to_owned(),
+                    name: format!("Test {kind}"),
+                    origin: crate::domain::automation::credential::CredentialOrigin::Supplied,
+                    data: Some(data),
+                },
+            )
+            .await
+            .unwrap()
+            .0
+            .id
+    }
+
+    async fn call_with(
+        usecase: MestierUseCase,
+        org_id: OrganizationId,
+        credential_id: Uuid,
+        cfg: &Map<String, Value>,
+    ) -> ConnectorOutcome {
+        HttpRequestConnector::with_client(usecase, test_client())
+            .execute(ConnectorInput {
+                org_id,
+                run_id: Uuid::from_u128(2),
+                config: cfg,
+                credential_id: Some(credential_id),
+                operation: None,
+            })
+            .await
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_query_key_credential_adds_its_parameter_to_the_url_and_keeps_the_others() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "auth-query").await;
+        let usecase = usecase_with_cipher(pool);
+        let key = credential_of(
+            &usecase,
+            org_id,
+            "api_key_query",
+            json!({ "param_name": "api_key", "param_value": "s3cret value" }),
+        )
+        .await;
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let cfg = config(&[
+            ("method", json!("GET")),
+            ("url", json!(format!("{}/items?page=2", server.url))),
+        ]);
+
+        let outcome = call_with(usecase, org_id, key, &cfg).await;
+
+        assert!(
+            matches!(outcome, ConnectorOutcome::Produced(_)),
+            "{outcome:?}"
+        );
+        let request = server.last_request();
+        assert_eq!(request.path, "/items?page=2&api_key=s3cret+value");
+        assert!(!request.headers.contains_key("authorization"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_custom_credential_adds_headers_query_and_body_fields() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "auth-custom").await;
+        let usecase = usecase_with_cipher(pool);
+        let custom = credential_of(
+            &usecase,
+            org_id,
+            "custom_auth",
+            json!({ "json": {
+                "headers": { "X-Token": "abc" },
+                "qs": { "sig": "z" },
+                "body": { "client": "mestier" },
+            } }),
+        )
+        .await;
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let cfg = config(&[
+            ("method", json!("POST")),
+            ("url", json!(format!("{}/orders", server.url))),
+            ("body", json!({ "id": 7 })),
+        ]);
+
+        let outcome = call_with(usecase, org_id, custom, &cfg).await;
+
+        assert!(
+            matches!(outcome, ConnectorOutcome::Produced(_)),
+            "{outcome:?}"
+        );
+        let request = server.last_request();
+        assert_eq!(request.path, "/orders?sig=z");
+        assert_eq!(
+            request.headers.get("x-token").map(String::as_str),
+            Some("abc")
+        );
+        assert_eq!(request.body_json(), json!({ "id": 7, "client": "mestier" }));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_jwt_credential_sends_a_token_signed_with_its_secret() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "auth-jwt").await;
+        let usecase = usecase_with_cipher(pool);
+        let jwt = credential_of(
+            &usecase,
+            org_id,
+            "jwt",
+            json!({ "algorithm": "HS384", "key": "shared-secret" }),
+        )
+        .await;
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let cfg = config(&[("method", json!("GET")), ("url", json!(server.url))]);
+
+        let outcome = call_with(usecase, org_id, jwt, &cfg).await;
+
+        assert!(
+            matches!(outcome, ConnectorOutcome::Produced(_)),
+            "{outcome:?}"
+        );
+        let header = server.last_request().headers["authorization"].clone();
+        let token = header.strip_prefix("Bearer ").expect("a bearer token");
+        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS384);
+        validation.required_spec_claims.clear();
+        let claims = jsonwebtoken::decode::<Value>(
+            token,
+            &jsonwebtoken::DecodingKey::from_secret(b"shared-secret"),
+            &validation,
+        )
+        .expect("the token verifies with the shared secret")
+        .claims;
+        assert!(claims["exp"].as_u64().unwrap() > claims["iat"].as_u64().unwrap());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_digest_credential_answers_the_servers_challenge_through_the_connector() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "auth-digest").await;
+        let usecase = usecase_with_cipher(pool);
+        let digest = credential_of(
+            &usecase,
+            org_id,
+            "digest",
+            json!({ "username": "bot", "password": "pw" }),
+        )
+        .await;
+        let server = TestServer::start(|request| {
+            if request.headers.contains_key("authorization") {
+                StubResponse::json(200, &json!({ "ok": true }))
+            } else {
+                StubResponse::text(401, "no").with_header(
+                    "www-authenticate",
+                    r#"Digest realm="api", nonce="n1", qop="auth""#,
+                )
+            }
+        })
+        .await;
+        let cfg = config(&[("method", json!("GET")), ("url", json!(server.url))]);
+
+        let outcome = call_with(usecase, org_id, digest, &cfg).await;
+
+        let ConnectorOutcome::Produced(value) = outcome else {
+            panic!("the retry succeeds");
+        };
+        assert_eq!(value["body"], json!({ "ok": true }));
+        assert_eq!(server.requests().len(), 2);
+        assert!(server.last_request().headers["authorization"].starts_with("Digest "));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_client_certificate_credential_that_cannot_be_used_fails_the_node_naming_the_cause() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "auth-mtls").await;
+        let usecase = usecase_with_cipher(pool);
+        let mtls = credential_of(
+            &usecase,
+            org_id,
+            "mtls",
+            json!({ "certificate": "not a pem", "private_key": "not a key" }),
+        )
+        .await;
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let cfg = config(&[("method", json!("GET")), ("url", json!(server.url))]);
+
+        let outcome = call_with(usecase, org_id, mtls, &cfg).await;
+
+        let ConnectorOutcome::Failed { error } = outcome else {
+            panic!("an unusable certificate fails the node");
+        };
+        assert!(error.contains("client certificate"), "{error}");
+        assert!(server.requests().is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_credential_kind_no_http_call_consumes_fails_the_node_without_a_call() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "auth-unsupported").await;
+        let usecase = usecase_with_cipher(pool);
+        let smtp = credential_of(
+            &usecase,
+            org_id,
+            "smtp",
+            json!({ "host": "smtp.example.com", "port": 465 }),
+        )
+        .await;
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let cfg = config(&[("method", json!("GET")), ("url", json!(server.url))]);
+
+        let outcome = call_with(usecase, org_id, smtp, &cfg).await;
+
+        let ConnectorOutcome::Failed { error } = outcome else {
+            panic!("an SMTP credential cannot authenticate an HTTP call");
+        };
+        assert!(
+            error.contains("unsupported auth credential kind `smtp`"),
+            "{error}"
+        );
+        assert!(server.requests().is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
     async fn an_http_basic_credential_produces_a_base64_authorization_header() {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "auth-basic").await;
@@ -639,6 +912,8 @@ mod tests {
         let (credential, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
+                    description: None,
+                    expires_at: None,
                     org_id,
                     kind: "http_basic".to_owned(),
                     name: "Basic auth".to_owned(),
@@ -684,6 +959,8 @@ mod tests {
         let (credential, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
+                    description: None,
+                    expires_at: None,
                     org_id,
                     kind: "http_header".to_owned(),
                     name: "Header auth".to_owned(),
@@ -731,6 +1008,8 @@ mod tests {
         let (signing, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
+                    description: None,
+                    expires_at: None,
                     org_id,
                     kind: "bearer_token".to_owned(),
                     name: "Outgoing signature".to_owned(),

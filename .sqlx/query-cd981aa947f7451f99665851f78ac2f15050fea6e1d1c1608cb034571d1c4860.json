@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id AS \"id!\", COUNT(DISTINCT wv.id)::bigint AS \"used_by!\"\n               FROM automation.credential c\n               LEFT JOIN automation.workflow w\n                      ON w.org_id = c.org_id AND w.current_version_id IS NOT NULL\n               LEFT JOIN automation.workflow_version wv\n                      ON wv.id = w.current_version_id\n                     AND (\n                         wv.graph @> jsonb_build_object(\n                             'connectors',\n                             jsonb_build_array(jsonb_build_object('credential_id', c.id::text))\n                         )\n                         OR EXISTS (\n                             SELECT 1\n                             FROM jsonb_array_elements(wv.graph -> 'triggers') AS trig(value)\n                             WHERE trig.value -> 'kind' -> 'Webhook' ->> 'credential_id' = c.id::text\n                         )\n                         OR EXISTS (\n                             SELECT 1\n                             FROM jsonb_array_elements(wv.graph -> 'connectors') AS node(value)\n                             WHERE node.value -> 'config' ->> 'signing_credential_id' = c.id::text\n                         )\n                     )\n               WHERE c.org_id = $1\n               GROUP BY c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "used_by!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "cd981aa947f7451f99665851f78ac2f15050fea6e1d1c1608cb034571d1c4860"
+}

@@ -1,5 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
+use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::UpdateCredentialCommand;
 use serde::Deserialize;
@@ -9,19 +10,22 @@ use utoipa::ToSchema;
 use crate::{
     credential::{credential_failure, require_credential},
     paths::CredentialPath,
+    request::deserialize_present,
     response::CredentialResponse,
 };
 
-/// Both fields optional and applied only when present. `data: None` renames
-/// without touching the sealed bytes; `Some` replaces them after
-/// re-validating against the credential's scheme — mirrors
-/// `mestier_core::UpdateCredentialCommand`'s own doc comment.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateCredentialRequest {
     #[serde(default)]
     pub name: Option<String>,
     #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    #[schema(value_type = Option<Object>)]
     pub data: Option<Value>,
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<DateTime<Utc>>)]
+    pub expires_at: Option<Option<DateTime<Utc>>>,
 }
 
 #[utoipa::path(
@@ -35,12 +39,12 @@ pub struct UpdateCredentialRequest {
     ),
     request_body = UpdateCredentialRequest,
     responses(
-        (status = 200, description = "Credential updated — never carries the secret", body = inline(DataEnvelope<CredentialResponse>)),
-        (status = 400, description = "Validation failed"),
+        (status = 200, description = "Credential updated. A secret absent from data is kept, a secret present is replaced, an explicit null is refused; never carries a secret", body = inline(DataEnvelope<CredentialResponse>)),
+        (status = 400, description = "Fields that do not match the kind's descriptor"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Credential not found"),
-        (status = 409, description = "Invalid data for this credential's scheme"),
+        (status = 409, description = "Name already used for this kind"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -61,10 +65,18 @@ pub async fn handler(
             org_id: organization_id,
             id: credential_id,
             name: payload.name,
+            description: payload.description,
             data: payload.data,
+            expires_at: payload.expires_at,
         })
         .await
         .map_err(credential_failure)?;
 
-    Ok(Response::OK(CredentialResponse::from(updated)))
+    let usage = state.usecase.credential_usage(organization_id).await?;
+    let used_by = usage.get(&credential_id).copied().unwrap_or(0);
+    Ok(Response::OK(CredentialResponse::new(
+        updated,
+        used_by,
+        Utc::now(),
+    )))
 }

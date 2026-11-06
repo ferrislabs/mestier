@@ -1665,16 +1665,11 @@ mod tests {
         use crate::domain::automation::credential::CredentialOrigin;
         use common::{OrganizationId, generate_uuid_v7};
 
-        let now = chrono::Utc::now();
-        Credential {
-            id,
-            org_id: OrganizationId(generate_uuid_v7()),
-            kind: kind.to_string(),
-            name: "Test credential".to_string(),
-            origin: CredentialOrigin::Supplied,
-            created_at: now,
-            updated_at: now,
-        }
+        let mut credential =
+            Credential::fixture(OrganizationId(generate_uuid_v7()), kind, "Test credential");
+        credential.id = id;
+        credential.origin = CredentialOrigin::Supplied;
+        credential
     }
 
     fn http_connector(
@@ -2961,10 +2956,10 @@ mod tests {
         }
 
         #[test]
-        fn a_webhook_accepts_header_basic_and_bearer_credentials_only() {
+        fn a_webhook_accepts_header_basic_bearer_and_hmac_credentials_only() {
             let id = Uuid::from_u128(5);
 
-            for scheme in ["http_header", "http_basic", "bearer_token"] {
+            for scheme in ["http_header", "http_basic", "bearer_token", "hmac"] {
                 let errors = errors_with(
                     &graph_with(webhook_with_credential(id)),
                     &[credential(id, scheme)],
@@ -2972,7 +2967,14 @@ mod tests {
                 assert_eq!(errors, Vec::new(), "{scheme}");
             }
 
-            for scheme in ["odoo_api", "anything_else"] {
+            for scheme in [
+                "odoo_api",
+                "anything_else",
+                "jwt",
+                "digest",
+                "api_key_query",
+                "smtp",
+            ] {
                 let errors = errors_with(
                     &graph_with(webhook_with_credential(id)),
                     &[credential(id, scheme)],

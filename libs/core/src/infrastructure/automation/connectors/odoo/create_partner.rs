@@ -198,6 +198,8 @@ mod tests {
     ) -> Uuid {
         let (credential, _secret) = usecase
             .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
                 org_id,
                 kind: "odoo_api".to_owned(),
                 name: "Production Odoo".to_owned(),

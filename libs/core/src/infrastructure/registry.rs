@@ -36,6 +36,7 @@ pub mod domain {
     pub struct Project;
     pub struct ProjectTemplate;
     pub struct Credential;
+    pub struct OauthState;
     pub struct CustomerContext;
     pub struct AutomationSettings;
     pub struct Quote;

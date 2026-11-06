@@ -990,6 +990,8 @@ mod tests {
         let (stranger_credential, _secret) = usecase
             .create_credential(
                 crate::domain::automation::credential::CreateCredentialCommand {
+                    description: None,
+                    expires_at: None,
                     org_id: stranger_org,
                     kind: "bearer_token".to_string(),
                     name: "Stranger token".to_string(),

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.credential SET expires_at = now() - interval '1 hour' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2cf462a2bf27cb264a4892bba6a4f2d3331d015b1e5aa724542eea491b1bac84"
+}

@@ -6,19 +6,22 @@ use auth::Identity;
 use axum::{Extension, Router, extract::State};
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{auth_schemes, connector_catalogue, event_catalogue};
+use mestier_core::{connector_catalogue, credential_kinds, event_catalogue};
 
 use crate::{
-    paths::{ConnectorsPath, EventsPath},
+    paths::{ConnectorsPath, CredentialKindsPath, EventsPath},
     require_view_automation,
     response::{
         AuthSchemeResponse, ConnectorDescriptorResponse, ConnectorsResponse,
-        EventDescriptorResponse,
+        CredentialKindResponse, EventDescriptorResponse,
     },
 };
 
 pub fn router(_state: &AppState) -> Router<AppState> {
-    Router::new().typed_get(connectors).typed_get(events)
+    Router::new()
+        .typed_get(connectors)
+        .typed_get(events)
+        .typed_get(credential_kinds_handler)
 }
 
 #[utoipa::path(
@@ -49,7 +52,7 @@ pub async fn connectors(
             .descriptors()
             .map(ConnectorDescriptorResponse::from)
             .collect(),
-        auth_schemes: auth_schemes()
+        auth_schemes: credential_kinds()
             .iter()
             .map(AuthSchemeResponse::from)
             .collect(),
@@ -84,6 +87,36 @@ pub async fn events(
     let body: Vec<EventDescriptorResponse> = catalogue
         .descriptors()
         .map(EventDescriptorResponse::from)
+        .collect();
+
+    Ok(Response::OK(body))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/organizations/{organization_id}/automation/credential-kinds",
+    operation_id = "listCredentialKinds",
+    tag = super::TAG,
+    params(
+        ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
+    ),
+    responses(
+        (status = 200, description = "Every credential kind with its French label, category, usages, fields (default, placeholder, hint, conditional display) and whether an executor consumes it", body = inline(DataEnvelope<Vec<CredentialKindResponse>>)),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn credential_kinds_handler(
+    CredentialKindsPath { organization_id }: CredentialKindsPath,
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+) -> Result<Response<Vec<CredentialKindResponse>>, ApiError> {
+    require_view_automation(&state, &identity, organization_id).await?;
+
+    let body: Vec<CredentialKindResponse> = credential_kinds()
+        .iter()
+        .map(CredentialKindResponse::from)
         .collect();
 
     Ok(Response::OK(body))

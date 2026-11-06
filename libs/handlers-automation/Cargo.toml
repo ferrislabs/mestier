@@ -28,6 +28,7 @@ uuid = { workspace = true }
 # The end-to-end suite drives the real router over a real socket, so it needs
 # the bootstrap crates the binary uses, not just this crate's own dependencies.
 [dev-dependencies]
+mestier-core = { workspace = true, features = ["mock"] }
 args = { workspace = true }
 clap = { workspace = true }
 jsonwebtoken = { workspace = true }

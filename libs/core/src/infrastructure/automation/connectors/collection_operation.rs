@@ -13,8 +13,9 @@ use crate::domain::automation::workflow::OperationRef;
 use crate::infrastructure::automation::webhook::address_policy::PrivateNetworkAccess;
 
 use super::http_client::{
-    DEFAULT_TIMEOUT, HttpAuth, build_guarded_client, describe_reqwest_error, open_http_auth,
-    outcome_for, read_response, refuse_literal_private_address,
+    DEFAULT_TIMEOUT, HttpAuth, PreparedRequest, build_guarded_client, client_for_auth,
+    describe_reqwest_error, open_http_auth, outcome_for, read_response,
+    refuse_literal_private_address, send,
 };
 
 pub struct CollectionOperationConnector {
@@ -41,9 +42,14 @@ fn method_of(method: HttpMethod) -> Method {
 
 fn offered_by(auth: &HttpAuth) -> Offered {
     match auth {
-        HttpAuth::Bearer { .. } => Offered::Bearer,
+        HttpAuth::Bearer { .. } | HttpAuth::Jwt { .. } => Offered::Bearer,
         HttpAuth::Basic { .. } => Offered::Basic,
         HttpAuth::Header { .. } => Offered::Header,
+        HttpAuth::Query { .. } => Offered::Query,
+        HttpAuth::Digest { .. }
+        | HttpAuth::Custom(_)
+        | HttpAuth::OAuth1(_)
+        | HttpAuth::ClientCertificate(_) => Offered::Other,
     }
 }
 
@@ -132,45 +138,32 @@ impl CollectionOperationConnector {
             }
         }
 
-        let mut request = self
-            .client
-            .request(method_of(built.method), url)
-            .timeout(DEFAULT_TIMEOUT);
-        let has_content_type = built
-            .headers
-            .iter()
-            .any(|(name, _)| name.eq_ignore_ascii_case("content-type"));
-        let applied_name = match (&identification, &auth) {
-            (Identification::Credential, Some(HttpAuth::Header { name, .. })) => Some(name.clone()),
-            (Identification::Credential, Some(_)) => Some("authorization".to_owned()),
-            (Identification::HeaderNamed(name), Some(_)) => Some(name.clone()),
-            _ => None,
-        };
-        for (name, value) in &built.headers {
-            let replaced = applied_name
-                .as_deref()
-                .is_some_and(|applied| applied.eq_ignore_ascii_case(name));
-            if !replaced {
-                request = request.header(name, value);
-            }
-        }
+        let mut request = PreparedRequest::new(
+            method_of(built.method),
+            url,
+            built.headers.clone(),
+            built.body.clone(),
+        );
         match (identification, &auth) {
-            (Identification::Credential, Some(auth)) => request = auth.apply(request),
+            (Identification::Credential, Some(auth)) => {
+                if let Err(error) = auth.prepare(&mut request) {
+                    return failed(error);
+                }
+            }
             (Identification::HeaderNamed(name), Some(HttpAuth::Header { value, .. })) => {
-                request = request.header(name, value);
+                request.set_header(&name, value.clone());
+            }
+            (Identification::QueryNamed(name), Some(HttpAuth::Query { value, .. })) => {
+                request.set_query(&name, value);
             }
             _ => {}
         }
-        if let Some(body) = &built.body {
-            let bytes = serde_json::to_vec(body)
-                .expect("a serde_json::Value serializes into a JSON body without failing");
-            if !has_content_type {
-                request = request.header("content-type", "application/json");
-            }
-            request = request.body(bytes);
-        }
 
-        let response = match request.send().await {
+        let client = match client_for_auth(&self.client, self.access, auth.as_ref()) {
+            Ok(client) => client,
+            Err(error) => return failed(error),
+        };
+        let response = match send(&client, &request, DEFAULT_TIMEOUT, auth.as_ref()).await {
             Ok(response) => response,
             Err(error) => return failed(describe_reqwest_error(&error)),
         };
@@ -828,7 +821,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_api_key_in_the_query_is_refused_with_the_stable_code() {
+    async fn an_api_key_in_a_cookie_is_refused_with_the_stable_code() {
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let collection = collection(
+            &server.url,
+            vec![SecurityScheme {
+                name: "key".to_owned(),
+                kind: SecurityKind::ApiKey {
+                    location: ApiKeyLocation::Cookie,
+                    parameter_name: "session".to_owned(),
+                },
+            }],
+        );
+        let cfg = config(json!({ "path": { "id": "1" } }));
+        let node = reference("getAddress");
+
+        let outcome = CollectionOperationConnector::with_client(lazy_usecase(), test_client())
+            .perform(&collection, &node, &input(&cfg, &node, None))
+            .await;
+
+        let error = failure(outcome);
+        assert!(error.starts_with("unsupported_security_scheme"), "{error}");
+        assert!(server.requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_api_key_in_the_query_without_a_credential_is_an_anonymous_call() {
         let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
         let collection = collection(
             &server.url,
@@ -847,9 +865,11 @@ mod tests {
             .perform(&collection, &node, &input(&cfg, &node, None))
             .await;
 
-        let error = failure(outcome);
-        assert!(error.starts_with("unsupported_security_scheme"), "{error}");
-        assert!(server.requests().is_empty());
+        assert!(
+            matches!(outcome, ConnectorOutcome::Produced(_)),
+            "{outcome:?}"
+        );
+        assert!(!server.last_request().path.contains("api_key"));
     }
 
     #[tokio::test]
@@ -924,6 +944,8 @@ mod tests {
 
         usecase
             .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
                 org_id,
                 kind: kind.to_owned(),
                 name: format!("{kind} credential"),
@@ -1185,6 +1207,91 @@ mod tests {
             Some("shh")
         );
         assert!(!request.headers.contains_key("x-something-else"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_api_key_in_the_query_is_sent_under_the_name_the_collection_declares() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "collection-query-key").await;
+        let usecase = usecase_with_cipher(pool);
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let stored = usecase
+            .import_collection(ImportCollectionCommand {
+                org_id,
+                draft: draft(
+                    &server.url,
+                    vec![SecurityScheme {
+                        name: "keyAuth".to_owned(),
+                        kind: SecurityKind::ApiKey {
+                            location: ApiKeyLocation::Query,
+                            parameter_name: "key".to_owned(),
+                        },
+                    }],
+                    "/addresses/{id}",
+                ),
+            })
+            .await
+            .unwrap();
+        let key = credential(
+            &usecase,
+            org_id,
+            "api_key_query",
+            json!({ "param_name": "something_else", "param_value": "shh" }),
+        )
+        .await;
+        let cfg = config(json!({ "path": { "id": "7" } }));
+
+        let outcome = run_stored(&usecase, org_id, stored.id, "getAddress", &cfg, Some(key)).await;
+
+        assert!(
+            matches!(outcome, ConnectorOutcome::Produced(_)),
+            "{outcome:?}"
+        );
+        let request = server.last_request();
+        assert_eq!(request.path, "/addresses/7?key=shh");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_query_credential_against_a_header_scheme_is_a_mismatch_and_sends_nothing() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "collection-query-mismatch").await;
+        let usecase = usecase_with_cipher(pool);
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let stored = usecase
+            .import_collection(ImportCollectionCommand {
+                org_id,
+                draft: draft(
+                    &server.url,
+                    vec![SecurityScheme {
+                        name: "keyAuth".to_owned(),
+                        kind: SecurityKind::ApiKey {
+                            location: ApiKeyLocation::Header,
+                            parameter_name: "X-Key".to_owned(),
+                        },
+                    }],
+                    "/addresses/{id}",
+                ),
+            })
+            .await
+            .unwrap();
+        let key = credential(
+            &usecase,
+            org_id,
+            "api_key_query",
+            json!({ "param_name": "key", "param_value": "shh" }),
+        )
+        .await;
+        let cfg = config(json!({ "path": { "id": "7" } }));
+
+        let outcome = run_stored(&usecase, org_id, stored.id, "getAddress", &cfg, Some(key)).await;
+
+        assert!(
+            failure(outcome).contains("the credential offers"),
+            "mismatch"
+        );
+        assert!(server.requests().is_empty());
     }
 
     #[tokio::test]

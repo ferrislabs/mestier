@@ -1,5 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
+use chrono::Utc;
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 
 use crate::{
@@ -42,8 +43,10 @@ pub async fn handler(
         .await?;
 
     let secret = secret_value(existing.origin, &plaintext);
+    let usage = state.usecase.credential_usage(organization_id).await?;
+    let used_by = usage.get(&credential_id).copied().unwrap_or(0);
     Ok(Response::OK(CredentialWithSecretResponse {
-        credential: CredentialResponse::from(rotated),
+        credential: CredentialResponse::new(rotated, used_by, Utc::now()),
         secret,
     }))
 }

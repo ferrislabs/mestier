@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT error FROM automation.run_step WHERE run_id = $1 AND connector_id = 'c1'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "error",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c7c94e7a23a0f936c66f7090dce02af1761b55a4e91889a307df701ff6a8b545"
+}

@@ -16,9 +16,9 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    AuthRequirement, AuthScheme, AutomationSettings, Credential, CredentialOrigin, Field,
-    FieldKind, NodePosition, OrganizationId, RunOverview, RunStatus, RunStep, SelectOption,
-    StepStatus, VisibleWhen, Workflow, WorkflowFolder, WorkflowVersion,
+    AuthRequirement, AutomationSettings, CredentialFieldKind, CredentialKind, Field, FieldKind,
+    NodePosition, OrganizationId, RunOverview, RunStatus, RunStep, SelectOption, StepStatus,
+    VisibleWhen, Workflow, WorkflowFolder, WorkflowVersion,
 };
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::Value;
@@ -182,12 +182,48 @@ pub struct AuthSchemeResponse {
     pub fields: Vec<FieldResponse>,
 }
 
-impl From<&AuthScheme> for AuthSchemeResponse {
-    fn from(value: &AuthScheme) -> Self {
+impl From<&CredentialKind> for AuthSchemeResponse {
+    fn from(value: &CredentialKind) -> Self {
         Self {
             kind: value.kind.to_owned(),
             label: value.label.to_owned(),
-            fields: value.fields.iter().map(FieldResponse::from).collect(),
+            fields: value
+                .fields
+                .iter()
+                .map(|field| FieldResponse {
+                    name: field.name.to_owned(),
+                    label: field.label.to_owned(),
+                    required: field.required,
+                    kind: match field.kind {
+                        CredentialFieldKind::Text
+                        | CredentialFieldKind::Password
+                        | CredentialFieldKind::Textarea => FieldKindResponse::Text,
+                        CredentialFieldKind::Number => FieldKindResponse::Number,
+                        CredentialFieldKind::Boolean => FieldKindResponse::Bool,
+                        CredentialFieldKind::Json => FieldKindResponse::Json,
+                        CredentialFieldKind::Select => FieldKindResponse::Select {
+                            options: field
+                                .options
+                                .iter()
+                                .map(|option| SelectOptionResponse {
+                                    value: option.value.to_owned(),
+                                    label: option.label.to_owned(),
+                                })
+                                .collect(),
+                        },
+                    },
+                    expression: false,
+                    secret: field.secret,
+                    visible_when: field.show_when.map(|rule| VisibleWhenResponse {
+                        field: rule.field.to_owned(),
+                        any_of: rule
+                            .one_of
+                            .iter()
+                            .map(|value| (*value).to_owned())
+                            .collect(),
+                    }),
+                })
+                .collect(),
         }
     }
 }
@@ -224,59 +260,9 @@ impl From<&events::EventDescriptor> for EventDescriptorResponse {
     }
 }
 
-// --- credentials -----------------------------------------------------------
-
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
-pub struct CredentialResponse {
-    pub id: Uuid,
-    pub organization_id: OrganizationId,
-    pub kind: String,
-    pub name: String,
-    pub origin: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl From<Credential> for CredentialResponse {
-    fn from(value: Credential) -> Self {
-        Self {
-            id: value.id,
-            organization_id: value.org_id,
-            kind: value.kind,
-            name: value.name,
-            origin: value.origin.as_str().to_owned(),
-            created_at: value.created_at,
-            updated_at: value.updated_at,
-        }
-    }
-}
-
-/// The one response that ever carries a credential's secret — see
-/// `credential::create` and `credential::rotate`. `secret` is a JSON object
-/// for a `Supplied` credential (exactly what the caller sent) and a string
-/// for a `Generated` one (base64 of the freshly minted bytes).
-#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
-pub struct CredentialWithSecretResponse {
-    #[serde(flatten)]
-    pub credential: CredentialResponse,
-    pub secret: Value,
-}
-
-/// Decodes a credential's plaintext into the JSON shape a client should see
-/// once — the same decision a worker opening the credential later would
-/// make from `Credential::origin`, mirrored here for display rather than
-/// use. `Supplied` reconstructs the object the caller originally sent
-/// (`create_credential`'s plaintext *is* `serde_json::to_vec(&data)`);
-/// `Generated` has no JSON structure of its own, so it is shown as base64.
-pub fn secret_value(origin: CredentialOrigin, plaintext: &[u8]) -> Value {
-    match origin {
-        CredentialOrigin::Supplied => serde_json::from_slice(plaintext).unwrap_or(Value::Null),
-        CredentialOrigin::Generated => {
-            use base64::Engine;
-            Value::String(base64::engine::general_purpose::STANDARD.encode(plaintext))
-        }
-    }
-}
+pub use crate::credential::dto::{
+    CredentialKindResponse, CredentialResponse, CredentialWithSecretResponse, secret_value,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct FolderResponse {
@@ -1394,29 +1380,6 @@ mod tests {
         assert!(parsed.is_err());
     }
 
-    // --- secret_value --------------------------------------------------
-
-    #[test]
-    fn a_supplied_secret_reconstructs_the_original_json_object() {
-        let data = json!({ "token": "abc123" });
-        let plaintext = serde_json::to_vec(&data).unwrap();
-
-        let secret = secret_value(CredentialOrigin::Supplied, &plaintext);
-
-        assert_eq!(secret, data);
-    }
-
-    #[test]
-    fn a_generated_secret_is_shown_as_base64() {
-        use base64::Engine;
-        let plaintext = vec![1u8, 2, 3, 4, 5];
-
-        let secret = secret_value(CredentialOrigin::Generated, &plaintext);
-
-        let expected = base64::engine::general_purpose::STANDARD.encode(&plaintext);
-        assert_eq!(secret, Value::String(expected));
-    }
-
     // --- GraphErrorResponse ----------------------------------------------
 
     #[test]
@@ -1571,10 +1534,10 @@ mod tests {
 
     #[test]
     fn every_auth_scheme_referenced_by_a_connector_is_in_the_response() {
-        use mestier_core::auth_schemes;
+        use mestier_core::credential_kinds;
 
         let catalogue = connector_catalogue();
-        let scheme_responses: Vec<AuthSchemeResponse> = auth_schemes()
+        let scheme_responses: Vec<AuthSchemeResponse> = credential_kinds()
             .iter()
             .map(AuthSchemeResponse::from)
             .collect();

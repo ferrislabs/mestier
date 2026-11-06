@@ -147,19 +147,6 @@ pub struct WorkflowVersion {
     pub created_by: Option<Uuid>,
 }
 
-/// Just enough to name a workflow in an error — what
-/// [`super::ports::WorkflowRepository::workflows_referencing_credential`]
-/// returns for the credential-deletion guard
-/// (`application::automation::credential::delete_credential`). Counting is
-/// `.len()` on the result; naming is `.name` on each entry — one query
-/// answers both, rather than a count query and a naming query disagreeing
-/// under concurrent writes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorkflowReference {
-    pub id: Uuid,
-    pub name: String,
-}
-
 pub const MAX_LAYOUT_ENTRIES: usize = 512;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

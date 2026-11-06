@@ -52,7 +52,15 @@ pub async fn start() -> App {
     start_with_rate_limit(100_000).await
 }
 
+pub async fn start_with_oauth_client() -> App {
+    start_configured(100_000, true).await
+}
+
 pub async fn start_with_rate_limit(per_minute: u32) -> App {
+    start_configured(per_minute, false).await
+}
+
+async fn start_configured(per_minute: u32, plain_oauth_client: bool) -> App {
     let issuer_url = issuer::spawn();
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set to run the http end-to-end tests");
@@ -70,9 +78,17 @@ pub async fn start_with_rate_limit(per_minute: u32) -> App {
         &issuer_url,
         per_minute,
     )));
-    let state = handlers::state(args)
+    let mut state = handlers::state(args)
         .await
         .expect("build AppState for the test");
+    if plain_oauth_client {
+        state.usecase = state.usecase.with_oauth_http_client(
+            reqwest::Client::builder()
+                .no_proxy()
+                .build()
+                .expect("a plain client builds"),
+        );
+    }
 
     let router = handlers_automation::router(&state).with_state(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -184,6 +200,24 @@ impl App {
         format!(
             "{}/api/v1/organizations/{}/automation/credentials",
             self.base_url, self.organization_id
+        )
+    }
+
+    pub fn credential_url(&self, credential_id: &str) -> String {
+        format!("{}/{credential_id}", self.credentials_url())
+    }
+
+    pub fn credential_kinds_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/credential-kinds",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn other_organization_credentials_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/credentials",
+            self.base_url, self.other_organization_id
         )
     }
 

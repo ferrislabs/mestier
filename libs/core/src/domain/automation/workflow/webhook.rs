@@ -10,7 +10,7 @@ pub const WEBHOOK_PREFIX: &str = "webhooks";
 pub const MAX_WEBHOOK_PATH_LENGTH: usize = 200;
 pub const MAX_WEBHOOK_BODY_BYTES: usize = 1024 * 1024;
 pub const MAX_WEBHOOK_ROUTES_PER_ORGANIZATION: usize = 200;
-pub const WEBHOOK_CREDENTIAL_KINDS: [&str; 3] = ["http_header", "http_basic", "bearer_token"];
+pub use crate::domain::automation::credential_kind::WEBHOOK_CREDENTIAL_KINDS;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedWebhook {

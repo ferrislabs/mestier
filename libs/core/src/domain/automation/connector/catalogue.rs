@@ -6,6 +6,7 @@ use thiserror::Error;
 
 use super::descriptor::{AuthRequirement, ConnectorDescriptor};
 use super::field::{Field, FieldKind, SelectOption};
+use crate::domain::automation::credential_kind::HTTP_CREDENTIAL_KINDS;
 use crate::domain::automation::workflow::Branch;
 
 /// Every connector kind the product can pose in a workflow graph, keyed by
@@ -547,7 +548,7 @@ fn http_descriptors() -> Vec<ConnectorDescriptor> {
         version: 1,
         family: "http",
         label: "Requête HTTP",
-        auth: AuthRequirement::Optional(&["bearer_token", "http_basic", "http_header"]),
+        auth: AuthRequirement::Optional(HTTP_CREDENTIAL_KINDS),
         fields: HTTP_REQUEST_FIELDS,
         branches: &[],
         output_example: json!({
@@ -566,7 +567,7 @@ fn collection_descriptors() -> Vec<ConnectorDescriptor> {
         version: 1,
         family: "http",
         label: "Opération d'une collection",
-        auth: AuthRequirement::Optional(&["bearer_token", "http_basic", "http_header"]),
+        auth: AuthRequirement::Optional(HTTP_CREDENTIAL_KINDS),
         fields: COLLECTION_OPERATION_FIELDS,
         branches: &[],
         output_example: json!({
@@ -654,7 +655,7 @@ mod tests {
     use serde_json::to_value;
 
     use super::*;
-    use crate::domain::automation::connector::auth_scheme;
+    use crate::domain::automation::credential_kind::credential_kind;
 
     fn descriptor(kind: &'static str, version: u16) -> ConnectorDescriptor {
         ConnectorDescriptor {
@@ -922,7 +923,7 @@ mod tests {
             .expect("http.request is described");
         assert_eq!(
             descriptor.auth,
-            AuthRequirement::Optional(&["bearer_token", "http_basic", "http_header"])
+            AuthRequirement::Optional(HTTP_CREDENTIAL_KINDS)
         );
         assert!(descriptor.auth.is_satisfied_without_a_credential());
         assert!(
@@ -957,7 +958,7 @@ mod tests {
         assert_eq!(descriptor.family, "http");
         assert_eq!(
             descriptor.auth,
-            AuthRequirement::Optional(&["bearer_token", "http_basic", "http_header"])
+            AuthRequirement::Optional(HTTP_CREDENTIAL_KINDS)
         );
         assert!(descriptor.auth.is_satisfied_without_a_credential());
         let names: Vec<&str> = descriptor.fields.iter().map(|field| field.name).collect();
@@ -1038,10 +1039,37 @@ mod tests {
         for descriptor in catalogue.descriptors() {
             for scheme_kind in descriptor.auth.scheme_kinds() {
                 assert!(
-                    auth_scheme(scheme_kind).is_some(),
+                    credential_kind(scheme_kind).is_some(),
                     "`{}` requires unknown auth scheme `{scheme_kind}`",
                     descriptor.kind
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn the_http_connectors_accept_every_http_kind_and_nothing_else() {
+        let catalogue = connector_catalogue();
+
+        for connector in ["http.request", "collection.operation"] {
+            let descriptor = catalogue.get(connector, 1).unwrap();
+            for kind in [
+                "bearer_token",
+                "http_basic",
+                "http_header",
+                "api_key_query",
+                "digest",
+                "oauth2_authorization_code",
+                "oauth2_client_credentials",
+                "oauth1",
+                "jwt",
+                "mtls",
+                "custom_auth",
+            ] {
+                assert!(descriptor.auth.accepts(kind), "{connector} {kind}");
+            }
+            for kind in ["hmac", "smtp", "imap", "ssh", "ftp", "sql", "odoo_api"] {
+                assert!(!descriptor.auth.accepts(kind), "{connector} {kind}");
             }
         }
     }

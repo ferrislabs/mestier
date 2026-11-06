@@ -4,6 +4,8 @@ pub mod application;
 pub(crate) mod domain;
 pub mod infrastructure;
 
+pub use application::automation::oauth::StartOauthCommand;
+pub use application::automation::trigger::WebhookAuthentication;
 pub use application::supplier_invoice::{ImportSupplierInvoiceOutcome, TotalsMismatch};
 pub use application::*;
 pub use domain::automation::collection::{
@@ -13,12 +15,17 @@ pub use domain::automation::collection::{
     ReplaceCollectionCommand, RequestBody, SecurityKind, SecurityScheme,
 };
 pub use domain::automation::connector::{
-    AuthRequirement, AuthScheme, ConnectorCatalogue, ConnectorCatalogueError, ConnectorDescriptor,
-    Field, FieldKind, SelectOption, VisibleWhen, auth_scheme, auth_schemes, connector_catalogue,
+    AuthRequirement, ConnectorCatalogue, ConnectorCatalogueError, ConnectorDescriptor, Field,
+    FieldKind, SelectOption, VisibleWhen, connector_catalogue,
 };
 pub use domain::automation::credential::{
-    CreateCredentialCommand, Credential, CredentialError, CredentialOrigin,
-    UpdateCredentialCommand, validate_credential_data,
+    CreateCredentialCommand, Credential, CredentialError, CredentialOrigin, CredentialStatus,
+    MAX_CREDENTIAL_DESCRIPTION_CHARS, UpdateCredentialCommand,
+};
+pub use domain::automation::credential_kind::{
+    CredentialCategory, CredentialField, CredentialFieldKind, CredentialKind, CredentialOption,
+    CredentialUsage, HTTP_CREDENTIAL_KINDS, ShowWhen, WEBHOOK_CREDENTIAL_KINDS, credential_kind,
+    credential_kinds,
 };
 pub use domain::automation::event_catalogue;
 pub use domain::automation::expression::{
@@ -27,6 +34,10 @@ pub use domain::automation::expression::{
 pub use domain::automation::folder::{
     CreateFolderCommand, FolderName, FolderNameError, FolderRefusal, FolderTree, MAX_FOLDER_DEPTH,
     MAX_FOLDER_NAME_LENGTH, MAX_FOLDERS_PER_ORGANIZATION, UpdateFolderCommand, WorkflowFolder,
+};
+pub use domain::automation::oauth::{
+    OauthCallback, OauthOutcome, is_valid_redirect_uri, is_valid_return_to,
+    with_outcome as with_oauth_outcome,
 };
 pub use domain::automation::ports::DispatchOutcome;
 pub use domain::automation::run::{
@@ -46,15 +57,17 @@ pub use domain::automation::workflow::{
     OperationRef, PlacedConnector, PlacedTrigger, ResolvedWebhook, SaveWorkflowVersionCommand,
     TriggerKind, UpdateWorkflowCommand, WEBHOOK_PREFIX, WebhookMethod, WebhookPathIssue, Weekday,
     Workflow, WorkflowDescription, WorkflowDescriptionError, WorkflowInitialState, WorkflowLayout,
-    WorkflowName, WorkflowNameError, WorkflowReference, WorkflowRefusal, WorkflowTags,
-    WorkflowTagsError, WorkflowVersion, check_webhook_path, contract_violations, holds_nul,
-    is_json_content_type, validate_graph,
+    WorkflowName, WorkflowNameError, WorkflowRefusal, WorkflowTags, WorkflowTagsError,
+    WorkflowVersion, check_webhook_path, contract_violations, holds_nul, is_json_content_type,
+    validate_graph,
 };
 pub use infrastructure::automation::connectors::{
     ConnectorDryRun, ConnectorRegistry, UnknownConnectorKind,
 };
 pub use infrastructure::automation::webhook::{
-    address_policy::PrivateNetworkAccess, inbound::path_fingerprint, secret::SecretCipher,
+    address_policy::PrivateNetworkAccess,
+    inbound::{SignatureAlgorithm, SignatureSpec, path_fingerprint},
+    secret::SecretCipher,
 };
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::invoice::facturx::FacturXDocumentFormat;

@@ -4625,6 +4625,7 @@ dependencies = [
  "en16931",
  "en16931-formats",
  "events",
+ "jsonwebtoken",
  "lopdf",
  "mestier-core",
  "mestier-macros",

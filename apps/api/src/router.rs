@@ -94,6 +94,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
 
 const WEBHOOK_PREFIX: &str = "/webhooks";
 const REDACTED_WEBHOOK_PATH: &str = "/webhooks/{redacted}";
+const OAUTH_CALLBACK_PATH: &str = "/oauth/callback";
 
 fn is_webhook_path(path: &str) -> bool {
     path == WEBHOOK_PREFIX
@@ -119,7 +120,8 @@ fn request_span(request: &Request) -> tracing::Span {
         url.query = tracing::field::Empty,
         http.response.status_code = tracing::field::Empty,
     );
-    if !redacted && let Some(query) = request.uri().query() {
+    let query_hidden = redacted || request.uri().path() == OAUTH_CALLBACK_PATH;
+    if !query_hidden && let Some(query) = request.uri().query() {
         span.record("url.query", query);
     }
     span
@@ -198,6 +200,16 @@ mod tests {
 
             assert!(output.contains("/webhooks/{redacted}"), "{uri}: {output}");
         }
+    }
+
+    #[test]
+    fn the_oauth_callback_is_traced_without_its_state_or_its_code() {
+        let output = traced("/oauth/callback?code=code-secret-1&state=state-secret-2");
+
+        assert!(output.contains("/oauth/callback"), "{output}");
+        assert!(!output.contains("code-secret-1"), "{output}");
+        assert!(!output.contains("state-secret-2"), "{output}");
+        assert!(!output.contains("url.query"), "{output}");
     }
 
     #[test]
