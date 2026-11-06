@@ -13,6 +13,7 @@
 //! ```
 
 mod collections;
+mod dry_run;
 mod folders;
 mod graph_nodes;
 mod harness;

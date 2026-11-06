@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 pub mod create;
 pub mod delete;
+pub mod dry_run;
 pub mod get_one;
 pub mod list;
 pub mod save_version;
@@ -22,6 +23,7 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_patch(update::handler)
         .typed_delete(delete::handler)
         .typed_put(save_version::handler)
+        .typed_post(dry_run::handler)
 }
 
 /// Loads a workflow of `organization_id`. Gates nothing: readers and writers

@@ -291,6 +291,40 @@ fn find_header_end(buffer: &[u8]) -> Option<usize> {
     buffer.windows(4).position(|window| window == b"\r\n\r\n")
 }
 
+pub fn sample_of(kind: &str) -> Value {
+    crate::domain::automation::connector::connector_catalogue()
+        .get(kind, 1)
+        .unwrap_or_else(|| panic!("`{kind}` is not in the catalogue"))
+        .sample_output
+        .clone()
+}
+
+pub fn assert_same_shape(actual: &Value, kind: &str) {
+    let sample = sample_of(kind);
+    let (Some(actual_fields), Some(sample_fields)) = (actual.as_object(), sample.as_object())
+    else {
+        panic!("`{kind}` must produce an object, got {actual} against {sample}");
+    };
+    let names = |fields: &serde_json::Map<String, Value>| {
+        let mut names: Vec<String> = fields.keys().cloned().collect();
+        names.sort();
+        names
+    };
+    assert_eq!(
+        names(actual_fields),
+        names(sample_fields),
+        "the sample of `{kind}` names other fields than a run returns"
+    );
+    for (name, value) in actual_fields {
+        assert_eq!(
+            std::mem::discriminant(value),
+            std::mem::discriminant(&sample_fields[name]),
+            "`{kind}` field `{name}` is {value} where its sample has {}",
+            sample_fields[name]
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

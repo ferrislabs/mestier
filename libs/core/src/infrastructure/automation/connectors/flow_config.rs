@@ -1,25 +1,34 @@
-use serde_json::Value;
+use serde_json::{Map, Value};
 
-use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
+use crate::domain::automation::connector::ConnectorDescriptor;
+use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome, DryRunInput};
 
 pub struct FlowConfigConnector;
 
+fn decide(config: &Map<String, Value>) -> ConnectorOutcome {
+    match config.get("variables") {
+        Some(Value::Object(variables)) => {
+            ConnectorOutcome::Produced(Value::Object(variables.clone()))
+        }
+        Some(other) => ConnectorOutcome::Failed {
+            error: format!(
+                "`variables` must resolve to a JSON object, got {}",
+                value_kind(other)
+            ),
+        },
+        None => ConnectorOutcome::Failed {
+            error: "`variables` is required".to_string(),
+        },
+    }
+}
+
 impl Connector for FlowConfigConnector {
     async fn execute(&self, input: ConnectorInput<'_>) -> ConnectorOutcome {
-        match input.config.get("variables") {
-            Some(Value::Object(variables)) => {
-                ConnectorOutcome::Produced(Value::Object(variables.clone()))
-            }
-            Some(other) => ConnectorOutcome::Failed {
-                error: format!(
-                    "`variables` must resolve to a JSON object, got {}",
-                    value_kind(other)
-                ),
-            },
-            None => ConnectorOutcome::Failed {
-                error: "`variables` is required".to_string(),
-            },
-        }
+        decide(input.config)
+    }
+
+    fn dry_run(_descriptor: &ConnectorDescriptor, input: &DryRunInput<'_>) -> ConnectorOutcome {
+        decide(input.config)
     }
 }
 
@@ -117,5 +126,45 @@ mod tests {
             matches!(outcome, ConnectorOutcome::Failed { .. }),
             "{outcome:?}"
         );
+    }
+
+    fn dry_run_of(config: &serde_json::Map<String, Value>) -> ConnectorOutcome {
+        let descriptor = crate::domain::automation::connector::connector_catalogue()
+            .get("flow.config", 1)
+            .expect("flow.config is described")
+            .clone();
+        FlowConfigConnector::dry_run(
+            &descriptor,
+            &crate::domain::automation::run::DryRunInput {
+                config,
+                stored: None,
+            },
+        )
+    }
+
+    #[test]
+    fn a_dry_run_produces_the_variables_the_node_holds() {
+        let mut config = serde_json::Map::new();
+        config.insert("variables".to_string(), json!({ "customer_id": "c-1" }));
+
+        assert_eq!(
+            dry_run_of(&config),
+            ConnectorOutcome::Produced(json!({ "customer_id": "c-1" }))
+        );
+    }
+
+    #[test]
+    fn a_dry_run_refuses_variables_that_are_not_an_object_like_a_run_does() {
+        let mut config = serde_json::Map::new();
+        config.insert("variables".to_string(), json!(42));
+
+        assert!(matches!(
+            dry_run_of(&config),
+            ConnectorOutcome::Failed { .. }
+        ));
+        assert!(matches!(
+            dry_run_of(&serde_json::Map::new()),
+            ConnectorOutcome::Failed { .. }
+        ));
     }
 }

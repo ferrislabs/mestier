@@ -255,6 +255,12 @@ mod tests {
             outcome,
             ConnectorOutcome::Produced(json!({ "id": 17, "updated": true }))
         );
+        if let ConnectorOutcome::Produced(value) = &outcome {
+            crate::infrastructure::automation::connectors::test_support::assert_same_shape(
+                value,
+                "odoo.update_partner",
+            );
+        }
         let write_args = server.requests()[1].body_json()["params"]["args"].clone();
         assert_eq!(write_args[3], "res.partner");
         assert_eq!(write_args[4], "write");

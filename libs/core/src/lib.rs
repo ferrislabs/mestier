@@ -30,8 +30,9 @@ pub use domain::automation::folder::{
 };
 pub use domain::automation::ports::DispatchOutcome;
 pub use domain::automation::run::{
-    Connector, ConnectorInput, ConnectorOutcome, DueRun, Run, RunOverview, RunSettlement,
-    RunStatus, RunStep, StepStatus,
+    Connector, ConnectorInput, ConnectorOutcome, DryRunDispatch, DryRunError, DryRunInput,
+    DryRunStatus, DryRunStep, DueRun, MAX_DRY_RUN_BYTES, MAX_DRY_RUN_LOOP_ITEMS, MAX_DRY_RUN_STEPS,
+    Run, RunOverview, RunSettlement, RunStatus, RunStep, StepStatus, StoredOperation,
 };
 pub use domain::automation::secret::SealedSecret;
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
@@ -44,7 +45,9 @@ pub use domain::automation::workflow::{
     WorkflowName, WorkflowNameError, WorkflowReference, WorkflowRefusal, WorkflowTags,
     WorkflowTagsError, WorkflowVersion, validate_graph,
 };
-pub use infrastructure::automation::connectors::{ConnectorRegistry, UnknownConnectorKind};
+pub use infrastructure::automation::connectors::{
+    ConnectorDryRun, ConnectorRegistry, UnknownConnectorKind,
+};
 pub use infrastructure::automation::webhook::{
     address_policy::PrivateNetworkAccess, secret::SecretCipher,
 };

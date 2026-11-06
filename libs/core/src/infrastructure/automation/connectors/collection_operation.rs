@@ -1,10 +1,14 @@
 use reqwest::{Client, Method, Url};
+use serde_json::Value;
 
 use crate::application::MestierUseCase;
 use crate::domain::automation::collection::{
     Collection, HttpMethod, Identification, Offered, build_request, select_identification,
 };
-use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
+use crate::domain::automation::connector::ConnectorDescriptor;
+use crate::domain::automation::run::{
+    Connector, ConnectorInput, ConnectorOutcome, DryRunInput, StoredOperation,
+};
 use crate::domain::automation::workflow::OperationRef;
 use crate::infrastructure::automation::webhook::address_policy::PrivateNetworkAccess;
 
@@ -207,6 +211,37 @@ impl Connector for CollectionOperationConnector {
 
         self.perform(&collection, reference, &input).await
     }
+
+    fn dry_run(descriptor: &ConnectorDescriptor, input: &DryRunInput<'_>) -> ConnectorOutcome {
+        let Some(StoredOperation {
+            collection,
+            operation,
+        }) = input.stored
+        else {
+            return failed("the node's operation no longer exists in its collection");
+        };
+        if let Err(error) = build_request(collection, operation, input.config) {
+            return failed(format!(
+                "collection `{}` operation `{}`: {error}",
+                collection.title, operation.id
+            ));
+        }
+
+        let mut output = descriptor.sample_output.clone();
+        if let Value::Object(fields) = &mut output {
+            if let Some(status) = operation
+                .response_status
+                .as_deref()
+                .and_then(|status| status.parse::<u16>().ok())
+            {
+                fields.insert("status".to_owned(), Value::from(status));
+            }
+            if let Some(body) = &operation.response {
+                fields.insert("body".to_owned(), body.clone());
+            }
+        }
+        ConnectorOutcome::Produced(output)
+    }
 }
 
 #[cfg(test)]
@@ -224,6 +259,7 @@ mod tests {
         ImportCollectionCommand, Operation, Parameter, ParameterLocation, ReplaceCollectionCommand,
         RequestBody, SecurityKind, SecurityScheme,
     };
+    use crate::domain::automation::run::{DryRunInput, StoredOperation};
     use crate::infrastructure::automation::connectors::test_support::{StubResponse, TestServer};
     use crate::infrastructure::realtime::EventHub;
 
@@ -351,6 +387,119 @@ mod tests {
         }
     }
 
+    fn descriptor() -> crate::domain::automation::connector::ConnectorDescriptor {
+        crate::domain::automation::connector::connector_catalogue()
+            .get("collection.operation", 1)
+            .expect("collection.operation is described")
+            .clone()
+    }
+
+    fn dry_run_of(
+        collection: &Collection,
+        operation_id: &str,
+        config: &Map<String, Value>,
+    ) -> ConnectorOutcome {
+        CollectionOperationConnector::dry_run(
+            &descriptor(),
+            &DryRunInput {
+                config,
+                stored: collection
+                    .find_operation(operation_id)
+                    .map(|operation| StoredOperation {
+                        collection,
+                        operation,
+                    }),
+            },
+        )
+    }
+
+    fn collection_answering(response: Option<Value>, status: Option<&str>) -> Collection {
+        let mut collection = collection("https://api.example.com", Vec::new());
+        let operation = collection
+            .operations
+            .iter_mut()
+            .find(|operation| operation.id == "getAddress")
+            .unwrap();
+        operation.response = response;
+        operation.response_status = status.map(str::to_owned);
+        collection
+    }
+
+    #[test]
+    fn a_dry_run_answers_with_the_response_example_stored_on_the_operation() {
+        let collection =
+            collection_answering(Some(json!({ "id": "a-1", "city": "Lyon" })), Some("201"));
+        let cfg = config(json!({ "path": { "id": "1" } }));
+
+        let outcome = dry_run_of(&collection, "getAddress", &cfg);
+
+        assert_eq!(
+            outcome,
+            ConnectorOutcome::Produced(json!({
+                "status": 201,
+                "headers": {},
+                "body": { "id": "a-1", "city": "Lyon" }
+            }))
+        );
+    }
+
+    #[test]
+    fn a_dry_run_of_an_operation_with_no_stored_response_answers_a_bare_ok() {
+        let collection = collection_answering(None, None);
+        let cfg = config(json!({ "path": { "id": "1" } }));
+
+        let outcome = dry_run_of(&collection, "getAddress", &cfg);
+
+        assert_eq!(
+            outcome,
+            ConnectorOutcome::Produced(json!({ "status": 200, "headers": {}, "body": {} }))
+        );
+    }
+
+    #[test]
+    fn a_status_that_is_not_a_number_falls_back_to_200() {
+        for declared in ["default", "2XX", ""] {
+            let collection = collection_answering(Some(json!({ "ok": true })), Some(declared));
+            let cfg = config(json!({ "path": { "id": "1" } }));
+
+            let outcome = dry_run_of(&collection, "getAddress", &cfg);
+
+            assert_eq!(
+                outcome,
+                ConnectorOutcome::Produced(json!({
+                    "status": 200,
+                    "headers": {},
+                    "body": { "ok": true }
+                })),
+                "{declared}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dry_run_whose_resolved_config_no_longer_fits_the_operation_fails_naming_it() {
+        let collection = collection_answering(None, None);
+        let cfg = config(json!({ "query": { "limit": 5 } }));
+
+        let error = failure(dry_run_of(&collection, "getAddress", &cfg));
+
+        assert!(error.contains("path.id"), "{error}");
+        assert!(
+            error.contains("Addresses") && error.contains("getAddress"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_dry_run_without_a_resolvable_operation_fails() {
+        let collection = collection_answering(None, None);
+        let cfg = config(json!({}));
+
+        let error = failure(dry_run_of(&collection, "deleteAddress", &cfg));
+
+        assert!(error.contains("operation"), "{error}");
+    }
+
     #[tokio::test]
     async fn the_node_sends_the_substituted_path_the_query_the_headers_and_the_body() {
         let server =
@@ -391,6 +540,10 @@ mod tests {
         assert_eq!(value["status"], 201);
         assert_eq!(value["body"], json!({ "id": 42 }));
         assert_eq!(value["headers"]["content-type"], json!("application/json"));
+        crate::infrastructure::automation::connectors::test_support::assert_same_shape(
+            &value,
+            "collection.operation",
+        );
         let request = server.last_request();
         assert_eq!(request.method, "PUT");
         assert_eq!(request.path, "/v1/addresses/a%20b?limit=5");

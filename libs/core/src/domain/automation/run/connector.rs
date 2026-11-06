@@ -7,6 +7,8 @@ use common::OrganizationId;
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
+use crate::domain::automation::collection::{Collection, Operation};
+use crate::domain::automation::connector::ConnectorDescriptor;
 use crate::domain::automation::workflow::{Branch, OperationRef};
 
 /// What a connector receives: its config already **resolved** — every
@@ -54,6 +56,29 @@ pub trait Connector: Send + Sync {
         &'a self,
         input: ConnectorInput<'a>,
     ) -> impl Future<Output = ConnectorOutcome> + Send + 'a;
+
+    fn dry_run(descriptor: &ConnectorDescriptor, _input: &DryRunInput<'_>) -> ConnectorOutcome {
+        ConnectorOutcome::Produced(descriptor.sample_output.clone())
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct StoredOperation<'a> {
+    pub collection: &'a Collection,
+    pub operation: &'a Operation,
+}
+
+pub struct DryRunInput<'a> {
+    pub config: &'a Map<String, Value>,
+    pub stored: Option<StoredOperation<'a>>,
+}
+
+pub trait DryRunDispatch {
+    fn dry_run(
+        &self,
+        descriptor: &ConnectorDescriptor,
+        input: &DryRunInput<'_>,
+    ) -> Option<ConnectorOutcome>;
 }
 
 #[cfg(test)]
@@ -64,6 +89,43 @@ mod tests {
     /// connector stub returns one, the test asserts on it), so equality has
     /// to actually distinguish every variant, not just derive without
     /// exercising it.
+    struct Unexecutable;
+
+    impl Connector for Unexecutable {
+        async fn execute(&self, _input: ConnectorInput<'_>) -> ConnectorOutcome {
+            panic!("a dry run must never reach execute")
+        }
+    }
+
+    fn descriptor_sampling(sample: Value) -> ConnectorDescriptor {
+        ConnectorDescriptor {
+            kind: "test.unexecutable",
+            version: 1,
+            family: "test",
+            label: "Unexecutable",
+            auth: crate::domain::automation::connector::AuthRequirement::None,
+            fields: &[],
+            branches: &[],
+            output_example: Value::Null,
+            output_mirrors_field: None,
+            sample_output: sample,
+        }
+    }
+
+    #[test]
+    fn the_default_dry_run_answers_with_the_descriptors_sample_and_never_executes() {
+        let config = Map::new();
+        let input = DryRunInput {
+            config: &config,
+            stored: None,
+        };
+        let sample = serde_json::json!({ "id": 42 });
+
+        let outcome = Unexecutable::dry_run(&descriptor_sampling(sample.clone()), &input);
+
+        assert_eq!(outcome, ConnectorOutcome::Produced(sample));
+    }
+
     #[test]
     fn outcomes_of_different_variants_are_never_equal() {
         let produced = ConnectorOutcome::Produced(Value::Null);

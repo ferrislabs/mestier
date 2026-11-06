@@ -182,6 +182,55 @@ pub fn resolve_config_nested(
     Ok(resolved)
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Next<'g, 'o> {
+    Follow {
+        targets: Vec<&'g str>,
+        skipped: Vec<&'g str>,
+    },
+    Iterate {
+        after: Vec<&'g str>,
+        each: Vec<&'g str>,
+        items: &'o [Value],
+    },
+}
+
+pub fn next_after<'g, 'o>(
+    graph: &'g Graph,
+    connector_id: &str,
+    outcome: &'o ConnectorOutcome,
+) -> Next<'g, 'o> {
+    match outcome {
+        ConnectorOutcome::Produced(_) => Next::Follow {
+            targets: branch_targets(graph, connector_id, None),
+            skipped: Vec::new(),
+        },
+        ConnectorOutcome::Branch { taken, .. } => {
+            let untaken = if *taken == Branch::Then {
+                Branch::Else
+            } else {
+                Branch::Then
+            };
+            let targets = branch_targets(graph, connector_id, Some(*taken));
+            let untaken_targets = branch_targets(graph, connector_id, Some(untaken));
+            let taken_reach = descendants_via(graph, &targets);
+            let untaken_reach = descendants_via(graph, &untaken_targets);
+            let mut skipped: Vec<&str> = untaken_reach.difference(&taken_reach).copied().collect();
+            skipped.sort_unstable();
+            Next::Follow { targets, skipped }
+        }
+        ConnectorOutcome::Iterate { items } => Next::Iterate {
+            after: branch_targets(graph, connector_id, Some(Branch::After)),
+            each: branch_targets(graph, connector_id, Some(Branch::Each)),
+            items,
+        },
+        ConnectorOutcome::Failed { .. } => Next::Follow {
+            targets: Vec::new(),
+            skipped: Vec::new(),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc};
@@ -299,6 +348,127 @@ mod tests {
         assert_eq!(
             descendants_via(&graph, &["only"]),
             HashSet::from_iter(["only"])
+        );
+    }
+
+    fn produced_outcome() -> ConnectorOutcome {
+        ConnectorOutcome::Produced(Value::Null)
+    }
+
+    fn branch(taken: Branch) -> ConnectorOutcome {
+        ConnectorOutcome::Branch {
+            taken,
+            output: Value::Null,
+        }
+    }
+
+    #[test]
+    fn a_produced_outcome_follows_the_plain_edges_and_skips_nothing() {
+        let graph = Graph {
+            connectors: vec![],
+            edges: vec![edge("a", "b", None), edge("a", "c", None)],
+            triggers: Vec::new(),
+        };
+
+        assert_eq!(
+            next_after(&graph, "a", &produced_outcome()),
+            Next::Follow {
+                targets: vec!["b", "c"],
+                skipped: Vec::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn a_branch_follows_its_taken_side_and_skips_what_only_the_other_side_reaches() {
+        let graph = Graph {
+            connectors: vec![],
+            edges: vec![
+                edge("c", "yes", Some(Branch::Then)),
+                edge("c", "no", Some(Branch::Else)),
+                edge("yes", "merge", None),
+                edge("no", "merge", None),
+                edge("no", "only_no", None),
+            ],
+            triggers: Vec::new(),
+        };
+
+        assert_eq!(
+            next_after(&graph, "c", &branch(Branch::Then)),
+            Next::Follow {
+                targets: vec!["yes"],
+                skipped: vec!["no", "only_no"],
+            }
+        );
+        assert_eq!(
+            next_after(&graph, "c", &branch(Branch::Else)),
+            Next::Follow {
+                targets: vec!["no"],
+                skipped: vec!["yes"],
+            }
+        );
+    }
+
+    #[test]
+    fn what_is_skipped_comes_back_sorted_whatever_the_edge_order() {
+        let graph = Graph {
+            connectors: vec![],
+            edges: vec![
+                edge("c", "t", Some(Branch::Then)),
+                edge("c", "z", Some(Branch::Else)),
+                edge("c", "m", Some(Branch::Else)),
+                edge("c", "a", Some(Branch::Else)),
+            ],
+            triggers: Vec::new(),
+        };
+
+        let Next::Follow { skipped, .. } = next_after(&graph, "c", &branch(Branch::Then)) else {
+            panic!("a branch follows");
+        };
+
+        assert_eq!(skipped, vec!["a", "m", "z"]);
+    }
+
+    #[test]
+    fn an_iterate_outcome_splits_the_body_from_the_continuation_and_lends_its_items() {
+        let graph = Graph {
+            connectors: vec![],
+            edges: vec![
+                edge("l", "body", Some(Branch::Each)),
+                edge("l", "done", Some(Branch::After)),
+            ],
+            triggers: Vec::new(),
+        };
+        let outcome = ConnectorOutcome::Iterate {
+            items: vec![Value::from(1), Value::from(2)],
+        };
+
+        let Next::Iterate { after, each, items } = next_after(&graph, "l", &outcome) else {
+            panic!("an iteration iterates");
+        };
+
+        assert_eq!(after, vec!["done"]);
+        assert_eq!(each, vec!["body"]);
+        assert_eq!(items, [Value::from(1), Value::from(2)]);
+    }
+
+    #[test]
+    fn a_failed_outcome_goes_nowhere() {
+        let graph = Graph {
+            connectors: vec![],
+            edges: vec![edge("a", "b", None)],
+            triggers: Vec::new(),
+        };
+        let failed = ConnectorOutcome::Failed {
+            error: "boom".to_string(),
+        };
+
+        assert_eq!(
+            next_after(&graph, "a", &failed),
+            Next::Follow {
+                targets: Vec::new(),
+                skipped: Vec::new(),
+            }
         );
     }
 
