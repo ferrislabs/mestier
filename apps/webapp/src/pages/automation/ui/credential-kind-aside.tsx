@@ -1,26 +1,25 @@
 import { ArrowLeft, Link2, Lock } from 'lucide-react'
 import { Button } from '#/components/ui/button'
-import type { AuthScheme } from '#/hooks/use-automation'
+import type { CredentialKind } from '#/hooks/use-automation'
 import { credentialAppearance } from '#/pages/automation/lib/credential-appearance'
-import { schemeDescription } from '#/pages/automation/lib/credential-meta'
 import { kindTransitionStyle } from '#/pages/automation/ui/credential-kind-names'
 import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
 
 export function CredentialKindAside({
-	scheme,
+	kind,
 	usage,
 	meta,
 	onBack,
 }: {
-	scheme: AuthScheme
+	kind: CredentialKind
 	usage: string
 	meta?: string
 	onBack?: () => void
 }) {
-	const appearance = credentialAppearance(scheme.kind)
+	const appearance = credentialAppearance(kind.kind)
 	return (
 		<aside
-			aria-label={`Type : ${scheme.label}`}
+			aria-label={`Type : ${kind.label}`}
 			className="hidden min-h-0 flex-col gap-5 overflow-y-auto border-border border-r bg-muted/40 p-5 sm:flex"
 		>
 			{onBack && (
@@ -36,21 +35,18 @@ export function CredentialKindAside({
 				</Button>
 			)}
 			<div className="grid gap-3">
-				<span
-					className="w-fit"
-					style={kindTransitionStyle('icon', scheme.kind)}
-				>
+				<span className="w-fit" style={kindTransitionStyle('icon', kind.kind)}>
 					<KindIconTile icon={appearance.icon} hue={appearance.hue} size="lg" />
 				</span>
 				<div>
 					<p
 						className="w-fit font-semibold text-base"
-						style={kindTransitionStyle('label', scheme.kind)}
+						style={kindTransitionStyle('label', kind.kind)}
 					>
-						{scheme.label}
+						{kind.label}
 					</p>
 					<p className="mt-1 text-muted-foreground text-sm leading-snug">
-						{schemeDescription(scheme)}
+						{kind.description}
 					</p>
 				</div>
 			</div>

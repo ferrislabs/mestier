@@ -11,7 +11,6 @@ import {
 	credentialSlotAfter,
 	displayField,
 } from '#/pages/automation/lib/connector-field-copy'
-import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
 import {
 	credentialsForAuth,
 	generatedCredentials,
@@ -37,7 +36,6 @@ export interface ConnectorConfigFormProps {
 	bindingIssues?: readonly NodeIssue[]
 	credentialHint?: string
 	fieldAddOns?: Readonly<Record<string, FieldAddOns>>
-	credentialStatusOf?: (credentialId: string) => CredentialStatus
 	renderPreview?: (field: Schemas.FieldResponse) => ReactNode
 	onConfigChange: (config: Record<string, unknown>) => void
 	onCredentialChange: (credentialId: string | null) => void
@@ -53,7 +51,6 @@ export function ConnectorConfigForm({
 	bindingIssues = [],
 	credentialHint,
 	fieldAddOns,
-	credentialStatusOf,
 	renderPreview,
 	onConfigChange,
 	onCredentialChange,
@@ -90,7 +87,6 @@ export function ConnectorConfigForm({
 				error={levelErrors[0] ?? null}
 				optional={!isCredentialRequired(descriptor.auth)}
 				hint={credentialHint}
-				statusOf={credentialStatusOf}
 				onChange={onCredentialChange}
 				onCreateNew={() => onRequestCreateCredential('typed')}
 			/>

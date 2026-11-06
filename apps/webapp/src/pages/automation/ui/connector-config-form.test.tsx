@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
+import { credential as fixture } from '#/pages/automation/test/credential-fixtures'
 import { ConnectorConfigForm } from '#/pages/automation/ui/connector-config-form'
 
 for (const method of [
@@ -51,16 +52,9 @@ function credential(
 	id: string,
 	kind: string,
 	origin: 'supplied' | 'generated' = 'supplied',
+	status: Schemas.CredentialStatusResponse = 'valid',
 ): Schemas.CredentialResponse {
-	return {
-		id,
-		kind,
-		name: id,
-		origin,
-		organization_id: 'org-1',
-		created_at: '2026-01-01T00:00:00Z',
-		updated_at: '2026-01-01T00:00:00Z',
-	}
+	return fixture({ id, kind, name: id, origin, status })
 }
 
 function baseProps(
@@ -504,9 +498,8 @@ describe('ConnectorConfigForm — the identification slot', () => {
 			<ConnectorConfigForm
 				{...baseProps({
 					descriptor: descriptor({ auth: { Exactly: 'odoo_api' } }),
-					credentials: [credential('c1', 'odoo_api')],
+					credentials: [credential('c1', 'odoo_api', 'supplied', 'expired')],
 					credentialId: 'c1',
-					credentialStatusOf: () => 'expired',
 				})}
 			/>,
 		)

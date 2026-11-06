@@ -7,6 +7,7 @@ import {
 	useAutomationRuns,
 	useConnectorCatalogue,
 	useCreateCredential,
+	useCredentialKinds,
 	useEvaluateExpression,
 	useRunPolling,
 } from '#/hooks/use-automation'
@@ -49,6 +50,7 @@ export function WorkflowCanvasFeature({ session }: WorkflowCanvasFeatureProps) {
 	const workflowId = session.workflowId
 	const catalogueQuery = useConnectorCatalogue(organizationId)
 	const credentialsQuery = useAutomationCredentials(organizationId)
+	const credentialKindsQuery = useCredentialKinds(organizationId)
 	const eventsQuery = useAutomationEvents(organizationId)
 	const runsQuery = useAutomationRuns(organizationId)
 	const latestId = workflowId
@@ -183,7 +185,7 @@ export function WorkflowCanvasFeature({ session }: WorkflowCanvasFeatureProps) {
 				dryRunSteps={dryRunSteps}
 				onEvaluateExpression={handleEvaluateExpression}
 				credentials={credentialsQuery.data?.data ?? []}
-				authSchemes={catalogueQuery.data?.data.auth_schemes ?? []}
+				credentialKinds={credentialKindsQuery.data?.data ?? []}
 				onCreateCredential={handleCreateCredential}
 				canTest={canManage}
 				testRun={testControl}

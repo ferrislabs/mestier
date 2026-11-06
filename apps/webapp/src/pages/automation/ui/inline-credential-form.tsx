@@ -11,29 +11,31 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
+import type { CredentialKind } from '#/hooks/use-automation'
+import { credentialFailure } from '#/pages/automation/lib/credential-errors'
 import {
 	buildCredentialFieldErrors,
 	credentialFormDefaults,
 	credentialPayload,
-	translateCredentialMessage,
 	visibleCredentialFields,
 } from '#/pages/automation/lib/credential-form'
-import { localizeScheme } from '#/pages/automation/lib/credential-meta'
+import { allowsGeneratedOrigin } from '#/pages/automation/lib/credential-kinds'
 import { CredentialFieldRows } from '#/pages/automation/ui/credential-dialog'
+import { TextArea } from '#/pages/automation/ui/text-area'
 
 type Origin = 'supplied' | 'generated'
 
 export interface InlineCredentialFormProps {
-	authSchemes: Schemas.AuthSchemeResponse[]
+	kinds: CredentialKind[]
 	lockOrigin?: 'generated'
 	isPending: boolean
-	error: string | null
+	error: (Error & { status?: number }) | null
 	onSubmit: (body: Schemas.CreateCredentialRequest) => void
 	onCancel: () => void
 }
 
 export function InlineCredentialForm({
-	authSchemes,
+	kinds,
 	lockOrigin,
 	isPending,
 	error,
@@ -41,49 +43,50 @@ export function InlineCredentialForm({
 	onCancel,
 }: InlineCredentialFormProps) {
 	const baseId = useId()
-	const schemes = authSchemes.map(localizeScheme)
 	const [name, setName] = useState('')
-	const [kind, setKind] = useState(schemes[0]?.kind ?? '')
+	const [description, setDescription] = useState('')
+	const [kindCode, setKindCode] = useState(kinds[0]?.kind ?? '')
 	const [origin, setOrigin] = useState<Origin>(lockOrigin ?? 'supplied')
 	const [data, setData] = useState<Record<string, string>>(() =>
-		credentialFormDefaults(schemes[0]),
+		credentialFormDefaults(kinds[0]),
 	)
 	const [showErrors, setShowErrors] = useState(false)
 
-	const scheme = schemes.find((candidate) => candidate.kind === kind)
+	const kind = kinds.find((candidate) => candidate.kind === kindCode)
 	const fieldErrors = buildCredentialFieldErrors(
-		{ kind, name, description: '', origin, data },
-		scheme,
-		'create',
+		{ kind: kindCode, name, description, origin, data },
+		kind,
 	)
-	const errorOf = (key: string) => (showErrors ? fieldErrors[key] : undefined)
+	const failure = credentialFailure(error, kind?.fields)
+	const failureOf = (key: string) =>
+		failure?.field === key ? failure.message : undefined
+	const errorOf = (key: string) =>
+		(showErrors ? fieldErrors[key] : undefined) ?? failureOf(key)
 	const nameError = errorOf('name')
 
 	function pickKind(next: string) {
-		setKind(next)
+		setKindCode(next)
+		setOrigin(lockOrigin ?? 'supplied')
 		setData(
 			credentialFormDefaults(
-				schemes.find((candidate) => candidate.kind === next),
+				kinds.find((candidate) => candidate.kind === next),
 			),
 		)
 	}
 
 	function handleSubmit() {
 		if (isPending) return
-		if (kind === '' || Object.keys(fieldErrors).length > 0) {
+		if (!kind || Object.keys(fieldErrors).length > 0) {
 			setShowErrors(true)
 			return
 		}
+		const note = description.trim()
 		onSubmit({
-			kind,
+			kind: kind.kind,
 			name: name.trim(),
+			...(note === '' ? {} : { description: note }),
 			origin,
-			data:
-				origin === 'supplied'
-					? scheme
-						? credentialPayload(scheme, data)
-						: data
-					: undefined,
+			data: origin === 'supplied' ? credentialPayload(kind, data) : undefined,
 		})
 	}
 
@@ -95,7 +98,7 @@ export function InlineCredentialForm({
 					id={`${baseId}-name`}
 					value={name}
 					onChange={(event) => setName(event.target.value)}
-					placeholder={scheme ? `Ex. ${scheme.label} – fournisseur` : undefined}
+					placeholder={kind ? `Ex. ${kind.label} – fournisseur` : undefined}
 					aria-invalid={nameError ? true : undefined}
 					aria-describedby={nameError ? `${baseId}-name-error` : undefined}
 				/>
@@ -107,13 +110,32 @@ export function InlineCredentialForm({
 			</div>
 
 			<div className="grid gap-2">
+				<Label htmlFor={`${baseId}-description`}>
+					Description{' '}
+					<span className="font-normal text-muted-foreground">
+						(facultatif)
+					</span>
+				</Label>
+				<TextArea
+					id={`${baseId}-description`}
+					rows={2}
+					value={description}
+					onChange={(event) => setDescription(event.target.value)}
+					placeholder="À quoi sert-elle ? Qui l’a fournie ?"
+				/>
+				{failureOf('description') ? (
+					<p className="text-state-alert text-xs">{failureOf('description')}</p>
+				) : null}
+			</div>
+
+			<div className="grid gap-2">
 				<Label htmlFor={`${baseId}-kind`}>Type</Label>
-				<Select value={kind} onValueChange={pickKind}>
+				<Select value={kindCode} onValueChange={pickKind}>
 					<SelectTrigger id={`${baseId}-kind`} className="w-full">
 						<SelectValue placeholder="Choisir un type" />
 					</SelectTrigger>
 					<SelectContent>
-						{schemes.map((candidate) => (
+						{kinds.map((candidate) => (
 							<SelectItem key={candidate.kind} value={candidate.kind}>
 								{candidate.label}
 							</SelectItem>
@@ -122,7 +144,7 @@ export function InlineCredentialForm({
 				</Select>
 			</div>
 
-			{lockOrigin ? null : (
+			{!lockOrigin && kind && allowsGeneratedOrigin(kind) ? (
 				<div className="grid gap-2">
 					<Label htmlFor={`${baseId}-origin`}>Origine</Label>
 					<Select
@@ -142,22 +164,22 @@ export function InlineCredentialForm({
 						</SelectContent>
 					</Select>
 				</div>
-			)}
+			) : null}
 
-			{origin === 'supplied' && scheme ? (
+			{origin === 'supplied' && kind ? (
 				<CredentialFieldRows
-					fields={visibleCredentialFields(scheme.fields, data)}
+					fields={visibleCredentialFields(kind.fields, data)}
 					data={data}
 					baseId={baseId}
-					stored={false}
+					storedSecrets={[]}
 					errorOf={errorOf}
 					onChange={setData}
 				/>
 			) : null}
 
-			{error ? (
+			{failure && failure.field === null ? (
 				<p className="rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
-					{translateCredentialMessage(error, scheme?.fields)}
+					{failure.message}
 				</p>
 			) : null}
 

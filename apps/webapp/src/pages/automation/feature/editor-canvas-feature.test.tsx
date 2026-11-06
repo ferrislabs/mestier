@@ -256,7 +256,7 @@ function Harness({
 	lastRun = null,
 	onEvaluateExpression = () => Promise.resolve(null),
 	credentials = [],
-	authSchemes = [],
+	credentialKinds = [],
 	onCreateCredential,
 	onSaveSpy = vi.fn(),
 	onTest = vi.fn(),
@@ -281,7 +281,7 @@ function Harness({
 				dryRunSteps={dryRunSteps}
 				onEvaluateExpression={onEvaluateExpression}
 				credentials={credentials}
-				authSchemes={authSchemes}
+				credentialKinds={credentialKinds}
 				onCreateCredential={onCreateCredential}
 				testRun={{ running, start: onTest }}
 				canTest={canTest}

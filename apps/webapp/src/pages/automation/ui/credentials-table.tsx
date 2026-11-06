@@ -8,24 +8,10 @@ import {
 	TableRow,
 } from '#/components/ui/table'
 import { credentialAppearance } from '#/pages/automation/lib/credential-appearance'
-import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
+import type { CredentialRow } from '#/pages/automation/lib/credential-rows'
 import { formatUsage } from '#/pages/automation/lib/format'
 import { CredentialStatusLabel } from '#/pages/automation/ui/credential-status-label'
 import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
-
-export interface CredentialRow {
-	id: string
-	name: string
-	description: string
-	kind: string
-	kindLabel: string
-	origin: 'supplied' | 'generated'
-	createdAt: string
-	updatedAt: string
-	usedByWorkflows: number
-	status: CredentialStatus
-	account?: string
-}
 
 export function formatCredentialDate(iso: string): string {
 	return new Date(iso).toLocaleDateString('fr-FR', {
@@ -115,11 +101,7 @@ export function CredentialsTable({
 								<TableCell className="px-4">
 									<span className="block text-sm">{credential.kindLabel}</span>
 									<span className="block max-w-64 truncate font-mono text-muted-foreground text-xs">
-										{credential.account
-											? `Connecté : ${credential.account}`
-											: credential.origin === 'generated'
-												? 'Générée par Mestier'
-												: 'Fournie'}
+										{credential.summary}
 									</span>
 								</TableCell>
 								<TableCell className="px-4 text-muted-foreground">

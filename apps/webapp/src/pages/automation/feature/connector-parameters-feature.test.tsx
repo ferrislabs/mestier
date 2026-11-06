@@ -1,15 +1,15 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import {
 	ConnectorParametersFeature,
 	type ConnectorParametersFeatureProps,
 } from '#/pages/automation/feature/connector-parameters-feature'
 import {
-	forgetCredentialMeta,
-	patchCredentialMeta,
-} from '#/pages/automation/feature/mocks/credential-meta'
+	BEARER_TOKEN,
+	credential as fixture,
+} from '#/pages/automation/test/credential-fixtures'
 
 for (const method of [
 	'hasPointerCapture',
@@ -57,32 +57,9 @@ function credential(
 	id: string,
 	kind: string,
 	origin: 'supplied' | 'generated' = 'supplied',
+	status: Schemas.CredentialStatusResponse = 'valid',
 ): Schemas.CredentialResponse {
-	return {
-		id,
-		kind,
-		name: id,
-		origin,
-		organization_id: 'org-1',
-		created_at: '2026-01-01T00:00:00Z',
-		updated_at: '2026-01-01T00:00:00Z',
-	}
-}
-
-const SCHEME_A: Schemas.AuthSchemeResponse = {
-	kind: 'scheme_a',
-	label: 'Scheme A',
-	fields: [
-		{
-			name: 'token',
-			label: 'Token',
-			kind: 'Text',
-			required: true,
-			secret: true,
-			expression: false,
-			visible_when: null,
-		},
-	],
+	return fixture({ id, kind, name: id, origin, status })
 }
 
 const EMPTY_CONTEXT: Schemas.EvaluateContextBody = {
@@ -99,7 +76,7 @@ function baseProps(
 		config: {},
 		credentialId: null,
 		credentials: [],
-		authSchemes: [SCHEME_A],
+		credentialKinds: [BEARER_TOKEN],
 		errors: [],
 		bindingIssues: [],
 		evaluateContext: EMPTY_CONTEXT,
@@ -202,7 +179,7 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 	it('creates a supplied credential, selects it, and returns to the form without a secret step', async () => {
 		const user = userEvent.setup()
 		const onCredentialChange = vi.fn()
-		const created = credential('new-cred', 'scheme_a', 'supplied')
+		const created = credential('new-cred', 'bearer_token', 'supplied')
 		const onCreateCredential = vi
 			.fn()
 			.mockResolvedValue({ ...created, secret: 'irrelevant' })
@@ -210,7 +187,7 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 		render(
 			<ConnectorParametersFeature
 				{...baseProps({
-					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
+					descriptor: descriptor({ auth: { Exactly: 'bearer_token' } }),
 					onCredentialChange,
 					onCreateCredential,
 				})}
@@ -219,7 +196,7 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 
 		await openCreation(user)
 		await user.type(screen.getByLabelText('Nom'), 'Ma clé')
-		await user.type(screen.getByLabelText('Token'), 's3cr3t')
+		await user.type(screen.getByLabelText('Jeton'), 's3cr3t')
 		await user.click(screen.getByRole('button', { name: 'Créer' }))
 
 		await waitFor(() => {
@@ -227,7 +204,7 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 		})
 
 		expect(onCreateCredential).toHaveBeenCalledWith({
-			kind: 'scheme_a',
+			kind: 'bearer_token',
 			name: 'Ma clé',
 			origin: 'supplied',
 			data: { token: 's3cr3t' },
@@ -238,7 +215,7 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 	it('shows the once-only secret before applying a generated credential', async () => {
 		const user = userEvent.setup()
 		const onCredentialChange = vi.fn()
-		const created = credential('gen-cred', 'scheme_a', 'generated')
+		const created = credential('gen-cred', 'bearer_token', 'generated')
 		const onCreateCredential = vi
 			.fn()
 			.mockResolvedValue({ ...created, secret: 'generated-secret' })
@@ -246,7 +223,7 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 		render(
 			<ConnectorParametersFeature
 				{...baseProps({
-					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
+					descriptor: descriptor({ auth: { Exactly: 'bearer_token' } }),
 					onCredentialChange,
 					onCreateCredential,
 				})}
@@ -275,7 +252,7 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 	it('routes a signing-slot creation into config, locked to a generated origin', async () => {
 		const user = userEvent.setup()
 		const onConfigChange = vi.fn()
-		const created = credential('sign-cred', 'scheme_a', 'generated')
+		const created = credential('sign-cred', 'bearer_token', 'generated')
 		const onCreateCredential = vi
 			.fn()
 			.mockResolvedValue({ ...created, secret: 'signing-secret' })
@@ -326,12 +303,19 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 		const user = userEvent.setup()
 		const onCreateCredential = vi
 			.fn()
-			.mockRejectedValue(new Error('La création a échoué'))
+			.mockRejectedValue(
+				Object.assign(
+					new Error(
+						'Conflict: Une identification de ce type porte déjà ce nom.',
+					),
+					{ status: 409 },
+				),
+			)
 
 		render(
 			<ConnectorParametersFeature
 				{...baseProps({
-					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
+					descriptor: descriptor({ auth: { Exactly: 'bearer_token' } }),
 					onCreateCredential,
 				})}
 			/>,
@@ -339,10 +323,14 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 
 		await openCreation(user)
 		await user.type(screen.getByLabelText('Nom'), 'Ma clé')
-		await user.type(screen.getByLabelText('Token'), 's3cr3t')
+		await user.type(screen.getByLabelText('Jeton'), 's3cr3t')
 		await user.click(screen.getByRole('button', { name: 'Créer' }))
 
-		expect(await screen.findByText('La création a échoué')).toBeDefined()
+		expect(
+			await screen.findByText(
+				'Une identification de ce type porte déjà ce nom.',
+			),
+		).toBeDefined()
 		expect(screen.getByLabelText('Nom')).toBeDefined()
 	})
 
@@ -352,7 +340,7 @@ describe('ConnectorParametersFeature — inline credential creation', () => {
 		render(
 			<ConnectorParametersFeature
 				{...baseProps({
-					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
+					descriptor: descriptor({ auth: { Exactly: 'bearer_token' } }),
 					onCredentialChange,
 				})}
 			/>,
@@ -620,17 +608,14 @@ describe('ConnectorParametersFeature — the defaults of a new node', () => {
 })
 
 describe('ConnectorParametersFeature — the identification slot', () => {
-	afterEach(() => {
-		forgetCredentialMeta('cred-expired')
-	})
-
-	it('flags an expired identification from its status', () => {
-		patchCredentialMeta('cred-expired', { status: 'expired' })
+	it('flags an expired identification from the status the server gives it', () => {
 		render(
 			<ConnectorParametersFeature
 				{...baseProps({
-					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
-					credentials: [credential('cred-expired', 'scheme_a')],
+					descriptor: descriptor({ auth: { Exactly: 'bearer_token' } }),
+					credentials: [
+						credential('cred-expired', 'bearer_token', 'supplied', 'expired'),
+					],
 					credentialId: 'cred-expired',
 				})}
 			/>,
@@ -643,26 +628,46 @@ describe('ConnectorParametersFeature — the identification slot', () => {
 		).toBeDefined()
 	})
 
-	it('does not flag a valid identification', () => {
-		patchCredentialMeta('cred-expired', { status: 'valid' })
+	it('flags an identification whose account is not connected', () => {
 		render(
 			<ConnectorParametersFeature
 				{...baseProps({
-					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
-					credentials: [credential('cred-expired', 'scheme_a')],
-					credentialId: 'cred-expired',
+					descriptor: descriptor({ auth: { Exactly: 'bearer_token' } }),
+					credentials: [
+						credential('cred-off', 'bearer_token', 'supplied', 'not_connected'),
+					],
+					credentialId: 'cred-off',
+				})}
+			/>,
+		)
+
+		expect(
+			screen.getByText(
+				'Cette identification n’est pas connectée. Connectez le compte depuis Identifications.',
+			),
+		).toBeDefined()
+	})
+
+	it('does not flag a valid identification', () => {
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: descriptor({ auth: { Exactly: 'bearer_token' } }),
+					credentials: [credential('cred-ok', 'bearer_token')],
+					credentialId: 'cred-ok',
 				})}
 			/>,
 		)
 
 		expect(screen.queryByText(/est expirée/)).toBeNull()
+		expect(screen.queryByText(/n’est pas connectée/)).toBeNull()
 	})
 
 	it('shows the hint the node comes with', () => {
 		render(
 			<ConnectorParametersFeature
 				{...baseProps({
-					descriptor: descriptor({ auth: { Exactly: 'scheme_a' } }),
+					descriptor: descriptor({ auth: { Exactly: 'bearer_token' } }),
 					credentialHint: 'La spec déclare : bearerAuth.',
 				})}
 			/>,

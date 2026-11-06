@@ -19,19 +19,22 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
+import { Switch } from '#/components/ui/switch'
+import type { CredentialField, CredentialKind } from '#/hooks/use-automation'
 import { cn } from '#/lib/utils'
 import type { ExternalService } from '#/pages/automation/feature/mocks/external-services'
 import {
 	type CredentialFieldErrors,
 	credentialFormDefaults,
+	fieldType,
+	isMultiline,
 	visibleCredentialFields,
 } from '#/pages/automation/lib/credential-form'
 import {
-	isOauthAuthorization,
-	type LocalizedField,
-	type LocalizedScheme,
-	schemeUsageText,
-} from '#/pages/automation/lib/credential-meta'
+	allowsGeneratedOrigin,
+	usageSentence,
+} from '#/pages/automation/lib/credential-kinds'
+import type { CredentialRow } from '#/pages/automation/lib/credential-rows'
 import { formatUsage } from '#/pages/automation/lib/format'
 import {
 	supportsViewTransition,
@@ -42,10 +45,7 @@ import { CredentialKindAside } from '#/pages/automation/ui/credential-kind-aside
 import { CredentialKindPicker } from '#/pages/automation/ui/credential-kind-picker'
 import { SecretRevealField } from '#/pages/automation/ui/credential-secret-reveal'
 import { CredentialStatusLabel } from '#/pages/automation/ui/credential-status-label'
-import {
-	type CredentialRow,
-	formatCredentialDate,
-} from '#/pages/automation/ui/credentials-table'
+import { formatCredentialDate } from '#/pages/automation/ui/credentials-table'
 import { SecretField } from '#/pages/automation/ui/secret-field'
 import { TextArea } from '#/pages/automation/ui/text-area'
 
@@ -60,15 +60,17 @@ export interface CredentialDialogProps {
 	open: boolean
 	mode: 'create' | 'edit'
 	editing: CredentialRow | null
-	authSchemes: LocalizedScheme[]
+	kinds: CredentialKind[]
 	services: readonly ExternalService[]
 	form: CredentialFormBinding
 	fieldErrors: CredentialFieldErrors
+	serverErrors: CredentialFieldErrors
 	saveError: string | null
 	revealedSecret: string | null
 	rotatingId: string | null
 	isDeleting: boolean
-	schemesLoading: boolean
+	isConnecting: boolean
+	kindsLoading: boolean
 	onOpenChange: (open: boolean) => void
 	onRotate: (row: CredentialRow) => void
 	onDelete: (row: CredentialRow) => void
@@ -85,7 +87,7 @@ export function CredentialFieldControl({
 	describedBy,
 	onChange,
 }: {
-	field: LocalizedField
+	field: CredentialField
 	controlId: string
 	value: string
 	stored: boolean
@@ -97,16 +99,16 @@ export function CredentialFieldControl({
 		'aria-invalid': invalid || undefined,
 		'aria-describedby': describedBy,
 	}
-	const kind = field.kind
+	const type = fieldType(field)
 
-	if (typeof kind === 'object' && 'Select' in kind) {
+	if (type === 'select') {
 		return (
 			<Select value={value} onValueChange={onChange}>
 				<SelectTrigger id={controlId} className="w-full" {...aria}>
 					<SelectValue placeholder="Choisir…" />
 				</SelectTrigger>
 				<SelectContent>
-					{kind.Select.options.map((option) => (
+					{field.options.map((option) => (
 						<SelectItem key={option.value} value={option.value}>
 							{option.label}
 						</SelectItem>
@@ -116,27 +118,37 @@ export function CredentialFieldControl({
 		)
 	}
 
+	if (type === 'boolean')
+		return (
+			<Switch
+				id={controlId}
+				checked={value === 'true'}
+				onCheckedChange={(checked) => onChange(String(checked))}
+				{...aria}
+			/>
+		)
+
 	if (field.secret)
 		return (
 			<SecretField
 				id={controlId}
 				stored={stored}
-				multiline={kind === 'Json'}
+				multiline={isMultiline(field)}
 				value={value}
-				placeholder={field.placeholder}
+				placeholder={field.placeholder ?? undefined}
 				invalid={invalid}
 				describedBy={describedBy}
 				onChange={onChange}
 			/>
 		)
 
-	if (kind === 'Json')
+	if (isMultiline(field))
 		return (
 			<TextArea
 				id={controlId}
 				rows={4}
 				value={value}
-				placeholder={stored ? 'Inchangé' : field.placeholder}
+				placeholder={field.placeholder ?? undefined}
 				onChange={(event) => onChange(event.target.value)}
 				className="font-mono text-xs"
 				{...aria}
@@ -146,11 +158,12 @@ export function CredentialFieldControl({
 	return (
 		<Input
 			id={controlId}
+			type={type === 'password' ? 'password' : undefined}
 			value={value}
-			inputMode={kind === 'Number' ? 'numeric' : undefined}
-			placeholder={stored ? 'Inchangé' : field.placeholder}
+			inputMode={type === 'number' ? 'numeric' : undefined}
+			placeholder={field.placeholder ?? undefined}
 			onChange={(event) => onChange(event.target.value)}
-			className={kind === 'Number' ? 'max-w-32' : undefined}
+			className={type === 'number' ? 'max-w-32' : undefined}
 			autoComplete="off"
 			{...aria}
 		/>
@@ -161,26 +174,26 @@ export function CredentialFieldRows({
 	fields,
 	data,
 	baseId,
-	stored,
+	storedSecrets,
 	errorOf,
 	onChange,
 }: {
-	fields: readonly LocalizedField[]
+	fields: readonly CredentialField[]
 	data: Readonly<Record<string, string>>
 	baseId: string
-	stored: boolean
+	storedSecrets: readonly string[]
 	errorOf: (key: string) => string | undefined
 	onChange: (data: Record<string, string>) => void
 }) {
 	return fields.map((field) => {
 		const controlId = `${baseId}-${field.name}`
 		const error = errorOf(field.name)
-		const isSelect = typeof field.kind === 'object' && 'Select' in field.kind
+		const type = fieldType(field)
 		return (
 			<div key={field.name} className="grid gap-2">
 				<Label htmlFor={controlId}>
 					{field.label}
-					{!field.required && !isSelect && (
+					{!field.required && type !== 'select' && type !== 'boolean' && (
 						<span className="font-normal text-muted-foreground">
 							{' '}
 							(facultatif)
@@ -191,7 +204,7 @@ export function CredentialFieldRows({
 					field={field}
 					controlId={controlId}
 					value={data[field.name] ?? ''}
-					stored={stored}
+					stored={field.secret && storedSecrets.includes(field.name)}
 					invalid={Boolean(error)}
 					describedBy={error ? `${controlId}-error` : undefined}
 					onChange={(value) => onChange({ ...data, [field.name]: value })}
@@ -209,16 +222,26 @@ export function CredentialFieldRows({
 	})
 }
 
+function authorizationText(credential: CredentialRow): string {
+	if (credential.status === 'not_connected')
+		return 'Mestier vous redirige vers le fournisseur pour autoriser l’accès, puis conserve le jeton chiffré.'
+	if (credential.status === 'expired')
+		return 'L’autorisation a expiré. Reconnectez le compte pour la renouveler.'
+	return `Compte ${credential.account ?? 'autorisé'}. Mestier renouvelle le jeton automatiquement.`
+}
+
 function AuthorizationSection({
 	credential,
+	pending,
 	onConnect,
 	onDisconnect,
 }: {
 	credential: CredentialRow
+	pending: boolean
 	onConnect: (row: CredentialRow) => void
 	onDisconnect: (row: CredentialRow) => void
 }) {
-	const connected = credential.status !== 'not-connected'
+	const connected = credential.status !== 'not_connected'
 	return (
 		<section
 			aria-label="Compte autorisé"
@@ -232,21 +255,25 @@ function AuthorizationSection({
 							type="button"
 							variant="ghost"
 							size="sm"
+							disabled={pending}
 							onClick={() => onDisconnect(credential)}
 						>
 							Déconnecter
 						</Button>
 					)}
-					<Button type="button" size="sm" onClick={() => onConnect(credential)}>
-						<PlugZap />
+					<Button
+						type="button"
+						size="sm"
+						disabled={pending}
+						onClick={() => onConnect(credential)}
+					>
+						{pending ? <Loader2 className="animate-spin" /> : <PlugZap />}
 						{connected ? 'Reconnecter' : 'Connecter un compte'}
 					</Button>
 				</div>
 			</div>
 			<p className="text-muted-foreground text-xs">
-				{connected
-					? `Compte ${credential.account ?? 'autorisé'}. Mestier renouvelle le jeton automatiquement.`
-					: 'Mestier vous redirige vers le fournisseur pour autoriser l’accès, puis conserve le jeton chiffré.'}
+				{authorizationText(credential)}
 			</p>
 		</section>
 	)
@@ -255,12 +282,14 @@ function AuthorizationSection({
 function CredentialForm({
 	mode,
 	editing,
-	scheme,
+	kind,
 	form,
 	fieldErrors,
+	serverErrors,
 	saveError,
 	rotatingId,
 	isDeleting,
+	isConnecting,
 	onBack,
 	onCancel,
 	onRotate,
@@ -270,12 +299,14 @@ function CredentialForm({
 }: {
 	mode: 'create' | 'edit'
 	editing: CredentialRow | null
-	scheme: LocalizedScheme
+	kind: CredentialKind
 	form: CredentialFormBinding
 	fieldErrors: CredentialFieldErrors
+	serverErrors: CredentialFieldErrors
 	saveError: string | null
 	rotatingId: string | null
 	isDeleting: boolean
+	isConnecting: boolean
 	onBack?: () => void
 	onCancel: () => void
 	onRotate: (row: CredentialRow) => void
@@ -287,14 +318,13 @@ function CredentialForm({
 	const [showErrors, setShowErrors] = useState(false)
 	const [confirmingDelete, setConfirmingDelete] = useState(false)
 	const generated = form.values.origin === 'generated'
-	const visibleFields = visibleCredentialFields(scheme.fields, form.values.data)
-	const errorOf = (key: string) => (showErrors ? fieldErrors[key] : undefined)
+	const visibleFields = visibleCredentialFields(kind.fields, form.values.data)
+	const errorOf = (key: string) =>
+		(showErrors ? fieldErrors[key] : undefined) ?? serverErrors[key]
 
 	const submit = () => {
-		if (Object.keys(fieldErrors).length > 0) {
-			setShowErrors(true)
-			return
-		}
+		setShowErrors(true)
+		if (Object.keys(fieldErrors).length > 0) return
 		form.onSubmit()
 	}
 
@@ -316,8 +346,8 @@ function CredentialForm({
 			)}
 		>
 			<CredentialKindAside
-				scheme={scheme}
-				usage={schemeUsageText(scheme.kind)}
+				kind={kind}
+				usage={usageSentence(kind)}
 				meta={
 					editing
 						? `Créée le ${formatCredentialDate(editing.createdAt)} · ${formatUsage(editing.usedByWorkflows).toLowerCase()}.`
@@ -352,7 +382,7 @@ function CredentialForm({
 								onChange={(event) =>
 									form.onChange({ name: event.target.value })
 								}
-								placeholder={`Ex. ${scheme.label} – fournisseur`}
+								placeholder={`Ex. ${kind.label} – fournisseur`}
 								aria-invalid={errorOf('name') ? true : undefined}
 								aria-describedby={
 									errorOf('name') ? `${baseId}-name-error` : undefined
@@ -376,9 +406,11 @@ function CredentialForm({
 									form.onChange({ description: event.target.value })
 								}
 								placeholder="À quoi sert-elle ? Qui l’a fournie ?"
+								aria-invalid={errorOf('description') ? true : undefined}
 							/>
+							{errorText('description', `${baseId}-description`)}
 						</div>
-						{mode === 'create' ? (
+						{mode === 'create' && allowsGeneratedOrigin(kind) ? (
 							<div className="grid gap-2">
 								<Label htmlFor={`${baseId}-origin`}>Origine</Label>
 								<Select
@@ -438,14 +470,15 @@ function CredentialForm({
 								fields={visibleFields}
 								data={form.values.data}
 								baseId={baseId}
-								stored={mode === 'edit'}
+								storedSecrets={editing?.secretsSet ?? []}
 								errorOf={errorOf}
 								onChange={(data) => form.onChange({ data })}
 							/>
 						)}
-						{editing && isOauthAuthorization(scheme.kind) ? (
+						{editing && kind.connectable ? (
 							<AuthorizationSection
 								credential={editing}
+								pending={isConnecting}
 								onConnect={onConnect}
 								onDisconnect={onDisconnect}
 							/>
@@ -528,24 +561,24 @@ export function CredentialDialog({
 	open,
 	mode,
 	editing,
-	authSchemes,
+	kinds,
 	services,
 	form,
 	fieldErrors,
+	serverErrors,
 	saveError,
 	revealedSecret,
 	rotatingId,
 	isDeleting,
-	schemesLoading,
+	isConnecting,
+	kindsLoading,
 	onOpenChange,
 	onRotate,
 	onDelete,
 	onConnect,
 	onDisconnect,
 }: CredentialDialogProps) {
-	const scheme = authSchemes.find(
-		(candidate) => candidate.kind === form.values.kind,
-	)
+	const kind = kinds.find((candidate) => candidate.kind === form.values.kind)
 
 	if (revealedSecret !== null) {
 		return (
@@ -579,22 +612,24 @@ export function CredentialDialog({
 				showCloseButton={false}
 				className="flex h-[min(48rem,90vh)] flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl"
 			>
-				{scheme ? (
+				{kind ? (
 					<CredentialForm
-						key={`${mode}:${editing?.id ?? 'new'}:${scheme.kind}`}
+						key={`${mode}:${editing?.id ?? 'new'}:${kind.kind}`}
 						mode={mode}
 						editing={editing}
-						scheme={scheme}
+						kind={kind}
 						form={form}
 						fieldErrors={fieldErrors}
+						serverErrors={serverErrors}
 						saveError={saveError}
 						rotatingId={rotatingId}
 						isDeleting={isDeleting}
+						isConnecting={isConnecting}
 						onBack={
 							mode === 'create'
 								? () =>
 										withViewTransition(() =>
-											form.onChange({ kind: '', data: {} }),
+											form.onChange({ kind: '', data: {}, origin: 'supplied' }),
 										)
 								: undefined
 						}
@@ -614,7 +649,13 @@ export function CredentialDialog({
 								Modifiez son nom, sa description ou ses paramètres de connexion.
 							</DialogDescription>
 						</DialogHeader>
-						<DialogLoading />
+						{kindsLoading ? (
+							<DialogLoading />
+						) : (
+							<p className="px-6 py-5 text-muted-foreground text-sm">
+								Ce type d’identification n’est plus pris en charge.
+							</p>
+						)}
 						<DialogFooter className="border-border border-t px-6 py-3">
 							<Button
 								type="button"
@@ -640,21 +681,20 @@ export function CredentialDialog({
 								système.
 							</DialogDescription>
 						</DialogHeader>
-						{schemesLoading ? (
+						{kindsLoading ? (
 							<DialogLoading />
 						) : (
 							<div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
 								<CredentialKindPicker
-									schemes={authSchemes}
+									kinds={kinds}
 									services={services}
-									onPick={(kind) =>
+									onPick={(picked) =>
 										withViewTransition(() =>
 											form.onChange({
-												kind,
+												kind: picked,
+												origin: 'supplied',
 												data: credentialFormDefaults(
-													authSchemes.find(
-														(candidate) => candidate.kind === kind,
-													),
+													kinds.find((candidate) => candidate.kind === picked),
 												),
 											}),
 										)

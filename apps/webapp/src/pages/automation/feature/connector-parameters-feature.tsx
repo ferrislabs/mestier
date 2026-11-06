@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
-import {
-	useCredentialMeta,
-	useCredentialMetaActions,
-} from '#/pages/automation/feature/use-credential-meta'
+import type { CredentialKind } from '#/hooks/use-automation'
 import {
 	type FieldAddOns,
 	withField,
 } from '#/pages/automation/lib/connector-config'
 import { withFieldDefaults } from '#/pages/automation/lib/connector-field-copy'
-import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
+import { allowsGeneratedOrigin } from '#/pages/automation/lib/credential-kinds'
+import { allowedCredentialKinds } from '#/pages/automation/lib/credential-picker'
 import type { NodeIssue } from '#/pages/automation/lib/node-issues'
 import { isExpression } from '#/pages/automation/lib/parameters'
 import {
@@ -31,6 +29,8 @@ const PREVIEW_DEBOUNCE_MS = 400
 
 export type CreatedCredential = Schemas.CredentialResponse & { secret: unknown }
 
+type CreationFailure = Error & { status?: number }
+
 interface CreateState {
 	purpose: CredentialCreationPurpose
 	result: CreatedCredential | null
@@ -39,9 +39,9 @@ interface CreateState {
 export interface CredentialCreation {
 	state: CreateState | null
 	pending: boolean
-	error: string | null
+	error: CreationFailure | null
 	start: (purpose: CredentialCreationPurpose) => void
-	submit: (body: Schemas.CreateCredentialRequest, description?: string) => void
+	submit: (body: Schemas.CreateCredentialRequest) => void
 	done: () => void
 	cancel: () => void
 }
@@ -57,20 +57,14 @@ export function useCredentialCreation({
 }): CredentialCreation {
 	const [state, setState] = useState<CreateState | null>(null)
 	const [pending, setPending] = useState(false)
-	const [error, setError] = useState<string | null>(null)
-	const { patch } = useCredentialMetaActions()
+	const [error, setError] = useState<CreationFailure | null>(null)
 
-	async function submitAsync(
-		body: Schemas.CreateCredentialRequest,
-		description?: string,
-	) {
+	async function submitAsync(body: Schemas.CreateCredentialRequest) {
 		if (!state) return
 		setPending(true)
 		setError(null)
 		try {
 			const created = await onCreateCredential(body)
-			const note = description?.trim()
-			if (note) patch(created.id, { description: note })
 			if (created.origin === 'generated') {
 				setState({ purpose: state.purpose, result: created })
 			} else {
@@ -79,7 +73,7 @@ export function useCredentialCreation({
 			}
 		} catch (failure) {
 			setError(
-				failure instanceof Error ? failure.message : 'La création a échoué.',
+				failure instanceof Error ? failure : new Error('La création a échoué.'),
 			)
 		} finally {
 			setPending(false)
@@ -94,7 +88,7 @@ export function useCredentialCreation({
 			setError(null)
 			setState({ purpose, result: null })
 		},
-		submit: (body, description) => void submitAsync(body, description),
+		submit: (body) => void submitAsync(body),
 		done: () => {
 			if (state?.result) onSelect(state.purpose, state.result.id)
 			setState(null)
@@ -108,10 +102,12 @@ export function useCredentialCreation({
 
 export function CredentialCreationPanel({
 	creation,
-	authSchemes,
+	kinds,
+	signingKinds = [],
 }: {
 	creation: CredentialCreation
-	authSchemes: Schemas.AuthSchemeResponse[]
+	kinds: CredentialKind[]
+	signingKinds?: CredentialKind[]
 }) {
 	const { state } = creation
 	if (!state) return null
@@ -122,13 +118,12 @@ export function CredentialCreationPanel({
 		/>
 	) : (
 		<InlineCredentialForm
-			authSchemes={authSchemes}
+			key={state.purpose}
+			kinds={state.purpose === 'signing' ? signingKinds : kinds}
 			lockOrigin={state.purpose === 'signing' ? 'generated' : undefined}
 			isPending={creation.pending}
 			error={creation.error}
-			onSubmit={(body, description?: string) =>
-				creation.submit(body, description)
-			}
+			onSubmit={creation.submit}
 			onCancel={creation.cancel}
 		/>
 	)
@@ -139,7 +134,7 @@ export interface ConnectorParametersFeatureProps {
 	config: Record<string, unknown>
 	credentialId: string | null
 	credentials: Schemas.CredentialResponse[]
-	authSchemes: Schemas.AuthSchemeResponse[]
+	credentialKinds: CredentialKind[]
 	errors: ConnectorValidationError[]
 	bindingIssues: readonly NodeIssue[]
 	credentialHint?: string
@@ -207,7 +202,7 @@ export function ConnectorParametersFeature({
 	config,
 	credentialId,
 	credentials,
-	authSchemes,
+	credentialKinds,
 	errors,
 	bindingIssues,
 	credentialHint,
@@ -222,20 +217,15 @@ export function ConnectorParametersFeature({
 	configRef.current = config
 	const changeRef = useRef(onConfigChange)
 	changeRef.current = onConfigChange
-	const credentialMeta = useCredentialMeta().data
-	const { rememberKinds } = useCredentialMetaActions()
-
-	useEffect(() => {
-		rememberKinds(credentials)
-	}, [credentials, rememberKinds])
-
 	useEffect(() => {
 		const seeded = withFieldDefaults(descriptor.kind, configRef.current)
 		if (seeded) changeRef.current(seeded)
 	}, [descriptor.kind])
 
-	const statusOf = (credentialId: string): CredentialStatus =>
-		credentialMeta[credentialId]?.status ?? 'valid'
+	const allowedKinds = allowedCredentialKinds(descriptor.auth)
+	const typedKinds = credentialKinds.filter((candidate) =>
+		allowedKinds.includes(candidate.kind),
+	)
 
 	const creation = useCredentialCreation({
 		onCreateCredential,
@@ -250,7 +240,11 @@ export function ConnectorParametersFeature({
 
 	if (creation.state) {
 		return (
-			<CredentialCreationPanel creation={creation} authSchemes={authSchemes} />
+			<CredentialCreationPanel
+				creation={creation}
+				kinds={typedKinds}
+				signingKinds={credentialKinds.filter(allowsGeneratedOrigin)}
+			/>
 		)
 	}
 
@@ -279,7 +273,6 @@ export function ConnectorParametersFeature({
 				bindingIssues={bindingIssues}
 				credentialHint={credentialHint}
 				fieldAddOns={fieldAddOns}
-				credentialStatusOf={statusOf}
 				renderPreview={(field) => {
 					const template = config[field.name]
 					return typeof template === 'string' && isExpression(template) ? (

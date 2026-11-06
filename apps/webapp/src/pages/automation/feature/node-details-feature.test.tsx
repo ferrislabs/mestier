@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import { TooltipProvider } from '#/components/ui/tooltip'
+import type { CredentialKind } from '#/hooks/use-automation'
 import { NodeDetailsFeature } from '#/pages/automation/feature/node-details-feature'
 import type { CollectionRead } from '#/pages/automation/lib/collection-node'
 import type { Collection } from '#/pages/automation/lib/collections'
@@ -19,6 +20,12 @@ import {
 	type DryRunPasses,
 	dryRunPassesByConnector,
 } from '#/pages/automation/lib/workflow-runs'
+import {
+	credential as credentialFixture,
+	HTTP_HEADER,
+	KINDS,
+	ODOO_API,
+} from '#/pages/automation/test/credential-fixtures'
 import type { TestRun } from '#/pages/automation/ui/variables-panel'
 import { renderWithRouter } from '#/test/render-with-router'
 
@@ -75,7 +82,7 @@ describe('NodeDetailsFeature', () => {
 					runSteps: new Map([['c1', FAILED_STEP]]),
 				}}
 				collectionReads={new Map()}
-				authSchemes={[]}
+				credentialKinds={KINDS}
 				credentials={[]}
 				issues={[]}
 				dryRunSteps={null}
@@ -220,7 +227,7 @@ interface OpenOptions {
 		body: Schemas.CreateCredentialRequest,
 	) => Promise<Schemas.CredentialResponse & { secret: unknown }>
 	credentials?: Schemas.CredentialResponse[]
-	authSchemes?: Schemas.AuthSchemeResponse[]
+	credentialKinds?: CredentialKind[]
 	events?: Schemas.EventDescriptorResponse[]
 	reads?: ReadonlyMap<string, CollectionRead>
 	issues?: readonly NodeIssue[]
@@ -252,7 +259,7 @@ async function openNode(
 					...(handlers.lastRun ? { lastRun: handlers.lastRun } : {}),
 				}}
 				collectionReads={handlers.reads ?? new Map()}
-				authSchemes={handlers.authSchemes ?? []}
+				credentialKinds={handlers.credentialKinds ?? KINDS}
 				credentials={handlers.credentials ?? []}
 				issues={handlers.issues ?? []}
 				dryRunSteps={handlers.dryRunSteps ?? null}
@@ -1356,16 +1363,9 @@ function placedCredential(
 	id: string,
 	name: string,
 	kind: string,
+	status: Schemas.CredentialStatusResponse = 'valid',
 ): Schemas.CredentialResponse {
-	return {
-		id,
-		name,
-		kind,
-		origin: 'supplied',
-		organization_id: 'org-1',
-		created_at: '2026-01-01T00:00:00Z',
-		updated_at: '2026-01-01T00:00:00Z',
-	}
+	return credentialFixture({ id, name, kind, status })
 }
 
 const SCHEDULE_NODE = triggerNode(
@@ -1618,9 +1618,41 @@ describe('NodeDetailsFeature — a webhook', () => {
 		).toEqual(['Aucune identification', 'Clé Stripe', 'Compte basic', 'Jeton'])
 		expect(
 			within(dialog).getByText(
-				'Types acceptés : Basic Auth, Bearer, Clé d’API dans un en-tête.',
+				'Types acceptés : Basic Auth, Bearer, Clé d’API dans un en-tête, Signature HMAC.',
 			),
 		).toBeDefined()
+	})
+
+	it('flags the identification a webhook points at when it is expired', async () => {
+		const dialog = await openNode(
+			't1',
+			[webhookNode({ credential_id: 'c1' })],
+			[],
+			{
+				credentials: [
+					placedCredential('c1', 'Clé Stripe', 'http_header', 'expired'),
+				],
+			},
+		)
+
+		expect(
+			within(dialog).getByText(
+				'Cette identification est expirée. Renouvelez-la depuis Identifications.',
+			),
+		).toBeDefined()
+	})
+
+	it('offers no identification to a webhook while the kinds are not known', async () => {
+		const dialog = await openNode('t1', [webhookNode()], [], {
+			credentials: [placedCredential('c1', 'Clé Stripe', 'http_header')],
+			credentialKinds: [],
+		})
+
+		expect(
+			within(dialog)
+				.getByRole('combobox', { name: 'Identification' })
+				.hasAttribute('disabled'),
+		).toBe(true)
 	})
 
 	it('saves the chosen identification on the trigger', async () => {
@@ -1716,33 +1748,7 @@ describe('NodeDetailsFeature — a webhook', () => {
 		const dialog = await openNode('t1', [webhookNode()], [], {
 			onUpdateTriggerKind,
 			onCreateCredential,
-			authSchemes: [
-				{
-					kind: 'http_header',
-					label: 'HTTP header',
-					fields: [
-						{
-							expression: false,
-							kind: 'Text',
-							label: 'header_name',
-							name: 'header_name',
-							required: true,
-							secret: false,
-							visible_when: null,
-						},
-						{
-							expression: false,
-							kind: 'Text',
-							label: 'header_value',
-							name: 'header_value',
-							required: true,
-							secret: true,
-							visible_when: null,
-						},
-					],
-				},
-				{ kind: 'odoo_api', label: 'Odoo', fields: [] },
-			],
+			credentialKinds: [HTTP_HEADER, ODOO_API],
 		})
 
 		await user.click(
@@ -1778,7 +1784,7 @@ async function renderOpened(node: EditorNode, handlers: OpenOptions = {}) {
 				organizationSlug="atelier-bois"
 				sources={SOURCES}
 				collectionReads={new Map()}
-				authSchemes={handlers.authSchemes ?? []}
+				credentialKinds={handlers.credentialKinds ?? KINDS}
 				credentials={handlers.credentials ?? []}
 				issues={handlers.issues ?? []}
 				dryRunSteps={null}

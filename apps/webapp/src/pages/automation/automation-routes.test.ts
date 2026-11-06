@@ -190,3 +190,29 @@ describe('automatisation workflow search', () => {
 		}
 	})
 })
+
+describe('automatisation identifications search', () => {
+	it('keeps the outcome the provider redirects back with', async () => {
+		for (const oauth of ['ok', 'error']) {
+			const settled = await settleAt(
+				`/o/acme/automatisation/identifications?oauth=${oauth}`,
+			)
+
+			expect(settled.validatedSearch).toEqual({ oauth })
+		}
+	})
+
+	it('drops anything else', async () => {
+		const settled = await settleAt(
+			'/o/acme/automatisation/identifications?oauth=maybe',
+		)
+
+		expect(settled.validatedSearch).toEqual({})
+	})
+
+	it('has no search by default', async () => {
+		const settled = await settleAt('/o/acme/automatisation/identifications')
+
+		expect(settled.validatedSearch).toEqual({})
+	})
+})
