@@ -11,14 +11,17 @@ use crate::{
     domain::automation::{
         credential::{
             CreateCredentialCommand, Credential, CredentialError, CredentialOrigin,
-            CredentialStatus, UpdateCredentialCommand, assemble_fields, is_internal_secret,
-            validate_description, validate_name,
+            CredentialStatus, MAX_CREDENTIALS_PER_ORGANIZATION, UpdateCredentialCommand,
+            assemble_fields, check_provider_urls, destination_moved, ensure_origin_allowed,
+            is_internal_secret, require_secrets_after_a_move, validate_description, validate_name,
         },
         credential_kind::{CredentialKind, credential_kind},
         ports::CredentialRepository,
         secret::SealedSecret,
     },
-    infrastructure::automation::webhook::secret::SecretCipher,
+    infrastructure::automation::webhook::{
+        address_policy::PrivateNetworkAccess, secret::SecretCipher,
+    },
 };
 
 const NAME_CONSTRAINT: &str = "uq_automation_credential_name";
@@ -97,7 +100,19 @@ async fn split_legacy<R: CredentialRepository>(
         let Some(kind) = credential_kind(&credential.kind) else {
             continue;
         };
-        let (readable, secrets) = split_unvalidated(kind, open_object(cipher, &sealed)?);
+        let opened = match open_object(cipher, &sealed) {
+            Ok(opened) => opened,
+            Err(error) => {
+                tracing::warn!(
+                    org_id = %org_id.0,
+                    credential_id = %credential.id,
+                    %error,
+                    "a stored credential could not be opened and was left unsplit"
+                );
+                continue;
+            }
+        };
+        let (readable, secrets) = split_unvalidated(kind, opened);
         let resealed = seal_object(cipher, &secrets)?;
         let split = Credential {
             data: readable,
@@ -111,6 +126,10 @@ async fn split_legacy<R: CredentialRepository>(
 }
 
 impl MestierUseCase {
+    pub(super) fn provider_urls_must_be_https(&self) -> bool {
+        self.oauth_access == Some(PrivateNetworkAccess::Denied)
+    }
+
     pub(super) fn require_cipher(&self) -> Result<Arc<SecretCipher>, CoreError> {
         self.cipher.clone().ok_or_else(|| {
             CoreError::Conflict(
@@ -126,6 +145,7 @@ impl MestierUseCase {
     ) -> Result<(Credential, Option<Vec<u8>>), CoreError> {
         let cipher = self.require_cipher()?;
         let kind = kind_of(&command.kind)?;
+        ensure_origin_allowed(kind, command.origin)?;
         let name = validate_name(&command.name)?;
         let description = validate_description(command.description.as_deref().unwrap_or(""))?;
 
@@ -133,6 +153,7 @@ impl MestierUseCase {
             CredentialOrigin::Supplied => {
                 let data = command.data.ok_or(CredentialError::MissingData)?;
                 let set = assemble_fields(kind, &Map::new(), &data)?;
+                check_provider_urls(kind, &set.readable, self.provider_urls_must_be_https())?;
                 let plaintext = serde_json::to_vec(&set.secrets).map_err(|e| {
                     CoreError::Internal(format!("credential data cannot be serialized: {e}"))
                 })?;
@@ -165,6 +186,13 @@ impl MestierUseCase {
         };
 
         let mut repository = credential_repository;
+        if repository
+            .count_locking_organization(command.org_id)
+            .await?
+            >= MAX_CREDENTIALS_PER_ORGANIZATION
+        {
+            return Err(CredentialError::TooManyCredentials.into());
+        }
         let inserted = repository
             .insert(&credential, &sealed)
             .await
@@ -271,7 +299,7 @@ impl MestierUseCase {
         let mut repository = credential_repository;
         split_legacy(self.cipher.as_deref(), &mut repository, command.org_id).await?;
         let (existing, sealed) = repository
-            .find_sealed_by_id(command.org_id, command.id)
+            .find_sealed_for_update(command.org_id, command.id)
             .await?
             .ok_or(CoreError::NotFound)?;
         let kind = kind_of(&existing.kind)?;
@@ -314,15 +342,25 @@ impl MestierUseCase {
                     }
                 }
                 let set = assemble_fields(kind, &stored, &data)?;
+                check_provider_urls(kind, &set.readable, self.provider_urls_must_be_https())?;
+                let moved = destination_moved(kind, &updated.data, &set.readable);
+                if moved {
+                    require_secrets_after_a_move(kind, &data)?;
+                }
                 let replaced_a_secret = data
                     .as_object()
                     .is_some_and(|patch| patch.keys().any(|name| set.secrets.contains_key(name)));
 
                 let mut secrets = set.secrets;
+                if moved {
+                    internal.clear();
+                    updated.account = None;
+                    updated.status = Credential::initial_status(kind.kind);
+                }
                 secrets.extend(internal);
                 updated.data = set.readable;
                 updated.secrets_set = secret_names(&secrets);
-                if replaced_a_secret && updated.status == CredentialStatus::Expired {
+                if !moved && replaced_a_secret && updated.status == CredentialStatus::Expired {
                     updated.status = CredentialStatus::Valid;
                     if command.expires_at.is_none()
                         && updated
@@ -395,7 +433,9 @@ mod tests {
     use crate::domain::automation::workflow::{
         CreateWorkflowCommand, Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind,
     };
-    use crate::infrastructure::automation::webhook::secret::SecretCipher;
+    use crate::infrastructure::automation::webhook::{
+        address_policy::PrivateNetworkAccess, secret::SecretCipher,
+    };
     use crate::infrastructure::realtime::EventHub;
 
     async fn make_pool() -> PgPool {
@@ -1947,5 +1987,602 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(again, 5);
+    }
+
+    async fn sealed_object(
+        pool: &PgPool,
+        usecase: &MestierUseCase,
+        id: Uuid,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        let row = sqlx::query!(
+            "SELECT data_nonce, data_ciphertext FROM automation.credential WHERE id = $1",
+            id
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        open_object(
+            usecase.cipher.as_ref().unwrap(),
+            &SealedSecret {
+                nonce: row.data_nonce,
+                ciphertext: row.data_ciphertext,
+            },
+        )
+        .unwrap()
+    }
+
+    fn bearer(org_id: OrganizationId, name: &str) -> CreateCredentialCommand {
+        CreateCredentialCommand {
+            description: None,
+            expires_at: None,
+            org_id,
+            kind: "bearer_token".to_owned(),
+            name: name.to_owned(),
+            origin: CredentialOrigin::Supplied,
+            data: Some(serde_json::json!({ "token": "abc" })),
+        }
+    }
+
+    fn validation_message(error: CoreError) -> String {
+        let CoreError::Conflict(message) = error else {
+            panic!("expected a validation conflict, got {error:?}");
+        };
+        CredentialError::validation_message(&message)
+            .unwrap_or_else(|| panic!("not a validation message: {message}"))
+            .to_owned()
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn reverting_the_credential_migration_is_refused_while_a_supplied_credential_holds_split_fields()
+     {
+        use crate::application::test_support::scratch_pool;
+
+        const DOWN: &str = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../migrations/20261107000001_complete_automation_credentials.down.sql"
+        ));
+        const UP: &str = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../migrations/20261107000001_complete_automation_credentials.up.sql"
+        ));
+        let pool = scratch_pool("mestier_credmig_test_", &MIGRATION_SCRATCH).await;
+        let has_column = || async {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT count(*) FROM information_schema.columns
+                 WHERE table_schema = 'automation' AND table_name = 'credential'
+                   AND column_name = 'fields_split'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+        sqlx::query("DELETE FROM automation.credential WHERE fields_split AND origin = 'supplied'")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::raw_sql(DOWN).execute(&pool).await.unwrap();
+        assert_eq!(
+            has_column().await,
+            0,
+            "nothing is split: the revert goes through"
+        );
+        sqlx::raw_sql(UP).execute(&pool).await.unwrap();
+        assert_eq!(has_column().await, 1);
+
+        let org_id = seed_organization(&pool, "migration-guard").await;
+        let sealed = SecretCipher::new(&[7u8; 32]).unwrap().seal(b"{}").unwrap();
+        let id = generate_uuid_v7();
+        sqlx::query(
+            "INSERT INTO automation.credential
+                 (id, org_id, kind, name, origin, data_nonce, data_ciphertext, fields_split)
+             VALUES ($1, $2, 'bearer_token', 'Split', 'supplied', $3, $4, TRUE)",
+        )
+        .bind(id)
+        .bind(org_id.0)
+        .bind(sealed.nonce)
+        .bind(sealed.ciphertext)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let refusal = sqlx::raw_sql(DOWN).execute(&pool).await.unwrap_err();
+
+        let message = refusal.to_string();
+        assert!(
+            message.contains("cannot revert 20261107000001")
+                && message.contains("1 supplied credential"),
+            "{message}"
+        );
+        assert_eq!(has_column().await, 1, "a refused revert changes nothing");
+        sqlx::query("DELETE FROM automation.credential WHERE id = $1")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_organization_holds_at_most_two_hundred_credentials_even_when_created_together() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "quota").await;
+        let usecase = use_case(pool.clone());
+        sqlx::query(
+            "INSERT INTO automation.credential
+                 (id, org_id, kind, name, origin, data_nonce, data_ciphertext, fields_split)
+             SELECT gen_random_uuid(), $1, 'bearer_token', 'Fill ' || n, 'supplied',
+                    '\\x00'::bytea, '\\x00'::bytea, TRUE
+             FROM generate_series(1, 195) AS n",
+        )
+        .bind(org_id.0)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let mut creations = tokio::task::JoinSet::new();
+        for index in 0..12 {
+            let usecase = usecase.clone();
+            creations.spawn(async move {
+                usecase
+                    .create_credential(bearer(org_id, &format!("Late {index}")))
+                    .await
+            });
+        }
+        let mut created = 0;
+        let mut refused = Vec::new();
+        while let Some(joined) = creations.join_next().await {
+            match joined.unwrap() {
+                Ok(_) => created += 1,
+                Err(error) => refused.push(error),
+            }
+        }
+
+        assert_eq!(created, 5, "195 + 5 = 200, whatever the interleaving");
+        assert_eq!(refused.len(), 7);
+        for error in refused {
+            let CoreError::Conflict(message) = error else {
+                panic!("expected a conflict, got {error:?}");
+            };
+            assert!(
+                CredentialError::validation_message(&message).is_none(),
+                "a quota is a plain conflict, not a field error: {message}"
+            );
+            assert!(!message.contains("200 "), "{message}");
+        }
+        let total: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM automation.credential WHERE org_id = $1")
+                .bind(org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(total, 200);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_kind_that_cannot_be_generated_refuses_the_generated_origin() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "generated").await;
+        let usecase = use_case(pool);
+
+        for kind in [
+            "hmac",
+            "oauth1",
+            "oauth2_authorization_code",
+            "http_basic",
+            "odoo_api",
+        ] {
+            let error = usecase
+                .create_credential(CreateCredentialCommand {
+                    description: None,
+                    expires_at: None,
+                    org_id,
+                    kind: kind.to_owned(),
+                    name: format!("Generated {kind}"),
+                    origin: CredentialOrigin::Generated,
+                    data: None,
+                })
+                .await
+                .unwrap_err();
+
+            assert!(
+                validation_message(error).contains("ne peut pas être généré"),
+                "{kind}"
+            );
+        }
+        let (bearer, revealed) = usecase
+            .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
+                org_id,
+                kind: "bearer_token".to_owned(),
+                name: "Generated bearer".to_owned(),
+                origin: CredentialOrigin::Generated,
+                data: None,
+            })
+            .await
+            .unwrap();
+        assert!(revealed.is_some());
+        assert_eq!(bearer.origin, CredentialOrigin::Generated);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_name_over_a_hundred_and_twenty_characters_or_with_a_nul_is_refused_on_create_and_update()
+     {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "bounds").await;
+        let usecase = use_case(pool);
+        let (credential, _) = usecase
+            .create_credential(bearer(org_id, "Normal"))
+            .await
+            .unwrap();
+
+        let too_long = usecase
+            .create_credential(bearer(org_id, &"n".repeat(121)))
+            .await
+            .unwrap_err();
+        let with_nul = usecase
+            .create_credential(bearer(org_id, "a\0b"))
+            .await
+            .unwrap_err();
+        let renamed = usecase
+            .update_credential(UpdateCredentialCommand {
+                org_id,
+                id: credential.id,
+                name: Some("n".repeat(121)),
+                description: None,
+                data: None,
+                expires_at: None,
+            })
+            .await
+            .unwrap_err();
+        let secret_with_nul = usecase
+            .update_credential(UpdateCredentialCommand {
+                org_id,
+                id: credential.id,
+                name: None,
+                description: None,
+                data: Some(serde_json::json!({ "token": "a\0b" })),
+                expires_at: None,
+            })
+            .await
+            .unwrap_err();
+
+        assert!(validation_message(too_long).contains("120"));
+        assert!(validation_message(with_nul).contains("caractère interdit"));
+        assert!(validation_message(renamed).contains("120"));
+        assert!(validation_message(secret_with_nul).contains("caractère interdit"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn provider_urls_are_https_on_a_closed_instance_and_plaintext_never_travels_over_http() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "https").await;
+        let closed = use_case(pool.clone());
+        let open = use_case(pool).with_private_network(PrivateNetworkAccess::Allowed);
+        let oauth = |name: &str, url: &str| CreateCredentialCommand {
+            description: None,
+            expires_at: None,
+            org_id,
+            kind: "oauth2_client_credentials".to_owned(),
+            name: name.to_owned(),
+            origin: CredentialOrigin::Supplied,
+            data: Some(serde_json::json!({
+                "token_url": url,
+                "client_id": "id",
+                "client_secret": "secret",
+            })),
+        };
+        let one = |name: &str, scheme: &str, method: &str| CreateCredentialCommand {
+            description: None,
+            expires_at: None,
+            org_id,
+            kind: "oauth1".to_owned(),
+            name: name.to_owned(),
+            origin: CredentialOrigin::Supplied,
+            data: Some(serde_json::json!({
+                "consumer_key": "ck",
+                "consumer_secret": "cs",
+                "request_token_url": format!("{scheme}://a.example.com/request"),
+                "authorization_url": "https://a.example.com/authorize",
+                "access_token_url": format!("{scheme}://a.example.com/access"),
+                "signature_method": method,
+            })),
+        };
+
+        let refused = closed
+            .create_credential(oauth("Http closed", "http://auth.example.com/token"))
+            .await
+            .unwrap_err();
+        assert!(validation_message(refused).contains("https"));
+        closed
+            .create_credential(oauth("Https closed", "https://auth.example.com/token"))
+            .await
+            .unwrap();
+        open.create_credential(oauth("Http open", "http://auth.example.com/token"))
+            .await
+            .unwrap();
+        open.create_credential(one("Hmac over http", "http", "HMAC-SHA1"))
+            .await
+            .unwrap();
+
+        let plaintext = open
+            .create_credential(one("Plaintext over http", "http", "PLAINTEXT"))
+            .await
+            .unwrap_err();
+        assert!(validation_message(plaintext).contains("PLAINTEXT"));
+        open.create_credential(one("Plaintext over https", "https", "PLAINTEXT"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn listing_survives_a_generated_secret_and_a_row_nobody_can_open_and_still_splits_the_others()
+     {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "legacy").await;
+        let usecase = use_case(pool.clone());
+        let (generated, _) = usecase
+            .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
+                org_id,
+                kind: "bearer_token".to_owned(),
+                name: "Generated".to_owned(),
+                origin: CredentialOrigin::Generated,
+                data: None,
+            })
+            .await
+            .unwrap();
+        let (legacy, _) = usecase
+            .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
+                org_id,
+                kind: "odoo_api".to_owned(),
+                name: "Legacy".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(serde_json::json!({
+                    "base_url": "https://odoo.example.com",
+                    "database": "prod",
+                    "username": "bot",
+                    "api_key": "KEY-VALUE",
+                })),
+            })
+            .await
+            .unwrap();
+        let foreign_key = SecretCipher::new(&[9u8; 32]).unwrap();
+        let unreadable = foreign_key
+            .seal(br#"{"token":"LOST-SECRET-VALUE"}"#)
+            .unwrap();
+        let (stranger, _) = usecase
+            .create_credential(bearer(org_id, "Sealed elsewhere"))
+            .await
+            .unwrap();
+        sqlx::query!(
+            "UPDATE automation.credential SET fields_split = FALSE, data = '{}'::jsonb WHERE id = ANY($1)",
+            &[generated.id, legacy.id, stranger.id]
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE automation.credential SET data_nonce = $2, data_ciphertext = $3 WHERE id = $1",
+            stranger.id,
+            unreadable.nonce,
+            unreadable.ciphertext
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let everything = seal_object(
+            usecase.cipher.as_ref().unwrap(),
+            serde_json::json!({
+                "base_url": "https://odoo.example.com",
+                "database": "prod",
+                "username": "bot",
+                "api_key": "KEY-VALUE",
+            })
+            .as_object()
+            .unwrap(),
+        )
+        .unwrap();
+        sqlx::query!(
+            "UPDATE automation.credential SET data_nonce = $2, data_ciphertext = $3 WHERE id = $1",
+            legacy.id,
+            everything.nonce,
+            everything.ciphertext
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let listed = usecase.list_credentials(org_id).await.unwrap();
+
+        assert_eq!(listed.len(), 3, "no credential takes the others down");
+        let legacy_after = listed.iter().find(|c| c.id == legacy.id).unwrap();
+        assert!(legacy_after.fields_split, "a readable legacy row is split");
+        assert_eq!(
+            legacy_after.data.get("base_url"),
+            Some(&serde_json::json!("https://odoo.example.com"))
+        );
+        let flags: Vec<(Uuid, bool)> =
+            sqlx::query_as("SELECT id, fields_split FROM automation.credential WHERE id = ANY($1)")
+                .bind(vec![generated.id, stranger.id])
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert!(
+            flags.iter().all(|(_, split)| !split),
+            "a generated secret and an unreadable row are left as they are"
+        );
+        assert!(
+            usecase
+                .find_credential(org_id, stranger.id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    async fn hold_the_row(pool: &PgPool, id: Uuid) -> sqlx::Transaction<'static, sqlx::Postgres> {
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query("SELECT 1 FROM automation.credential WHERE id = $1 FOR UPDATE")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+        tx
+    }
+
+    fn patch(org_id: OrganizationId, id: Uuid, data: serde_json::Value) -> UpdateCredentialCommand {
+        UpdateCredentialCommand {
+            org_id,
+            id,
+            name: None,
+            description: None,
+            data: Some(data),
+            expires_at: None,
+        }
+    }
+
+    fn mtls(org_id: OrganizationId) -> CreateCredentialCommand {
+        CreateCredentialCommand {
+            description: None,
+            expires_at: None,
+            org_id,
+            kind: "mtls".to_owned(),
+            name: "Client".to_owned(),
+            origin: CredentialOrigin::Supplied,
+            data: Some(serde_json::json!({
+                "certificate": "-----BEGIN CERTIFICATE-----",
+                "private_key": "KEY-ONE",
+            })),
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn two_patches_on_two_secrets_keep_both_whatever_the_interleaving() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "patch-both").await;
+        let usecase = use_case(pool.clone());
+        let (credential, _) = usecase.create_credential(mtls(org_id)).await.unwrap();
+
+        let holder = hold_the_row(&pool, credential.id).await;
+        let first = tokio::spawn({
+            let usecase = usecase.clone();
+            async move {
+                usecase
+                    .update_credential(patch(
+                        org_id,
+                        credential.id,
+                        serde_json::json!({ "passphrase": "PASS-TWO" }),
+                    ))
+                    .await
+            }
+        });
+        let second = tokio::spawn({
+            let usecase = usecase.clone();
+            async move {
+                usecase
+                    .update_credential(patch(
+                        org_id,
+                        credential.id,
+                        serde_json::json!({ "private_key": "KEY-THREE" }),
+                    ))
+                    .await
+            }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        holder.commit().await.unwrap();
+        first.await.unwrap().unwrap();
+        second.await.unwrap().unwrap();
+
+        let sealed = sealed_object(&pool, &usecase, credential.id).await;
+        assert_eq!(sealed["passphrase"], serde_json::json!("PASS-TWO"));
+        assert_eq!(sealed["private_key"], serde_json::json!("KEY-THREE"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_patch_waiting_behind_a_token_refresh_keeps_the_fresh_tokens_instead_of_rewriting_old_ones()
+     {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "patch-refresh").await;
+        let usecase = use_case(pool.clone());
+        let (credential, _) = usecase
+            .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
+                org_id,
+                kind: "oauth2_authorization_code".to_owned(),
+                name: "Compte".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(serde_json::json!({
+                    "authorization_url": "https://auth.example.com/authorize",
+                    "token_url": "https://auth.example.com/token",
+                    "client_id": "id",
+                    "client_secret": "secret",
+                    "scopes": "openid",
+                })),
+            })
+            .await
+            .unwrap();
+        let cipher = usecase.cipher.clone().unwrap();
+        let sealed_with = |access: &str, refresh: &str| {
+            let mut object = serde_json::Map::new();
+            object.insert("client_secret".to_owned(), serde_json::json!("secret"));
+            object.insert("access_token".to_owned(), serde_json::json!(access));
+            object.insert("refresh_token".to_owned(), serde_json::json!(refresh));
+            seal_object(&cipher, &object).unwrap()
+        };
+        let old = sealed_with("AT-OLD", "RT-OLD");
+        sqlx::query!(
+            "UPDATE automation.credential SET data_nonce = $2, data_ciphertext = $3 WHERE id = $1",
+            credential.id,
+            old.nonce,
+            old.ciphertext
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let mut refresh = hold_the_row(&pool, credential.id).await;
+        let patching = tokio::spawn({
+            let usecase = usecase.clone();
+            async move {
+                usecase
+                    .update_credential(patch(
+                        org_id,
+                        credential.id,
+                        serde_json::json!({ "scopes": "openid email" }),
+                    ))
+                    .await
+            }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        let fresh = sealed_with("AT-FRESH", "RT-ROTATED");
+        sqlx::query(
+            "UPDATE automation.credential SET data_nonce = $2, data_ciphertext = $3 WHERE id = $1",
+        )
+        .bind(credential.id)
+        .bind(fresh.nonce)
+        .bind(fresh.ciphertext)
+        .execute(&mut *refresh)
+        .await
+        .unwrap();
+        refresh.commit().await.unwrap();
+        let saved = patching.await.unwrap().unwrap();
+
+        let sealed = sealed_object(&pool, &usecase, credential.id).await;
+        assert_eq!(sealed["access_token"], serde_json::json!("AT-FRESH"));
+        assert_eq!(sealed["refresh_token"], serde_json::json!("RT-ROTATED"));
+        assert_eq!(saved.data["scopes"], serde_json::json!("openid email"));
     }
 }

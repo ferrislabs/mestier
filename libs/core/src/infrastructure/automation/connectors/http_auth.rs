@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fmt, time::Duration};
 
 use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -15,14 +15,20 @@ use crate::infrastructure::automation::webhook::{
     address_policy::PrivateNetworkAccess, resolver::GuardedResolver,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct CustomAuth {
     pub headers: Vec<(String, String)>,
     pub query: Vec<(String, String)>,
     pub body: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl fmt::Debug for CustomAuth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("CustomAuth([REDACTED])")
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct OAuth1Auth {
     pub consumer_key: String,
     pub consumer_secret: String,
@@ -31,7 +37,13 @@ pub struct OAuth1Auth {
     pub signature_method: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl fmt::Debug for OAuth1Auth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("OAuth1Auth([REDACTED])")
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct ClientCertificate {
     pub certificate: String,
     pub private_key: String,
@@ -39,7 +51,13 @@ pub struct ClientCertificate {
     pub ca_certificate: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl fmt::Debug for ClientCertificate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ClientCertificate([REDACTED])")
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub enum HttpAuth {
     Bearer { token: String },
     Basic { username: String, password: String },
@@ -50,6 +68,23 @@ pub enum HttpAuth {
     Custom(CustomAuth),
     OAuth1(OAuth1Auth),
     ClientCertificate(ClientCertificate),
+}
+
+impl fmt::Debug for HttpAuth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let variant = match self {
+            Self::Bearer { .. } => "Bearer",
+            Self::Basic { .. } => "Basic",
+            Self::Header { .. } => "Header",
+            Self::Query { .. } => "Query",
+            Self::Digest { .. } => "Digest",
+            Self::Jwt { .. } => "Jwt",
+            Self::Custom(_) => "Custom",
+            Self::OAuth1(_) => "OAuth1",
+            Self::ClientCertificate(_) => "ClientCertificate",
+        };
+        write!(f, "HttpAuth::{variant}([REDACTED])")
+    }
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]
@@ -638,6 +673,97 @@ td7H8fmaJgKruJIBRIL8AlKR
             ]
         );
         assert_eq!(prepared.url.path(), "/path");
+    }
+
+    #[test]
+    fn every_way_of_holding_an_authentication_prints_redacted() {
+        let secrets = [
+            "BEARER-SECRET",
+            "PASSWORD-SECRET",
+            "HEADER-SECRET",
+            "QUERY-SECRET",
+            "DIGEST-SECRET",
+            "JWT-KEY-SECRET",
+            "CUSTOM-SECRET",
+            "CONSUMER-SECRET",
+            "TOKEN-SECRET",
+            "PRIVATE-KEY-SECRET",
+            "PASSPHRASE-SECRET",
+        ];
+        let auths = vec![
+            HttpAuth::Bearer {
+                token: "BEARER-SECRET".to_owned(),
+            },
+            HttpAuth::Basic {
+                username: "ada".to_owned(),
+                password: "PASSWORD-SECRET".to_owned(),
+            },
+            HttpAuth::Header {
+                name: "X-Key".to_owned(),
+                value: "HEADER-SECRET".to_owned(),
+            },
+            HttpAuth::Query {
+                name: "key".to_owned(),
+                value: "QUERY-SECRET".to_owned(),
+            },
+            HttpAuth::Digest {
+                username: "ada".to_owned(),
+                password: "DIGEST-SECRET".to_owned(),
+            },
+            HttpAuth::Jwt {
+                algorithm: "HS256".to_owned(),
+                key: "JWT-KEY-SECRET".to_owned(),
+            },
+            HttpAuth::Custom(CustomAuth {
+                headers: vec![("X-T".to_owned(), "CUSTOM-SECRET".to_owned())],
+                query: vec![],
+                body: Map::new(),
+            }),
+            HttpAuth::OAuth1(OAuth1Auth {
+                consumer_key: "ck".to_owned(),
+                consumer_secret: "CONSUMER-SECRET".to_owned(),
+                token: "t".to_owned(),
+                token_secret: "TOKEN-SECRET".to_owned(),
+                signature_method: "HMAC-SHA1".to_owned(),
+            }),
+            HttpAuth::ClientCertificate(ClientCertificate {
+                certificate: "cert".to_owned(),
+                private_key: "PRIVATE-KEY-SECRET".to_owned(),
+                passphrase: Some("PASSPHRASE-SECRET".to_owned()),
+                ca_certificate: None,
+            }),
+        ];
+
+        for auth in &auths {
+            for rendered in [format!("{auth:?}"), format!("{auth:#?}")] {
+                assert!(rendered.contains("[REDACTED]"), "{rendered}");
+                for secret in secrets {
+                    assert!(!rendered.contains(secret), "{rendered}");
+                }
+            }
+        }
+        let inner = [
+            format!(
+                "{:?}",
+                CustomAuth {
+                    headers: vec![("X-T".to_owned(), "CUSTOM-SECRET".to_owned())],
+                    query: vec![],
+                    body: Map::new(),
+                }
+            ),
+            format!(
+                "{:?}",
+                ClientCertificate {
+                    certificate: "cert".to_owned(),
+                    private_key: "PRIVATE-KEY-SECRET".to_owned(),
+                    passphrase: None,
+                    ca_certificate: None,
+                }
+            ),
+        ];
+        for rendered in inner {
+            assert!(!rendered.contains("SECRET"), "{rendered}");
+        }
     }
 
     #[test]

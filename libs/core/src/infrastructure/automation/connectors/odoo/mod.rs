@@ -185,7 +185,7 @@ async fn json_rpc_call(
         .json(&payload)
         .send()
         .await
-        .map_err(|error| OdooError::Network(describe_reqwest_error(&error)))?;
+        .map_err(|error| OdooError::Network(describe_reqwest_error(error)))?;
 
     let status = response.status();
     if !status.is_success() {
@@ -197,7 +197,10 @@ async fn json_rpc_call(
     }
 
     let body: Value = response.json().await.map_err(|error| {
-        OdooError::Network(format!("Odoo's response was not valid JSON: {error}"))
+        OdooError::Network(format!(
+            "Odoo's response was not valid JSON: {}",
+            describe_reqwest_error(error)
+        ))
     })?;
 
     if let Some(error) = body.get("error") {

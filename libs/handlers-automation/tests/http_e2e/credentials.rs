@@ -772,3 +772,140 @@ async fn an_http_node_saves_with_every_http_kind_and_is_refused_a_kind_no_call_c
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn every_kind_is_supported_and_only_the_executable_ones_say_a_node_can_use_them() {
+    let app = harness::start().await;
+
+    let kinds = client()
+        .get(app.credential_kinds_url())
+        .bearer_auth(&app.view_only_token)
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap()["data"]
+        .as_array()
+        .unwrap()
+        .clone();
+
+    assert!(kinds.iter().all(|kind| kind["supported"] == json!(true)));
+    let ssh = kinds.iter().find(|kind| kind["kind"] == "ssh").unwrap();
+    assert_eq!(ssh["executable"], json!(false));
+    let jwt = kinds.iter().find(|kind| kind["kind"] == "jwt").unwrap();
+    assert_eq!(jwt["usages"].as_array().unwrap().len(), 1);
+    assert!(!jwt["description"].as_str().unwrap().contains("vérifie"));
+    let mtls = kinds.iter().find(|kind| kind["kind"] == "mtls").unwrap();
+    let passphrase = mtls["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["name"] == "passphrase")
+        .unwrap();
+    assert!(passphrase["hint"].as_str().unwrap().contains("chiffrées"));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_kind_that_cannot_be_generated_and_oversized_or_nul_values_are_validation_errors() {
+    let app = harness::start().await;
+
+    let generated = create(
+        &app,
+        json!({ "kind": "hmac", "name": "Signature", "origin": "generated" }),
+    )
+    .await;
+    let long_name = create(
+        &app,
+        json!({ "kind": "bearer_token", "name": "n".repeat(121), "origin": "supplied", "data": { "token": "t" } }),
+    )
+    .await;
+    let nul_secret = create(
+        &app,
+        json!({ "kind": "bearer_token", "name": "Nul", "origin": "supplied", "data": { "token": "a\u{0}b" } }),
+    )
+    .await;
+    let huge = create(
+        &app,
+        json!({ "kind": "bearer_token", "name": "Huge", "origin": "supplied", "data": { "token": "x".repeat(9000) } }),
+    )
+    .await;
+
+    for refused in [generated, long_name, nul_secret, huge] {
+        assert_eq!(refused.status(), 400);
+        assert_eq!(
+            refused.json::<Value>().await.unwrap()["code"],
+            "E_VALIDATION"
+        );
+    }
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn moving_a_provider_address_needs_the_secret_again_and_leaves_the_account_disconnected() {
+    let app = harness::start().await;
+    let credential = created(
+        &app,
+        json!({
+            "kind": "oauth2_authorization_code",
+            "name": "Compte",
+            "origin": "supplied",
+            "data": {
+                "authorization_url": "https://auth.example.com/authorize",
+                "token_url": "https://auth.example.com/token",
+                "client_id": "id",
+                "client_secret": "CLIENT-SECRET-VALUE",
+            }
+        }),
+    )
+    .await;
+    let id = credential["id"].as_str().unwrap().to_owned();
+
+    let scopes = patch(&app, &id, json!({ "data": { "scopes": "openid" } })).await;
+    let without_secret = patch(
+        &app,
+        &id,
+        json!({ "data": { "token_url": "https://evil.example/token" } }),
+    )
+    .await;
+    let insecure = patch(
+        &app,
+        &id,
+        json!({ "data": { "token_url": "http://auth.example.com/token", "client_secret": "s" } }),
+    )
+    .await;
+    let moved = patch(
+        &app,
+        &id,
+        json!({ "data": { "token_url": "https://other.example.com/token", "client_secret": "s" } }),
+    )
+    .await;
+
+    assert_eq!(scopes.status(), 200);
+    assert_eq!(without_secret.status(), 400);
+    let refusal = without_secret.json::<Value>().await.unwrap();
+    assert_eq!(refusal["code"], "E_VALIDATION");
+    assert!(
+        refusal["message"]
+            .as_str()
+            .unwrap()
+            .contains("Client secret")
+    );
+    assert!(!refusal.to_string().contains("CLIENT-SECRET-VALUE"));
+    assert_eq!(insecure.status(), 400);
+    assert_eq!(moved.status(), 200);
+    let moved = moved.json::<Value>().await.unwrap();
+    assert_eq!(moved["data"]["status"], "not_connected");
+    assert_eq!(
+        moved["data"]["data"]["token_url"],
+        "https://other.example.com/token"
+    );
+
+    app.cleanup().await;
+}

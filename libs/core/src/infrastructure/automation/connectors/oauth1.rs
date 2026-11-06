@@ -46,6 +46,9 @@ pub fn authorization_header(
     nonce: &str,
     timestamp: u64,
 ) -> Result<String, String> {
+    if signer.signature_method == "PLAINTEXT" && url.scheme() != "https" {
+        return Err("a PLAINTEXT signature is only sent over https".to_owned());
+    }
     let mut oauth: Vec<(String, String)> = vec![
         (
             "oauth_consumer_key".to_owned(),
@@ -190,6 +193,18 @@ mod tests {
         assert!(
             header.contains(&format!(r#"oauth_signature="{expected}""#)),
             "{header}"
+        );
+    }
+
+    #[test]
+    fn plaintext_is_never_sent_over_plain_http() {
+        let url = Url::parse("http://api.example.com/x").unwrap();
+
+        let refused = authorization_header(&twitter_signer("PLAINTEXT"), "GET", &url, &[], "n", 1);
+
+        assert!(refused.is_err());
+        assert!(
+            authorization_header(&twitter_signer("HMAC-SHA1"), "GET", &url, &[], "n", 1).is_ok()
         );
     }
 

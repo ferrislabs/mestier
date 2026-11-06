@@ -13,6 +13,7 @@ use serde_json::{Map, Value, json};
 use uuid::Uuid;
 
 use crate::application::MestierUseCase;
+use crate::domain::automation::credential::CredentialStatus;
 use crate::domain::automation::run::ConnectorOutcome;
 use crate::infrastructure::automation::webhook::{
     address_policy::{AddressVerdict, PrivateNetworkAccess, judge},
@@ -95,6 +96,10 @@ pub async fn open_http_auth(
     let (credential, plaintext) = usecase
         .open_credential_for_run(org_id, credential_id)
         .await?;
+
+    if credential.status == CredentialStatus::NotConnected {
+        return Err(format!("credential `{}` is not connected", credential.name));
+    }
 
     if matches!(
         credential.kind.as_str(),
@@ -194,10 +199,12 @@ pub async fn read_response(mut response: Response) -> Result<CapturedResponse, S
     let ceiling = MAX_RESPONSE_BODY_BYTES + 1;
     let mut collected: Vec<u8> = Vec::new();
     while collected.len() < ceiling {
-        let chunk = response
-            .chunk()
-            .await
-            .map_err(|error| format!("reading the response body failed: {error}"))?;
+        let chunk = response.chunk().await.map_err(|error| {
+            format!(
+                "reading the response body failed: {}",
+                describe_reqwest_error(error)
+            )
+        })?;
         let Some(chunk) = chunk else {
             break;
         };
@@ -233,9 +240,10 @@ fn headers_to_value(headers: &reqwest::header::HeaderMap) -> Value {
 /// reading a run, see why a call never left the process. Shared by
 /// `http.request` and the `odoo.*` connectors: both send through a guarded
 /// client and both want the same depth of explanation for the same reason.
-pub fn describe_reqwest_error(error: &reqwest::Error) -> String {
+pub fn describe_reqwest_error(error: reqwest::Error) -> String {
     use std::error::Error;
 
+    let error = error.without_url();
     let mut message = error.to_string();
     let mut source = error.source();
     while let Some(err) = source {
@@ -293,6 +301,28 @@ mod tests {
 
     use super::super::http_auth::AuthFromCredentialError;
     use super::*;
+
+    #[tokio::test]
+    async fn a_failed_call_is_described_without_the_url_it_carried() {
+        let client = Client::builder().no_proxy().build().unwrap();
+
+        let error = client
+            .get("http://127.0.0.1:1/items?api_key=QUERY-SECRET-VALUE&sig=OTHER-SECRET")
+            .send()
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("QUERY-SECRET-VALUE"),
+            "the raw error does carry the url: that is the leak"
+        );
+
+        let described = describe_reqwest_error(error);
+
+        assert!(!described.contains("QUERY-SECRET-VALUE"), "{described}");
+        assert!(!described.contains("OTHER-SECRET"), "{described}");
+        assert!(!described.contains("api_key"), "{described}");
+        assert!(!described.is_empty());
+    }
 
     fn fields(pairs: &[(&str, &str)]) -> Map<String, Value> {
         pairs

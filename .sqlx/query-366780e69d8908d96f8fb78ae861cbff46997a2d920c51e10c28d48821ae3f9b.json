@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, kind, name, description, origin, status, account, expires_at,\n                      data, secret_names, fields_split, created_at, updated_at,\n                      data_nonce, data_ciphertext\n               FROM automation.credential\n               WHERE org_id = $1 AND NOT fields_split\n               ORDER BY id\n               FOR UPDATE",
+  "query": "SELECT id, org_id, kind, name, description, origin, status, account, expires_at,\n                      data, secret_names, fields_split, created_at, updated_at,\n                      data_nonce, data_ciphertext\n               FROM automation.credential\n               WHERE org_id = $1 AND NOT fields_split AND origin = 'supplied'\n               ORDER BY id\n               FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -108,5 +108,5 @@
       false
     ]
   },
-  "hash": "67fd1cc419100b5da29926dcf5704d8b918a7f86f4f14d7982de4076ed16ad76"
+  "hash": "366780e69d8908d96f8fb78ae861cbff46997a2d920c51e10c28d48821ae3f9b"
 }

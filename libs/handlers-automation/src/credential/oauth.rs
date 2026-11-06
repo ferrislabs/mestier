@@ -7,13 +7,15 @@ use axum::{
     routing::get,
 };
 use chrono::Utc;
+use common::CoreError;
 use handlers::{ApiError, AppState, DataEnvelope, Response, rate_limit::rate_limit_middleware};
-use http::{HeaderValue, header};
+use http::{HeaderValue, StatusCode, header};
 use mestier_core::{
-    CredentialError, OauthCallback, StartOauthCommand, is_valid_redirect_uri, is_valid_return_to,
-    with_oauth_outcome,
+    CredentialError, OauthCallback, RedirectRefusal, StartOauthCommand, check_redirect_uri,
+    is_valid_return_to, return_origins, with_oauth_outcome,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use utoipa::ToSchema;
 
 use crate::{
@@ -22,7 +24,41 @@ use crate::{
     response::CredentialResponse,
 };
 
-const LOCAL_ORIGIN: &str = "http://localhost:3000";
+const NOT_CONFIGURED_MESSAGE: &str = "La connexion de comptes n’est pas configurée sur ce serveur : l’administrateur doit renseigner l’adresse publique de l’API.";
+
+pub enum StartFailure {
+    Api(ApiError),
+    NotConfigured,
+}
+
+impl From<ApiError> for StartFailure {
+    fn from(error: ApiError) -> Self {
+        Self::Api(error)
+    }
+}
+
+impl From<CoreError> for StartFailure {
+    fn from(error: CoreError) -> Self {
+        Self::Api(error.into())
+    }
+}
+
+impl IntoResponse for StartFailure {
+    fn into_response(self) -> AxumResponse {
+        match self {
+            Self::Api(error) => error.into_response(),
+            Self::NotConfigured => (
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "code": "E_OAUTH_NOT_CONFIGURED",
+                    "message": NOT_CONFIGURED_MESSAGE,
+                    "status": 409,
+                })),
+            )
+                .into_response(),
+        }
+    }
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct StartOauthRequest {
@@ -47,11 +83,11 @@ pub struct StartOauthResponse {
     request_body = StartOauthRequest,
     responses(
         (status = 200, description = "The address of the provider's authorization page. It carries a single-use state, bound to this organization, this credential and the caller, valid ten minutes", body = inline(DataEnvelope<StartOauthResponse>)),
-        (status = 400, description = "The credential kind is not connected to an account, or an address is not acceptable"),
+        (status = 400, description = "The credential kind is not connected to an account, or an address is not acceptable. With PUBLIC_API_URL set, redirect_uri must be exactly {PUBLIC_API_URL}/oauth/callback"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Credential not found"),
-        (status = 409, description = "The provider did not answer, or too many authorizations are pending"),
+        (status = 409, description = "The provider did not answer, or too many authorizations are pending, or (code E_OAUTH_NOT_CONFIGURED) the server has no PUBLIC_API_URL and the redirect_uri is not a localhost one"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -63,18 +99,20 @@ pub async fn start(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<StartOauthRequest>,
-) -> Result<Response<StartOauthResponse>, ApiError> {
+) -> Result<Response<StartOauthResponse>, StartFailure> {
     require_credential(&state, &identity, organization_id, credential_id).await?;
 
-    let mut origins = vec![LOCAL_ORIGIN.to_owned()];
-    origins.extend(state.args.server.allowed_origins.iter().cloned());
-    if !is_valid_redirect_uri(&payload.redirect_uri) {
-        return Err(credential_failure(
-            CredentialError::InvalidRedirectUri.into(),
-        ));
+    let public_api_url = state.args.server.public_api_url.as_deref();
+    match check_redirect_uri(&payload.redirect_uri, public_api_url) {
+        Ok(()) => {}
+        Err(RedirectRefusal::NotConfigured) => return Err(StartFailure::NotConfigured),
+        Err(RedirectRefusal::Invalid) => {
+            return Err(credential_failure(CredentialError::InvalidRedirectUri.into()).into());
+        }
     }
+    let origins = return_origins(public_api_url, &state.args.server.allowed_origins);
     if !is_valid_return_to(&payload.return_to, &origins) {
-        return Err(credential_failure(CredentialError::InvalidReturnTo.into()));
+        return Err(credential_failure(CredentialError::InvalidReturnTo.into()).into());
     }
     let member = state
         .usecase

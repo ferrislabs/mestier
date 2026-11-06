@@ -36,8 +36,8 @@ pub use domain::automation::folder::{
     MAX_FOLDER_NAME_LENGTH, MAX_FOLDERS_PER_ORGANIZATION, UpdateFolderCommand, WorkflowFolder,
 };
 pub use domain::automation::oauth::{
-    OauthCallback, OauthOutcome, is_valid_redirect_uri, is_valid_return_to,
-    with_outcome as with_oauth_outcome,
+    OauthCallback, OauthOutcome, RedirectRefusal, check_redirect_uri, is_valid_return_to,
+    return_origins, with_outcome as with_oauth_outcome,
 };
 pub use domain::automation::ports::DispatchOutcome;
 pub use domain::automation::run::{

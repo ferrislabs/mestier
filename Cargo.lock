@@ -4627,6 +4627,7 @@ dependencies = [
  "events",
  "jsonwebtoken",
  "lopdf",
+ "md-5 0.10.6",
  "mestier-core",
  "mestier-macros",
  "mockall",

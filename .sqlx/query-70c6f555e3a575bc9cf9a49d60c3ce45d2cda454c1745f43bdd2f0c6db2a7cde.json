@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.credential SET data_nonce = $2, data_ciphertext = $3 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "70c6f555e3a575bc9cf9a49d60c3ce45d2cda454c1745f43bdd2f0c6db2a7cde"
+}

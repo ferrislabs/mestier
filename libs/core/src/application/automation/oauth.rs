@@ -1,3 +1,5 @@
+use std::{fmt, future::Future};
+
 use chrono::{DateTime, Duration, Utc};
 use common::{CoreError, OrganizationId};
 use mestier_macros::transactional;
@@ -14,7 +16,7 @@ use crate::{
         ports::{CredentialRepository, OauthStateRepository},
     },
     infrastructure::automation::oauth::{
-        Grant, OAuth1Settings, OAuth1Token, OAuth2Settings, authorization_url,
+        Grant, OAuth1Settings, OAuth1Token, OAuth2Settings, TokenSet, authorization_url,
         exchange_oauth1_token, fetch_account, oauth1_authorization_url, pkce_challenge,
         random_token, request_oauth1_token, request_tokens, state_hash,
     },
@@ -24,10 +26,19 @@ pub const MAX_PENDING_AUTHORIZATIONS_PER_CREDENTIAL: i64 = 20;
 
 const EXPIRY_SKEW_SECONDS: i64 = 30;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum TokenOutcome {
     Token(String),
     Failed(String),
+}
+
+impl fmt::Debug for TokenOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Token(_) => f.write_str("Token([REDACTED])"),
+            Self::Failed(message) => f.debug_tuple("Failed").field(message).finish(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -39,8 +50,24 @@ pub struct StartOauthCommand {
     pub return_to: String,
 }
 
+enum Exchange {
+    OAuth1 {
+        settings: OAuth1Settings,
+        access: OAuth1Token,
+    },
+    OAuth2 {
+        settings: OAuth2Settings,
+        tokens: TokenSet,
+        account: Option<String>,
+    },
+}
+
 fn conflict(message: impl Into<String>) -> CoreError {
     CoreError::Conflict(message.into())
+}
+
+fn changed_meanwhile() -> CoreError {
+    conflict("the credential changed while the provider was being called")
 }
 
 fn merged(credential: &Credential, secrets: &Map<String, Value>) -> Map<String, Value> {
@@ -73,38 +100,34 @@ fn require_connectable(credential: &Credential) -> Result<(), CoreError> {
 }
 
 impl MestierUseCase {
-    #[transactional(credential, oauth_state)]
+    async fn provider_call<T>(&self, call: impl Future<Output = T>) -> T {
+        let _slot = self.oauth.provider_slot().await;
+        call.await
+    }
+
     pub async fn start_oauth_authorization(
         &self,
         command: StartOauthCommand,
     ) -> Result<String, CoreError> {
         let cipher = self.require_cipher()?;
-        let mut credentials = credential_repository;
-        let mut states = oauth_state_repository;
-
-        let (credential, sealed) = credentials
-            .find_sealed_by_id(command.org_id, command.credential_id)
-            .await?
-            .ok_or(CoreError::NotFound)?;
-        require_connectable(&credential)?;
-        let fields = merged(&credential, &open_object(&cipher, &sealed)?);
+        let (credential, fields) = self
+            .prepare_oauth_start(command.org_id, command.credential_id)
+            .await?;
 
         let now = Utc::now();
-        states.purge_expired(now).await?;
-        if states.count_for_credential(credential.id).await?
-            >= MAX_PENDING_AUTHORIZATIONS_PER_CREDENTIAL
-        {
-            return Err(CredentialError::TooManyAuthorizations.into());
-        }
-
         let state = random_token(32);
         let (url, payload) = if credential.kind == "oauth1" {
             let settings = OAuth1Settings::from_fields(&fields).map_err(conflict)?;
             let callback = format!("{}?state={state}", command.redirect_uri);
-            let request_token =
-                request_oauth1_token(&self.oauth_http, self.oauth_access, &settings, &callback)
-                    .await
-                    .map_err(|error| provider_unavailable(&credential, &error))?;
+            let request_token = self
+                .provider_call(request_oauth1_token(
+                    &self.oauth_http,
+                    self.oauth_access,
+                    &settings,
+                    &callback,
+                ))
+                .await
+                .map_err(|error| provider_unavailable(&credential, &error))?;
             let url =
                 oauth1_authorization_url(&settings, &request_token.token).map_err(conflict)?;
             let payload = seal_object(
@@ -140,21 +163,57 @@ impl MestierUseCase {
             (url, payload)
         };
 
-        states
-            .insert(
-                &state_hash(&state),
-                &OauthState::new(
-                    command.org_id,
-                    credential.id,
-                    command.member_id,
-                    command.redirect_uri,
-                    command.return_to,
-                    payload,
-                    now,
-                ),
-            )
-            .await?;
+        self.store_oauth_state(
+            state_hash(&state),
+            OauthState::new(
+                command.org_id,
+                credential.id,
+                command.member_id,
+                command.redirect_uri,
+                command.return_to,
+                payload,
+                now,
+            ),
+        )
+        .await?;
         Ok(url.to_string())
+    }
+
+    #[transactional(credential, oauth_state)]
+    async fn prepare_oauth_start(
+        &self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> Result<(Credential, Map<String, Value>), CoreError> {
+        let cipher = self.require_cipher()?;
+        let mut credentials = credential_repository;
+        let mut states = oauth_state_repository;
+
+        let (credential, sealed) = credentials
+            .find_sealed_by_id(org_id, id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        require_connectable(&credential)?;
+        states.purge_expired(Utc::now()).await?;
+        if states.count_for_credential(credential.id).await?
+            >= MAX_PENDING_AUTHORIZATIONS_PER_CREDENTIAL
+        {
+            return Err(CredentialError::TooManyAuthorizations.into());
+        }
+        let fields = merged(&credential, &open_object(&cipher, &sealed)?);
+        Ok((credential, fields))
+    }
+
+    #[transactional(oauth_state)]
+    async fn store_oauth_state(&self, hash: Vec<u8>, state: OauthState) -> Result<(), CoreError> {
+        let mut states = oauth_state_repository;
+        states.purge_expired(state.created_at).await?;
+        if states.count_for_credential(state.credential_id).await?
+            >= MAX_PENDING_AUTHORIZATIONS_PER_CREDENTIAL
+        {
+            return Err(CredentialError::TooManyAuthorizations.into());
+        }
+        states.insert(&hash, &state).await
     }
 
     #[transactional(oauth_state)]
@@ -201,30 +260,24 @@ impl MestierUseCase {
         })
     }
 
-    #[transactional(credential)]
     async fn connect_with_callback(
         &self,
         state: &OauthState,
         callback: &OauthCallback,
     ) -> Result<(), CoreError> {
         let cipher = self.require_cipher()?;
-        let mut credentials = credential_repository;
-        let (credential, sealed) = credentials
-            .find_sealed_for_update(state.org_id, state.credential_id)
-            .await?
-            .ok_or(CoreError::NotFound)?;
+        let _flight = self.oauth.flight(state.credential_id).lock_owned().await;
+        let (credential, secrets) = self
+            .read_oauth_credential(state.org_id, state.credential_id)
+            .await?;
         require_connectable(&credential)?;
-
-        let mut secrets = open_object(&cipher, &sealed)?;
         let fields = merged(&credential, &secrets);
         let payload = match &state.payload {
             Some(payload) => open_object(&cipher, payload)?,
             None => Map::new(),
         };
-        let now = Utc::now();
-        let mut updated = credential.clone();
 
-        if credential.kind == "oauth1" {
+        let exchange = if credential.kind == "oauth1" {
             let settings = OAuth1Settings::from_fields(&fields).map_err(conflict)?;
             let verifier = callback
                 .oauth_verifier
@@ -237,21 +290,17 @@ impl MestierUseCase {
             if stored.token.is_empty() || callback.oauth_token.as_deref() != Some(&stored.token) {
                 return Err(conflict("the provider answered for another request token"));
             }
-            let access = exchange_oauth1_token(
-                &self.oauth_http,
-                self.oauth_access,
-                &settings,
-                &stored,
-                verifier,
-            )
-            .await
-            .map_err(|error| provider_unavailable(&credential, &error))?;
-            secrets.insert("oauth_token".to_owned(), Value::String(access.token));
-            secrets.insert(
-                "oauth_token_secret".to_owned(),
-                Value::String(access.secret),
-            );
-            updated.expires_at = None;
+            let access = self
+                .provider_call(exchange_oauth1_token(
+                    &self.oauth_http,
+                    self.oauth_access,
+                    &settings,
+                    &stored,
+                    verifier,
+                ))
+                .await
+                .map_err(|error| provider_unavailable(&credential, &error))?;
+            Exchange::OAuth1 { settings, access }
         } else {
             let settings = OAuth2Settings::from_fields(&fields).map_err(conflict)?;
             let code = callback
@@ -259,47 +308,121 @@ impl MestierUseCase {
                 .as_deref()
                 .ok_or_else(|| conflict("the provider sent no code"))?;
             let verifier = text_of(&payload, "code_verifier");
-            let tokens = request_tokens(
-                &self.oauth_http,
-                self.oauth_access,
-                &settings,
-                Grant::AuthorizationCode {
-                    code,
-                    redirect_uri: &state.redirect_uri,
-                    verifier: verifier.as_deref(),
-                },
-            )
-            .await
-            .map_err(|error| provider_unavailable(&credential, &error))?;
-            if let Some(url) = &settings.userinfo_url {
-                updated.account = fetch_account(
-                    &self.oauth_http,
-                    self.oauth_access,
-                    url,
-                    &tokens.access_token,
-                )
-                .await;
+            let userinfo_url = settings.userinfo_url.clone();
+            let (tokens, account) = self
+                .provider_call(async {
+                    let tokens = request_tokens(
+                        &self.oauth_http,
+                        self.oauth_access,
+                        &settings,
+                        Grant::AuthorizationCode {
+                            code,
+                            redirect_uri: &state.redirect_uri,
+                            verifier: verifier.as_deref(),
+                        },
+                    )
+                    .await?;
+                    let account = match &userinfo_url {
+                        Some(url) => {
+                            fetch_account(
+                                &self.oauth_http,
+                                self.oauth_access,
+                                url,
+                                &tokens.access_token,
+                            )
+                            .await
+                        }
+                        None => None,
+                    };
+                    Ok::<_, String>((tokens, account))
+                })
+                .await
+                .map_err(|error| provider_unavailable(&credential, &error))?;
+            Exchange::OAuth2 {
+                settings,
+                tokens,
+                account,
             }
-            secrets.insert(
-                "access_token".to_owned(),
-                Value::String(tokens.access_token),
-            );
-            match tokens.refresh_token {
-                Some(refresh) => secrets.insert("refresh_token".to_owned(), Value::String(refresh)),
-                None => secrets.remove("refresh_token"),
-            };
-            updated.expires_at = tokens
-                .expires_in
-                .map(|seconds| now + Duration::seconds(seconds.min(i64::MAX as u64 / 2) as i64));
+        };
+
+        self.write_connection(state.org_id, state.credential_id, exchange, Utc::now())
+            .await
+    }
+
+    #[transactional(credential)]
+    async fn read_oauth_credential(
+        &self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> Result<(Credential, Map<String, Value>), CoreError> {
+        let cipher = self.require_cipher()?;
+        let mut credentials = credential_repository;
+        let (credential, sealed) = credentials
+            .find_sealed_by_id(org_id, id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        let secrets = open_object(&cipher, &sealed)?;
+        Ok((credential, secrets))
+    }
+
+    #[transactional(credential)]
+    async fn write_connection(
+        &self,
+        org_id: OrganizationId,
+        id: Uuid,
+        exchange: Exchange,
+        now: DateTime<Utc>,
+    ) -> Result<(), CoreError> {
+        let cipher = self.require_cipher()?;
+        let mut credentials = credential_repository;
+        let (credential, sealed) = credentials
+            .find_sealed_for_update(org_id, id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        require_connectable(&credential)?;
+        let mut secrets = open_object(&cipher, &sealed)?;
+        let fields = merged(&credential, &secrets);
+        let mut updated = credential.clone();
+
+        match exchange {
+            Exchange::OAuth1 { settings, access } => {
+                if OAuth1Settings::from_fields(&fields).map_err(conflict)? != settings {
+                    return Err(changed_meanwhile());
+                }
+                secrets.insert("oauth_token".to_owned(), Value::String(access.token));
+                secrets.insert(
+                    "oauth_token_secret".to_owned(),
+                    Value::String(access.secret),
+                );
+                updated.expires_at = None;
+            }
+            Exchange::OAuth2 {
+                settings,
+                tokens,
+                account,
+            } => {
+                if OAuth2Settings::from_fields(&fields).map_err(conflict)? != settings {
+                    return Err(changed_meanwhile());
+                }
+                updated.account = account;
+                updated.expires_at = tokens.expires_at(now);
+                match tokens.refresh_token {
+                    Some(refresh) => {
+                        secrets.insert("refresh_token".to_owned(), Value::String(refresh))
+                    }
+                    None => secrets.remove("refresh_token"),
+                };
+                secrets.insert(
+                    "access_token".to_owned(),
+                    Value::String(tokens.access_token),
+                );
+            }
         }
 
         updated.status = CredentialStatus::Valid;
         updated.secrets_set = secret_names(&secrets);
         let resealed = seal_object(&cipher, &secrets)?;
-        credentials
-            .update(state.org_id, &updated, Some(&resealed))
-            .await?;
-        Ok(())
+        credentials.store_tokens(org_id, &updated, &resealed).await
     }
 
     #[transactional(credential)]
@@ -334,7 +457,8 @@ impl MestierUseCase {
         org_id: OrganizationId,
         id: Uuid,
     ) -> Result<String, String> {
-        match self.locked_oauth_access_token(org_id, id).await {
+        let _flight = self.oauth.flight(id).lock_owned().await;
+        match self.renewed_oauth_token(org_id, id).await {
             Ok(TokenOutcome::Token(token)) => Ok(token),
             Ok(TokenOutcome::Failed(message)) => Err(message),
             Err(CoreError::NotFound) => Err(self.missing_credential_message(org_id, id).await),
@@ -342,45 +466,23 @@ impl MestierUseCase {
         }
     }
 
-    #[transactional(credential)]
-    async fn locked_oauth_access_token(
+    async fn renewed_oauth_token(
         &self,
         org_id: OrganizationId,
         id: Uuid,
     ) -> Result<TokenOutcome, CoreError> {
-        let cipher = self.require_cipher()?;
-        let mut credentials = credential_repository;
-        let (credential, sealed) = credentials
-            .find_sealed_for_update(org_id, id)
-            .await?
-            .ok_or(CoreError::NotFound)?;
-        let mut secrets = open_object(&cipher, &sealed)?;
+        let (credential, secrets) = self.read_oauth_credential(org_id, id).await?;
         let now = Utc::now();
         let name = credential.name.clone();
 
-        let fresh = match credential.kind.as_str() {
+        let (settings, refresh) = match credential.kind.as_str() {
             "oauth2_client_credentials" => {
                 if let Some(token) = usable_token(&secrets, credential.expires_at, now) {
                     return Ok(TokenOutcome::Token(token));
                 }
-                let settings = match OAuth2Settings::from_fields(&merged(&credential, &secrets)) {
-                    Ok(settings) => settings,
+                match OAuth2Settings::from_fields(&merged(&credential, &secrets)) {
+                    Ok(settings) => (settings, None),
                     Err(error) => return Ok(TokenOutcome::Failed(error)),
-                };
-                match request_tokens(
-                    &self.oauth_http,
-                    self.oauth_access,
-                    &settings,
-                    Grant::ClientCredentials,
-                )
-                .await
-                {
-                    Ok(tokens) => tokens,
-                    Err(error) => {
-                        return Ok(TokenOutcome::Failed(format!(
-                            "fetching a token for credential `{name}` failed: {error}"
-                        )));
-                    }
                 }
             }
             "oauth2_authorization_code" => {
@@ -401,31 +503,9 @@ impl MestierUseCase {
                         "credential `{name}` has expired and has no refresh token: reconnect the account"
                     )));
                 };
-                let settings = match OAuth2Settings::from_fields(&merged(&credential, &secrets)) {
-                    Ok(settings) => settings,
+                match OAuth2Settings::from_fields(&merged(&credential, &secrets)) {
+                    Ok(settings) => (settings, Some(refresh)),
                     Err(error) => return Ok(TokenOutcome::Failed(error)),
-                };
-                match request_tokens(
-                    &self.oauth_http,
-                    self.oauth_access,
-                    &settings,
-                    Grant::Refresh {
-                        refresh_token: &refresh,
-                    },
-                )
-                .await
-                {
-                    Ok(tokens) => tokens,
-                    Err(error) => {
-                        let expired = Credential {
-                            status: CredentialStatus::Expired,
-                            ..credential
-                        };
-                        credentials.store_tokens(org_id, &expired, &sealed).await?;
-                        return Ok(TokenOutcome::Failed(format!(
-                            "refreshing the token of credential `{name}` failed: {error}"
-                        )));
-                    }
                 }
             }
             other => {
@@ -435,24 +515,83 @@ impl MestierUseCase {
             }
         };
 
-        secrets.insert(
-            "access_token".to_owned(),
-            Value::String(fresh.access_token.clone()),
-        );
-        if let Some(refresh) = fresh.refresh_token {
-            secrets.insert("refresh_token".to_owned(), Value::String(refresh));
-        }
-        let stored = Credential {
-            status: CredentialStatus::Valid,
-            expires_at: fresh
-                .expires_in
-                .map(|seconds| now + Duration::seconds(seconds.min(i64::MAX as u64 / 2) as i64)),
-            secrets_set: secret_names(&secrets),
-            ..credential
+        let grant = match &refresh {
+            Some(refresh_token) => Grant::Refresh { refresh_token },
+            None => Grant::ClientCredentials,
         };
-        let resealed = seal_object(&cipher, &secrets)?;
-        credentials.store_tokens(org_id, &stored, &resealed).await?;
-        Ok(TokenOutcome::Token(fresh.access_token))
+        let outcome = self
+            .provider_call(request_tokens(
+                &self.oauth_http,
+                self.oauth_access,
+                &settings,
+                grant,
+            ))
+            .await;
+        self.store_renewed_token(org_id, id, settings, refresh, outcome, now)
+            .await
+    }
+
+    #[transactional(credential)]
+    async fn store_renewed_token(
+        &self,
+        org_id: OrganizationId,
+        id: Uuid,
+        used: OAuth2Settings,
+        used_refresh: Option<String>,
+        outcome: Result<TokenSet, String>,
+        now: DateTime<Utc>,
+    ) -> Result<TokenOutcome, CoreError> {
+        let cipher = self.require_cipher()?;
+        let mut credentials = credential_repository;
+        let (credential, sealed) = credentials
+            .find_sealed_for_update(org_id, id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        let mut secrets = open_object(&cipher, &sealed)?;
+        let name = credential.name.clone();
+
+        let unchanged = OAuth2Settings::from_fields(&merged(&credential, &secrets))
+            .is_ok_and(|current| current == used)
+            && text_of(&secrets, "refresh_token") == used_refresh;
+        if !unchanged {
+            return Ok(TokenOutcome::Failed(format!(
+                "credential `{name}` changed while its token was being renewed: try again"
+            )));
+        }
+
+        match outcome {
+            Ok(fresh) => {
+                secrets.insert(
+                    "access_token".to_owned(),
+                    Value::String(fresh.access_token.clone()),
+                );
+                if let Some(refresh) = &fresh.refresh_token {
+                    secrets.insert("refresh_token".to_owned(), Value::String(refresh.clone()));
+                }
+                let stored = Credential {
+                    status: CredentialStatus::Valid,
+                    expires_at: fresh.expires_at(now),
+                    secrets_set: secret_names(&secrets),
+                    ..credential
+                };
+                let resealed = seal_object(&cipher, &secrets)?;
+                credentials.store_tokens(org_id, &stored, &resealed).await?;
+                Ok(TokenOutcome::Token(fresh.access_token))
+            }
+            Err(error) if used_refresh.is_some() => {
+                let expired = Credential {
+                    status: CredentialStatus::Expired,
+                    ..credential
+                };
+                credentials.store_tokens(org_id, &expired, &sealed).await?;
+                Ok(TokenOutcome::Failed(format!(
+                    "refreshing the token of credential `{name}` failed: {error}"
+                )))
+            }
+            Err(error) => Ok(TokenOutcome::Failed(format!(
+                "fetching a token for credential `{name}` failed: {error}"
+            ))),
+        }
     }
 }
 
@@ -479,12 +618,14 @@ mod tests {
 
     use common::generate_uuid_v7;
     use reqwest::{Client, Url};
-    use sqlx::PgPool;
+    use sqlx::{PgPool, postgres::PgPoolOptions};
 
     use super::*;
     use crate::application::default_authorizer;
     use crate::application::test_support::automation_pool;
-    use crate::domain::automation::credential::{CreateCredentialCommand, CredentialOrigin};
+    use crate::domain::automation::credential::{
+        CreateCredentialCommand, CredentialOrigin, UpdateCredentialCommand,
+    };
     use crate::domain::automation::secret::SealedSecret;
     use crate::infrastructure::automation::connectors::{
         http_client::{HttpAuth, open_http_auth},
@@ -547,12 +688,37 @@ mod tests {
     struct Behaviour {
         refresh_fails: AtomicBool,
         refresh_delay_ms: AtomicUsize,
+        code_delay_ms: AtomicUsize,
         refresh_calls: AtomicUsize,
         client_credential_calls: AtomicUsize,
         code_calls: AtomicUsize,
         omit_refresh_token: AtomicBool,
+        expires_in: Mutex<Option<Value>>,
+        in_flight: AtomicUsize,
+        most_in_flight: AtomicUsize,
+        pool: Mutex<Option<PgPool>>,
+        connections_in_use: Mutex<Vec<usize>>,
         forms: Mutex<Vec<HashMap<String, String>>>,
         headers: Mutex<Vec<HashMap<String, String>>>,
+    }
+
+    impl Behaviour {
+        fn expiry(&self, default: Value) -> Value {
+            self.expires_in.lock().unwrap().clone().unwrap_or(default)
+        }
+
+        fn linger(&self, delay_ms: usize) {
+            let now = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+            self.most_in_flight.fetch_max(now, Ordering::SeqCst);
+            std::thread::sleep(StdDuration::from_millis(delay_ms as u64));
+            if let Some(pool) = self.pool.lock().unwrap().as_ref() {
+                self.connections_in_use
+                    .lock()
+                    .unwrap()
+                    .push(pool.size() as usize - pool.num_idle());
+            }
+            self.in_flight.fetch_sub(1, Ordering::SeqCst);
+        }
     }
 
     async fn provider(behaviour: Arc<Behaviour>) -> TestServer {
@@ -566,10 +732,11 @@ mod tests {
                     match form.get("grant_type").map(String::as_str) {
                         Some("authorization_code") => {
                             behaviour.code_calls.fetch_add(1, Ordering::SeqCst);
+                            behaviour.linger(behaviour.code_delay_ms.load(Ordering::SeqCst));
                             if form.get("code").map(String::as_str) != Some("good-code") {
                                 return StubResponse::json(400, &json!({ "error": "invalid_grant" }));
                             }
-                            let mut body = json!({ "access_token": "AT-code", "expires_in": 3600 });
+                            let mut body = json!({ "access_token": "AT-code", "expires_in": behaviour.expiry(json!(3600)) });
                             if !behaviour.omit_refresh_token.load(Ordering::SeqCst) {
                                 body["refresh_token"] = json!("RT-code");
                             }
@@ -577,25 +744,21 @@ mod tests {
                         }
                         Some("refresh_token") => {
                             let call = behaviour.refresh_calls.fetch_add(1, Ordering::SeqCst) + 1;
-                            std::thread::sleep(StdDuration::from_millis(
-                                behaviour.refresh_delay_ms.load(Ordering::SeqCst) as u64,
-                            ));
+                            behaviour.linger(behaviour.refresh_delay_ms.load(Ordering::SeqCst));
                             if behaviour.refresh_fails.load(Ordering::SeqCst) {
                                 return StubResponse::json(400, &json!({ "error": "invalid_grant" }));
                             }
                             StubResponse::json(
                                 200,
-                                &json!({ "access_token": format!("AT-refresh-{call}"), "expires_in": "3600" }),
+                                &json!({ "access_token": format!("AT-refresh-{call}"), "expires_in": behaviour.expiry(json!("3600")) }),
                             )
                         }
                         Some("client_credentials") => {
                             let call = behaviour.client_credential_calls.fetch_add(1, Ordering::SeqCst) + 1;
-                            std::thread::sleep(StdDuration::from_millis(
-                                behaviour.refresh_delay_ms.load(Ordering::SeqCst) as u64,
-                            ));
+                            behaviour.linger(behaviour.refresh_delay_ms.load(Ordering::SeqCst));
                             StubResponse::json(
                                 200,
-                                &json!({ "access_token": format!("CC-{call}"), "expires_in": 3600 }),
+                                &json!({ "access_token": format!("CC-{call}"), "expires_in": behaviour.expiry(json!(3600)) }),
                             )
                         }
                         _ => StubResponse::json(400, &json!({ "error": "unsupported_grant_type" })),
@@ -1455,27 +1618,49 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn the_token_url_is_filtered_by_the_address_policy() {
+    async fn the_token_url_is_filtered_by_the_https_rule_and_the_address_policy() {
         let pool = automation_pool().await;
         let (org_id, member) = seed_organization(&pool, "oauth-guard").await;
         let behaviour = Arc::new(Behaviour::default());
         let server = provider(behaviour.clone()).await;
+        let open = use_case(pool.clone());
         let guarded = MestierUseCase::new(pool.clone(), default_authorizer(), EventHub::new())
             .with_cipher(Some(Arc::new(SecretCipher::new(&[7u8; 32]).unwrap())));
-        let credential = code_credential(&guarded, org_id, &server, "Compte").await;
-        let url = guarded
-            .start_oauth_authorization(start_command(org_id, credential.id, member))
+        let plain_http = code_credential(&open, org_id, &server, "Compte http").await;
+        let loopback_https = open
+            .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
+                org_id,
+                kind: "oauth2_authorization_code".to_owned(),
+                name: "Compte https".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(json!({
+                    "authorization_url": "https://auth.example.com/authorize",
+                    "token_url": server.url.replace("http://", "https://"),
+                    "client_id": "mestier-client",
+                    "client_secret": "client-secret-value",
+                })),
+            })
             .await
-            .unwrap();
+            .unwrap()
+            .0;
 
-        let outcome = guarded
-            .complete_oauth_authorization(callback(&state_of(&url), "good-code"))
-            .await
-            .unwrap();
+        for credential in [&plain_http, &loopback_https] {
+            let url = guarded
+                .start_oauth_authorization(start_command(org_id, credential.id, member))
+                .await
+                .unwrap();
 
-        assert!(!outcome.connected, "a loopback token url is never reached");
+            let outcome = guarded
+                .complete_oauth_authorization(callback(&state_of(&url), "good-code"))
+                .await
+                .unwrap();
+
+            assert!(!outcome.connected, "{}", credential.name);
+        }
         assert_eq!(behaviour.code_calls.load(Ordering::SeqCst), 0);
-        assert!(server.requests().is_empty());
+        assert!(server.requests().is_empty(), "nothing reached the server");
     }
 
     #[tokio::test]
@@ -1651,5 +1836,332 @@ mod tests {
             }
             other => panic!("an OAuth1 credential signs requests: {other:?}"),
         }
+    }
+
+    #[test]
+    fn an_outcome_holding_a_token_never_prints_it() {
+        let token = TokenOutcome::Token("SECRET-ACCESS-TOKEN".to_owned());
+        let failed = TokenOutcome::Failed("the provider said no".to_owned());
+
+        for rendered in [format!("{token:?}"), format!("{token:#?}")] {
+            assert!(!rendered.contains("SECRET-ACCESS-TOKEN"), "{rendered}");
+            assert!(rendered.contains("[REDACTED]"), "{rendered}");
+        }
+        assert!(format!("{failed:?}").contains("the provider said no"));
+    }
+
+    async fn stored_expiry_after(
+        usecase: &MestierUseCase,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> Duration {
+        usecase
+            .find_credential(org_id, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .expires_at
+            .expect("an expiry was recorded")
+            - Utc::now()
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_absurd_expires_in_is_capped_to_a_year_on_the_callback_the_refresh_and_client_credentials()
+     {
+        let pool = automation_pool().await;
+        let (org_id, member) = seed_organization(&pool, "oauth-absurd").await;
+        let behaviour = Arc::new(Behaviour::default());
+        let server = provider(behaviour.clone()).await;
+        let usecase = use_case(pool.clone());
+        let code = code_credential(&usecase, org_id, &server, "Compte").await;
+        let service = client_credentials_credential(&usecase, org_id, &server, "header").await;
+        let a_year = Duration::days(365);
+
+        for given in [
+            json!(9_000_000_000_000_u64),
+            json!(u64::MAX),
+            json!("9000000000000"),
+            json!("18446744073709551615"),
+        ] {
+            *behaviour.expires_in.lock().unwrap() = Some(given.clone());
+
+            connect(&usecase, org_id, member, &code).await;
+            let on_callback = stored_expiry_after(&usecase, org_id, code.id).await;
+            expire_access_token(&pool, code.id).await;
+            usecase.oauth_access_token(org_id, code.id).await.unwrap();
+            let on_refresh = stored_expiry_after(&usecase, org_id, code.id).await;
+            expire_access_token(&pool, service.id).await;
+            usecase
+                .oauth_access_token(org_id, service.id)
+                .await
+                .unwrap();
+            let on_fetch = stored_expiry_after(&usecase, org_id, service.id).await;
+
+            for (path, left) in [
+                ("callback", on_callback),
+                ("refresh", on_refresh),
+                ("client credentials", on_fetch),
+            ] {
+                assert!(
+                    left > a_year - Duration::minutes(5) && left <= a_year + Duration::minutes(5),
+                    "{path} with {given}: {left}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn twelve_callbacks_against_a_slow_provider_overlap_beyond_the_pool_size_because_none_holds_a_connection()
+     {
+        let pool = automation_pool().await;
+        let (org_id, member) = seed_organization(&pool, "oauth-pool").await;
+        let behaviour = Arc::new(Behaviour::default());
+        behaviour.code_delay_ms.store(400, Ordering::SeqCst);
+        let server = provider(behaviour.clone()).await;
+        let small = PgPoolOptions::new()
+            .max_connections(3)
+            .acquire_timeout(StdDuration::from_secs(5))
+            .connect_with(pool.connect_options().as_ref().clone())
+            .await
+            .unwrap();
+        let usecase = use_case(small.clone());
+        let mut states = Vec::new();
+        for index in 0..12 {
+            let credential =
+                code_credential(&usecase, org_id, &server, &format!("Compte {index}")).await;
+            let url = usecase
+                .start_oauth_authorization(start_command(org_id, credential.id, member))
+                .await
+                .unwrap();
+            states.push((credential.id, state_of(&url)));
+        }
+
+        let mut callbacks = tokio::task::JoinSet::new();
+        for (_, state) in &states {
+            let usecase = usecase.clone();
+            let state = state.clone();
+            callbacks.spawn(async move {
+                usecase
+                    .complete_oauth_authorization(callback(&state, "good-code"))
+                    .await
+            });
+        }
+        while let Some(joined) = callbacks.join_next().await {
+            assert!(joined.unwrap().unwrap().connected);
+        }
+
+        assert_eq!(behaviour.code_calls.load(Ordering::SeqCst), 12);
+        let most = behaviour.most_in_flight.load(Ordering::SeqCst);
+        assert!(
+            (4..=8).contains(&most),
+            "more provider calls overlap than the pool has connections (3), never more than eight: {most}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn callbacks_for_one_credential_reach_the_provider_one_at_a_time() {
+        let pool = automation_pool().await;
+        let (org_id, member) = seed_organization(&pool, "oauth-flight").await;
+        let behaviour = Arc::new(Behaviour::default());
+        behaviour.code_delay_ms.store(150, Ordering::SeqCst);
+        let server = provider(behaviour.clone()).await;
+        let usecase = use_case(pool.clone());
+        let credential = code_credential(&usecase, org_id, &server, "Compte").await;
+        let mut states = Vec::new();
+        for _ in 0..4 {
+            let url = usecase
+                .start_oauth_authorization(start_command(org_id, credential.id, member))
+                .await
+                .unwrap();
+            states.push(state_of(&url));
+        }
+
+        let mut callbacks = tokio::task::JoinSet::new();
+        for state in states {
+            let usecase = usecase.clone();
+            callbacks.spawn(async move {
+                usecase
+                    .complete_oauth_authorization(callback(&state, "good-code"))
+                    .await
+            });
+        }
+        while let Some(joined) = callbacks.join_next().await {
+            assert!(joined.unwrap().unwrap().connected);
+        }
+
+        assert_eq!(behaviour.code_calls.load(Ordering::SeqCst), 4);
+        assert_eq!(behaviour.most_in_flight.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn starting_an_oauth1_authorization_holds_no_connection_during_the_provider_call() {
+        let pool = automation_pool().await;
+        let (org_id, member) = seed_organization(&pool, "oauth1-pool").await;
+        let behaviour = Arc::new(Behaviour::default());
+        *behaviour.pool.lock().unwrap() = Some(pool.clone());
+        let sampled = behaviour.clone();
+        let server = TestServer::start(move |_| {
+            sampled.linger(200);
+            StubResponse::text(200, "oauth_token=REQ-TOKEN&oauth_token_secret=REQ-SECRET")
+        })
+        .await;
+        let usecase = use_case(pool.clone());
+        let credential = usecase
+            .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
+                org_id,
+                kind: "oauth1".to_owned(),
+                name: "Compte OAuth1".to_owned(),
+                origin: CredentialOrigin::Supplied,
+                data: Some(json!({
+                    "consumer_key": "ck",
+                    "consumer_secret": "cs",
+                    "request_token_url": format!("{}/request_token", server.url),
+                    "authorization_url": format!("{}/authorize", server.url),
+                    "access_token_url": format!("{}/access_token", server.url),
+                })),
+            })
+            .await
+            .unwrap()
+            .0;
+
+        usecase
+            .start_oauth_authorization(start_command(org_id, credential.id, member))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            behaviour.connections_in_use.lock().unwrap().clone(),
+            vec![0],
+            "no transaction is open while the request token is fetched"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn moving_a_provider_address_needs_the_secret_again_and_disconnects_the_account() {
+        let pool = automation_pool().await;
+        let (org_id, member) = seed_organization(&pool, "oauth-move").await;
+        let server = provider(Arc::new(Behaviour::default())).await;
+        let usecase = use_case(pool.clone());
+        let credential = code_credential(&usecase, org_id, &server, "Compte").await;
+        connect(&usecase, org_id, member, &credential).await;
+        let patch = |data: Value| UpdateCredentialCommand {
+            org_id,
+            id: credential.id,
+            name: None,
+            description: None,
+            data: Some(data),
+            expires_at: None,
+        };
+
+        let unrelated = usecase
+            .update_credential(patch(json!({ "scopes": "openid email" })))
+            .await
+            .unwrap();
+        assert_eq!(unrelated.status, CredentialStatus::Valid);
+        assert_eq!(unrelated.account.as_deref(), Some("ada@example.com"));
+
+        let without_secret = usecase
+            .update_credential(patch(json!({ "token_url": "https://evil.example/token" })))
+            .await
+            .unwrap_err();
+        let CoreError::Conflict(message) = without_secret else {
+            panic!("expected a validation conflict");
+        };
+        assert!(
+            CredentialError::validation_message(&message)
+                .is_some_and(|text| text.contains("Client secret")),
+            "{message}"
+        );
+        let untouched = usecase
+            .find_credential(org_id, credential.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(untouched.status, CredentialStatus::Valid);
+        assert_eq!(
+            untouched.data["token_url"],
+            json!(format!("{}/token", server.url))
+        );
+
+        let moved = usecase
+            .update_credential(patch(json!({
+                "token_url": "https://auth.example.com/token",
+                "client_secret": "client-secret-value",
+            })))
+            .await
+            .unwrap();
+
+        assert_eq!(moved.status, CredentialStatus::NotConnected);
+        assert_eq!(moved.account, None);
+        assert_eq!(moved.secrets_set, vec!["client_secret".to_owned()]);
+        let sealed = sealed_secrets(&pool, &usecase, credential.id).await;
+        assert!(
+            !sealed.contains_key("access_token") && !sealed.contains_key("refresh_token"),
+            "{sealed:?}"
+        );
+        let refused = usecase
+            .oauth_access_token(org_id, credential.id)
+            .await
+            .unwrap_err();
+        assert!(refused.contains("not connected"), "{refused}");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_callback_finishing_after_the_provider_address_moved_connects_nothing() {
+        let pool = automation_pool().await;
+        let (org_id, member) = seed_organization(&pool, "oauth-moved-meanwhile").await;
+        let behaviour = Arc::new(Behaviour::default());
+        behaviour.code_delay_ms.store(500, Ordering::SeqCst);
+        let server = provider(behaviour.clone()).await;
+        let usecase = use_case(pool.clone());
+        let credential = code_credential(&usecase, org_id, &server, "Compte").await;
+        let url = usecase
+            .start_oauth_authorization(start_command(org_id, credential.id, member))
+            .await
+            .unwrap();
+        let state = state_of(&url);
+
+        let completing = tokio::spawn({
+            let usecase = usecase.clone();
+            async move {
+                usecase
+                    .complete_oauth_authorization(callback(&state, "good-code"))
+                    .await
+            }
+        });
+        tokio::time::sleep(StdDuration::from_millis(150)).await;
+        usecase
+            .update_credential(UpdateCredentialCommand {
+                org_id,
+                id: credential.id,
+                name: None,
+                description: None,
+                data: Some(json!({
+                    "token_url": "https://auth.example.com/token",
+                    "client_secret": "client-secret-value",
+                })),
+                expires_at: None,
+            })
+            .await
+            .unwrap();
+        let outcome = completing.await.unwrap().unwrap();
+
+        assert!(!outcome.connected);
+        let after = usecase
+            .find_credential(org_id, credential.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after.status, CredentialStatus::NotConnected);
+        let sealed = sealed_secrets(&pool, &usecase, credential.id).await;
+        assert!(!sealed.contains_key("access_token"));
     }
 }

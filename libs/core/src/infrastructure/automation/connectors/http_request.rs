@@ -148,7 +148,7 @@ impl Connector for HttpRequestConnector {
             Ok(response) => response,
             Err(error) => {
                 return ConnectorOutcome::Failed {
-                    error: describe_reqwest_error(&error),
+                    error: describe_reqwest_error(error),
                 };
             }
         };
@@ -737,6 +737,116 @@ mod tests {
         let request = server.last_request();
         assert_eq!(request.path, "/items?page=2&api_key=s3cret+value");
         assert!(!request.headers.contains_key("authorization"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_failure_never_repeats_a_secret_carried_in_the_query() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "auth-query-leak").await;
+        let usecase = usecase_with_cipher(pool);
+        let key = credential_of(
+            &usecase,
+            org_id,
+            "api_key_query",
+            json!({ "param_name": "api_key", "param_value": "QUERY-SECRET-VALUE" }),
+        )
+        .await;
+        let custom = credential_of(
+            &usecase,
+            org_id,
+            "custom_auth",
+            json!({ "json": { "qs": { "sig": "CUSTOM-QS-SECRET-VALUE" } } }),
+        )
+        .await;
+
+        for (credential, secret) in [
+            (key, "QUERY-SECRET-VALUE"),
+            (custom, "CUSTOM-QS-SECRET-VALUE"),
+        ] {
+            let unreachable = config(&[
+                ("method", json!("GET")),
+                ("url", json!("http://127.0.0.1:1/items?page=2")),
+                ("timeout_seconds", json!(2)),
+            ]);
+            let outcome = call_with(usecase.clone(), org_id, credential, &unreachable).await;
+            let ConnectorOutcome::Failed { error } = outcome else {
+                panic!("an unreachable host fails the node");
+            };
+            assert!(!error.contains(secret), "{error}");
+            assert!(
+                !error.contains("api_key=") && !error.contains("sig="),
+                "{error}"
+            );
+
+            let refused = config(&[
+                ("method", json!("GET")),
+                ("url", json!("http://localhost:9/items")),
+                ("timeout_seconds", json!(2)),
+            ]);
+            let outcome = HttpRequestConnector::new(usecase.clone(), PrivateNetworkAccess::Denied)
+                .execute(ConnectorInput {
+                    org_id,
+                    run_id: Uuid::from_u128(2),
+                    config: &refused,
+                    credential_id: Some(credential),
+                    operation: None,
+                })
+                .await;
+            let ConnectorOutcome::Failed { error } = outcome else {
+                panic!("a refused host fails the node");
+            };
+            assert!(!error.contains(secret), "{error}");
+            assert!(
+                error.contains("private address") || error.contains("loopback"),
+                "the refusal is still explained: {error}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_credential_that_is_not_connected_fails_the_node_before_any_call() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "auth-not-connected").await;
+        let usecase = usecase_with_cipher(pool).with_oauth_http_client(test_client());
+        let code = credential_of(
+            &usecase,
+            org_id,
+            "oauth2_authorization_code",
+            json!({
+                "authorization_url": "https://auth.example.com/authorize",
+                "token_url": "https://auth.example.com/token",
+                "client_id": "id",
+                "client_secret": "secret",
+            }),
+        )
+        .await;
+        let one = credential_of(
+            &usecase,
+            org_id,
+            "oauth1",
+            json!({
+                "consumer_key": "ck",
+                "consumer_secret": "cs",
+                "request_token_url": "https://auth.example.com/request",
+                "authorization_url": "https://auth.example.com/authorize",
+                "access_token_url": "https://auth.example.com/access",
+            }),
+        )
+        .await;
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let cfg = config(&[("method", json!("GET")), ("url", json!(server.url))]);
+
+        for (credential, kind) in [(code, "oauth2_authorization_code"), (one, "oauth1")] {
+            let outcome = call_with(usecase.clone(), org_id, credential, &cfg).await;
+
+            let ConnectorOutcome::Failed { error } = outcome else {
+                panic!("{kind} is not connected");
+            };
+            assert_eq!(error, format!("credential `Test {kind}` is not connected"));
+        }
+        assert!(server.requests().is_empty(), "nothing leaves the process");
     }
 
     #[tokio::test]

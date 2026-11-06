@@ -10,6 +10,7 @@ use sqlx::postgres::PgPoolOptions;
 use crate::domain::file_storage::service::FileStorageService;
 use crate::domain::role::Permissions;
 use crate::infrastructure::automation::connectors::http_client::build_guarded_client;
+use crate::infrastructure::automation::oauth::OauthCoordinator;
 use crate::infrastructure::automation::retention::{RetentionWorkerSchedule, run_retention_worker};
 use crate::infrastructure::automation::webhook::{
     address_policy::PrivateNetworkAccess, secret::SecretCipher,
@@ -151,6 +152,7 @@ pub struct MestierUseCase {
     pub(crate) cipher: Option<Arc<SecretCipher>>,
     pub(crate) oauth_http: reqwest::Client,
     pub(crate) oauth_access: Option<PrivateNetworkAccess>,
+    pub(crate) oauth: Arc<OauthCoordinator>,
 }
 
 impl MestierUseCase {
@@ -164,6 +166,7 @@ impl MestierUseCase {
             oauth_http: build_guarded_client(PrivateNetworkAccess::Denied)
                 .expect("building the guarded HTTP client failed"),
             oauth_access: Some(PrivateNetworkAccess::Denied),
+            oauth: Arc::default(),
         }
     }
 

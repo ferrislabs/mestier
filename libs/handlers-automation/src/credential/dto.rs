@@ -189,7 +189,7 @@ impl From<&CredentialKind> for CredentialKindResponse {
                 .iter()
                 .map(CredentialFieldResponse::from)
                 .collect(),
-            supported: kind.executable,
+            supported: true,
             executable: kind.executable,
             connectable: kind.connectable,
         }
@@ -339,7 +339,11 @@ mod tests {
         let wire = serde_json::to_value(CredentialKindResponse::from(ssh)).unwrap();
 
         assert_eq!(wire["executable"], json!(false));
-        assert_eq!(wire["supported"], json!(false));
+        assert_eq!(
+            wire["supported"],
+            json!(true),
+            "every kind can be created; `executable` says whether a node can use it yet"
+        );
         let password = wire["fields"]
             .as_array()
             .unwrap()

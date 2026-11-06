@@ -277,7 +277,7 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
                       data, secret_names, fields_split, created_at, updated_at,
                       data_nonce, data_ciphertext
                FROM automation.credential
-               WHERE org_id = $1 AND NOT fields_split
+               WHERE org_id = $1 AND NOT fields_split AND origin = 'supplied'
                ORDER BY id
                FOR UPDATE"#,
             org_id.0,
@@ -381,12 +381,35 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
         Ok(rows.into_iter().map(|row| (row.id, row.used_by)).collect())
     }
 
+    async fn count_locking_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> Result<i64, CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(format!("credential-quota:{}", org_id.0))
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM automation.credential WHERE org_id = $1"#,
+            org_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
+    }
+
     async fn find_sealed_for_update(
         &mut self,
         org_id: OrganizationId,
         id: Uuid,
     ) -> Result<Option<(Credential, SealedSecret)>, CoreError> {
         let mut tx = self.tx.lock().await;
+        sqlx::query("SET LOCAL lock_timeout = '2s'")
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
         let row = sqlx::query!(
             r#"SELECT id, org_id, kind, name, description, origin, status, account, expires_at,
                       data, secret_names, fields_split, created_at, updated_at,

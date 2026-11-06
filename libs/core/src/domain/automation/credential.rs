@@ -6,10 +6,19 @@ use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use super::credential_kind::{
-    CredentialField, CredentialFieldKind, CredentialKind, credential_kind,
+    CredentialField, CredentialFieldKind, CredentialKind, PROVIDER_URL_FIELDS, credential_kind,
+    secret_guard,
 };
 
 pub const MAX_CREDENTIAL_DESCRIPTION_CHARS: usize = 500;
+
+pub const MAX_CREDENTIAL_NAME_CHARS: usize = 120;
+
+pub const MAX_TEXT_FIELD_BYTES: usize = 8 * 1024;
+
+pub const MAX_LONG_FIELD_BYTES: usize = 64 * 1024;
+
+pub const MAX_CREDENTIALS_PER_ORGANIZATION: i64 = 200;
 
 pub const INTERNAL_SECRET_KEYS: &[&str] = &[
     "access_token",
@@ -216,8 +225,26 @@ pub enum CredentialError {
     TooManyAuthorizations,
     #[error("Le fournisseur n’a pas répondu comme attendu.")]
     ProviderUnavailable,
+    #[error(
+        "Ce type d’identification ne peut pas être généré par Mestier : saisissez ses paramètres."
+    )]
+    GeneratedNotAllowed,
+    #[error("Modifier cette adresse exige de saisir de nouveau « {label} ».")]
+    SecretRequired { label: String },
+    #[error("Le champ « {label} » doit être une URL https.")]
+    InsecureUrl { label: String },
+    #[error("Une signature PLAINTEXT n’est acceptée qu’avec des URL https.")]
+    PlaintextNeedsHttps,
+    #[error("Le champ « {label} » ne peut pas dépasser {limit}.")]
+    ValueTooLong { label: String, limit: &'static str },
+    #[error("Le champ « {label} » contient un caractère interdit.")]
+    ForbiddenCharacter { label: String },
+    #[error("Cette organisation a atteint le nombre maximal d’identifications.")]
+    TooManyCredentials,
     #[error("Donnez un nom à cette identification.")]
     BlankName,
+    #[error("Le nom ne peut pas dépasser 120 caractères.")]
+    NameTooLong,
     #[error("La description ne peut pas dépasser 500 caractères.")]
     DescriptionTooLong,
     #[error("Une identification fournie se remplace, elle ne se régénère pas.")]
@@ -234,6 +261,7 @@ impl CredentialError {
                 | Self::NameTaken
                 | Self::TooManyAuthorizations
                 | Self::ProviderUnavailable
+                | Self::TooManyCredentials
         )
     }
 
@@ -257,15 +285,39 @@ pub fn validate_name(name: &str) -> Result<String, CredentialError> {
     if trimmed.is_empty() {
         return Err(CredentialError::BlankName);
     }
+    if trimmed.contains('\0') {
+        return Err(CredentialError::ForbiddenCharacter {
+            label: "Nom".to_owned(),
+        });
+    }
+    if trimmed.chars().count() > MAX_CREDENTIAL_NAME_CHARS {
+        return Err(CredentialError::NameTooLong);
+    }
     Ok(trimmed.to_owned())
 }
 
 pub fn validate_description(description: &str) -> Result<String, CredentialError> {
     let trimmed = description.trim();
+    if trimmed.contains('\0') {
+        return Err(CredentialError::ForbiddenCharacter {
+            label: "Description".to_owned(),
+        });
+    }
     if trimmed.chars().count() > MAX_CREDENTIAL_DESCRIPTION_CHARS {
         return Err(CredentialError::DescriptionTooLong);
     }
     Ok(trimmed.to_owned())
+}
+
+pub fn ensure_origin_allowed(
+    kind: &CredentialKind,
+    origin: CredentialOrigin,
+) -> Result<(), CredentialError> {
+    match origin {
+        CredentialOrigin::Supplied => Ok(()),
+        CredentialOrigin::Generated if kind.origin_choices.contains(&"generated") => Ok(()),
+        CredentialOrigin::Generated => Err(CredentialError::GeneratedNotAllowed),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -333,6 +385,82 @@ pub fn assemble_fields(
     Ok(set)
 }
 
+fn effective_text(
+    kind: &CredentialKind,
+    name: &str,
+    fields: &Map<String, Value>,
+) -> Option<String> {
+    fields
+        .get(name)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .or_else(|| {
+            kind.field(name)
+                .and_then(|field| field.default)
+                .map(str::to_owned)
+        })
+}
+
+pub fn destination_moved(
+    kind: &CredentialKind,
+    before: &Map<String, Value>,
+    after: &Map<String, Value>,
+) -> bool {
+    secret_guard(kind.kind).is_some_and(|guard| {
+        guard
+            .destinations
+            .iter()
+            .any(|name| effective_text(kind, name, before) != effective_text(kind, name, after))
+    })
+}
+
+pub fn require_secrets_after_a_move(
+    kind: &CredentialKind,
+    patch: &Value,
+) -> Result<(), CredentialError> {
+    let Some(guard) = secret_guard(kind.kind) else {
+        return Ok(());
+    };
+    let supplied = patch.as_object();
+    for secret in guard.secrets {
+        if !supplied.is_some_and(|patch| patch.contains_key(*secret)) {
+            return Err(CredentialError::SecretRequired {
+                label: kind
+                    .field(secret)
+                    .map_or_else(|| (*secret).to_owned(), |field| field.label.to_owned()),
+            });
+        }
+    }
+    Ok(())
+}
+
+pub fn check_provider_urls(
+    kind: &CredentialKind,
+    readable: &Map<String, Value>,
+    https_only: bool,
+) -> Result<(), CredentialError> {
+    if secret_guard(kind.kind).is_none() || kind.kind == "odoo_api" {
+        return Ok(());
+    }
+    let plaintext = readable.get("signature_method").and_then(Value::as_str) == Some("PLAINTEXT");
+    for name in PROVIDER_URL_FIELDS {
+        let Some(url) = readable.get(*name).and_then(Value::as_str) else {
+            continue;
+        };
+        if plaintext && !url.starts_with("https://") {
+            return Err(CredentialError::PlaintextNeedsHttps);
+        }
+        if https_only && !url.starts_with("https://") {
+            return Err(CredentialError::InsecureUrl {
+                label: kind
+                    .field(name)
+                    .map_or_else(|| (*name).to_owned(), |field| field.label.to_owned()),
+            });
+        }
+    }
+    Ok(())
+}
+
 fn is_visible(kind: &CredentialKind, field: &CredentialField, merged: &Map<String, Value>) -> bool {
     let Some(rule) = field.show_when else {
         return true;
@@ -367,6 +495,7 @@ fn normalize(
             if text.trim().is_empty() {
                 return Ok(None);
             }
+            check_size(field, text)?;
             if field.kind == CredentialFieldKind::Select
                 && !field.options.iter().any(|option| option.value == text)
             {
@@ -393,16 +522,60 @@ fn normalize(
             .as_bool()
             .map(|flag| Some(Value::Bool(flag)))
             .ok_or_else(|| wrong("un booléen")),
-        CredentialFieldKind::Json => match value {
-            Value::Object(_) => Ok(Some(value.clone())),
-            Value::String(text) if text.trim().is_empty() => Ok(None),
-            Value::String(text) => match serde_json::from_str::<Value>(text) {
-                Ok(parsed @ Value::Object(_)) => Ok(Some(parsed)),
-                _ => Err(CredentialError::InvalidJsonObject),
-            },
-            _ => Err(CredentialError::InvalidJsonObject),
-        },
+        CredentialFieldKind::Json => {
+            let parsed = match value {
+                Value::Object(_) => value.clone(),
+                Value::String(text) if text.trim().is_empty() => return Ok(None),
+                Value::String(text) => {
+                    check_size(field, text)?;
+                    match serde_json::from_str::<Value>(text) {
+                        Ok(parsed @ Value::Object(_)) => parsed,
+                        _ => return Err(CredentialError::InvalidJsonObject),
+                    }
+                }
+                _ => return Err(CredentialError::InvalidJsonObject),
+            };
+            if holds_nul(&parsed) {
+                return Err(CredentialError::ForbiddenCharacter {
+                    label: field.label.to_owned(),
+                });
+            }
+            check_size(field, &parsed.to_string())?;
+            Ok(Some(parsed))
+        }
     }
+}
+
+fn holds_nul(value: &Value) -> bool {
+    match value {
+        Value::String(text) => text.contains('\0'),
+        Value::Array(items) => items.iter().any(holds_nul),
+        Value::Object(map) => map
+            .iter()
+            .any(|(name, member)| name.contains('\0') || holds_nul(member)),
+        _ => false,
+    }
+}
+
+fn check_size(field: &CredentialField, text: &str) -> Result<(), CredentialError> {
+    if text.contains('\0') {
+        return Err(CredentialError::ForbiddenCharacter {
+            label: field.label.to_owned(),
+        });
+    }
+    let (limit, label) = match field.kind {
+        CredentialFieldKind::Textarea | CredentialFieldKind::Json => {
+            (MAX_LONG_FIELD_BYTES, "64 Kio")
+        }
+        _ => (MAX_TEXT_FIELD_BYTES, "8 Kio"),
+    };
+    if text.len() > limit {
+        return Err(CredentialError::ValueTooLong {
+            label: field.label.to_owned(),
+            limit: label,
+        });
+    }
+    Ok(())
 }
 
 impl CredentialField {
@@ -564,6 +737,7 @@ mod tests {
     use chrono::Duration;
     use serde_json::json;
 
+    use super::super::credential_kind::credential_kinds;
     use super::*;
 
     fn kind(code: &str) -> &'static CredentialKind {
@@ -1185,6 +1359,232 @@ mod tests {
         );
         assert_eq!(validate_description("  note  "), Ok("note".to_owned()));
         assert_eq!(validate_description(""), Ok(String::new()));
+    }
+
+    #[test]
+    fn a_name_holds_a_hundred_and_twenty_characters_and_no_nul() {
+        assert!(validate_name(&"é".repeat(120)).is_ok());
+        assert_eq!(
+            validate_name(&"é".repeat(121)),
+            Err(CredentialError::NameTooLong)
+        );
+        assert!(matches!(
+            validate_name("a\0b"),
+            Err(CredentialError::ForbiddenCharacter { .. })
+        ));
+        assert!(matches!(
+            validate_description("a\0b"),
+            Err(CredentialError::ForbiddenCharacter { .. })
+        ));
+    }
+
+    #[test]
+    fn a_text_field_holds_eight_kibibytes_and_a_long_one_sixty_four() {
+        let at_the_limit = "x".repeat(MAX_TEXT_FIELD_BYTES);
+        let over = "x".repeat(MAX_TEXT_FIELD_BYTES + 1);
+
+        assert!(create("bearer_token", json!({ "token": at_the_limit })).is_ok());
+        assert!(matches!(
+            refused("bearer_token", json!({ "token": over })),
+            CredentialError::ValueTooLong { limit: "8 Kio", .. }
+        ));
+        assert!(matches!(
+            refused("http_basic", json!({ "username": over, "password": "p" })),
+            CredentialError::ValueTooLong { .. }
+        ));
+
+        let long = "x".repeat(MAX_LONG_FIELD_BYTES);
+        assert!(create("jwt", json!({ "key": long })).is_ok());
+        assert!(matches!(
+            refused(
+                "jwt",
+                json!({ "key": "x".repeat(MAX_LONG_FIELD_BYTES + 1) })
+            ),
+            CredentialError::ValueTooLong {
+                limit: "64 Kio",
+                ..
+            }
+        ));
+        let big_definition =
+            json!({ "json": { "headers": { "X-T": "x".repeat(MAX_LONG_FIELD_BYTES) } } });
+        assert!(matches!(
+            refused("custom_auth", big_definition),
+            CredentialError::ValueTooLong { .. }
+        ));
+    }
+
+    #[test]
+    fn a_nul_is_refused_in_readable_fields_secrets_and_json_definitions() {
+        for (code, data) in [
+            ("bearer_token", json!({ "token": "a\0b" })),
+            ("http_basic", json!({ "username": "a\0b", "password": "p" })),
+            ("jwt", json!({ "key": "a\0b" })),
+            (
+                "custom_auth",
+                json!({ "json": { "headers": { "X-T": "a\0b" } } }),
+            ),
+            (
+                "custom_auth",
+                json!({ "json": "{\"headers\":{\"X-T\":\"a\\u0000b\"}}" }),
+            ),
+        ] {
+            assert!(
+                matches!(
+                    refused(code, data.clone()),
+                    CredentialError::ForbiddenCharacter { .. }
+                ),
+                "{code}: {data}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_a_kind_that_offers_it_can_be_generated() {
+        for kind in credential_kinds() {
+            let verdict = ensure_origin_allowed(kind, CredentialOrigin::Generated);
+            if kind.origin_choices.contains(&"generated") {
+                assert_eq!(verdict, Ok(()), "{}", kind.kind);
+            } else {
+                assert_eq!(
+                    verdict,
+                    Err(CredentialError::GeneratedNotAllowed),
+                    "{}",
+                    kind.kind
+                );
+            }
+            assert_eq!(
+                ensure_origin_allowed(kind, CredentialOrigin::Supplied),
+                Ok(())
+            );
+        }
+        assert!(CredentialError::GeneratedNotAllowed.is_validation());
+    }
+
+    #[test]
+    fn moving_a_destination_is_seen_where_a_secret_travels_there() {
+        let oauth = kind("oauth2_authorization_code");
+        let before = object(json!({
+            "authorization_url": "https://a/authorize",
+            "token_url": "https://a/token",
+            "client_id": "id",
+            "scopes": "openid",
+        }));
+        let same_but_scopes = object(json!({
+            "authorization_url": "https://a/authorize",
+            "token_url": "https://a/token",
+            "client_id": "other",
+            "scopes": "profile",
+        }));
+        let moved_token = object(json!({
+            "authorization_url": "https://a/authorize",
+            "token_url": "https://evil/token",
+        }));
+        let added_userinfo = object(json!({
+            "authorization_url": "https://a/authorize",
+            "token_url": "https://a/token",
+            "userinfo_url": "https://evil/me",
+        }));
+
+        assert!(!destination_moved(oauth, &before, &before));
+        assert!(!destination_moved(oauth, &before, &same_but_scopes));
+        assert!(destination_moved(oauth, &before, &moved_token));
+        assert!(destination_moved(oauth, &before, &added_userinfo));
+        assert!(!destination_moved(
+            kind("bearer_token"),
+            &before,
+            &moved_token
+        ));
+
+        let one = kind("oauth1");
+        let hmac =
+            object(json!({ "request_token_url": "https://a/r", "signature_method": "HMAC-SHA1" }));
+        let implicit = object(json!({ "request_token_url": "https://a/r" }));
+        let plaintext =
+            object(json!({ "request_token_url": "https://a/r", "signature_method": "PLAINTEXT" }));
+        assert!(
+            !destination_moved(one, &hmac, &implicit),
+            "the default is the same method"
+        );
+        assert!(destination_moved(one, &hmac, &plaintext));
+        assert!(destination_moved(
+            kind("odoo_api"),
+            &object(json!({ "base_url": "https://a" })),
+            &object(json!({ "base_url": "https://b" }))
+        ));
+    }
+
+    #[test]
+    fn a_moved_destination_needs_its_secret_sent_again_and_says_which() {
+        let oauth = kind("oauth2_authorization_code");
+
+        let error = require_secrets_after_a_move(oauth, &json!({ "token_url": "https://b/t" }))
+            .unwrap_err();
+
+        assert_eq!(
+            error,
+            CredentialError::SecretRequired {
+                label: "Client secret".to_owned()
+            }
+        );
+        assert!(error.is_validation());
+        assert_eq!(
+            require_secrets_after_a_move(
+                oauth,
+                &json!({ "token_url": "https://b/t", "client_secret": "s" })
+            ),
+            Ok(())
+        );
+        assert!(matches!(
+            require_secrets_after_a_move(kind("oauth1"), &json!({})),
+            Err(CredentialError::SecretRequired { .. })
+        ));
+        assert_eq!(
+            require_secrets_after_a_move(kind("bearer_token"), &json!({})),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn provider_urls_are_https_when_the_instance_is_closed_and_plaintext_needs_https_everywhere() {
+        let http = object(json!({ "authorization_url": "https://a/a", "token_url": "http://a/t" }));
+        let https =
+            object(json!({ "authorization_url": "https://a/a", "token_url": "https://a/t" }));
+        let oauth = kind("oauth2_authorization_code");
+
+        assert!(matches!(
+            check_provider_urls(oauth, &http, true),
+            Err(CredentialError::InsecureUrl { .. })
+        ));
+        assert_eq!(check_provider_urls(oauth, &http, false), Ok(()));
+        assert_eq!(check_provider_urls(oauth, &https, true), Ok(()));
+        assert_eq!(
+            check_provider_urls(kind("bearer_token"), &http, true),
+            Ok(())
+        );
+
+        let one = kind("oauth1");
+        let plaintext_http = object(json!({
+            "request_token_url": "http://a/r",
+            "authorization_url": "https://a/a",
+            "access_token_url": "https://a/t",
+            "signature_method": "PLAINTEXT",
+        }));
+        let hmac_http = object(json!({
+            "request_token_url": "http://a/r",
+            "signature_method": "HMAC-SHA1",
+        }));
+        let plaintext_https = object(json!({
+            "request_token_url": "https://a/r",
+            "authorization_url": "https://a/a",
+            "access_token_url": "https://a/t",
+            "signature_method": "PLAINTEXT",
+        }));
+        assert_eq!(
+            check_provider_urls(one, &plaintext_http, false),
+            Err(CredentialError::PlaintextNeedsHttps)
+        );
+        assert_eq!(check_provider_urls(one, &hmac_http, false), Ok(()));
+        assert_eq!(check_provider_urls(one, &plaintext_https, true), Ok(()));
     }
 
     #[test]

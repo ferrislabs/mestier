@@ -37,6 +37,19 @@ pub struct ServerArgs {
         long_help = "The port to run the internal application on (health, metrics, ...)"
     )]
     pub internal_port: u16,
+    #[arg(
+        long = "public-api-url",
+        env = "PUBLIC_API_URL",
+        name = "PUBLIC_API_URL",
+        long_help = "The public address of this API, e.g. https://api.mestier.fr. \
+                     Account connections (OAuth) send the browser back to \
+                     {PUBLIC_API_URL}/oauth/callback, and only that address is accepted \
+                     as a redirect. Unset, the instance is treated as a development one: \
+                     only a localhost redirect is accepted, and the local web app origin \
+                     (http://localhost:3000) is allowed as a return address. Set it in \
+                     production."
+    )]
+    pub public_api_url: Option<String>,
     #[command(flatten)]
     pub tls: Option<ServerTlsArgs>,
 }
@@ -69,6 +82,7 @@ impl Default for ServerArgs {
             host: "0.0.0.0".to_string(),
             port: 3333,
             internal_port: 3334,
+            public_api_url: None,
             tls: None,
         }
     }
@@ -93,6 +107,19 @@ mod tests {
         assert_eq!(args.internal_port, 3334);
         assert!(args.allowed_origins.is_empty());
         assert!(args.tls.is_none());
+    }
+
+    #[test]
+    fn the_public_api_url_is_absent_by_default_and_read_from_its_flag() {
+        assert!(ServerArgs::default().public_api_url.is_none());
+
+        let cmd =
+            Cmd::try_parse_from(["cmd", "--public-api-url", "https://api.mestier.fr"]).unwrap();
+
+        assert_eq!(
+            cmd.server.public_api_url.as_deref(),
+            Some("https://api.mestier.fr")
+        );
     }
 
     #[test]

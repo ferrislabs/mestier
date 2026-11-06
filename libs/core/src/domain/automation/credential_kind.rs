@@ -348,7 +348,9 @@ const MTLS_FIELDS: &[CredentialField] = &[
     CredentialField::new("private_key", "Clé privée (PEM)", Textarea)
         .required()
         .secret(),
-    CredentialField::new("passphrase", "Phrase de passe", Password).secret(),
+    CredentialField::new("passphrase", "Phrase de passe", Password)
+        .secret()
+        .hint("Les clés privées chiffrées ne sont pas prises en charge : fournissez une clé non chiffrée."),
     CredentialField::new(
         "ca_certificate",
         "Autorité de certification (PEM)",
@@ -571,7 +573,7 @@ const KINDS: &[CredentialKind] = &[
         kind: "jwt",
         label: "JWT",
         category: Http,
-        description: "Mestier signe un jeton JWT à chaque appel, ou vérifie celui reçu.",
+        description: "Mestier signe un jeton JWT à chaque appel sortant.",
         usages: &[CredentialUsage::Http],
         origin_choices: NO_ORIGIN_CHOICE,
         fields: JWT_FIELDS,
@@ -695,6 +697,47 @@ pub const HTTP_CREDENTIAL_KINDS: &[&str] = &[
 
 pub const WEBHOOK_CREDENTIAL_KINDS: &[&str] =
     &["http_header", "http_basic", "bearer_token", "hmac"];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SecretGuard {
+    pub destinations: &'static [&'static str],
+    pub secrets: &'static [&'static str],
+}
+
+pub const PROVIDER_URL_FIELDS: &[&str] = &[
+    "authorization_url",
+    "token_url",
+    "userinfo_url",
+    "request_token_url",
+    "access_token_url",
+];
+
+pub fn secret_guard(kind: &str) -> Option<SecretGuard> {
+    match kind {
+        "oauth2_authorization_code" => Some(SecretGuard {
+            destinations: &["authorization_url", "token_url", "userinfo_url"],
+            secrets: &["client_secret"],
+        }),
+        "oauth2_client_credentials" => Some(SecretGuard {
+            destinations: &["token_url"],
+            secrets: &["client_secret"],
+        }),
+        "oauth1" => Some(SecretGuard {
+            destinations: &[
+                "request_token_url",
+                "authorization_url",
+                "access_token_url",
+                "signature_method",
+            ],
+            secrets: &["consumer_secret"],
+        }),
+        "odoo_api" => Some(SecretGuard {
+            destinations: &["base_url"],
+            secrets: &["api_key"],
+        }),
+        _ => None,
+    }
+}
 
 pub fn credential_kinds() -> &'static [CredentialKind] {
     KINDS

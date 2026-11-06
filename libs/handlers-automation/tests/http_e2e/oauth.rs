@@ -348,3 +348,85 @@ async fn starting_needs_manage_rights_in_this_organization_a_connectable_kind_an
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn without_a_public_api_url_only_a_localhost_redirect_is_accepted_and_the_dev_origin_is_trusted()
+ {
+    let (provider_url, _) = fake_provider().await;
+    let app = harness::start_with_oauth_client().await;
+    let id = create_oauth_credential(&app, &provider_url, "Compte").await;
+
+    let foreign = start(
+        &app,
+        &app.token,
+        &id,
+        json!({ "redirect_uri": "https://api.mestier.fr/oauth/callback", "return_to": "/ok" }),
+    )
+    .await;
+    let local = start(
+        &app,
+        &app.token,
+        &id,
+        json!({
+            "redirect_uri": format!("{}/oauth/callback", app.base_url),
+            "return_to": "http://localhost:3000/o/atelier/automatisation/credentials",
+        }),
+    )
+    .await;
+
+    assert_eq!(foreign.status(), 409);
+    let refusal = foreign.json::<Value>().await.unwrap();
+    assert_eq!(refusal["code"], "E_OAUTH_NOT_CONFIGURED");
+    assert_eq!(refusal["status"], 409);
+    assert!(
+        !refusal["message"]
+            .as_str()
+            .unwrap()
+            .contains("api.mestier.fr")
+    );
+    assert_eq!(local.status(), 200);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn with_a_public_api_url_only_its_callback_is_accepted_and_the_dev_origin_is_not() {
+    let (provider_url, _) = fake_provider().await;
+    let app = harness::start_with_public_api_url("https://api.mestier.test/").await;
+    let id = create_oauth_credential(&app, &provider_url, "Compte").await;
+    let attempt = |redirect_uri: String, return_to: &str| {
+        let body = json!({ "redirect_uri": redirect_uri, "return_to": return_to });
+        let app = &app;
+        let id = id.clone();
+        async move { start(app, &app.token, &id, body).await }
+    };
+
+    let configured = attempt("https://api.mestier.test/oauth/callback".to_owned(), "/ok").await;
+    let local_callback = attempt(format!("{}/oauth/callback", app.base_url), "/ok").await;
+    let other_host = attempt("https://evil.example/oauth/callback".to_owned(), "/ok").await;
+    let dev_origin = attempt(
+        "https://api.mestier.test/oauth/callback".to_owned(),
+        "http://localhost:3000/o/atelier",
+    )
+    .await;
+
+    let allowed_origin = attempt(
+        "https://api.mestier.test/oauth/callback".to_owned(),
+        "https://app.mestier.test/o/atelier",
+    )
+    .await;
+
+    assert_eq!(configured.status(), 200);
+    assert_eq!(allowed_origin.status(), 200);
+    for refused in [local_callback, other_host, dev_origin] {
+        assert_eq!(refused.status(), 400);
+        assert_eq!(
+            refused.json::<Value>().await.unwrap()["code"],
+            "E_VALIDATION"
+        );
+    }
+
+    app.cleanup().await;
+}

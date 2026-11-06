@@ -165,7 +165,7 @@ impl CollectionOperationConnector {
         };
         let response = match send(&client, &request, DEFAULT_TIMEOUT, auth.as_ref()).await {
             Ok(response) => response,
-            Err(error) => return failed(describe_reqwest_error(&error)),
+            Err(error) => return failed(describe_reqwest_error(error)),
         };
         match read_response(response).await {
             Ok(captured) => outcome_for(captured),
@@ -800,24 +800,86 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_oauth2_collection_is_refused_with_the_stable_code_and_no_call_is_made() {
-        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+    #[ignore = "requires live postgres"]
+    async fn an_oauth2_collection_is_called_with_the_bearer_token_of_an_oauth2_credential() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "collection-oauth2").await;
+        let usecase = usecase_with_cipher(pool).with_oauth_http_client(test_client());
+        let server = TestServer::start(|request| {
+            if request.path == "/token" {
+                StubResponse::json(
+                    200,
+                    &json!({ "access_token": "CC-TOKEN", "expires_in": 3600 }),
+                )
+            } else {
+                StubResponse::json(200, &json!({ "ok": true }))
+            }
+        })
+        .await;
+        let credential_id = credential(
+            &usecase,
+            org_id,
+            "oauth2_client_credentials",
+            json!({
+                "token_url": format!("{}/token", server.url),
+                "client_id": "svc",
+                "client_secret": "svc-secret",
+            }),
+        )
+        .await;
+        let collection = collection(&server.url, vec![oauth2()]);
+        let cfg = config(json!({ "path": { "id": "1" } }));
+        let node = reference("getAddress");
+
+        let outcome = CollectionOperationConnector::with_client(usecase, test_client())
+            .perform(
+                &collection,
+                &node,
+                &ConnectorInput {
+                    org_id,
+                    run_id: Uuid::from_u128(2),
+                    config: &cfg,
+                    credential_id: Some(credential_id),
+                    operation: Some(&node),
+                },
+            )
+            .await;
+
+        assert!(
+            matches!(outcome, ConnectorOutcome::Produced(_)),
+            "{outcome:?}"
+        );
+        let call = server
+            .requests()
+            .into_iter()
+            .find(|request| request.path.starts_with("/addresses"))
+            .expect("the operation was called");
+        assert_eq!(
+            call.headers.get("authorization").map(String::as_str),
+            Some("Bearer CC-TOKEN")
+        );
+    }
+
+    #[tokio::test]
+    async fn an_oauth2_collection_called_without_a_credential_is_an_anonymous_call() {
+        let server =
+            TestServer::respond_always(StubResponse::json(200, &json!({ "ok": true }))).await;
         let collection = collection(&server.url, vec![oauth2()]);
         let cfg = config(json!({ "path": { "id": "1" } }));
         let node = reference("getAddress");
 
         let outcome = CollectionOperationConnector::with_client(lazy_usecase(), test_client())
-            .perform(
-                &collection,
-                &node,
-                &input(&cfg, &node, Some(Uuid::from_u128(5))),
-            )
+            .perform(&collection, &node, &input(&cfg, &node, None))
             .await;
 
-        let error = failure(outcome);
-        assert!(error.starts_with("unsupported_security_scheme"), "{error}");
-        assert!(error.contains("petstore_auth"), "{error}");
-        assert!(server.requests().is_empty());
+        assert!(
+            matches!(outcome, ConnectorOutcome::Produced(_)),
+            "{outcome:?}"
+        );
+        assert!(
+            !server.last_request().headers.contains_key("authorization"),
+            "no credential, no token"
+        );
     }
 
     #[tokio::test]

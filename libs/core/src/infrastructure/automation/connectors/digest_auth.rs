@@ -1,6 +1,9 @@
 use aws_lc_rs::digest;
+use md5::{Digest, Md5};
 
-use super::md5::md5;
+fn md5(data: &[u8]) -> Vec<u8> {
+    Md5::digest(data).to_vec()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DigestAlgorithm {
@@ -45,7 +48,7 @@ impl DigestAlgorithm {
 
     fn hash(self, input: &str) -> String {
         let bytes = match self {
-            Self::Md5 | Self::Md5Session => md5(input.as_bytes()).to_vec(),
+            Self::Md5 | Self::Md5Session => md5(input.as_bytes()),
             Self::Sha256 | Self::Sha256Session => digest::digest(&digest::SHA256, input.as_bytes())
                 .as_ref()
                 .to_vec(),
@@ -220,6 +223,35 @@ pub fn authorization(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    }
+
+    #[test]
+    fn md5_matches_the_rfc_1321_test_suite() {
+        for (input, expected) in [
+            ("", "d41d8cd98f00b204e9800998ecf8427e"),
+            ("a", "0cc175b9c0f1b6a831c399e269772661"),
+            ("abc", "900150983cd24fb0d6963f7d28e17f72"),
+            ("message digest", "f96b697d7cb7938d525a2f31aaf161d0"),
+            (
+                "abcdefghijklmnopqrstuvwxyz",
+                "c3fcd3d76192e4007dfb496cca67e13b",
+            ),
+            (
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+                "d174ab98d277d9f5a5611c2c9f419d9f",
+            ),
+            (
+                "12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+                "57edf4a22be3c955ac49da2e2107b67a",
+            ),
+        ] {
+            assert_eq!(hex(&md5(input.as_bytes())), expected, "{input}");
+        }
+        assert_eq!(hex(&md5(&[b'a'; 1000])), "cabe45dcc9ae5b66ba86600cca6b8ba8");
+    }
 
     const RFC_2617_CHALLENGE: &str = r#"Digest realm="testrealm@host.com", qop="auth,auth-int", nonce="dcd98b7102dd2f0e8b11d0f600bfb0c093", opaque="5ccc069c403ebaf9f0171e9517f40e41""#;
 

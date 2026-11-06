@@ -53,14 +53,28 @@ pub async fn start() -> App {
 }
 
 pub async fn start_with_oauth_client() -> App {
-    start_configured(100_000, true).await
+    start_configured(100_000, true, &[]).await
+}
+
+pub async fn start_with_public_api_url(public_api_url: &str) -> App {
+    start_configured(
+        100_000,
+        true,
+        &[
+            "--public-api-url",
+            public_api_url,
+            "--allowed-origins",
+            "https://app.mestier.test",
+        ],
+    )
+    .await
 }
 
 pub async fn start_with_rate_limit(per_minute: u32) -> App {
-    start_configured(per_minute, false).await
+    start_configured(per_minute, false, &[]).await
 }
 
-async fn start_configured(per_minute: u32, plain_oauth_client: bool) -> App {
+async fn start_configured(per_minute: u32, plain_oauth_client: bool, extra: &[&str]) -> App {
     let issuer_url = issuer::spawn();
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set to run the http end-to-end tests");
@@ -72,12 +86,9 @@ async fn start_configured(per_minute: u32, plain_oauth_client: bool) -> App {
         .expect("connect to the test database");
     let fixture = seed(&pool).await;
 
-    let args = Arc::new(Args::parse_from(args_for(
-        &database_url,
-        &redis_url,
-        &issuer_url,
-        per_minute,
-    )));
+    let mut arguments = args_for(&database_url, &redis_url, &issuer_url, per_minute);
+    arguments.extend(extra.iter().map(|argument| (*argument).to_owned()));
+    let args = Arc::new(Args::parse_from(arguments));
     let mut state = handlers::state(args)
         .await
         .expect("build AppState for the test");

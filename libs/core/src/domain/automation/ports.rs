@@ -211,6 +211,11 @@ pub trait CredentialRepository: Send {
         org_id: OrganizationId,
     ) -> impl Future<Output = Result<Vec<(Uuid, i64)>, CoreError>> + Send;
 
+    fn count_locking_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<i64, CoreError>> + Send;
+
     fn deleted_name(
         &mut self,
         org_id: OrganizationId,

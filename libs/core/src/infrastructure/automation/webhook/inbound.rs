@@ -89,11 +89,21 @@ impl SignatureAlgorithm {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SignatureSpec {
     pub header_name: String,
     pub algorithm: SignatureAlgorithm,
     pub secret: String,
+}
+
+impl std::fmt::Debug for SignatureSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SignatureSpec")
+            .field("header_name", &self.header_name)
+            .field("algorithm", &self.algorithm)
+            .field("secret", &format_args!("[REDACTED]"))
+            .finish()
+    }
 }
 
 impl SignatureSpec {
@@ -158,6 +168,21 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+
+    #[test]
+    fn a_signature_spec_never_prints_its_secret() {
+        let spec = SignatureSpec {
+            header_name: "X-Signature".to_owned(),
+            algorithm: SignatureAlgorithm::Sha256,
+            secret: "SHARED-SECRET-VALUE".to_owned(),
+        };
+
+        for rendered in [format!("{spec:?}"), format!("{spec:#?}")] {
+            assert!(!rendered.contains("SHARED-SECRET-VALUE"), "{rendered}");
+            assert!(rendered.contains("[REDACTED]"), "{rendered}");
+            assert!(rendered.contains("X-Signature"), "{rendered}");
+        }
+    }
 
     fn headers(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<&'static str> {
         let map: HashMap<String, &'static str> = pairs

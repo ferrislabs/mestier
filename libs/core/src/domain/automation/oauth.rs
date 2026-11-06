@@ -58,7 +58,66 @@ pub struct OauthOutcome {
     pub connected: bool,
 }
 
+pub const MAX_ADDRESS_BYTES: usize = 2048;
+
+pub const DEVELOPMENT_ORIGIN: &str = "http://localhost:3000";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RedirectRefusal {
+    Invalid,
+    NotConfigured,
+}
+
+pub fn expected_redirect_uri(public_api_url: &str) -> String {
+    format!(
+        "{}/oauth/callback",
+        public_api_url.trim().trim_end_matches('/')
+    )
+}
+
+fn is_loopback_host(candidate: &str) -> bool {
+    let Some((_, rest)) = candidate.split_once("://") else {
+        return false;
+    };
+    let authority = rest.split('/').next().unwrap_or_default();
+    let host = match authority.strip_prefix('[') {
+        Some(inner) => inner.split(']').next().unwrap_or_default(),
+        None => authority.split(':').next().unwrap_or_default(),
+    };
+    matches!(
+        host.to_ascii_lowercase().as_str(),
+        "localhost" | "127.0.0.1" | "::1"
+    )
+}
+
+pub fn check_redirect_uri(
+    candidate: &str,
+    public_api_url: Option<&str>,
+) -> Result<(), RedirectRefusal> {
+    if !is_valid_redirect_uri(candidate) {
+        return Err(RedirectRefusal::Invalid);
+    }
+    match public_api_url.map(str::trim).filter(|url| !url.is_empty()) {
+        Some(public) if candidate == expected_redirect_uri(public) => Ok(()),
+        Some(_) => Err(RedirectRefusal::Invalid),
+        None if is_loopback_host(candidate) => Ok(()),
+        None => Err(RedirectRefusal::NotConfigured),
+    }
+}
+
+pub fn return_origins(public_api_url: Option<&str>, allowed_origins: &[String]) -> Vec<String> {
+    let mut origins = Vec::with_capacity(allowed_origins.len() + 1);
+    if public_api_url.map(str::trim).is_none_or(str::is_empty) {
+        origins.push(DEVELOPMENT_ORIGIN.to_owned());
+    }
+    origins.extend(allowed_origins.iter().cloned());
+    origins
+}
+
 pub fn is_valid_redirect_uri(candidate: &str) -> bool {
+    if candidate.len() > MAX_ADDRESS_BYTES {
+        return false;
+    }
     let Some((scheme_end, rest)) = candidate.split_once("://") else {
         return false;
     };
@@ -81,6 +140,9 @@ pub fn is_valid_redirect_uri(candidate: &str) -> bool {
 }
 
 pub fn is_valid_return_to(candidate: &str, allowed_origins: &[String]) -> bool {
+    if candidate.len() > MAX_ADDRESS_BYTES {
+        return false;
+    }
     if candidate
         .chars()
         .any(|c| c.is_whitespace() || c.is_control() || c == '\\')
@@ -169,6 +231,107 @@ mod tests {
         ] {
             assert!(!is_valid_redirect_uri(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn an_address_longer_than_two_kibibytes_is_refused_and_a_nul_too() {
+        let long_path = "a".repeat(MAX_ADDRESS_BYTES);
+
+        assert!(!is_valid_redirect_uri(&format!(
+            "https://api.mestier.fr/{long_path}/oauth/callback"
+        )));
+        assert!(!is_valid_return_to(&format!("/{long_path}"), &allowed()));
+        assert!(is_valid_return_to(
+            &format!("/{}", "a".repeat(MAX_ADDRESS_BYTES - 1)),
+            &allowed()
+        ));
+        assert!(!is_valid_redirect_uri(
+            "https://api.mestier.fr/\0/oauth/callback"
+        ));
+        assert!(!is_valid_return_to("/ok\0", &allowed()));
+    }
+
+    #[test]
+    fn a_configured_public_url_is_the_only_redirect_uri_accepted() {
+        let public = Some("https://api.mestier.fr/");
+
+        assert_eq!(
+            check_redirect_uri("https://api.mestier.fr/oauth/callback", public),
+            Ok(())
+        );
+        for bad in [
+            "https://evil.example/oauth/callback",
+            "https://api.mestier.fr.evil.example/oauth/callback",
+            "http://api.mestier.fr/oauth/callback",
+            "https://api.mestier.fr/prefix/oauth/callback",
+            "https://api.mestier.fr/oauth/callback/",
+            "http://localhost:3456/oauth/callback",
+            "https://api.mestier.fr/elsewhere",
+        ] {
+            assert_eq!(
+                check_redirect_uri(bad, public),
+                Err(RedirectRefusal::Invalid),
+                "{bad}"
+            );
+        }
+        assert_eq!(
+            expected_redirect_uri("https://api.mestier.fr///"),
+            "https://api.mestier.fr/oauth/callback"
+        );
+    }
+
+    #[test]
+    fn without_a_public_url_only_a_loopback_host_is_accepted_and_anything_else_is_not_configured() {
+        for good in [
+            "http://localhost:3456/oauth/callback",
+            "http://127.0.0.1:3456/oauth/callback",
+            "http://[::1]:3456/oauth/callback",
+            "http://LOCALHOST/oauth/callback",
+        ] {
+            assert_eq!(check_redirect_uri(good, None), Ok(()), "{good}");
+            assert_eq!(check_redirect_uri(good, Some("  ")), Ok(()), "{good}");
+        }
+        for unconfigured in [
+            "https://api.mestier.fr/oauth/callback",
+            "http://localhost.evil.example/oauth/callback",
+            "http://127.0.0.1.evil.example/oauth/callback",
+            "http://10.0.0.5/oauth/callback",
+        ] {
+            assert_eq!(
+                check_redirect_uri(unconfigured, None),
+                Err(RedirectRefusal::NotConfigured),
+                "{unconfigured}"
+            );
+        }
+        assert_eq!(
+            check_redirect_uri("not an address", None),
+            Err(RedirectRefusal::Invalid)
+        );
+    }
+
+    #[test]
+    fn the_development_origin_only_exists_while_no_public_url_is_configured() {
+        let allowed = vec!["https://app.mestier.fr".to_owned()];
+
+        assert_eq!(
+            return_origins(None, &allowed),
+            vec![
+                DEVELOPMENT_ORIGIN.to_owned(),
+                "https://app.mestier.fr".to_owned()
+            ]
+        );
+        assert_eq!(
+            return_origins(Some("https://api.mestier.fr"), &allowed),
+            allowed
+        );
+        assert!(!is_valid_return_to(
+            "http://localhost:3000/o/x",
+            &return_origins(Some("https://api.mestier.fr"), &allowed)
+        ));
+        assert!(is_valid_return_to(
+            "http://localhost:3000/o/x",
+            &return_origins(None, &allowed)
+        ));
     }
 
     #[test]

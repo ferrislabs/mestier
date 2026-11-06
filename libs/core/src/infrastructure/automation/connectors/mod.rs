@@ -15,7 +15,6 @@ pub(crate) mod http_auth;
 pub(crate) mod http_client;
 mod http_request;
 mod jwt_auth;
-mod md5;
 pub(crate) mod oauth1;
 mod odoo;
 mod registry;
