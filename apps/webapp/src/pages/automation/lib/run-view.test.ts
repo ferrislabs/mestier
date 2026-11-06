@@ -178,6 +178,44 @@ describe('buildRunView', () => {
 		)
 	})
 
+	it('counts the items of the branch an edge leaves by', () => {
+		const graph: Schemas.GraphDto = {
+			triggers: [{ id: 't1', kind: 'Manual' }],
+			connectors: [
+				{ id: 'c1', kind: 'flow.condition', version: 1, config: {} },
+				{ id: 'c2', kind: 'mestier.mail', version: 1, config: {} },
+				{ id: 'c3', kind: 'mestier.mail', version: 1, config: {} },
+			],
+			edges: [
+				{ from: 't1', to: 'c1' },
+				{ from: 'c1', to: 'c2', branch: 'Then' },
+				{ from: 'c1', to: 'c3', branch: 'Else' },
+			],
+		}
+		const view = buildRunView(
+			{
+				...run('succeeded', [
+					step({
+						id: 's1',
+						connector_id: 'c1',
+						output: { Then: [{ n: 1 }], Else: [{ n: 2 }, { n: 3 }] },
+					}),
+					step({ id: 's2', connector_id: 'c2', output: [{ n: 1 }] }),
+					step({ id: 's3', connector_id: 'c3', output: [{ n: 2 }, { n: 3 }] }),
+				]),
+				graph,
+			},
+			DESCRIPTORS,
+		)
+
+		expect(
+			view.edgeCounts.get(realEdgeId({ from: 'c1', to: 'c2', branch: 'Then' })),
+		).toBe(1)
+		expect(
+			view.edgeCounts.get(realEdgeId({ from: 'c1', to: 'c3', branch: 'Else' })),
+		).toBe(2)
+	})
+
 	it('groups looped steps by connector and iteration, in execution order', () => {
 		const view = buildRunView(
 			run('succeeded', [
@@ -240,6 +278,68 @@ function liveRun(
 ): Schemas.RunDetailResponse {
 	return { ...run(status, steps), started_at: RUN_START, finished_at: null }
 }
+
+describe('buildRunView — what a step received and produced', () => {
+	function detailOf(
+		patch: Partial<Schemas.RunStepResponse>,
+	): string | undefined {
+		return buildRunView(
+			run('succeeded', [step({ id: 's1', connector_id: 'c1', ...patch })]),
+			DESCRIPTORS,
+		).steps.find((s) => s.nodeId === 'c1')?.detail
+	}
+
+	it('says « 1 → 3 éléments » next to the duration of a step that made a list', () => {
+		expect(
+			detailOf({ input: [{ q: 1 }], output: [{ a: 1 }, { a: 2 }, { a: 3 }] }),
+		).toBe('2 s · 1 → 3 éléments')
+	})
+
+	it('says « 1 → 1 élément » in the singular', () => {
+		expect(detailOf({ input: [{ q: 1 }], output: [{ a: 1 }] })).toBe(
+			'2 s · 1 → 1 élément',
+		)
+	})
+
+	it('counts the items of the branches of a condition one by one', () => {
+		expect(
+			detailOf({
+				input: [{ n: 1 }, { n: 2 }, { n: 3 }],
+				output: { Then: [{ n: 1 }], Else: [{ n: 2 }, { n: 3 }] },
+			}),
+		).toBe('2 s · 3 → vrai 1 · faux 2')
+	})
+
+	it('counts the items of the branches of a loop one by one', () => {
+		expect(
+			detailOf({
+				input: [{ items: 1 }],
+				output: { Each: [{ v: 1 }, { v: 2 }, { v: 3 }], After: [{ items: 1 }] },
+			}),
+		).toBe('2 s · 1 → chaque élément 3 · terminé 1')
+	})
+
+	it('reads an input of an older run, which is not a list, as one item', () => {
+		expect(detailOf({ input: { url: 'x' }, output: [{ a: 1 }] })).toBe(
+			'2 s · 1 → 1 élément',
+		)
+	})
+
+	it('says nothing of the items of a step that has no output', () => {
+		expect(detailOf({ input: [{ q: 1 }] })).toBe('2 s')
+	})
+
+	it('says how many items the trigger started with', () => {
+		const view = buildRunView(
+			{ ...run('succeeded', []), trigger_payload: { number: 'DV-1' } },
+			DESCRIPTORS,
+		)
+
+		expect(view.steps.find((s) => s.nodeId === 't1')?.detail).toBe(
+			'Démarré · 1 élément',
+		)
+	})
+})
 
 describe('buildRunView — the statuses of a step', () => {
 	it('shows an in_flight step as running, with how long it has been running', () => {
@@ -1001,7 +1101,7 @@ describe('buildRunView — the trigger of the run', () => {
 		expect(
 			view.steps.map((s) => [s.nodeId, s.label, s.status, s.detail]),
 		).toEqual([
-			['t1', 'Devis accepté', 'success', 'Démarré'],
+			['t1', 'Devis accepté', 'success', 'Démarré · 1 élément'],
 			['c1', 'c1', 'success', '2 s'],
 		])
 		expect(view.nodes.find((n) => n.id === 't1')).toMatchObject({

@@ -83,7 +83,7 @@ export function OperationField({
 	)
 }
 
-const EXPRESSION_EXAMPLE = '{{ trigger.client.nom }}'
+const EXPRESSION_EXAMPLE = "{{ $('Nom du nœud').item.json.client.nom }}"
 
 export function NodeParametersPanel({
 	acceptsExpressions,
@@ -99,7 +99,7 @@ export function NodeParametersPanel({
 				{acceptsExpressions && (
 					<p className="rounded-md bg-muted px-3 py-2 text-muted-foreground text-xs">
 						Astuce : glissez une variable depuis la colonne Entrée, ou écrivez
-						une expression, par exemple{' '}
+						une expression qui nomme le nœud, par exemple{' '}
 						<code className="font-mono text-foreground">
 							{EXPRESSION_EXAMPLE}
 						</code>

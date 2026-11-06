@@ -11,7 +11,7 @@ import type {
 	EditorNode,
 } from '#/pages/automation/lib/editor-nodes'
 import { upstreamOf } from '#/pages/automation/lib/graph'
-import { toItems } from '#/pages/automation/lib/items'
+import { outputItems, toItems, triggerItem } from '#/pages/automation/lib/items'
 import {
 	triggerExample,
 	triggerKindOf,
@@ -22,7 +22,6 @@ export interface UpstreamEntry {
 	label: string
 	icon: LucideIcon
 	hue: number
-	rootPath: string
 	distance: number
 	direct: boolean
 	branch?: string
@@ -66,6 +65,16 @@ export function connectorOutput(
 	)
 }
 
+export function nodeOutput(
+	node: EditorNode,
+	sources: UpstreamSources,
+): unknown {
+	if (!node.data.trigger) return connectorOutput(node, sources)
+	return sources.lastRun
+		? sources.lastRun.triggerPayload
+		: triggerExample(node.data.trigger, sources.events)
+}
+
 function stepOutcome(
 	step: Schemas.RunStepResponse | undefined,
 ): Pick<UpstreamEntry, 'status' | 'error'> {
@@ -87,31 +96,10 @@ function firstTriggerExample(
 	return undefined
 }
 
-function triggerEntry(
-	triggers: readonly EditorNode[],
-	distance: number,
-	handle: string | null,
-	sources: UpstreamSources,
-): UpstreamEntry | null {
-	const first = triggers[0]
-	if (!first?.data.trigger) return null
-	const example = firstTriggerExample(triggers, sources.events)
-	const appearance = triggerAppearance(triggerKindOf(first.data.trigger.kind))
-	const payload = sources.lastRun ? sources.lastRun.triggerPayload : example
-	return {
-		id: 'trigger',
-		label: first.data.label,
-		icon: appearance.icon,
-		hue: appearance.hue,
-		rootPath: 'trigger',
-		distance,
-		direct: distance === 1,
-		branch: handle ? branchLabel(handle) : undefined,
-		items: payload === undefined || payload === null ? [] : toItems(payload),
-		executed: sources.lastRun !== null,
-		status: sources.lastRun ? 'success' : null,
-		error: null,
-	}
+function triggerItems(node: EditorNode, sources: UpstreamSources): unknown[] {
+	const payload = nodeOutput(node, sources)
+	if (sources.lastRun) return [triggerItem(payload)]
+	return payload === undefined || payload === null ? [] : [triggerItem(payload)]
 }
 
 function triggersLinkedFirst(
@@ -131,6 +119,17 @@ function triggersLinkedFirst(
 	]
 }
 
+function connectorItems(
+	node: EditorNode,
+	handle: string | null,
+	sources: UpstreamSources,
+): unknown[] {
+	const real = sources.lastRun?.connectorOutputs[node.id]
+	if (real !== undefined) return outputItems(real, handle ? [handle] : [])
+	const example = connectorOutputExample(node, sources.descriptors)
+	return example === undefined || example === null ? [] : toItems(example)
+}
+
 export function upstreamEntries(
 	nodeId: string,
 	nodes: readonly EditorNode[],
@@ -138,41 +137,46 @@ export function upstreamEntries(
 	sources: UpstreamSources,
 ): UpstreamEntry[] {
 	const byId = new Map(nodes.map((node) => [node.id, node]))
-	const links = upstreamOf(nodeId, edges)
-	const triggerLink = links.find((link) => byId.get(link.id)?.data.trigger)
-	const triggers = triggersLinkedFirst(nodes, byId, links)
-	const farthest = links.reduce((max, link) => Math.max(max, link.distance), 0)
-
 	const entries: UpstreamEntry[] = []
-	if (byId.get(nodeId)?.data.kind === 'connector') {
-		const entry = triggerEntry(
-			triggers,
-			triggerLink?.distance ?? farthest + 1,
-			triggerLink?.handle ?? null,
-			sources,
-		)
-		if (entry) entries.push(entry)
-	}
-	for (const link of links) {
+	for (const link of upstreamOf(nodeId, edges)) {
 		const source = byId.get(link.id)
-		if (!source?.data.connector) continue
+		if (!source) continue
+		const branch = link.handle ? branchLabel(link.handle) : undefined
+		if (source.data.trigger) {
+			if (byId.get(nodeId)?.data.kind !== 'connector') continue
+			const appearance = triggerAppearance(
+				triggerKindOf(source.data.trigger.kind),
+			)
+			entries.push({
+				id: source.id,
+				label: source.data.label,
+				icon: appearance.icon,
+				hue: appearance.hue,
+				distance: link.distance,
+				direct: link.distance === 1,
+				branch,
+				items: triggerItems(source, sources),
+				executed: sources.lastRun !== null,
+				status: sources.lastRun ? 'success' : null,
+				error: null,
+			})
+			continue
+		}
+		if (!source.data.connector) continue
 		const appearance = connectorAppearance(
 			source.data.family,
-			source.data.connector?.kind,
+			source.data.connector.kind,
 		)
-		const real = sources.lastRun?.connectorOutputs[source.id]
-		const output = real ?? connectorOutputExample(source, sources.descriptors)
 		entries.push({
 			id: source.id,
 			label: source.data.label,
 			icon: appearance.icon,
 			hue: appearance.hue,
-			rootPath: `connectors.${source.id}.output`,
 			distance: link.distance,
 			direct: link.distance === 1,
-			branch: link.handle ? branchLabel(link.handle) : undefined,
-			items: output === undefined || output === null ? [] : toItems(output),
-			executed: real !== undefined,
+			branch,
+			items: connectorItems(source, link.handle, sources),
+			executed: sources.lastRun?.connectorOutputs[source.id] !== undefined,
 			...stepOutcome(sources.runSteps.get(source.id)),
 		})
 	}
@@ -193,17 +197,22 @@ export function evaluateContextFor(
 				triggersLinkedFirst(nodes, byId, links),
 				sources.events,
 			)
-	const connectors = links.flatMap((link) => {
+	const available = links.flatMap((link) => {
 		const source = byId.get(link.id)
-		return source?.data.connector
+		if (!source) return []
+		if (source.data.trigger) {
+			return [
+				{ label: source.data.label, items: triggerItems(source, sources) },
+			]
+		}
+		return source.data.connector
 			? [
 					{
-						id: source.id,
 						label: source.data.label,
-						output: connectorOutput(source, sources),
+						items: connectorItems(source, link.handle, sources),
 					},
 				]
 			: []
 	})
-	return toEvaluateContext({ trigger, connectors })
+	return toEvaluateContext({ trigger, nodes: available })
 }

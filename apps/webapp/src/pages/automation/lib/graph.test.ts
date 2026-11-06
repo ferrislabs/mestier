@@ -23,8 +23,15 @@ import {
 function connector(
 	id: string,
 	config: Record<string, unknown> = {},
+	name?: string,
 ): Schemas.PlacedConnectorDto {
-	return { id, kind: 'http.request', version: 1, config }
+	return {
+		id,
+		kind: 'http.request',
+		version: 1,
+		config,
+		...(name ? { name } : {}),
+	}
 }
 
 function graphOf(
@@ -239,28 +246,41 @@ describe('removeTrigger', () => {
 })
 
 describe('connectorsReferencing', () => {
-	it('names the connectors whose config reads the given one', () => {
+	it('names the connectors whose config reads the given one by its name', () => {
 		const graph = graphOf([
-			connector('c1'),
-			connector('c2', { url: '{{ connectors.c1.output.href }}' }),
-			connector('c3', { body: { nested: '{{ connectors.c1.output.id }}' } }),
-			connector('c4', { url: '{{ connectors.c2.output.href }}' }),
+			connector('c1', {}, 'Tarifs'),
+			connector('c2', { url: "{{ $('Tarifs').item.json.href }}" }, 'Lire'),
+			connector('c3', {
+				body: { nested: ["{{ $('Tarifs').first().json.id }}"] },
+			}),
+			connector('c4', { url: "{{ $('Lire').item.json.href }}" }),
 		])
 
 		expect(connectorsReferencing(graph, 'c1')).toEqual(['c2', 'c3'])
 	})
 
-	it('does not match a connector whose id merely starts the same', () => {
+	it('does not match a connector whose name merely starts the same', () => {
 		const graph = graphOf([
-			connector('c1'),
-			connector('c2', { url: '{{ connectors.c10.output.href }}' }),
+			connector('c1', {}, 'Tarifs'),
+			connector('c2', { url: "{{ $('Tarifs 2').item.json.href }}" }),
 		])
 
 		expect(connectorsReferencing(graph, 'c1')).toEqual([])
 	})
 
-	it('is empty when nothing references it', () => {
-		expect(connectorsReferencing(graphOf([connector('c1')]), 'c1')).toEqual([])
+	it('is empty when nothing references it or when it has no name to be referenced by', () => {
+		expect(
+			connectorsReferencing(graphOf([connector('c1', {}, 'Tarifs')]), 'c1'),
+		).toEqual([])
+		expect(
+			connectorsReferencing(
+				graphOf([
+					connector('c1'),
+					connector('c2', { url: "{{ $('c1').item.json.href }}" }),
+				]),
+				'c1',
+			),
+		).toEqual([])
 	})
 })
 
@@ -430,6 +450,7 @@ describe('isBranchDeclared', () => {
 				auth: 'None',
 				fields: [],
 				branches: ['Then', 'Else'],
+				execution: 'per_item',
 				output_example: null,
 			},
 		],
@@ -443,6 +464,7 @@ describe('isBranchDeclared', () => {
 				auth: 'None',
 				fields: [],
 				branches: [],
+				execution: 'per_item',
 				output_example: null,
 			},
 		],

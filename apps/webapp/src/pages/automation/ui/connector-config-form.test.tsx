@@ -38,6 +38,7 @@ function descriptor(
 	return {
 		auth: 'None',
 		branches: [],
+		execution: 'per_item',
 		family: 'test',
 		fields: [],
 		kind: 'test.fabricated',

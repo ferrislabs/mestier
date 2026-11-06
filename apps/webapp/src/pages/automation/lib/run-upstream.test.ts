@@ -49,7 +49,7 @@ describe('runUpstreamEntries', () => {
 
 		expect(entries.map((entry) => entry.id)).toEqual(['c1', 't1'])
 		expect(entries[0]).toMatchObject({
-			rootPath: 'connectors.c1.output',
+			label: 'Facture',
 			distance: 1,
 			direct: true,
 			branch: 'Then',
@@ -57,11 +57,42 @@ describe('runUpstreamEntries', () => {
 		})
 		expect(entries[0]?.items).toHaveLength(2)
 		expect(entries[1]).toMatchObject({
-			rootPath: 'trigger',
+			label: 'Déclencheur',
 			distance: 2,
 			direct: false,
 		})
 		expect(entries[1]?.items).toEqual([{ number: 'DV-1' }])
+	})
+
+	it('keeps of a condition the items of the branch that feeds the node', () => {
+		const entries = runUpstreamEntries({
+			graph: GRAPH,
+			nodeId: 'c2',
+			nodes: [
+				node({
+					id: 'c1',
+					step: {
+						output: { Then: [{ n: 1 }], Else: [{ n: 2 }, { n: 3 }] },
+					} as Schemas.RunStepResponse,
+				}),
+			],
+			triggerPayload: undefined,
+			appearanceOf: () => ({ icon: Zap, hue: 10 }),
+		})
+
+		expect(entries[0]?.items).toEqual([{ n: 1 }])
+	})
+
+	it('gives a trigger that sent nothing the empty item it produced', () => {
+		const entries = runUpstreamEntries({
+			graph: GRAPH,
+			nodeId: 'c1',
+			nodes: [node({ id: 't1', kind: 'trigger', label: 'Déclencheur' })],
+			triggerPayload: null,
+			appearanceOf: () => ({ icon: Zap, hue: 10 }),
+		})
+
+		expect(entries[0]?.items).toEqual([{}])
 	})
 
 	it('reports a failed upstream node with its error', () => {

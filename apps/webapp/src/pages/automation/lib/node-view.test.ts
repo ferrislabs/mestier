@@ -3,6 +3,7 @@ import type { Schemas } from '#/api/api.client'
 import {
 	inputViewFromDryStep,
 	nodeDescription,
+	outputBranches,
 	outputViewFromDryStep,
 	outputViewFromPayload,
 	outputViewFromStep,
@@ -42,9 +43,85 @@ describe('outputViewFromStep', () => {
 	})
 })
 
+describe('outputViewFromStep — a node with branches', () => {
+	it('gives one branch per list for a condition, named in French', () => {
+		expect(
+			outputViewFromStep(
+				step({ output: { Then: [{ n: 1 }, { n: 2 }], Else: [{ n: 3 }] } }),
+			),
+		).toEqual({
+			state: 'ready',
+			branches: [
+				{ id: 'Then', label: 'vrai', items: [{ n: 1 }, { n: 2 }] },
+				{ id: 'Else', label: 'faux', items: [{ n: 3 }] },
+			],
+		})
+	})
+
+	it('gives one branch per list for a loop, wrapping its raw values', () => {
+		expect(
+			outputViewFromStep(step({ output: { Each: [1, 2], After: [] } })),
+		).toEqual({
+			state: 'ready',
+			branches: [
+				{
+					id: 'Each',
+					label: 'chaque élément',
+					items: [{ valeur: 1 }, { valeur: 2 }],
+				},
+				{ id: 'After', label: 'terminé', items: [] },
+			],
+		})
+	})
+
+	it('keeps an empty branch, so that the switch tells « faux (0) »', () => {
+		const view = outputViewFromStep(
+			step({ output: { Then: [{ n: 1 }], Else: [] } }),
+		)
+
+		expect(view).toMatchObject({
+			state: 'ready',
+			branches: [{ id: 'Then' }, { id: 'Else', items: [] }],
+		})
+	})
+
+	it('reads a value of an older run, which is not a list, as one item', () => {
+		expect(outputViewFromStep(step({ output: { matched: true } }))).toEqual({
+			state: 'ready',
+			branches: [{ id: 'main', label: 'Sortie', items: [{ matched: true }] }],
+		})
+	})
+})
+
+describe('outputBranches', () => {
+	it('gives the one branch « Sortie » to a list', () => {
+		expect(outputBranches([{ a: 1 }])).toEqual([
+			{ id: 'main', label: 'Sortie', items: [{ a: 1 }] },
+		])
+	})
+
+	it('gives a branch per list, in French, to a condition', () => {
+		expect(
+			outputBranches({ Then: [{ a: 1 }], Else: [{ a: 2 }, { a: 3 }] }).map(
+				(branch) => [branch.id, branch.label, branch.items.length],
+			),
+		).toEqual([
+			['Then', 'vrai', 1],
+			['Else', 'faux', 2],
+		])
+	})
+})
+
 describe('outputViewFromPayload', () => {
 	it('is not executed without a payload', () => {
 		expect(outputViewFromPayload(undefined)).toEqual({ state: 'not-executed' })
+	})
+
+	it('shows the payload as the one item a trigger produces', () => {
+		expect(outputViewFromPayload({ id: 1 })).toEqual({
+			state: 'ready',
+			branches: [{ id: 'main', label: 'Sortie', items: [{ id: 1 }] }],
+		})
 	})
 
 	it('shows a payload as a single item', () => {
@@ -143,6 +220,20 @@ describe('outputViewFromDryStep', () => {
 		})
 	})
 
+	it('gives the branches of a condition the test ran', () => {
+		expect(
+			outputViewFromDryStep(
+				dryStep({ output: { Then: [], Else: [{ a: 1 }] } }),
+			),
+		).toEqual({
+			state: 'ready',
+			branches: [
+				{ id: 'Then', label: 'vrai', items: [] },
+				{ id: 'Else', label: 'faux', items: [{ a: 1 }] },
+			],
+		})
+	})
+
 	it('shows a succeeded step that answered nothing as an empty output', () => {
 		expect(outputViewFromDryStep(dryStep({ output: null }))).toEqual({
 			state: 'ready',
@@ -166,6 +257,21 @@ describe('inputViewFromDryStep', () => {
 				false,
 			),
 		).toEqual({ state: 'ready', items: [{ url: 'https://a.test' }] })
+	})
+
+	it('shows every item of the input list', () => {
+		expect(
+			inputViewFromDryStep(dryStep({ input: [{ a: 1 }, { a: 2 }] }), false),
+		).toEqual({ state: 'ready', items: [{ a: 1 }, { a: 2 }] })
+	})
+
+	it('shows what a disabled condition lets pass, whichever branch carries it', () => {
+		expect(
+			inputViewFromDryStep(
+				dryStep({ input: null, output: { Then: [{ n: 1 }], Else: [] } }),
+				true,
+			),
+		).toEqual({ state: 'ready', items: [{ n: 1 }] })
 	})
 
 	it('shows the input of a failed step, which is what it was called with', () => {

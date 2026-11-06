@@ -1,4 +1,5 @@
 import type { Schemas } from '#/api/api.client'
+import { referencedLabels } from '#/pages/automation/lib/references'
 
 export interface NodePosition {
 	x: number
@@ -110,13 +111,16 @@ export function connectorsReferencing(
 	graph: Schemas.GraphDto,
 	connectorId: string,
 ): string[] {
-	const reference = `connectors.${connectorId}.`
+	const name = graph.connectors
+		.find((connector) => connector.id === connectorId)
+		?.name?.trim()
+	if (!name) return []
 
 	return graph.connectors
 		.filter(
 			(connector) =>
 				connector.id !== connectorId &&
-				JSON.stringify(connector.config).includes(reference),
+				referencedLabels(connector.config).has(name),
 		)
 		.map((connector) => connector.id)
 }

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
 	displayPath,
-	findConnectorReferences,
+	escapeNodeLabel,
+	findNodeReferences,
 	listVariables,
+	nodeReference,
 	readPath,
+	usesLegacyRoot,
 	variableExpression,
 } from '#/pages/automation/lib/variables'
 
@@ -32,13 +35,25 @@ describe('listVariables', () => {
 })
 
 describe('variableExpression', () => {
-	it('builds the expression the evaluator understands', () => {
-		expect(variableExpression('trigger', ['client', 'nom'])).toBe(
-			'{{ trigger.client.nom }}',
+	it('names the node and reads the json of its current item', () => {
+		expect(variableExpression('Devis accepté', ['client', 'nom'])).toBe(
+			"{{ $('Devis accepté').item.json.client.nom }}",
 		)
-		expect(
-			variableExpression('connectors.c1.output', ['lignes', 0, 'a b']),
-		).toBe('{{ connectors.c1.output.lignes[0]["a b"] }}')
+		expect(variableExpression('Si', ['lignes', 0, 'a b'])).toBe(
+			'{{ $(\'Si\').item.json.lignes[0]["a b"] }}',
+		)
+	})
+
+	it('escapes the apostrophes and the backslashes of the name', () => {
+		expect(variableExpression("Prix d'achat", ['prix'])).toBe(
+			"{{ $('Prix d\\'achat').item.json.prix }}",
+		)
+		expect(nodeReference('A\\B')).toBe("$('A\\\\B')")
+		expect(escapeNodeLabel("l'un")).toBe("l\\'un")
+	})
+
+	it('reads the whole item when the path is empty', () => {
+		expect(variableExpression('Si', [])).toBe("{{ $('Si').item.json }}")
 	})
 })
 
@@ -50,16 +65,59 @@ describe('readPath', () => {
 	})
 })
 
-describe('findConnectorReferences', () => {
-	it('finds every connector output referenced in a text', () => {
+describe('findNodeReferences', () => {
+	it('finds every node named in a text, with the path read in its item', () => {
 		expect(
-			findConnectorReferences(
-				'{{ connectors.c1.output.id }} et {{ connectors.c2.output.client["nom"] }}',
+			findNodeReferences(
+				"{{ $('Si').item.json.id }} et {{ $('Créer un projet').item.json.client[\"nom\"] }}",
 			),
 		).toEqual([
-			{ connectorId: 'c1', accessor: '.id' },
-			{ connectorId: 'c2', accessor: '.client["nom"]' },
+			{ label: 'Si', accessor: '.id' },
+			{ label: 'Créer un projet', accessor: '.client["nom"]' },
 		])
+	})
+
+	it('unescapes the name', () => {
+		expect(
+			findNodeReferences("{{ $('Prix d\\'achat').item.json.prix[0].code }}"),
+		).toEqual([{ label: "Prix d'achat", accessor: '.prix[0].code' }])
+	})
+
+	it('reads first, last and the item the same way', () => {
+		expect(
+			findNodeReferences(
+				"{{ $('A').first().json.x }} {{ $('B').last().json.y }} {{ $('C').item.json }}",
+			),
+		).toEqual([
+			{ label: 'A', accessor: '.x' },
+			{ label: 'B', accessor: '.y' },
+			{ label: 'C', accessor: '' },
+		])
+	})
+
+	it('names the node but has no path to check for all()', () => {
+		expect(findNodeReferences("{{ len($('A').all()) }}")).toEqual([
+			{ label: 'A', accessor: null },
+		])
+	})
+
+	it('finds nothing in a text without a node reference', () => {
+		expect(findNodeReferences('{{ trigger.id }} et {{ now() }}')).toEqual([])
+	})
+})
+
+describe('usesLegacyRoot', () => {
+	it('spots the root connectors.<id>.output', () => {
+		expect(usesLegacyRoot('{{ connectors.c1.output.total }}')).toBe(true)
+		expect(usesLegacyRoot('a {{ upper(connectors.c2.output.name) }}')).toBe(
+			true,
+		)
+	})
+
+	it('leaves the new syntax and the other roots alone', () => {
+		expect(usesLegacyRoot("{{ $('Si').item.json.total }}")).toBe(false)
+		expect(usesLegacyRoot('{{ trigger.total }}')).toBe(false)
+		expect(usesLegacyRoot('connectors are nice')).toBe(false)
 	})
 })
 

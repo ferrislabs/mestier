@@ -22,6 +22,7 @@ function descriptor(
 		auth: 'None',
 		fields: [],
 		branches: [],
+		execution: 'per_item',
 		output_example: null,
 	}
 }

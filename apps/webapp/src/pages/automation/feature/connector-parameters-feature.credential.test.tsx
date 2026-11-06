@@ -63,6 +63,7 @@ for (const method of [
 const DESCRIPTOR: Schemas.ConnectorDescriptorResponse = {
 	auth: { AnyOf: ['bearer_token', 'http_header'] },
 	branches: [],
+	execution: 'per_item',
 	family: 'test',
 	fields: [
 		{
@@ -99,7 +100,7 @@ function renderFeature(
 		credentialKinds: [BEARER_TOKEN, HTTP_BASIC, HTTP_HEADER, ODOO_API],
 		errors: [],
 		bindingIssues: [],
-		evaluateContext: { trigger: null, connectors: {}, loop: null },
+		evaluateContext: { trigger: null, nodes: {}, position: 0, loop: null },
 		onConfigChange: vi.fn(),
 		onCredentialChange: vi.fn(),
 		onCreateCredential: vi.fn(),

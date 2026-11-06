@@ -235,7 +235,7 @@ export function VariablesPanel({
 		return (
 			<ul>
 				{variables.map((variable) => {
-					const expression = variableExpression(entry.rootPath, variable.path)
+					const expression = variableExpression(entry.label, variable.path)
 					return (
 						<VariableRow
 							key={expression}

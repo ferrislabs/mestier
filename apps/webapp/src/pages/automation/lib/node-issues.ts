@@ -9,12 +9,20 @@ import type {
 	EditorNode,
 } from '#/pages/automation/lib/editor-nodes'
 import { upstreamOf } from '#/pages/automation/lib/graph'
+import { outputItems } from '#/pages/automation/lib/items'
+import {
+	LEGACY_SYNTAX_MESSAGE,
+	missingKeyMessage,
+	notUpstreamMessage,
+	unknownNodeMessage,
+} from '#/pages/automation/lib/reference-messages'
 import { scheduleTimeIssue } from '#/pages/automation/lib/schedule'
 import { scheduleOf, webhookOf } from '#/pages/automation/lib/trigger-events'
 import {
 	displayPath,
-	findConnectorReferences,
+	findNodeReferences,
 	readPath,
+	usesLegacyRoot,
 } from '#/pages/automation/lib/variables'
 import {
 	type ContractKey,
@@ -31,13 +39,18 @@ export interface NodeIssue {
 	message: string
 }
 
-function labelOf(nodes: readonly EditorNode[], id: string): string {
-	return nodes.find((node) => node.id === id)?.data.label ?? id
-}
-
 const NO_FORM = { fields: [], copy: {} }
 
 const NO_READS: ReadonlyMap<string, CollectionRead> = new Map()
+
+function stringsOf(value: unknown): string[] {
+	if (typeof value === 'string') return [value]
+	if (Array.isArray(value)) return value.flatMap(stringsOf)
+	if (typeof value === 'object' && value !== null) {
+		return Object.values(value).flatMap(stringsOf)
+	}
+	return []
+}
 
 function configEntries(
 	connector: NonNullable<EditorNode['data']['connector']>,
@@ -106,35 +119,57 @@ export function nodeIssues(
 	node: EditorNode,
 	nodes: readonly EditorNode[],
 	edges: readonly EditorEdge[],
-	outputOf: (connectorId: string) => unknown,
+	outputOf: (nodeId: string) => unknown,
 	reads: ReadonlyMap<string, CollectionRead> = NO_READS,
 ): NodeIssue[] {
 	const connector = node.data.connector
 	if (!connector) return triggerIssues(node, nodes)
-	const known = new Set(nodes.map((candidate) => candidate.id))
-	const upstream = new Set(upstreamOf(node.id, edges).map((link) => link.id))
+	const byLabel = new Map<string, EditorNode>()
+	for (const candidate of nodes) {
+		const label = candidate.data.label.trim()
+		if (!byLabel.has(label)) byLabel.set(label, candidate)
+	}
+	const upstream = new Map(
+		upstreamOf(node.id, edges).map((link) => [link.id, link]),
+	)
 	const issues: NodeIssue[] = []
+	const flag = (parameter: string, message: string) => {
+		if (
+			!issues.some(
+				(issue) => issue.parameter === parameter && issue.message === message,
+			)
+		) {
+			issues.push({ parameter, message })
+		}
+	}
 	for (const [parameter, value] of configEntries(connector)) {
-		const text = typeof value === 'string' ? value : JSON.stringify(value)
-		if (typeof text !== 'string') continue
-		for (const reference of findConnectorReferences(text)) {
-			const label = labelOf(nodes, reference.connectorId)
-			const path = displayPath(reference.accessor)
-			const message = !known.has(reference.connectorId)
-				? `Le nœud « ${label} » n’existe plus.`
-				: !upstream.has(reference.connectorId)
-					? `Le nœud « ${label} » n’est pas relié en amont de ce nœud.`
-					: readPath(outputOf(reference.connectorId), reference.accessor) ===
-								undefined && outputOf(reference.connectorId) !== undefined
-						? `La clé « ${path} » est absente de la sortie de « ${label} ».`
-						: null
-			if (
-				message &&
-				!issues.some(
-					(issue) => issue.parameter === parameter && issue.message === message,
-				)
-			) {
-				issues.push({ parameter, message })
+		for (const text of stringsOf(value)) {
+			if (usesLegacyRoot(text)) flag(parameter, LEGACY_SYNTAX_MESSAGE)
+			for (const reference of findNodeReferences(text)) {
+				const target = byLabel.get(reference.label.trim())
+				const link = target ? upstream.get(target.id) : undefined
+				if (!target) {
+					flag(parameter, unknownNodeMessage(reference.label))
+				} else if (!link) {
+					flag(parameter, notUpstreamMessage(reference.label))
+				} else if (reference.accessor !== null) {
+					const first = outputItems(
+						outputOf(target.id),
+						link.handle ? [link.handle] : [],
+					)[0]
+					if (
+						first !== undefined &&
+						readPath(first, reference.accessor) === undefined
+					) {
+						flag(
+							parameter,
+							missingKeyMessage(
+								displayPath(reference.accessor),
+								reference.label,
+							),
+						)
+					}
+				}
 			}
 		}
 	}
@@ -147,7 +182,7 @@ export function nodeIssues(
 export function nodeIssuesByNode(
 	nodes: readonly EditorNode[],
 	edges: readonly EditorEdge[],
-	outputOf: (connectorId: string) => unknown,
+	outputOf: (nodeId: string) => unknown,
 	reads: ReadonlyMap<string, CollectionRead> = NO_READS,
 ): Map<string, NodeIssue[]> {
 	return new Map(

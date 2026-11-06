@@ -27,6 +27,7 @@ function descriptor(
 	return {
 		auth: 'None',
 		branches: [],
+		execution: 'per_item',
 		family,
 		fields: [],
 		kind,
@@ -125,9 +126,7 @@ describe('upstreamEntries — a connector upstream', () => {
 	it('has no branch to name when the edge carries none', () => {
 		const entries = upstreamEntries('c2', nodes, [edge('t1', 'c2')], SOURCES)
 
-		expect(
-			entries.find((entry) => entry.id === 'trigger')?.branch,
-		).toBeUndefined()
+		expect(entries.find((entry) => entry.id === 't1')?.branch).toBeUndefined()
 	})
 
 	it('names the other branch too', () => {
@@ -139,6 +138,150 @@ describe('upstreamEntries — a connector upstream', () => {
 		)
 
 		expect(entries.find((entry) => entry.id === 'c1')?.branch).toBe('faux')
+	})
+})
+
+describe('upstreamEntries — the nodes are read by name', () => {
+	const nodes = [
+		trigger('t1', 'Manual'),
+		connectorNode(
+			{ id: 'c1', kind: 'flow.condition', version: 1, config: {}, name: 'Si' },
+			AT,
+			LOOKUP,
+		),
+		connectorNode(
+			{ id: 'c2', kind: 'http.request', version: 1, config: {}, name: 'Lire' },
+			AT,
+			LOOKUP,
+		),
+	]
+	const edges = [edge('t1', 'c1'), edge('c1', 'c2', 'Else')]
+
+	it('lists each trigger that leads to the node, under its own name', () => {
+		const two = [
+			trigger('t1', 'Manual'),
+			trigger('t2', { Events: ['invoice.paid'] }),
+			connector('c1', 'http.request'),
+		]
+
+		const entries = upstreamEntries(
+			'c1',
+			two,
+			[edge('t1', 'c1'), edge('t2', 'c1')],
+			SOURCES,
+		)
+
+		expect(entries.map((entry) => [entry.id, entry.label])).toEqual([
+			['t1', 'Clic'],
+			['t2', 'Facture payée'],
+		])
+	})
+
+	it('leaves out a trigger that does not lead to the node', () => {
+		const two = [
+			trigger('t1', 'Manual'),
+			trigger('t2', { Events: ['invoice.paid'] }),
+			connector('c1', 'http.request'),
+		]
+
+		const entries = upstreamEntries('c1', two, [edge('t2', 'c1')], SOURCES)
+
+		expect(entries.map((entry) => entry.id)).toEqual(['t2'])
+	})
+
+	it('shows the example of a connector as the one item it would produce', () => {
+		const entries = upstreamEntries('c2', nodes, edges, SOURCES)
+
+		expect(entries.find((entry) => entry.id === 'c1')?.items).toEqual([
+			{ ok: true },
+		])
+	})
+
+	it('shows the items of the last run, and of the branch that feeds the node', () => {
+		const sources: UpstreamSources = {
+			...SOURCES,
+			lastRun: {
+				triggerPayload: { facture: 'FA-9' },
+				connectorOutputs: {
+					c1: { Then: [{ n: 1 }], Else: [{ n: 2 }, { n: 3 }] },
+				},
+			},
+		}
+
+		const entries = upstreamEntries('c2', nodes, edges, sources)
+
+		const condition = entries.find((entry) => entry.id === 'c1')
+		expect(condition?.items).toEqual([{ n: 2 }, { n: 3 }])
+		expect(condition?.branch).toBe('faux')
+		expect(condition?.executed).toBe(true)
+	})
+
+	it('shows every item of a list produced by a node without branches', () => {
+		const sources: UpstreamSources = {
+			...SOURCES,
+			lastRun: {
+				triggerPayload: {},
+				connectorOutputs: { c2: [{ id: 1 }, { id: 2 }, { id: 3 }] },
+			},
+		}
+
+		const entries = upstreamEntries(
+			'c3',
+			[...nodes, connector('c3', 'http.request')],
+			[...edges, edge('c2', 'c3')],
+			sources,
+		)
+
+		expect(entries.find((entry) => entry.id === 'c2')?.items).toHaveLength(3)
+	})
+
+	it('hands the preview the items of every node upstream, by name, at position 0', () => {
+		const sources: UpstreamSources = {
+			...SOURCES,
+			lastRun: {
+				triggerPayload: { facture: 'FA-9' },
+				connectorOutputs: {
+					c1: { Then: [{ n: 1 }], Else: [{ n: 2 }, { n: 3 }] },
+				},
+			},
+		}
+
+		const context = evaluateContextFor('c2', nodes, edges, sources)
+
+		expect(context).toEqual({
+			trigger: { facture: 'FA-9' },
+			nodes: {
+				Clic: [{ facture: 'FA-9' }],
+				Si: [{ n: 2 }, { n: 3 }],
+			},
+			position: 0,
+			loop: null,
+		})
+	})
+
+	it('hands the preview an empty list for a node with nothing to show yet', () => {
+		const context = evaluateContextFor(
+			'c2',
+			[
+				trigger('t1', 'Manual'),
+				connectorNode(
+					{
+						id: 'c1',
+						kind: 'inconnu.kind',
+						version: 1,
+						config: {},
+						name: 'Ailleurs',
+					},
+					AT,
+					LOOKUP,
+				),
+				connector('c2', 'http.request'),
+			],
+			[edge('t1', 'c1'), edge('c1', 'c2')],
+			SOURCES,
+		)
+
+		expect(context.nodes?.Ailleurs).toEqual([])
 	})
 })
 

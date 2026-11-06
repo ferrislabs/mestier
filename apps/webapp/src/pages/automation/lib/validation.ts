@@ -1,4 +1,5 @@
 import type { Schemas } from '#/api/api.client'
+import { translateReferenceError } from '#/pages/automation/lib/reference-messages'
 import { TIME_MESSAGE } from '#/pages/automation/lib/schedule'
 import { PATH_MESSAGES } from '#/pages/automation/lib/webhook-path'
 
@@ -54,7 +55,10 @@ export function projectGraphErrors(
 		}
 
 		const existing = connectorErrors.get(nodeId) ?? []
-		existing.push({ field: error.field ?? null, message: error.message })
+		existing.push({
+			field: error.field ?? null,
+			message: translateReferenceError(error.message),
+		})
 		connectorErrors.set(nodeId, existing)
 	}
 

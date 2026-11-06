@@ -4,6 +4,7 @@ import {
 	connectorTypeLabel,
 	displayValue,
 	isExpressionValue,
+	loopFrameOf,
 	nodeNeighbours,
 	parameterEntries,
 } from '#/pages/automation/lib/run-node'
@@ -229,5 +230,55 @@ describe('run node helpers', () => {
 				{ id: 'd', branch: 'Else' },
 			],
 		})
+	})
+})
+
+describe('loopFrameOf', () => {
+	function stepAt(
+		connectorId: string,
+		iterationPath: string,
+		output?: unknown,
+	): Schemas.RunStepResponse {
+		return {
+			attempts: 1,
+			connector_id: connectorId,
+			created_at: '2026-01-01T00:00:00Z',
+			id: `${connectorId}@${iterationPath}`,
+			iteration_path: iterationPath,
+			status: 'succeeded',
+			output,
+		}
+	}
+
+	const loop = stepAt('c2', '', { Each: ['a', { n: 2 }, 'c'], After: [] })
+
+	it('has no frame for a step outside any loop', () => {
+		expect(loopFrameOf(stepAt('c1', ''), [loop])).toBeNull()
+		expect(loopFrameOf(null, [loop])).toBeNull()
+	})
+
+	it('hands the step the index and the raw element of its pass', () => {
+		expect(loopFrameOf(stepAt('c3', 'c2[0]'), [loop])).toEqual({
+			index: 0,
+			item: 'a',
+		})
+		expect(loopFrameOf(stepAt('c3', 'c2[1]'), [loop])).toEqual({
+			index: 1,
+			item: { n: 2 },
+		})
+	})
+
+	it('reads the innermost loop of a nested pass, run in the pass of the outer one', () => {
+		const inner = stepAt('c5', 'c2[1]', { Each: [10, 11], After: [] })
+
+		expect(loopFrameOf(stepAt('c6', 'c2[1].c5[1]'), [loop, inner])).toEqual({
+			index: 1,
+			item: 11,
+		})
+	})
+
+	it('has no frame when the loop step is not there to say what the element is', () => {
+		expect(loopFrameOf(stepAt('c3', 'c2[4]'), [loop])).toBeNull()
+		expect(loopFrameOf(stepAt('c3', 'c9[0]'), [loop])).toBeNull()
 	})
 })

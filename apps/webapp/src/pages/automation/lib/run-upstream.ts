@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { Schemas } from '#/api/api.client'
-import { toItems } from '#/pages/automation/lib/items'
+import { outputItems, triggerItem } from '#/pages/automation/lib/items'
 import type { RunNodeView } from '#/pages/automation/lib/run-view'
 
 export interface RunUpstreamEntry {
@@ -8,7 +8,6 @@ export interface RunUpstreamEntry {
 	label: string
 	icon: LucideIcon
 	hue: number
-	rootPath: string
 	distance: number
 	direct: boolean
 	branch?: string
@@ -32,14 +31,13 @@ function entryOf(
 		label: node.label,
 		icon: appearance.icon,
 		hue: appearance.hue,
-		rootPath:
-			node.kind === 'trigger' ? 'trigger' : `connectors.${node.id}.output`,
 		distance,
 		direct: distance === 1,
 		branch,
-		items: toItems(
-			node.kind === 'trigger' ? triggerPayload : node.step?.output,
-		),
+		items:
+			node.kind === 'trigger'
+				? [triggerItem(triggerPayload)]
+				: outputItems(node.step?.output, branch ? [branch] : []),
 		executed: status !== null,
 		status,
 		error: node.step?.error ?? null,

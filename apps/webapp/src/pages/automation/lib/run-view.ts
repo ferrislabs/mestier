@@ -1,4 +1,5 @@
 import type { Schemas } from '#/api/api.client'
+import { branchLabel } from '#/pages/automation/lib/branch-labels'
 import { connectorCopy } from '#/pages/automation/lib/connector-copy'
 import {
 	type ExecutionStatus,
@@ -6,10 +7,15 @@ import {
 	toStepExecutionStatus,
 } from '#/pages/automation/lib/execution-status'
 import {
+	formatItemCount,
 	formatMilliseconds,
 	formatResumeNote,
 } from '#/pages/automation/lib/format'
-import { toItems } from '#/pages/automation/lib/items'
+import {
+	outputItemCount,
+	outputItems,
+	parseStepOutput,
+} from '#/pages/automation/lib/items'
 import {
 	isEventsTrigger,
 	isManualTrigger,
@@ -186,6 +192,19 @@ function noteFor(
 	}
 }
 
+function producedSummary(output: unknown): string {
+	const parsed = parseStepOutput(output)
+	if (parsed.kind === 'main') return formatItemCount(parsed.items.length)
+	return parsed.lists
+		.map((list) => `${branchLabel(list.branch)} ${list.items.length}`)
+		.join(' · ')
+}
+
+function itemsFlow(step: Schemas.RunStepResponse): string | null {
+	if (step.output === undefined) return null
+	return `${outputItemCount(step.input)} → ${producedSummary(step.output)}`
+}
+
 function stepDetail(
 	status: ExecutionStatus,
 	step: Schemas.RunStepResponse,
@@ -194,7 +213,9 @@ function stepDetail(
 	switch (status) {
 		case 'success': {
 			const duration = stepDuration(step)
-			return duration === null ? 'Terminé' : formatMilliseconds(duration)
+			const took = duration === null ? 'Terminé' : formatMilliseconds(duration)
+			const flow = itemsFlow(step)
+			return flow === null ? took : `${took} · ${flow}`
 		}
 		case 'error':
 			return step.error ?? 'Erreur inconnue'
@@ -225,23 +246,15 @@ function iterationSuffix(step: Schemas.RunStepResponse): string {
 	return match ? ` · itération ${Number(match[1]) + 1}` : ''
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function edgeItemCount(
 	source: RunNodeView | undefined,
 	edge: Schemas.EdgeDto,
-	triggerPayload: unknown,
 ): number | null {
 	if (!source) return null
-	if (source.kind === 'trigger')
-		return Math.max(1, toItems(triggerPayload).length)
+	if (source.kind === 'trigger') return 1
 	const output = source.step?.output
 	if (output === undefined || output === null) return null
-	if (edge.branch && isRecord(output) && edge.branch in output)
-		return toItems(output[edge.branch]).length
-	return toItems(output).length
+	return outputItems(output, edge.branch ? [edge.branch] : []).length
 }
 
 export function buildRunView(
@@ -328,7 +341,7 @@ export function buildRunView(
 			family: undefined,
 			connectorKind: undefined,
 			status: node.status,
-			detail: node.note,
+			detail: `${node.note} · ${formatItemCount(1)}`,
 		}))
 	const connectorSteps: RunStepView[] = executed.map((step) => {
 		const node = byId.get(step.connector_id)
@@ -408,7 +421,7 @@ export function buildRunView(
 	for (const edge of graph.edges) {
 		const id = realEdgeId(edge)
 		if (!traversedEdges.has(id)) continue
-		const count = edgeItemCount(byId.get(edge.from), edge, run.trigger_payload)
+		const count = edgeItemCount(byId.get(edge.from), edge)
 		if (count !== null) edgeCounts.set(id, count)
 	}
 

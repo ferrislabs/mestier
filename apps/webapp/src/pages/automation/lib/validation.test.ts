@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
+import { LEGACY_SYNTAX_MESSAGE } from '#/pages/automation/lib/reference-messages'
 import {
 	connectorLevelErrors,
 	fieldErrorMessage,
@@ -48,6 +49,58 @@ describe('projectGraphErrors', () => {
 
 		expect(result.connectorErrors.get('c1')).toEqual([
 			{ field: 'url', message: 'URL manquante' },
+		])
+	})
+
+	it('tells in French, on the node and on the field, that a referenced node is unknown', () => {
+		const result = projectGraphErrors([
+			error({
+				connector_id: 'c2',
+				field: 'url',
+				message:
+					'connector `c2` field `url` references unknown node `Rechercher les devis`',
+			}),
+		])
+
+		expect(result.connectorErrors.get('c2')).toEqual([
+			{
+				field: 'url',
+				message: 'Le nœud « Rechercher les devis » n’existe plus.',
+			},
+		])
+	})
+
+	it('tells in French that a referenced node does not run before the one that reads it', () => {
+		const result = projectGraphErrors([
+			error({
+				connector_id: 'c2',
+				field: 'body.lignes.0.code',
+				message:
+					'connector `c2` field `body.lignes.0.code` references node `Créer un projet`, which does not run before it',
+			}),
+		])
+
+		expect(result.connectorErrors.get('c2')).toEqual([
+			{
+				field: 'body.lignes.0.code',
+				message:
+					'Le nœud « Créer un projet » n’est pas relié en amont de ce nœud.',
+			},
+		])
+	})
+
+	it('tells which syntax replaces the old one on the field that uses it', () => {
+		const result = projectGraphErrors([
+			error({
+				connector_id: 'c2',
+				field: 'url',
+				message:
+					"cette expression utilise l'ancienne syntaxe `connectors.<id>.output` (position 3) : utilise $('Nom du nœud').item.json…",
+			}),
+		])
+
+		expect(result.connectorErrors.get('c2')).toEqual([
+			{ field: 'url', message: LEGACY_SYNTAX_MESSAGE },
 		])
 	})
 

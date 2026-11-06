@@ -154,6 +154,7 @@ const HTTP_DESCRIPTOR: Schemas.ConnectorDescriptorResponse = {
 	auth: 'None',
 	fields: [textField('method'), textField('url')],
 	branches: [],
+	execution: 'per_item',
 	output_example: null,
 }
 
@@ -165,6 +166,7 @@ const OPERATION_DESCRIPTOR: Schemas.ConnectorDescriptorResponse = {
 	auth: { Optional: ['bearer_token'] },
 	fields: [],
 	branches: [],
+	execution: 'per_item',
 	output_example: null,
 }
 
@@ -181,6 +183,7 @@ function descriptorOf(
 		auth: 'None',
 		fields: [],
 		branches: [],
+		execution: 'per_item',
 		output_example: null,
 	}
 }

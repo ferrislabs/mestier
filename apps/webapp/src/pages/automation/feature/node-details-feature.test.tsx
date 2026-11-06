@@ -114,6 +114,7 @@ function descriptor(
 	return {
 		auth: 'None',
 		branches: [],
+		execution: 'per_item',
 		family,
 		fields: [],
 		kind,
@@ -1014,8 +1015,8 @@ describe('NodeDetailsFeature — the dry run', () => {
 
 	const FILLED = stepsOf(
 		dryStep('c2', {
-			input: { url: 'https://fournisseur.test/commandes' },
-			output: { numero: 'CMD-77' },
+			input: [{ url: 'https://fournisseur.test/commandes' }],
+			output: [{ numero: 'CMD-77' }],
 		}),
 	)
 
@@ -1040,6 +1041,51 @@ describe('NodeDetailsFeature — the dry run', () => {
 		expect(output.textContent).toContain('CMD-77')
 	})
 
+	it('lists every item the test fed the node and every item it produced', async () => {
+		const dialog = await openExecutionTab('c2', {
+			dryRunSteps: stepsOf(
+				dryStep('c2', {
+					input: [{ ref: 'A-1' }, { ref: 'A-2' }, { ref: 'A-3' }],
+					output: [{ numero: 'CMD-1' }, { numero: 'CMD-2' }],
+				}),
+			),
+		})
+
+		const input = within(dialog).getByRole('region', { name: 'Entrée' })
+		expect(input.textContent).toContain('3 éléments')
+		expect(input.textContent).toContain('A-3')
+		const output = within(dialog).getByRole('region', { name: 'Sortie' })
+		expect(output.textContent).toContain('2 éléments')
+		expect(output.textContent).toContain('CMD-2')
+	})
+
+	it('switches between the branches of a condition the test ran, each with its count', async () => {
+		const { nodes, edges } = chain()
+		const dialog = await openNode('c1', nodes, edges, {
+			dryRunSteps: stepsOf(
+				dryStep('c1', {
+					input: [{ n: 1 }, { n: 2 }, { n: 3 }],
+					output: { Then: [{ n: 1 }], Else: [{ n: 2 }, { n: 3 }] },
+				}),
+			),
+		})
+		const output = within(dialog).getByRole('region', { name: 'Sortie' })
+
+		expect(
+			within(output).getByRole('radio', { name: 'vrai (1)' }),
+		).toBeDefined()
+		expect(
+			within(output).getByRole('radio', { name: 'faux (2)' }),
+		).toBeDefined()
+		expect(output.textContent).toContain('1 élément')
+
+		await userEvent.click(
+			within(output).getByRole('radio', { name: 'faux (2)' }),
+		)
+
+		expect(output.textContent).toContain('2 éléments')
+	})
+
 	it('tells the status of the step in the header', async () => {
 		const dialog = await openExecutionTab('c2', { dryRunSteps: FILLED })
 
@@ -1052,7 +1098,7 @@ describe('NodeDetailsFeature — the dry run', () => {
 				dryStep('c2', {
 					status: 'failed',
 					input: { url: 'https://fournisseur.test/commandes' },
-					error: 'connectors.c1.output.body.nope est introuvable',
+					error: "missing path `$('Si').item.json.body.nope`",
 				}),
 			),
 		})
@@ -1060,7 +1106,7 @@ describe('NodeDetailsFeature — the dry run', () => {
 		const output = within(dialog).getByRole('region', { name: 'Sortie' })
 		expect(output.textContent).toContain('Erreur dans ce nœud')
 		expect(output.textContent).toContain(
-			'connectors.c1.output.body.nope est introuvable',
+			"missing path `$('Si').item.json.body.nope`",
 		)
 		expect(
 			within(dialog).getByRole('region', { name: 'Entrée' }).textContent,

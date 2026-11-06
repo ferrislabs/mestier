@@ -5,10 +5,12 @@ import { buildOrgPath } from '#/modules/org-path'
 import { useResolvedParameters } from '#/pages/automation/feature/use-resolved-parameters'
 import { identificationsPath } from '#/pages/automation/lib/automation-paths'
 import { branchLabel } from '#/pages/automation/lib/branch-labels'
-import { toItems } from '#/pages/automation/lib/items'
+import { toEvaluateContext } from '#/pages/automation/lib/data-tree'
+import { outputItemCount } from '#/pages/automation/lib/items'
 import { runNodeAppearance } from '#/pages/automation/lib/run-appearance'
 import {
 	connectorTypeLabel,
+	loopFrameOf,
 	nodeNeighbours,
 	parameterEntries,
 } from '#/pages/automation/lib/run-node'
@@ -19,7 +21,6 @@ import {
 	realEdgeId,
 	skipReason,
 } from '#/pages/automation/lib/run-view'
-import { connectorOutputsFromSteps } from '#/pages/automation/lib/workflow-runs'
 import type { NdvNavItem } from '#/pages/automation/ui/ndv-node-nav'
 import {
 	RunNodeDetails,
@@ -61,8 +62,8 @@ export function RunNodeDetailsFeature({
 	const graph = run.graph ?? null
 	const descriptor = descriptors.get(node.connector?.kind ?? '')
 	const appearance = runNodeAppearance(node)
-	const items = node.step ? toItems(node.step.input) : []
-	const index = Math.min(itemIndex, Math.max(0, items.length - 1))
+	const itemCount = node.step ? outputItemCount(node.step.input) : 0
+	const index = Math.min(itemIndex, Math.max(0, itemCount - 1))
 	const credentialsQuery = useAutomationCredentials(organizationId)
 	const credentialNames = useMemo(
 		() =>
@@ -75,19 +76,31 @@ export function RunNodeDetailsFeature({
 		[credentialsQuery.data],
 	)
 
+	const upstream = graph
+		? runUpstreamEntries({
+				graph,
+				nodeId: node.id,
+				nodes: view.nodes,
+				triggerPayload: run.trigger_payload,
+				appearanceOf: runNodeAppearance,
+			})
+		: []
+
 	const parameters = useResolvedParameters({
 		organizationId,
 		entries: parameterEntries(node.connector, descriptor, credentialNames),
-		context: {
-			trigger: run.trigger_payload,
-			connectors: Object.fromEntries(
-				Object.entries(connectorOutputsFromSteps(run.steps)).map(
-					([id, output]) => [id, { output }],
-				),
-			),
-			loop: items[index] === undefined ? null : { index, item: items[index] },
-		},
-		hasItem: items.length > 0,
+		context: toEvaluateContext(
+			{
+				trigger: run.trigger_payload,
+				nodes: upstream.map((entry) => ({
+					label: entry.label,
+					items: entry.items,
+				})),
+			},
+			index,
+			loopFrameOf(node.step, run.steps),
+		),
+		hasItem: itemCount > 0,
 	})
 
 	const labelOf = (id: string) =>
@@ -153,29 +166,17 @@ export function RunNodeDetailsFeature({
 			hue={appearance.hue}
 			parameters={parameters}
 			itemIndex={index}
-			itemCount={items.length}
+			itemCount={itemCount}
 			onItemIndexChange={setItemIndex}
 			triggerPayload={run.trigger_payload}
 			triggerLabel={triggerLabel}
 			sources={sources}
 			notice={notice}
-			upstream={
-				graph
-					? runUpstreamEntries({
-							graph,
-							nodeId: node.id,
-							nodes: view.nodes,
-							triggerPayload: run.trigger_payload,
-							appearanceOf: runNodeAppearance,
-						}).map((entry) => ({
-							...entry,
-							branch:
-								entry.branch === undefined
-									? undefined
-									: branchLabel(entry.branch),
-						}))
-					: []
-			}
+			upstream={upstream.map((entry) => ({
+				...entry,
+				branch:
+					entry.branch === undefined ? undefined : branchLabel(entry.branch),
+			}))}
 			notRunLabel={(entryId) =>
 				NOT_RUN_LABELS[
 					view.nodes.find((candidate) => candidate.id === entryId)?.status ??

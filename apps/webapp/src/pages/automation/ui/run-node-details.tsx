@@ -19,7 +19,8 @@ import {
 	formatMilliseconds,
 	formatResumeNote,
 } from '#/pages/automation/lib/format'
-import { toItems } from '#/pages/automation/lib/items'
+import { outputItemCount, triggerItem } from '#/pages/automation/lib/items'
+import { outputBranches } from '#/pages/automation/lib/node-view'
 import type { RunUpstreamEntry } from '#/pages/automation/lib/run-upstream'
 import type { RunNodeView } from '#/pages/automation/lib/run-view'
 import { DataViewer } from '#/pages/automation/ui/data-viewer'
@@ -32,6 +33,7 @@ import { ErrorBox } from '#/pages/automation/ui/ndv-error-box'
 import type { NdvNavItem } from '#/pages/automation/ui/ndv-node-nav'
 import { NdvEmptyState, NdvPanel } from '#/pages/automation/ui/ndv-panel'
 import { NodeDetailsDialog } from '#/pages/automation/ui/node-details-dialog'
+import { BranchedData } from '#/pages/automation/ui/node-output-panel'
 import { VariablesPanel } from '#/pages/automation/ui/variables-panel'
 
 export interface RunNodeReplay {
@@ -100,9 +102,8 @@ export function RunNodeDetails({
 }: RunNodeDetailsProps) {
 	const [confirming, setConfirming] = useState(false)
 	const step = node.step
-	const outputItems = toItems(
-		node.kind === 'trigger' ? triggerPayload : step?.output,
-	)
+	const outputCount =
+		node.kind === 'trigger' ? 1 : outputItemCount(step?.output)
 
 	const input =
 		node.kind === 'trigger' ? (
@@ -136,7 +137,11 @@ export function RunNodeDetails({
 	const output = (() => {
 		switch (node.status) {
 			case 'success':
-				return <DataViewer key={node.id} items={outputItems} />
+				return node.kind === 'trigger' ? (
+					<DataViewer key={node.id} items={[triggerItem(triggerPayload)]} />
+				) : (
+					<BranchedData key={node.id} branches={outputBranches(step?.output)} />
+				)
 			case 'error':
 				return (
 					<ErrorBox
@@ -220,7 +225,7 @@ export function RunNodeDetails({
 						caption={
 							node.kind === 'trigger' || node.order === null || !step
 								? 'Entrée'
-								: `Entrée · ${formatItemCount(toItems(step.input).length)}`
+								: `Entrée · ${formatItemCount(outputItemCount(step.input))}`
 						}
 						tone="side"
 					>
@@ -242,7 +247,7 @@ export function RunNodeDetails({
 						title="Après l’exécution"
 						caption={
 							node.status === 'success'
-								? `Sortie · ${formatItemCount(outputItems.length)}`
+								? `Sortie · ${formatItemCount(outputCount)}`
 								: 'Sortie'
 						}
 						tone="side"
