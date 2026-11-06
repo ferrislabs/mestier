@@ -1628,6 +1628,7 @@ mod tests {
                 execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
+                group: None,
                 sample_output: json!({}),
             })
             .expect("first registration succeeds");
@@ -1714,6 +1715,7 @@ mod tests {
                 execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
+                group: None,
                 sample_output: json!({}),
             })
             .expect("first registration succeeds");
@@ -1765,6 +1767,7 @@ mod tests {
                 execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
+                group: None,
                 sample_output: json!({}),
             })
             .expect("open registers");
@@ -1809,6 +1812,7 @@ mod tests {
                 execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
+                group: None,
                 sample_output: json!({}),
             })
             .expect("open registers");
@@ -2547,6 +2551,7 @@ mod tests {
                 execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
+                group: None,
                 sample_output: json!({}),
             })
             .expect("fork registers");
@@ -2562,6 +2567,7 @@ mod tests {
                 execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
+                group: None,
                 sample_output: json!({}),
             })
             .expect("sink registers");
@@ -2652,6 +2658,7 @@ mod tests {
                 execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
+                group: None,
                 sample_output: json!({}),
             })
             .expect("each registers");
@@ -2675,6 +2682,7 @@ mod tests {
                 execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
+                group: None,
                 sample_output: json!({}),
             })
             .expect("body registers");

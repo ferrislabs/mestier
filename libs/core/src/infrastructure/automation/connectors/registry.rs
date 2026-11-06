@@ -7,6 +7,7 @@ use crate::domain::automation::run::{
 };
 use crate::infrastructure::automation::webhook::address_policy::PrivateNetworkAccess;
 
+use super::actions;
 use super::chat_post_message::ChatPostMessageConnector;
 use super::collection_operation::CollectionOperationConnector;
 use super::customer_create::CustomerCreateConnector;
@@ -45,6 +46,7 @@ pub struct UnknownConnectorKind {
 /// and every implementation here must be in the catalogue, or the two silently
 /// drift apart the way #197 could not yet guard against.
 pub struct ConnectorRegistry {
+    usecase: MestierUseCase,
     flow_loop: FlowLoopConnector,
     flow_condition: FlowConditionConnector,
     flow_config: FlowConfigConnector,
@@ -84,6 +86,7 @@ impl ConnectorRegistry {
         access: PrivateNetworkAccess,
     ) -> Self {
         Self {
+            usecase: usecase.clone(),
             flow_loop: FlowLoopConnector,
             flow_condition: FlowConditionConnector,
             flow_config: FlowConfigConnector,
@@ -173,7 +176,7 @@ impl ConnectorRegistry {
             ("mestier.task_recurrence.extend_horizon", 1) => {
                 TaskRecurrenceExtendHorizonConnector::dry_run(descriptor, input)
             }
-            _ => return None,
+            _ => return actions::dry_run(descriptor),
         })
     }
 
@@ -207,7 +210,11 @@ impl ConnectorRegistry {
             ("mestier.task_recurrence.extend_horizon", 1) => {
                 Ok(self.task_recurrence_extend_horizon.execute(input).await)
             }
-            _ => Err(UnknownConnectorKind {
+            _ => match version {
+                1 => actions::execute(&self.usecase, kind, input).await,
+                _ => None,
+            }
+            .ok_or_else(|| UnknownConnectorKind {
                 kind: kind.to_string(),
                 version,
             }),
@@ -238,7 +245,7 @@ mod tests {
 
     use super::*;
     use crate::application::default_authorizer;
-    use crate::domain::automation::connector::connector_catalogue;
+    use crate::domain::automation::connector::{action_specs, connector_catalogue};
     use crate::domain::automation::run::DryRunDispatch;
     use crate::infrastructure::realtime::EventHub;
 
@@ -266,6 +273,7 @@ mod tests {
         let registry_kinds: BTreeSet<(String, u16)> = ConnectorRegistry::known_kinds()
             .iter()
             .map(|(kind, version)| (kind.to_string(), *version))
+            .chain(action_specs().map(|spec| (spec.kind.to_string(), 1)))
             .collect();
 
         assert_eq!(

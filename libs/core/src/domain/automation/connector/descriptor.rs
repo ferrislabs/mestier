@@ -92,6 +92,7 @@ pub struct ConnectorDescriptor {
     /// invented. `None` for every connector whose output only exists once it
     /// has run.
     pub output_mirrors_field: Option<&'static str>,
+    pub group: Option<&'static str>,
     pub sample_output: Value,
 }
 
@@ -168,6 +169,7 @@ mod tests {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "id": 42 }),
             output_mirrors_field: None,
+            group: None,
             sample_output: json!({ "id": 42 }),
         };
 

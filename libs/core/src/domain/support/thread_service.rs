@@ -87,6 +87,41 @@ where
         .await
     }
 
+    pub async fn send_automation_reply(
+        &mut self,
+        organization_id: OrganizationId,
+        ticket_id: TicketId,
+        body: &str,
+    ) -> Result<TicketEntry, CoreError> {
+        self.write(organization_id, ticket_id, EntryKind::Reply, None, body)
+            .await
+    }
+
+    pub async fn save_automation_draft(
+        &mut self,
+        organization_id: OrganizationId,
+        ticket_id: TicketId,
+        body: &str,
+    ) -> Result<TicketEntry, CoreError> {
+        self.write(organization_id, ticket_id, EntryKind::Draft, None, body)
+            .await
+    }
+
+    pub async fn send_automation_draft(
+        &mut self,
+        organization_id: OrganizationId,
+        entry_id: TicketEntryId,
+    ) -> Result<TicketEntry, CoreError> {
+        let mut entry = self.draft(organization_id, entry_id).await?;
+        let now = Utc::now();
+
+        entry.kind = EntryKind::Reply;
+        entry.author = None;
+        entry.created_at = now;
+        entry.updated_at = now;
+        self.entries.update(&entry).await
+    }
+
     pub async fn save_draft(
         &mut self,
         organization_id: OrganizationId,

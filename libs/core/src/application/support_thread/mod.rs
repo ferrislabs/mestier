@@ -109,6 +109,136 @@ impl MestierUseCase {
     }
 
     #[transactional(support_ticket, support_ticket_entry, member, role, authz, emitter)]
+    pub async fn send_support_automation_reply(
+        &self,
+        command: AddEntryCommand,
+    ) -> Result<TicketEntry, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        crate::application::support_ticket::authorize(
+            authz,
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        ThreadService::new(
+            support_ticket_repository,
+            support_ticket_entry_repository,
+            emitter,
+        )
+        .send_automation_reply(command.organization_id, command.ticket_id, &command.body)
+        .await
+    }
+
+    #[transactional(support_ticket, support_ticket_entry, member, role, authz, emitter)]
+    pub async fn save_support_automation_draft(
+        &self,
+        command: AddEntryCommand,
+    ) -> Result<TicketEntry, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        crate::application::support_ticket::authorize(
+            authz,
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        ThreadService::new(
+            support_ticket_repository,
+            support_ticket_entry_repository,
+            emitter,
+        )
+        .save_automation_draft(command.organization_id, command.ticket_id, &command.body)
+        .await
+    }
+
+    #[transactional(support_ticket, support_ticket_entry, member, role, authz, emitter)]
+    pub async fn edit_support_automation_draft(
+        &self,
+        command: EditDraftCommand,
+    ) -> Result<TicketEntry, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        crate::application::support_ticket::authorize(
+            authz,
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        ThreadService::new(
+            support_ticket_repository,
+            support_ticket_entry_repository,
+            emitter,
+        )
+        .edit_draft(command.organization_id, command.entry_id, &command.body)
+        .await
+    }
+
+    #[transactional(support_ticket, support_ticket_entry, member, role, authz, emitter)]
+    pub async fn delete_support_automation_draft(
+        &self,
+        command: DraftCommand,
+    ) -> Result<(), CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        crate::application::support_ticket::authorize(
+            authz,
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        ThreadService::new(
+            support_ticket_repository,
+            support_ticket_entry_repository,
+            emitter,
+        )
+        .delete_draft(command.organization_id, command.entry_id)
+        .await
+    }
+
+    #[transactional(support_ticket, support_ticket_entry, member, role, authz, emitter)]
+    pub async fn send_support_automation_draft(
+        &self,
+        command: DraftCommand,
+    ) -> Result<TicketEntry, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        crate::application::support_ticket::authorize(
+            authz,
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        ThreadService::new(
+            support_ticket_repository,
+            support_ticket_entry_repository,
+            emitter,
+        )
+        .send_automation_draft(command.organization_id, command.entry_id)
+        .await
+    }
+
+    #[transactional(support_ticket, support_ticket_entry, member, role, authz, emitter)]
     pub async fn save_support_draft(
         &self,
         command: AddEntryCommand,
