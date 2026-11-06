@@ -236,6 +236,7 @@ type HarnessProps = Partial<Omit<WorkflowCanvasProps, 'onChange'>> & {
 	onSaveSpy?: (change: GraphChange) => void
 	onTest?: () => void
 	running?: boolean
+	canTest?: boolean
 }
 
 interface ApiOptions {
@@ -260,6 +261,8 @@ function Harness({
 	onSaveSpy = vi.fn(),
 	onTest = vi.fn(),
 	running = false,
+	canTest,
+	dryRunSteps = null,
 }: HarnessProps) {
 	const current = useRef<GraphChange>({ graph, layout })
 
@@ -275,11 +278,13 @@ function Harness({
 				runSteps={runSteps}
 				events={events}
 				lastRun={lastRun}
+				dryRunSteps={dryRunSteps}
 				onEvaluateExpression={onEvaluateExpression}
 				credentials={credentials}
 				authSchemes={authSchemes}
 				onCreateCredential={onCreateCredential}
 				testRun={{ running, start: onTest }}
+				canTest={canTest}
 				onChange={(change) => {
 					current.current = change
 				}}
@@ -2151,6 +2156,88 @@ describe('WorkflowCanvas — testing the workflow', () => {
 			name: 'Exécution en cours…',
 		})
 		expect((button as HTMLButtonElement).disabled).toBe(true)
+	})
+
+	it('is active whatever is saved, and says nothing about saving first', async () => {
+		renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)]),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const button = (await screen.findByRole('button', {
+			name: 'Tester le workflow',
+		})) as HTMLButtonElement
+
+		expect(button.disabled).toBe(false)
+		expect(button.getAttribute('title')).toBeNull()
+	})
+
+	it('is not offered to somebody who cannot test, nor in the node details', async () => {
+		renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)], [], [trigger('t1')]),
+			layout: layoutOf(['t1', -220, 0], ['c1', 0, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			canTest: false,
+		})
+		await screen.findByTestId('rf__node-c1')
+		expect(
+			screen.queryByRole('button', { name: 'Tester le workflow' }),
+		).toBeNull()
+
+		const dialog = await openDetails('c1')
+		fireEvent.click(within(dialog).getByRole('radio', { name: 'Exécution' }))
+
+		expect(
+			within(dialog).queryByRole('button', { name: 'Tester le workflow' }),
+		).toBeNull()
+	})
+
+	it('fills the output column and the input tab of a node from the dry run, and the real run no longer shows for it', async () => {
+		renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)], [], [trigger('t1')]),
+			layout: layoutOf(['t1', -220, 0], ['c1', 0, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+			runSteps: new Map([
+				[
+					'c1',
+					{
+						attempts: 1,
+						connector_id: 'c1',
+						created_at: '2026-01-01T00:00:00Z',
+						id: 's1',
+						iteration_path: '',
+						status: 'succeeded',
+						output: { created_id: 'reel-1' },
+					},
+				],
+			]),
+			dryRunSteps: new Map([
+				[
+					'c1',
+					[
+						{
+							connector_id: 'c1',
+							iteration_path: '',
+							status: 'succeeded',
+							input: { url: 'https://a.test' },
+							output: { created_id: 'blanc-1' },
+							error: null,
+						},
+					],
+				],
+			]),
+		})
+
+		const dialog = await openDetails('c1')
+		fireEvent.click(within(dialog).getByRole('radio', { name: 'Exécution' }))
+
+		const output = within(dialog).getByRole('region', { name: 'Sortie' })
+		expect(output.textContent).toContain('blanc-1')
+		expect(output.textContent).not.toContain('reel-1')
+		expect(
+			within(dialog).getByRole('region', { name: 'Entrée' }).textContent,
+		).toContain('https://a.test')
 	})
 
 	it('is disabled on an empty canvas', async () => {

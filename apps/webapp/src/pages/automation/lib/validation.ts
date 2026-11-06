@@ -31,6 +31,51 @@ export function projectGraphErrors(
 	return { connectorErrors, graphErrors }
 }
 
+export function graphErrorsOf(
+	error: unknown,
+): Schemas.GraphErrorResponse[] | null {
+	if (!(error instanceof Error)) return null
+	if ((error as { status?: number }).status !== 422) return null
+
+	const data = (error as { data?: { details?: { errors?: unknown } } }).data
+	const errors = data?.details?.errors
+	return Array.isArray(errors) && errors.length > 0
+		? (errors as Schemas.GraphErrorResponse[])
+		: null
+}
+
+export function mergeValidations(
+	first: GraphValidation,
+	second: GraphValidation,
+): GraphValidation {
+	if (second.connectorErrors.size === 0 && second.graphErrors.length === 0)
+		return first
+	if (first.connectorErrors.size === 0 && first.graphErrors.length === 0)
+		return second
+
+	const connectorErrors = new Map<string, ConnectorValidationError[]>()
+	for (const source of [first.connectorErrors, second.connectorErrors]) {
+		for (const [nodeId, errors] of source) {
+			const kept = connectorErrors.get(nodeId) ?? []
+			for (const error of errors) {
+				if (
+					!kept.some(
+						(known) =>
+							known.field === error.field && known.message === error.message,
+					)
+				)
+					kept.push(error)
+			}
+			connectorErrors.set(nodeId, kept)
+		}
+	}
+
+	return {
+		connectorErrors,
+		graphErrors: [...new Set([...first.graphErrors, ...second.graphErrors])],
+	}
+}
+
 export function fieldErrorMessage(
 	errors: ConnectorValidationError[],
 	field: string,

@@ -7,6 +7,10 @@ import type {
 import { DataViewer } from '#/pages/automation/ui/data-viewer'
 import { ErrorBox } from '#/pages/automation/ui/ndv-error-box'
 import { NdvEmptyState, NdvPanel } from '#/pages/automation/ui/ndv-panel'
+import {
+	ItemPager,
+	type PassSelector,
+} from '#/pages/automation/ui/variables-panel'
 
 export function BranchedData({
 	branches,
@@ -72,13 +76,18 @@ function OutputContent({
 export function NodeOutputPanel({
 	view,
 	errorAction,
+	passes = null,
 }: {
 	view: NodeOutputView
 	errorAction?: ReactNode
+	passes?: PassSelector | null
 }) {
 	return (
 		<NdvPanel title="Sortie" tone="side">
-			<OutputContent view={view} errorAction={errorAction} />
+			<div className="grid gap-3">
+				{passes && <ItemPager noun="Passage" {...passes} />}
+				<OutputContent view={view} errorAction={errorAction} />
+			</div>
 		</NdvPanel>
 	)
 }

@@ -26,6 +26,8 @@ const EVENTS_PATH = '/api/v1/organizations/{organization_id}/automation/events'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
 const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
+const WORKFLOW_RUNS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs'
 const RUN_REPLAY_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay'
 const EVALUATE_PATH =
@@ -527,6 +529,163 @@ describe('WorkflowExecutionsFeature — replay', () => {
 		expect(
 			screen.queryByRole('button', { name: /Relancer depuis ici/ }),
 		).toBeNull()
+	})
+})
+
+describe('WorkflowExecutionsFeature — the real run, from the header of the view', () => {
+	function startButton() {
+		return screen.queryByRole('button', { name: 'Exécuter maintenant' })
+	}
+
+	it('offers « Exécuter maintenant » above the list of runs', async () => {
+		render()
+
+		await screen.findByRole('complementary', { name: 'Liste des exécutions' })
+		await waitFor(() => {
+			expect(startButton()).not.toBeNull()
+		})
+	})
+
+	it('offers it as well to a workflow that never ran, which is when it is needed', async () => {
+		render((api) => {
+			api.mockGet(RUNS_PATH, () => ({ data: [], pagination: null }))
+		})
+
+		await screen.findByText('Aucune exécution pour le moment')
+		await waitFor(() => {
+			expect(startButton()).not.toBeNull()
+		})
+	})
+
+	it('does not tell to test the workflow to see executions: a test leaves none', async () => {
+		render((api) => {
+			api.mockGet(RUNS_PATH, () => ({ data: [], pagination: null }))
+		})
+
+		const empty = await screen.findByText('Aucune exécution pour le moment')
+
+		expect(empty.parentElement?.textContent).not.toContain('Testez')
+	})
+
+	it('offers it to nobody but those who manage the automation', async () => {
+		render(undefined, ['VIEW_AUTOMATION'])
+
+		await screen.findByRole('complementary', { name: 'Liste des exécutions' })
+		await waitFor(() => {
+			expect(
+				screen.queryByRole('button', { name: 'Exécuter maintenant' }),
+			).toBeNull()
+		})
+	})
+
+	it('opens the dialog of a real run, with its warning and its confirmation', async () => {
+		const user = userEvent.setup()
+		render()
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Exécuter maintenant' }),
+		)
+
+		const dialog = await screen.findByRole('dialog')
+		expect(
+			within(dialog).getByText(
+				'Démarre une exécution réelle de ce workflow — pas un test.',
+			),
+		).toBeDefined()
+		expect(within(dialog).getByRole('alert').textContent).toContain(
+			'Les connecteurs de ce workflow agiront pour de vrai',
+		)
+		expect(
+			within(dialog).getByRole('button', { name: 'Exécuter maintenant' }),
+		).toBeDefined()
+		expect(
+			within(dialog).getByRole('button', { name: 'Annuler' }),
+		).toBeDefined()
+	})
+
+	it('starts nothing before the confirmation, and nothing when it is cancelled', async () => {
+		const user = userEvent.setup()
+		const { api } = render()
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Exécuter maintenant' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+		await user.click(within(dialog).getByRole('button', { name: 'Annuler' }))
+
+		await waitFor(() => {
+			expect(screen.queryByRole('dialog')).toBeNull()
+		})
+		expect(
+			api.calls.filter((call) => call.path === WORKFLOW_RUNS_PATH),
+		).toEqual([])
+	})
+
+	it('starts the run on the confirmation, then shows it at the head of the list', async () => {
+		const user = userEvent.setup()
+		let started = false
+		const { api } = render((fakeApi) => {
+			fakeApi.mockGet(RUNS_PATH, () => ({
+				data: started
+					? [
+							run({ id: 'run-8', number: 8, status: 'pending' }),
+							run({ id: 'run-7', number: 7 }),
+						]
+					: [run({ id: 'run-7', number: 7 })],
+				pagination: null,
+			}))
+			fakeApi.mockMutation('post', WORKFLOW_RUNS_PATH, () => {
+				started = true
+				return { data: { run_id: 'run-8' }, pagination: null }
+			})
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Exécuter maintenant' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Exécuter maintenant' }),
+		)
+
+		await waitFor(() => {
+			expect(screen.queryByRole('dialog')).toBeNull()
+		})
+		const calls = api.calls.filter((call) => call.path === WORKFLOW_RUNS_PATH)
+		expect(calls).toHaveLength(1)
+		expect(calls[0]?.params).toMatchObject({
+			path: { organization_id: 'org-1', workflow_id: 'workflow-1' },
+		})
+		const list = screen.getByRole('complementary', {
+			name: 'Liste des exécutions',
+		})
+		await waitFor(() => {
+			expect(
+				within(list)
+					.getAllByRole('button')
+					.map((item) => item.textContent),
+			).toEqual([expect.stringContaining('#8'), expect.stringContaining('#7')])
+		})
+	})
+
+	it('keeps the dialog open and says why when the start is refused', async () => {
+		const user = userEvent.setup()
+		render((api) => {
+			api.mockMutation('post', WORKFLOW_RUNS_PATH, () => {
+				throw Object.assign(new Error('Workflow archivé'), { status: 409 })
+			})
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Exécuter maintenant' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Exécuter maintenant' }),
+		)
+
+		expect(await within(dialog).findByText('Workflow archivé')).toBeDefined()
+		expect(screen.getByRole('dialog')).toBe(dialog)
 	})
 })
 

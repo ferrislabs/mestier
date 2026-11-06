@@ -13,6 +13,7 @@ import {
 } from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
 import { RunNodeDetailsFeature } from '#/pages/automation/feature/run-node-details-feature'
+import { RunNowFeature } from '#/pages/automation/feature/run-now-feature'
 import { WorkflowTopBarFeature } from '#/pages/automation/feature/workflow-top-bar-feature'
 import { workflowExecutionsLocation } from '#/pages/automation/lib/automation-paths'
 import { typographicEventLabels } from '#/pages/automation/lib/event-search'
@@ -149,6 +150,7 @@ function WorkflowExecutionsWorkspace({
 	const [filter, setFilter] = useState<ExecutionFilter>('all')
 	const [openNodeId, setOpenNodeId] = useState<string | null>(null)
 	const [replayError, setReplayError] = useState<string | null>(null)
+	const [runNowOpen, setRunNowOpen] = useState(false)
 
 	const runs = useMemo(
 		() =>
@@ -371,9 +373,14 @@ function WorkflowExecutionsWorkspace({
 					}}
 					onFilterChange={setFilter}
 					onOpenNode={setOpenNodeId}
+					onRunNow={() => setRunNowOpen(true)}
 					nodeDialog={nodeDialog}
 				/>
 			</div>
+			<RunNowFeature
+				workflowId={workflowId}
+				controlled={{ open: runNowOpen, onOpenChange: setRunNowOpen }}
+			/>
 		</div>
 	)
 }

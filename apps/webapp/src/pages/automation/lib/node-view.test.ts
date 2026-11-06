@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import {
+	inputViewFromDryStep,
 	nodeDescription,
+	outputViewFromDryStep,
 	outputViewFromPayload,
 	outputViewFromStep,
 } from '#/pages/automation/lib/node-view'
@@ -98,5 +100,102 @@ describe('nodeDescription', () => {
 				connector: { id: 'c1', kind: 'mail.send', version: 1, config: {} },
 			}),
 		).toBe('Mail · Connecteur')
+	})
+})
+
+function dryStep(
+	patch: Partial<Schemas.DryRunStepResponse>,
+): Schemas.DryRunStepResponse {
+	return {
+		connector_id: 'c1',
+		iteration_path: '',
+		status: 'succeeded',
+		...patch,
+	}
+}
+
+describe('outputViewFromDryStep', () => {
+	it('is not executed without a step and for a skipped one', () => {
+		expect(outputViewFromDryStep(undefined)).toEqual({ state: 'not-executed' })
+		expect(outputViewFromDryStep(dryStep({ status: 'skipped' }))).toEqual({
+			state: 'not-executed',
+		})
+	})
+
+	it('surfaces the error of a failed step', () => {
+		expect(
+			outputViewFromDryStep(dryStep({ status: 'failed', error: 'boom' })),
+		).toEqual({ state: 'error', message: 'boom' })
+	})
+
+	it('still says a failed step failed when the wire carries no message', () => {
+		expect(
+			outputViewFromDryStep(dryStep({ status: 'failed', error: null })),
+		).toEqual({ state: 'error', message: 'Ce nœud a échoué lors du test.' })
+	})
+
+	it('wraps the output in one branch of items', () => {
+		expect(
+			outputViewFromDryStep(dryStep({ output: [{ a: 1 }, { a: 2 }] })),
+		).toEqual({
+			state: 'ready',
+			branches: [{ id: 'main', label: 'Sortie', items: [{ a: 1 }, { a: 2 }] }],
+		})
+	})
+
+	it('shows a succeeded step that answered nothing as an empty output', () => {
+		expect(outputViewFromDryStep(dryStep({ output: null }))).toEqual({
+			state: 'ready',
+			branches: [{ id: 'main', label: 'Sortie', items: [] }],
+		})
+	})
+})
+
+describe('inputViewFromDryStep', () => {
+	it('tells a node with no step at all from a node the test skipped', () => {
+		expect(inputViewFromDryStep(undefined, false)).toEqual({ state: 'absent' })
+		expect(inputViewFromDryStep(dryStep({ status: 'skipped' }), false)).toEqual(
+			{ state: 'not-reached' },
+		)
+	})
+
+	it('shows the input of the step as items', () => {
+		expect(
+			inputViewFromDryStep(
+				dryStep({ input: { url: 'https://a.test' } }),
+				false,
+			),
+		).toEqual({ state: 'ready', items: [{ url: 'https://a.test' }] })
+	})
+
+	it('shows the input of a failed step, which is what it was called with', () => {
+		expect(
+			inputViewFromDryStep(
+				dryStep({ status: 'failed', error: 'boom', input: { id: 1 } }),
+				false,
+			),
+		).toEqual({ state: 'ready', items: [{ id: 1 }] })
+	})
+
+	it('shows nothing received when the step carries no input', () => {
+		expect(inputViewFromDryStep(dryStep({ input: null }), false)).toEqual({
+			state: 'ready',
+			items: [],
+		})
+	})
+
+	it('shows a disabled node with no input as receiving what it lets pass', () => {
+		expect(
+			inputViewFromDryStep(dryStep({ input: null, output: { n: 1 } }), true),
+		).toEqual({ state: 'ready', items: [{ n: 1 }] })
+	})
+
+	it('keeps the input of a disabled node when the wire does carry one', () => {
+		expect(
+			inputViewFromDryStep(
+				dryStep({ input: { a: 1 }, output: { n: 1 } }),
+				true,
+			),
+		).toEqual({ state: 'ready', items: [{ a: 1 }] })
 	})
 })

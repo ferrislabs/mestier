@@ -1,6 +1,7 @@
 import { History, Loader2, TriangleAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Schemas } from '#/api/api.client'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import type { ExecutionStatus } from '#/pages/automation/lib/execution-status'
 import type { NodePosition } from '#/pages/automation/lib/graph'
@@ -47,7 +48,7 @@ function EmptyExecutions() {
 				<History className="mb-3 size-8 text-muted-foreground" aria-hidden />
 				<p className="font-medium text-base">Aucune exécution pour le moment</p>
 				<p className="mt-1 text-muted-foreground text-sm">
-					Testez le workflow ou activez-le pour voir apparaître ses exécutions
+					Exécutez le workflow ou activez-le pour voir apparaître ses exécutions
 					ici, nœud par nœud.
 				</p>
 			</div>
@@ -162,10 +163,23 @@ export interface WorkflowExecutionsProps {
 	onSelect: (number: number) => void
 	onFilterChange: (filter: ExecutionFilter) => void
 	onOpenNode: (nodeId: string) => void
+	onRunNow: () => void
 	nodeDialog: ReactNode
 }
 
-export function WorkflowExecutions({
+function ExecutionsHeader({ onRunNow }: { onRunNow: () => void }) {
+	return (
+		<RequirePermission permission="MANAGE_AUTOMATION">
+			<header className="flex shrink-0 items-center justify-end border-border border-b bg-card px-4 py-2">
+				<Button size="sm" onClick={onRunNow}>
+					Exécuter maintenant
+				</Button>
+			</header>
+		</RequirePermission>
+	)
+}
+
+function ExecutionsBody({
 	entries,
 	total,
 	selectedNumber,
@@ -179,7 +193,7 @@ export function WorkflowExecutions({
 	onFilterChange,
 	onOpenNode,
 	nodeDialog,
-}: WorkflowExecutionsProps) {
+}: Omit<WorkflowExecutionsProps, 'onRunNow'>) {
 	if (isLoading) {
 		return (
 			<div className="flex h-full items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
@@ -228,6 +242,20 @@ export function WorkflowExecutions({
 				</div>
 			)}
 			{nodeDialog}
+		</div>
+	)
+}
+
+export function WorkflowExecutions({
+	onRunNow,
+	...body
+}: WorkflowExecutionsProps) {
+	return (
+		<div className="flex h-full min-h-0 flex-col">
+			<ExecutionsHeader onRunNow={onRunNow} />
+			<div className="min-h-0 flex-1">
+				<ExecutionsBody {...body} />
+			</div>
 		</div>
 	)
 }

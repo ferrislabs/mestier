@@ -5,6 +5,9 @@ import {
 	aggregateConnectorStatuses,
 	canReplay,
 	connectorOutputsFromSteps,
+	dryRunPassesByConnector,
+	dryRunReveals,
+	dryRunStatuses,
 	elapsedMsSince,
 	failedRunProbes,
 	groupRunSteps,
@@ -603,5 +606,132 @@ describe('representativeStepByConnector', () => {
 
 	it('has nothing to say about a connector with no step', () => {
 		expect(representativeStepByConnector([]).get('c1')).toBeUndefined()
+	})
+})
+
+function dryStep(
+	overrides: Partial<Schemas.DryRunStepResponse> = {},
+): Schemas.DryRunStepResponse {
+	return {
+		connector_id: 'c1',
+		iteration_path: '',
+		status: 'succeeded',
+		...overrides,
+	}
+}
+
+describe('dryRunPassesByConnector', () => {
+	it('is empty without a step', () => {
+		expect(dryRunPassesByConnector([]).size).toBe(0)
+	})
+
+	it('keeps the passes of each node together, in the order of the response', () => {
+		const passes = dryRunPassesByConnector([
+			dryStep({ connector_id: 'c1', output: 1 }),
+			dryStep({ connector_id: 'c2', iteration_path: 'c1[0]', output: 'a' }),
+			dryStep({ connector_id: 'c3', iteration_path: 'c1[0]', output: 'x' }),
+			dryStep({ connector_id: 'c2', iteration_path: 'c1[1]', output: 'b' }),
+			dryStep({ connector_id: 'c3', iteration_path: 'c1[1]', output: 'y' }),
+			dryStep({ connector_id: 'c2', iteration_path: 'c1[2]', output: 'c' }),
+		])
+
+		expect([...passes.keys()]).toEqual(['c1', 'c2', 'c3'])
+		expect(passes.get('c2')?.map((step) => step.output)).toEqual([
+			'a',
+			'b',
+			'c',
+		])
+		expect(passes.get('c2')?.map((step) => step.iteration_path)).toEqual([
+			'c1[0]',
+			'c1[1]',
+			'c1[2]',
+		])
+		expect(passes.get('c3')?.map((step) => step.output)).toEqual(['x', 'y'])
+	})
+
+	it('holds one step for a node and an iteration path, the later answer replacing the earlier', () => {
+		const passes = dryRunPassesByConnector([
+			dryStep({ connector_id: 'c2', iteration_path: 'c1[0]', output: 'old' }),
+			dryStep({ connector_id: 'c2', iteration_path: 'c1[1]', output: 'b' }),
+			dryStep({ connector_id: 'c2', iteration_path: 'c1[0]', output: 'new' }),
+		])
+
+		expect(passes.get('c2')?.map((step) => step.output)).toEqual(['b', 'new'])
+	})
+
+	it('tells nested loops apart by their whole path', () => {
+		const passes = dryRunPassesByConnector([
+			dryStep({ connector_id: 'c3', iteration_path: 'c1[0].c2[0]', output: 1 }),
+			dryStep({ connector_id: 'c3', iteration_path: 'c1[0].c2[1]', output: 2 }),
+			dryStep({ connector_id: 'c3', iteration_path: 'c1[1].c2[0]', output: 3 }),
+		])
+
+		expect(passes.get('c3')).toHaveLength(3)
+	})
+})
+
+describe('dryRunStatuses', () => {
+	it('names the status of the last pass of each node', () => {
+		const statuses = dryRunStatuses(
+			dryRunPassesByConnector([
+				dryStep({ connector_id: 'c1', status: 'succeeded' }),
+				dryStep({ connector_id: 'c2', iteration_path: 'c1[0]' }),
+				dryStep({
+					connector_id: 'c2',
+					iteration_path: 'c1[1]',
+					status: 'failed',
+					error: 'boom',
+				}),
+				dryStep({ connector_id: 'c3', status: 'skipped' }),
+			]),
+		)
+
+		expect([...statuses]).toEqual([
+			['c1', 'succeeded'],
+			['c2', 'failed'],
+			['c3', 'skipped'],
+		])
+	})
+
+	it('is empty for no step, so every badge goes', () => {
+		expect(dryRunStatuses(new Map()).size).toBe(0)
+	})
+})
+
+describe('dryRunReveals', () => {
+	it('gives each step that ran a beat of its own', () => {
+		expect(dryRunReveals([dryStep(), dryStep(), dryStep()])).toEqual({
+			lead: 0,
+			beats: [1, 2, 3],
+		})
+	})
+
+	it('shows the steps that did not run along with the step before them', () => {
+		const steps = [
+			dryStep({ connector_id: 'c1' }),
+			dryStep({ connector_id: 'c2', status: 'skipped' }),
+			dryStep({ connector_id: 'c3' }),
+			dryStep({ connector_id: 'c4', status: 'failed', error: 'boom' }),
+			dryStep({ connector_id: 'c5', status: 'skipped' }),
+			dryStep({ connector_id: 'c6', status: 'skipped' }),
+		]
+
+		expect(dryRunReveals(steps)).toEqual({ lead: 0, beats: [2, 3, 6] })
+	})
+
+	it('shows what did not run at the head of the answer at once', () => {
+		expect(
+			dryRunReveals([dryStep({ status: 'skipped' }), dryStep(), dryStep()]),
+		).toEqual({ lead: 1, beats: [2, 3] })
+	})
+
+	it('has no beat when nothing ran', () => {
+		expect(dryRunReveals([])).toEqual({ lead: 0, beats: [] })
+		expect(
+			dryRunReveals([
+				dryStep({ status: 'skipped' }),
+				dryStep({ status: 'skipped' }),
+			]),
+		).toEqual({ lead: 2, beats: [] })
 	})
 })

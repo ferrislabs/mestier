@@ -4,6 +4,8 @@ import {
 	connectorLevelErrors,
 	fieldErrorMessage,
 	type GraphValidation,
+	graphErrorsOf,
+	mergeValidations,
 	nodeTextErrors,
 	projectGraphErrors,
 	pruneCorrectedErrors,
@@ -349,5 +351,69 @@ describe('nodeTextErrors', () => {
 			description: null,
 			rest: [],
 		})
+	})
+})
+
+describe('graphErrorsOf', () => {
+	function refusal(status: number, errors: unknown) {
+		return Object.assign(new Error('Invalid graph'), {
+			status,
+			data: { details: { errors } },
+		})
+	}
+
+	it('reads the errors of a 422 carrying them', () => {
+		expect(
+			graphErrorsOf(refusal(422, [{ connector_id: 'c1', message: 'bad' }])),
+		).toEqual([{ connector_id: 'c1', message: 'bad' }])
+	})
+
+	it('reads nothing from another status, another shape or something that is no error', () => {
+		expect(graphErrorsOf(refusal(503, [{ message: 'bad' }]))).toBeNull()
+		expect(graphErrorsOf(refusal(422, 'bad'))).toBeNull()
+		expect(graphErrorsOf(refusal(422, []))).toBeNull()
+		expect(
+			graphErrorsOf(Object.assign(new Error('x'), { status: 422 })),
+		).toBeNull()
+		expect(graphErrorsOf('boom')).toBeNull()
+		expect(graphErrorsOf(null)).toBeNull()
+	})
+})
+
+describe('mergeValidations', () => {
+	it('returns the same validation when the other one is empty', () => {
+		const filled = projectGraphErrors([
+			error({ connector_id: 'c1', message: 'a' }),
+			error({ message: 'cycle' }),
+		])
+		const empty = projectGraphErrors([])
+
+		expect(mergeValidations(filled, empty)).toBe(filled)
+		expect(mergeValidations(empty, filled)).toBe(filled)
+	})
+
+	it('adds the errors of a node and of the graph from both sides, once each', () => {
+		const left = projectGraphErrors([
+			error({ connector_id: 'c1', field: 'url', message: 'URL manquante' }),
+			error({ message: 'cycle' }),
+		])
+		const right = projectGraphErrors([
+			error({ connector_id: 'c1', field: 'url', message: 'URL manquante' }),
+			error({ connector_id: 'c1', message: 'Identification manquante' }),
+			error({ connector_id: 'c2', message: 'autre' }),
+			error({ message: 'cycle' }),
+			error({ message: 'sans déclencheur' }),
+		])
+
+		const merged = mergeValidations(left, right)
+
+		expect(merged.connectorErrors.get('c1')).toEqual([
+			{ field: 'url', message: 'URL manquante' },
+			{ field: null, message: 'Identification manquante' },
+		])
+		expect(merged.connectorErrors.get('c2')).toEqual([
+			{ field: null, message: 'autre' },
+		])
+		expect(merged.graphErrors).toEqual(['cycle', 'sans déclencheur'])
 	})
 })

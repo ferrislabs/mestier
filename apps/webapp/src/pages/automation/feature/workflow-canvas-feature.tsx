@@ -10,21 +10,24 @@ import {
 	useEvaluateExpression,
 	useRunPolling,
 } from '#/hooks/use-automation'
+import { useHasPermission } from '#/hooks/use-permissions'
 import {
 	type LastRunData,
 	WorkflowCanvas,
 } from '#/pages/automation/feature/editor-canvas-feature'
-import { RunNowFeature } from '#/pages/automation/feature/run-now-feature'
+import { useTestRun } from '#/pages/automation/feature/use-test-run'
+import type { GraphChange } from '#/pages/automation/feature/use-workflow-graph'
 import {
 	type EditorSession,
 	WorkflowTopBarFeature,
 } from '#/pages/automation/feature/workflow-top-bar-feature'
 import { NEW_WORKFLOW_ID } from '#/pages/automation/lib/automation-paths'
 import { typographicEventLabels } from '#/pages/automation/lib/event-search'
+import { mergeValidations } from '#/pages/automation/lib/validation'
 import {
 	aggregateConnectorStatuses,
 	connectorOutputsFromSteps,
-	isTerminalRunStatus,
+	dryRunStatuses,
 	latestRunId,
 	representativeStepByConnector,
 } from '#/pages/automation/lib/workflow-runs'
@@ -54,7 +57,6 @@ export function WorkflowCanvasFeature({ session }: WorkflowCanvasFeatureProps) {
 	const runDetailQuery = useRunPolling(organizationId, latestId)
 	const createCredential = useCreateCredential(organizationId)
 	const { mutateAsync: evaluate } = useEvaluateExpression()
-	const [runDialogOpen, setRunDialogOpen] = useState(false)
 	const connectors = catalogueQuery.data?.data.connectors
 	const descriptors = useMemo(
 		() => descriptorsByKind(connectors ?? []),
@@ -75,7 +77,7 @@ export function WorkflowCanvasFeature({ session }: WorkflowCanvasFeatureProps) {
 				: null,
 		[runDetail],
 	)
-	const runStatuses = useMemo(
+	const lastRunStatuses = useMemo(
 		() =>
 			runDetail
 				? aggregateConnectorStatuses(runDetail.steps)
@@ -90,6 +92,30 @@ export function WorkflowCanvasFeature({ session }: WorkflowCanvasFeatureProps) {
 		[runDetail],
 	)
 	const [initial] = useState(() => session.snapshot())
+	const canManage = useHasPermission('MANAGE_AUTOMATION')
+	const { snapshot, onGraphChange } = session
+	const currentGraph = useCallback(() => snapshot().graph, [snapshot])
+	const dryRun = useTestRun({ organizationId, currentGraph })
+	const { graphChanged, steps: dryRunSteps } = dryRun
+	const runStatuses = useMemo(
+		() => (dryRunSteps ? dryRunStatuses(dryRunSteps) : lastRunStatuses),
+		[dryRunSteps, lastRunStatuses],
+	)
+	const testControl = useMemo(
+		() => ({ running: dryRun.running, start: dryRun.start }),
+		[dryRun.running, dryRun.start],
+	)
+	const validation = useMemo(
+		() => mergeValidations(session.validation, dryRun.validation),
+		[session.validation, dryRun.validation],
+	)
+	const handleChange = useCallback(
+		(change: GraphChange) => {
+			graphChanged(change.graph)
+			onGraphChange(change)
+		},
+		[graphChanged, onGraphChange],
+	)
 
 	const handleCreateCredential = async (
 		body: Schemas.CreateCredentialRequest,
@@ -113,7 +139,7 @@ export function WorkflowCanvasFeature({ session }: WorkflowCanvasFeatureProps) {
 	)
 
 	const topBarId = workflowId ?? NEW_WORKFLOW_ID
-	const { validation, saveError } = session
+	const { saveError } = session
 
 	if (
 		catalogueQuery.isLoading ||
@@ -154,25 +180,22 @@ export function WorkflowCanvasFeature({ session }: WorkflowCanvasFeatureProps) {
 				lastRun={lastRun}
 				runStatuses={runStatuses}
 				runSteps={runSteps}
+				dryRunSteps={dryRunSteps}
 				onEvaluateExpression={handleEvaluateExpression}
 				credentials={credentialsQuery.data?.data ?? []}
 				authSchemes={catalogueQuery.data?.data.auth_schemes ?? []}
 				onCreateCredential={handleCreateCredential}
-				canTest={workflowId !== null}
-				testRun={{
-					running:
-						runDetail !== undefined && !isTerminalRunStatus(runDetail.status),
-					start: () => {
-						if (workflowId) setRunDialogOpen(true)
-					},
-				}}
-				onChange={session.onGraphChange}
+				canTest={canManage}
+				testRun={testControl}
+				onChange={handleChange}
 			/>
-			{workflowId ? (
-				<RunNowFeature
-					workflowId={workflowId}
-					controlled={{ open: runDialogOpen, onOpenChange: setRunDialogOpen }}
-				/>
+			{dryRun.error ? (
+				<div
+					role="alert"
+					className="border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+				>
+					{dryRun.error}
+				</div>
 			) : null}
 		</div>
 	)
