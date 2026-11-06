@@ -36,12 +36,13 @@ pub use connector::{
     Connector, ConnectorInput, ConnectorOutcome, DryRunDispatch, DryRunInput, StoredOperation,
 };
 pub use dry_run::{
-    DryRunError, DryRunStatus, DryRunStep, MAX_DRY_RUN_BYTES, MAX_DRY_RUN_LOOP_ITEMS,
-    MAX_DRY_RUN_STEPS,
+    DryRunError, DryRunLimit, DryRunStatus, DryRunStep, MAX_DRY_RUN_BYTES, MAX_DRY_RUN_DURATION,
+    MAX_DRY_RUN_EDGES, MAX_DRY_RUN_FIELD_BYTES, MAX_DRY_RUN_LOOP_ITEMS, MAX_DRY_RUN_NODE_BYTES,
+    MAX_DRY_RUN_NODES, MAX_DRY_RUN_PAYLOAD_BYTES, MAX_DRY_RUN_PENDING, MAX_DRY_RUN_STEPS,
 };
 pub use graph::{
     LoopStackEntry, Next, connectors_by_id, descendants_via, disabled_outcome,
     format_iteration_path, next_after, pass_through_output, resolve_config, resolve_config_nested,
-    roots,
+    resolve_config_nested_within, resolve_config_within, roots,
 };
 pub use model::{DueRun, Run, RunOverview, RunSettlement, RunStatus, RunStep, StepStatus};

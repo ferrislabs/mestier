@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::{DateTime, Utc};
@@ -46,7 +47,7 @@ pub struct EnginePassOutcome {
 pub(super) struct LoopStep {
     pub(super) loop_id: String,
     pub(super) index: usize,
-    pub(super) item: Value,
+    pub(super) item: Arc<Value>,
 }
 
 /// One connector waiting to be visited, with the loop nesting that got the
@@ -55,13 +56,13 @@ pub(super) struct LoopStep {
 /// next item starts, and the loop's `After` continuation — pushed *before*
 /// any item frame — only pops once every item's subtree is exhausted.
 #[derive(Debug, Clone)]
-pub(super) struct Frame {
-    pub(super) connector_id: String,
-    pub(super) path: Vec<LoopStep>,
+struct Frame {
+    connector_id: String,
+    path: Vec<LoopStep>,
 }
 
 impl Frame {
-    pub(super) fn scope_paths(&self) -> Vec<String> {
+    fn scope_paths(&self) -> Vec<String> {
         let entries: Vec<LoopStackEntry> = self
             .path
             .iter()
@@ -73,7 +74,7 @@ impl Frame {
             .collect()
     }
 
-    pub(super) fn iteration_path(&self) -> String {
+    fn iteration_path(&self) -> String {
         let entries: Vec<LoopStackEntry> = self
             .path
             .iter()
@@ -780,12 +781,13 @@ impl MestierUseCase {
                     });
                 }
                 for (idx, item) in items.iter().enumerate().rev() {
+                    let shared = Arc::new(item.clone());
                     for target in &each {
                         let mut path = frame.path.clone();
                         path.push(LoopStep {
                             loop_id: frame.connector_id.clone(),
                             index: idx,
-                            item: item.clone(),
+                            item: Arc::clone(&shared),
                         });
                         stack.push(Frame {
                             connector_id: (*target).to_string(),

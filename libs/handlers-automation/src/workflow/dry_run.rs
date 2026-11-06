@@ -1,5 +1,5 @@
 use auth::Identity;
-use axum::{Extension, Json, extract::State};
+use axum::{Extension, body::Bytes, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{DryRunError, DryRunStatus, DryRunStep};
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,7 @@ impl From<DryRunStatus> for DryRunStepStatus {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct DryRunStepResponse {
     pub connector_id: String,
+    pub iteration_path: String,
     pub status: DryRunStepStatus,
     pub input: Option<Value>,
     pub output: Option<Value>,
@@ -52,6 +53,7 @@ impl From<DryRunStep> for DryRunStepResponse {
     fn from(step: DryRunStep) -> Self {
         Self {
             connector_id: step.connector_id,
+            iteration_path: step.iteration_path,
             status: step.status.into(),
             input: step.input,
             output: step.output,
@@ -72,9 +74,22 @@ fn refusal(error: DryRunError) -> SaveVersionError {
         }
         DryRunError::Core(error) => error.into(),
         error @ (DryRunError::UnknownTrigger { .. }
+        | DryRunError::Oversized(_)
         | DryRunError::TooManySteps { .. }
-        | DryRunError::TooLarge { .. }) => ApiError::UnprocessableEntity(error.to_string()).into(),
+        | DryRunError::TooLarge { .. }
+        | DryRunError::TimedOut) => ApiError::UnprocessableEntity(error.to_string()).into(),
     }
+}
+
+fn parse(body: &[u8]) -> Result<DryRunRequest, SaveVersionError> {
+    serde_json::from_slice(body).map_err(|error| {
+        let message = format!("the request body is not a dry run request: {error}");
+        if error.is_data() {
+            ApiError::UnprocessableEntity(message).into()
+        } else {
+            ApiError::BadRequest(message).into()
+        }
+    })
 }
 
 #[utoipa::path(
@@ -99,9 +114,10 @@ pub async fn handler(
     WorkflowDryRunPath { organization_id }: WorkflowDryRunPath,
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
-    Json(payload): Json<DryRunRequest>,
+    body: Bytes,
 ) -> Result<Response<DryRunResponse>, SaveVersionError> {
     require_manage_automation(&state, &identity, organization_id).await?;
+    let payload = parse(&body)?;
 
     let graph: mestier_core::Graph = payload.graph.into();
     let trigger_payload = payload.trigger_payload.map(Value::Object);
@@ -131,9 +147,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_step_answers_with_its_five_fields_and_a_snake_case_status() {
+    fn a_step_answers_with_its_six_fields_and_a_snake_case_status() {
         let step = DryRunStep {
             connector_id: "c1".to_owned(),
+            iteration_path: "l1[2]".to_owned(),
             status: DryRunStatus::Skipped,
             input: None,
             output: Some(json!({ "n": 1 })),
@@ -146,6 +163,7 @@ mod tests {
             wire,
             json!({
                 "connector_id": "c1",
+                "iteration_path": "l1[2]",
                 "status": "skipped",
                 "input": null,
                 "output": { "n": 1 },
@@ -183,6 +201,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_body_that_is_not_json_is_a_400_and_one_of_the_wrong_shape_a_422() {
+        let broken = parse(b"{ not json").unwrap_err().into_response();
+        let truncated = parse(b"{\"graph\": ").unwrap_err().into_response();
+        let wrong_shape = parse(br#"{ "graph": 42 }"#).unwrap_err().into_response();
+        let missing = parse(b"{}").unwrap_err().into_response();
+
+        assert_eq!(broken.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(truncated.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(wrong_shape.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(missing.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(
+            parse(br#"{ "graph": { "connectors": [], "edges": [], "triggers": [] } }"#).is_ok()
+        );
+    }
+
+    #[tokio::test]
     async fn an_invalid_graph_answers_the_422_body_a_save_answers() {
         let error = DryRunError::InvalidGraph(vec![GraphError::MissingRequiredField {
             connector_id: "c1".to_owned(),
@@ -208,6 +242,8 @@ mod tests {
             },
             DryRunError::TooManySteps { limit: 1000 },
             DryRunError::TooLarge { limit: 1 << 24 },
+            DryRunError::TimedOut,
+            DryRunError::Oversized(mestier_core::DryRunLimit::Nodes),
         ] {
             let response = refusal(error).into_response();
 

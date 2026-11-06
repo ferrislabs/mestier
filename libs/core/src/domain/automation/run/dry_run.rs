@@ -1,11 +1,21 @@
+use std::time::Duration;
+
 use common::CoreError;
 use serde_json::Value;
 
+use crate::domain::automation::expression::json_size;
 use crate::domain::automation::workflow::GraphError;
 
 pub const MAX_DRY_RUN_LOOP_ITEMS: usize = 3;
 pub const MAX_DRY_RUN_STEPS: usize = 1_000;
+pub const MAX_DRY_RUN_PENDING: usize = 10_000;
 pub const MAX_DRY_RUN_BYTES: usize = 16 * 1024 * 1024;
+pub const MAX_DRY_RUN_NODE_BYTES: usize = 4 * 1024 * 1024;
+pub const MAX_DRY_RUN_DURATION: Duration = Duration::from_secs(2);
+pub const MAX_DRY_RUN_NODES: usize = 1_000;
+pub const MAX_DRY_RUN_EDGES: usize = 3_000;
+pub const MAX_DRY_RUN_FIELD_BYTES: usize = 64 * 1024;
+pub const MAX_DRY_RUN_PAYLOAD_BYTES: usize = 256 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DryRunStatus {
@@ -27,6 +37,7 @@ impl DryRunStatus {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DryRunStep {
     pub connector_id: String,
+    pub iteration_path: String,
     pub status: DryRunStatus,
     pub input: Option<Value>,
     pub output: Option<Value>,
@@ -34,9 +45,15 @@ pub struct DryRunStep {
 }
 
 impl DryRunStep {
-    pub fn succeeded(connector_id: &str, input: Option<Value>, output: Value) -> Self {
+    pub fn succeeded(
+        connector_id: &str,
+        iteration_path: &str,
+        input: Option<Value>,
+        output: Value,
+    ) -> Self {
         Self {
             connector_id: connector_id.to_owned(),
+            iteration_path: iteration_path.to_owned(),
             status: DryRunStatus::Succeeded,
             input,
             output: Some(output),
@@ -44,9 +61,15 @@ impl DryRunStep {
         }
     }
 
-    pub fn failed(connector_id: &str, input: Option<Value>, error: String) -> Self {
+    pub fn failed(
+        connector_id: &str,
+        iteration_path: &str,
+        input: Option<Value>,
+        error: String,
+    ) -> Self {
         Self {
             connector_id: connector_id.to_owned(),
+            iteration_path: iteration_path.to_owned(),
             status: DryRunStatus::Failed,
             input,
             output: None,
@@ -54,35 +77,41 @@ impl DryRunStep {
         }
     }
 
-    pub fn weight(&self) -> usize {
-        self.connector_id.len()
-            + self.input.as_ref().map_or(0, weight_of)
-            + self.output.as_ref().map_or(0, weight_of)
-            + self.error.as_ref().map_or(0, String::len)
-    }
-
-    pub fn skipped(connector_id: &str) -> Self {
+    pub fn skipped(connector_id: &str, iteration_path: &str) -> Self {
         Self {
             connector_id: connector_id.to_owned(),
+            iteration_path: iteration_path.to_owned(),
             status: DryRunStatus::Skipped,
             input: None,
             output: None,
             error: None,
         }
     }
+
+    pub fn weight(&self) -> usize {
+        self.connector_id.len()
+            + self.iteration_path.len()
+            + self.input.as_ref().map_or(0, json_size)
+            + self.output.as_ref().map_or(0, json_size)
+            + self.error.as_ref().map_or(0, String::len)
+    }
 }
 
-fn weight_of(value: &Value) -> usize {
-    match value {
-        Value::Null | Value::Bool(_) => 4,
-        Value::Number(_) => 8,
-        Value::String(text) => text.len() + 2,
-        Value::Array(items) => 2 + items.iter().map(weight_of).sum::<usize>(),
-        Value::Object(fields) => {
-            2 + fields
-                .iter()
-                .map(|(name, item)| name.len() + 4 + weight_of(item))
-                .sum::<usize>()
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DryRunLimit {
+    Nodes,
+    Edges,
+    Field,
+    Payload,
+}
+
+impl DryRunLimit {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::Nodes => "a dry run takes at most 1000 nodes",
+            Self::Edges => "a dry run takes at most 3000 edges",
+            Self::Field => "a dry run takes at most 64 KiB per config field",
+            Self::Payload => "a dry run takes at most 256 KiB of trigger payload",
         }
     }
 }
@@ -95,11 +124,17 @@ pub enum DryRunError {
     #[error("trigger `{trigger_id}` is not in this graph")]
     UnknownTrigger { trigger_id: String },
 
-    #[error("a dry run walks at most {limit} steps, and this graph needs more")]
+    #[error("{}", .0.message())]
+    Oversized(DryRunLimit),
+
+    #[error("a dry run is limited to {limit} steps, and this graph needs more")]
     TooManySteps { limit: usize },
 
     #[error("a dry run answers with at most {limit} bytes, and this graph needs more")]
     TooLarge { limit: usize },
+
+    #[error("a dry run is cut after 2 seconds, and this graph needs longer")]
+    TimedOut,
 
     #[error(transparent)]
     Core(#[from] CoreError),
@@ -125,26 +160,28 @@ mod tests {
     }
 
     #[test]
-    fn a_skipped_step_carries_nothing_but_its_node() {
-        let step = DryRunStep::skipped("c2");
+    fn a_skipped_step_carries_nothing_but_its_node_and_its_iteration() {
+        let step = DryRunStep::skipped("c2", "l1[2]");
 
         assert_eq!(step.connector_id, "c2");
+        assert_eq!(step.iteration_path, "l1[2]");
         assert_eq!(step.status, DryRunStatus::Skipped);
         assert!(step.input.is_none() && step.output.is_none() && step.error.is_none());
     }
 
     #[test]
     fn a_failed_step_carries_its_error_and_no_output() {
-        let step = DryRunStep::failed("c2", Some(Value::Null), "boom".to_owned());
+        let step = DryRunStep::failed("c2", "", Some(Value::Null), "boom".to_owned());
 
         assert_eq!(step.status, DryRunStatus::Failed);
         assert_eq!(step.error.as_deref(), Some("boom"));
         assert!(step.output.is_none());
+        assert_eq!(step.iteration_path, "");
     }
 
     #[test]
     fn a_succeeded_step_carries_its_output_and_no_error() {
-        let step = DryRunStep::succeeded("c1", None, Value::from(1));
+        let step = DryRunStep::succeeded("c1", "", None, Value::from(1));
 
         assert_eq!(step.status, DryRunStatus::Succeeded);
         assert_eq!(step.output, Some(Value::from(1)));
@@ -173,21 +210,44 @@ mod tests {
     }
 
     #[test]
-    fn a_step_weighs_what_it_carries() {
-        let light = DryRunStep::skipped("c1");
-        let heavy = DryRunStep::succeeded(
-            "c1",
-            Some(serde_json::json!({ "name": "x".repeat(1000) })),
-            Value::from(1),
-        );
+    fn a_step_weighs_the_json_it_would_serialize_to() {
+        let input = serde_json::json!({ "name": "é".repeat(500), "n": [1, 2.5, null] });
+        let step = DryRunStep::succeeded("c1", "l[0]", Some(input.clone()), Value::from(1));
 
-        assert_eq!(light.weight(), 2);
-        assert!(heavy.weight() > 1000);
-        assert!(heavy.weight() < 1100);
+        assert_eq!(
+            step.weight(),
+            2 + 4 + serde_json::to_string(&input).unwrap().len() + 1
+        );
+        assert_eq!(DryRunStep::skipped("c1", "").weight(), 2);
     }
 
     #[test]
     fn the_loop_ceiling_is_the_one_the_contract_names() {
         assert_eq!(MAX_DRY_RUN_LOOP_ITEMS, 3);
+    }
+
+    #[test]
+    fn each_structural_limit_says_the_number_it_enforces() {
+        assert!(
+            DryRunLimit::Nodes
+                .message()
+                .contains(&MAX_DRY_RUN_NODES.to_string())
+        );
+        assert!(
+            DryRunLimit::Edges
+                .message()
+                .contains(&MAX_DRY_RUN_EDGES.to_string())
+        );
+        assert!(
+            DryRunLimit::Field
+                .message()
+                .contains(&(MAX_DRY_RUN_FIELD_BYTES / 1024).to_string())
+        );
+        assert!(
+            DryRunLimit::Payload
+                .message()
+                .contains(&(MAX_DRY_RUN_PAYLOAD_BYTES / 1024).to_string())
+        );
+        assert_eq!(MAX_DRY_RUN_DURATION, Duration::from_secs(2));
     }
 }

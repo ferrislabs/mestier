@@ -233,6 +233,7 @@ impl Connector for CollectionOperationConnector {
                 .response_status
                 .as_deref()
                 .and_then(|status| status.parse::<u16>().ok())
+                .filter(|status| (200..300).contains(status))
             {
                 fields.insert("status".to_owned(), Value::from(status));
             }
@@ -457,8 +458,10 @@ mod tests {
     }
 
     #[test]
-    fn a_status_that_is_not_a_number_falls_back_to_200() {
-        for declared in ["default", "2XX", ""] {
+    fn a_status_that_is_not_a_success_falls_back_to_200() {
+        for declared in [
+            "default", "2XX", "", "404", "500", "301", "100", "199", "300",
+        ] {
             let collection = collection_answering(Some(json!({ "ok": true })), Some(declared));
             let cfg = config(json!({ "path": { "id": "1" } }));
 
@@ -468,6 +471,27 @@ mod tests {
                 outcome,
                 ConnectorOutcome::Produced(json!({
                     "status": 200,
+                    "headers": {},
+                    "body": { "ok": true }
+                })),
+                "{declared}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_success_status_is_kept_as_declared() {
+        for declared in [200u16, 201, 202, 204, 299] {
+            let collection =
+                collection_answering(Some(json!({ "ok": true })), Some(&declared.to_string()));
+            let cfg = config(json!({ "path": { "id": "1" } }));
+
+            let outcome = dry_run_of(&collection, "getAddress", &cfg);
+
+            assert_eq!(
+                outcome,
+                ConnectorOutcome::Produced(json!({
+                    "status": declared,
                     "headers": {},
                     "body": { "ok": true }
                 })),

@@ -7,7 +7,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use serde_json::{Map, Value};
 
 use super::ConnectorOutcome;
-use crate::domain::automation::expression::{ExpressionContext, ExpressionError, parse_template};
+use crate::domain::automation::expression::{
+    EvalBudget, ExpressionContext, ExpressionError, parse_template,
+};
 use crate::domain::automation::workflow::{Branch, Graph, PlacedConnector};
 
 /// One level of loop nesting a connector currently sits inside:
@@ -134,6 +136,20 @@ pub fn format_iteration_path(stack: &[LoopStackEntry]) -> String {
         .join(".")
 }
 
+#[derive(Debug, PartialEq)]
+pub struct FieldError {
+    pub field: String,
+    pub source: ExpressionError,
+}
+
+impl std::fmt::Display for FieldError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "field `{}`: {}", self.field, self.source)
+    }
+}
+
+impl std::error::Error for FieldError {}
+
 /// Evaluates every field of a connector's config against `ctx`, stopping at
 /// the first expression that fails. `ConnectorInput::config` is exactly this
 /// result — a connector never sees a template, only what it evaluated to.
@@ -141,27 +157,44 @@ pub fn resolve_config(
     config: &Map<String, Value>,
     ctx: &ExpressionContext<'_>,
 ) -> Result<Map<String, Value>, ExpressionError> {
+    resolve_config_within(config, ctx, &mut EvalBudget::default()).map_err(|error| error.source)
+}
+
+pub fn resolve_config_within(
+    config: &Map<String, Value>,
+    ctx: &ExpressionContext<'_>,
+    budget: &mut EvalBudget,
+) -> Result<Map<String, Value>, FieldError> {
     let mut resolved = Map::with_capacity(config.len());
     for (key, raw) in config {
-        let template = parse_template(raw)?;
-        resolved.insert(key.clone(), template.evaluate(ctx)?);
+        let value = parse_template(raw)
+            .and_then(|template| template.evaluate_within(ctx, budget))
+            .map_err(|source| FieldError {
+                field: key.clone(),
+                source,
+            })?;
+        resolved.insert(key.clone(), value);
     }
     Ok(resolved)
 }
 
-fn resolve_value(raw: &Value, ctx: &ExpressionContext<'_>) -> Result<Value, ExpressionError> {
+fn resolve_value(
+    raw: &Value,
+    ctx: &ExpressionContext<'_>,
+    budget: &mut EvalBudget,
+) -> Result<Value, ExpressionError> {
     match raw {
         Value::Object(map) => map
             .iter()
-            .map(|(key, value)| Ok((key.clone(), resolve_value(value, ctx)?)))
+            .map(|(key, value)| Ok((key.clone(), resolve_value(value, ctx, budget)?)))
             .collect::<Result<Map<String, Value>, ExpressionError>>()
             .map(Value::Object),
         Value::Array(items) => items
             .iter()
-            .map(|value| resolve_value(value, ctx))
+            .map(|value| resolve_value(value, ctx, budget))
             .collect::<Result<Vec<Value>, ExpressionError>>()
             .map(Value::Array),
-        other => parse_template(other)?.evaluate(ctx),
+        other => parse_template(other)?.evaluate_within(ctx, budget),
     }
 }
 
@@ -170,13 +203,27 @@ pub fn resolve_config_nested(
     ctx: &ExpressionContext<'_>,
     nested_fields: &[&str],
 ) -> Result<Map<String, Value>, ExpressionError> {
+    resolve_config_nested_within(config, ctx, nested_fields, &mut EvalBudget::default())
+        .map_err(|error| error.source)
+}
+
+pub fn resolve_config_nested_within(
+    config: &Map<String, Value>,
+    ctx: &ExpressionContext<'_>,
+    nested_fields: &[&str],
+    budget: &mut EvalBudget,
+) -> Result<Map<String, Value>, FieldError> {
     let mut resolved = Map::with_capacity(config.len());
     for (key, raw) in config {
         let value = if nested_fields.contains(&key.as_str()) {
-            resolve_value(raw, ctx)?
+            resolve_value(raw, ctx, budget)
         } else {
-            parse_template(raw)?.evaluate(ctx)?
-        };
+            parse_template(raw).and_then(|template| template.evaluate_within(ctx, budget))
+        }
+        .map_err(|source| FieldError {
+            field: key.clone(),
+            source,
+        })?;
         resolved.insert(key.clone(), value);
     }
     Ok(resolved)
@@ -570,6 +617,86 @@ mod tests {
 
         assert_eq!(resolved["headers"], json!({ "X-Id": "{{ trigger.id }}" }));
         assert_eq!(resolved["body"], json!({ "name": "{{ trigger.id }}" }));
+    }
+
+    #[test]
+    fn a_failing_field_is_named_with_the_error_it_raised() {
+        let config = serde_json::from_value::<Map<String, Value>>(json!({
+            "name": "fine",
+            "url": "https://example.com/{{ connectors.c1.output.nope }}"
+        }))
+        .unwrap();
+        let trigger = json!({});
+        let connectors = BTreeMap::new();
+        let ctx = nested_ctx(&trigger, &connectors);
+
+        let error = resolve_config_within(&config, &ctx, &mut EvalBudget::default()).unwrap_err();
+
+        assert_eq!(error.field, "url");
+        assert_eq!(
+            error.source,
+            ExpressionError::MissingPath {
+                path: "connectors.c1.output.nope".to_string()
+            }
+        );
+        assert_eq!(
+            error.to_string(),
+            "field `url`: missing path `connectors.c1.output.nope`"
+        );
+    }
+
+    #[test]
+    fn a_failing_nested_value_is_named_by_its_top_level_field() {
+        let config = serde_json::from_value::<Map<String, Value>>(json!({
+            "body": { "list": [{ "name": "{{ trigger.absent }}" }] }
+        }))
+        .unwrap();
+        let trigger = json!({});
+        let connectors = BTreeMap::new();
+        let ctx = nested_ctx(&trigger, &connectors);
+
+        let error =
+            resolve_config_nested_within(&config, &ctx, &["body"], &mut EvalBudget::default())
+                .unwrap_err();
+
+        assert_eq!(error.field, "body");
+    }
+
+    #[test]
+    fn one_budget_covers_every_field_of_a_config() {
+        let config = serde_json::from_value::<Map<String, Value>>(json!({
+            "a": "{{ trigger.p }}",
+            "b": "{{ trigger.p }}"
+        }))
+        .unwrap();
+        let trigger = json!({ "p": "x".repeat(600) });
+        let connectors = BTreeMap::new();
+        let ctx = nested_ctx(&trigger, &connectors);
+
+        let error = resolve_config_within(&config, &ctx, &mut EvalBudget::new(1000)).unwrap_err();
+
+        assert_eq!(error.field, "b");
+        assert_eq!(error.source, ExpressionError::TooLarge { limit: 1000 });
+    }
+
+    #[test]
+    fn the_engines_own_resolution_still_raises_the_bare_expression_error() {
+        let config = serde_json::from_value::<Map<String, Value>>(json!({
+            "url": "{{ trigger.absent }}"
+        }))
+        .unwrap();
+        let trigger = json!({});
+        let connectors = BTreeMap::new();
+        let ctx = nested_ctx(&trigger, &connectors);
+
+        let error = resolve_config(&config, &ctx).unwrap_err();
+
+        assert_eq!(
+            error,
+            ExpressionError::MissingPath {
+                path: "trigger.absent".to_string()
+            }
+        );
     }
 
     #[test]

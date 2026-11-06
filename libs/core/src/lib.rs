@@ -31,8 +31,10 @@ pub use domain::automation::folder::{
 pub use domain::automation::ports::DispatchOutcome;
 pub use domain::automation::run::{
     Connector, ConnectorInput, ConnectorOutcome, DryRunDispatch, DryRunError, DryRunInput,
-    DryRunStatus, DryRunStep, DueRun, MAX_DRY_RUN_BYTES, MAX_DRY_RUN_LOOP_ITEMS, MAX_DRY_RUN_STEPS,
-    Run, RunOverview, RunSettlement, RunStatus, RunStep, StepStatus, StoredOperation,
+    DryRunLimit, DryRunStatus, DryRunStep, DueRun, MAX_DRY_RUN_BYTES, MAX_DRY_RUN_DURATION,
+    MAX_DRY_RUN_EDGES, MAX_DRY_RUN_FIELD_BYTES, MAX_DRY_RUN_LOOP_ITEMS, MAX_DRY_RUN_NODE_BYTES,
+    MAX_DRY_RUN_NODES, MAX_DRY_RUN_PAYLOAD_BYTES, MAX_DRY_RUN_PENDING, MAX_DRY_RUN_STEPS, Run,
+    RunOverview, RunSettlement, RunStatus, RunStep, StepStatus, StoredOperation,
 };
 pub use domain::automation::secret::SealedSecret;
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};

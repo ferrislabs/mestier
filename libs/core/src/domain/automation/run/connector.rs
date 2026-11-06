@@ -89,6 +89,42 @@ mod tests {
     /// connector stub returns one, the test asserts on it), so equality has
     /// to actually distinguish every variant, not just derive without
     /// exercising it.
+    #[test]
+    fn outcomes_of_different_variants_are_never_equal() {
+        let produced = ConnectorOutcome::Produced(Value::Null);
+        let failed = ConnectorOutcome::Failed {
+            error: "boom".to_string(),
+        };
+        let branch = ConnectorOutcome::Branch {
+            taken: Branch::Then,
+            output: Value::Null,
+        };
+        let iterate = ConnectorOutcome::Iterate { items: Vec::new() };
+
+        assert_ne!(produced, failed);
+        assert_ne!(produced, branch);
+        assert_ne!(produced, iterate);
+        assert_ne!(branch, iterate);
+    }
+
+    #[test]
+    fn outcomes_of_the_same_variant_and_value_are_equal() {
+        assert_eq!(
+            ConnectorOutcome::Produced(Value::from(1)),
+            ConnectorOutcome::Produced(Value::from(1))
+        );
+        assert_ne!(
+            ConnectorOutcome::Branch {
+                taken: Branch::Then,
+                output: Value::Null
+            },
+            ConnectorOutcome::Branch {
+                taken: Branch::Else,
+                output: Value::Null
+            }
+        );
+    }
+
     struct Unexecutable;
 
     impl Connector for Unexecutable {
@@ -124,41 +160,5 @@ mod tests {
         let outcome = Unexecutable::dry_run(&descriptor_sampling(sample.clone()), &input);
 
         assert_eq!(outcome, ConnectorOutcome::Produced(sample));
-    }
-
-    #[test]
-    fn outcomes_of_different_variants_are_never_equal() {
-        let produced = ConnectorOutcome::Produced(Value::Null);
-        let failed = ConnectorOutcome::Failed {
-            error: "boom".to_string(),
-        };
-        let branch = ConnectorOutcome::Branch {
-            taken: Branch::Then,
-            output: Value::Null,
-        };
-        let iterate = ConnectorOutcome::Iterate { items: Vec::new() };
-
-        assert_ne!(produced, failed);
-        assert_ne!(produced, branch);
-        assert_ne!(produced, iterate);
-        assert_ne!(branch, iterate);
-    }
-
-    #[test]
-    fn outcomes_of_the_same_variant_and_value_are_equal() {
-        assert_eq!(
-            ConnectorOutcome::Produced(Value::from(1)),
-            ConnectorOutcome::Produced(Value::from(1))
-        );
-        assert_ne!(
-            ConnectorOutcome::Branch {
-                taken: Branch::Then,
-                output: Value::Null
-            },
-            ConnectorOutcome::Branch {
-                taken: Branch::Else,
-                output: Value::Null
-            }
-        );
     }
 }

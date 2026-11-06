@@ -1374,9 +1374,18 @@ mod tests {
             assert!(request["properties"].get(field).is_some(), "{field}");
         }
         let step = serde_json::to_value(schemas.get("DryRunStepResponse").unwrap()).unwrap();
-        for field in ["connector_id", "status", "input", "output", "error"] {
+        for field in [
+            "connector_id",
+            "iteration_path",
+            "status",
+            "input",
+            "output",
+            "error",
+        ] {
             assert!(step["properties"].get(field).is_some(), "{field}");
         }
+        let required = step["required"].as_array().expect("required fields");
+        assert!(required.iter().any(|name| name == "iteration_path"));
         let status = serde_json::to_value(schemas.get("DryRunStepStatus").unwrap()).unwrap();
         assert_eq!(status["enum"], json!(["succeeded", "failed", "skipped"]));
     }

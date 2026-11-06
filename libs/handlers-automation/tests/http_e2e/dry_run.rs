@@ -137,7 +137,18 @@ async fn an_unsaved_draft_answers_one_step_per_reachable_node_and_writes_no_row(
             .map(String::as_str)
             .collect();
         keys.sort_unstable();
-        assert_eq!(keys, ["connector_id", "error", "input", "output", "status"]);
+        assert_eq!(
+            keys,
+            [
+                "connector_id",
+                "error",
+                "input",
+                "iteration_path",
+                "output",
+                "status"
+            ]
+        );
+        assert_eq!(each["iteration_path"], "");
         assert_eq!(each["status"], "succeeded");
         assert_eq!(each["error"], Value::Null);
     }
@@ -248,6 +259,17 @@ async fn a_loop_iterates_at_most_three_sample_items() {
     let steps = steps_of(dry_run(&app, &app.token, &body).await).await;
 
     assert_eq!(ids(&steps), ["c1", "c2", "c2", "c2", "c3"]);
+    let paths: Vec<&Value> = steps.iter().map(|step| &step["iteration_path"]).collect();
+    assert_eq!(
+        paths,
+        [
+            &json!(""),
+            &json!("c1[0]"),
+            &json!("c1[1]"),
+            &json!("c1[2]"),
+            &json!("")
+        ]
+    );
     let names: Vec<&Value> = steps
         .iter()
         .filter(|step| step["connector_id"] == "c2")
@@ -285,7 +307,8 @@ async fn a_disabled_node_passes_the_previous_output_through() {
 
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
-async fn a_reference_to_an_output_that_does_not_exist_fails_the_referencing_node() {
+async fn a_reference_to_an_output_that_does_not_exist_fails_the_referencing_node_and_stops_the_walk()
+ {
     let app = harness::start().await;
     let graph = draft(
         vec![
@@ -305,15 +328,19 @@ async fn a_reference_to_an_output_that_does_not_exist_fails_the_referencing_node
 
     let steps = steps_of(dry_run(&app, &app.token, &json!({ "graph": graph })).await).await;
 
-    assert_eq!(ids(&steps), ["c1", "c2"]);
-    assert_eq!(step(&steps, "c2")["status"], "failed");
-    assert!(
-        step(&steps, "c2")["error"]
-            .as_str()
-            .expect("an error")
-            .contains("connectors.c1.output.body.nope")
-    );
+    assert_eq!(ids(&steps), ["c1", "c2", "c3"]);
     assert_eq!(step(&steps, "c1")["status"], "succeeded");
+    assert_eq!(step(&steps, "c2")["status"], "failed");
+    let message = step(&steps, "c2")["error"].as_str().expect("an error");
+    assert!(message.starts_with("field `url`"), "{message}");
+    assert!(
+        message.contains("connectors.c1.output.body.nope"),
+        "{message}"
+    );
+    assert_eq!(step(&steps, "c3")["status"], "skipped");
+    assert_eq!(step(&steps, "c3")["error"], Value::Null);
+    assert_eq!(step(&steps, "c3")["input"], Value::Null);
+    assert_eq!(step(&steps, "c3")["output"], Value::Null);
 
     app.cleanup().await;
 }
@@ -467,6 +494,270 @@ async fn a_body_over_the_limit_is_refused_exactly_as_a_save_refuses_it() {
 
     assert_eq!(dry.status(), 413);
     assert_eq!(dry.status(), save.status());
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn the_permission_is_checked_before_the_body_is_read_as_a_request() {
+    let app = harness::start().await;
+
+    for (who, token) in [
+        ("no role", &app.no_role_token),
+        ("view only", &app.view_only_token),
+        ("outsider", &app.outsider_token),
+    ] {
+        for garbage in ["{ not json", r#"{ "graph": 42 }"#, ""] {
+            let response = client()
+                .post(app.dry_run_url())
+                .bearer_auth(token)
+                .header("content-type", "application/json")
+                .body(garbage)
+                .send()
+                .await
+                .expect("the api answers");
+            assert_eq!(response.status(), 403, "{who} / {garbage}");
+        }
+    }
+    let broken = client()
+        .post(app.dry_run_url())
+        .bearer_auth(&app.token)
+        .header("content-type", "application/json")
+        .body("{ not json")
+        .send()
+        .await
+        .expect("the api answers");
+    let shapeless = dry_run(&app, &app.token, &json!({ "graph": 42 })).await;
+    assert_eq!(broken.status(), 400);
+    assert_eq!(shapeless.status(), 422);
+
+    app.cleanup().await;
+}
+
+async fn refusal_of(response: reqwest::Response) -> (u16, Value) {
+    let status = response.status().as_u16();
+    (status, response.json().await.expect("json"))
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_walk_past_the_step_ceiling_answers_422() {
+    let app = harness::start().await;
+    let mut connectors = vec![node(
+        "l1",
+        "flow.loop",
+        json!({ "items": "{{ trigger.items }}" }),
+    )];
+    let mut edges = vec![edge("t1", "l1", Value::Null)];
+    for index in 0..400 {
+        connectors.push(node(
+            &format!("b{index:03}"),
+            "flow.config",
+            json!({ "variables": {} }),
+        ));
+        edges.push(if index == 0 {
+            edge("l1", "b000", json!("Each"))
+        } else {
+            edge(
+                &format!("b{:03}", index - 1),
+                &format!("b{index:03}"),
+                Value::Null,
+            )
+        });
+    }
+    let body = json!({
+        "graph": draft(connectors, edges),
+        "trigger_payload": { "items": [1, 2, 3] }
+    });
+
+    let (status, refusal) = refusal_of(dry_run(&app, &app.token, &body).await).await;
+
+    assert_eq!(status, 422);
+    assert_eq!(refusal["code"], "E_UNPROCESSABLE_ENTITY");
+    assert!(
+        refusal["message"]
+            .as_str()
+            .expect("a message")
+            .contains("1000 steps"),
+        "{refusal}"
+    );
+    assert_eq!(rows(&app).await, (0, 0, 0));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_walk_past_the_byte_ceiling_answers_422() {
+    let app = harness::start().await;
+    let pad = |fill: &str| fill.repeat(60_000);
+    let mut connectors = Vec::new();
+    let mut edges = vec![edge("t1", "l0", Value::Null)];
+    for level in 0..5 {
+        connectors.push(node(
+            &format!("l{level}"),
+            "flow.loop",
+            json!({ "items": "{{ trigger.items }}" }),
+        ));
+        if level > 0 {
+            edges.push(edge(
+                &format!("l{}", level - 1),
+                &format!("l{level}"),
+                json!("Each"),
+            ));
+        }
+    }
+    connectors.push(node(
+        "leaf",
+        "http.request",
+        json!({
+            "method": "POST",
+            "url": format!("https://example.com/{}", pad("a")),
+            "headers": { "x-pad": pad("b") },
+            "body": { "blob": pad("c") }
+        }),
+    ));
+    edges.push(edge("l4", "leaf", json!("Each")));
+    let body = json!({
+        "graph": draft(connectors, edges),
+        "trigger_payload": { "items": [1, 2, 3] }
+    });
+
+    let (status, refusal) = refusal_of(dry_run(&app, &app.token, &body).await).await;
+
+    assert_eq!(status, 422);
+    assert_eq!(refusal["code"], "E_UNPROCESSABLE_ENTITY");
+    assert!(
+        refusal["message"]
+            .as_str()
+            .expect("a message")
+            .contains("16777216 bytes"),
+        "{refusal}"
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_graph_over_the_structural_limits_answers_422_with_a_static_message() {
+    let app = harness::start().await;
+    let many_nodes = draft(
+        (0..=1000)
+            .map(|index| {
+                node(
+                    &format!("c{index}"),
+                    "flow.config",
+                    json!({ "variables": {} }),
+                )
+            })
+            .collect(),
+        vec![edge("t1", "c0", Value::Null)],
+    );
+    let many_edges = draft(
+        vec![node("c1", "flow.config", json!({ "variables": {} }))],
+        (0..3001).map(|_| edge("t1", "c1", Value::Null)).collect(),
+    );
+    let fat_field = draft(
+        vec![node(
+            "c1",
+            "flow.config",
+            json!({ "variables": { "blob": "x".repeat(70_000) } }),
+        )],
+        vec![edge("t1", "c1", Value::Null)],
+    );
+
+    let mut messages = Vec::new();
+    for body in [
+        json!({ "graph": many_nodes }),
+        json!({ "graph": many_edges }),
+        json!({ "graph": fat_field }),
+        json!({ "graph": linear_draft(), "trigger_payload": { "blob": "x".repeat(300_000) } }),
+    ] {
+        let (status, refusal) = refusal_of(dry_run(&app, &app.token, &body).await).await;
+        assert_eq!(status, 422);
+        assert_eq!(refusal["code"], "E_UNPROCESSABLE_ENTITY");
+        messages.push(refusal["message"].as_str().expect("a message").to_owned());
+    }
+
+    assert!(messages[0].contains("1000 nodes"), "{messages:?}");
+    assert!(messages[1].contains("3000 edges"), "{messages:?}");
+    assert!(messages[2].contains("64 KiB"), "{messages:?}");
+    assert!(messages[3].contains("256 KiB"), "{messages:?}");
+    assert!(messages.iter().all(|message| !message.contains("xxxx")));
+
+    app.cleanup().await;
+}
+
+fn without_the_id(refusal: &Value, id: &str) -> Value {
+    serde_json::from_str(&refusal.to_string().replace(id, "<id>")).expect("json")
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_collection_or_a_credential_of_another_organization_is_refused_like_a_missing_one() {
+    let app = harness::start().await;
+    let foreign: Value = client()
+        .post(app.other_organization_collections_url())
+        .bearer_auth(&app.outsider_token)
+        .json(&collection_body())
+        .send()
+        .await
+        .expect("the api answers the import")
+        .json()
+        .await
+        .expect("json");
+    let foreign_collection = foreign["data"]["id"].as_str().expect("an id").to_owned();
+    let missing_collection = uuid::Uuid::now_v7().to_string();
+    let foreign_credential = uuid::Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO automation.credential (id, org_id, kind, name, origin, data_nonce, data_ciphertext) \
+         VALUES ($1, $2, 'bearer_token', 'foreign', 'supplied', $3, $3)",
+    )
+    .bind(foreign_credential)
+    .bind(app.other_organization_id())
+    .bind(vec![0u8; 12])
+    .execute(&app.pool)
+    .await
+    .expect("seed the foreign credential");
+    let missing_credential = uuid::Uuid::now_v7();
+
+    let with_collection = |collection_id: &str| {
+        let mut call = node(
+            "c1",
+            "collection.operation",
+            json!({ "path": { "id": "1" } }),
+        );
+        call["operation"] = json!({ "collection_id": collection_id, "operation_id": "getAddress" });
+        json!({ "graph": draft(vec![call], vec![edge("t1", "c1", Value::Null)]) })
+    };
+    let with_credential = |credential_id: uuid::Uuid| {
+        let mut call = http_get("c1", "https://example.com/a");
+        call["credential_id"] = json!(credential_id);
+        json!({ "graph": draft(vec![call], vec![edge("t1", "c1", Value::Null)]) })
+    };
+
+    let (foreign_status, foreign_refusal) =
+        refusal_of(dry_run(&app, &app.token, &with_collection(&foreign_collection)).await).await;
+    let (missing_status, missing_refusal) =
+        refusal_of(dry_run(&app, &app.token, &with_collection(&missing_collection)).await).await;
+    let (foreign_cred_status, foreign_cred_refusal) =
+        refusal_of(dry_run(&app, &app.token, &with_credential(foreign_credential)).await).await;
+    let (missing_cred_status, missing_cred_refusal) =
+        refusal_of(dry_run(&app, &app.token, &with_credential(missing_credential)).await).await;
+
+    assert_eq!((foreign_status, missing_status), (422, 422));
+    assert_eq!(foreign_refusal["code"], "E_GRAPH_INVALID");
+    assert_eq!(
+        without_the_id(&foreign_refusal, &foreign_collection),
+        without_the_id(&missing_refusal, &missing_collection)
+    );
+    assert_eq!((foreign_cred_status, missing_cred_status), (422, 422));
+    assert_eq!(
+        without_the_id(&foreign_cred_refusal, &foreign_credential.to_string()),
+        without_the_id(&missing_cred_refusal, &missing_credential.to_string())
+    );
 
     app.cleanup().await;
 }
