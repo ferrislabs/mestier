@@ -1644,6 +1644,7 @@ export namespace Schemas {
     input?: unknown | undefined;
     iteration_path: string;
     output?: unknown | undefined;
+    resume_at?: (string | null) | undefined;
     started_at?: (string | null) | undefined;
     status: string;
   };
