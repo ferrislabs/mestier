@@ -4,7 +4,7 @@ use events::EventEnvelope;
 use uuid::Uuid;
 
 use crate::domain::automation::credential::Credential;
-use crate::domain::automation::folder::WorkflowFolder;
+use crate::domain::automation::folder::{FolderName, WorkflowFolder};
 use crate::domain::automation::run::{DueRun, Run, RunOverview, RunSettlement, RunStep};
 use crate::domain::automation::secret::SealedSecret;
 use crate::domain::automation::settings::AutomationSettings;
@@ -208,6 +208,12 @@ pub trait WorkflowRepository: Send {
         id: Uuid,
     ) -> impl Future<Output = Result<Option<Workflow>, CoreError>> + Send;
 
+    fn find_by_id_for_update(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<Workflow>, CoreError>> + Send;
+
     fn list_by_organization(
         &mut self,
         org_id: OrganizationId,
@@ -298,15 +304,18 @@ pub trait WorkflowFolderRepository: Send {
         org_id: OrganizationId,
     ) -> impl Future<Output = Result<Vec<WorkflowFolder>, CoreError>> + Send;
 
-    fn lock_by_organization(
+    fn lock_tree(
         &mut self,
         org_id: OrganizationId,
-    ) -> impl Future<Output = Result<Vec<WorkflowFolder>, CoreError>> + Send;
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
-    fn update(
+    #[allow(clippy::needless_lifetimes)]
+    fn update<'a>(
         &mut self,
         org_id: OrganizationId,
-        folder: &WorkflowFolder,
+        id: Uuid,
+        name: Option<&'a FolderName>,
+        parent_id: Option<Option<Uuid>>,
     ) -> impl Future<Output = Result<WorkflowFolder, CoreError>> + Send;
 
     fn delete(

@@ -60,6 +60,18 @@ struct Frame {
 }
 
 impl Frame {
+    fn scope_paths(&self) -> Vec<String> {
+        let entries: Vec<LoopStackEntry> = self
+            .path
+            .iter()
+            .map(|step| (step.loop_id.clone(), step.index))
+            .collect();
+        (0..=entries.len())
+            .rev()
+            .map(|depth| format_iteration_path(&entries[..depth]))
+            .collect()
+    }
+
     fn iteration_path(&self) -> String {
         let entries: Vec<LoopStackEntry> = self
             .path
@@ -79,6 +91,17 @@ enum SliceResult {
         dead: bool,
         next_attempt_at: Option<DateTime<Utc>>,
     },
+}
+
+fn succeeded_output_in_scope(
+    index: &HashMap<(String, String), RunStep>,
+    connector_id: &str,
+    scope_paths: &[String],
+) -> Option<Value> {
+    let step = scope_paths
+        .iter()
+        .find_map(|path| index.get(&(connector_id.to_owned(), path.clone())))?;
+    (step.status == StepStatus::Succeeded).then(|| step.output.clone().unwrap_or(Value::Null))
 }
 
 fn pass_through_step(
@@ -242,14 +265,15 @@ impl MestierUseCase {
     ///
     /// Refused while the run is still `pending` or `running`: replaying a
     /// run the worker might be mid-slice on would race its own writes.
-    #[transactional(run)]
+    #[transactional(run, workflow)]
     pub async fn replay_run_from_step(
         &self,
         org_id: OrganizationId,
         run_id: Uuid,
         connector_id: String,
-    ) -> Result<Run, CoreError> {
+    ) -> Result<RunOverview, CoreError> {
         let mut runs = run_repository;
+        let mut workflows = workflow_repository;
 
         let run = runs
             .find_by_id(org_id, run_id)
@@ -260,6 +284,11 @@ impl MestierUseCase {
                 "a run still in progress cannot be replayed".to_string(),
             ));
         }
+        workflows
+            .find_by_id(org_id, run.workflow_id)
+            .await?
+            .ok_or(CoreError::NotFound)?
+            .ensure_not_archived()?;
 
         let graph = runs
             .graph_for_version(org_id, run.workflow_version_id)
@@ -284,7 +313,7 @@ impl MestierUseCase {
         runs.delete_steps(run_id, &to_reset).await?;
         runs.requeue_for_replay(run_id).await?;
 
-        runs.find_by_id(org_id, run_id)
+        runs.overview_by_id(org_id, run_id)
             .await?
             .ok_or(CoreError::NotFound)
     }
@@ -517,10 +546,11 @@ impl MestierUseCase {
             };
 
             if placed.disabled {
+                let scope_paths = frame.scope_paths();
                 let output = pass_through_output(
                     &graph,
                     &frame.connector_id,
-                    &connector_outputs,
+                    |source| succeeded_output_in_scope(&index, source, &scope_paths),
                     due.trigger_payload.as_ref(),
                 );
                 let settled = self
@@ -1067,6 +1097,24 @@ mod tests {
         .unwrap()
     }
 
+    async fn step_output_at(
+        pool: &PgPool,
+        run_id: Uuid,
+        connector_id: &str,
+        iteration_path: &str,
+    ) -> Option<Value> {
+        sqlx::query_scalar!(
+            r#"SELECT output FROM automation.run_step
+               WHERE run_id = $1 AND connector_id = $2 AND iteration_path = $3"#,
+            run_id,
+            connector_id,
+            iteration_path,
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
     fn status_of<'a>(steps: &'a [StepRow], connector_id: &str) -> Option<&'a str> {
         steps
             .iter()
@@ -1271,6 +1319,99 @@ mod tests {
             step_output(&pool, run_id, "after").await,
             Some(json!({ "y": 2 }))
         );
+    }
+
+    fn merge_after_a_branch_inside_a_loop() -> Graph {
+        Graph {
+            connectors: vec![
+                flow_loop("loop1", json!("{{ trigger.items }}")),
+                condition("cond", "{{ loop.item }}"),
+                flow_config("a", json!({ "branch": "then" })),
+                flow_config("b", json!({ "branch": "else" })),
+                disabled(http_get("merge", "http://127.0.0.1:1/never")),
+            ],
+            edges: vec![
+                edge("loop1", "cond", Some(Branch::Each)),
+                edge("cond", "a", Some(Branch::Then)),
+                edge("cond", "b", Some(Branch::Else)),
+                edge("a", "merge", None),
+                edge("b", "merge", None),
+            ],
+            triggers: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_disabled_merge_after_a_branch_in_a_loop_passes_the_branch_taken_in_each_iteration() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "disabled-merge-loop").await;
+        let usecase = use_case(pool.clone());
+        let workflow_id =
+            start_workflow(&usecase, org_id, merge_after_a_branch_inside_a_loop()).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({ "items": [true, false, true] }))
+            .await
+            .unwrap();
+
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+
+        let steps = run_steps(&pool, run_id).await;
+        assert_eq!(run_status(&pool, run_id).await, "succeeded", "{steps:?}");
+        for (iteration, branch) in ["then", "else", "then"].into_iter().enumerate() {
+            assert_eq!(
+                step_output_at(&pool, run_id, "merge", &format!("loop1[{iteration}]")).await,
+                Some(json!({ "branch": branch })),
+                "iteration {iteration} must carry the branch it took, not a leftover"
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_disabled_connector_after_a_connector_outside_the_loop_still_reads_it() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "disabled-outer-source").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![
+                flow_config("before", json!({ "scope": "outside" })),
+                flow_loop("loop1", json!("{{ trigger.items }}")),
+                disabled(http_get("inside", "http://127.0.0.1:1/never")),
+            ],
+            edges: vec![
+                edge("before", "loop1", None),
+                edge("before", "inside", None),
+                edge("loop1", "inside", Some(Branch::Each)),
+            ],
+            triggers: Vec::new(),
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({ "items": [1, 2] }))
+            .await
+            .unwrap();
+
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+
+        assert_eq!(run_status(&pool, run_id).await, "succeeded");
+        for iteration in 0..2 {
+            assert_eq!(
+                step_output_at(&pool, run_id, "inside", &format!("loop1[{iteration}]")).await,
+                Some(json!({ "scope": "outside" })),
+                "the first incoming edge comes from the connector before the loop"
+            );
+        }
     }
 
     #[tokio::test]
@@ -2371,7 +2512,14 @@ mod tests {
             .replay_run_from_step(org_id, run_id, "c2".to_string())
             .await
             .unwrap();
-        assert_eq!(replayed.status, RunStatus::Pending);
+        assert_eq!(replayed.run.status, RunStatus::Pending);
+        assert_eq!(replayed.run.id, run_id);
+        assert_eq!(replayed.number, 1, "a replay keeps the run's number");
+        assert_eq!(replayed.steps_total, 3);
+        assert_eq!(
+            replayed.steps_done, 1,
+            "the replayed step and its descendants were reset in the same transaction"
+        );
 
         usecase
             .run_engine_pass(&connectors, "worker-1", generous_schedule())
@@ -2428,6 +2576,88 @@ mod tests {
 
         assert!(matches!(error, CoreError::Conflict(_)));
         assert!(format!("{error}").contains("not-a-real-connector"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn replaying_a_run_of_an_archived_workflow_is_refused_and_keeps_every_step() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "replay-archived").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![customer_create("c1", "A"), customer_create("c2", "B")],
+            edges: vec![edge("c1", "c2", None)],
+            triggers: Vec::new(),
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+        assert_eq!(run_status(&pool, run_id).await, "succeeded");
+        usecase
+            .update_workflow(crate::domain::automation::workflow::UpdateWorkflowCommand {
+                archived: Some(true),
+                ..lifecycle_update(org_id, workflow_id)
+            })
+            .await
+            .unwrap();
+
+        let error = usecase
+            .replay_run_from_step(org_id, run_id, "c1".to_string())
+            .await
+            .expect_err("an archived workflow cannot be replayed");
+
+        assert!(matches!(&error, CoreError::Conflict(message)
+            if crate::domain::automation::workflow::WorkflowRefusal::from_conflict(message)
+                == Some(crate::domain::automation::workflow::WorkflowRefusal::Archived)));
+        assert_eq!(run_status(&pool, run_id).await, "succeeded");
+        assert_eq!(run_steps(&pool, run_id).await.len(), 2);
+        assert_eq!(customer_count(&pool, org_id).await, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn replaying_a_run_of_a_merely_disabled_workflow_is_allowed() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "replay-disabled").await;
+        let usecase = use_case(pool.clone());
+        let graph = Graph {
+            connectors: vec![condition("c1", "{{ true }}")],
+            edges: vec![],
+            triggers: Vec::new(),
+        };
+        let workflow_id = start_workflow(&usecase, org_id, graph).await;
+        let run_id = usecase
+            .start_run(org_id, workflow_id, json!({}))
+            .await
+            .unwrap();
+        let connectors = ConnectorRegistry::new(usecase.clone());
+        usecase
+            .run_engine_pass(&connectors, "worker-1", generous_schedule())
+            .await
+            .unwrap();
+        usecase
+            .update_workflow(crate::domain::automation::workflow::UpdateWorkflowCommand {
+                enabled: Some(false),
+                ..lifecycle_update(org_id, workflow_id)
+            })
+            .await
+            .unwrap();
+
+        let replayed = usecase
+            .replay_run_from_step(org_id, run_id, "c1".to_string())
+            .await
+            .unwrap();
+
+        assert_eq!(replayed.run.status, RunStatus::Pending);
     }
 
     #[tokio::test]

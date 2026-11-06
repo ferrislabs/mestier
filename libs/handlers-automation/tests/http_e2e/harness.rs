@@ -173,7 +173,7 @@ impl App {
 
     /// Drops the fixture. Every table listed here references `organizations`
     /// without `ON DELETE CASCADE`, so one missing from the list makes the
-    /// final delete fail — silently, since the errors are swallowed.
+    /// final delete fail, loudly.
     pub async fn cleanup(&self) {
         for organization_id in [self.organization_id, self.other_organization_id] {
             for statement in [
@@ -181,10 +181,11 @@ impl App {
                 "DELETE FROM automation.event WHERE org_id = $1",
                 "DELETE FROM organizations WHERE id = $1",
             ] {
-                let _ = sqlx::query(statement)
+                sqlx::query(statement)
                     .bind(organization_id)
                     .execute(&self.pool)
-                    .await;
+                    .await
+                    .unwrap_or_else(|error| panic!("cleanup failed on `{statement}`: {error}"));
             }
         }
 
@@ -194,10 +195,11 @@ impl App {
             self.no_role_user_id,
             self.outsider_user_id,
         ] {
-            let _ = sqlx::query("DELETE FROM users WHERE id = $1")
+            sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(user_id)
                 .execute(&self.pool)
-                .await;
+                .await
+                .unwrap_or_else(|error| panic!("cleanup failed deleting user {user_id}: {error}"));
         }
     }
 }

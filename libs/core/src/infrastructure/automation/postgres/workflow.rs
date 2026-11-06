@@ -169,6 +169,28 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         row.map(Workflow::try_from).transpose()
     }
 
+    async fn find_by_id_for_update(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> Result<Option<Workflow>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            WorkflowRow,
+            r#"SELECT id, org_id, name, description, enabled, current_version_id, layout,
+                      folder_id, tags, archived_at, created_at, updated_at
+               FROM automation.workflow WHERE org_id = $1 AND id = $2
+               FOR UPDATE"#,
+            org_id.0,
+            id,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(Workflow::try_from).transpose()
+    }
+
     async fn list_by_organization(
         &mut self,
         org_id: OrganizationId,

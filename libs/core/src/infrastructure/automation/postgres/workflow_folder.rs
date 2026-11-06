@@ -135,43 +135,40 @@ impl<'tx> WorkflowFolderRepository for PgWorkflowFolderRepository<'tx> {
         rows.into_iter().map(WorkflowFolder::try_from).collect()
     }
 
-    async fn lock_by_organization(
-        &mut self,
-        org_id: OrganizationId,
-    ) -> Result<Vec<WorkflowFolder>, CoreError> {
+    async fn lock_tree(&mut self, org_id: OrganizationId) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
-        let rows = sqlx::query_as!(
-            WorkflowFolderRow,
-            r#"SELECT id, org_id, parent_id, name, created_at
-               FROM automation.workflow_folder
-               WHERE org_id = $1
-               ORDER BY lower(name), id
-               FOR UPDATE"#,
-            org_id.0,
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 2))",
+            org_id.0.to_string(),
         )
-        .fetch_all(&mut ***tx)
+        .execute(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
-        rows.into_iter().map(WorkflowFolder::try_from).collect()
+        Ok(())
     }
 
-    async fn update(
+    #[allow(clippy::needless_lifetimes)]
+    async fn update<'a>(
         &mut self,
         org_id: OrganizationId,
-        folder: &WorkflowFolder,
+        id: Uuid,
+        name: Option<&'a FolderName>,
+        parent_id: Option<Option<Uuid>>,
     ) -> Result<WorkflowFolder, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             WorkflowFolderRow,
             r#"UPDATE automation.workflow_folder
-               SET name = $3, parent_id = $4
+               SET name = COALESCE($3, name),
+                   parent_id = CASE WHEN $4 THEN $5 ELSE parent_id END
                WHERE org_id = $1 AND id = $2
                RETURNING id, org_id, parent_id, name, created_at"#,
             org_id.0,
-            folder.id,
-            folder.name.as_str(),
-            folder.parent_id,
+            id,
+            name.map(FolderName::as_str),
+            parent_id.is_some(),
+            parent_id.flatten(),
         )
         .fetch_optional(&mut ***tx)
         .await
@@ -348,23 +345,55 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn locking_returns_the_same_rows_as_listing() {
+    async fn the_tree_lock_makes_a_second_taker_of_the_same_organization_wait_for_the_commit() {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "folder-lock").await;
-        insert(&pool, &folder(org_id, None, "A")).await.unwrap();
-        insert(&pool, &folder(org_id, None, "B")).await.unwrap();
+        let other_org = seed_organization(&pool, "folder-lock-other").await;
+        let (locked_tx, locked_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
 
-        let (listed, locked) = with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowFolderRepository::new(&tx);
-            let listed = repo.list_by_organization(org_id).await?;
-            let locked = repo.lock_by_organization(org_id).await?;
-            Ok::<_, CoreError>((listed, locked))
-        })
-        .await
-        .unwrap();
+        let holder = tokio::spawn({
+            let pool = pool.clone();
+            async move {
+                with_tx(&pool, async |tx| {
+                    let mut repo = PgWorkflowFolderRepository::new(&tx);
+                    repo.lock_tree(org_id).await?;
+                    locked_tx.send(()).ok();
+                    release_rx.await.ok();
+                    Ok::<_, CoreError>(())
+                })
+                .await
+            }
+        });
+        locked_rx.await.unwrap();
 
-        assert_eq!(listed, locked);
-        assert_eq!(locked.len(), 2);
+        let take_lock = |organization: OrganizationId| {
+            let pool = pool.clone();
+            async move {
+                with_tx(&pool, async |tx| {
+                    let mut repo = PgWorkflowFolderRepository::new(&tx);
+                    repo.lock_tree(organization).await
+                })
+                .await
+            }
+        };
+        let mut same_org = Box::pin(take_lock(org_id));
+        let blocked =
+            tokio::time::timeout(std::time::Duration::from_millis(300), &mut same_org).await;
+        let other =
+            tokio::time::timeout(std::time::Duration::from_secs(5), take_lock(other_org)).await;
+
+        assert!(
+            blocked.is_err(),
+            "the lock must hold a same-organization taker back"
+        );
+        assert!(other.is_ok(), "another organization is never held back");
+        release_tx.send(()).unwrap();
+        holder.await.unwrap().unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(5), same_org)
+            .await
+            .expect("the waiter proceeds once the holder commits")
+            .unwrap();
     }
 
     #[tokio::test]
@@ -411,9 +440,24 @@ mod tests {
         insert(&pool, &folder(other, None, "Shared")).await.unwrap();
     }
 
+    async fn update(
+        pool: &PgPool,
+        org_id: OrganizationId,
+        id: Uuid,
+        name: Option<&str>,
+        parent_id: Option<Option<Uuid>>,
+    ) -> Result<WorkflowFolder, CoreError> {
+        let name = name.map(|raw| FolderName::try_from(raw.to_owned()).unwrap());
+        with_tx(pool, async |tx| {
+            let mut repo = PgWorkflowFolderRepository::new(&tx);
+            repo.update(org_id, id, name.as_ref(), parent_id).await
+        })
+        .await
+    }
+
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn updating_renames_and_moves_a_folder() {
+    async fn updating_renames_and_moves_a_folder_in_one_statement() {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "folder-update").await;
         let target = insert(&pool, &folder(org_id, None, "Target"))
@@ -421,24 +465,35 @@ mod tests {
             .unwrap();
         let moved = insert(&pool, &folder(org_id, None, "Old")).await.unwrap();
 
-        let updated = with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowFolderRepository::new(&tx);
-            repo.update(
-                org_id,
-                &WorkflowFolder {
-                    name: FolderName::try_from("New".to_owned()).unwrap(),
-                    parent_id: Some(target.id),
-                    ..moved.clone()
-                },
-            )
+        let updated = update(&pool, org_id, moved.id, Some("New"), Some(Some(target.id)))
             .await
-        })
-        .await
-        .unwrap();
+            .unwrap();
 
         assert_eq!(updated.name.as_str(), "New");
         assert_eq!(updated.parent_id, Some(target.id));
         assert_eq!(updated.created_at, moved.created_at);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_rename_leaves_the_parent_alone_and_a_move_leaves_the_name_alone() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "folder-partial").await;
+        let root = insert(&pool, &folder(org_id, None, "Root")).await.unwrap();
+        let child = insert(&pool, &folder(org_id, Some(root.id), "Child"))
+            .await
+            .unwrap();
+
+        let renamed = update(&pool, org_id, child.id, Some("Renamed"), None)
+            .await
+            .unwrap();
+        let moved_out = update(&pool, org_id, child.id, None, Some(None))
+            .await
+            .unwrap();
+
+        assert_eq!(renamed.parent_id, Some(root.id));
+        assert_eq!(moved_out.name.as_str(), "Renamed");
+        assert_eq!(moved_out.parent_id, None);
     }
 
     #[tokio::test]
@@ -449,13 +504,64 @@ mod tests {
         let stranger = seed_organization(&pool, "folder-update-stranger").await;
         let written = insert(&pool, &folder(org_id, None, "Mine")).await.unwrap();
 
-        let outcome = with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowFolderRepository::new(&tx);
-            repo.update(stranger, &written).await
+        let outcome = update(&pool, stranger, written.id, Some("Hijacked"), None).await;
+
+        assert!(matches!(outcome, Err(CoreError::NotFound)));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_parent_or_a_workflow_folder_from_another_organization_is_refused_by_the_database() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "folder-fk").await;
+        let stranger = seed_organization(&pool, "folder-fk-stranger").await;
+        let foreign = insert(&pool, &folder(stranger, None, "Theirs"))
+            .await
+            .unwrap();
+        let mine = insert(&pool, &folder(org_id, None, "Mine")).await.unwrap();
+
+        let adopted = insert(&pool, &folder(org_id, Some(foreign.id), "Adopted")).await;
+        let moved = update(&pool, org_id, mine.id, None, Some(Some(foreign.id))).await;
+        let now = now_storable();
+        let misfiled = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert(&Workflow {
+                id: generate_uuid_v7(),
+                org_id,
+                name: "Misfiled".to_owned(),
+                description: None,
+                enabled: true,
+                current_version_id: None,
+                layout: None,
+                folder_id: Some(foreign.id),
+                tags: Default::default(),
+                archived_at: None,
+                created_at: now,
+                updated_at: now,
+            })
+            .await
         })
         .await;
 
-        assert!(matches!(outcome, Err(CoreError::NotFound)));
+        for outcome in [adopted.map(|_| ()), moved.map(|_| ()), misfiled.map(|_| ())] {
+            assert!(
+                matches!(&outcome, Err(CoreError::Conflict(m))
+                    if FolderRefusal::from_conflict(m) == Some(FolderRefusal::Missing)),
+                "{outcome:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_folder_cannot_be_its_own_parent_even_around_the_use_case() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "folder-own-parent").await;
+        let only = insert(&pool, &folder(org_id, None, "Only")).await.unwrap();
+
+        let outcome = update(&pool, org_id, only.id, None, Some(Some(only.id))).await;
+
+        assert!(outcome.is_err(), "the CHECK constraint must refuse it");
     }
 
     #[tokio::test]
@@ -558,20 +664,30 @@ mod tests {
         let child = insert(&pool, &folder(org_id, Some(root.id), "Child"))
             .await
             .unwrap();
-        seed_workflow_in(&pool, org_id, child.id, false).await;
+        let grandchild = insert(&pool, &folder(org_id, Some(child.id), "Grandchild"))
+            .await
+            .unwrap();
+        seed_workflow_in(&pool, org_id, grandchild.id, false).await;
+        seed_workflow_in(&pool, org_id, child.id, true).await;
 
         sqlx::query("DELETE FROM organizations WHERE id = $1")
             .bind(org_id.0)
             .execute(&pool)
             .await
-            .unwrap();
+            .expect("an organization with nested folders and filed workflows can be deleted");
 
-        let left: i64 =
+        let folders: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM automation.workflow_folder WHERE org_id = $1")
                 .bind(org_id.0)
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(left, 0);
+        let workflows: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM automation.workflow WHERE org_id = $1")
+                .bind(org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!((folders, workflows), (0, 0));
     }
 }

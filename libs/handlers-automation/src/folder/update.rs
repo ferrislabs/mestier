@@ -36,7 +36,7 @@ pub struct UpdateFolderRequest {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Folder not found"),
-        (status = 409, description = "The new parent does not exist, would close a loop, or a sibling already has this name (case-insensitive)"),
+        (status = 409, description = "The new parent does not exist, would close a loop, would push the folder or its sub-folders past 8 levels, or a sibling already has this name (case-insensitive)"),
     ),
     security(("bearer_auth" = []))
 )]

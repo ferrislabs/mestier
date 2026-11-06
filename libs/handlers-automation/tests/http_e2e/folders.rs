@@ -349,3 +349,81 @@ async fn folders_follow_the_automation_permission_split_and_stay_inside_their_or
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn the_depth_and_count_caps_answer_a_plain_conflict_with_a_static_message() {
+    let app = harness::start().await;
+    let mut parent: Option<Value> = None;
+    for level in 0..8 {
+        let mut body = json!({ "name": format!("level-{level}") });
+        if let Some(parent) = &parent {
+            body["parent_id"] = parent["id"].clone();
+        }
+        parent = Some(created_folder(&app, body).await);
+    }
+
+    let too_deep = post_folder(
+        &app,
+        &app.token,
+        json!({ "name": "ninth", "parent_id": parent.as_ref().expect("a parent")["id"] }),
+    )
+    .await;
+    let (status, body) = code_of(too_deep).await;
+    assert_eq!((status, &body["code"]), (409, &json!("E_CONFLICT")));
+    assert!(
+        body["message"]
+            .as_str()
+            .expect("a message")
+            .contains("8 levels"),
+        "{body}"
+    );
+
+    sqlx::query(
+        "INSERT INTO automation.workflow_folder (id, org_id, name)
+         SELECT gen_random_uuid(), $1, 'bulk-' || n FROM generate_series(1, 491) AS n",
+    )
+    .bind(app.organization_id)
+    .execute(&app.pool)
+    .await
+    .expect("bulk insert");
+    let still_room = post_folder(&app, &app.token, json!({ "name": "the 500th" })).await;
+    assert_eq!(still_room.status(), 201);
+    let (status, body) =
+        code_of(post_folder(&app, &app.token, json!({ "name": "the 501st" })).await).await;
+    assert_eq!((status, &body["code"]), (409, &json!("E_CONFLICT")));
+    assert!(
+        body["message"]
+            .as_str()
+            .expect("a message")
+            .contains("500 folders"),
+        "{body}"
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn an_organization_with_nested_folders_and_a_filed_workflow_can_be_torn_down() {
+    let app = harness::start().await;
+    let root = created_folder(&app, json!({ "name": "Root" })).await;
+    let child = created_folder(&app, json!({ "name": "Child", "parent_id": root["id"] })).await;
+    let filed = client()
+        .post(app.workflows_url())
+        .bearer_auth(&app.token)
+        .json(&json!({ "name": "Filed", "folder_id": child["id"] }))
+        .send()
+        .await
+        .expect("the api answers the workflow create call");
+    assert_eq!(filed.status(), 201);
+
+    app.cleanup().await;
+
+    let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM organizations WHERE id = $1")
+        .bind(app.organization_id)
+        .fetch_one(&app.pool)
+        .await
+        .expect("count the fixture organization");
+    assert_eq!(left, 0, "the fixture organization must really be gone");
+}

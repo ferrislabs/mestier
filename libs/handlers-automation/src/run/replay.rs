@@ -1,11 +1,12 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{AppState, DataEnvelope, Response};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    paths::RunReplayPath, require_manage_automation, response::RunResponse, run::find_run_in_org,
+    error::AutomationError, paths::RunReplayPath, require_manage_automation, response::RunResponse,
+    run::find_run_in_org,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -31,7 +32,7 @@ pub struct ReplayRunRequest {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Run not found"),
-        (status = 409, description = "Unknown connector, or the run is still pending or running"),
+        (status = 409, description = "E_WORKFLOW_ARCHIVED when the run's workflow is archived; otherwise an unknown connector, or the run is still pending or running"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -43,15 +44,14 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<ReplayRunRequest>,
-) -> Result<Response<RunResponse>, ApiError> {
+) -> Result<Response<RunResponse>, AutomationError> {
     require_manage_automation(&state, &identity, organization_id).await?;
     find_run_in_org(&state, organization_id, run_id).await?;
 
-    state
+    let replayed = state
         .usecase
         .replay_run_from_step(organization_id, run_id, payload.connector_id)
         .await?;
-    let replayed = find_run_in_org(&state, organization_id, run_id).await?;
 
     Ok(Response::OK(RunResponse::from(replayed)))
 }

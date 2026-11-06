@@ -29,7 +29,7 @@ pub struct CreateFolderRequest {
         (status = 400, description = "The name is empty or longer than 80 characters"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
-        (status = 409, description = "The parent folder does not exist, or a sibling already has this name (case-insensitive)"),
+        (status = 409, description = "The parent folder does not exist, a sibling already has this name (case-insensitive), the organization already holds 500 folders, or the folder would sit deeper than 8 levels"),
     ),
     security(("bearer_auth" = []))
 )]

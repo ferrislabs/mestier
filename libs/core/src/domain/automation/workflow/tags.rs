@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 pub const MAX_TAGS: usize = 10;
 pub const MAX_TAG_LENGTH: usize = 30;
+pub const MAX_RAW_TAGS: usize = 50;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorkflowTags(Vec<String>);
@@ -12,8 +13,8 @@ pub enum WorkflowTagsError {
     TooMany,
     #[error("a tag cannot be empty")]
     Empty,
-    #[error("the tag `{tag}` holds more than {MAX_TAG_LENGTH} characters")]
-    TooLong { tag: String },
+    #[error("a tag holds at most {MAX_TAG_LENGTH} characters")]
+    TooLong,
 }
 
 impl WorkflowTags {
@@ -34,6 +35,10 @@ impl TryFrom<Vec<String>> for WorkflowTags {
     type Error = WorkflowTagsError;
 
     fn try_from(raw: Vec<String>) -> Result<Self, Self::Error> {
+        if raw.len() > MAX_RAW_TAGS {
+            return Err(WorkflowTagsError::TooMany);
+        }
+
         let mut seen = HashSet::with_capacity(raw.len());
         let mut kept = Vec::with_capacity(raw.len().min(MAX_TAGS));
 
@@ -43,9 +48,7 @@ impl TryFrom<Vec<String>> for WorkflowTags {
                 return Err(WorkflowTagsError::Empty);
             }
             if trimmed.chars().count() > MAX_TAG_LENGTH {
-                return Err(WorkflowTagsError::TooLong {
-                    tag: trimmed.to_owned(),
-                });
+                return Err(WorkflowTagsError::TooLong);
             }
             if seen.insert(trimmed.to_lowercase()) {
                 kept.push(trimmed.to_owned());
@@ -121,10 +124,7 @@ mod tests {
         let thirty_one = "é".repeat(31);
 
         assert!(tags(&[&thirty]).is_ok());
-        assert_eq!(
-            tags(&[&thirty_one]),
-            Err(WorkflowTagsError::TooLong { tag: thirty_one })
-        );
+        assert_eq!(tags(&[&thirty_one]), Err(WorkflowTagsError::TooLong));
     }
 
     #[test]
@@ -132,5 +132,37 @@ mod tests {
         let padded = format!("  {}  ", "a".repeat(30));
 
         assert!(tags(&[&padded]).is_ok());
+    }
+
+    #[test]
+    fn fifty_raw_entries_are_read_and_fifty_one_are_refused_before_any_is_looked_at() {
+        let fifty: Vec<String> = (0..MAX_RAW_TAGS).map(|_| "same".to_owned()).collect();
+        let fifty_one: Vec<String> = (0..=MAX_RAW_TAGS).map(|_| "same".to_owned()).collect();
+        let fifty_one_blanks: Vec<String> = (0..=MAX_RAW_TAGS).map(|_| " ".to_owned()).collect();
+
+        assert_eq!(
+            WorkflowTags::try_from(fifty).map(|parsed| parsed.as_slice().len()),
+            Ok(1),
+            "duplicates collapse, so the raw cap is the only thing in play"
+        );
+        assert_eq!(
+            WorkflowTags::try_from(fifty_one),
+            Err(WorkflowTagsError::TooMany)
+        );
+        assert_eq!(
+            WorkflowTags::try_from(fifty_one_blanks),
+            Err(WorkflowTagsError::TooMany),
+            "the raw cap wins over the first blank entry"
+        );
+    }
+
+    #[test]
+    fn an_oversized_tag_is_never_echoed_back_in_the_message() {
+        let huge = "x".repeat(5_000);
+
+        let error = tags(&[&huge]).expect_err("too long");
+
+        assert!(!error.to_string().contains("xxxx"), "{error}");
+        assert!(error.to_string().len() < 100);
     }
 }

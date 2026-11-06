@@ -131,20 +131,31 @@ async fn fetch_overviews(
 ) -> Result<Vec<RunOverview>, CoreError> {
     let rows = sqlx::query_as!(
         RunOverviewRow,
-        r#"SELECT r.id, r.org_id, r.workflow_id, r.workflow_version_id, r.trigger_event_id,
+        r#"WITH version_sizes AS MATERIALIZED (
+               SELECT wv.id,
+                      wv.created_at,
+                      (CASE WHEN jsonb_typeof(wv.graph -> 'connectors') = 'array'
+                            THEN jsonb_array_length(wv.graph -> 'connectors')
+                            ELSE 0
+                       END)::int4 AS connectors
+               FROM automation.workflow_version wv
+               WHERE wv.id IN (
+                   SELECT DISTINCT scoped.workflow_version_id
+                   FROM automation.run scoped
+                   WHERE scoped.org_id = $1 AND ($2::uuid IS NULL OR scoped.id = $2)
+               )
+           )
+           SELECT r.id, r.org_id, r.workflow_id, r.workflow_version_id, r.trigger_event_id,
                   r.trigger_payload, r.trigger_id, r.status, r.error, r.next_attempt_at,
                   r.locked_at, r.locked_by, r.started_at, r.finished_at, r.created_at,
                   r.run_number AS "number!",
                   COALESCE(done.connectors, 0)::int4 AS "steps_done!",
-                  (CASE WHEN jsonb_typeof(wv.graph -> 'connectors') = 'array'
-                        THEN jsonb_array_length(wv.graph -> 'connectors')
-                        ELSE 0
-                   END)::int4 AS "steps_total!",
+                  version_sizes.connectors AS "steps_total!",
                   e.name AS "trigger_event_name?",
                   failed.connector_id AS "failed_connector_id?",
-                  wv.created_at AS "workflow_version_created_at!"
+                  version_sizes.created_at AS "workflow_version_created_at!"
            FROM automation.run r
-           JOIN automation.workflow_version wv ON wv.id = r.workflow_version_id
+           JOIN version_sizes ON version_sizes.id = r.workflow_version_id
            LEFT JOIN automation.event e ON e.id = r.trigger_event_id AND e.org_id = r.org_id
            LEFT JOIN LATERAL (
                SELECT count(DISTINCT connector_id) AS connectors
@@ -967,6 +978,60 @@ mod tests {
         assert_eq!(overview.steps_total, 3);
         assert_eq!(overview.failed_connector_id, None);
         assert_eq!(overview.run.id, run.id);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn each_run_reports_the_size_of_the_version_it_is_pinned_to() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "overview-versions").await;
+        let (workflow_id, small_version) =
+            seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let large_version = with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert_version(org_id, workflow_id, &three_connector_graph(), None)
+                .await
+        })
+        .await
+        .unwrap()
+        .id;
+        let legacy_version = generate_uuid_v7();
+        sqlx::query(
+            "INSERT INTO automation.workflow_version (id, workflow_id, version, graph)
+             VALUES ($1, $2, 99, '{}'::jsonb)",
+        )
+        .bind(legacy_version)
+        .bind(workflow_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let mut expected = Vec::new();
+        for (version_id, connectors) in [
+            (small_version, 1),
+            (large_version, 3),
+            (small_version, 1),
+            (large_version, 3),
+            (legacy_version, 0),
+            (large_version, 3),
+        ] {
+            let run = create(&pool, &pending_run(org_id, workflow_id, version_id)).await;
+            expected.push((run.id, connectors));
+        }
+
+        let listed = overviews(&pool, org_id).await;
+
+        assert_eq!(listed.len(), expected.len());
+        for (run_id, connectors) in expected {
+            let overview = listed
+                .iter()
+                .find(|overview| overview.run.id == run_id)
+                .expect("every run is listed");
+            assert_eq!(overview.steps_total, connectors, "run {run_id}");
+            let alone = overview_of(&pool, org_id, run_id).await.unwrap();
+            assert_eq!(alone.steps_total, connectors, "run {run_id} read alone");
+        }
     }
 
     #[tokio::test]

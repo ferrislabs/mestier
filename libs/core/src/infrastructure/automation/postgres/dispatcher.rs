@@ -74,6 +74,7 @@ impl<'tx> EventDispatchRepository for PgEventDispatchRepository<'tx> {
                  AND s.kind = 'workflow'
                 JOIN automation.workflow w
                   ON w.id = s.target_id
+                 AND w.org_id = e.org_id
                  AND w.current_version_id IS NOT NULL
                  AND w.enabled
                  AND w.archived_at IS NULL
@@ -668,6 +669,25 @@ mod tests {
         dispatch(&pool).await;
 
         assert_eq!(runs_for(&pool, event_id).await, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_subscription_pointing_at_another_organizations_workflow_receives_no_run() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        let mine = seed_organization(&pool).await;
+        let theirs = seed_organization(&pool).await;
+        let their_workflow = seed_workflow(&pool, theirs).await;
+        seed_workflow_subscription(&pool, mine, their_workflow, "t1", &["quote.accepted"], true)
+            .await;
+        let event_id = seed_event(&pool, mine, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(runs_for(&pool, event_id).await, 0);
+        assert_eq!(counter_of(&pool, mine).await, None);
+        assert_eq!(counter_of(&pool, theirs).await, None);
     }
 
     #[tokio::test]

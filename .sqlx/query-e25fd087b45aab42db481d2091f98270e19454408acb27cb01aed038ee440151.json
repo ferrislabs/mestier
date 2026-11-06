@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, parent_id, name, created_at\n               FROM automation.workflow_folder\n               WHERE org_id = $1\n               ORDER BY lower(name), id\n               FOR UPDATE",
+  "query": "UPDATE automation.workflow_folder\n               SET name = COALESCE($3, name),\n                   parent_id = CASE WHEN $4 THEN $5 ELSE parent_id END\n               WHERE org_id = $1 AND id = $2\n               RETURNING id, org_id, parent_id, name, created_at",
   "describe": {
     "columns": [
       {
@@ -31,6 +31,10 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
         "Uuid"
       ]
     },
@@ -42,5 +46,5 @@
       false
     ]
   },
-  "hash": "5c7a3f81f80d5f692f88c5ae304f6fa784763041659e6ed784841af1c8114e06"
+  "hash": "e25fd087b45aab42db481d2091f98270e19454408acb27cb01aed038ee440151"
 }

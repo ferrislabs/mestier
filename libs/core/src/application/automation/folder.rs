@@ -7,7 +7,7 @@ use crate::{
     application::MestierUseCase,
     domain::automation::{
         folder::{
-            CreateFolderCommand, FolderRefusal, UpdateFolderCommand, WorkflowFolder, would_cycle,
+            CreateFolderCommand, FolderRefusal, FolderTree, UpdateFolderCommand, WorkflowFolder,
         },
         ports::WorkflowFolderRepository,
     },
@@ -33,9 +33,9 @@ impl MestierUseCase {
         command: CreateFolderCommand,
     ) -> Result<WorkflowFolder, CoreError> {
         let mut folders = workflow_folder_repository;
-        if let Some(parent_id) = command.parent_id {
-            ensure_folder_exists(&mut folders, command.org_id, parent_id).await?;
-        }
+        folders.lock_tree(command.org_id).await?;
+        let existing = folders.list_by_organization(command.org_id).await?;
+        FolderTree::new(&existing).check_creation(command.parent_id)?;
 
         folders
             .insert(&WorkflowFolder {
@@ -63,29 +63,23 @@ impl MestierUseCase {
         command: UpdateFolderCommand,
     ) -> Result<WorkflowFolder, CoreError> {
         let mut folders = workflow_folder_repository;
-        let mut tree = folders.lock_by_organization(command.org_id).await?;
-        let position = tree
-            .iter()
-            .position(|folder| folder.id == command.id)
+        let current = folders
+            .find_by_id(command.org_id, command.id)
+            .await?
             .ok_or(CoreError::NotFound)?;
 
-        if let Some(Some(parent_id)) = command.parent_id {
-            if !tree.iter().any(|folder| folder.id == parent_id) {
-                return Err(FolderRefusal::Missing.into());
-            }
-            if would_cycle(&tree, command.id, parent_id) {
-                return Err(FolderRefusal::WouldCycle.into());
-            }
+        let moves_to = command
+            .parent_id
+            .filter(|target| *target != current.parent_id);
+        if let Some(target) = moves_to {
+            folders.lock_tree(command.org_id).await?;
+            let tree = folders.list_by_organization(command.org_id).await?;
+            FolderTree::new(&tree).check_move(command.id, target)?;
         }
 
-        let existing = tree.swap_remove(position);
-        let updated = WorkflowFolder {
-            name: command.name.unwrap_or(existing.name),
-            parent_id: command.parent_id.unwrap_or(existing.parent_id),
-            ..existing
-        };
-
-        folders.update(command.org_id, &updated).await
+        folders
+            .update(command.org_id, command.id, command.name.as_ref(), moves_to)
+            .await
     }
 
     #[transactional(workflow_folder)]
@@ -367,6 +361,196 @@ mod tests {
 
         assert!(matches!(updated, CoreError::NotFound));
         assert_eq!(refusal_of(adopted), Some(FolderRefusal::Missing));
+    }
+
+    async fn chain_of_folders(
+        usecase: &MestierUseCase,
+        org_id: OrganizationId,
+        length: usize,
+        prefix: &str,
+    ) -> Vec<WorkflowFolder> {
+        let mut chain: Vec<WorkflowFolder> = Vec::with_capacity(length);
+        for level in 0..length {
+            let parent_id = level.checked_sub(1).map(|previous| chain[previous].id);
+            chain.push(create(usecase, org_id, parent_id, &format!("{prefix}{level}")).await);
+        }
+        chain
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_organization_cannot_hold_more_than_the_maximum_number_of_folders() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "folder-cap").await;
+        let other_org = seed_organization(&pool, "folder-cap-other").await;
+        sqlx::query(
+            "INSERT INTO automation.workflow_folder (id, org_id, name)
+             SELECT gen_random_uuid(), $1, 'bulk-' || n FROM generate_series(1, $2) AS n",
+        )
+        .bind(org_id.0)
+        .bind((crate::domain::automation::folder::MAX_FOLDERS_PER_ORGANIZATION - 1) as i32)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let usecase = use_case(pool);
+
+        let last_allowed = create(&usecase, org_id, None, "The 500th").await;
+        let error = usecase
+            .create_workflow_folder(CreateFolderCommand {
+                org_id,
+                name: name("The 501st"),
+                parent_id: Some(last_allowed.id),
+            })
+            .await
+            .expect_err("the cap is reached");
+        let elsewhere = create(&usecase, other_org, None, "Unaffected").await;
+
+        assert_eq!(refusal_of(error), Some(FolderRefusal::TooMany));
+        assert_eq!(elsewhere.parent_id, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn folders_nest_at_most_eight_levels_deep() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "folder-depth").await;
+        let usecase = use_case(pool);
+        let chain = chain_of_folders(
+            &usecase,
+            org_id,
+            crate::domain::automation::folder::MAX_FOLDER_DEPTH,
+            "level-",
+        )
+        .await;
+
+        let error = usecase
+            .create_workflow_folder(CreateFolderCommand {
+                org_id,
+                name: name("Too deep"),
+                parent_id: Some(chain[chain.len() - 1].id),
+            })
+            .await
+            .expect_err("a ninth level is refused");
+        let sibling = create(&usecase, org_id, Some(chain[chain.len() - 2].id), "Sibling").await;
+
+        assert_eq!(refusal_of(error), Some(FolderRefusal::TooDeep));
+        assert_eq!(sibling.parent_id, Some(chain[chain.len() - 2].id));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_move_is_refused_when_the_moved_subtree_would_pass_the_eighth_level() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "folder-move-depth").await;
+        let usecase = use_case(pool);
+        let target = chain_of_folders(&usecase, org_id, 5, "target-").await;
+        let subtree = chain_of_folders(&usecase, org_id, 4, "subtree-").await;
+
+        let refused = usecase
+            .update_workflow_folder(move_to(org_id, subtree[0].id, Some(target[4].id)))
+            .await
+            .expect_err("5 + 4 levels do not fit in 8");
+        let accepted = usecase
+            .update_workflow_folder(move_to(org_id, subtree[0].id, Some(target[3].id)))
+            .await
+            .unwrap();
+
+        assert_eq!(refusal_of(refused), Some(FolderRefusal::TooDeep));
+        assert_eq!(accepted.parent_id, Some(target[3].id));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_rename_never_waits_for_the_tree_lock_but_a_move_does() {
+        use crate::domain::automation::ports::WorkflowFolderRepository;
+        use crate::infrastructure::automation::postgres::PgWorkflowFolderRepository;
+        use crate::infrastructure::postgres::with_tx;
+
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "folder-lock-scope").await;
+        let usecase = use_case(pool.clone());
+        let root = create(&usecase, org_id, None, "Root").await;
+        let child = create(&usecase, org_id, Some(root.id), "Child").await;
+        let (locked_tx, locked_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+        let holder = tokio::spawn({
+            let pool = pool.clone();
+            async move {
+                with_tx(&pool, async |tx| {
+                    let mut repo = PgWorkflowFolderRepository::new(&tx);
+                    repo.lock_tree(org_id).await?;
+                    locked_tx.send(()).ok();
+                    release_rx.await.ok();
+                    Ok::<_, CoreError>(())
+                })
+                .await
+            }
+        });
+        locked_rx.await.unwrap();
+
+        let renamed = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            usecase.update_workflow_folder(UpdateFolderCommand {
+                org_id,
+                id: child.id,
+                name: Some(name("Renamed")),
+                parent_id: None,
+            }),
+        )
+        .await
+        .expect("a rename must not wait for the tree lock")
+        .unwrap();
+        let same_parent = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            usecase.update_workflow_folder(UpdateFolderCommand {
+                org_id,
+                id: child.id,
+                name: Some(name("Renamed again")),
+                parent_id: Some(Some(root.id)),
+            }),
+        )
+        .await
+        .expect("re-stating the current parent is not a move")
+        .unwrap();
+        let mut moving = Box::pin(usecase.update_workflow_folder(move_to(org_id, child.id, None)));
+        let waiting =
+            tokio::time::timeout(std::time::Duration::from_millis(300), &mut moving).await;
+
+        assert_eq!(renamed.name.as_str(), "Renamed");
+        assert_eq!(same_parent.name.as_str(), "Renamed again");
+        assert!(waiting.is_err(), "a move must wait for the tree lock");
+        release_tx.send(()).unwrap();
+        holder.await.unwrap().unwrap();
+        let moved = tokio::time::timeout(std::time::Duration::from_secs(5), moving)
+            .await
+            .expect("the move proceeds once the lock is released")
+            .unwrap();
+        assert_eq!(moved.parent_id, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn two_opposite_moves_at_once_cannot_close_a_loop() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "folder-race").await;
+        let usecase = use_case(pool);
+        let a = create(&usecase, org_id, None, "A").await;
+        let b = create(&usecase, org_id, None, "B").await;
+
+        let (a_under_b, b_under_a) = tokio::join!(
+            usecase.update_workflow_folder(move_to(org_id, a.id, Some(b.id))),
+            usecase.update_workflow_folder(move_to(org_id, b.id, Some(a.id))),
+        );
+
+        let outcomes = [a_under_b, b_under_a];
+        let succeeded = outcomes.iter().filter(|outcome| outcome.is_ok()).count();
+        let refused = outcomes
+            .into_iter()
+            .filter_map(Result::err)
+            .map(refusal_of)
+            .collect::<Vec<_>>();
+        assert_eq!(succeeded, 1);
+        assert_eq!(refused, vec![Some(FolderRefusal::WouldCycle)]);
     }
 
     #[tokio::test]

@@ -307,3 +307,102 @@ async fn the_view_only_member_lists_archived_workflows_but_cannot_archive() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn archiving_and_enabling_in_one_request_is_a_validation_error() {
+    let app = harness::start().await;
+    let workflow = created(&app, json!({ "name": "Contradiction" })).await;
+
+    let response = patch(
+        &app,
+        &workflow,
+        json!({ "archived": true, "enabled": true }),
+    )
+    .await;
+
+    assert_eq!(response.status(), 400);
+    let body: Value = response.json().await.expect("json");
+    assert_eq!(body["code"], "E_VALIDATION");
+    let reread: Value = client()
+        .get(app.workflow_url(id_of(&workflow)))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the read")
+        .json()
+        .await
+        .expect("json");
+    assert_eq!(reread["data"]["archived_at"], Value::Null);
+    assert_eq!(reread["data"]["enabled"], true);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn workflow_names_and_descriptions_are_bounded_on_create_and_update() {
+    let app = harness::start().await;
+    let workflow = created(&app, json!({ "name": "  Padded  " })).await;
+    assert_eq!(workflow["name"], "Padded");
+
+    for name in [json!(""), json!("   "), json!("é".repeat(121))] {
+        let response = create(&app, json!({ "name": name })).await;
+        assert_eq!(response.status(), 400, "create with {name}");
+        let body: Value = response.json().await.expect("json");
+        assert_eq!(body["code"], "E_VALIDATION");
+
+        let response = patch(&app, &workflow, json!({ "name": name })).await;
+        assert_eq!(response.status(), 400, "update with {name}");
+        let body: Value = response.json().await.expect("json");
+        assert_eq!(
+            body["code"], "E_VALIDATION",
+            "a blank name is a 400, never a 500"
+        );
+    }
+    let too_long = json!("é".repeat(2001));
+    assert_eq!(
+        create(&app, json!({ "name": "Ok", "description": too_long }))
+            .await
+            .status(),
+        400
+    );
+    assert_eq!(
+        patch(&app, &workflow, json!({ "description": too_long }))
+            .await
+            .status(),
+        400
+    );
+
+    let longest = patched(
+        &app,
+        &workflow,
+        json!({ "name": "é".repeat(120), "description": "é".repeat(2000) }),
+    )
+    .await;
+    assert_eq!(
+        longest["name"].as_str().expect("a name").chars().count(),
+        120
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn too_many_raw_tags_are_refused_without_echoing_an_oversized_one() {
+    let app = harness::start().await;
+    let workflow = created(&app, json!({ "name": "Tagged" })).await;
+    let fifty_one: Vec<String> = (0..51).map(|_| "same".to_owned()).collect();
+
+    let response = patch(&app, &workflow, json!({ "tags": fifty_one })).await;
+    assert_eq!(response.status(), 400);
+
+    let huge = "secret-looking-".repeat(100);
+    let response = patch(&app, &workflow, json!({ "tags": [huge] })).await;
+    assert_eq!(response.status(), 400);
+    let body = response.text().await.expect("a body");
+    assert!(!body.contains("secret-looking"), "{body}");
+
+    app.cleanup().await;
+}

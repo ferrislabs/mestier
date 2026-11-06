@@ -5,8 +5,12 @@ CREATE TABLE automation.workflow_folder (
     name       TEXT        NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
+    CONSTRAINT uq_automation_workflow_folder_org_id UNIQUE (org_id, id),
     CONSTRAINT fk_automation_workflow_folder_parent
-        FOREIGN KEY (parent_id) REFERENCES automation.workflow_folder(id) ON DELETE RESTRICT,
+        FOREIGN KEY (org_id, parent_id) REFERENCES automation.workflow_folder (org_id, id)
+        ON DELETE RESTRICT,
+    CONSTRAINT chk_automation_workflow_folder_not_own_parent
+        CHECK (parent_id IS DISTINCT FROM id),
     CONSTRAINT chk_automation_workflow_folder_name
         CHECK (char_length(btrim(name)) BETWEEN 1 AND 80)
 );
@@ -26,7 +30,8 @@ ALTER TABLE automation.workflow
 
 ALTER TABLE automation.workflow
     ADD CONSTRAINT fk_automation_workflow_folder
-        FOREIGN KEY (folder_id) REFERENCES automation.workflow_folder(id) ON DELETE RESTRICT,
+        FOREIGN KEY (org_id, folder_id) REFERENCES automation.workflow_folder (org_id, id)
+        ON DELETE RESTRICT,
     ADD CONSTRAINT chk_automation_workflow_tags
         CHECK (cardinality(tags) <= 10),
     ADD CONSTRAINT chk_automation_workflow_archived_disabled

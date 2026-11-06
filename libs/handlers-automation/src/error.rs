@@ -30,20 +30,12 @@ impl Refusal {
     }
 
     fn from_conflict(message: &str) -> Option<Self> {
-        if WorkflowRefusal::from_conflict(message).is_some() {
+        if WorkflowRefusal::from_conflict(message) == Some(WorkflowRefusal::Archived) {
             return Some(Self::WorkflowArchived);
         }
         match FolderRefusal::from_conflict(message) {
             Some(FolderRefusal::NotEmpty) => Some(Self::FolderNotEmpty),
             _ => None,
-        }
-    }
-}
-
-impl From<WorkflowRefusal> for Refusal {
-    fn from(refusal: WorkflowRefusal) -> Self {
-        match refusal {
-            WorkflowRefusal::Archived => Self::WorkflowArchived,
         }
     }
 }
@@ -62,18 +54,26 @@ impl From<ApiError> for AutomationError {
 
 impl From<WorkflowRefusal> for AutomationError {
     fn from(refusal: WorkflowRefusal) -> Self {
-        Self::Refused(refusal.into())
+        match refusal {
+            WorkflowRefusal::Archived => Self::Refused(Refusal::WorkflowArchived),
+            WorkflowRefusal::ConflictingFlags => {
+                Self::Api(ApiError::Validation(refusal.message().to_owned()))
+            }
+        }
     }
 }
 
 impl From<CoreError> for AutomationError {
     fn from(error: CoreError) -> Self {
-        match &error {
-            CoreError::Conflict(message) => match Refusal::from_conflict(message) {
-                Some(refusal) => Self::Refused(refusal),
-                None => Self::Api(error.into()),
-            },
-            _ => Self::Api(error.into()),
+        let CoreError::Conflict(message) = &error else {
+            return Self::Api(error.into());
+        };
+        if let Some(refusal) = WorkflowRefusal::from_conflict(message) {
+            return refusal.into();
+        }
+        match Refusal::from_conflict(message) {
+            Some(refusal) => Self::Refused(refusal),
+            None => Self::Api(error.into()),
         }
     }
 }
@@ -125,6 +125,17 @@ mod tests {
         assert_eq!(json["status"], 409);
         assert!(json["message"].is_string());
         assert!(json.get("details").is_none());
+    }
+
+    #[tokio::test]
+    async fn archiving_and_enabling_together_is_a_validation_error_not_a_conflict() {
+        let error = AutomationError::from(CoreError::from(WorkflowRefusal::ConflictingFlags));
+
+        let (status, json) = body_of(error).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(json["code"], "E_VALIDATION");
+        assert_eq!(json["status"], 400);
     }
 
     #[tokio::test]

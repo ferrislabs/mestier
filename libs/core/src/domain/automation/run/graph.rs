@@ -2,7 +2,7 @@
 //! composes into a traversal. Kept separate and side-effect free so the
 //! shape of "what comes next" is unit-testable without a database.
 
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde_json::{Map, Value};
 
@@ -91,7 +91,7 @@ pub fn descendants_via<'a>(graph: &'a Graph, start: &[&'a str]) -> HashSet<&'a s
 pub fn pass_through_output(
     graph: &Graph,
     connector_id: &str,
-    connector_outputs: &BTreeMap<String, Value>,
+    produced_in_scope: impl Fn(&str) -> Option<Value>,
     trigger_payload: Option<&Value>,
 ) -> Value {
     let from_predecessor = graph
@@ -99,8 +99,8 @@ pub fn pass_through_output(
         .iter()
         .filter(|edge| edge.to == connector_id)
         .find_map(|edge| {
-            if let Some(produced) = connector_outputs.get(&edge.from) {
-                return Some(produced.get("output").cloned().unwrap_or(Value::Null));
+            if let Some(produced) = produced_in_scope(&edge.from) {
+                return Some(produced);
             }
             graph
                 .triggers
@@ -403,11 +403,12 @@ mod tests {
         }
     }
 
-    fn outputs(entries: &[(&str, Value)]) -> BTreeMap<String, Value> {
-        entries
+    fn produced(entries: &[(&str, Value)]) -> impl Fn(&str) -> Option<Value> {
+        let outputs: BTreeMap<String, Value> = entries
             .iter()
-            .map(|(id, output)| ((*id).to_string(), json!({ "output": output })))
-            .collect()
+            .map(|(id, output)| ((*id).to_string(), output.clone()))
+            .collect();
+        move |source: &str| outputs.get(source).cloned()
     }
 
     #[test]
@@ -420,10 +421,12 @@ mod tests {
             edges: vec![edge("t1", "c1", None), edge("c1", "c2", None)],
             triggers: vec![trigger("t1")],
         };
-        let produced = outputs(&[("c1", json!({ "status": 200 }))]);
-
-        let passed =
-            pass_through_output(&graph, "c2", &produced, Some(&json!({ "from": "trigger" })));
+        let passed = pass_through_output(
+            &graph,
+            "c2",
+            produced(&[("c1", json!({ "status": 200 }))]),
+            Some(&json!({ "from": "trigger" })),
+        );
 
         assert_eq!(passed, json!({ "status": 200 }));
     }
@@ -437,7 +440,7 @@ mod tests {
         };
         let payload = json!({ "quote": 42 });
 
-        let passed = pass_through_output(&graph, "c1", &BTreeMap::new(), Some(&payload));
+        let passed = pass_through_output(&graph, "c1", produced(&[]), Some(&payload));
 
         assert_eq!(passed, payload);
     }
@@ -458,10 +461,13 @@ mod tests {
             ],
             triggers: vec![trigger("t1")],
         };
-        let produced = outputs(&[("a", json!("from a")), ("b", json!("from b"))]);
-
         assert_eq!(
-            pass_through_output(&graph, "merge", &produced, None),
+            pass_through_output(
+                &graph,
+                "merge",
+                produced(&[("a", json!("from a")), ("b", json!("from b"))]),
+                None
+            ),
             json!("from b"),
             "b's edge comes first in the edge list"
         );
@@ -483,10 +489,13 @@ mod tests {
             ],
             triggers: vec![trigger("t1")],
         };
-        let produced = outputs(&[("ran", json!("only me"))]);
-
         assert_eq!(
-            pass_through_output(&graph, "merge", &produced, None),
+            pass_through_output(
+                &graph,
+                "merge",
+                produced(&[("ran", json!("only me"))]),
+                None
+            ),
             json!("only me")
         );
     }
@@ -500,11 +509,11 @@ mod tests {
         };
 
         assert_eq!(
-            pass_through_output(&graph, "c1", &BTreeMap::new(), None),
+            pass_through_output(&graph, "c1", produced(&[]), None),
             Value::Null
         );
         assert_eq!(
-            pass_through_output(&graph, "c1", &BTreeMap::new(), Some(&json!({ "a": 1 }))),
+            pass_through_output(&graph, "c1", produced(&[]), Some(&json!({ "a": 1 }))),
             json!({ "a": 1 }),
             "a root connector with no trigger edge falls back to the payload"
         );

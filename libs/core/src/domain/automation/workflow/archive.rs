@@ -22,14 +22,16 @@ impl ArchiveScope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkflowRefusal {
     Archived,
+    ConflictingFlags,
 }
 
 impl WorkflowRefusal {
-    const ALL: [Self; 1] = [Self::Archived];
+    const ALL: [Self; 2] = [Self::Archived, Self::ConflictingFlags];
 
     pub fn message(self) -> &'static str {
         match self {
             Self::Archived => "the workflow is archived",
+            Self::ConflictingFlags => "a workflow cannot be archived and enabled in one request",
         }
     }
 
@@ -88,6 +90,17 @@ mod tests {
             WorkflowRefusal::from_conflict(&message),
             Some(WorkflowRefusal::Archived)
         );
+    }
+
+    #[test]
+    fn every_refusal_survives_the_trip_through_a_conflict() {
+        for refusal in WorkflowRefusal::ALL {
+            let CoreError::Conflict(message) = CoreError::from(refusal) else {
+                panic!("a refusal must become a conflict");
+            };
+
+            assert_eq!(WorkflowRefusal::from_conflict(&message), Some(refusal));
+        }
     }
 
     #[test]

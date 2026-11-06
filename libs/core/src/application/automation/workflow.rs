@@ -12,7 +12,8 @@ use crate::{
         ports::{CredentialRepository, SubscriptionRepository, WorkflowRepository},
         workflow::{
             ArchiveScope, CreateWorkflowCommand, GraphError, SaveWorkflowVersionCommand,
-            UpdateWorkflowCommand, Workflow, WorkflowInitialState, WorkflowVersion, validate_graph,
+            UpdateWorkflowCommand, Workflow, WorkflowDescription, WorkflowInitialState,
+            WorkflowName, WorkflowVersion, validate_graph,
         },
     },
 };
@@ -47,6 +48,13 @@ impl MestierUseCase {
     ) -> Result<Workflow, CoreError> {
         let mut repository = workflow_repository;
         let mut folders = workflow_folder_repository;
+        let name = WorkflowName::try_from(command.name)
+            .map_err(|error| CoreError::Conflict(error.to_string()))?;
+        let description = command
+            .description
+            .map(WorkflowDescription::try_from)
+            .transpose()
+            .map_err(|error| CoreError::Conflict(error.to_string()))?;
         if let Some(folder_id) = initial_state.folder_id {
             ensure_folder_exists(&mut folders, command.org_id, folder_id).await?;
         }
@@ -55,8 +63,8 @@ impl MestierUseCase {
         let workflow = Workflow {
             id: generate_uuid_v7(),
             org_id: command.org_id,
-            name: command.name,
-            description: command.description,
+            name: name.into_string(),
+            description: description.map(WorkflowDescription::into_string),
             enabled: initial_state.enabled,
             current_version_id: None,
             layout: None,
@@ -106,7 +114,7 @@ impl MestierUseCase {
         let mut repository = workflow_repository;
         let mut folders = workflow_folder_repository;
         let existing = repository
-            .find_by_id(command.org_id, command.id)
+            .find_by_id_for_update(command.org_id, command.id)
             .await?
             .ok_or(CoreError::NotFound)?;
         if let Some(Some(folder_id)) = command.folder_id {
@@ -414,7 +422,7 @@ mod tests {
             .update_workflow(UpdateWorkflowCommand {
                 org_id,
                 id: created.id,
-                name: Some("New name".to_string()),
+                name: Some(WorkflowName::try_from("New name".to_string()).unwrap()),
                 description: Some(None),
                 enabled: Some(false),
                 folder_id: None,
@@ -440,7 +448,7 @@ mod tests {
             .update_workflow(UpdateWorkflowCommand {
                 org_id,
                 id: generate_uuid_v7(),
-                name: Some("Nope".to_string()),
+                name: Some(WorkflowName::try_from("Nope".to_string()).unwrap()),
                 description: None,
                 enabled: None,
                 folder_id: None,
@@ -926,6 +934,19 @@ mod tests {
         }
     }
 
+    fn untouched_for(org_id: OrganizationId, id: Uuid) -> UpdateWorkflowCommand {
+        UpdateWorkflowCommand {
+            org_id,
+            id,
+            name: None,
+            description: None,
+            enabled: None,
+            folder_id: None,
+            tags: None,
+            archived: None,
+        }
+    }
+
     fn tags(raw: &[&str]) -> WorkflowTags {
         WorkflowTags::try_from(raw.iter().map(|tag| (*tag).to_owned()).collect::<Vec<_>>()).unwrap()
     }
@@ -1059,7 +1080,7 @@ mod tests {
             .unwrap();
         let renamed = usecase
             .update_workflow(UpdateWorkflowCommand {
-                name: Some("Other".to_string()),
+                name: Some(WorkflowName::try_from("Other".to_string()).unwrap()),
                 ..untouched(&created)
             })
             .await
@@ -1179,6 +1200,73 @@ mod tests {
             .unwrap();
         assert!(restored.enabled);
         assert_eq!(restored.archived_at, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_update_waits_for_a_concurrent_one_and_never_undoes_its_archive() {
+        use crate::domain::automation::ports::WorkflowRepository;
+        use crate::infrastructure::automation::postgres::PgWorkflowRepository;
+        use crate::infrastructure::postgres::with_tx;
+
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "update-race").await;
+        let usecase = use_case(pool.clone());
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Name"))
+            .await
+            .unwrap();
+        let (locked_tx, locked_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+        let archiver = tokio::spawn({
+            let pool = pool.clone();
+            let id = created.id;
+            async move {
+                with_tx(&pool, async |tx| {
+                    let mut repo = PgWorkflowRepository::new(&tx);
+                    let current = repo
+                        .find_by_id_for_update(org_id, id)
+                        .await?
+                        .expect("the workflow exists");
+                    locked_tx.send(()).ok();
+                    release_rx.await.ok();
+                    let archived = current.apply(
+                        UpdateWorkflowCommand {
+                            archived: Some(true),
+                            ..untouched_for(org_id, id)
+                        },
+                        chrono::Utc::now(),
+                    )?;
+                    repo.update(org_id, &archived).await
+                })
+                .await
+            }
+        });
+        locked_rx.await.unwrap();
+
+        let mut renaming = Box::pin(usecase.update_workflow(UpdateWorkflowCommand {
+            name: Some(WorkflowName::try_from("Renamed".to_string()).unwrap()),
+            ..untouched(&created)
+        }));
+        let waiting =
+            tokio::time::timeout(std::time::Duration::from_millis(300), &mut renaming).await;
+
+        assert!(
+            waiting.is_err(),
+            "the second update must wait for the first"
+        );
+        release_tx.send(()).unwrap();
+        archiver.await.unwrap().unwrap();
+        let renamed = tokio::time::timeout(std::time::Duration::from_secs(5), renaming)
+            .await
+            .expect("the waiting update proceeds once the first commits")
+            .unwrap();
+        assert_eq!(renamed.name, "Renamed");
+        assert!(
+            renamed.archived_at.is_some(),
+            "the rename was computed from a stale copy and unarchived the workflow"
+        );
+        assert!(!renamed.enabled);
     }
 
     #[tokio::test]

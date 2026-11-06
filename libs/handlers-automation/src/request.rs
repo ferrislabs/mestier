@@ -10,3 +10,7 @@ where
 {
     Deserialize::deserialize(deserializer).map(Some)
 }
+
+pub(crate) fn invalid(error: impl std::fmt::Display) -> handlers::ApiError {
+    handlers::ApiError::Validation(error.to_string())
+}

@@ -4,6 +4,7 @@ use uuid::Uuid;
 use super::WorkflowLayout;
 use super::graph::Graph;
 use super::tags::WorkflowTags;
+use super::text::{WorkflowDescription, WorkflowName};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateWorkflowCommand {
@@ -37,8 +38,8 @@ impl Default for WorkflowInitialState {
 pub struct UpdateWorkflowCommand {
     pub org_id: OrganizationId,
     pub id: Uuid,
-    pub name: Option<String>,
-    pub description: Option<Option<String>>,
+    pub name: Option<WorkflowName>,
+    pub description: Option<Option<WorkflowDescription>>,
     pub enabled: Option<bool>,
     pub folder_id: Option<Option<Uuid>>,
     pub tags: Option<WorkflowTags>,

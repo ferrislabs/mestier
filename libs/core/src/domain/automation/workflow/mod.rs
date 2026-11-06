@@ -7,6 +7,7 @@ mod archive;
 mod commands;
 mod graph;
 mod tags;
+mod text;
 mod validation;
 
 use std::collections::BTreeMap;
@@ -21,7 +22,11 @@ pub use commands::{
     CreateWorkflowCommand, SaveWorkflowVersionCommand, UpdateWorkflowCommand, WorkflowInitialState,
 };
 pub use graph::{Branch, Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind};
-pub use tags::{MAX_TAG_LENGTH, MAX_TAGS, WorkflowTags, WorkflowTagsError};
+pub use tags::{MAX_RAW_TAGS, MAX_TAG_LENGTH, MAX_TAGS, WorkflowTags, WorkflowTagsError};
+pub use text::{
+    MAX_WORKFLOW_DESCRIPTION_LENGTH, MAX_WORKFLOW_NAME_LENGTH, WorkflowDescription,
+    WorkflowDescriptionError, WorkflowName, WorkflowNameError,
+};
 pub use validation::{
     GraphError, MAX_NODE_DESCRIPTION_LENGTH, MAX_NODE_NAME_LENGTH, NodeRef, validate_graph,
 };
@@ -65,13 +70,21 @@ impl Workflow {
         command: UpdateWorkflowCommand,
         now: DateTime<Utc>,
     ) -> Result<Self, WorkflowRefusal> {
-        let renamed = command.name.as_ref().is_some_and(|name| *name != self.name);
-        let redescribed = command
-            .description
+        if command.archived == Some(true) && command.enabled == Some(true) {
+            return Err(WorkflowRefusal::ConflictingFlags);
+        }
+
+        let renamed = command
+            .name
             .as_ref()
-            .is_some_and(|description| *description != self.description);
-        let name = command.name.unwrap_or(self.name);
-        let description = command.description.unwrap_or(self.description);
+            .is_some_and(|name| name.as_str() != self.name);
+        let redescribed = command.description.as_ref().is_some_and(|description| {
+            description.as_ref().map(WorkflowDescription::as_str) != self.description.as_deref()
+        });
+        let name = command.name.map_or(self.name, WorkflowName::into_string);
+        let description = command.description.map_or(self.description, |replacement| {
+            replacement.map(WorkflowDescription::into_string)
+        });
         let archived_at = match command.archived {
             Some(true) => self.archived_at.or(Some(now)),
             Some(false) => None,
@@ -82,6 +95,7 @@ impl Workflow {
             (Some(_), _) => false,
             (None, requested) => requested.unwrap_or(self.enabled),
         };
+
         Ok(Self {
             name,
             description,
@@ -237,7 +251,7 @@ mod tests {
             .clone()
             .apply(
                 UpdateWorkflowCommand {
-                    name: Some("Renamed".to_owned()),
+                    name: Some(WorkflowName::try_from("Renamed".to_owned()).expect("valid name")),
                     ..untouched(&before)
                 },
                 now,
@@ -276,8 +290,13 @@ mod tests {
             .clone()
             .apply(
                 UpdateWorkflowCommand {
-                    name: Some(before.name.clone()),
-                    description: Some(before.description.clone()),
+                    name: Some(WorkflowName::try_from(before.name.clone()).expect("valid name")),
+                    description: Some(
+                        before
+                            .description
+                            .clone()
+                            .map(|text| WorkflowDescription::try_from(text).expect("valid text")),
+                    ),
                     ..untouched(&before)
                 },
                 later(&before),
@@ -455,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn archiving_and_enabling_in_one_call_is_refused() {
+    fn archiving_and_enabling_in_one_call_is_a_contradiction() {
         let before = workflow();
 
         let refused = before
@@ -470,7 +489,75 @@ mod tests {
             )
             .expect_err("contradictory");
 
-        assert_eq!(refused, WorkflowRefusal::Archived);
+        assert_eq!(refused, WorkflowRefusal::ConflictingFlags);
+    }
+
+    #[test]
+    fn archiving_an_already_archived_workflow_while_enabling_is_still_a_contradiction() {
+        let before = Workflow {
+            enabled: false,
+            archived_at: Some(later(&workflow())),
+            ..workflow()
+        };
+
+        let refused = before
+            .clone()
+            .apply(
+                UpdateWorkflowCommand {
+                    archived: Some(true),
+                    enabled: Some(true),
+                    ..untouched(&before)
+                },
+                later(&before),
+            )
+            .expect_err("contradictory");
+
+        assert_eq!(refused, WorkflowRefusal::ConflictingFlags);
+    }
+
+    #[test]
+    fn a_name_is_trimmed_and_held_between_one_and_120_characters() {
+        assert_eq!(
+            WorkflowName::try_from("  Quote accepted ".to_string())
+                .unwrap()
+                .as_str(),
+            "Quote accepted"
+        );
+        assert_eq!(
+            WorkflowName::try_from("   ".to_string()),
+            Err(WorkflowNameError::Empty)
+        );
+        assert_eq!(
+            WorkflowName::try_from(String::new()),
+            Err(WorkflowNameError::Empty)
+        );
+        assert!(WorkflowName::try_from(format!(" {} ", "é".repeat(120))).is_ok());
+        assert_eq!(
+            WorkflowName::try_from("é".repeat(121)),
+            Err(WorkflowNameError::TooLong)
+        );
+    }
+
+    #[test]
+    fn a_description_holds_at_most_2000_characters_and_may_be_empty() {
+        assert!(WorkflowDescription::try_from("é".repeat(2000)).is_ok());
+        assert!(WorkflowDescription::try_from(String::new()).is_ok());
+        assert_eq!(
+            WorkflowDescription::try_from("é".repeat(2001)),
+            Err(WorkflowDescriptionError::TooLong)
+        );
+    }
+
+    #[test]
+    fn the_text_errors_never_echo_the_offending_text() {
+        let huge = "x".repeat(10_000);
+
+        let name = WorkflowName::try_from(huge.clone())
+            .unwrap_err()
+            .to_string();
+        let description = WorkflowDescription::try_from(huge).unwrap_err().to_string();
+
+        assert!(!name.contains("xxxx") && !description.contains("xxxx"));
     }
 
     #[test]

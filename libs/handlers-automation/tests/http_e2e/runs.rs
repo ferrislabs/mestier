@@ -249,3 +249,46 @@ async fn a_run_of_another_organization_reads_back_not_found() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn replaying_a_run_of_an_archived_workflow_answers_its_own_conflict() {
+    let app = harness::start().await;
+    let workflow_id = main_workflow(&app).await;
+    let run_id = start(&app, &workflow_id).await;
+    insert_step(&app, &run_id, "c1", "succeeded").await;
+    sqlx::query("UPDATE automation.run SET status = 'succeeded' WHERE id = $1")
+        .bind(run_id.parse::<Uuid>().expect("a uuid"))
+        .execute(&app.pool)
+        .await
+        .expect("finish the run");
+    let archived = client()
+        .patch(app.workflow_url(&workflow_id))
+        .bearer_auth(&app.token)
+        .json(&json!({ "archived": true }))
+        .send()
+        .await
+        .expect("the api answers the archive");
+    assert_eq!(archived.status(), 200);
+
+    let replayed = client()
+        .post(app.run_replay_url(&run_id))
+        .bearer_auth(&app.token)
+        .json(&json!({ "connector_id": "c1" }))
+        .send()
+        .await
+        .expect("the api answers the replay");
+
+    assert_eq!(replayed.status(), 409);
+    let body: Value = replayed.json().await.expect("json");
+    assert_eq!(body["code"], "E_WORKFLOW_ARCHIVED");
+    assert_eq!(
+        get_run(&app, &run_id).await["steps"]
+            .as_array()
+            .expect("steps")
+            .len(),
+        1
+    );
+
+    app.cleanup().await;
+}

@@ -1,14 +1,18 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{UpdateWorkflowCommand, WorkflowTags};
+use handlers::{AppState, DataEnvelope, Response};
+use mestier_core::{UpdateWorkflowCommand, WorkflowDescription, WorkflowName, WorkflowTags};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    error::AutomationError, paths::WorkflowPath, request::deserialize_present,
-    require_manage_automation, response::WorkflowResponse, workflow::find_workflow_in_org,
+    error::AutomationError,
+    paths::WorkflowPath,
+    request::{deserialize_present, invalid},
+    require_manage_automation,
+    response::WorkflowResponse,
+    workflow::find_workflow_in_org,
 };
 
 /// Every field optional. `enabled` is #203's "enable/disable"; `name` and
@@ -44,7 +48,7 @@ pub struct UpdateWorkflowRequest {
     request_body = UpdateWorkflowRequest,
     responses(
         (status = 200, description = "Workflow updated. `archived: true` also disables it; `archived: false` leaves it disabled. updated_at only moves for a new name or description", body = inline(DataEnvelope<WorkflowResponse>)),
-        (status = 400, description = "Validation failed, including more than 10 tags or a tag outside 1 to 30 characters"),
+        (status = 400, description = "Validation failed: name empty or over 120 characters, description over 2000 characters, more than 10 tags or a tag outside 1 to 30 characters, or archived and enabled both true in one request"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Workflow not found"),
@@ -64,18 +68,28 @@ pub async fn handler(
     require_manage_automation(&state, &identity, organization_id).await?;
     find_workflow_in_org(&state, organization_id, workflow_id).await?;
 
+    let name = payload
+        .name
+        .map(WorkflowName::try_from)
+        .transpose()
+        .map_err(invalid)?;
+    let description = payload
+        .description
+        .map(|text| text.map(WorkflowDescription::try_from).transpose())
+        .transpose()
+        .map_err(invalid)?;
     let tags = payload
         .tags
         .map(WorkflowTags::try_from)
         .transpose()
-        .map_err(|error| ApiError::Validation(error.to_string()))?;
+        .map_err(invalid)?;
     let updated = state
         .usecase
         .update_workflow(UpdateWorkflowCommand {
             org_id: organization_id,
             id: workflow_id,
-            name: payload.name,
-            description: payload.description,
+            name,
+            description,
             enabled: payload.enabled,
             folder_id: payload.folder_id,
             tags,
