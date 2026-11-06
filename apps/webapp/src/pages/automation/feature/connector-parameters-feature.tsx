@@ -4,7 +4,10 @@ import {
 	useCredentialMeta,
 	useCredentialMetaActions,
 } from '#/pages/automation/feature/use-credential-meta'
-import { withField } from '#/pages/automation/lib/connector-config'
+import {
+	type FieldAddOns,
+	withField,
+} from '#/pages/automation/lib/connector-config'
 import { withFieldDefaults } from '#/pages/automation/lib/connector-field-copy'
 import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
 import type { NodeIssue } from '#/pages/automation/lib/node-issues'
@@ -42,6 +45,7 @@ export interface ConnectorParametersFeatureProps {
 	errors: ConnectorValidationError[]
 	bindingIssues: readonly NodeIssue[]
 	credentialHint?: string
+	fieldAddOns?: Readonly<Record<string, FieldAddOns>>
 	evaluateContext: Schemas.EvaluateContextBody
 	onConfigChange: (config: Record<string, unknown>) => void
 	onCredentialChange: (credentialId: string | null) => void
@@ -109,6 +113,7 @@ export function ConnectorParametersFeature({
 	errors,
 	bindingIssues,
 	credentialHint,
+	fieldAddOns,
 	evaluateContext,
 	onConfigChange,
 	onCredentialChange,
@@ -228,6 +233,7 @@ export function ConnectorParametersFeature({
 				errors={errors}
 				bindingIssues={bindingIssues}
 				credentialHint={credentialHint}
+				fieldAddOns={fieldAddOns}
 				credentialStatusOf={statusOf}
 				renderPreview={(field) => {
 					const template = config[field.name]

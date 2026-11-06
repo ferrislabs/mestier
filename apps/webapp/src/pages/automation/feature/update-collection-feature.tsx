@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useReplaceCollection } from '#/hooks/use-automation'
 import {
 	loadErrorMessage,
 	loadSpecFromFile,
 	loadSpecFromUrl,
 } from '#/pages/automation/feature/spec-loader'
-import { useUpdateCollection } from '#/pages/automation/feature/use-collections'
-import type { Collection } from '#/pages/automation/lib/collections'
+import { collectionErrorMessage } from '#/pages/automation/lib/collection-format'
+import type {
+	Collection,
+	CollectionDraft,
+} from '#/pages/automation/lib/collections'
 import {
 	diffCollections,
 	withStableOperationIds,
@@ -31,24 +36,26 @@ export function UpdateCollectionFeature({
 	onClose: () => void
 	onUpdated: (outcome: UpdateOutcome) => void
 }) {
-	const updateCollection = useUpdateCollection()
-	const sourceUrl =
-		collection.source.kind === 'url' ? collection.source.url : ''
+	const { activeOrganization } = useActiveOrganization()
+	const replaceCollection = useReplaceCollection(activeOrganization.id)
+	const [installed] = useState(collection)
+	const sourceUrl = installed.source.kind === 'url' ? installed.source.url : ''
 	const [loading, setLoading] = useState(autoCheck && sourceUrl !== '')
-	const [error, setError] = useState<string | null>(null)
+	const [loadError, setLoadError] = useState<string | null>(null)
 	const [candidate, setCandidate] = useState<UpdateCandidate | null>(null)
 
-	const load = async (loader: () => Promise<Collection>) => {
+	const compare = (draft: CollectionDraft): UpdateCandidate => ({
+		draft,
+		diff: diffCollections(installed, draft),
+	})
+
+	const load = async (loader: () => Promise<CollectionDraft>) => {
 		setLoading(true)
-		setError(null)
+		setLoadError(null)
 		try {
-			const next = await loader()
-			setCandidate({
-				collection: next,
-				diff: diffCollections(collection, next),
-			})
+			setCandidate(compare(await loader()))
 		} catch (caught) {
-			setError(loadErrorMessage(caught))
+			setLoadError(loadErrorMessage(caught))
 		} finally {
 			setLoading(false)
 		}
@@ -58,15 +65,15 @@ export function UpdateCollectionFeature({
 		if (!autoCheck || !sourceUrl) return
 		let cancelled = false
 		loadSpecFromUrl(sourceUrl)
-			.then((next) => {
+			.then((draft) => {
 				if (!cancelled)
 					setCandidate({
-						collection: next,
-						diff: diffCollections(collection, next),
+						draft,
+						diff: diffCollections(installed, draft),
 					})
 			})
 			.catch((caught: unknown) => {
-				if (!cancelled) setError(loadErrorMessage(caught))
+				if (!cancelled) setLoadError(loadErrorMessage(caught))
 			})
 			.finally(() => {
 				if (!cancelled) setLoading(false)
@@ -74,33 +81,42 @@ export function UpdateCollectionFeature({
 		return () => {
 			cancelled = true
 		}
-	}, [autoCheck, sourceUrl, collection])
+	}, [autoCheck, sourceUrl, installed])
 
 	return (
 		<UpdateCollectionDialog
-			collection={collection}
+			collection={installed}
 			sourceUrl={sourceUrl}
 			loading={loading}
-			error={error}
+			saving={replaceCollection.isPending}
+			error={loadError ?? collectionErrorMessage(replaceCollection.error)}
 			candidate={candidate}
 			onLoadUrl={(url) => void load(() => loadSpecFromUrl(url))}
 			onLoadFile={(file) => void load(() => loadSpecFromFile(file))}
-			onSourceChange={() => setError(null)}
-			onResetCandidate={() => setCandidate(null)}
+			onSourceChange={() => {
+				setLoadError(null)
+				replaceCollection.reset()
+			}}
+			onResetCandidate={() => {
+				setCandidate(null)
+				replaceCollection.reset()
+			}}
 			onClose={onClose}
 			onConfirm={() => {
 				if (!candidate) return
-				void updateCollection
-					.mutateAsync({
-						id: collection.id,
-						next: withStableOperationIds(collection, candidate.collection),
-					})
-					.then(() =>
-						onUpdated({
-							version: candidate.collection.version,
-							breakingCount: candidate.diff.breakingCount,
-						}),
-					)
+				replaceCollection.mutate(
+					{
+						collectionId: installed.id,
+						draft: withStableOperationIds(installed, candidate.draft),
+					},
+					{
+						onSuccess: () =>
+							onUpdated({
+								version: candidate.draft.version,
+								breakingCount: candidate.diff.breakingCount,
+							}),
+					},
+				)
 			}}
 		/>
 	)

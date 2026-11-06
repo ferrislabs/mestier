@@ -196,7 +196,7 @@ export function operationContractSource(
 	)
 	if (operation.requestBody) {
 		requestFields.push(
-			`  body: ${typeOf(operation.requestBody, references, '  ')}`,
+			`  body: ${typeOf(operation.requestBody.schema, references, '  ')}`,
 		)
 	}
 	const blocks = [
@@ -313,6 +313,7 @@ export function resolveSchema(
 				{},
 				...parts.map((part) => part.properties ?? {}),
 			),
+			required: [...new Set(parts.flatMap((part) => part.required ?? []))],
 		}
 	}
 	return schema

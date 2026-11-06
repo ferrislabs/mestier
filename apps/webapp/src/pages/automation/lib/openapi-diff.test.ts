@@ -19,7 +19,6 @@ function spec(version: string, paths: unknown, schemas: unknown = {}) {
 			components: { schemas },
 		},
 		SOURCE,
-		'2026-11-04T09:00:00Z',
 	)
 }
 
@@ -167,7 +166,21 @@ test('a renamed operationId keeps the id nodes refer to', () => {
 	assert.equal(versionWarning(diff), null)
 	const stable = withStableOperationIds(V1, V2)
 	assert.equal(stable.operations[0]?.id, 'createRealm')
-	assert.equal(stable.id, V1.id)
+	assert.equal(stable.version, V2.version)
+	assert.deepEqual(Object.keys(stable).sort(), Object.keys(V2).sort())
+})
+
+test('a stored collection from the API is compared with a new draft', () => {
+	const stored = {
+		...V1,
+		id: '6f1f6a9e-5f0c-4a43-9d77-1d9d0a3b1c11',
+		slug: 'realms',
+		importedAt: '2026-11-06T09:30:00Z',
+		history: [],
+	}
+	const diff = diffCollections(stored, V1)
+	assert.equal(diff.identical, true)
+	assert.equal(withStableOperationIds(stored, V1).operations.length, 2)
 })
 
 test('content changes without a new version are reported', () => {

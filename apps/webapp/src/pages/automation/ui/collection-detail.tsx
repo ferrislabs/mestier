@@ -3,17 +3,20 @@ import {
 	ChevronDown,
 	ChevronRight,
 	CircleCheck,
+	Loader2,
 	OctagonAlert,
 	RefreshCw,
 	Upload,
 } from 'lucide-react'
 import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import { collectionsPath } from '#/pages/automation/lib/automation-paths'
 import {
+	describeSecurity,
 	describeSource,
 	formatImportDate,
 	operationCount,
@@ -45,16 +48,48 @@ export interface CollectionUpdateOutcome {
 export function CollectionDetail({
 	organizationSlug,
 	collection,
+	isLoading,
+	error,
 	outcome,
 	onUpdate,
 }: {
 	organizationSlug: string
 	collection: Collection | undefined
+	isLoading: boolean
+	error: string | null
 	outcome: CollectionUpdateOutcome | null
 	onUpdate: (autoCheck: boolean) => void
 }) {
 	const [openOperationId, setOpenOperationId] = useState<string | null>(null)
 	const listPath = buildOrgPath(organizationSlug, collectionsPath())
+
+	if (isLoading) {
+		return (
+			<PageShell className="gap-0">
+				<div className="flex min-h-40 items-center justify-center gap-3 rounded-lg border border-border bg-card p-8 text-muted-foreground text-sm">
+					<Loader2 className="size-5 animate-spin" />
+					Chargement de la collection…
+				</div>
+			</PageShell>
+		)
+	}
+
+	if (error) {
+		return (
+			<PageShell className="gap-0">
+				<PageHeader
+					className="mb-6"
+					title="Impossible de charger cette collection"
+					description={error}
+					actions={
+						<Button asChild variant="outline">
+							<Link to={listPath}>Voir les collections</Link>
+						</Button>
+					}
+				/>
+			</PageShell>
+		)
+	}
 
 	if (!collection) {
 		return (
@@ -96,18 +131,20 @@ export function CollectionDetail({
 				title={collection.title}
 				description={collection.description || undefined}
 				actions={
-					<div className="flex items-center gap-2">
-						<Button variant="outline" onClick={() => onUpdate(false)}>
-							<Upload />
-							Importer une version
-						</Button>
-						{collection.source.kind === 'url' && (
-							<Button onClick={() => onUpdate(true)}>
-								<RefreshCw />
-								Vérifier les mises à jour
+					<RequirePermission permission="MANAGE_AUTOMATION">
+						<div className="flex items-center gap-2">
+							<Button variant="outline" onClick={() => onUpdate(false)}>
+								<Upload />
+								Importer une version
 							</Button>
-						)}
-					</div>
+							{collection.source.kind === 'url' && (
+								<Button onClick={() => onUpdate(true)}>
+									<RefreshCw />
+									Vérifier les mises à jour
+								</Button>
+							)}
+						</div>
+					</RequirePermission>
 				}
 			/>
 			{outcome && (
@@ -149,7 +186,7 @@ export function CollectionDetail({
 					<dt className="text-muted-foreground">Version</dt>
 					<dd className="mt-0.5">
 						<span className="font-mono">{collection.version}</span>
-						{collection.history && collection.history.length > 0 && (
+						{collection.history.length > 0 && (
 							<span className="text-muted-foreground">
 								{' '}
 								· précédentes :{' '}
@@ -170,7 +207,7 @@ export function CollectionDetail({
 					<dt className="text-muted-foreground">Authentification</dt>
 					<dd className="mt-0.5">
 						{collection.security.length > 0
-							? collection.security.join(', ')
+							? collection.security.map(describeSecurity).join(', ')
 							: 'Aucune'}
 					</dd>
 				</div>

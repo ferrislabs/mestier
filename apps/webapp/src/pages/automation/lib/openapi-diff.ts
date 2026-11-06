@@ -1,5 +1,5 @@
 import type {
-	Collection,
+	CollectionDraft,
 	CollectionOperation,
 	JsonSchema,
 	OperationParameter,
@@ -212,7 +212,7 @@ function operationKey(operation: CollectionOperation): string {
 	return `${operation.method} ${operation.path}`
 }
 
-function matchOperations(previous: Collection, next: Collection) {
+function matchOperations(previous: CollectionDraft, next: CollectionDraft) {
 	const byId = new Map(previous.operations.map((op) => [op.id, op]))
 	const byKey = new Map(previous.operations.map((op) => [operationKey(op), op]))
 	const matched = new Map<string, CollectionOperation>()
@@ -225,8 +225,8 @@ function matchOperations(previous: Collection, next: Collection) {
 }
 
 export function diffCollections(
-	previous: Collection,
-	next: Collection,
+	previous: CollectionDraft,
+	next: CollectionDraft,
 ): CollectionDiff {
 	const matched = matchOperations(previous, next)
 	const matchedPrevious = new Set(matched.values())
@@ -255,9 +255,9 @@ export function diffCollections(
 			...parameterChanges(old, previous.schemas, operation, next.schemas),
 			...schemaChanges(
 				'body',
-				old.requestBody,
+				old.requestBody?.schema ?? null,
 				previous.schemas,
-				operation.requestBody,
+				operation.requestBody?.schema ?? null,
 				next.schemas,
 			),
 			...schemaChanges(
@@ -309,9 +309,9 @@ export function versionWarning(diff: CollectionDiff): string | null {
 }
 
 export function withStableOperationIds(
-	previous: Collection,
-	next: Collection,
-): Collection {
+	previous: CollectionDraft,
+	next: CollectionDraft,
+): CollectionDraft {
 	const matched = matchOperations(previous, next)
 	const taken = new Set<string>()
 	const operations = next.operations.map((operation) => {
@@ -320,5 +320,5 @@ export function withStableOperationIds(
 		taken.add(id)
 		return id === operation.id ? operation : { ...operation, id }
 	})
-	return { ...next, id: previous.id, operations }
+	return { ...next, operations }
 }

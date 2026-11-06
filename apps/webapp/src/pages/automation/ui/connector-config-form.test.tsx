@@ -546,3 +546,56 @@ describe('ConnectorConfigForm — the preview of an expression', () => {
 		expect(screen.queryByText('Aperçu de name')).toBeNull()
 	})
 })
+
+describe('ConnectorConfigForm — what the caller adds to a field', () => {
+	it('shows the placeholder and the hint a field is given beyond the descriptor', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({ name: 'path.id', label: 'id', expression: true }),
+							field({ name: 'query.q', label: 'q', expression: true }),
+						],
+					}),
+					fieldAddOns: {
+						'path.id': {
+							placeholder: 'Obligatoire',
+							hint: 'Chemin · obligatoire',
+						},
+					},
+				})}
+			/>,
+		)
+
+		const required = screen.getByLabelText('id') as HTMLInputElement
+		expect(required.placeholder).toBe('Obligatoire')
+		expect(screen.getByText('Chemin · obligatoire')).toBeDefined()
+		expect((screen.getByLabelText('q') as HTMLInputElement).placeholder).toBe(
+			'',
+		)
+	})
+
+	it('types the keys of a JSON field after the kinds it is given', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [
+							field({
+								name: 'body',
+								label: 'Corps',
+								kind: 'Json',
+								expression: true,
+							}),
+						],
+					}),
+					config: { body: { age: null } },
+					fieldAddOns: { body: { entryKinds: { age: 'number' } } },
+				})}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Type de age').textContent).toBe('Nombre')
+	})
+})

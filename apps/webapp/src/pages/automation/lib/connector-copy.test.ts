@@ -1,3 +1,4 @@
+import { Library } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import {
 	CATEGORY_IDS,
@@ -7,9 +8,13 @@ import {
 	isInternalConnector,
 	triggerCopy,
 } from '#/pages/automation/lib/connector-copy'
+import { runNodeAppearance } from '#/pages/automation/lib/run-appearance'
+import { connectorTypeLabel } from '#/pages/automation/lib/run-node'
+import { connectorLabel } from '#/pages/automation/lib/run-view'
 
 const SERVER_KINDS = [
 	'http.request',
+	'collection.operation',
 	'flow.condition',
 	'flow.loop',
 	'flow.config',
@@ -69,6 +74,18 @@ describe('connectorCopy', () => {
 			hue: 265,
 			category: 'core',
 		})
+	})
+
+	it('copies the collection operation from the prototype, filed under the collections', () => {
+		expect(connectorCopy('collection.operation')).toMatchObject({
+			label: 'Opération de collection',
+			subtitle: 'Collection',
+			description: 'Appelle une opération d’une spec OpenAPI importée',
+			hue: 200,
+			category: 'collections',
+			internal: false,
+		})
+		expect(connectorCopy('collection.operation')?.icon).toBe(Library)
 	})
 
 	it('keeps the server wording for the types the prototype does not have', () => {
@@ -169,5 +186,35 @@ describe('categoryCopy', () => {
 		expect(categoryCopy('human').description).toBe(
 			'Demander l’accord d’un membre de l’équipe avant de continuer',
 		)
+	})
+})
+
+describe('the execution views — a collection operation', () => {
+	const operation = {
+		id: 'c1',
+		kind: 'collection.operation',
+		version: 1,
+		config: {},
+	}
+
+	it('names it after the entry until the node has a name of its own', () => {
+		expect(connectorLabel(operation, undefined)).toBe('Opération de collection')
+		expect(connectorTypeLabel('collection.operation', undefined)).toBe(
+			'Opération de collection',
+		)
+		expect(
+			connectorLabel({ ...operation, name: 'Lire un animal' }, undefined),
+		).toBe('Lire un animal')
+	})
+
+	it('draws it with the icon and hue of the entry', () => {
+		expect(
+			runNodeAppearance({
+				kind: 'connector',
+				family: 'http',
+				connector: operation,
+				trigger: null,
+			}),
+		).toEqual({ icon: Library, hue: 200 })
 	})
 })

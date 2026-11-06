@@ -6,6 +6,7 @@ import {
 	isSelectKind,
 	isSigningCredentialField,
 	JSON_ENTRY_KINDS,
+	type JsonEntryKind,
 	jsonEntriesFromValue,
 	jsonEntryValue,
 	numberFieldError,
@@ -205,6 +206,54 @@ describe('jsonEntriesFromValue', () => {
 			{ key: 'tags', value: '["x"]', kind: 'json' },
 			{ key: 'none', value: 'null', kind: 'json' },
 		])
+	})
+})
+
+describe('jsonEntriesFromValue with the kinds a spec declares', () => {
+	const kinds: Record<string, JsonEntryKind> = {
+		name: 'string',
+		age: 'number',
+		ok: 'boolean',
+		tags: 'json',
+	}
+
+	it('types an empty key after the spec instead of showing it as null', () => {
+		expect(
+			jsonEntriesFromValue(
+				{ name: '', age: null, ok: null, tags: null, free: null },
+				kinds,
+			),
+		).toEqual([
+			{ key: 'name', value: '', kind: 'string' },
+			{ key: 'age', value: '', kind: 'number' },
+			{ key: 'ok', value: '', kind: 'boolean' },
+			{ key: 'tags', value: '', kind: 'json' },
+			{ key: 'free', value: 'null', kind: 'json' },
+		])
+	})
+
+	it('keeps an expression on a typed key typed as the spec says', () => {
+		expect(jsonEntriesFromValue({ age: '{{ trigger.age }}' }, kinds)).toEqual([
+			{ key: 'age', value: '{{ trigger.age }}', kind: 'number' },
+		])
+	})
+
+	it('reads a value of the declared type as itself', () => {
+		expect(
+			jsonEntriesFromValue({ age: 3, ok: true, tags: ['a'] }, kinds),
+		).toEqual([
+			{ key: 'age', value: '3', kind: 'number' },
+			{ key: 'ok', value: 'true', kind: 'boolean' },
+			{ key: 'tags', value: '["a"]', kind: 'json' },
+		])
+	})
+
+	it('writes a typed empty key back as null, as the prototype did', () => {
+		expect(
+			valueFromJsonEntries(
+				jsonEntriesFromValue({ age: null, name: '' }, kinds),
+			),
+		).toEqual({ age: null, name: '' })
 	})
 })
 

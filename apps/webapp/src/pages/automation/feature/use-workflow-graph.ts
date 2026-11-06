@@ -16,15 +16,12 @@ import {
 	type EditorNode,
 	edgeIdOf,
 	type NodeDetailsPatch,
-	type NodeMeta,
-	type NodeMetaMap,
 	type OutputSource,
 	outputHandles,
 	toEditorEdges,
 	toEditorNodes,
 	toGraph,
 	toLayout,
-	toMeta,
 	triggerNode,
 	withDetails,
 	withDisabled,
@@ -65,20 +62,16 @@ function sameErrors(
 	return a.length === b.length && a.every((error, index) => error === b[index])
 }
 
-export interface ConnectorPresetMeta extends NodeMeta {
-	label?: string
-	subtitle?: string
-}
-
 export interface ConnectorPreset {
 	config?: Record<string, unknown>
-	meta?: ConnectorPresetMeta
+	operation?: Schemas.OperationRefDto
+	name?: string
+	description?: string
 }
 
 export interface GraphChange {
 	graph: Schemas.GraphDto
 	layout: Map<string, NodePosition>
-	meta: NodeMetaMap
 }
 
 interface Snapshot {
@@ -134,7 +127,6 @@ export interface UseWorkflowGraphOptions {
 	graph: Schemas.GraphDto
 	layout: Map<string, NodePosition>
 	lookup: EditorLookup
-	meta: NodeMetaMap
 	errors: Map<string, ConnectorValidationError[]>
 	runStatuses: Map<string, string>
 	onChange: (change: GraphChange) => void
@@ -144,13 +136,12 @@ export function useWorkflowGraph({
 	graph,
 	layout,
 	lookup,
-	meta,
 	errors,
 	runStatuses,
 	onChange,
 }: UseWorkflowGraphOptions): WorkflowGraphState {
 	const [initial] = useState<Snapshot>(() => ({
-		nodes: toEditorNodes(graph, layout, lookup, meta, errors, runStatuses),
+		nodes: toEditorNodes(graph, layout, lookup, errors, runStatuses),
 		edges: toEditorEdges(graph),
 	}))
 	const [state, setState] = useState<Snapshot>(initial)
@@ -170,7 +161,6 @@ export function useWorkflowGraph({
 			onChangeRef.current({
 				graph: toGraph(next.nodes, next.edges),
 				layout: toLayout(next.nodes),
-				meta: toMeta(next.nodes),
 			})
 		}
 	}, [])
@@ -281,22 +271,23 @@ export function useWorkflowGraph({
 						)
 					})()
 				: fallbackPosition
-			const presetMeta = preset?.meta
 			const connector: Schemas.PlacedConnectorDto = {
 				id,
 				kind: descriptor.kind,
 				version: descriptor.version,
 				config: preset?.config ?? withFieldDefaults(descriptor.kind, {}) ?? {},
-				...(presetMeta?.label === undefined ? {} : { name: presetMeta.label }),
-				...(presetMeta?.subtitle === undefined
+				...(preset?.name === undefined ? {} : { name: preset.name }),
+				...(preset?.description === undefined
 					? {}
-					: { description: presetMeta.subtitle }),
+					: { description: preset.description }),
+				...(preset?.operation === undefined
+					? {}
+					: { operation: preset.operation }),
 			}
 			const created = connectorNode(
 				connector,
 				findFreePosition(snapToGrid(origin), nodes),
 				lookupRef.current,
-				presetMeta?.operation ? { operation: presetMeta.operation } : {},
 			)
 			const label = uniqueLabel(
 				created.data.label,
@@ -517,7 +508,6 @@ export function useWorkflowGraph({
 						},
 						slot,
 						lookupRef.current,
-						source.data.meta,
 					)
 				: source.data.trigger
 					? triggerNode(
@@ -532,7 +522,6 @@ export function useWorkflowGraph({
 							},
 							slot,
 							lookupRef.current,
-							source.data.meta,
 						)
 					: null
 			if (!copy) return

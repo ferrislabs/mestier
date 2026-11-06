@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
 	fireEvent,
 	render,
@@ -11,19 +12,25 @@ import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
+	ActiveOrganizationProvider,
+	OrganizationListProvider,
+} from '#/hooks/use-active-organization'
+import type { Organization } from '#/hooks/use-organizations'
+import {
 	type LastRunData,
 	WorkflowCanvas,
 	type WorkflowCanvasProps,
 } from '#/pages/automation/feature/editor-canvas-feature'
 import type { GraphChange } from '#/pages/automation/feature/use-workflow-graph'
-import type { NodeMetaMap } from '#/pages/automation/lib/editor-nodes'
 import type { NodePosition } from '#/pages/automation/lib/graph'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
+import { installFakeTanstackApi } from '#/pages/automation/test/fake-tanstack-api'
 import {
 	dragNodeBy,
 	flowPositionOf,
 	installFlowTestEnvironment,
 } from '#/pages/automation/test/flow-test-env'
+import { renderWithRouter } from '#/test/render-with-router'
 
 for (const method of [
 	'hasPointerCapture',
@@ -39,6 +46,94 @@ for (const method of [
 beforeEach(() => {
 	installFlowTestEnvironment()
 })
+
+const COLLECTIONS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/collections'
+const COLLECTION_PATH =
+	'/api/v1/organizations/{organization_id}/automation/collections/{collection_id}'
+
+const ORGANIZATION: Organization = {
+	id: 'org-1',
+	name: 'Atelier Bois & Co',
+	slug: 'atelier',
+	owner_id: 'user-1',
+	missing_legal_identity_fields: [],
+	field_clock_enabled: false,
+	vat_on_debits: false,
+	mcp_enabled: false,
+	created_at: '2026-01-01T00:00:00Z',
+	updated_at: '2026-01-01T00:00:00Z',
+}
+
+const PETS_ID = '6f1f6a9e-5f0c-4a43-9d77-1d9d0a3b1c11'
+
+function petstore(
+	overrides: Partial<Schemas.CollectionResponse> = {},
+): Schemas.CollectionResponse {
+	return {
+		id: PETS_ID,
+		organization_id: ORGANIZATION.id,
+		slug: 'petstore',
+		title: 'Petstore',
+		version: '2.0',
+		description: '',
+		base_url: 'https://pets.test',
+		source: { kind: 'url', url: 'https://pets.test/openapi.json' },
+		imported_at: '2026-11-06T09:30:00Z',
+		security: [],
+		operations: [
+			{
+				id: 'createPet',
+				method: 'POST',
+				path: '/pets',
+				summary: 'Créer un animal',
+				tag: 'pets',
+				parameters: [
+					{
+						name: 'dry_run',
+						location: 'query',
+						required: false,
+						description: '',
+						schema: { type: 'boolean' },
+					},
+				],
+				request_body: {
+					schema: {
+						type: 'object',
+						required: ['name'],
+						properties: { name: { type: 'string' }, age: { type: 'integer' } },
+					},
+				},
+				response: { type: 'object', example: { id: 7 } },
+				response_status: '201',
+			},
+		],
+		schemas: {},
+		history: [],
+		...overrides,
+	}
+}
+
+function summaryOf(
+	collection: Schemas.CollectionResponse,
+): Schemas.CollectionSummaryResponse {
+	return {
+		id: collection.id,
+		organization_id: collection.organization_id,
+		slug: collection.slug,
+		title: collection.title,
+		version: collection.version,
+		base_url: collection.base_url,
+		source: collection.source,
+		imported_at: collection.imported_at,
+		security: collection.security,
+		operation_count: collection.operations.length,
+	}
+}
+
+function apiError(status: number, message: string) {
+	return Object.assign(new Error(message), { status })
+}
 
 function connector(
 	id: string,
@@ -138,17 +233,21 @@ type HarnessProps = Partial<Omit<WorkflowCanvasProps, 'onChange'>> & {
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors?: Map<string, ConnectorValidationError[]>
 	lastRun?: LastRunData | null
-	meta?: NodeMetaMap
 	onSaveSpy?: (change: GraphChange) => void
 	onTest?: () => void
 	running?: boolean
+}
+
+interface ApiOptions {
+	collections?: Schemas.CollectionResponse[]
+	collectionsPending?: boolean
+	collectionFailure?: number
 }
 
 function Harness({
 	graph,
 	layout,
 	descriptors,
-	meta = {},
 	connectorErrors = new Map(),
 	runStatuses = new Map(),
 	runSteps = new Map(),
@@ -162,14 +261,13 @@ function Harness({
 	onTest = vi.fn(),
 	running = false,
 }: HarnessProps) {
-	const current = useRef<GraphChange>({ graph, layout, meta })
+	const current = useRef<GraphChange>({ graph, layout })
 
 	return (
 		<TooltipProvider>
 			<WorkflowCanvas
 				graph={graph}
 				layout={layout}
-				meta={meta}
 				organizationSlug="atelier"
 				descriptors={descriptors}
 				connectorErrors={connectorErrors}
@@ -195,10 +293,62 @@ function Harness({
 
 type SaveSpy = Mock<(change: GraphChange) => void>
 
-function renderHarness(props: HarnessProps) {
+function installApi({
+	collections = [],
+	collectionsPending = false,
+	collectionFailure,
+}: ApiOptions) {
+	const api = installFakeTanstackApi()
+	api.mockGet(COLLECTIONS_PATH, () =>
+		collectionsPending
+			? new Promise(() => {})
+			: { data: collections.map(summaryOf), pagination: null },
+	)
+	api.mockGet(COLLECTION_PATH, (params) => {
+		if (collectionsPending) return new Promise(() => {})
+		if (collectionFailure) throw apiError(collectionFailure, 'Failure')
+		const id = (params as { path: { collection_id: string } }).path
+			.collection_id
+		const found = collections.find((collection) => collection.id === id)
+		if (!found) throw apiError(404, 'Resource not found')
+		return { data: found, pagination: null }
+	})
+	return api
+}
+
+function harnessTree(props: HarnessProps & ApiOptions) {
+	const { collections, collectionsPending, collectionFailure, ...harness } =
+		props
+	const api = installApi({ collections, collectionsPending, collectionFailure })
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false, retryDelay: 0 } },
+	})
 	const onSaveSpy: SaveSpy = vi.fn<(change: GraphChange) => void>()
-	render(<Harness {...props} onSaveSpy={onSaveSpy} />)
-	return { onSaveSpy }
+	return {
+		api,
+		onSaveSpy,
+		tree: (
+			<QueryClientProvider client={queryClient}>
+				<OrganizationListProvider organizations={[ORGANIZATION]}>
+					<ActiveOrganizationProvider activeOrganization={ORGANIZATION}>
+						<Harness {...harness} onSaveSpy={onSaveSpy} />
+					</ActiveOrganizationProvider>
+				</OrganizationListProvider>
+			</QueryClientProvider>
+		),
+	}
+}
+
+function renderHarness(props: HarnessProps & ApiOptions) {
+	const { tree, onSaveSpy, api } = harnessTree(props)
+	render(tree)
+	return { onSaveSpy, api }
+}
+
+async function renderHarnessWithRouter(props: HarnessProps & ApiOptions) {
+	const { tree, onSaveSpy, api } = harnessTree(props)
+	await renderWithRouter(tree)
+	return { onSaveSpy, api }
 }
 
 function saved(onSaveSpy: SaveSpy): GraphChange {
@@ -600,15 +750,23 @@ describe('WorkflowCanvas — a node made from a collection operation', () => {
 		family: 'http',
 	}
 
-	it('builds an http connector from the operation and remembers where it came from', async () => {
-		const user = userEvent.setup()
-		const { onSaveSpy } = renderHarness({
-			graph: graphWith([], [], [trigger('t1')]),
-			layout: layoutOf(['t1', 0, 0]),
-			descriptors: descriptorMap(HTTP_DESCRIPTOR),
-		})
+	const OPERATION_DESCRIPTOR = {
+		...descriptor(
+			'collection.operation',
+			"Opération d'une collection",
+			[],
+			[
+				{ ...textField('path', 'Paramètres de chemin', true), kind: 'Json' },
+				{ ...textField('query', 'Paramètres de requête', true), kind: 'Json' },
+				{ ...textField('headers', 'En-têtes', true), kind: 'Json' },
+				{ ...textField('body', 'Corps', true), kind: 'Json' },
+			],
+			{ auth: { Optional: ['bearer_token'] } },
+		),
+		family: 'http',
+	}
 
-		await screen.findByTestId('rf__node-t1')
+	async function pickOperation(user: ReturnType<typeof userEvent.setup>) {
 		await user.click(
 			screen.getByRole('button', { name: 'Ajouter un nœud après « Clic »' }),
 		)
@@ -616,27 +774,152 @@ describe('WorkflowCanvas — a node made from a collection operation', () => {
 			name: 'Créateur de nœuds',
 		})
 		await user.click(within(panel).getByRole('button', { name: /Collections/ }))
-		const collections = within(panel).getAllByRole('button', {
-			name: /opération/,
-		})
-		await user.click(collections[0])
-		const operations = within(panel)
-			.getAllByRole('button')
-			.filter((button) =>
-				/^(GET|POST|PUT|PATCH|DELETE)/.test(button.textContent ?? ''),
-			)
-		await user.click(operations[0])
+		await user.click(
+			await within(panel).findByRole('button', { name: /Petstore/ }),
+		)
+		await user.click(
+			await within(panel).findByRole('button', { name: /Créer un animal/ }),
+		)
+	}
 
-		const change = saved(onSaveSpy)
-		const created = change.graph.connectors[0]
-		expect(created.kind).toBe('http.request')
-		expect(created.config.url).toMatch(/^https?:\/\//)
-		expect(change.meta.c1?.operation).toBeDefined()
-		expect(created.name).toBeTruthy()
-		expect(created.description).toMatch(/^(GET|POST|PUT|PATCH|DELETE) \//)
+	it('creates a collection.operation node that holds the reference and no copy of the url', async () => {
+		const user = userEvent.setup()
+		const { onSaveSpy } = renderHarness({
+			graph: graphWith([], [], [trigger('t1')]),
+			layout: layoutOf(['t1', 0, 0]),
+			descriptors: descriptorMap(HTTP_DESCRIPTOR, OPERATION_DESCRIPTOR),
+			collections: [petstore()],
+		})
+
+		await screen.findByTestId('rf__node-t1')
+		await pickOperation(user)
+
+		const { graph } = saved(onSaveSpy)
+		expect(graph.connectors).toEqual([
+			{
+				id: 'c1',
+				kind: 'collection.operation',
+				version: 1,
+				name: 'Créer un animal',
+				description: 'POST /pets',
+				operation: { collection_id: PETS_ID, operation_id: 'createPet' },
+				config: { body: { name: '', age: null } },
+			},
+		])
+		expect(JSON.stringify(graph)).not.toContain('pets.test')
+		expect(graph.edges).toEqual([{ from: 't1', to: 'c1', branch: null }])
+	})
+
+	it('remembers nothing of the operation outside the graph', async () => {
+		const user = userEvent.setup()
+		renderHarness({
+			graph: graphWith([], [], [trigger('t1')]),
+			layout: layoutOf(['t1', 0, 0]),
+			descriptors: descriptorMap(OPERATION_DESCRIPTOR),
+			collections: [petstore()],
+		})
+
+		await screen.findByTestId('rf__node-t1')
+		await pickOperation(user)
+
+		expect(
+			Object.keys(window.localStorage).filter((key) =>
+				/node-meta|collections/.test(key),
+			),
+		).toEqual([])
+	})
+
+	it('opens on the operation, its typed fields and the example of its response', async () => {
+		const user = userEvent.setup()
+		await renderHarnessWithRouter({
+			graph: graphWith([], [], [trigger('t1')]),
+			layout: layoutOf(['t1', 0, 0]),
+			descriptors: descriptorMap(OPERATION_DESCRIPTOR),
+			collections: [petstore()],
+		})
+		await screen.findByTestId('rf__node-t1')
+		await pickOperation(user)
 
 		const dialog = await openDetails('c1')
-		expect(within(dialog).getByText('Opération')).toBeDefined()
+
+		const parameters = within(dialog).getByRole('region', {
+			name: 'Paramètres',
+		})
+		await within(parameters).findByText('/pets')
+		expect(within(parameters).getByText('Créer un animal')).toBeDefined()
+		expect(within(parameters).getByLabelText('dry_run').textContent).toBe(
+			'Non renseigné',
+		)
+		expect(within(parameters).getByLabelText('Type de age').textContent).toBe(
+			'Nombre',
+		)
+		expect(within(parameters).queryByLabelText('URL')).toBeNull()
+		const output = within(dialog).getByRole('region', { name: 'Sortie' })
+		expect(output.textContent).toContain('Exemple de réponse 201 de')
+		expect(output.textContent).toContain('"status": 201')
+	})
+
+	it('writes an edit of a parameter into the graph, keeping the reference', async () => {
+		const user = userEvent.setup()
+		const { onSaveSpy } = await renderHarnessWithRouter({
+			graph: graphWith(
+				[
+					{
+						...connector('c1', 'collection.operation', {
+							body: { name: 'Rex', age: null },
+						}),
+						operation: { collection_id: PETS_ID, operation_id: 'createPet' },
+					},
+				],
+				[],
+				[],
+			),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(OPERATION_DESCRIPTOR),
+			collections: [petstore()],
+		})
+		const dialog = await openDetails('c1')
+
+		await user.click(await within(dialog).findByLabelText('dry_run'))
+		await user.click(await screen.findByRole('option', { name: 'true' }))
+
+		expect(saved(onSaveSpy).graph.connectors[0]).toEqual({
+			id: 'c1',
+			kind: 'collection.operation',
+			version: 1,
+			operation: { collection_id: PETS_ID, operation_id: 'createPet' },
+			config: { query: { dry_run: 'true' }, body: { name: 'Rex', age: null } },
+		})
+	})
+
+	it('keeps the operation of a node duplicated from another', async () => {
+		const user = userEvent.setup()
+		const { onSaveSpy } = renderHarness({
+			graph: graphWith([
+				{
+					...connector('c1', 'collection.operation', {
+						query: { dry_run: 'true' },
+					}),
+					operation: { collection_id: PETS_ID, operation_id: 'createPet' },
+				},
+			]),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(OPERATION_DESCRIPTOR),
+			collections: [petstore()],
+		})
+
+		fireEvent.contextMenu(await screen.findByTestId('rf__node-c1'), {
+			clientX: 200,
+			clientY: 150,
+		})
+		await user.click(await screen.findByRole('menuitem', { name: /Dupliquer/ }))
+
+		const { connectors } = saved(onSaveSpy).graph
+		expect(connectors[1]).toMatchObject({
+			id: 'c2',
+			operation: { collection_id: PETS_ID, operation_id: 'createPet' },
+			config: { query: { dry_run: 'true' } },
+		})
 	})
 
 	it('seeds the defaults of a fresh http node', async () => {
@@ -656,6 +939,183 @@ describe('WorkflowCanvas — a node made from a collection operation', () => {
 		expect(saved(onSaveSpy).graph.connectors[0].config).toEqual({
 			method: 'GET',
 		})
+	})
+})
+
+describe('WorkflowCanvas — the red badge of a collection operation', () => {
+	const OPERATION_DESCRIPTOR = {
+		...descriptor('collection.operation', "Opération d'une collection"),
+		family: 'http',
+	}
+
+	function operationNode(
+		config: Record<string, unknown>,
+		operationId = 'createPet',
+		collectionId = PETS_ID,
+	): Schemas.PlacedConnectorDto {
+		return {
+			...connector('c1', 'collection.operation', config),
+			operation: { collection_id: collectionId, operation_id: operationId },
+		}
+	}
+
+	function badgesOf(id: string): string[] {
+		return within(screen.getByTestId(`rf__node-${id}`))
+			.queryAllByRole('img')
+			.map((badge) => badge.getAttribute('aria-label') ?? '')
+			.filter((label) => label.startsWith('À corriger'))
+	}
+
+	function renderOperation(
+		node: Schemas.PlacedConnectorDto,
+		options: ApiOptions = { collections: [petstore()] },
+	) {
+		return renderHarness({
+			graph: graphWith([node]),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(OPERATION_DESCRIPTOR),
+			...options,
+		})
+	}
+
+	it('shows no badge on a node that fits its operation', async () => {
+		renderOperation(operationNode({ body: { name: 'Rex', age: null } }))
+
+		await screen.findByTestId('rf__node-c1')
+		await waitFor(() => {
+			expect(screen.getByTestId('rf__node-c1').textContent).toContain(
+				'Opération de collection',
+			)
+		})
+
+		expect(badgesOf('c1')).toEqual([])
+	})
+
+	it('badges a node whose collection was deleted', async () => {
+		renderOperation(operationNode({}), { collections: [] })
+
+		await waitFor(() => {
+			expect(badgesOf('c1')).toEqual([
+				'À corriger : La collection de cette opération a été supprimée.',
+			])
+		})
+	})
+
+	it('badges a node whose collection could not be read as unreadable, not as deleted', async () => {
+		renderOperation(operationNode({}), {
+			collections: [petstore()],
+			collectionFailure: 500,
+		})
+
+		await waitFor(() => {
+			expect(badgesOf('c1')).toEqual([
+				'À corriger : Impossible de lire la collection de cette opération.',
+			])
+		})
+	})
+
+	it('badges a node whose operation is gone from the collection', async () => {
+		renderOperation(operationNode({}, 'removed'))
+
+		await waitFor(() => {
+			expect(badgesOf('c1')).toEqual([
+				'À corriger : L’opération n’existe plus dans « Petstore » 2.0.',
+			])
+		})
+	})
+
+	it('badges a node whose body lacks a required key of the spec', async () => {
+		renderOperation(operationNode({ body: { age: 3 } }))
+
+		await waitFor(() => {
+			expect(badgesOf('c1')).toEqual([
+				'À corriger : Champ requis « name » absent du corps (spec 2.0).',
+			])
+		})
+	})
+
+	it('badges a node whose body carries a key the spec does not know', async () => {
+		renderOperation(operationNode({ body: { name: 'Rex', color: 'red' } }))
+
+		await waitFor(() => {
+			expect(badgesOf('c1')).toEqual([
+				'À corriger : Champ « color » inconnu de la spec 2.0 : il a peut-être été retiré.',
+			])
+		})
+	})
+
+	it('says nothing while the collections are still loading', async () => {
+		renderOperation(operationNode({}), {
+			collections: [],
+			collectionsPending: true,
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		expect(badgesOf('c1')).toEqual([])
+	})
+
+	it('reads only the collections the nodes call', async () => {
+		const { api } = renderOperation(operationNode({ body: { name: 'Rex' } }))
+
+		await waitFor(() => {
+			expect(
+				api.calls.filter((call) => call.path === COLLECTION_PATH),
+			).toHaveLength(1)
+		})
+		expect(api.calls.filter((call) => call.path === COLLECTIONS_PATH)).toEqual(
+			[],
+		)
+	})
+
+	it('reads nothing for a workflow with no collection operation', async () => {
+		const { api } = renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)]),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+
+		expect(api.calls).toEqual([])
+	})
+
+	it('lands the 422 errors of the server on the fields they name', async () => {
+		await renderHarnessWithRouter({
+			graph: graphWith([operationNode({ body: { name: 'Rex', age: null } })]),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(OPERATION_DESCRIPTOR),
+			collections: [petstore()],
+			connectorErrors: new Map([
+				[
+					'c1',
+					[
+						{
+							field: 'query.dry_run',
+							message: 'connector `c1` sets unknown parameter `query.dry_run`',
+						},
+						{
+							field: 'body.age',
+							message:
+								'connector `c1` sets parameter `body.age` to a bad value',
+						},
+					],
+				],
+			]),
+		})
+
+		const dialog = await openDetails('c1')
+
+		expect(
+			await within(dialog).findByText(
+				'connector `c1` sets unknown parameter `query.dry_run`',
+			),
+		).toBeDefined()
+		expect(
+			within(dialog).getByText(
+				'connector `c1` sets parameter `body.age` to a bad value',
+			),
+		).toBeDefined()
 	})
 })
 
@@ -853,7 +1313,6 @@ describe('WorkflowCanvas — the node details', () => {
 			...connector('c1', SIMPLE_KIND),
 			name: 'Créer le projet',
 		})
-		expect(change.meta).toEqual({})
 		expect(screen.getAllByText('Créer le projet').length).toBeGreaterThan(0)
 	})
 
@@ -878,7 +1337,6 @@ describe('WorkflowCanvas — the node details', () => {
 			...connector('c1', SIMPLE_KIND),
 			description: 'Crée le projet du chantier',
 		})
-		expect(change.meta).toEqual({})
 	})
 
 	it('shows the name, description and disabled flag saved in the graph', async () => {
@@ -1514,7 +1972,6 @@ describe('WorkflowCanvas — the node menu', () => {
 		expect(change.graph.connectors.map((c) => c.id)).toEqual(['c1', 'c2'])
 		expect(change.graph.connectors[1].config).toEqual({ url: 'https://a' })
 		expect(change.graph.connectors[1].name).toBe('Étape simple (copie)')
-		expect(change.meta).toEqual({})
 	})
 
 	it('copies a node, then offers to paste it from the pane menu', async () => {

@@ -147,7 +147,6 @@ export function WorkflowCanvasFeature({ session }: WorkflowCanvasFeatureProps) {
 			<WorkflowCanvas
 				graph={initial.graph}
 				layout={initial.layout}
-				meta={initial.meta}
 				organizationSlug={activeOrganization.slug}
 				descriptors={descriptors}
 				connectorErrors={validation.connectorErrors}

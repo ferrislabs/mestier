@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router'
+import { Unlink } from 'lucide-react'
 import { type ReactNode, useId } from 'react'
 import { Label } from '#/components/ui/label'
 import type { HttpMethod } from '#/pages/automation/lib/collections'
@@ -7,14 +9,22 @@ import { NdvPanel } from '#/pages/automation/ui/ndv-panel'
 export interface OperationSummary {
 	method: HttpMethod
 	path: string
+	summary: string
 	collectionTitle: string
+	collectionHref: string
 	baseUrl: string
 }
 
+export type OperationUnavailable = 'loading' | 'missing' | 'unreadable'
+
 export function OperationField({
 	operation,
+	unavailable = 'missing',
+	errors = [],
 }: {
 	operation: OperationSummary | null
+	unavailable?: OperationUnavailable
+	errors?: readonly string[]
 }) {
 	const controlId = useId()
 	return (
@@ -30,17 +40,45 @@ export function OperationField({
 						<span className="block truncate font-mono text-sm">
 							{operation.path}
 						</span>
+						{operation.summary && (
+							<span className="block truncate text-muted-foreground text-xs">
+								{operation.summary}
+							</span>
+						)}
 						<span className="block truncate text-muted-foreground text-xs">
-							{operation.collectionTitle}
+							<Link
+								to={operation.collectionHref}
+								className="underline-offset-2 hover:underline"
+							>
+								{operation.collectionTitle}
+							</Link>
 							{operation.baseUrl ? ` · ${operation.baseUrl}` : ''}
 						</span>
 					</span>
 				</div>
+			) : unavailable === 'loading' ? (
+				<p id={controlId} className="text-muted-foreground text-sm">
+					Chargement de l’opération…
+				</p>
+			) : unavailable === 'unreadable' ? (
+				<p id={controlId} className="text-sm text-state-alert">
+					Impossible de lire la collection de cette opération.
+				</p>
 			) : (
 				<p id={controlId} className="text-sm text-state-alert">
 					Opération introuvable : la collection a été supprimée ou modifiée.
 				</p>
 			)}
+			{errors.map((error) => (
+				<p
+					key={error}
+					role="alert"
+					className="flex items-start gap-1.5 text-state-alert text-xs"
+				>
+					<Unlink className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+					{error}
+				</p>
+			))}
 		</div>
 	)
 }

@@ -70,6 +70,12 @@ export interface JsonEntry {
 	kind: JsonEntryKind
 }
 
+export interface FieldAddOns {
+	placeholder?: string
+	hint?: string
+	entryKinds?: Readonly<Record<string, JsonEntryKind>>
+}
+
 export const RAW_JSON_ERROR =
 	'JSON invalide : vérifiez les guillemets, les virgules et les accolades. Une expression doit être entre guillemets.'
 
@@ -80,7 +86,19 @@ export function isJsonMapRepresentable(value: unknown): boolean {
 	)
 }
 
-function entryOf(key: string, value: unknown): JsonEntry {
+function entryOf(
+	key: string,
+	value: unknown,
+	declared?: JsonEntryKind,
+): JsonEntry {
+	if (declared !== undefined) {
+		if (value === null || value === undefined) {
+			return { key, value: '', kind: declared }
+		}
+		if (typeof value === 'string' && isExpression(value)) {
+			return { key, value, kind: declared }
+		}
+	}
 	if (typeof value === 'string') return { key, value, kind: 'string' }
 	if (typeof value === 'number')
 		return { key, value: String(value), kind: 'number' }
@@ -90,10 +108,17 @@ function entryOf(key: string, value: unknown): JsonEntry {
 	return { key, value: JSON.stringify(value), kind: 'json' }
 }
 
-export function jsonEntriesFromValue(value: unknown): JsonEntry[] {
+export function jsonEntriesFromValue(
+	value: unknown,
+	declared: Readonly<Record<string, JsonEntryKind>> = {},
+): JsonEntry[] {
 	if (!isJsonMapRepresentable(value) || value === undefined) return []
 	return Object.entries(value as Record<string, unknown>).map(([key, entry]) =>
-		entryOf(key, entry),
+		entryOf(
+			key,
+			entry,
+			Object.hasOwn(declared, key) ? declared[key] : undefined,
+		),
 	)
 }
 
