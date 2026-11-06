@@ -4,7 +4,7 @@ import {
 	triggerCopy,
 } from '#/pages/automation/lib/connector-copy'
 import { toItems } from '#/pages/automation/lib/items'
-import { isManualTrigger } from '#/pages/automation/lib/trigger-events'
+import { triggerKindOf } from '#/pages/automation/lib/trigger-events'
 
 export interface OutputBranch {
 	id: string
@@ -89,8 +89,7 @@ interface DescribedNode {
 
 function typeSubtitle(node: DescribedNode): string {
 	if (node.trigger) {
-		return triggerCopy(isManualTrigger(node.trigger) ? 'manual' : 'events')
-			.subtitle
+		return triggerCopy(triggerKindOf(node.trigger.kind)).subtitle
 	}
 	return describeConnector({
 		kind: node.connector?.kind ?? '',

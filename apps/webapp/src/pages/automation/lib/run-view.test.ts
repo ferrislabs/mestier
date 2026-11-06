@@ -754,6 +754,85 @@ describe('buildRunView — the names saved in the graph', () => {
 		)
 	})
 
+	it('names a webhook and a scheduler after their kind, or after the name saved in the graph', () => {
+		const graph: Schemas.GraphDto = {
+			...NAMED,
+			triggers: [
+				{
+					id: 't1',
+					kind: {
+						Webhook: {
+							method: 'POST',
+							path: 'paiement-recu',
+							credential_id: null,
+							contract: [],
+							on_invalid: 'Reject',
+						},
+					},
+				},
+				{
+					id: 't2',
+					kind: { Schedule: { frequency: 'Daily', time: '09:00' } },
+				},
+				{
+					id: 't3',
+					name: 'Paiement Stripe',
+					kind: {
+						Webhook: { method: 'GET', path: 'stripe', credential_id: null },
+					},
+				},
+			],
+		}
+
+		expect(graphNodeNames(graph, DESCRIPTORS, EVENTS)).toEqual(
+			new Map([
+				['t1', 'Webhook'],
+				['t2', 'Planificateur'],
+				['t3', 'Paiement Stripe'],
+				['c1', 'Montant élevé ?'],
+				['c2', 'Si'],
+			]),
+		)
+	})
+
+	it('shows the subtitle of a webhook and the rule of a scheduler on the canvas', () => {
+		const view = buildRunView(
+			{
+				...run('succeeded', []),
+				graph: {
+					...NAMED,
+					triggers: [
+						{
+							id: 't1',
+							kind: { Webhook: { method: 'POST', path: 'x' } },
+						},
+						{
+							id: 't2',
+							kind: {
+								Schedule: {
+									frequency: 'Weekly',
+									time: '14:30',
+									weekday: 'Friday',
+								},
+							},
+						},
+					],
+				},
+			},
+			DESCRIPTORS,
+			undefined,
+			EVENTS,
+		)
+
+		expect(view.nodes.slice(0, 2)).toMatchObject([
+			{ label: 'Webhook', subtitle: 'Déclencheur HTTP' },
+			{
+				label: 'Planificateur',
+				subtitle: 'toutes les semaines le vendredi à 14:30',
+			},
+		])
+	})
+
 	it('names a trigger that has no name of its own after its event', () => {
 		const view = buildRunView(
 			{

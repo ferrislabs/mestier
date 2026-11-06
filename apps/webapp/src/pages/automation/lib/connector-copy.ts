@@ -2,6 +2,7 @@ import {
 	Activity,
 	BadgeCheck,
 	Boxes,
+	CalendarClock,
 	CalendarSync,
 	Contact,
 	GitBranch,
@@ -17,6 +18,7 @@ import {
 	UserCog,
 	UserPlus,
 	UserRoundPlus,
+	Webhook,
 	Wrench,
 	Zap,
 } from 'lucide-react'
@@ -55,7 +57,14 @@ export interface TriggerCopy {
 	hue: number
 }
 
-export type TriggerCopyKind = 'manual' | 'events'
+export type TriggerCopyKind = 'schedule' | 'events' | 'webhook' | 'manual'
+
+export const TRIGGER_COPY_KINDS: readonly TriggerCopyKind[] = [
+	'schedule',
+	'events',
+	'webhook',
+	'manual',
+]
 
 export const CATEGORY_IDS: readonly CategoryId[] = [
 	'actions',
@@ -106,6 +115,20 @@ const CATEGORIES: Record<CategoryId, CategoryCopy> = {
 }
 
 const TRIGGERS: Record<TriggerCopyKind, TriggerCopy> = {
+	schedule: {
+		label: 'Planificateur',
+		subtitle: 'Déclencheur planifié',
+		description: 'Se déclenche à intervalle régulier',
+		icon: CalendarClock,
+		hue: 255,
+	},
+	webhook: {
+		label: 'Webhook',
+		subtitle: 'Déclencheur HTTP',
+		description: 'Se déclenche quand un service externe appelle une URL',
+		icon: Webhook,
+		hue: 335,
+	},
 	manual: {
 		label: 'Clic',
 		subtitle: 'Déclenchement manuel',

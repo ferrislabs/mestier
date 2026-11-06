@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import {
 	connectorCopy,
+	type TriggerCopyKind,
 	triggerCopy,
 } from '#/pages/automation/lib/connector-copy'
 
@@ -37,7 +38,11 @@ export function connectorAppearance(
 	return (family && BY_FAMILY[family]) || FALLBACK
 }
 
-export function triggerAppearance(manual: boolean): ConnectorAppearance {
-	const copy = triggerCopy(manual ? 'manual' : 'events')
+export function triggerAppearance(
+	kind: TriggerCopyKind | boolean,
+): ConnectorAppearance {
+	const copy = triggerCopy(
+		typeof kind === 'boolean' ? (kind ? 'manual' : 'events') : kind,
+	)
 	return { icon: copy.icon, hue: copy.hue }
 }

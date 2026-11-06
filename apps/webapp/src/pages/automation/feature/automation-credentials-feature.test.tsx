@@ -535,7 +535,7 @@ describe('AutomationCredentialsFeature — type labels', () => {
 })
 
 describe('AutomationCredentialsFeature — dialog wording', () => {
-	it('says where the type can be used, without the webhook that does not exist yet', async () => {
+	it('says where the type can be used, the webhook trigger included', async () => {
 		const user = userEvent.setup()
 		renderFeature(() => {})
 
@@ -546,10 +546,9 @@ describe('AutomationCredentialsFeature — dialog wording', () => {
 
 		expect(
 			screen.getByText(
-				'Utilisable dans : Requête HTTP et opérations de collection.',
+				'Utilisable dans : Requête HTTP et opérations de collection, Webhook.',
 			),
 		).toBeDefined()
-		expect(screen.queryByText(/Webhook/)).toBeNull()
 	})
 
 	it('offers the French categories and types, and finds a type by what it does', async () => {

@@ -5,10 +5,7 @@ import {
 	connectorAppearance,
 	triggerAppearance,
 } from '#/pages/automation/lib/connector-appearance'
-import {
-	resolveTriggerExample,
-	toEvaluateContext,
-} from '#/pages/automation/lib/data-tree'
+import { toEvaluateContext } from '#/pages/automation/lib/data-tree'
 import type {
 	EditorEdge,
 	EditorNode,
@@ -16,8 +13,8 @@ import type {
 import { upstreamOf } from '#/pages/automation/lib/graph'
 import { toItems } from '#/pages/automation/lib/items'
 import {
-	isManualTrigger,
-	triggerEventNames,
+	triggerExample,
+	triggerKindOf,
 } from '#/pages/automation/lib/trigger-events'
 
 export interface UpstreamEntry {
@@ -77,6 +74,19 @@ function stepOutcome(
 	return { status: step.output === undefined ? null : 'success', error: null }
 }
 
+function firstTriggerExample(
+	triggers: readonly EditorNode[],
+	events: readonly Schemas.EventDescriptorResponse[],
+): unknown {
+	for (const node of triggers) {
+		const example = node.data.trigger
+			? triggerExample(node.data.trigger, events)
+			: undefined
+		if (example !== undefined) return example
+	}
+	return undefined
+}
+
 function triggerEntry(
 	triggers: readonly EditorNode[],
 	distance: number,
@@ -85,11 +95,8 @@ function triggerEntry(
 ): UpstreamEntry | null {
 	const first = triggers[0]
 	if (!first?.data.trigger) return null
-	const names = triggers.flatMap((trigger) =>
-		trigger.data.trigger ? triggerEventNames(trigger.data.trigger) : [],
-	)
-	const example = resolveTriggerExample(sources.events, [...new Set(names)])
-	const appearance = triggerAppearance(isManualTrigger(first.data.trigger))
+	const example = firstTriggerExample(triggers, sources.events)
+	const appearance = triggerAppearance(triggerKindOf(first.data.trigger.kind))
 	const payload = sources.lastRun ? sources.lastRun.triggerPayload : example
 	return {
 		id: 'trigger',
@@ -180,12 +187,12 @@ export function evaluateContextFor(
 ): Schemas.EvaluateContextBody {
 	const byId = new Map(nodes.map((node) => [node.id, node]))
 	const links = upstreamOf(nodeId, edges)
-	const names = triggersLinkedFirst(nodes, byId, links).flatMap((node) =>
-		node.data.trigger ? triggerEventNames(node.data.trigger) : [],
-	)
 	const trigger = sources.lastRun
 		? sources.lastRun.triggerPayload
-		: resolveTriggerExample(sources.events, [...new Set(names)])
+		: firstTriggerExample(
+				triggersLinkedFirst(nodes, byId, links),
+				sources.events,
+			)
 	const connectors = links.flatMap((link) => {
 		const source = byId.get(link.id)
 		return source?.data.connector

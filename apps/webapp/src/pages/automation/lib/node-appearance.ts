@@ -5,20 +5,21 @@ import {
 } from '#/pages/automation/lib/connector-appearance'
 import type { EditorNodeData } from '#/pages/automation/lib/editor-nodes'
 import {
-	isManualTrigger,
+	isEventsTrigger,
 	triggerEventNames,
+	triggerKindOf,
 } from '#/pages/automation/lib/trigger-events'
 
 export function appearanceOf(data: EditorNodeData): ConnectorAppearance {
 	return data.trigger
-		? triggerAppearance(isManualTrigger(data.trigger))
+		? triggerAppearance(triggerKindOf(data.trigger.kind))
 		: connectorAppearance(data.family, data.connector?.kind)
 }
 
 export function needsEventChoice(data: EditorNodeData): boolean {
 	return (
 		data.trigger !== undefined &&
-		!isManualTrigger(data.trigger) &&
+		isEventsTrigger(data.trigger) &&
 		triggerEventNames(data.trigger).length === 0
 	)
 }

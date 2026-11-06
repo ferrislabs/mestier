@@ -8,6 +8,7 @@ import {
 	useAutomationRuns,
 	useConnectorCatalogue,
 	useReplayRun,
+	useRunGraphs,
 	useRunPolling,
 	useWorkflow,
 } from '#/hooks/use-automation'
@@ -38,6 +39,7 @@ import {
 	isTerminalRunStatus,
 	runElapsedMs,
 	runTriggerLabel,
+	triggerRunProbes,
 } from '#/pages/automation/lib/workflow-runs'
 import type { ExecutionFilter } from '#/pages/automation/ui/execution-list'
 import type {
@@ -159,6 +161,8 @@ function WorkflowExecutionsWorkspace({
 				.sort((a, b) => b.number - a.number),
 		[runsQuery.data, workflowId],
 	)
+	const probes = useMemo(() => triggerRunProbes(runs), [runs])
+	const graphs = useRunGraphs(organizationId, probes)
 	const selectedRun =
 		runs.find((item) => item.number === executionNumber) ?? runs[0]
 	const selectedId = selectedRun?.id ?? null
@@ -214,6 +218,16 @@ function WorkflowExecutionsWorkspace({
 			run?.graph ? graphNodeNames(run.graph, descriptors, events) : undefined,
 		[run?.graph, descriptors, events],
 	)
+	const versionNodeNames = useMemo(
+		() =>
+			new Map(
+				[...graphs].map(([versionId, graph]) => [
+					versionId,
+					graph ? graphNodeNames(graph, descriptors, events) : new Map(),
+				]),
+			),
+		[graphs, descriptors, events],
+	)
 	const triggerOf = (item: Run) =>
 		runTriggerLabel(item, {
 			events: eventLabels,
@@ -222,7 +236,7 @@ function WorkflowExecutionsWorkspace({
 					? ownNodeNames
 					: item.workflow_version_id === currentVersion?.id
 						? currentNodeNames
-						: undefined,
+						: versionNodeNames.get(item.workflow_version_id),
 		})
 
 	const entries = runs

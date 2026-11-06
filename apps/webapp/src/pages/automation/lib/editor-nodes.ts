@@ -6,7 +6,7 @@ import {
 } from '#/pages/automation/lib/connector-copy'
 import type { NodePosition } from '#/pages/automation/lib/graph'
 import {
-	isManualTrigger,
+	triggerKindOf,
 	triggerPresentation,
 } from '#/pages/automation/lib/trigger-events'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
@@ -59,9 +59,7 @@ function defaultPresentation(
 	if (data.trigger) {
 		return {
 			...triggerPresentation(data.trigger, lookup.events),
-			typeLabel: triggerCopy(
-				isManualTrigger(data.trigger) ? 'manual' : 'events',
-			).label,
+			typeLabel: triggerCopy(triggerKindOf(data.trigger.kind)).label,
 		}
 	}
 	const connector = data.connector

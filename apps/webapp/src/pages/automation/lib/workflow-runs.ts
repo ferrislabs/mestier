@@ -138,6 +138,32 @@ export function failedRunProbes(runs: readonly Run[]): string[] {
 	return [...byVersion.values()]
 }
 
+function firedByNode(
+	run: Pick<Run, 'trigger_id' | 'trigger_event_name'>,
+): boolean {
+	return Boolean(run.trigger_id) && !run.trigger_event_name
+}
+
+export function graphProbes(runs: readonly Run[]): string[] {
+	const byVersion = new Map<string, string>()
+	for (const run of runs) {
+		if (run.failed_connector_id) byVersion.set(run.workflow_version_id, run.id)
+	}
+	for (const run of runs) {
+		if (firedByNode(run) && !byVersion.has(run.workflow_version_id))
+			byVersion.set(run.workflow_version_id, run.id)
+	}
+	return [...byVersion.values()]
+}
+
+export function triggerRunProbes(runs: readonly Run[]): string[] {
+	const byVersion = new Map<string, string>()
+	for (const run of runs) {
+		if (firedByNode(run)) byVersion.set(run.workflow_version_id, run.id)
+	}
+	return [...byVersion.values()]
+}
+
 export interface TriggerLabels {
 	events?: ReadonlyMap<string, string>
 	nodeNames?: ReadonlyMap<string, string>

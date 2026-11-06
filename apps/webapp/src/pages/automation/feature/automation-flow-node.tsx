@@ -11,6 +11,7 @@ import {
 	appearanceOf,
 	needsEventChoice,
 } from '#/pages/automation/lib/node-appearance'
+import { triggerErrorMessage } from '#/pages/automation/lib/validation'
 import {
 	AutomationNodeCard,
 	type RunStatus,
@@ -49,7 +50,9 @@ export function AutomationFlowNode({
 			bindingIssues={[
 				...new Set([
 					...issues.map((issue) => issue.message),
-					...data.errors.map((error) => error.message),
+					...data.errors.map((error) =>
+						trigger ? triggerErrorMessage(error) : error.message,
+					),
 				]),
 			]}
 			selected={selected}

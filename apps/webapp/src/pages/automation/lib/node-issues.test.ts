@@ -5,6 +5,7 @@ import type { Collection } from '#/pages/automation/lib/collections'
 import {
 	connectorNode,
 	type EditorLookup,
+	triggerNode,
 } from '#/pages/automation/lib/editor-nodes'
 import {
 	nodeIssues,
@@ -223,5 +224,161 @@ describe('nodeIssues — a node made from a collection operation', () => {
 		expect([
 			...nodeIssuesByNode([gone, fine], [], nothing, readsAs('loading')).keys(),
 		]).toEqual([])
+	})
+})
+
+describe('nodeIssues — the triggers', () => {
+	function webhook(
+		id: string,
+		rule: Partial<
+			Extract<Schemas.TriggerKindDto, { Webhook: unknown }>['Webhook']
+		> = {},
+		name?: string,
+	) {
+		return triggerNode(
+			{
+				id,
+				name,
+				kind: {
+					Webhook: {
+						method: 'POST',
+						path: 'paiement-recu',
+						credential_id: null,
+						contract: [],
+						on_invalid: 'Reject',
+						...rule,
+					},
+				},
+			},
+			{ x: 0, y: 0 },
+			lookup,
+		)
+	}
+
+	function schedule(time: string) {
+		return triggerNode(
+			{
+				id: 't1',
+				kind: { Schedule: { frequency: 'Daily', time, timezone: 'UTC' } },
+			},
+			{ x: 0, y: 0 },
+			lookup,
+		)
+	}
+
+	it('stays quiet about a webhook with a good path and a good contract', () => {
+		const hook = webhook('t1', {
+			contract: [{ name: 'montant', kind: 'Number', required: true }],
+		})
+
+		expect(nodeIssues(hook, [hook], [], nothing)).toEqual([])
+	})
+
+	it('flags an empty path', () => {
+		const hook = webhook('t1', { path: '' })
+
+		expect(nodeIssues(hook, [hook], [], nothing)).toEqual([
+			{
+				parameter: 'path',
+				message: 'Indiquez la fin de l’URL après /webhooks/.',
+			},
+		])
+	})
+
+	it('flags a path with forbidden characters', () => {
+		const hook = webhook('t1', { path: 'Paiement Reçu' })
+
+		expect(nodeIssues(hook, [hook], [], nothing)[0]).toEqual({
+			parameter: 'path',
+			message:
+				'Lettres minuscules, chiffres, « - », « _ » et « / » uniquement.',
+		})
+	})
+
+	it('names the other webhook of the graph that holds the same path', () => {
+		const first = webhook('t1', {}, 'Paiements')
+		const second = webhook('t2', {}, 'Doublon')
+		const third = webhook('t3', { path: 'autre' })
+		const nodes = [first, second, third]
+
+		expect(nodeIssues(first, nodes, [], nothing)).toEqual([
+			{
+				parameter: 'path',
+				message:
+					'Cette URL est déjà utilisée par « Doublon » dans ce workflow.',
+			},
+		])
+		expect(nodeIssues(second, nodes, [], nothing)[0]?.message).toBe(
+			'Cette URL est déjà utilisée par « Paiements » dans ce workflow.',
+		)
+		expect(nodeIssues(third, nodes, [], nothing)).toEqual([])
+	})
+
+	it('badges the nodes with the issue in the map by node, the others stay out of it', () => {
+		const first = webhook('t1')
+		const second = webhook('t2')
+		const alone = webhook('t3', { path: 'seul' })
+
+		const issues = nodeIssuesByNode([first, second, alone], [], nothing)
+
+		expect([...issues.keys()]).toEqual(['t1', 't2'])
+	})
+
+	it('flags a key without a name, a bad name, a duplicate and an example that does not fit', () => {
+		const hook = webhook('t1', {
+			contract: [
+				{ name: '', kind: 'Text', required: true },
+				{ name: 'mon montant', kind: 'Text', required: true },
+				{ name: 'a', kind: 'Text', required: true },
+				{ name: 'a', kind: 'Text', required: true },
+				{ name: 'b', kind: 'Number', required: true, example: 'beaucoup' },
+			],
+		})
+
+		expect(nodeIssues(hook, [hook], [], nothing)).toEqual([
+			{
+				parameter: 'contract',
+				message: 'Clé n° 1 : Donnez un nom à cette clé.',
+			},
+			{
+				parameter: 'contract',
+				message:
+					'Clé « mon montant » : Lettres, chiffres, « _ » et « - » uniquement.',
+			},
+			{
+				parameter: 'contract',
+				message: 'Clé « a » : Clé en double à ce niveau.',
+			},
+			{
+				parameter: 'contract',
+				message: 'Clé « b » : Exemple invalide pour le type « Nombre ».',
+			},
+		])
+	})
+
+	it('flags a time that is not HH:MM on a scheduler', () => {
+		expect(nodeIssues(schedule('9h'), [schedule('9h')], [], nothing)).toEqual([
+			{
+				parameter: 'time',
+				message: 'Indiquez une heure au format HH:MM, par exemple 09:00.',
+			},
+		])
+		expect(nodeIssues(schedule('09:00'), [], [], nothing)).toEqual([])
+	})
+
+	it('has no issue for a click or an event trigger', () => {
+		const click = triggerNode(
+			{ id: 't1', kind: 'Manual' },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		const event = triggerNode(
+			{ id: 't2', kind: { Events: [] } },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+
+		expect(nodeIssues(click, [click, event], [], nothing)).toEqual([])
+		expect(nodeIssues(event, [click, event], [], nothing)).toEqual([])
 	})
 })

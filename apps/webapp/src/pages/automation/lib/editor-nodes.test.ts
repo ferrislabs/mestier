@@ -259,3 +259,69 @@ describe('editor nodes', () => {
 		).toBeNull()
 	})
 })
+
+describe('editor nodes — the scheduler and the webhook', () => {
+	const schedule: Schemas.PlacedTriggerDto = {
+		id: 't1',
+		kind: { Schedule: { frequency: 'Daily', time: '09:00', timezone: 'UTC' } },
+	}
+	const webhook: Schemas.PlacedTriggerDto = {
+		id: 't2',
+		kind: {
+			Webhook: {
+				method: 'POST',
+				path: 'paiement-recu',
+				credential_id: null,
+				contract: [],
+				on_invalid: 'Reject',
+			},
+		},
+	}
+
+	it('presents a scheduler with its rule as the subtitle', () => {
+		const node = triggerNode(schedule, { x: 0, y: 0 }, lookup)
+
+		expect(node.data).toMatchObject({
+			kind: 'trigger',
+			label: 'Planificateur',
+			subtitle: 'tous les jours à 9:00',
+			typeLabel: 'Planificateur',
+		})
+	})
+
+	it('presents a webhook with the label and the subtitle of the prototype', () => {
+		const node = triggerNode(webhook, { x: 0, y: 0 }, lookup)
+
+		expect(node.data).toMatchObject({
+			label: 'Webhook',
+			subtitle: 'Déclencheur HTTP',
+			typeLabel: 'Webhook',
+		})
+	})
+
+	it('keeps the name and the description given to the node', () => {
+		const node = withDetails(
+			triggerNode(schedule, { x: 0, y: 0 }, lookup),
+			{ name: 'Chaque matin', description: 'Avant l’ouverture' },
+			lookup,
+		)
+
+		expect(node.data).toMatchObject({
+			label: 'Chaque matin',
+			subtitle: 'Avant l’ouverture',
+			typeLabel: 'Planificateur',
+		})
+	})
+
+	it('saves the kinds back untouched', () => {
+		const nodes = toEditorNodes(
+			{ triggers: [schedule, webhook], connectors: [], edges: [] },
+			new Map(),
+			lookup,
+			new Map(),
+			new Map(),
+		)
+
+		expect(toGraph(nodes, []).triggers).toEqual([schedule, webhook])
+	})
+})

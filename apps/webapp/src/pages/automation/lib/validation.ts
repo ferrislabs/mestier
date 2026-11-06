@@ -1,4 +1,6 @@
 import type { Schemas } from '#/api/api.client'
+import { TIME_MESSAGE } from '#/pages/automation/lib/schedule'
+import { PATH_MESSAGES } from '#/pages/automation/lib/webhook-path'
 
 export interface ConnectorValidationError {
 	field: string | null
@@ -10,6 +12,34 @@ export interface GraphValidation {
 	graphErrors: string[]
 }
 
+const GRAPH_LEVEL_TEXT_ERRORS: readonly {
+	pattern: RegExp
+	french: (match: RegExpExecArray) => string
+}[] = [
+	{
+		pattern: /^an organization holds at most (\d+) webhook routes$/,
+		french: ([, limit]) =>
+			`Votre organisation a atteint la limite de ${limit} webhooks.`,
+	},
+	{
+		pattern: /^an organization holds at most (\d+) schedules$/,
+		french: ([, limit]) =>
+			`Votre organisation a atteint la limite de ${limit} planificateurs.`,
+	},
+	{
+		pattern: /^a graph holds at most (\d+) triggers$/,
+		french: ([, limit]) => `Un workflow compte au plus ${limit} déclencheurs.`,
+	},
+]
+
+function graphLevelMessage(message: string): string {
+	for (const { pattern, french } of GRAPH_LEVEL_TEXT_ERRORS) {
+		const match = pattern.exec(message)
+		if (match) return french(match)
+	}
+	return message
+}
+
 export function projectGraphErrors(
 	errors: Schemas.GraphErrorResponse[],
 ): GraphValidation {
@@ -19,7 +49,7 @@ export function projectGraphErrors(
 	for (const error of errors) {
 		const nodeId = error.connector_id ?? error.trigger_id
 		if (!nodeId) {
-			graphErrors.push(error.message)
+			graphErrors.push(graphLevelMessage(error.message))
 			continue
 		}
 
@@ -31,11 +61,21 @@ export function projectGraphErrors(
 	return { connectorErrors, graphErrors }
 }
 
+const WEBHOOK_PATH_TAKEN = 'E_WEBHOOK_PATH_TAKEN'
+
+function carriesGraphErrors(error: Error): boolean {
+	const { status, data } = error as {
+		status?: number
+		data?: { code?: string }
+	}
+	return status === 422 || (status === 409 && data?.code === WEBHOOK_PATH_TAKEN)
+}
+
 export function graphErrorsOf(
 	error: unknown,
 ): Schemas.GraphErrorResponse[] | null {
 	if (!(error instanceof Error)) return null
-	if ((error as { status?: number }).status !== 422) return null
+	if (!carriesGraphErrors(error)) return null
 
 	const data = (error as { data?: { details?: { errors?: unknown } } }).data
 	const errors = data?.details?.errors
@@ -198,4 +238,138 @@ export function pruneCorrectedErrors(
 	return kept.size === validation.connectorErrors.size
 		? validation
 		: { ...validation, connectorErrors: kept }
+}
+
+export interface TriggerFieldErrors {
+	path: string | null
+	credential: string | null
+	time: string | null
+	weekday: string | null
+	timezone: string | null
+	contract: string | null
+	keys: Record<string, string>
+	rest: ConnectorValidationError[]
+}
+
+const PATH_TAKEN = 'Ce chemin est déjà utilisé.'
+
+const TRIGGER_FIELD_TEXT_ERRORS: Readonly<
+	Record<string, readonly { pattern: RegExp; french: () => string }[]>
+> = {
+	path: [
+		{
+			pattern: /another workflow already holds$/,
+			french: () => PATH_TAKEN,
+		},
+		{
+			pattern: /reuses the webhook path/,
+			french: () => 'Cette URL est déjà utilisée par un autre déclencheur.',
+		},
+		{
+			pattern: /the path is empty$/,
+			french: () => PATH_MESSAGES.empty,
+		},
+		{
+			pattern: /the path is longer than/,
+			french: () => PATH_MESSAGES.tooLong,
+		},
+		{
+			pattern: /must not start with/,
+			french: () => PATH_MESSAGES.prefixed,
+		},
+		{
+			pattern: /the path (must not contain|only allows)/,
+			french: () => PATH_MESSAGES.characters,
+		},
+	],
+	credential: [
+		{
+			pattern: /unknown credential/,
+			french: () => 'Cette identification n’existe plus.',
+		},
+		{
+			pattern: /does not accept$/,
+			french: () =>
+				'Cette identification n’est pas utilisable pour un webhook.',
+		},
+	],
+	time: [
+		{
+			pattern: /which is not HH:MM$/,
+			french: () => TIME_MESSAGE,
+		},
+	],
+	timezone: [
+		{
+			pattern: /unknown timezone/,
+			french: () => 'Ce fuseau horaire n’existe pas.',
+		},
+	],
+	contract: [
+		{
+			pattern: /contract key with no name$/,
+			french: () => 'Donnez un nom à cette clé.',
+		},
+		{
+			pattern: /more than once$/,
+			french: () => 'Clé en double à ce niveau.',
+		},
+		{
+			pattern: /not a valid key name$/,
+			french: () => 'Lettres, chiffres, « _ » et « - » uniquement.',
+		},
+	],
+}
+
+function triggerFieldMessage(field: string, message: string): string {
+	const family = field.startsWith('contract.') ? 'contract' : field
+	for (const { pattern, french } of TRIGGER_FIELD_TEXT_ERRORS[family] ?? []) {
+		if (pattern.test(message)) return french()
+	}
+	return message
+}
+
+const TRIGGER_FIELDS = new Set([
+	'path',
+	'credential',
+	'time',
+	'weekday',
+	'timezone',
+	'contract',
+])
+
+export function triggerErrorMessage(error: ConnectorValidationError): string {
+	const field = error.field
+	return field !== null &&
+		(field.startsWith('contract.') || TRIGGER_FIELDS.has(field))
+		? triggerFieldMessage(field, error.message)
+		: error.message
+}
+
+export function triggerFieldErrors(
+	errors: readonly ConnectorValidationError[],
+): TriggerFieldErrors {
+	const result: TriggerFieldErrors = {
+		path: null,
+		credential: null,
+		time: null,
+		weekday: null,
+		timezone: null,
+		contract: null,
+		keys: {},
+		rest: [],
+	}
+	for (const error of errors) {
+		const field = error.field
+		if (field?.startsWith('contract.')) {
+			const message = triggerFieldMessage(field, error.message)
+			result.keys[field.slice('contract.'.length)] ??= message
+		} else if (field !== null && TRIGGER_FIELDS.has(field)) {
+			const key = field as keyof Omit<TriggerFieldErrors, 'keys' | 'rest'>
+			result[key] ??= triggerFieldMessage(field, error.message)
+		} else {
+			result.rest.push(error)
+		}
+	}
+	return result
 }

@@ -28,7 +28,7 @@ import {
 } from '#/pages/automation/lib/execution-log'
 import { graphNodeNames } from '#/pages/automation/lib/run-view'
 import {
-	failedRunProbes,
+	graphProbes,
 	isTerminalRunStatus,
 } from '#/pages/automation/lib/workflow-runs'
 import { AutomationExecutionsLog } from '#/pages/automation/ui/automation-executions-log'
@@ -79,7 +79,7 @@ function ExecutionsLogWorkspace({
 	const catalogueQuery = useConnectorCatalogue(organizationId)
 	const { refetch: refetchRuns } = runsQuery
 	const runs = runsQuery.data?.data
-	const probes = useMemo(() => failedRunProbes(runs ?? []), [runs])
+	const probes = useMemo(() => graphProbes(runs ?? []), [runs])
 	const graphs = useRunGraphs(organizationId, probes)
 	const hasLiveRun = (runs ?? []).some(
 		(run) => !isTerminalRunStatus(run.status),
@@ -160,7 +160,7 @@ function ExecutionsLogWorkspace({
 					names.get(run.workflow_id) ?? DELETED_WORKFLOW,
 					now,
 					{
-						trigger: { events: eventLabels },
+						trigger: { events: eventLabels, nodeNames },
 						failedNode:
 							failedId && nodeNames
 								? (nodeNames.get(failedId) ?? failedId)

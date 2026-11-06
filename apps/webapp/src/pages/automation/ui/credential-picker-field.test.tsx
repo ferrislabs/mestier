@@ -351,3 +351,58 @@ describe('CredentialPickerField — expired credentials', () => {
 		expect(screen.queryByText(EXPIRED_ALERT)).toBeNull()
 	})
 })
+
+describe('CredentialPickerField — the warning', () => {
+	const WARNING =
+		'Sans identification, toute personne qui connaît cette URL peut déclencher ce workflow.'
+
+	it('shows the warning right under the selector, before the other lines', () => {
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[credential('c1', 'Odoo prod')]}
+				value={null}
+				error={null}
+				optional
+				hint="Types acceptés : Bearer."
+				warning={WARNING}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		const warning = screen.getByText(WARNING)
+		const select = screen.getByRole('combobox', { name: 'Identification' })
+		expect(
+			select.compareDocumentPosition(warning) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+		expect(
+			warning.compareDocumentPosition(
+				screen.getByRole('button', { name: 'Créer une identification' }),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+		expect(
+			warning.compareDocumentPosition(
+				screen.getByText('Types acceptés : Bearer.'),
+			) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+	})
+
+	it('shows no warning when none is given', () => {
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[credential('c1', 'Odoo prod')]}
+				value="c1"
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		expect(screen.queryByText(/Sans identification/)).toBeNull()
+	})
+})

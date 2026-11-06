@@ -9,6 +9,8 @@ import {
 	nodeTextErrors,
 	projectGraphErrors,
 	pruneCorrectedErrors,
+	triggerErrorMessage,
+	triggerFieldErrors,
 } from '#/pages/automation/lib/validation'
 
 function error(
@@ -368,6 +370,31 @@ describe('graphErrorsOf', () => {
 		).toEqual([{ connector_id: 'c1', message: 'bad' }])
 	})
 
+	it('reads the errors of a 409 refusing a webhook path, naming the trigger and the field', () => {
+		const errors = [{ trigger_id: 't1', field: 'path', message: 'taken' }]
+		const taken = Object.assign(new Error('taken'), {
+			status: 409,
+			data: { code: 'E_WEBHOOK_PATH_TAKEN', details: { errors } },
+		})
+
+		expect(graphErrorsOf(taken)).toEqual(errors)
+	})
+
+	it('reads nothing from another 409', () => {
+		expect(
+			graphErrorsOf(
+				Object.assign(new Error('archived'), {
+					status: 409,
+					data: {
+						code: 'E_WORKFLOW_ARCHIVED',
+						details: { errors: [{ message: 'x' }] },
+					},
+				}),
+			),
+		).toBeNull()
+		expect(graphErrorsOf(refusal(409, [{ message: 'x' }]))).toBeNull()
+	})
+
 	it('reads nothing from another status, another shape or something that is no error', () => {
 		expect(graphErrorsOf(refusal(503, [{ message: 'bad' }]))).toBeNull()
 		expect(graphErrorsOf(refusal(422, 'bad'))).toBeNull()
@@ -415,5 +442,171 @@ describe('mergeValidations', () => {
 			{ field: null, message: 'autre' },
 		])
 		expect(merged.graphErrors).toEqual(['cycle', 'sans déclencheur'])
+	})
+})
+
+describe('projectGraphErrors — the caps', () => {
+	it('banners the caps of the organization and of the graph in French', () => {
+		const result = projectGraphErrors([
+			error({ message: 'an organization holds at most 200 webhook routes' }),
+			error({ message: 'an organization holds at most 200 schedules' }),
+			error({
+				field: 'triggers',
+				message: 'a graph holds at most 20 triggers',
+			}),
+			error({ message: 'Le graphe contient un cycle' }),
+		])
+
+		expect(result.graphErrors).toEqual([
+			'Votre organisation a atteint la limite de 200 webhooks.',
+			'Votre organisation a atteint la limite de 200 planificateurs.',
+			'Un workflow compte au plus 20 déclencheurs.',
+			'Le graphe contient un cycle',
+		])
+		expect(result.connectorErrors.size).toBe(0)
+	})
+})
+
+describe('triggerFieldErrors', () => {
+	function fields(entries: [string, string][]) {
+		return triggerFieldErrors(
+			entries.map(([field, message]) => ({ field, message })),
+		)
+	}
+
+	it('says the path is taken, without telling by whom', () => {
+		expect(
+			fields([
+				[
+					'path',
+					'trigger `t1` uses a webhook path another workflow already holds',
+				],
+			]).path,
+		).toBe('Ce chemin est déjà utilisé.')
+	})
+
+	it('puts the other path refusals in French on the path field', () => {
+		const path = (message: string) =>
+			fields([
+				['path', `trigger \`t1\` has an invalid webhook path: ${message}`],
+			]).path
+
+		expect(path('the path is empty')).toBe(
+			'Indiquez la fin de l’URL après /webhooks/.',
+		)
+		expect(path('the path is longer than 200 characters')).toBe(
+			'L’URL ne peut pas dépasser 200 caractères.',
+		)
+		expect(
+			path('the path must not start with `/webhooks/`, which is added for you'),
+		).toBe('Le préfixe /webhooks/ est déjà ajouté : retirez-le.')
+		expect(path('the path must not contain a `..` segment')).toBe(
+			'Lettres minuscules, chiffres, « - », « _ » et « / » uniquement.',
+		)
+		expect(
+			path('the path only allows lowercase letters, digits, `-`, `_` and `/`'),
+		).toBe('Lettres minuscules, chiffres, « - », « _ » et « / » uniquement.')
+		expect(
+			fields([
+				['path', 'trigger `t1` reuses the webhook path `x` of another trigger'],
+			]).path,
+		).toBe('Cette URL est déjà utilisée par un autre déclencheur.')
+	})
+
+	it('keeps the credential, the time and the timezone on their own field', () => {
+		const result = fields([
+			['credential', 'trigger `t1` references unknown credential `c9`'],
+			['time', 'trigger `t1` has the time `9h`, which is not HH:MM'],
+			['timezone', 'trigger `t1` has the unknown timezone `Mars/Olympus`'],
+		])
+
+		expect(result.credential).toBe('Cette identification n’existe plus.')
+		expect(result.time).toBe(
+			'Indiquez une heure au format HH:MM, par exemple 09:00.',
+		)
+		expect(result.timezone).toBe('Ce fuseau horaire n’existe pas.')
+		expect(
+			fields([
+				[
+					'credential',
+					'trigger `t1` credential `c1` has scheme `odoo_api`, which a webhook does not accept',
+				],
+			]).credential,
+		).toBe('Cette identification n’est pas utilisable pour un webhook.')
+	})
+
+	it('sends the errors of a contract key to the key and the others to the contract', () => {
+		const result = fields([
+			['contract', 'trigger `t1` has a contract key with no name'],
+			[
+				'contract.montant',
+				'trigger `t1` names the contract key `montant` more than once',
+			],
+			[
+				'contract.1 x',
+				'trigger `t1` names the contract key `1 x`, which is not a valid key name',
+			],
+		])
+
+		expect(result.contract).toBe('Donnez un nom à cette clé.')
+		expect(result.keys).toEqual({
+			montant: 'Clé en double à ce niveau.',
+			'1 x': 'Lettres, chiffres, « _ » et « - » uniquement.',
+		})
+	})
+
+	it('keeps an error it cannot place, and the node level ones, in the rest', () => {
+		const result = triggerFieldErrors([
+			{ field: null, message: 'something else' },
+			{ field: 'unheard', message: 'odd' },
+		])
+
+		expect(result.rest).toEqual([
+			{ field: null, message: 'something else' },
+			{ field: 'unheard', message: 'odd' },
+		])
+		expect(result.path).toBeNull()
+	})
+
+	it('shows an unknown message of a known field as the server wrote it', () => {
+		expect(fields([['weekday', 'weekday is odd']]).weekday).toBe(
+			'weekday is odd',
+		)
+	})
+
+	it('keeps the first error of a field', () => {
+		expect(
+			fields([
+				['timezone', 'trigger `t1` has the unknown timezone `a`'],
+				['timezone', 'trigger `t1` has the unknown timezone `b`'],
+			]).timezone,
+		).toBe('Ce fuseau horaire n’existe pas.')
+	})
+})
+
+describe('triggerErrorMessage', () => {
+	it('puts the error of a trigger field in French', () => {
+		expect(
+			triggerErrorMessage({
+				field: 'path',
+				message:
+					'trigger `t1` uses a webhook path another workflow already holds',
+			}),
+		).toBe('Ce chemin est déjà utilisé.')
+		expect(
+			triggerErrorMessage({
+				field: 'contract.montant',
+				message: 'trigger `t1` names the contract key `montant` more than once',
+			}),
+		).toBe('Clé en double à ce niveau.')
+	})
+
+	it('leaves the other errors as they are', () => {
+		expect(triggerErrorMessage({ field: null, message: 'tel quel' })).toBe(
+			'tel quel',
+		)
+		expect(triggerErrorMessage({ field: 'name', message: 'tel quel' })).toBe(
+			'tel quel',
+		)
 	})
 })

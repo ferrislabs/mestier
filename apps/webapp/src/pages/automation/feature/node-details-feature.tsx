@@ -1,13 +1,19 @@
 import { Link } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	ConnectorParametersFeature,
 	type ConnectorParametersFeatureProps,
+	CredentialCreationPanel,
+	useCredentialCreation,
 } from '#/pages/automation/feature/connector-parameters-feature'
 import { EventPickerFeature } from '#/pages/automation/feature/event-picker-feature'
+import {
+	useCredentialMeta,
+	useCredentialMetaActions,
+} from '#/pages/automation/feature/use-credential-meta'
 import {
 	collectionPath,
 	identificationsPath,
@@ -25,6 +31,11 @@ import {
 	operationOutput,
 } from '#/pages/automation/lib/collection-node'
 import { collectionCredentialHint } from '#/pages/automation/lib/connector-field-copy'
+import {
+	type CredentialStatus,
+	usableInWebhook,
+	webhookCredentialHint,
+} from '#/pages/automation/lib/credential-meta'
 import type {
 	EditorEdge,
 	EditorNode,
@@ -42,20 +53,33 @@ import {
 	outputViewFromStep,
 } from '#/pages/automation/lib/node-view'
 import { labelConflict } from '#/pages/automation/lib/references'
+import { scheduleContractSource } from '#/pages/automation/lib/schedule'
 import {
 	exampleOf,
 	operationContractSource,
 } from '#/pages/automation/lib/schema-typescript'
 import {
 	findEvent,
+	isEventsTrigger,
+	scheduleOf,
 	triggerEventNames,
+	triggerExample,
+	webhookOf,
 } from '#/pages/automation/lib/trigger-events'
 import {
 	evaluateContextFor,
 	type UpstreamSources,
 	upstreamEntries,
 } from '#/pages/automation/lib/upstream-entries'
-import { nodeTextErrors } from '#/pages/automation/lib/validation'
+import {
+	nodeTextErrors,
+	triggerFieldErrors,
+} from '#/pages/automation/lib/validation'
+import {
+	contractSource,
+	sampleBody,
+} from '#/pages/automation/lib/webhook-contract'
+import { webhookUrl } from '#/pages/automation/lib/webhook-path'
 import type { DryRunPasses } from '#/pages/automation/lib/workflow-runs'
 import { EventInputPanel } from '#/pages/automation/ui/event-input-panel'
 import { InlineEditField } from '#/pages/automation/ui/inline-edit-field'
@@ -70,11 +94,13 @@ import {
 import { OperationContractTabs } from '#/pages/automation/ui/operation-contract-tabs'
 import { OperationOutputPanel } from '#/pages/automation/ui/operation-output-panel'
 import { RunStatusLabel } from '#/pages/automation/ui/run-status-label'
+import { ScheduleInputPanel } from '#/pages/automation/ui/schedule-input-panel'
 import { TriggerParameters } from '#/pages/automation/ui/trigger-parameters'
 import type {
 	PassSelector,
 	TestRun,
 } from '#/pages/automation/ui/variables-panel'
+import { WebhookInputPanel } from '#/pages/automation/ui/webhook-input-panel'
 
 export interface NodeDetailsFeatureProps {
 	node: EditorNode
@@ -177,6 +203,8 @@ export function NodeDetailsFeature({
 		() => evaluateContextFor(node.id, nodes, edges, sources),
 		[node.id, nodes, edges, sources],
 	)
+	const webhook = trigger ? webhookOf(trigger) : null
+	const schedule = trigger ? scheduleOf(trigger) : null
 	const eventNames = trigger ? triggerEventNames(trigger) : []
 	const chosenEvents = eventNames.flatMap((name) => {
 		const event = findEvent(sources.events, name)
@@ -212,8 +240,8 @@ export function NodeDetailsFeature({
 		: { state: 'unconnected' }
 
 	function applyEventChoice(event: Schemas.EventDescriptorResponse) {
-		if (!trigger || trigger.kind === 'Manual' || !picking) return
-		const names = trigger.kind.Events
+		if (!trigger || !isEventsTrigger(trigger) || !picking) return
+		const names = triggerEventNames(trigger)
 		const next =
 			picking.replacing === null
 				? [...names.filter((name) => name !== event.name), event.name]
@@ -226,8 +254,28 @@ export function NodeDetailsFeature({
 		node.data.errors,
 		new Set(descriptor?.fields.map((field) => field.name)),
 	)
+	const triggerErrors = triggerFieldErrors(textErrors.rest)
 	const operationErrors = operationFieldErrors(textErrors.rest)
 	const fieldIssues = issues
+	const webhookCredentials = credentials.filter((credential) =>
+		usableInWebhook(credential.kind),
+	)
+	const credentialCreation = useCredentialCreation({
+		onCreateCredential,
+		onSelect: (_, credentialId) => {
+			if (webhook)
+				onUpdateTriggerKind({
+					Webhook: { ...webhook, credential_id: credentialId },
+				})
+		},
+	})
+	const credentialMeta = useCredentialMeta().data
+	const { rememberKinds } = useCredentialMetaActions()
+	useEffect(() => {
+		rememberKinds(credentials)
+	}, [credentials, rememberKinds])
+	const credentialStatusOf = (credentialId: string): CredentialStatus =>
+		credentialMeta[credentialId]?.status ?? 'valid'
 	const acceptsExpressions =
 		descriptor?.fields.some((field) => field.expression) ?? false
 
@@ -280,7 +328,19 @@ export function NodeDetailsFeature({
 				hue={appearance.hue}
 				status={shownStatus && <RunStatusLabel status={shownStatus} />}
 				input={
-					trigger && trigger.kind !== 'Manual' ? (
+					webhook ? (
+						<WebhookInputPanel
+							method={webhook.method}
+							url={webhookUrl(window.location.origin, webhook.path)}
+							contract={contractSource(webhook.path, webhook.contract ?? [])}
+							example={sampleBody(webhook.contract ?? [])}
+						/>
+					) : schedule && trigger ? (
+						<ScheduleInputPanel
+							contract={scheduleContractSource()}
+							example={triggerExample(trigger, sources.events)}
+						/>
+					) : trigger && isEventsTrigger(trigger) ? (
 						<EventInputPanel
 							events={chosenEvents}
 							onChooseEvent={() => setPicking({ replacing: null })}
@@ -360,14 +420,21 @@ export function NodeDetailsFeature({
 								onCreateCredential={onCreateCredential}
 								onEvaluateExpression={onEvaluateExpression}
 							/>
+						) : trigger && credentialCreation.state ? (
+							<CredentialCreationPanel
+								creation={credentialCreation}
+								authSchemes={authSchemes.filter((scheme) =>
+									usableInWebhook(scheme.kind),
+								)}
+							/>
 						) : trigger ? (
 							<>
-								{textErrors.rest.length > 0 && (
+								{triggerErrors.rest.length > 0 && (
 									<div
 										role="alert"
 										className="rounded-md border border-state-alert/60 bg-state-alert/10 px-3 py-2 text-sm text-state-alert"
 									>
-										{textErrors.rest.map((error) => (
+										{triggerErrors.rest.map((error) => (
 											<p key={error.message}>{error.message}</p>
 										))}
 									</div>
@@ -375,6 +442,12 @@ export function NodeDetailsFeature({
 								<TriggerParameters
 									trigger={trigger}
 									events={sources.events}
+									origin={window.location.origin}
+									credentials={webhookCredentials}
+									credentialHint={webhookCredentialHint()}
+									credentialStatusOf={credentialStatusOf}
+									issues={fieldIssues}
+									errors={triggerErrors}
 									onChooseEvent={(replacing) => setPicking({ replacing })}
 									onRemoveEvent={(name) =>
 										onUpdateTriggerKind({
@@ -383,6 +456,8 @@ export function NodeDetailsFeature({
 											),
 										})
 									}
+									onChange={onUpdateTriggerKind}
+									onCreateCredential={() => credentialCreation.start('typed')}
 								/>
 							</>
 						) : null}

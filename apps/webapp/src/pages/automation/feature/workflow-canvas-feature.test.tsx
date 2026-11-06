@@ -2578,3 +2578,551 @@ describe('WorkflowPageFeature (editor) — testing the workflow', () => {
 		})
 	})
 })
+
+describe('WorkflowPageFeature (editor) — the scheduler and the webhook', () => {
+	const BASE: Schemas.GraphDto = {
+		connectors: [connector('c1')],
+		edges: [{ from: 't1', to: 'c1', branch: null }],
+		triggers: [{ id: 't1', kind: 'Manual' }],
+	}
+	const LAYOUT = { c1: { x: 280, y: 0 }, t1: { x: 0, y: 0 } }
+
+	function savedBody(api: FakeApi): Schemas.SaveWorkflowVersionRequest {
+		const call = api.calls.find(
+			(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
+		)
+		return (call?.params as { body: Schemas.SaveWorkflowVersionRequest }).body
+	}
+
+	function openWith(
+		graph: Schemas.GraphDto,
+		layout: Schemas.WorkflowLayoutDto = LAYOUT,
+		credentials: Schemas.CredentialResponse[] = [],
+	) {
+		return renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout }),
+				pagination: null,
+			}))
+			fakeApi.mockGet(CREDENTIALS_PATH, () => ({
+				data: credentials,
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, (params) => ({
+				data: {
+					id: 'version-2',
+					workflow_id: 'workflow-1',
+					version: 2,
+					graph: (params as { body: { graph: Schemas.GraphDto } }).body.graph,
+					created_at: '2026-08-02T00:00:00Z',
+					created_by: null,
+				},
+			}))
+		})
+	}
+
+	function refuseWith(
+		status: number,
+		code: string,
+		errors: Schemas.GraphErrorResponse[],
+	) {
+		return (fakeApi: FakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph: BASE, layout: LAYOUT }),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				throw Object.assign(new Error('refused'), {
+					status,
+					data: { code, message: 'refused', status, details: { errors } },
+				})
+			})
+		}
+	}
+
+	async function addTrigger(label: RegExp, nodeId: string) {
+		await screen.findByTestId('rf__node-t1')
+		const pane = document.querySelector('.react-flow__pane') as HTMLElement
+		fireEvent.contextMenu(pane, { clientX: 400, clientY: 400 })
+		fireEvent.click(await screen.findByText('Ajouter un nœud'))
+		fireEvent.click(await screen.findByText('Ajouter un déclencheur'))
+		fireEvent.click(
+			within(
+				await screen.findByRole('complementary', { name: 'Créateur de nœuds' }),
+			).getByRole('button', { name: label }),
+		)
+		return screen.findByTestId(`rf__node-${nodeId}`)
+	}
+
+	async function choose(
+		user: ReturnType<typeof userEvent.setup>,
+		combobox: string,
+		option: string,
+	) {
+		await user.click(screen.getByRole('combobox', { name: combobox }))
+		await user.click(await screen.findByRole('option', { name: option }))
+	}
+
+	it('creates a scheduler, makes it weekly on Friday at 14:30 and saves the schedule', async () => {
+		const user = userEvent.setup()
+		const api = openWith(BASE)
+
+		const node = await addTrigger(/Planificateur/, 't2')
+		expect(within(node).getByText('Planificateur')).toBeDefined()
+		expect(within(node).getByText('tous les jours à 9:00')).toBeDefined()
+
+		fireEvent.doubleClick(node)
+		await choose(user, 'Fréquence', 'Toutes les semaines')
+		await choose(user, 'Jour', 'Vendredi')
+		fireEvent.change(screen.getByLabelText('Heure de déclenchement'), {
+			target: { value: '14:30' },
+		})
+		await closeDetails()
+
+		expect(
+			within(screen.getByTestId('rf__node-t2')).getByText(
+				'toutes les semaines le vendredi à 14:30',
+			),
+		).toBeDefined()
+		await clickSave()
+		await waitFor(() => expect(savedBody(api)).toBeDefined())
+
+		expect(savedBody(api).graph.triggers).toEqual([
+			{ id: 't1', kind: 'Manual' },
+			{
+				id: 't2',
+				kind: {
+					Schedule: {
+						frequency: 'Weekly',
+						time: '14:30',
+						weekday: 'Friday',
+						timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+					},
+				},
+			},
+		])
+	})
+
+	it('creates a webhook, fills its method, its URL and its identification, and saves the webhook', async () => {
+		const user = userEvent.setup()
+		const api = openWith(BASE, LAYOUT, [
+			credential('key-1', 'http_header', 'Clé Stripe'),
+		])
+
+		const node = await addTrigger(/Webhook/, 't2')
+		expect(within(node).getByText('Webhook')).toBeDefined()
+		expect(within(node).getByText('Déclencheur HTTP')).toBeDefined()
+
+		fireEvent.doubleClick(node)
+		await choose(user, 'Méthode', 'PUT')
+		const path = screen.getByPlaceholderText('stripe/paiement-recu')
+		fireEvent.change(path, { target: { value: 'Stripe/Paiement Reçu' } })
+		fireEvent.blur(path)
+		await choose(user, 'Identification', 'Clé Stripe')
+
+		expect(
+			screen.getAllByText(
+				`${window.location.origin}/webhooks/stripe/paiement-recu`,
+			),
+		).toHaveLength(2)
+		await closeDetails()
+		await clickSave()
+		await waitFor(() => expect(savedBody(api)).toBeDefined())
+
+		expect(savedBody(api).graph.triggers[1]).toEqual({
+			id: 't2',
+			kind: {
+				Webhook: {
+					method: 'PUT',
+					path: 'stripe/paiement-recu',
+					credential_id: 'key-1',
+					contract: [],
+					on_invalid: 'Reject',
+				},
+			},
+		})
+	})
+
+	it('describes the contract of a webhook and what to do with a body that breaks it, and saves both', async () => {
+		const user = userEvent.setup()
+		const api = openWith(BASE)
+
+		fireEvent.doubleClick(await addTrigger(/Webhook/, 't2'))
+		await user.click(screen.getByRole('button', { name: 'Ajouter un champ' }))
+		fireEvent.change(screen.getByLabelText('Clé nouvelle clé'), {
+			target: { value: 'montant' },
+		})
+		await choose(user, 'Type de montant', 'Nombre')
+		fireEvent.change(screen.getByLabelText('Exemple pour montant'), {
+			target: { value: '2340' },
+		})
+		await user.click(screen.getByRole('switch', { name: 'montant requis' }))
+		await choose(
+			user,
+			'Requête non conforme au contrat',
+			'Accepter et lancer le workflow',
+		)
+		await closeDetails()
+		await clickSave()
+		await waitFor(() => expect(savedBody(api)).toBeDefined())
+
+		expect(savedBody(api).graph.triggers[1]).toMatchObject({
+			kind: {
+				Webhook: {
+					contract: [
+						{
+							name: 'montant',
+							kind: 'Number',
+							required: false,
+							example: '2340',
+						},
+					],
+					on_invalid: 'Accept',
+				},
+			},
+		})
+	})
+
+	it('badges a webhook with no path before any save, and lifts the badge once the path is right', async () => {
+		openWith(BASE)
+
+		const node = await addTrigger(/Webhook/, 't2')
+		expect(
+			within(node).getByLabelText(
+				'À corriger : Indiquez la fin de l’URL après /webhooks/.',
+			),
+		).toBeDefined()
+
+		fireEvent.doubleClick(node)
+		fireEvent.change(screen.getByPlaceholderText('stripe/paiement-recu'), {
+			target: { value: 'recu' },
+		})
+		await closeDetails()
+
+		await waitFor(() => {
+			expect(
+				within(screen.getByTestId('rf__node-t2')).queryByLabelText(
+					/À corriger/,
+				),
+			).toBeNull()
+		})
+	})
+
+	it('badges both webhooks of a graph that share a path, naming the other one', async () => {
+		const hook = (id: string, name: string): Schemas.PlacedTriggerDto => ({
+			id,
+			name,
+			kind: { Webhook: { method: 'POST', path: 'paiement-recu' } },
+		})
+		openWith(
+			{
+				connectors: [connector('c1')],
+				edges: [
+					{ from: 't1', to: 'c1', branch: null },
+					{ from: 't2', to: 'c1', branch: null },
+				],
+				triggers: [hook('t1', 'Stripe'), hook('t2', 'Paypal')],
+			},
+			{ c1: { x: 280, y: 0 }, t1: { x: 0, y: 0 }, t2: { x: 0, y: 140 } },
+		)
+
+		expect(
+			await within(await screen.findByTestId('rf__node-t1')).findByLabelText(
+				'À corriger : Cette URL est déjà utilisée par « Paypal » dans ce workflow.',
+			),
+		).toBeDefined()
+		expect(
+			within(screen.getByTestId('rf__node-t2')).getByLabelText(
+				'À corriger : Cette URL est déjà utilisée par « Stripe » dans ce workflow.',
+			),
+		).toBeDefined()
+	})
+
+	it('badges a key without a name and a scheduler whose time is not a time', async () => {
+		openWith(
+			{
+				connectors: [connector('c1')],
+				edges: [
+					{ from: 't1', to: 'c1', branch: null },
+					{ from: 't2', to: 'c1', branch: null },
+				],
+				triggers: [
+					{
+						id: 't1',
+						kind: {
+							Webhook: {
+								method: 'POST',
+								path: 'x',
+								contract: [{ name: '', kind: 'Text', required: true }],
+							},
+						},
+					},
+					{ id: 't2', kind: { Schedule: { frequency: 'Daily', time: '9h' } } },
+				],
+			},
+			{ c1: { x: 280, y: 0 }, t1: { x: 0, y: 0 }, t2: { x: 0, y: 140 } },
+		)
+
+		expect(
+			await within(await screen.findByTestId('rf__node-t1')).findByLabelText(
+				'À corriger : Clé n° 1 : Donnez un nom à cette clé.',
+			),
+		).toBeDefined()
+		expect(
+			within(screen.getByTestId('rf__node-t2')).getByLabelText(
+				'À corriger : Indiquez une heure au format HH:MM, par exemple 09:00.',
+			),
+		).toBeDefined()
+	})
+
+	it('puts the errors of a refused save on the webhook and on the field they name', async () => {
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({
+					graph: {
+						...BASE,
+						triggers: [
+							{
+								id: 't1',
+								kind: {
+									Webhook: {
+										method: 'POST',
+										path: 'paiement-recu',
+										credential_id: 'ghost',
+									},
+								},
+							},
+						],
+					},
+					layout: LAYOUT,
+				}),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				throw Object.assign(new Error('refused'), {
+					status: 422,
+					data: {
+						code: 'E_GRAPH_INVALID',
+						details: {
+							errors: [
+								{
+									trigger_id: 't1',
+									field: 'credential',
+									message: 'trigger `t1` references unknown credential `ghost`',
+								},
+								{
+									trigger_id: 't1',
+									field: 'contract.montant',
+									message:
+										'trigger `t1` names the contract key `montant` more than once',
+								},
+							],
+						},
+					},
+				})
+			})
+		})
+
+		await clickSave()
+		const node = await screen.findByTestId('rf__node-t1')
+		await within(node).findByLabelText(/À corriger/)
+
+		fireEvent.doubleClick(node)
+		expect(
+			await screen.findByText('Cette identification n’existe plus.'),
+		).toBeDefined()
+	})
+
+	it('puts the 409 of a path another workflow holds on the path of the webhook, in French', async () => {
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({
+					graph: {
+						...BASE,
+						triggers: [
+							{
+								id: 't1',
+								kind: {
+									Webhook: {
+										method: 'POST',
+										path: 'paiement-recu',
+										contract: [],
+									},
+								},
+							},
+						],
+					},
+					layout: LAYOUT,
+				}),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				throw Object.assign(
+					new Error('a webhook path is already used by another workflow'),
+					{
+						status: 409,
+						data: {
+							code: 'E_WEBHOOK_PATH_TAKEN',
+							message: 'a webhook path is already used by another workflow',
+							status: 409,
+							details: {
+								errors: [
+									{
+										trigger_id: 't1',
+										field: 'path',
+										message:
+											'trigger `t1` uses a webhook path another workflow already holds',
+									},
+								],
+							},
+						},
+					},
+				)
+			})
+		})
+
+		await clickSave()
+		const node = await screen.findByTestId('rf__node-t1')
+		expect(
+			await within(node).findByLabelText(
+				'À corriger : Ce chemin est déjà utilisé.',
+			),
+		).toBeDefined()
+		expect(screen.queryByText(/L’enregistrement a échoué/)).toBeNull()
+
+		fireEvent.doubleClick(node)
+		const dialog = await screen.findByRole('dialog')
+		expect(
+			(
+				await within(dialog).findByPlaceholderText('stripe/paiement-recu')
+			).getAttribute('aria-invalid'),
+		).toBe('true')
+		expect(within(dialog).getByRole('alert').textContent).toBe(
+			'Ce chemin est déjà utilisé.',
+		)
+	})
+
+	it('banners the cap of webhooks of the organization, and badges no node', async () => {
+		renderFeature(
+			refuseWith(422, 'E_GRAPH_INVALID', [
+				{ message: 'an organization holds at most 200 webhook routes' },
+			]),
+		)
+
+		await clickSave()
+
+		expect(
+			await screen.findByText(
+				'Votre organisation a atteint la limite de 200 webhooks.',
+			),
+		).toBeDefined()
+		expect(
+			within(screen.getByTestId('rf__node-t1')).queryByLabelText(/À corriger/),
+		).toBeNull()
+	})
+
+	it('banners the cap of schedules of the organization', async () => {
+		renderFeature(
+			refuseWith(422, 'E_GRAPH_INVALID', [
+				{ message: 'an organization holds at most 200 schedules' },
+			]),
+		)
+
+		await clickSave()
+
+		expect(
+			await screen.findByText(
+				'Votre organisation a atteint la limite de 200 planificateurs.',
+			),
+		).toBeDefined()
+	})
+
+	it('reads the webhook and the scheduler of a saved workflow and saves them back untouched', async () => {
+		const triggers: Schemas.PlacedTriggerDto[] = [
+			{
+				id: 't1',
+				name: 'Paiement',
+				kind: {
+					Webhook: {
+						method: 'DELETE',
+						path: 'a/b',
+						credential_id: null,
+						contract: [
+							{ name: 'x', kind: 'List', required: true, example: '[1]' },
+						],
+						on_invalid: 'Accept',
+					},
+				},
+			},
+			{
+				id: 't2',
+				kind: {
+					Schedule: {
+						frequency: 'Weekly',
+						time: '07:05',
+						weekday: 'Sunday',
+						timezone: 'UTC',
+					},
+				},
+			},
+		]
+		const api = openWith(
+			{
+				connectors: [connector('c1')],
+				edges: [
+					{ from: 't1', to: 'c1', branch: null },
+					{ from: 't2', to: 'c1', branch: null },
+				],
+				triggers,
+			},
+			{ c1: { x: 280, y: 0 }, t1: { x: 0, y: 0 }, t2: { x: 0, y: 140 } },
+		)
+
+		expect(
+			within(await screen.findByTestId('rf__node-t2')).getByText(
+				'toutes les semaines le dimanche à 7:05',
+			),
+		).toBeDefined()
+		fireEvent.doubleClick(screen.getByTestId('rf__node-t1'))
+		expect(
+			(
+				(await screen.findByPlaceholderText(
+					'stripe/paiement-recu',
+				)) as HTMLInputElement
+			).value,
+		).toBe('a/b')
+		await closeDetails()
+		fireEvent.click(screen.getByRole('button', { name: /Enregistrer/ }))
+		await waitFor(() => expect(savedBody(api)).toBeDefined())
+
+		expect(savedBody(api).graph.triggers).toEqual(triggers)
+	})
+
+	it('duplicates a webhook with its kind copied, not shared, and flags the copy that takes the same path', async () => {
+		const user = userEvent.setup()
+		openWith({
+			connectors: [connector('c1')],
+			edges: [{ from: 't1', to: 'c1', branch: null }],
+			triggers: [
+				{
+					id: 't1',
+					name: 'Stripe',
+					kind: {
+						Webhook: { method: 'POST', path: 'stripe', contract: [] },
+					},
+				},
+			],
+		})
+
+		const original = await screen.findByTestId('rf__node-t1')
+		fireEvent.click(original)
+		await user.keyboard('{Control>}d{/Control}')
+
+		const copy = await screen.findByTestId('rf__node-t2')
+		expect(
+			await within(copy).findByLabelText(
+				'À corriger : Cette URL est déjà utilisée par « Stripe » dans ce workflow.',
+			),
+		).toBeDefined()
+	})
+})

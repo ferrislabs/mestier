@@ -11,6 +11,7 @@ import {
 } from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
 import { workflowExecutionsLocation } from '#/pages/automation/lib/automation-paths'
+import { triggerEventNames } from '#/pages/automation/lib/trigger-events'
 import { RunNowDialog } from '#/pages/automation/ui/run-now-dialog'
 
 export interface RunNowControl {
@@ -42,8 +43,7 @@ function subscribedEventNames(graph: Schemas.GraphDto | null | undefined) {
 
 	const names = new Set<string>()
 	for (const trigger of graph.triggers) {
-		if (trigger.kind === 'Manual') continue
-		for (const name of trigger.kind.Events) names.add(name)
+		for (const name of triggerEventNames(trigger)) names.add(name)
 	}
 
 	return [...names]

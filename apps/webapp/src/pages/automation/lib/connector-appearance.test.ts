@@ -1,4 +1,4 @@
-import { Library } from 'lucide-react'
+import { CalendarClock, Library, Webhook } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import {
 	connectorAppearance,
@@ -62,5 +62,20 @@ describe('connectorAppearance', () => {
 	it('draws the triggers from the trigger copy', () => {
 		expect(triggerAppearance(true).hue).toBe(triggerCopy('manual').hue)
 		expect(triggerAppearance(false).hue).toBe(triggerCopy('events').hue)
+	})
+
+	it('draws the scheduler and the webhook with the icon and hue of the prototype', () => {
+		expect(triggerAppearance('schedule')).toEqual({
+			icon: CalendarClock,
+			hue: 255,
+		})
+		expect(triggerAppearance('webhook')).toEqual({ icon: Webhook, hue: 335 })
+	})
+
+	it('tells the four triggers apart', () => {
+		const hues = (['schedule', 'events', 'webhook', 'manual'] as const).map(
+			(kind) => triggerAppearance(kind).hue,
+		)
+		expect(new Set(hues).size).toBe(4)
 	})
 })

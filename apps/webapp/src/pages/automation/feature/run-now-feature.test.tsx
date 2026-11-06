@@ -21,6 +21,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 const EVENTS_PATH = '/api/v1/organizations/{organization_id}/automation/events'
 const WORKFLOW_TRIGGER_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/trigger'
+const WORKFLOW_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
 const WORKFLOW_RUNS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs'
 const MY_PERMISSIONS_PATH =
@@ -221,5 +223,81 @@ describe('RunNowFeature — the execution history link', () => {
 			to: '/o/atelier-bois/automatisation/workflows/workflow-1',
 			search: { vue: 'executions' },
 		})
+	})
+})
+
+describe('RunNowFeature — a workflow with a webhook and a scheduler', () => {
+	function workflowWith(triggers: Schemas.PlacedTriggerDto[]) {
+		return {
+			id: 'workflow-1',
+			organization_id: 'org-1',
+			name: 'Paiements',
+			description: null,
+			enabled: true,
+			layout: null,
+			current_version: {
+				id: 'version-1',
+				workflow_id: 'workflow-1',
+				version: 1,
+				graph: { connectors: [], edges: [], triggers },
+				created_at: '2026-08-01T00:00:00Z',
+				created_by: null,
+			},
+			created_at: '2026-08-01T00:00:00Z',
+			updated_at: '2026-08-01T00:00:00Z',
+		}
+	}
+
+	it('offers the event of the Mestier event trigger only, not a name for the other triggers', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowWith([
+					{ id: 't1', kind: { Webhook: { method: 'POST', path: 'x' } } },
+					{
+						id: 't2',
+						kind: { Schedule: { frequency: 'Daily', time: '09:00' } },
+					},
+					{ id: 't3', kind: { Events: ['quote.accepted'] } },
+				]),
+				pagination: null,
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Exécuter maintenant' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+
+		expect(
+			await within(dialog).findByRole('combobox', {
+				name: 'Événement déclencheur',
+			}),
+		).toBeDefined()
+	})
+
+	it('says no event is configured when the triggers are a webhook and a scheduler', async () => {
+		const user = userEvent.setup()
+		renderFeature((api) => {
+			api.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowWith([
+					{ id: 't1', kind: { Webhook: { method: 'POST', path: 'x' } } },
+					{
+						id: 't2',
+						kind: { Schedule: { frequency: 'Daily', time: '09:00' } },
+					},
+				]),
+				pagination: null,
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Exécuter maintenant' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+
+		expect(
+			await within(dialog).findByText(/Aucun événement configuré/),
+		).toBeDefined()
 	})
 })

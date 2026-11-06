@@ -1,12 +1,54 @@
 import type { Schemas } from '#/api/api.client'
-import { triggerCopy } from '#/pages/automation/lib/connector-copy'
+import {
+	type TriggerCopyKind,
+	triggerCopy,
+} from '#/pages/automation/lib/connector-copy'
+import { resolveTriggerExample } from '#/pages/automation/lib/data-tree'
+import {
+	type ScheduleRule,
+	scheduleExample,
+	scheduleSubtitle,
+} from '#/pages/automation/lib/schedule'
+import {
+	sampleBody,
+	type WebhookRule,
+} from '#/pages/automation/lib/webhook-contract'
+
+export function triggerKindOf(kind: Schemas.TriggerKindDto): TriggerCopyKind {
+	if (kind === 'Manual') return 'manual'
+	if ('Events' in kind) return 'events'
+	if ('Webhook' in kind) return 'webhook'
+	return 'schedule'
+}
+
+export function webhookOf(
+	trigger: Schemas.PlacedTriggerDto,
+): WebhookRule | null {
+	return typeof trigger.kind === 'object' && 'Webhook' in trigger.kind
+		? trigger.kind.Webhook
+		: null
+}
+
+export function scheduleOf(
+	trigger: Schemas.PlacedTriggerDto,
+): ScheduleRule | null {
+	return typeof trigger.kind === 'object' && 'Schedule' in trigger.kind
+		? trigger.kind.Schedule
+		: null
+}
 
 export function triggerEventNames(trigger: Schemas.PlacedTriggerDto): string[] {
-	return trigger.kind === 'Manual' ? [] : trigger.kind.Events
+	return typeof trigger.kind === 'object' && 'Events' in trigger.kind
+		? trigger.kind.Events
+		: []
 }
 
 export function isManualTrigger(trigger: Schemas.PlacedTriggerDto): boolean {
 	return trigger.kind === 'Manual'
+}
+
+export function isEventsTrigger(trigger: Schemas.PlacedTriggerDto): boolean {
+	return triggerKindOf(trigger.kind) === 'events'
 }
 
 export function findEvent(
@@ -25,9 +67,18 @@ export function triggerPresentation(
 	trigger: Schemas.PlacedTriggerDto,
 	events: readonly Schemas.EventDescriptorResponse[],
 ): TriggerPresentation {
-	if (isManualTrigger(trigger)) {
-		const { label, subtitle } = triggerCopy('manual')
+	const kind = triggerKindOf(trigger.kind)
+	if (kind === 'manual' || kind === 'webhook') {
+		const { label, subtitle } = triggerCopy(kind)
 		return { label, subtitle }
+	}
+	if (kind === 'schedule') {
+		const { label } = triggerCopy('schedule')
+		const schedule = scheduleOf(trigger)
+		return {
+			label,
+			subtitle: schedule ? scheduleSubtitle(schedule) : '',
+		}
 	}
 	const eventsLabel = triggerCopy('events').label
 	const names = triggerEventNames(trigger)
@@ -48,4 +99,16 @@ export function triggerPresentation(
 		label: eventsLabel,
 		subtitle: `${names.length} événements`,
 	}
+}
+
+export function triggerExample(
+	trigger: Schemas.PlacedTriggerDto,
+	events: readonly Schemas.EventDescriptorResponse[],
+	now: Date = new Date(),
+): unknown {
+	const webhook = webhookOf(trigger)
+	if (webhook) return sampleBody(webhook.contract ?? [])
+	const schedule = scheduleOf(trigger)
+	if (schedule) return scheduleExample(schedule, now)
+	return resolveTriggerExample(events, triggerEventNames(trigger))
 }
