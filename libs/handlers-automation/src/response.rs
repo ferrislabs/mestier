@@ -1019,6 +1019,13 @@ impl From<&mestier_core::GraphError> for GraphErrorResponse {
                 (Some(connector_id.clone()), None, None)
             }
             MissingCredential { connector_id } => (Some(connector_id.clone()), None, None),
+            HeaderInjection {
+                connector_id,
+                field,
+            } => (Some(connector_id.clone()), None, Some(field.clone())),
+            TooManyRecipients { connector_id } => {
+                (Some(connector_id.clone()), None, Some("to".to_owned()))
+            }
             UnknownConnectorReference {
                 connector_id,
                 field,
@@ -1160,6 +1167,7 @@ pub struct RunStepResponse {
     pub input: Option<Value>,
     pub output: Option<Value>,
     pub error: Option<String>,
+    pub resume_at: Option<DateTime<Utc>>,
     pub started_at: Option<DateTime<Utc>>,
     pub finished_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -1176,6 +1184,7 @@ impl From<RunStep> for RunStepResponse {
             input: value.input,
             output: value.output,
             error: value.error,
+            resume_at: value.resume_at,
             started_at: value.started_at,
             finished_at: value.finished_at,
             created_at: value.created_at,
@@ -1191,6 +1200,7 @@ fn step_status_str(status: StepStatus) -> &'static str {
         StepStatus::Failed => "failed",
         StepStatus::Skipped => "skipped",
         StepStatus::Dead => "dead",
+        StepStatus::Waiting => "waiting",
     }
 }
 
@@ -1743,6 +1753,50 @@ mod tests {
         assert!(duplicate.message.contains("Is it paid"));
         assert_eq!(empty.trigger_id.as_deref(), Some("t1"));
         assert_eq!(empty.field.as_deref(), Some("name"));
+    }
+
+    fn step(status: StepStatus, resume_at: Option<DateTime<Utc>>) -> RunStep {
+        let instant = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).expect("valid instant");
+        RunStep {
+            id: Uuid::from_u128(7),
+            run_id: Uuid::from_u128(1),
+            connector_id: "w1".to_string(),
+            iteration_path: String::new(),
+            attempts: 1,
+            status,
+            input: None,
+            output: Some(serde_json::json!({ "duration": 2, "unit": "days" })),
+            error: None,
+            resume_at,
+            started_at: Some(instant),
+            finished_at: None,
+            created_at: instant,
+        }
+    }
+
+    #[test]
+    fn a_parked_step_is_reported_as_waiting_with_its_resume_time() {
+        let resume_at = DateTime::<Utc>::from_timestamp(1_700_172_800, 0).expect("valid instant");
+
+        let json = serde_json::to_value(RunStepResponse::from(step(
+            StepStatus::Waiting,
+            Some(resume_at),
+        )))
+        .unwrap();
+
+        assert_eq!(json["status"], "waiting");
+        assert_eq!(json["resume_at"], "2023-11-16T22:13:20Z");
+        assert_eq!(json["connector_id"], "w1");
+    }
+
+    #[test]
+    fn a_step_that_is_not_parked_has_no_resume_time() {
+        let json =
+            serde_json::to_value(RunStepResponse::from(step(StepStatus::Succeeded, None))).unwrap();
+
+        assert_eq!(json["status"], "succeeded");
+        assert!(json["resume_at"].is_null());
+        assert!(json.as_object().unwrap().contains_key("resume_at"));
     }
 
     fn overview() -> mestier_core::RunOverview {

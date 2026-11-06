@@ -7,15 +7,22 @@ use crate::domain::automation::run::{
 };
 use crate::infrastructure::automation::webhook::address_policy::PrivateNetworkAccess;
 
+use super::chat_post_message::ChatPostMessageConnector;
 use super::collection_operation::CollectionOperationConnector;
 use super::customer_create::CustomerCreateConnector;
 use super::flow_condition::FlowConditionConnector;
 use super::flow_config::FlowConfigConnector;
 use super::flow_loop::FlowLoopConnector;
+use super::flow_merge::FlowMergeConnector;
+use super::flow_wait::FlowWaitConnector;
 use super::http_request::HttpRequestConnector;
+use super::note_add::NoteAddConnector;
 use super::odoo::{
     OdooCreateInvoiceConnector, OdooCreatePartnerConnector, OdooUpdatePartnerConnector,
 };
+use super::project_create::ProjectCreateConnector;
+use super::quote_search::QuoteSearchConnector;
+use super::smtp_send::SmtpSendConnector;
 use super::support_add_badge::SupportAddBadgeConnector;
 use super::support_assign_ticket::SupportAssignTicketConnector;
 use super::task_recurrence_extend_horizon::TaskRecurrenceExtendHorizonConnector;
@@ -41,14 +48,21 @@ pub struct ConnectorRegistry {
     flow_loop: FlowLoopConnector,
     flow_condition: FlowConditionConnector,
     flow_config: FlowConfigConnector,
+    flow_wait: FlowWaitConnector,
+    flow_merge: FlowMergeConnector,
     customer_create: CustomerCreateConnector,
     support_assign_ticket: SupportAssignTicketConnector,
     support_add_badge: SupportAddBadgeConnector,
+    note_add: NoteAddConnector,
+    quote_search: QuoteSearchConnector,
+    project_create: ProjectCreateConnector,
+    chat_post_message: ChatPostMessageConnector,
     http_request: HttpRequestConnector,
     collection_operation: CollectionOperationConnector,
     odoo_create_partner: OdooCreatePartnerConnector,
     odoo_update_partner: OdooUpdatePartnerConnector,
     odoo_create_invoice: OdooCreateInvoiceConnector,
+    smtp_send: SmtpSendConnector,
     task_recurrence_extend_horizon: TaskRecurrenceExtendHorizonConnector,
 }
 
@@ -73,14 +87,21 @@ impl ConnectorRegistry {
             flow_loop: FlowLoopConnector,
             flow_condition: FlowConditionConnector,
             flow_config: FlowConfigConnector,
+            flow_wait: FlowWaitConnector,
+            flow_merge: FlowMergeConnector,
             customer_create: CustomerCreateConnector::new(usecase.clone()),
             support_assign_ticket: SupportAssignTicketConnector::new(usecase.clone()),
             support_add_badge: SupportAddBadgeConnector::new(usecase.clone()),
+            note_add: NoteAddConnector::new(usecase.clone()),
+            quote_search: QuoteSearchConnector::new(usecase.clone()),
+            project_create: ProjectCreateConnector::new(usecase.clone()),
+            chat_post_message: ChatPostMessageConnector::new(usecase.clone()),
             http_request: HttpRequestConnector::new(usecase.clone(), access),
             collection_operation: CollectionOperationConnector::new(usecase.clone(), access),
             odoo_create_partner: OdooCreatePartnerConnector::new(usecase.clone(), access),
             odoo_update_partner: OdooUpdatePartnerConnector::new(usecase.clone(), access),
             odoo_create_invoice: OdooCreateInvoiceConnector::new(usecase.clone(), access),
+            smtp_send: SmtpSendConnector::new(usecase.clone(), access),
             task_recurrence_extend_horizon: TaskRecurrenceExtendHorizonConnector::new(usecase),
         }
     }
@@ -101,14 +122,21 @@ impl ConnectorRegistry {
             ("flow.loop", 1),
             ("flow.condition", 1),
             ("flow.config", 1),
+            ("flow.wait", 1),
+            ("flow.merge", 1),
             ("mestier.customer.create", 1),
             ("mestier.support.assign_ticket", 1),
             ("mestier.support.add_badge", 1),
+            ("mestier.note.add", 1),
+            ("mestier.quote.search", 1),
+            ("mestier.project.create", 1),
+            ("mestier.chat.post_message", 1),
             ("http.request", 1),
             ("collection.operation", 1),
             ("odoo.create_partner", 1),
             ("odoo.update_partner", 1),
             ("odoo.create_invoice", 1),
+            ("smtp.send", 1),
             ("mestier.task_recurrence.extend_horizon", 1),
         ]
     }
@@ -121,6 +149,8 @@ impl ConnectorRegistry {
             ("flow.loop", 1) => FlowLoopConnector::dry_run(descriptor, input),
             ("flow.condition", 1) => FlowConditionConnector::dry_run(descriptor, input),
             ("flow.config", 1) => FlowConfigConnector::dry_run(descriptor, input),
+            ("flow.wait", 1) => FlowWaitConnector::dry_run(descriptor, input),
+            ("flow.merge", 1) => FlowMergeConnector::dry_run(descriptor, input),
             ("mestier.customer.create", 1) => CustomerCreateConnector::dry_run(descriptor, input),
             ("mestier.support.assign_ticket", 1) => {
                 SupportAssignTicketConnector::dry_run(descriptor, input)
@@ -128,11 +158,18 @@ impl ConnectorRegistry {
             ("mestier.support.add_badge", 1) => {
                 SupportAddBadgeConnector::dry_run(descriptor, input)
             }
+            ("mestier.note.add", 1) => NoteAddConnector::dry_run(descriptor, input),
+            ("mestier.quote.search", 1) => QuoteSearchConnector::dry_run(descriptor, input),
+            ("mestier.project.create", 1) => ProjectCreateConnector::dry_run(descriptor, input),
+            ("mestier.chat.post_message", 1) => {
+                ChatPostMessageConnector::dry_run(descriptor, input)
+            }
             ("http.request", 1) => HttpRequestConnector::dry_run(descriptor, input),
             ("collection.operation", 1) => CollectionOperationConnector::dry_run(descriptor, input),
             ("odoo.create_partner", 1) => OdooCreatePartnerConnector::dry_run(descriptor, input),
             ("odoo.update_partner", 1) => OdooUpdatePartnerConnector::dry_run(descriptor, input),
             ("odoo.create_invoice", 1) => OdooCreateInvoiceConnector::dry_run(descriptor, input),
+            ("smtp.send", 1) => SmtpSendConnector::dry_run(descriptor, input),
             ("mestier.task_recurrence.extend_horizon", 1) => {
                 TaskRecurrenceExtendHorizonConnector::dry_run(descriptor, input)
             }
@@ -150,16 +187,23 @@ impl ConnectorRegistry {
             ("flow.loop", 1) => Ok(self.flow_loop.execute(input).await),
             ("flow.condition", 1) => Ok(self.flow_condition.execute(input).await),
             ("flow.config", 1) => Ok(self.flow_config.execute(input).await),
+            ("flow.wait", 1) => Ok(self.flow_wait.execute(input).await),
+            ("flow.merge", 1) => Ok(self.flow_merge.execute(input).await),
             ("mestier.customer.create", 1) => Ok(self.customer_create.execute(input).await),
             ("mestier.support.assign_ticket", 1) => {
                 Ok(self.support_assign_ticket.execute(input).await)
             }
             ("mestier.support.add_badge", 1) => Ok(self.support_add_badge.execute(input).await),
+            ("mestier.note.add", 1) => Ok(self.note_add.execute(input).await),
+            ("mestier.quote.search", 1) => Ok(self.quote_search.execute(input).await),
+            ("mestier.project.create", 1) => Ok(self.project_create.execute(input).await),
+            ("mestier.chat.post_message", 1) => Ok(self.chat_post_message.execute(input).await),
             ("http.request", 1) => Ok(self.http_request.execute(input).await),
             ("collection.operation", 1) => Ok(self.collection_operation.execute(input).await),
             ("odoo.create_partner", 1) => Ok(self.odoo_create_partner.execute(input).await),
             ("odoo.update_partner", 1) => Ok(self.odoo_update_partner.execute(input).await),
             ("odoo.create_invoice", 1) => Ok(self.odoo_create_invoice.execute(input).await),
+            ("smtp.send", 1) => Ok(self.smtp_send.execute(input).await),
             ("mestier.task_recurrence.extend_horizon", 1) => {
                 Ok(self.task_recurrence_extend_horizon.execute(input).await)
             }
@@ -257,6 +301,13 @@ mod tests {
         let config = serde_json::Map::new();
 
         for kind in [
+            "flow.wait",
+            "flow.merge",
+            "smtp.send",
+            "mestier.note.add",
+            "mestier.quote.search",
+            "mestier.project.create",
+            "mestier.chat.post_message",
             "mestier.customer.create",
             "mestier.support.assign_ticket",
             "mestier.support.add_badge",

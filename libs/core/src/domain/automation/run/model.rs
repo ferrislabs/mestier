@@ -105,6 +105,7 @@ pub struct RunStep {
     pub input: Option<Value>,
     pub output: Option<Value>,
     pub error: Option<String>,
+    pub resume_at: Option<DateTime<Utc>>,
     pub started_at: Option<DateTime<Utc>>,
     pub finished_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -118,6 +119,7 @@ pub enum StepStatus {
     Failed,
     Skipped,
     Dead,
+    Waiting,
 }
 
 impl StepStatus {
@@ -129,6 +131,7 @@ impl StepStatus {
             Self::Failed => "failed",
             Self::Skipped => "skipped",
             Self::Dead => "dead",
+            Self::Waiting => "waiting",
         }
     }
 
@@ -158,6 +161,7 @@ impl FromStr for StepStatus {
             "failed" => Ok(Self::Failed),
             "skipped" => Ok(Self::Skipped),
             "dead" => Ok(Self::Dead),
+            "waiting" => Ok(Self::Waiting),
             other => Err(format!("invalid run step status `{other}`")),
         }
     }
@@ -190,6 +194,9 @@ pub enum RunSettlement {
     /// again at `next_attempt_at`.
     Rescheduled {
         next_attempt_at: DateTime<Utc>,
+    },
+    Parked {
+        resume_at: DateTime<Utc>,
     },
 }
 
@@ -224,6 +231,7 @@ mod tests {
             StepStatus::Failed,
             StepStatus::Skipped,
             StepStatus::Dead,
+            StepStatus::Waiting,
         ] {
             assert_eq!(status.as_str().parse::<StepStatus>(), Ok(status));
         }
@@ -246,5 +254,6 @@ mod tests {
         assert!(!StepStatus::Pending.is_settled());
         assert!(!StepStatus::InFlight.is_settled());
         assert!(!StepStatus::Failed.is_settled());
+        assert!(!StepStatus::Waiting.is_settled());
     }
 }

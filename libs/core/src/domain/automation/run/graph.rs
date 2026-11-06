@@ -271,11 +271,62 @@ pub fn next_after<'g, 'o>(
             each: branch_targets(graph, connector_id, Some(Branch::Each)),
             items,
         },
-        ConnectorOutcome::Failed { .. } => Next::Follow {
+        ConnectorOutcome::Failed { .. } | ConnectorOutcome::Wait { .. } => Next::Follow {
             targets: Vec::new(),
             skipped: Vec::new(),
         },
     }
+}
+
+pub const MERGE_KIND: &str = "flow.merge";
+
+pub fn merge_blockers<'a>(graph: &'a Graph, connector_id: &str) -> Vec<&'a str> {
+    let connectors: HashSet<&str> = graph
+        .connectors
+        .iter()
+        .map(|connector| connector.id.as_str())
+        .collect();
+    let mut seen: HashSet<&str> = HashSet::new();
+
+    graph
+        .edges
+        .iter()
+        .filter(|edge| edge.to == connector_id)
+        .map(|edge| edge.from.as_str())
+        .filter(|from| *from != connector_id && connectors.contains(from))
+        .filter(|from| seen.insert(from))
+        .collect()
+}
+
+pub fn merge_inputs(
+    graph: &Graph,
+    connector_id: &str,
+    produced_in_scope: impl Fn(&str) -> Option<Value>,
+    trigger_payload: Option<&Value>,
+) -> Vec<Value> {
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut trigger_taken = false;
+    let mut inputs = Vec::new();
+
+    for edge in graph.edges.iter().filter(|edge| edge.to == connector_id) {
+        if !seen.insert(edge.from.as_str()) {
+            continue;
+        }
+        if let Some(produced) = produced_in_scope(&edge.from) {
+            inputs.push(produced);
+            continue;
+        }
+        let from_trigger = graph.triggers.iter().any(|trigger| trigger.id == edge.from);
+        if from_trigger
+            && !trigger_taken
+            && let Some(payload) = trigger_payload
+        {
+            trigger_taken = true;
+            inputs.push(payload.clone());
+        }
+    }
+
+    inputs
 }
 
 #[cfg(test)]
@@ -400,6 +451,89 @@ mod tests {
 
     fn produced_outcome() -> ConnectorOutcome {
         ConnectorOutcome::Produced(Value::Null)
+    }
+
+    fn graph_of(connectors: &[&str], edges: Vec<Edge>) -> Graph {
+        Graph {
+            connectors: connectors
+                .iter()
+                .map(|id| connector(id, "flow.config"))
+                .collect(),
+            edges,
+            triggers: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_merge_waits_for_each_direct_predecessor_once_in_edge_order() {
+        let graph = graph_of(
+            &["a", "b", "m"],
+            vec![
+                edge("b", "m", None),
+                edge("a", "m", None),
+                edge("b", "m", Some(Branch::Else)),
+            ],
+        );
+
+        assert_eq!(merge_blockers(&graph, "m"), vec!["b", "a"]);
+    }
+
+    #[test]
+    fn a_trigger_or_the_merge_itself_never_blocks_a_merge() {
+        let mut graph = graph_of(
+            &["a", "m"],
+            vec![edge("a", "m", None), edge("m", "m", None)],
+        );
+        graph.edges.push(edge("t1", "m", None));
+
+        assert_eq!(merge_blockers(&graph, "m"), vec!["a"]);
+    }
+
+    #[test]
+    fn merge_inputs_follow_the_edge_order_and_ignore_what_did_not_succeed() {
+        let graph = graph_of(
+            &["a", "b", "c", "m"],
+            vec![
+                edge("c", "m", None),
+                edge("a", "m", None),
+                edge("b", "m", None),
+                edge("a", "m", Some(Branch::Then)),
+            ],
+        );
+        let produced = |id: &str| match id {
+            "a" => Some(Value::from("from a")),
+            "c" => Some(Value::from("from c")),
+            _ => None,
+        };
+
+        let inputs = merge_inputs(&graph, "m", produced, None);
+
+        assert_eq!(inputs, vec![Value::from("from c"), Value::from("from a")]);
+    }
+
+    #[test]
+    fn merge_inputs_carry_the_trigger_payload_once_for_a_trigger_edge() {
+        let mut graph = graph_of(&["a", "m"], vec![edge("a", "m", None)]);
+        for id in ["t1", "t2"] {
+            graph
+                .triggers
+                .push(crate::domain::automation::workflow::PlacedTrigger {
+                    id: id.to_string(),
+                    kind: crate::domain::automation::workflow::TriggerKind::Manual,
+                    name: None,
+                    description: None,
+                });
+        }
+        graph.edges.insert(0, edge("t1", "m", None));
+        graph.edges.insert(1, edge("t2", "m", None));
+        let payload = json!({ "n": 1 });
+        let from_a = |id: &str| (id == "a").then(|| Value::from("a"));
+
+        let with_payload = merge_inputs(&graph, "m", from_a, Some(&payload));
+        let without_payload = merge_inputs(&graph, "m", from_a, None);
+
+        assert_eq!(with_payload, vec![payload, Value::from("a")]);
+        assert_eq!(without_payload, vec![Value::from("a")]);
     }
 
     fn branch(taken: Branch) -> ConnectorOutcome {

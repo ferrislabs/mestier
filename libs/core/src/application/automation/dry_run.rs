@@ -314,9 +314,9 @@ fn stored_operation<'a>(
 
 fn stored_output(outcome: &ConnectorOutcome) -> Result<Value, &str> {
     match outcome {
-        ConnectorOutcome::Produced(output) | ConnectorOutcome::Branch { output, .. } => {
-            Ok(output.clone())
-        }
+        ConnectorOutcome::Produced(output)
+        | ConnectorOutcome::Branch { output, .. }
+        | ConnectorOutcome::Wait { output, .. } => Ok(output.clone()),
         ConnectorOutcome::Iterate { items } => Ok(json!({ "items": items })),
         ConnectorOutcome::Failed { error } => Err(error),
     }
@@ -1467,6 +1467,55 @@ mod tests {
                 .all(|step| step.status == DryRunStatus::Succeeded)
         );
         assert_eq!(first(&steps, "c4").input, Some(json!({ "name": "c2" })));
+    }
+
+    #[test]
+    fn a_wait_answers_at_once_with_its_sample_and_the_walk_goes_on_to_the_merge() {
+        let graph = graph(
+            vec![
+                config_node("c1", json!({ "n": 1 })),
+                node(
+                    "w1",
+                    "flow.wait",
+                    json!({ "duration": 365, "unit": "days" }),
+                ),
+                config_node("c2", json!({ "n": 2 })),
+                node("m1", "flow.merge", json!({ "mode": "append" })),
+            ],
+            vec![
+                edge("t1", "c1", None),
+                edge("t1", "c2", None),
+                edge("c1", "w1", None),
+                edge("w1", "m1", None),
+                edge("c2", "m1", None),
+            ],
+        );
+        let catalogue = connector_catalogue();
+        let started = Instant::now();
+
+        let steps = walk_real(&graph, &json!({}));
+
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        assert_eq!(steps.len(), 4);
+        assert!(
+            steps
+                .iter()
+                .all(|step| step.status == DryRunStatus::Succeeded)
+        );
+        assert_eq!(
+            first(&steps, "w1").output,
+            Some(catalogue.get("flow.wait", 1).unwrap().sample_output.clone())
+        );
+        assert_eq!(
+            first(&steps, "m1").output,
+            Some(
+                catalogue
+                    .get("flow.merge", 1)
+                    .unwrap()
+                    .sample_output
+                    .clone()
+            )
+        );
     }
 
     #[test]

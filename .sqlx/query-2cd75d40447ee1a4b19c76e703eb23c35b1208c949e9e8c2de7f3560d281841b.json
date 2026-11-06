@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO automation.run_step\n                   (id, run_id, connector_id, iteration_path, attempts, status, input, output,\n                    error, started_at, finished_at, created_at)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())\n               ON CONFLICT (run_id, connector_id, iteration_path) DO UPDATE\n               SET attempts = EXCLUDED.attempts,\n                   status = EXCLUDED.status,\n                   input = COALESCE(EXCLUDED.input, automation.run_step.input),\n                   output = EXCLUDED.output,\n                   error = EXCLUDED.error,\n                   started_at = COALESCE(automation.run_step.started_at, EXCLUDED.started_at),\n                   finished_at = EXCLUDED.finished_at\n               RETURNING id, run_id, connector_id, iteration_path, attempts, status, input, output,\n                         error, started_at, finished_at, created_at",
+  "query": "SELECT id, run_id, connector_id, iteration_path, attempts, status, input, output,\n                      error, resume_at, started_at, finished_at, created_at\n               FROM automation.run_step\n               WHERE run_id = $1",
   "describe": {
     "columns": [
       {
@@ -50,33 +50,28 @@
       },
       {
         "ordinal": 9,
-        "name": "started_at",
+        "name": "resume_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 10,
-        "name": "finished_at",
+        "name": "started_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 11,
+        "name": "finished_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Int4",
-        "Text",
-        "Jsonb",
-        "Jsonb",
-        "Text",
-        "Timestamptz",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -91,8 +86,9 @@
       true,
       true,
       true,
+      true,
       false
     ]
   },
-  "hash": "cfaf1acacf583d1bcba5332baed19d3562a8c4a8fb1329879b0d869db91109c0"
+  "hash": "2cd75d40447ee1a4b19c76e703eb23c35b1208c949e9e8c2de7f3560d281841b"
 }

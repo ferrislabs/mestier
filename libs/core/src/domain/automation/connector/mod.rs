@@ -6,6 +6,7 @@
 mod catalogue;
 mod descriptor;
 mod field;
+pub mod smtp;
 
 pub use catalogue::{ConnectorCatalogue, ConnectorCatalogueError, connector_catalogue};
 pub use descriptor::{AuthRequirement, ConnectorDescriptor};

@@ -71,6 +71,22 @@ where
         .await
     }
 
+    pub async fn add_automation_note(
+        &mut self,
+        organization_id: OrganizationId,
+        ticket_id: TicketId,
+        body: &str,
+    ) -> Result<TicketEntry, CoreError> {
+        self.write(
+            organization_id,
+            ticket_id,
+            EntryKind::InternalNote,
+            None,
+            body,
+        )
+        .await
+    }
+
     pub async fn save_draft(
         &mut self,
         organization_id: OrganizationId,

@@ -41,6 +41,7 @@ chrono = { version = "0.4.42", features = ["serde"] }
 chrono-tz = "0.10"
 jsonwebtoken = { version = "10.3.0", features = ["aws_lc_rs"] }
 reqwest = { version = "0.12.24", features = ["json"] }
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "aws-lc-rs", "rustls-platform-verifier"] }
 uuid = { version = "1.19.0", features = ["serde", "v4", "v7"] }
 sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "macros", "json", "rust_decimal"] }
 rust_decimal = { version = "1.39.0", features = ["serde"] }

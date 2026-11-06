@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
+use super::search::{QuoteSearch, QuoteSummary};
 use crate::{OrganizationId, Quote, QuoteId, QuoteStatus};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -29,6 +30,11 @@ pub trait QuoteRepository: Send {
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Quote>, u64), CoreError>> + Send;
+
+    fn search(
+        &mut self,
+        search: &QuoteSearch,
+    ) -> impl Future<Output = Result<Vec<QuoteSummary>, CoreError>> + Send;
 
     fn update(&mut self, quote: &Quote) -> impl Future<Output = Result<Quote, CoreError>> + Send;
 

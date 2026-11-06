@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.run_step SET resume_at = now() - interval '1 second'\n                 WHERE run_id = $1 AND connector_id = $2 AND status = 'waiting'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c86531d7c8a25eaaf1e884201e67e170f6284f923dc0ccd5e42b72edf5269889"
+}
