@@ -47,14 +47,14 @@ pub use domain::automation::workflow::{
     TriggerKind, UpdateWorkflowCommand, WEBHOOK_PREFIX, WebhookMethod, WebhookPathIssue, Weekday,
     Workflow, WorkflowDescription, WorkflowDescriptionError, WorkflowInitialState, WorkflowLayout,
     WorkflowName, WorkflowNameError, WorkflowReference, WorkflowRefusal, WorkflowTags,
-    WorkflowTagsError, WorkflowVersion, check_webhook_path, contract_violations,
+    WorkflowTagsError, WorkflowVersion, check_webhook_path, contract_violations, holds_nul,
     is_json_content_type, validate_graph,
 };
 pub use infrastructure::automation::connectors::{
     ConnectorDryRun, ConnectorRegistry, UnknownConnectorKind,
 };
 pub use infrastructure::automation::webhook::{
-    address_policy::PrivateNetworkAccess, secret::SecretCipher,
+    address_policy::PrivateNetworkAccess, inbound::path_fingerprint, secret::SecretCipher,
 };
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::invoice::facturx::FacturXDocumentFormat;

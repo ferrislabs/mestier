@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     domain::automation::{
         ports::WebhookRouteRepository,
-        workflow::{PlacedTrigger, ResolvedWebhook, TriggerKind, WebhookMethod},
+        workflow::{PlacedTrigger, ResolvedWebhook, TriggerKind, WebhookMethod, WorkflowRefusal},
     },
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
 };
@@ -41,12 +41,17 @@ impl<'tx> WebhookRouteRepository for PgWebhookRouteRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
+        let mut taken = Vec::new();
         for trigger in triggers {
             let TriggerKind::Webhook { method, path, .. } = &trigger.kind else {
                 continue;
             };
 
-            sqlx::query!(
+            sqlx::query("SAVEPOINT webhook_route_insert")
+                .execute(&mut ***tx)
+                .await
+                .map_err(map_sqlx_error)?;
+            let inserted = sqlx::query!(
                 r#"
                 INSERT INTO automation.webhook_route (path, org_id, workflow_id, trigger_id, method)
                 VALUES ($1, $2, $3, $4, $5)
@@ -58,11 +63,63 @@ impl<'tx> WebhookRouteRepository for PgWebhookRouteRepository<'tx> {
                 method.as_str(),
             )
             .execute(&mut ***tx)
-            .await
-            .map_err(map_sqlx_error)?;
+            .await;
+            match inserted {
+                Ok(_) => {
+                    sqlx::query("RELEASE SAVEPOINT webhook_route_insert")
+                        .execute(&mut ***tx)
+                        .await
+                        .map_err(map_sqlx_error)?;
+                }
+                Err(sqlx::Error::Database(error))
+                    if error.constraint() == Some(WEBHOOK_PATH_CONSTRAINT) =>
+                {
+                    sqlx::query("ROLLBACK TO SAVEPOINT webhook_route_insert")
+                        .execute(&mut ***tx)
+                        .await
+                        .map_err(map_sqlx_error)?;
+                    sqlx::query("RELEASE SAVEPOINT webhook_route_insert")
+                        .execute(&mut ***tx)
+                        .await
+                        .map_err(map_sqlx_error)?;
+                    taken.push(trigger.id.clone());
+                }
+                Err(error) => return Err(map_sqlx_error(error)),
+            }
         }
 
-        Ok(())
+        if taken.is_empty() {
+            Ok(())
+        } else {
+            Err(WorkflowRefusal::webhook_path_taken(&taken))
+        }
+    }
+
+    async fn count_other_routes(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+    ) -> Result<i64, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(format!("automation.trigger_quota:{}", org_id.0))
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+
+        sqlx::query_scalar!(
+            r#"
+            SELECT count(*) AS "count!"
+            FROM automation.webhook_route
+            WHERE org_id = $1 AND workflow_id <> $2
+            "#,
+            org_id.0,
+            workflow_id,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
     }
 
     async fn paths_held_by_other_workflows(
@@ -276,9 +333,12 @@ mod tests {
 
         let refused = replace(&pool, second_org, second, &graph.triggers).await;
 
-        assert!(
-            matches!(&refused, Err(CoreError::Conflict(constraint)) if constraint == "uq_automation_webhook_route_path"),
-            "{refused:?}"
+        let Err(CoreError::Conflict(message)) = &refused else {
+            panic!("expected a conflict, got {refused:?}");
+        };
+        assert_eq!(
+            WorkflowRefusal::webhook_path_taken_triggers(message),
+            Some(vec!["t1".to_string()])
         );
         assert!(rows(&pool, second).await.is_empty());
         assert_eq!(rows(&pool, first).await.len(), 1);
@@ -344,6 +404,8 @@ mod tests {
                 org_id,
                 workflow_id,
                 trigger_id: "t1".to_string(),
+                path,
+                method: WebhookMethod::Post,
                 credential_id: Some(credential_id),
                 contract: vec![key("montant", ContractKind::Number, true)],
                 on_invalid: OnInvalid::Accept,
@@ -450,5 +512,80 @@ mod tests {
             .unwrap();
 
         assert!(rows(&pool, workflow_id).await.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn every_trigger_whose_path_is_taken_is_named_and_nothing_is_kept() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "routes-named").await;
+        let (first, second, free) = (unique("one"), unique("two"), unique("free"));
+        let holder_graph = graph_of(vec![
+            ("h1", webhook(WebhookMethod::Post, &first)),
+            ("h2", webhook(WebhookMethod::Post, &second)),
+        ]);
+        let holder = seed_workflow(&pool, org_id, &holder_graph).await;
+        replace(&pool, org_id, holder, &holder_graph.triggers)
+            .await
+            .unwrap();
+        let candidate_graph = graph_of(vec![
+            ("t1", webhook(WebhookMethod::Post, &first)),
+            ("t2", webhook(WebhookMethod::Post, &free)),
+            ("t3", webhook(WebhookMethod::Get, &second)),
+        ]);
+        let candidate = seed_workflow(&pool, org_id, &candidate_graph).await;
+
+        let refused = replace(&pool, org_id, candidate, &candidate_graph.triggers).await;
+
+        let Err(CoreError::Conflict(message)) = &refused else {
+            panic!("expected a conflict, got {refused:?}");
+        };
+        assert_eq!(
+            WorkflowRefusal::webhook_path_taken_triggers(message),
+            Some(vec!["t1".to_string(), "t3".to_string()])
+        );
+        assert!(rows(&pool, candidate).await.is_empty());
+        assert_eq!(rows(&pool, holder).await.len(), 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_routes_held_by_other_workflows_of_the_organization_are_counted() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "routes-count").await;
+        let other_org = seed_organization(&pool, "routes-count-other").await;
+        let two = graph_of(vec![
+            ("a", webhook(WebhookMethod::Post, &unique("a"))),
+            ("b", webhook(WebhookMethod::Post, &unique("b"))),
+        ]);
+        let one = graph_of(vec![("a", webhook(WebhookMethod::Post, &unique("c")))]);
+        let foreign = graph_of(vec![("a", webhook(WebhookMethod::Post, &unique("d")))]);
+        let (first, second, stranger) = (
+            seed_workflow(&pool, org_id, &two).await,
+            seed_workflow(&pool, org_id, &one).await,
+            seed_workflow(&pool, other_org, &foreign).await,
+        );
+        replace(&pool, org_id, first, &two.triggers).await.unwrap();
+        replace(&pool, org_id, second, &one.triggers).await.unwrap();
+        replace(&pool, other_org, stranger, &foreign.triggers)
+            .await
+            .unwrap();
+
+        let count = |workflow_id: Uuid| {
+            let pool = pool.clone();
+            async move {
+                with_tx(&pool, async |tx| {
+                    PgWebhookRouteRepository::new(&tx)
+                        .count_other_routes(org_id, workflow_id)
+                        .await
+                })
+                .await
+                .unwrap()
+            }
+        };
+
+        assert_eq!(count(first).await, 1);
+        assert_eq!(count(second).await, 2);
+        assert_eq!(count(Uuid::now_v7()).await, 3);
     }
 }

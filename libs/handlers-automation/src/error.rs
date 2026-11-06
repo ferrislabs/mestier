@@ -13,6 +13,8 @@ pub enum Refusal {
     WorkflowArchived,
     FolderNotEmpty,
     WebhookPathTaken,
+    WebhookQuota,
+    ScheduleQuota,
 }
 
 impl Refusal {
@@ -21,6 +23,8 @@ impl Refusal {
             Self::WorkflowArchived => "E_WORKFLOW_ARCHIVED",
             Self::FolderNotEmpty => "E_FOLDER_NOT_EMPTY",
             Self::WebhookPathTaken => "E_WEBHOOK_PATH_TAKEN",
+            Self::WebhookQuota => "E_WEBHOOK_QUOTA",
+            Self::ScheduleQuota => "E_SCHEDULE_QUOTA",
         }
     }
 
@@ -29,6 +33,8 @@ impl Refusal {
             Self::WorkflowArchived => WorkflowRefusal::Archived.message(),
             Self::FolderNotEmpty => FolderRefusal::NotEmpty.message(),
             Self::WebhookPathTaken => WorkflowRefusal::WebhookPathTaken.message(),
+            Self::WebhookQuota => WorkflowRefusal::TooManyWebhookRoutes.message(),
+            Self::ScheduleQuota => WorkflowRefusal::TooManySchedules.message(),
         }
     }
 
@@ -36,6 +42,8 @@ impl Refusal {
         match WorkflowRefusal::from_conflict(message) {
             Some(WorkflowRefusal::Archived) => return Some(Self::WorkflowArchived),
             Some(WorkflowRefusal::WebhookPathTaken) => return Some(Self::WebhookPathTaken),
+            Some(WorkflowRefusal::TooManyWebhookRoutes) => return Some(Self::WebhookQuota),
+            Some(WorkflowRefusal::TooManySchedules) => return Some(Self::ScheduleQuota),
             _ => {}
         }
         match FolderRefusal::from_conflict(message) {
@@ -69,6 +77,8 @@ impl From<WorkflowRefusal> for AutomationError {
         match refusal {
             WorkflowRefusal::Archived => Self::Refused(Refusal::WorkflowArchived),
             WorkflowRefusal::WebhookPathTaken => Self::Refused(Refusal::WebhookPathTaken),
+            WorkflowRefusal::TooManyWebhookRoutes => Self::Refused(Refusal::WebhookQuota),
+            WorkflowRefusal::TooManySchedules => Self::Refused(Refusal::ScheduleQuota),
             WorkflowRefusal::ConflictingFlags => {
                 Self::Api(ApiError::Validation(refusal.message().to_owned()))
             }
@@ -316,5 +326,29 @@ mod tests {
             assert_eq!(json["status"], 409);
             assert!(json["message"].is_string());
         }
+    }
+
+    #[tokio::test]
+    async fn the_trigger_quotas_answer_409_with_their_own_codes_outside_a_save() {
+        for (refusal, code) in [
+            (WorkflowRefusal::TooManyWebhookRoutes, "E_WEBHOOK_QUOTA"),
+            (WorkflowRefusal::TooManySchedules, "E_SCHEDULE_QUOTA"),
+        ] {
+            let (status, json) = body_of(AutomationError::from(CoreError::from(refusal))).await;
+
+            assert_eq!(status, StatusCode::CONFLICT);
+            assert_eq!(json["code"], code);
+            assert_eq!(json["message"], refusal.message());
+        }
+    }
+
+    #[tokio::test]
+    async fn a_taken_path_that_names_its_triggers_is_still_recognised() {
+        let core = WorkflowRefusal::webhook_path_taken(&["t1".to_owned()]);
+
+        let (status, json) = body_of(AutomationError::from(core)).await;
+
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(json["code"], "E_WEBHOOK_PATH_TAKEN");
     }
 }

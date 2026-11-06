@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use common::{CoreError, OrganizationId};
 use events::EventCatalogue;
@@ -30,7 +30,7 @@ use crate::{
         },
         workflow::{
             Branch, Graph, GraphError, PlacedConnector, TriggerKind, next_due, recurrence_of,
-            sample_body, validate_graph,
+            sample_body, schedule_payload, validate_graph,
         },
     },
     infrastructure::automation::connectors::ConnectorDryRun,
@@ -743,12 +743,10 @@ fn sample_payloads(
                 .unwrap_or_else(|| json!({})),
             TriggerKind::Manual => json!({}),
             TriggerKind::Webhook { contract, .. } => sample_body(contract),
-            kind @ TriggerKind::Schedule { .. } => {
-                let scheduled_for = recurrence_of(kind, organization_zone)
-                    .map(|(rule, zone)| next_due(now, &rule, zone))
-                    .unwrap_or(now);
-                json!({ "scheduled_for": scheduled_for.to_rfc3339_opts(SecondsFormat::Secs, true) })
-            }
+            kind @ TriggerKind::Schedule { .. } => match recurrence_of(kind, organization_zone) {
+                Some((rule, zone)) => schedule_payload(next_due(now, &rule, zone), zone),
+                None => schedule_payload(now, organization_zone),
+            },
         })
         .collect()
 }
@@ -2613,8 +2611,18 @@ mod tests {
         assert_eq!(
             payloads,
             vec![
-                json!({ "scheduled_for": "2026-11-06T08:00:00Z" }),
-                json!({ "scheduled_for": "2026-11-06T14:00:00Z" }),
+                json!({
+                    "scheduled_for": "2026-11-06T08:00:00Z",
+                    "horodatage": "2026-11-06T09:00:00+01:00",
+                    "jour": "vendredi",
+                    "fuseau": "Europe/Paris"
+                }),
+                json!({
+                    "scheduled_for": "2026-11-06T14:00:00Z",
+                    "horodatage": "2026-11-06T09:00:00-05:00",
+                    "jour": "vendredi",
+                    "fuseau": "America/New_York"
+                }),
             ]
         );
     }

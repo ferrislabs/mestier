@@ -205,7 +205,7 @@ async fn a_body_that_is_not_json_or_not_a_json_type_is_refused_before_it_reaches
     );
     assert_eq!(send(None, "{\"a\":1}").await, 415);
     assert_eq!(send(Some("application/json"), "{not json").await, 400);
-    assert_eq!(send(Some("application/json"), "").await, 400);
+    assert_eq!(send(Some("application/json"), "{\"a\":").await, 400);
     assert_eq!(run_count(&app, &workflow_id).await, 0);
 
     assert_eq!(
@@ -217,7 +217,8 @@ async fn a_body_that_is_not_json_or_not_a_json_type_is_refused_before_it_reaches
         202
     );
     assert_eq!(send(None, "").await, 202);
-    assert_eq!(run_count(&app, &workflow_id).await, 3);
+    assert_eq!(send(Some("application/json"), "").await, 202);
+    assert_eq!(run_count(&app, &workflow_id).await, 4);
 
     app.cleanup().await;
 }
@@ -559,6 +560,14 @@ async fn the_rate_limit_answers_before_the_route_is_even_looked_up() {
 }
 
 async fn raw_exchange(app: &harness::App, request: Vec<u8>) -> String {
+    raw_exchange_within(app, request, std::time::Duration::from_secs(5)).await
+}
+
+async fn raw_exchange_within(
+    app: &harness::App,
+    request: Vec<u8>,
+    wait: std::time::Duration,
+) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let address = app.base_url.trim_start_matches("http://");
@@ -567,10 +576,9 @@ async fn raw_exchange(app: &harness::App, request: Vec<u8>) -> String {
         .expect("connect to the api");
     let _ = stream.write_all(&request).await;
     let mut answer = Vec::new();
-    let _ = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        stream.read_buf(&mut answer),
-    )
+    let _ = tokio::time::timeout(wait, async {
+        while stream.read_buf(&mut answer).await.unwrap_or(0) > 0 {}
+    })
     .await;
     String::from_utf8_lossy(&answer).into_owned()
 }
@@ -618,6 +626,349 @@ async fn a_declared_length_past_the_limit_is_refused_before_any_of_the_body_arri
     .await;
 
     assert!(answer.starts_with("HTTP/1.1 413"), "{answer}");
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_body_that_never_arrives_is_given_up_on_after_ten_seconds() {
+    let app = harness::start().await;
+    let path = unique_path("stalled");
+    let workflow_id = published(&app, webhook_kind(&path, None, json!([]), "Accept")).await;
+    let started = std::time::Instant::now();
+
+    let answer = raw_exchange_within(
+        &app,
+        format!("{}{{\"a\":", head(&path, "Content-Length: 100\r\n")).into_bytes(),
+        std::time::Duration::from_secs(20),
+    )
+    .await;
+
+    assert!(answer.starts_with("HTTP/1.1 408"), "{answer}");
+    assert!(answer.contains("E_WEBHOOK_BODY_TIMEOUT"), "{answer}");
+    assert!(started.elapsed() >= std::time::Duration::from_secs(9));
+    assert!(started.elapsed() < std::time::Duration::from_secs(15));
+    assert_eq!(run_count(&app, &workflow_id).await, 0);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_nul_character_in_the_body_is_refused_as_invalid_not_as_a_server_error() {
+    let app = harness::start().await;
+    let rejecting = unique_path("nul-reject");
+    let accepting = unique_path("nul-accept");
+    let contract = json!([{ "name": "a", "kind": "Text", "required": false }]);
+    let first = published(
+        &app,
+        webhook_kind(&rejecting, None, contract.clone(), "Reject"),
+    )
+    .await;
+    let second = published(&app, webhook_kind(&accepting, None, contract, "Accept")).await;
+    let bodies = [
+        r#"{"a":"x\u0000y"}"#,
+        r#"{"a\u0000":1}"#,
+        r#"{"deep":[{"x":["ok","\u0000"]}]}"#,
+        r#""\u0000""#,
+    ];
+
+    for path in [&rejecting, &accepting] {
+        for body in bodies {
+            let response = client()
+                .post(app.webhook_url(path))
+                .header("content-type", "application/json")
+                .body(body)
+                .send()
+                .await
+                .expect("the api answers");
+
+            assert_eq!(response.status(), 400, "{path}: {body}");
+            let json: Value = response.json().await.expect("json");
+            assert_eq!(json["code"], "E_WEBHOOK_BODY_INVALID", "{body}");
+            assert_eq!(json["keys"], json!([]));
+        }
+    }
+    assert_eq!(run_count(&app, &first).await, 0);
+    assert_eq!(run_count(&app, &second).await, 0);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_path_that_is_not_valid_utf8_gets_the_uniform_not_found() {
+    let app = harness::start().await;
+    let reference = seen(post_json(&app, &unique_path("nothing"), &json!({})).await).await;
+    assert_eq!(reference.status, 404);
+
+    for escaped in ["%ff", "%c3%28", "a%ffb", "%00", "%2e%2e"] {
+        let answer = raw_exchange(
+            &app,
+            format!(
+                "POST /webhooks/{escaped} HTTP/1.1\r\nHost: webhook.test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            .into_bytes(),
+        )
+        .await;
+
+        assert!(answer.starts_with("HTTP/1.1 404"), "{escaped}: {answer}");
+        assert!(answer.contains("application/json"), "{escaped}: {answer}");
+        assert!(answer.ends_with(&reference.body), "{escaped}: {answer}");
+    }
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_path_answers_at_most_sixty_calls_a_minute_whatever_the_headers_say() {
+    let app = harness::start().await;
+    let path = unique_path("flooded");
+    let workflow_id = published(&app, webhook_kind(&path, None, json!([]), "Accept")).await;
+    let call = |index: usize| {
+        let request = client()
+            .post(app.webhook_url(&path))
+            .header("x-forwarded-for", format!("198.51.100.{}", index % 250 + 1))
+            .header("x-real-ip", format!("203.0.113.{}", index % 250 + 1))
+            .json(&json!({}));
+        async move { request.send().await.expect("the api answers") }
+    };
+
+    let mut statuses = Vec::new();
+    for index in 0..60 {
+        statuses.push(call(index).await.status().as_u16());
+    }
+    let refused = call(60).await;
+
+    assert!(statuses.iter().all(|status| *status == 202), "{statuses:?}");
+    assert_eq!(refused.status(), 429);
+    assert!(refused.headers().get("retry-after").is_some());
+    let body: Value = refused.json().await.expect("json");
+    assert_eq!(body["code"], "E_TOO_MANY_REQUESTS");
+    assert_eq!(run_count(&app, &workflow_id).await, 60);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_path_that_does_not_exist_is_limited_too_and_the_others_are_not_affected() {
+    let app = harness::start().await;
+    let nowhere = unique_path("nowhere");
+    let elsewhere = unique_path("elsewhere");
+    let mut statuses = Vec::new();
+    for index in 0..61 {
+        let response = client()
+            .post(app.webhook_url(&nowhere))
+            .header("x-forwarded-for", format!("192.0.2.{}", index % 250 + 1))
+            .json(&json!({}))
+            .send()
+            .await
+            .expect("the api answers");
+        statuses.push(response.status().as_u16());
+    }
+
+    assert!(
+        statuses[..60].iter().all(|status| *status == 404),
+        "{statuses:?}"
+    );
+    assert_eq!(statuses[60], 429);
+    assert_eq!(post_json(&app, &elsewhere, &json!({})).await.status(), 404);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_workflow_answers_at_most_one_hundred_twenty_calls_a_minute_across_its_paths() {
+    let app = harness::start().await;
+    let token = credential(&app, "bearer_token", json!({ "token": "s3cret-token" })).await;
+    let paths = [unique_path("w1"), unique_path("w2"), unique_path("w3")];
+    let workflow_id = new_workflow(&app).await;
+    let triggers: Vec<(String, Value)> = paths
+        .iter()
+        .enumerate()
+        .map(|(index, path)| {
+            (
+                format!("t{index}"),
+                webhook_kind(path, Some(token), json!([]), "Reject"),
+            )
+        })
+        .collect();
+    let response = save(
+        &app,
+        &workflow_id,
+        graph_of(
+            triggers
+                .iter()
+                .map(|(id, kind)| (id.as_str(), kind.clone()))
+                .collect(),
+        ),
+    )
+    .await;
+    assert_eq!(response.status(), 201);
+    let call = |index: usize| {
+        let request = client()
+            .post(app.webhook_url(&paths[index % 3]))
+            .header("x-forwarded-for", format!("198.51.100.{}", index % 250 + 1))
+            .json(&json!({}));
+        async move { request.send().await.expect("the api answers") }
+    };
+
+    let mut statuses = Vec::new();
+    for index in 0..120 {
+        statuses.push(call(index).await.status().as_u16());
+    }
+    let refused = call(120).await;
+
+    assert!(statuses.iter().all(|status| *status == 401), "{statuses:?}");
+    assert_eq!(refused.status(), 429);
+    assert!(refused.headers().get("retry-after").is_some());
+
+    app.cleanup().await;
+}
+
+async fn seed_credential_with(app: &harness::App, kind: &str, data: Value) -> Uuid {
+    let cipher = mestier_core::SecretCipher::new(b"0123456789abcdef0123456789abcdef")
+        .expect("a 32 byte key");
+    let sealed = cipher
+        .seal(&serde_json::to_vec(&data).expect("json"))
+        .expect("the data seals");
+    let id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO automation.credential (id, org_id, kind, name, origin, data_nonce, data_ciphertext) \
+         VALUES ($1, $2, $3, $6, 'supplied', $4, $5)",
+    )
+    .bind(id)
+    .bind(app.organization_id)
+    .bind(kind)
+    .bind(sealed.nonce)
+    .bind(sealed.ciphertext)
+    .bind(format!("blank-{id}"))
+    .execute(&app.pool)
+    .await
+    .expect("seed the credential");
+    id
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_webhook_guarded_by_a_blank_credential_does_not_open_to_a_blank_request() {
+    let app = harness::start().await;
+    let cases = [
+        (
+            "bearer_token",
+            json!({ "token": "" }),
+            vec![("authorization", "Bearer ")],
+        ),
+        (
+            "bearer_token",
+            json!({ "token": "  " }),
+            vec![("authorization", "Bearer   ")],
+        ),
+        (
+            "http_basic",
+            json!({ "username": "alice", "password": "" }),
+            vec![("authorization", "Basic YWxpY2U6")],
+        ),
+        (
+            "http_header",
+            json!({ "header_name": "X-Signature", "header_value": "" }),
+            vec![("x-signature", "")],
+        ),
+    ];
+
+    for (kind, data, headers) in cases {
+        let credential_id = seed_credential_with(&app, kind, data).await;
+        let path = unique_path("blank");
+        let workflow_id = published(
+            &app,
+            webhook_kind(&path, Some(credential_id), json!([]), "Reject"),
+        )
+        .await;
+        let mut request = client().post(app.webhook_url(&path)).json(&json!({}));
+        for (name, value) in &headers {
+            request = request.header(*name, *value);
+        }
+
+        let response = request.send().await.expect("the api answers");
+
+        assert_eq!(response.status(), 401, "{kind}: {headers:?}");
+        assert_eq!(run_count(&app, &workflow_id).await, 0, "{kind}");
+    }
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_credential_cannot_be_created_or_updated_blank_or_on_a_header_the_transport_owns() {
+    let app = harness::start().await;
+    let create = |kind: &str, data: Value| {
+        let request = client()
+            .post(app.credentials_url())
+            .bearer_auth(&app.token)
+            .json(&json!({ "kind": kind, "name": "Inbound", "origin": "supplied", "data": data }));
+        async move { request.send().await.expect("the api answers") }
+    };
+
+    let blank = mestier_core::CredentialError::BlankField.to_string();
+    let reserved = mestier_core::CredentialError::ReservedHeaderName.to_string();
+    let header = |name: &str, value: &str| json!({ "header_name": name, "header_value": value });
+    for (kind, data, expected) in [
+        ("bearer_token", json!({ "token": "" }), &blank),
+        ("bearer_token", json!({ "token": "   " }), &blank),
+        (
+            "http_basic",
+            json!({ "username": "alice", "password": "" }),
+            &blank,
+        ),
+        (
+            "http_basic",
+            json!({ "username": "", "password": "p4ss" }),
+            &blank,
+        ),
+        ("http_header", header("X-Signature", ""), &blank),
+        ("http_header", header("", "v"), &blank),
+        ("http_header", header("Host", "v"), &reserved),
+        ("http_header", header("content-type", "v"), &reserved),
+        ("http_header", header("Cookie", "v"), &reserved),
+        ("http_header", header("X-Forwarded-For", "v"), &reserved),
+        ("http_header", header("x-forwarded-proto", "v"), &reserved),
+    ] {
+        let response = create(kind, data.clone()).await;
+
+        assert_eq!(response.status(), 400, "{kind}: {data}");
+        let body: Value = response.json().await.expect("json");
+        assert_eq!(body["code"], "E_VALIDATION", "{kind}: {data}");
+        assert!(
+            body["message"]
+                .as_str()
+                .expect("a message")
+                .contains(expected.as_str()),
+            "{kind}: {data}: {body}"
+        );
+    }
+
+    let created = create("bearer_token", json!({ "token": "s3cret" })).await;
+    assert_eq!(created.status(), 201);
+    let id = created.json::<Value>().await.expect("json")["data"]["id"]
+        .as_str()
+        .expect("an id")
+        .to_owned();
+    let update = |data: Value| {
+        let request = client()
+            .patch(format!("{}/{id}", app.credentials_url()))
+            .bearer_auth(&app.token)
+            .json(&json!({ "data": data }));
+        async move { request.send().await.expect("the api answers") }
+    };
+    let blank = update(json!({ "token": "" })).await;
+    assert_eq!(blank.status(), 400);
+    assert_eq!(blank.json::<Value>().await.unwrap()["code"], "E_VALIDATION");
+    assert_eq!(update(json!({ "token": "fresh" })).await.status(), 200);
 
     app.cleanup().await;
 }

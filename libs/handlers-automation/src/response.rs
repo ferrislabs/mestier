@@ -946,6 +946,15 @@ pub struct GraphErrorResponse {
 }
 
 impl GraphErrorResponse {
+    pub fn quota(message: &str) -> Self {
+        Self {
+            connector_id: None,
+            trigger_id: None,
+            field: None,
+            message: message.to_owned(),
+        }
+    }
+
     pub fn webhook_path_taken(trigger_id: String) -> Self {
         Self {
             connector_id: None,
@@ -1073,9 +1082,12 @@ impl From<&mestier_core::GraphError> for GraphErrorResponse {
             InvalidScheduleTime { trigger_id, .. } => {
                 (None, Some(trigger_id.clone()), Some("time".to_owned()))
             }
-            MissingScheduleWeekday { trigger_id } => {
-                (None, Some(trigger_id.clone()), Some("weekday".to_owned()))
-            }
+            InvalidContractKeyName { trigger_id, name } => (
+                None,
+                Some(trigger_id.clone()),
+                Some(format!("contract.{name}")),
+            ),
+            TooManyTriggers => (None, None, Some("triggers".to_owned())),
             UnknownScheduleTimezone { trigger_id, .. } => {
                 (None, Some(trigger_id.clone()), Some("timezone".to_owned()))
             }
@@ -2027,10 +2039,11 @@ mod tests {
                 "time",
             ),
             (
-                GraphError::MissingScheduleWeekday {
+                GraphError::InvalidContractKeyName {
                     trigger_id: "t1".to_string(),
+                    name: "1 montant".to_string(),
                 },
-                "weekday",
+                "contract.1 montant",
             ),
             (
                 GraphError::UnknownScheduleTimezone {
@@ -2049,5 +2062,15 @@ mod tests {
             assert_eq!(response.field.as_deref(), Some(field), "{error}");
             assert!(response.message.contains("t1"), "{}", response.message);
         }
+    }
+
+    #[test]
+    fn a_graph_holding_too_many_triggers_is_a_graph_level_error() {
+        let response = GraphErrorResponse::from(&GraphError::TooManyTriggers);
+
+        assert_eq!(response.connector_id, None);
+        assert_eq!(response.trigger_id, None);
+        assert_eq!(response.field.as_deref(), Some("triggers"));
+        assert!(response.message.contains("20"), "{}", response.message);
     }
 }

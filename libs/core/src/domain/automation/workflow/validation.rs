@@ -19,14 +19,13 @@ use crate::domain::automation::connector::{ConnectorCatalogue, FieldKind};
 use crate::domain::automation::credential::Credential;
 use crate::domain::automation::expression::parse_template;
 
-use super::graph::{
-    Branch, ContractKey, Edge, Frequency, Graph, PlacedConnector, TriggerKind, Weekday,
-};
+use super::graph::{Branch, ContractKey, Edge, Graph, PlacedConnector, TriggerKind};
 use super::schedule::{parse_time, parse_timezone};
 use super::webhook::{WEBHOOK_CREDENTIAL_KINDS, WebhookPathIssue, check_webhook_path};
 
 pub const MAX_NODE_NAME_LENGTH: usize = 120;
 pub const MAX_NODE_DESCRIPTION_LENGTH: usize = 500;
+pub const MAX_TRIGGERS_PER_GRAPH: usize = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeRef {
@@ -229,8 +228,13 @@ pub enum GraphError {
     #[error("trigger `{trigger_id}` has the time `{time}`, which is not HH:MM")]
     InvalidScheduleTime { trigger_id: String, time: String },
 
-    #[error("trigger `{trigger_id}` is weekly and needs a weekday")]
-    MissingScheduleWeekday { trigger_id: String },
+    #[error(
+        "trigger `{trigger_id}` names the contract key `{name}`, which is not a valid key name"
+    )]
+    InvalidContractKeyName { trigger_id: String, name: String },
+
+    #[error("a graph holds at most {MAX_TRIGGERS_PER_GRAPH} triggers")]
+    TooManyTriggers,
 
     #[error("trigger `{trigger_id}` has the unknown timezone `{timezone}`")]
     UnknownScheduleTimezone {
@@ -302,6 +306,11 @@ fn validate_webhook_trigger<'a>(
             errors.push(GraphError::EmptyContractKeyName {
                 trigger_id: trigger_id.to_owned(),
             });
+        } else if !is_contract_key_name(&key.name) {
+            errors.push(GraphError::InvalidContractKeyName {
+                trigger_id: trigger_id.to_owned(),
+                name: key.name.clone(),
+            });
         } else if !seen_names.insert(key.name.as_str()) {
             errors.push(GraphError::DuplicateContractKey {
                 trigger_id: trigger_id.to_owned(),
@@ -311,11 +320,17 @@ fn validate_webhook_trigger<'a>(
     }
 }
 
+fn is_contract_key_name(name: &str) -> bool {
+    let mut characters = name.chars();
+    characters
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && characters.all(|next| next.is_ascii_alphanumeric() || matches!(next, '_' | '-'))
+}
+
 fn validate_schedule_trigger(
     trigger_id: &str,
-    frequency: Frequency,
     time: &str,
-    weekday: Option<Weekday>,
     timezone: Option<&str>,
     errors: &mut Vec<GraphError>,
 ) {
@@ -323,11 +338,6 @@ fn validate_schedule_trigger(
         errors.push(GraphError::InvalidScheduleTime {
             trigger_id: trigger_id.to_owned(),
             time: time.to_owned(),
-        });
-    }
-    if frequency == Frequency::Weekly && weekday.is_none() {
-        errors.push(GraphError::MissingScheduleWeekday {
-            trigger_id: trigger_id.to_owned(),
         });
     }
     if let Some(timezone) = timezone
@@ -583,6 +593,10 @@ pub fn validate_graph(
         .collect();
     let connector_ids: HashSet<&str> = connectors_by_id.keys().copied().collect();
 
+    if graph.triggers.len() > MAX_TRIGGERS_PER_GRAPH {
+        errors.push(GraphError::TooManyTriggers);
+    }
+
     let mut seen_trigger_ids: HashSet<&str> = HashSet::new();
     for trigger in &graph.triggers {
         if !seen_trigger_ids.insert(trigger.id.as_str()) {
@@ -645,19 +659,9 @@ pub fn validate_graph(
                 &mut seen_webhook_paths,
                 &mut errors,
             ),
-            TriggerKind::Schedule {
-                frequency,
-                time,
-                weekday,
-                timezone,
-            } => validate_schedule_trigger(
-                &trigger.id,
-                *frequency,
-                time,
-                *weekday,
-                timezone.as_deref(),
-                &mut errors,
-            ),
+            TriggerKind::Schedule { time, timezone, .. } => {
+                validate_schedule_trigger(&trigger.id, time, timezone.as_deref(), &mut errors)
+            }
         }
     }
 
@@ -3021,6 +3025,57 @@ mod tests {
         }
 
         #[test]
+        fn a_contract_key_name_follows_the_rule_of_the_prototype() {
+            for name in ["a", "_a", "A", "montant_ht", "client-nom", "a1", "_"] {
+                let errors = errors_with(&graph_with(webhook_with_contract(&[name])), &[]);
+
+                assert_eq!(errors, Vec::new(), "`{name}`");
+            }
+            for name in [
+                "1a", "-a", "a b", "a.b", "é", "a/b", " a", "a ", "a\u{0}b", "{{x}}", "a$",
+            ] {
+                let errors = errors_with(&graph_with(webhook_with_contract(&[name])), &[]);
+
+                assert_eq!(
+                    errors,
+                    vec![GraphError::InvalidContractKeyName {
+                        trigger_id: "t1".to_string(),
+                        name: name.to_string(),
+                    }],
+                    "`{name}`"
+                );
+            }
+        }
+
+        #[test]
+        fn a_graph_holds_at_most_twenty_triggers() {
+            let many = |count: usize| {
+                let mut graph = graph_of(vec![condition("c1", "{{ true }}")]);
+                for index in 0..count {
+                    let id = format!("t{index}");
+                    graph.triggers.push(PlacedTrigger {
+                        id: id.clone(),
+                        kind: TriggerKind::Manual,
+                        name: None,
+                        description: None,
+                    });
+                    graph.edges.push(Edge {
+                        from: id,
+                        to: "c1".to_string(),
+                        branch: None,
+                    });
+                }
+                graph
+            };
+
+            assert_eq!(errors_with(&many(20), &[]), Vec::new());
+            assert_eq!(
+                errors_with(&many(21), &[]),
+                vec![GraphError::TooManyTriggers]
+            );
+        }
+
+        #[test]
         fn a_schedule_time_must_be_hh_mm() {
             for time in ["", "9:00", "24:00", "09:60", "09h00", "09:00:00"] {
                 let errors = errors_with(&graph_with(schedule(Frequency::Daily, time)), &[]);
@@ -3051,14 +3106,8 @@ mod tests {
         }
 
         #[test]
-        fn a_weekly_schedule_needs_a_weekday_and_the_others_do_not() {
-            assert_eq!(
-                errors_with(&graph_with(schedule(Frequency::Weekly, "09:00")), &[]),
-                vec![GraphError::MissingScheduleWeekday {
-                    trigger_id: "t1".to_string()
-                }]
-            );
-            for frequency in [Frequency::Hourly, Frequency::Daily] {
+        fn a_weekly_schedule_may_leave_its_weekday_out() {
+            for frequency in [Frequency::Hourly, Frequency::Daily, Frequency::Weekly] {
                 assert_eq!(
                     errors_with(&graph_with(schedule(frequency, "09:00")), &[]),
                     Vec::new(),
@@ -3109,9 +3158,6 @@ mod tests {
                     GraphError::InvalidScheduleTime {
                         trigger_id: "t1".to_string(),
                         time: "nope".to_string(),
-                    },
-                    GraphError::MissingScheduleWeekday {
-                        trigger_id: "t1".to_string(),
                     },
                     GraphError::UnknownScheduleTimezone {
                         trigger_id: "t1".to_string(),

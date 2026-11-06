@@ -16,7 +16,28 @@ pub fn constant_time_equals(left: &[u8], right: &[u8]) -> bool {
     constant_time::verify_slices_are_equal(left.as_ref(), right.as_ref()).is_ok()
 }
 
+pub fn path_fingerprint(path: &str) -> String {
+    digest::digest(&digest::SHA256, path.as_bytes())
+        .as_ref()
+        .iter()
+        .take(16)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn holds_a_blank_secret(expected: &HttpAuth) -> bool {
+    let blank = |text: &str| text.trim().is_empty();
+    match expected {
+        HttpAuth::Bearer { token } => blank(token),
+        HttpAuth::Basic { username, password } => blank(username) || blank(password),
+        HttpAuth::Header { name, value } => blank(name) || blank(value),
+    }
+}
+
 pub fn presents<'a>(expected: &HttpAuth, header: impl Fn(&str) -> Option<&'a str>) -> bool {
+    if holds_a_blank_secret(expected) {
+        return false;
+    }
     match expected {
         HttpAuth::Bearer { token } => header("authorization")
             .and_then(|value| after_scheme(value, "bearer"))
@@ -209,5 +230,71 @@ mod tests {
 
             assert_eq!(count, 1, "{expected:?}");
         }
+    }
+
+    #[test]
+    fn a_blank_expected_secret_is_never_presented() {
+        let blank_bearer = |token: &str| HttpAuth::Bearer {
+            token: token.to_owned(),
+        };
+        for token in ["", " ", "   "] {
+            let presented: &'static str = Box::leak(format!("Bearer {token}").into_boxed_str());
+            assert!(
+                !presents(
+                    &blank_bearer(token),
+                    headers(&[("authorization", presented)])
+                ),
+                "`{token}`"
+            );
+        }
+
+        let encode = |text: &str| -> &'static str {
+            Box::leak(format!("Basic {}", STANDARD.encode(text)).into_boxed_str())
+        };
+        for (username, password) in [("alice", ""), ("", "p4ss"), ("", ""), ("alice", " ")] {
+            let expected = HttpAuth::Basic {
+                username: username.to_owned(),
+                password: password.to_owned(),
+            };
+            assert!(
+                !presents(
+                    &expected,
+                    headers(&[("authorization", encode(&format!("{username}:{password}")))])
+                ),
+                "`{username}`:`{password}`"
+            );
+        }
+
+        for (name, value) in [("X-Api-Key", ""), ("X-Api-Key", "  "), ("", "k3y")] {
+            let expected = HttpAuth::Header {
+                name: name.to_owned(),
+                value: value.to_owned(),
+            };
+            let pairs: &'static [(&'static str, &'static str)] = Box::leak(Box::new([(
+                Box::leak(name.to_owned().into_boxed_str()) as &'static str,
+                Box::leak(value.to_owned().into_boxed_str()) as &'static str,
+            )]));
+            assert!(!presents(&expected, headers(pairs)), "`{name}`:`{value}`");
+        }
+    }
+
+    #[test]
+    fn a_path_fingerprint_is_stable_short_and_does_not_show_the_path() {
+        let first = path_fingerprint("paiement/recu");
+
+        assert_eq!(first, path_fingerprint("paiement/recu"));
+        assert_eq!(first.len(), 32);
+        assert!(first.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(!first.contains("paiement"));
+        assert_ne!(first, path_fingerprint("paiement/recu2"));
+        assert_ne!(first, path_fingerprint("paiement-recu"));
+    }
+
+    #[test]
+    fn the_fingerprint_of_a_known_path_never_changes() {
+        assert_eq!(
+            path_fingerprint("ping"),
+            "758d61f26a44448384e5c4468a0dcb7a".to_owned()
+        );
     }
 }

@@ -770,10 +770,16 @@ async fn a_webhook_and_a_schedule_feed_their_example_to_the_nodes_after_them() {
         "connectors": [
             customer("c1", "{{ trigger.evenement }}"),
             customer("c2", "{{ trigger.scheduled_for }}"),
+            customer("c3", "{{ trigger.fuseau }}"),
+            customer("c4", "{{ trigger.jour }}"),
+            customer("c5", "{{ trigger.horodatage }}"),
         ],
         "edges": [
             edge("t1", "c1", Value::Null),
             edge("t2", "c2", Value::Null),
+            edge("t2", "c3", Value::Null),
+            edge("t2", "c4", Value::Null),
+            edge("t2", "c5", Value::Null),
         ],
         "triggers": [
             { "id": "t1", "kind": { "Webhook": {
@@ -803,6 +809,30 @@ async fn a_webhook_and_a_schedule_feed_their_example_to_the_nodes_after_them() {
     assert!(
         chrono::DateTime::parse_from_rfc3339(&instant).expect("an RFC 3339 instant")
             > chrono::Utc::now()
+    );
+    assert_eq!(
+        step(&steps, "c3")["input"],
+        json!({ "name": "Europe/Paris" })
+    );
+    let day = step(&steps, "c4")["input"]["name"].as_str().expect("a day");
+    assert!(
+        [
+            "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
+        ]
+        .contains(&day),
+        "{day}"
+    );
+    let local = step(&steps, "c5")["input"]["name"]
+        .as_str()
+        .expect("a local reading")
+        .to_owned();
+    assert!(
+        local[10..].starts_with("T09:00:00+0"),
+        "09:00 on the clock of Paris: {local}"
+    );
+    assert_eq!(
+        chrono::DateTime::parse_from_rfc3339(&local).expect("an RFC 3339 reading"),
+        chrono::DateTime::parse_from_rfc3339(&instant).expect("an RFC 3339 instant")
     );
     assert_eq!(rows(&app).await, before);
     let registered: i64 = sqlx::query_scalar(

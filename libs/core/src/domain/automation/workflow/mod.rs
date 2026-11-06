@@ -27,7 +27,10 @@ pub use graph::{
     Branch, ContractKey, ContractKind, Edge, Frequency, Graph, OnInvalid, OperationRef,
     PlacedConnector, PlacedTrigger, TriggerKind, WebhookMethod, Weekday,
 };
-pub use schedule::{DueSchedule, ScheduleSeed, next_due, recurrence_of, schedule_seeds};
+pub use schedule::{
+    DueSchedule, MAX_SCHEDULES_PER_ORGANIZATION, ScheduleSeed, next_due, recurrence_of,
+    schedule_payload, schedule_seeds,
+};
 pub use tags::{MAX_RAW_TAGS, MAX_TAG_LENGTH, MAX_TAGS, WorkflowTags, WorkflowTagsError};
 pub use text::{
     MAX_WORKFLOW_DESCRIPTION_LENGTH, MAX_WORKFLOW_NAME_LENGTH, WorkflowDescription,
@@ -37,8 +40,9 @@ pub use validation::{
     GraphError, MAX_NODE_DESCRIPTION_LENGTH, MAX_NODE_NAME_LENGTH, NodeRef, validate_graph,
 };
 pub use webhook::{
-    MAX_WEBHOOK_BODY_BYTES, MAX_WEBHOOK_PATH_LENGTH, ResolvedWebhook, WEBHOOK_PREFIX,
-    WebhookPathIssue, check_webhook_path, contract_violations, is_json_content_type, sample_body,
+    MAX_WEBHOOK_BODY_BYTES, MAX_WEBHOOK_PATH_LENGTH, MAX_WEBHOOK_ROUTES_PER_ORGANIZATION,
+    ResolvedWebhook, WEBHOOK_PREFIX, WebhookPathIssue, check_webhook_path, contract_violations,
+    holds_nul, is_json_content_type, sample_body,
 };
 
 /// A workflow: the organization-facing identity (name, whether it is

@@ -253,10 +253,14 @@ async fn each_fault_of_a_trigger_comes_back_on_its_own_field() {
         refused_fields(
             &app,
             &workflow_id,
-            json!({ "Schedule": { "frequency": "Weekly", "time": "09:00" } })
+            json!({ "Webhook": {
+                "method": "POST",
+                "path": unique_path("keys"),
+                "contract": [{ "name": "1 montant", "kind": "Number", "required": true }]
+            } })
         )
         .await,
-        vec![at("t1", "weekday")]
+        vec![at("t1", "contract.1 montant")]
     );
     assert_eq!(
         refused_fields(
@@ -359,6 +363,159 @@ async fn a_workflow_can_save_its_own_path_again_and_free_it_by_dropping_the_trig
             .status(),
         201
     );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_weekly_schedule_may_leave_its_weekday_out() {
+    let app = harness::start().await;
+    let workflow_id = new_workflow(&app).await;
+
+    let response = save(
+        &app,
+        &workflow_id,
+        graph_of(vec![(
+            "t1",
+            json!({ "Schedule": { "frequency": "Weekly", "time": "09:00" } }),
+        )]),
+    )
+    .await;
+
+    assert_eq!(response.status(), 201);
+    let next: chrono::DateTime<chrono::Utc> = sqlx::query_scalar(
+        "SELECT next_run_at FROM automation.schedule_state WHERE workflow_id = $1",
+    )
+    .bind(workflow_id.parse::<Uuid>().expect("a uuid"))
+    .fetch_one(&app.pool)
+    .await
+    .expect("the schedule is registered");
+    assert_eq!(chrono::Datelike::weekday(&next), chrono::Weekday::Mon);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_graph_holds_at_most_twenty_triggers() {
+    let app = harness::start().await;
+    let workflow_id = new_workflow(&app).await;
+    let many = |count: usize| {
+        let triggers: Vec<(String, Value)> = (0..count)
+            .map(|index| (format!("t{index}"), json!("Manual")))
+            .collect();
+        graph_of(
+            triggers
+                .iter()
+                .map(|(id, kind)| (id.as_str(), kind.clone()))
+                .collect(),
+        )
+    };
+
+    let over = save(&app, &workflow_id, many(21)).await;
+    assert_eq!(over.status(), 422);
+    let body: Value = over.json().await.expect("json");
+    assert_eq!(body["details"]["errors"][0]["field"], "triggers");
+    assert_eq!(body["details"]["errors"][0]["trigger_id"], Value::Null);
+
+    assert_eq!(save(&app, &workflow_id, many(20)).await.status(), 201);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn an_organization_past_its_webhook_allowance_is_refused_with_a_static_message() {
+    let app = harness::start().await;
+    let holder = new_workflow(&app).await;
+    for index in 0..199 {
+        sqlx::query(
+            "INSERT INTO automation.webhook_route (path, org_id, workflow_id, trigger_id, method) \
+             VALUES ($1, $2, $3, $4, 'POST')",
+        )
+        .bind(unique_path(&format!("fill{index}")))
+        .bind(app.organization_id)
+        .bind(holder.parse::<Uuid>().expect("a uuid"))
+        .bind(format!("fill-{index}"))
+        .execute(&app.pool)
+        .await
+        .expect("fill the allowance");
+    }
+    let candidate = new_workflow(&app).await;
+
+    let over = save(
+        &app,
+        &candidate,
+        graph_of(vec![
+            ("t1", webhook(&unique_path("over1"))),
+            ("t2", webhook(&unique_path("over2"))),
+        ]),
+    )
+    .await;
+    let fits = save(
+        &app,
+        &candidate,
+        graph_of(vec![("t1", webhook(&unique_path("fits")))]),
+    )
+    .await;
+
+    assert_eq!(over.status(), 422);
+    let body: Value = over.json().await.expect("json");
+    assert_eq!(body["code"], "E_GRAPH_INVALID");
+    assert_eq!(
+        body["details"]["errors"][0]["message"],
+        "an organization holds at most 200 webhook routes"
+    );
+    assert_eq!(fits.status(), 201);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn archiving_frees_the_path_and_re_enabling_needs_it_to_be_free_still() {
+    let app = harness::start().await;
+    let first = new_workflow(&app).await;
+    let second = new_workflow(&app).await;
+    let path = unique_path("archived");
+    assert_eq!(
+        save(&app, &first, graph_of(vec![("t1", webhook(&path))]))
+            .await
+            .status(),
+        201
+    );
+    let patch = |workflow_id: &str, body: Value| {
+        let request = client()
+            .patch(app.workflow_url(workflow_id))
+            .bearer_auth(&app.token)
+            .json(&body);
+        async move { request.send().await.expect("the api answers the update") }
+    };
+
+    assert!(
+        patch(&first, json!({ "archived": true }))
+            .await
+            .status()
+            .is_success()
+    );
+    assert_eq!(
+        save(&app, &second, graph_of(vec![("t1", webhook(&path))]))
+            .await
+            .status(),
+        201
+    );
+    assert!(
+        patch(&first, json!({ "archived": false }))
+            .await
+            .status()
+            .is_success()
+    );
+    let blocked = patch(&first, json!({ "enabled": true })).await;
+
+    assert_eq!(blocked.status(), 409);
+    let body: Value = blocked.json().await.expect("json");
+    assert_eq!(body["code"], "E_WEBHOOK_PATH_TAKEN");
 
     app.cleanup().await;
 }

@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use common::{CoreError, OrganizationId, generate_uuid_v7};
 use mestier_macros::transactional;
 use uuid::Uuid;
@@ -15,14 +15,13 @@ use crate::{
             WebhookRouteRepository, WorkflowRepository,
         },
         workflow::{
-            ArchiveScope, CreateWorkflowCommand, Graph, GraphError, SaveWorkflowVersionCommand,
-            TriggerKind, UpdateWorkflowCommand, Workflow, WorkflowDescription,
-            WorkflowInitialState, WorkflowName, WorkflowRefusal, WorkflowVersion, schedule_seeds,
-            validate_graph,
+            ArchiveScope, CreateWorkflowCommand, Graph, GraphError, MAX_SCHEDULES_PER_ORGANIZATION,
+            MAX_WEBHOOK_ROUTES_PER_ORGANIZATION, SaveWorkflowVersionCommand, TriggerKind,
+            UpdateWorkflowCommand, Workflow, WorkflowDescription, WorkflowInitialState,
+            WorkflowName, WorkflowRefusal, WorkflowVersion, schedule_seeds, validate_graph,
         },
     },
     domain::organization::ports::OrganizationRepository,
-    infrastructure::automation::postgres::webhook_route::WEBHOOK_PATH_CONSTRAINT,
 };
 
 /// One line per [`GraphError`], joined for [`CoreError::Conflict`]. The
@@ -36,6 +35,47 @@ fn format_graph_errors(errors: &[GraphError]) -> String {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+async fn derive_triggers(
+    routes: &mut impl WebhookRouteRepository,
+    schedules: &mut impl ScheduleRepository,
+    organizations: &mut impl OrganizationRepository,
+    org_id: OrganizationId,
+    workflow_id: Uuid,
+    graph: &Graph,
+    now: DateTime<Utc>,
+) -> Result<(), CoreError> {
+    let webhooks = graph
+        .triggers
+        .iter()
+        .filter(|trigger| matches!(trigger.kind, TriggerKind::Webhook { .. }))
+        .count();
+    if webhooks > 0 {
+        let held_elsewhere = routes.count_other_routes(org_id, workflow_id).await?;
+        if usize::try_from(held_elsewhere).unwrap_or(usize::MAX) + webhooks
+            > MAX_WEBHOOK_ROUTES_PER_ORGANIZATION
+        {
+            return Err(WorkflowRefusal::TooManyWebhookRoutes.into());
+        }
+    }
+    routes
+        .replace_workflow_routes(org_id, workflow_id, &graph.triggers)
+        .await?;
+
+    let zone = organization_zone_for(organizations, org_id, graph).await?;
+    let seeds = schedule_seeds(&graph.triggers, zone, now);
+    if !seeds.is_empty() {
+        let held_elsewhere = schedules.count_other_schedules(org_id, workflow_id).await?;
+        if usize::try_from(held_elsewhere).unwrap_or(usize::MAX) + seeds.len()
+            > MAX_SCHEDULES_PER_ORGANIZATION
+        {
+            return Err(WorkflowRefusal::TooManySchedules.into());
+        }
+    }
+    schedules
+        .replace_workflow_schedules(org_id, workflow_id, &seeds)
+        .await
 }
 
 async fn organization_zone_for(
@@ -129,13 +169,14 @@ impl MestierUseCase {
         repository.list_by_organization(org_id, scope).await
     }
 
-    #[transactional(workflow, workflow_folder, schedule, organization)]
+    #[transactional(workflow, workflow_folder, webhook_route, schedule, organization)]
     pub async fn update_workflow(
         &self,
         command: UpdateWorkflowCommand,
     ) -> Result<Workflow, CoreError> {
         let mut repository = workflow_repository;
         let mut folders = workflow_folder_repository;
+        let mut routes = webhook_route_repository;
         let mut schedules = schedule_repository;
         let mut organizations = organization_repository;
         let existing = repository
@@ -148,23 +189,33 @@ impl MestierUseCase {
 
         let org_id = command.org_id;
         let was_enabled = existing.enabled;
+        let was_archived = existing.is_archived();
         let now = Utc::now();
         let updated = existing.apply(command, now)?;
         let saved = repository.update(org_id, &updated).await?;
 
-        if !was_enabled
+        if !was_archived && saved.is_archived() {
+            routes
+                .replace_workflow_routes(org_id, saved.id, &[])
+                .await?;
+            schedules
+                .replace_workflow_schedules(org_id, saved.id, &[])
+                .await?;
+        } else if !was_enabled
             && saved.enabled
             && let Some(version_id) = saved.current_version_id
             && let Some(version) = repository.find_version_by_id(org_id, version_id).await?
         {
-            let zone = organization_zone_for(&mut organizations, org_id, &version.graph).await?;
-            schedules
-                .replace_workflow_schedules(
-                    org_id,
-                    saved.id,
-                    &schedule_seeds(&version.graph.triggers, zone, now),
-                )
-                .await?;
+            derive_triggers(
+                &mut routes,
+                &mut schedules,
+                &mut organizations,
+                org_id,
+                saved.id,
+                &version.graph,
+                now,
+            )
+            .await?;
         }
 
         Ok(saved)
@@ -247,25 +298,16 @@ impl MestierUseCase {
             )
             .await?;
 
-        routes
-            .replace_workflow_routes(command.org_id, command.workflow_id, &command.graph.triggers)
-            .await
-            .map_err(|error| match error {
-                CoreError::Conflict(constraint) if constraint == WEBHOOK_PATH_CONSTRAINT => {
-                    WorkflowRefusal::WebhookPathTaken.into()
-                }
-                other => other,
-            })?;
-
-        let zone =
-            organization_zone_for(&mut organizations, command.org_id, &command.graph).await?;
-        schedules
-            .replace_workflow_schedules(
-                command.org_id,
-                command.workflow_id,
-                &schedule_seeds(&command.graph.triggers, zone, Utc::now()),
-            )
-            .await?;
+        derive_triggers(
+            &mut routes,
+            &mut schedules,
+            &mut organizations,
+            command.org_id,
+            command.workflow_id,
+            &command.graph,
+            Utc::now(),
+        )
+        .await?;
 
         if let Some(layout) = command.layout.as_ref() {
             workflows

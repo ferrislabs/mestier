@@ -31,20 +31,13 @@ impl<'tx> ScheduleRepository for PgScheduleRepository<'tx> {
     ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
 
-        sqlx::query!(
-            "DELETE FROM automation.schedule_state WHERE org_id = $1 AND workflow_id = $2",
-            org_id.0,
-            workflow_id,
-        )
-        .execute(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
         for schedule in schedules {
             sqlx::query!(
                 r#"
                 INSERT INTO automation.schedule_state (workflow_id, trigger_id, org_id, next_run_at)
                 VALUES ($1, $2, $3, $4)
+                ON CONFLICT (workflow_id, trigger_id)
+                DO UPDATE SET next_run_at = EXCLUDED.next_run_at
                 "#,
                 workflow_id,
                 schedule.trigger_id,
@@ -56,6 +49,81 @@ impl<'tx> ScheduleRepository for PgScheduleRepository<'tx> {
             .map_err(map_sqlx_error)?;
         }
 
+        let kept: Vec<String> = schedules
+            .iter()
+            .map(|schedule| schedule.trigger_id.clone())
+            .collect();
+        sqlx::query!(
+            r#"
+            DELETE FROM automation.schedule_state
+            WHERE org_id = $1 AND workflow_id = $2 AND trigger_id <> ALL($3)
+            "#,
+            org_id.0,
+            workflow_id,
+            &kept,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+
+    async fn count_other_schedules(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+    ) -> Result<i64, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(format!("automation.trigger_quota:{}", org_id.0))
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+
+        sqlx::query_scalar!(
+            r#"
+            SELECT count(*) AS "count!"
+            FROM automation.schedule_state
+            WHERE org_id = $1 AND workflow_id <> $2
+            "#,
+            org_id.0,
+            workflow_id,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
+    }
+
+    async fn open_attempt(&mut self) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("SAVEPOINT schedule_attempt")
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn keep_attempt(&mut self) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("RELEASE SAVEPOINT schedule_attempt")
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn drop_attempt(&mut self) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("ROLLBACK TO SAVEPOINT schedule_attempt")
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        sqlx::query("RELEASE SAVEPOINT schedule_attempt")
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
         Ok(())
     }
 
@@ -63,11 +131,34 @@ impl<'tx> ScheduleRepository for PgScheduleRepository<'tx> {
         &mut self,
         now: DateTime<Utc>,
         batch: i64,
+        per_org: i64,
     ) -> Result<Vec<DueSchedule>, CoreError> {
         let mut tx = self.tx.lock().await;
 
         let rows = sqlx::query!(
             r#"
+            WITH eligible AS (
+                SELECT s.workflow_id, s.trigger_id, s.next_run_at,
+                       row_number() OVER (
+                           PARTITION BY s.org_id
+                           ORDER BY s.next_run_at, s.workflow_id, s.trigger_id
+                       ) AS rank
+                FROM automation.schedule_state s
+                JOIN automation.workflow w
+                  ON w.id = s.workflow_id
+                 AND w.org_id = s.org_id
+                 AND w.enabled
+                 AND w.archived_at IS NULL
+                 AND w.current_version_id IS NOT NULL
+                WHERE s.next_run_at <= $1
+            ),
+            chosen AS (
+                SELECT workflow_id, trigger_id, next_run_at
+                FROM eligible
+                WHERE rank <= $3
+                ORDER BY next_run_at, workflow_id, trigger_id
+                LIMIT $2
+            )
             SELECT s.org_id,
                    s.workflow_id,
                    s.trigger_id,
@@ -75,7 +166,9 @@ impl<'tx> ScheduleRepository for PgScheduleRepository<'tx> {
                    w.current_version_id AS "workflow_version_id!",
                    trig.value AS "trigger!",
                    o.timezone
-            FROM automation.schedule_state s
+            FROM chosen c
+            JOIN automation.schedule_state s
+              ON s.workflow_id = c.workflow_id AND s.trigger_id = c.trigger_id
             JOIN automation.workflow w
               ON w.id = s.workflow_id
              AND w.org_id = s.org_id
@@ -88,11 +181,12 @@ impl<'tx> ScheduleRepository for PgScheduleRepository<'tx> {
             WHERE s.next_run_at <= $1
               AND trig.value ->> 'id' = s.trigger_id
             ORDER BY s.next_run_at, s.workflow_id, s.trigger_id
-            LIMIT $2
             FOR UPDATE OF s SKIP LOCKED
+            FOR SHARE OF w SKIP LOCKED
             "#,
             now,
             batch,
+            per_org,
         )
         .fetch_all(&mut ***tx)
         .await
@@ -188,7 +282,9 @@ mod tests {
 
     async fn claim(pool: &PgPool, now: DateTime<Utc>, batch: i64) -> Vec<DueSchedule> {
         with_tx(pool, async |tx| {
-            PgScheduleRepository::new(&tx).claim_due(now, batch).await
+            PgScheduleRepository::new(&tx)
+                .claim_due(now, batch, 1000)
+                .await
         })
         .await
         .unwrap()
@@ -362,7 +458,7 @@ mod tests {
 
         let both = claim_of(&pool, workflow_id, now).await;
         let first = with_tx(&pool, async |tx| {
-            PgScheduleRepository::new(&tx).claim_due(now, 1).await
+            PgScheduleRepository::new(&tx).claim_due(now, 1, 1000).await
         })
         .await
         .unwrap();
@@ -432,7 +528,9 @@ mod tests {
             let pool = pool.clone();
             async move {
                 with_tx(&pool, async move |tx| {
-                    let held = PgScheduleRepository::new(&tx).claim_due(now, 1000).await?;
+                    let held = PgScheduleRepository::new(&tx)
+                        .claim_due(now, 1000, 1000)
+                        .await?;
                     claimed_tx.send(held).ok();
                     release_rx.await.ok();
                     Ok::<_, CoreError>(())
@@ -475,5 +573,226 @@ mod tests {
             .unwrap();
 
         assert!(rows(&pool, workflow_id).await.is_empty());
+    }
+
+    async fn seed_many(
+        pool: &PgPool,
+        org_id: OrganizationId,
+        count: usize,
+        due: DateTime<Utc>,
+    ) -> Vec<Uuid> {
+        let mut workflows = Vec::new();
+        for _ in 0..count {
+            let graph = graph_of(vec![("t1", daily("09:00", None))]);
+            let workflow_id = seed_workflow(pool, org_id, &graph).await;
+            replace(pool, org_id, workflow_id, &[seed("t1", due)]).await;
+            workflows.push(workflow_id);
+        }
+        workflows
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn one_organization_cannot_take_more_than_its_share_of_a_pass() {
+        let pool = automation_pool().await;
+        let noisy = seed_organization(&pool, "sched-noisy").await;
+        let quiet = seed_organization(&pool, "sched-quiet").await;
+        let now = now_storable();
+        let due = now - Duration::minutes(5);
+        let noisy_workflows = seed_many(&pool, noisy, 15, due).await;
+        let quiet_workflows = seed_many(&pool, quiet, 1, due + Duration::minutes(1)).await;
+
+        let claimed = with_tx(&pool, async |tx| {
+            PgScheduleRepository::new(&tx).claim_due(now, 100, 10).await
+        })
+        .await
+        .unwrap();
+
+        let of = |workflows: &[Uuid]| {
+            claimed
+                .iter()
+                .filter(|due| workflows.contains(&due.workflow_id))
+                .count()
+        };
+        assert_eq!(of(&noisy_workflows), 10);
+        assert_eq!(of(&quiet_workflows), 1);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_oldest_rows_of_an_organization_are_the_ones_its_share_covers() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "sched-share-order").await;
+        let now = now_storable();
+        let mut workflows = Vec::new();
+        for minutes in (1..=12).rev() {
+            let id = seed_many(&pool, org_id, 1, now - Duration::minutes(minutes)).await[0];
+            workflows.push((minutes, id));
+        }
+
+        let claimed = with_tx(&pool, async |tx| {
+            PgScheduleRepository::new(&tx).claim_due(now, 100, 10).await
+        })
+        .await
+        .unwrap();
+
+        let mut ages: Vec<i64> = workflows
+            .iter()
+            .filter(|(_, id)| claimed.iter().any(|due| due.workflow_id == *id))
+            .map(|(minutes, _)| *minutes)
+            .collect();
+        ages.sort_unstable();
+        assert_eq!(ages, (3..=12).collect::<Vec<i64>>());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_workflow_being_disabled_is_not_claimed_from_under_the_change() {
+        let pool = automation_pool().await;
+        let (org_id, workflow_id) = scheduled_workflow(&pool, "sched-lock-workflow").await;
+        let now = now_storable();
+        replace(
+            &pool,
+            org_id,
+            workflow_id,
+            &[seed("t1", now - Duration::minutes(1))],
+        )
+        .await;
+
+        let (changing_tx, changing_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+        let changer = tokio::spawn({
+            let pool = pool.clone();
+            async move {
+                let mut tx = pool.begin().await.unwrap();
+                sqlx::query("UPDATE automation.workflow SET enabled = false WHERE id = $1")
+                    .bind(workflow_id)
+                    .execute(&mut *tx)
+                    .await
+                    .unwrap();
+                changing_tx.send(()).ok();
+                release_rx.await.ok();
+                tx.commit().await.unwrap();
+            }
+        });
+        changing_rx.await.unwrap();
+        let during = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            claim_of(&pool, workflow_id, now),
+        )
+        .await
+        .expect("a claim must skip a workflow that is being changed, not wait for it");
+        release_tx.send(()).ok();
+        changer.await.unwrap();
+        let after = claim_of(&pool, workflow_id, now).await;
+
+        assert!(
+            during.is_empty(),
+            "claimed a workflow being disabled: {during:?}"
+        );
+        assert!(after.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn saving_again_keeps_when_a_schedule_last_ran() {
+        let pool = automation_pool().await;
+        let (org_id, workflow_id) = scheduled_workflow(&pool, "sched-keep-last").await;
+        let ran = now_storable() - Duration::hours(2);
+        let first = now_storable() + Duration::hours(3);
+        replace(
+            &pool,
+            org_id,
+            workflow_id,
+            &[seed("t1", first), seed("t2", first)],
+        )
+        .await;
+        with_tx(&pool, async |tx| {
+            let mut repo = PgScheduleRepository::new(&tx);
+            repo.advance(workflow_id, "t1", Some(ran), first).await?;
+            repo.advance(workflow_id, "t2", Some(ran), first).await
+        })
+        .await
+        .unwrap();
+
+        let later = first + Duration::days(1);
+        replace(&pool, org_id, workflow_id, &[seed("t1", later)]).await;
+
+        assert_eq!(
+            rows(&pool, workflow_id).await,
+            vec![("t1".to_string(), later, Some(ran))]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_schedules_held_by_other_workflows_of_the_organization_are_counted() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "sched-count").await;
+        let other_org = seed_organization(&pool, "sched-count-other").await;
+        let now = now_storable() + Duration::hours(1);
+        let first = seed_many(&pool, org_id, 1, now).await[0];
+        let second = seed_many(&pool, org_id, 1, now).await[0];
+        seed_many(&pool, other_org, 3, now).await;
+
+        let count = |workflow_id: Uuid| {
+            let pool = pool.clone();
+            async move {
+                with_tx(&pool, async |tx| {
+                    PgScheduleRepository::new(&tx)
+                        .count_other_schedules(org_id, workflow_id)
+                        .await
+                })
+                .await
+                .unwrap()
+            }
+        };
+
+        assert_eq!(count(first).await, 1);
+        assert_eq!(count(second).await, 1);
+        assert_eq!(count(Uuid::now_v7()).await, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_dropped_attempt_undoes_what_it_did_even_after_a_database_error() {
+        let pool = automation_pool().await;
+        let (org_id, workflow_id) = scheduled_workflow(&pool, "sched-attempt").await;
+        let due = now_storable() + Duration::hours(1);
+        replace(
+            &pool,
+            org_id,
+            workflow_id,
+            &[seed("t1", due), seed("t2", due)],
+        )
+        .await;
+        let moved = due + Duration::days(1);
+
+        with_tx(&pool, async |tx| {
+            let mut repo = PgScheduleRepository::new(&tx);
+            repo.open_attempt().await?;
+            repo.advance(workflow_id, "t1", None, moved).await?;
+            {
+                let mut inner = tx.lock().await;
+                let broken = sqlx::query("SELECT 1 FROM automation.no_such_table")
+                    .execute(&mut ***inner)
+                    .await;
+                assert!(broken.is_err());
+            }
+            repo.drop_attempt().await?;
+            repo.open_attempt().await?;
+            repo.advance(workflow_id, "t2", None, moved).await?;
+            repo.keep_attempt().await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            rows(&pool, workflow_id).await,
+            vec![
+                ("t1".to_string(), due, None),
+                ("t2".to_string(), moved, None)
+            ]
+        );
     }
 }

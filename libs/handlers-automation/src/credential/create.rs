@@ -7,6 +7,7 @@ use serde_json::Value;
 use utoipa::ToSchema;
 
 use crate::{
+    credential::credential_failure,
     paths::CredentialsPath,
     require_manage_automation,
     response::{CredentialResponse, CredentialWithSecretResponse, secret_value},
@@ -75,7 +76,8 @@ pub async fn handler(
             origin,
             data: payload.data,
         })
-        .await?;
+        .await
+        .map_err(credential_failure)?;
 
     let secret = secret_value(origin, &plaintext);
     Ok(Response::Created(CredentialWithSecretResponse {

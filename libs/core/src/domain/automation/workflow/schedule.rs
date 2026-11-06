@@ -1,11 +1,16 @@
-use chrono::{DateTime, Datelike, Duration, LocalResult, NaiveDate, TimeZone, Timelike, Utc};
+use chrono::{
+    DateTime, Datelike, Duration, LocalResult, NaiveDate, SecondsFormat, TimeZone, Timelike, Utc,
+};
 use chrono_tz::Tz;
 use common::OrganizationId;
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::graph::{Frequency, PlacedTrigger, TriggerKind, Weekday};
 
 pub type Instant = DateTime<Utc>;
+
+pub const MAX_SCHEDULES_PER_ORGANIZATION: usize = 200;
 
 const SEARCH_DAYS: i64 = 10;
 const SEARCH_MINUTES: i64 = 180;
@@ -31,8 +36,6 @@ pub enum ScheduleRule {
 pub enum ScheduleRuleError {
     #[error("the time must be written HH:MM, from 00:00 to 23:59")]
     InvalidTime,
-    #[error("a weekly schedule needs a weekday")]
-    MissingWeekday,
 }
 
 pub fn parse_time(value: &str) -> Option<(u32, u32)> {
@@ -64,14 +67,11 @@ impl ScheduleRule {
         match frequency {
             Frequency::Hourly => Ok(Self::Hourly { minute }),
             Frequency::Daily => Ok(Self::Daily { hour, minute }),
-            Frequency::Weekly => {
-                let weekday = weekday.ok_or(ScheduleRuleError::MissingWeekday)?;
-                Ok(Self::Weekly {
-                    weekday,
-                    hour,
-                    minute,
-                })
-            }
+            Frequency::Weekly => Ok(Self::Weekly {
+                weekday: weekday.unwrap_or(Weekday::Monday),
+                hour,
+                minute,
+            }),
         }
     }
 }
@@ -128,20 +128,41 @@ pub fn schedule_seeds(
         .collect()
 }
 
+pub fn schedule_payload(scheduled_for: Instant, zone: Tz) -> Value {
+    let local = scheduled_for.with_timezone(&zone);
+    json!({
+        "scheduled_for": scheduled_for.to_rfc3339_opts(SecondsFormat::Secs, true),
+        "horodatage": local.to_rfc3339_opts(SecondsFormat::Secs, false),
+        "jour": french_day(local.weekday()),
+        "fuseau": zone.name(),
+    })
+}
+
+fn french_day(day: chrono::Weekday) -> &'static str {
+    match day {
+        chrono::Weekday::Mon => "lundi",
+        chrono::Weekday::Tue => "mardi",
+        chrono::Weekday::Wed => "mercredi",
+        chrono::Weekday::Thu => "jeudi",
+        chrono::Weekday::Fri => "vendredi",
+        chrono::Weekday::Sat => "samedi",
+        chrono::Weekday::Sun => "dimanche",
+    }
+}
+
 impl DueSchedule {
-    pub fn next_after(&self, now: Instant) -> Option<Instant> {
+    pub fn recurrence(&self) -> Option<(ScheduleRule, Tz)> {
         let organization_zone = parse_timezone(&self.organization_timezone);
-        let (rule, zone) = match (&self.trigger, organization_zone) {
+        match (&self.trigger, organization_zone) {
             (
                 TriggerKind::Schedule {
                     timezone: Some(_), ..
                 },
                 _,
-            ) => recurrence_of(&self.trigger, chrono_tz::UTC)?,
-            (_, Some(zone)) => recurrence_of(&self.trigger, zone)?,
-            (_, None) => return None,
-        };
-        Some(next_due(now, &rule, zone))
+            ) => recurrence_of(&self.trigger, chrono_tz::UTC),
+            (_, Some(zone)) => recurrence_of(&self.trigger, zone),
+            (_, None) => None,
+        }
     }
 }
 
@@ -313,10 +334,14 @@ mod tests {
     }
 
     #[test]
-    fn a_weekly_rule_without_a_weekday_is_refused() {
+    fn a_weekly_rule_without_a_weekday_falls_on_monday() {
         assert_eq!(
             ScheduleRule::new(Frequency::Weekly, "09:00", None),
-            Err(ScheduleRuleError::MissingWeekday)
+            Ok(ScheduleRule::Weekly {
+                weekday: Weekday::Monday,
+                hour: 9,
+                minute: 0
+            })
         );
     }
 
@@ -681,18 +706,37 @@ mod tests {
         let triggers = vec![
             schedule_trigger("t1", daily_kind("nope", None)),
             schedule_trigger("t2", daily_kind("09:00", Some("Mars/Olympus"))),
-            schedule_trigger(
-                "t3",
-                TriggerKind::Schedule {
-                    frequency: Frequency::Weekly,
-                    time: "09:00".to_string(),
-                    weekday: None,
-                    timezone: None,
-                },
-            ),
         ];
 
         assert!(schedule_seeds(&triggers, paris(), at("2026-11-06T07:00:00Z")).is_empty());
+    }
+
+    #[test]
+    fn a_weekly_schedule_without_a_weekday_is_seeded_on_the_next_monday() {
+        let triggers = vec![schedule_trigger(
+            "t1",
+            TriggerKind::Schedule {
+                frequency: Frequency::Weekly,
+                time: "09:00".to_string(),
+                weekday: None,
+                timezone: None,
+            },
+        )];
+
+        let seeds = schedule_seeds(&triggers, paris(), at("2026-11-06T07:00:00Z"));
+
+        assert_eq!(
+            seeds,
+            vec![ScheduleSeed {
+                trigger_id: "t1".to_string(),
+                next_run_at: at("2026-11-09T08:00:00Z"),
+            }]
+        );
+    }
+
+    fn next_after(schedule: &DueSchedule, now: Instant) -> Option<Instant> {
+        let (rule, zone) = schedule.recurrence()?;
+        Some(next_due(now, &rule, zone))
     }
 
     fn due(kind: TriggerKind, organization_timezone: &str) -> DueSchedule {
@@ -712,15 +756,17 @@ mod tests {
         let now = at("2026-11-06T08:00:00Z");
 
         assert_eq!(
-            due(daily_kind("09:00", None), "Europe/Paris").next_after(now),
+            next_after(&due(daily_kind("09:00", None), "Europe/Paris"), now),
             Some(at("2026-11-07T08:00:00Z"))
         );
         assert_eq!(
-            due(
-                daily_kind("09:00", Some("America/New_York")),
-                "Europe/Paris"
-            )
-            .next_after(now),
+            next_after(
+                &due(
+                    daily_kind("09:00", Some("America/New_York")),
+                    "Europe/Paris"
+                ),
+                now
+            ),
             Some(at("2026-11-06T14:00:00Z"))
         );
     }
@@ -730,15 +776,18 @@ mod tests {
         let now = at("2026-11-06T08:00:00Z");
 
         assert_eq!(
-            due(daily_kind("09:00", None), "Mars/Olympus").next_after(now),
+            next_after(&due(daily_kind("09:00", None), "Mars/Olympus"), now),
             None
         );
         assert_eq!(
-            due(daily_kind("09:00", Some("Mars/Olympus")), "Europe/Paris").next_after(now),
+            next_after(
+                &due(daily_kind("09:00", Some("Mars/Olympus")), "Europe/Paris"),
+                now
+            ),
             None
         );
         assert_eq!(
-            due(TriggerKind::Manual, "Europe/Paris").next_after(now),
+            next_after(&due(TriggerKind::Manual, "Europe/Paris"), now),
             None
         );
     }
@@ -747,8 +796,92 @@ mod tests {
     fn a_missed_occurrence_is_followed_by_the_next_future_one_not_by_the_backlog() {
         let now = at("2026-11-10T12:00:00Z");
 
-        let next = due(daily_kind("09:00", None), "Europe/Paris").next_after(now);
+        let next = next_after(&due(daily_kind("09:00", None), "Europe/Paris"), now);
 
         assert_eq!(next, Some(at("2026-11-11T08:00:00Z")));
+    }
+
+    #[test]
+    fn the_payload_of_a_scheduled_run_carries_the_instant_and_its_local_reading() {
+        let payload = schedule_payload(at("2026-11-04T08:00:00Z"), paris());
+
+        assert_eq!(
+            payload,
+            json!({
+                "scheduled_for": "2026-11-04T08:00:00Z",
+                "horodatage": "2026-11-04T09:00:00+01:00",
+                "jour": "mercredi",
+                "fuseau": "Europe/Paris"
+            })
+        );
+    }
+
+    #[test]
+    fn the_local_reading_follows_the_offset_of_the_day_and_the_zone() {
+        assert_eq!(
+            schedule_payload(at("2026-07-14T07:00:00Z"), paris()),
+            json!({
+                "scheduled_for": "2026-07-14T07:00:00Z",
+                "horodatage": "2026-07-14T09:00:00+02:00",
+                "jour": "mardi",
+                "fuseau": "Europe/Paris"
+            })
+        );
+        assert_eq!(
+            schedule_payload(at("2026-11-04T01:00:00Z"), chrono_tz::America::New_York),
+            json!({
+                "scheduled_for": "2026-11-04T01:00:00Z",
+                "horodatage": "2026-11-03T20:00:00-05:00",
+                "jour": "mardi",
+                "fuseau": "America/New_York"
+            })
+        );
+        assert_eq!(
+            schedule_payload(at("2026-11-04T08:00:00Z"), chrono_tz::UTC)["horodatage"],
+            json!("2026-11-04T08:00:00+00:00")
+        );
+    }
+
+    #[test]
+    fn the_days_are_named_in_french_in_lower_case() {
+        let monday = at("2026-11-02T12:00:00Z");
+        let names: Vec<String> = (0..7)
+            .map(|offset| {
+                schedule_payload(monday + Duration::days(offset), chrono_tz::UTC)["jour"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect();
+
+        assert_eq!(
+            names,
+            [
+                "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_due_schedule_reads_its_zone_the_same_way_as_its_next_occurrence() {
+        let schedule = due(
+            daily_kind("09:00", Some("America/New_York")),
+            "Europe/Paris",
+        );
+
+        assert_eq!(
+            schedule.recurrence().map(|(_, zone)| zone),
+            Some(chrono_tz::America::New_York)
+        );
+        assert_eq!(
+            due(daily_kind("09:00", None), "Europe/Paris")
+                .recurrence()
+                .map(|(_, zone)| zone),
+            Some(paris())
+        );
+        assert_eq!(
+            due(daily_kind("09:00", None), "Mars/Olympus").recurrence(),
+            None
+        );
     }
 }

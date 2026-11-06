@@ -1,7 +1,7 @@
-use chrono::{DateTime, Duration, SecondsFormat, Utc};
+use chrono::{DateTime, Duration, Utc};
 use common::{CoreError, OrganizationId, generate_uuid_v7};
 use mestier_macros::transactional;
-use serde_json::{Value, json};
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
@@ -9,7 +9,9 @@ use crate::{
     domain::automation::{
         ports::{RunRepository, ScheduleRepository, WebhookRouteRepository, WorkflowRepository},
         run::{Run, RunStatus},
-        workflow::{Graph, ResolvedWebhook, TriggerKind, WebhookMethod},
+        workflow::{
+            Graph, ResolvedWebhook, TriggerKind, WebhookMethod, next_due, schedule_payload,
+        },
     },
     infrastructure::automation::{
         connectors::http_client::{HttpAuth, open_http_auth},
@@ -17,10 +19,13 @@ use crate::{
     },
 };
 
+pub const SCHEDULES_PER_ORGANIZATION_PER_PASS: i64 = 10;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ScheduleOutcome {
     pub fired: usize,
     pub unreadable: usize,
+    pub failed: usize,
 }
 
 fn triggered_run(
@@ -97,7 +102,7 @@ impl MestierUseCase {
         match open_http_auth(self, org_id, credential_id).await {
             Ok(expected) => presents(&expected, header),
             Err(error) => {
-                tracing::warn!(
+                tracing::debug!(
                     org_id = %org_id.0,
                     %credential_id,
                     %error,
@@ -114,30 +119,43 @@ impl MestierUseCase {
     }
 
     #[transactional(run, workflow)]
-    pub async fn start_trigger_run(
+    pub async fn start_webhook_run(
         &self,
-        org_id: OrganizationId,
-        workflow_id: Uuid,
-        trigger_id: &str,
+        route: &ResolvedWebhook,
         payload: Value,
     ) -> Result<Uuid, CoreError> {
         let mut workflows = workflow_repository;
         let mut runs = run_repository;
 
         let workflow = workflows
-            .find_by_id_for_update(org_id, workflow_id)
+            .find_by_id_for_update(route.org_id, route.workflow_id)
             .await?
             .ok_or(CoreError::NotFound)?;
         if workflow.is_archived() || !workflow.enabled {
             return Err(CoreError::NotFound);
         }
         let workflow_version_id = workflow.current_version_id.ok_or(CoreError::NotFound)?;
+        let version = workflows
+            .find_version_by_id(route.org_id, workflow_version_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        let still_listening = version.graph.triggers.iter().any(|trigger| {
+            trigger.id == route.trigger_id
+                && matches!(
+                    &trigger.kind,
+                    TriggerKind::Webhook { method, path, .. }
+                        if *method == route.method && *path == route.path
+                )
+        });
+        if !still_listening {
+            return Err(CoreError::NotFound);
+        }
 
         let run = triggered_run(
-            org_id,
-            workflow_id,
+            route.org_id,
+            route.workflow_id,
             workflow_version_id,
-            trigger_id,
+            &route.trigger_id,
             payload,
             Utc::now(),
         );
@@ -154,8 +172,11 @@ impl MestierUseCase {
         let mut runs = run_repository;
         let mut outcome = ScheduleOutcome::default();
 
-        for due in schedules.claim_due(now, batch).await? {
-            let Some(next) = due.next_after(now) else {
+        for due in schedules
+            .claim_due(now, batch, SCHEDULES_PER_ORGANIZATION_PER_PASS)
+            .await?
+        {
+            let Some((rule, zone)) = due.recurrence() else {
                 tracing::error!(
                     workflow_id = %due.workflow_id,
                     trigger_id = %due.trigger_id,
@@ -173,22 +194,43 @@ impl MestierUseCase {
                 continue;
             };
 
-            let payload = json!({
-                "scheduled_for": due.scheduled_for.to_rfc3339_opts(SecondsFormat::Secs, true)
-            });
-            runs.create_run(&triggered_run(
+            let run = triggered_run(
                 due.org_id,
                 due.workflow_id,
                 due.workflow_version_id,
                 &due.trigger_id,
-                payload,
+                schedule_payload(due.scheduled_for, zone),
                 now,
-            ))
-            .await?;
-            schedules
-                .advance(due.workflow_id, &due.trigger_id, Some(now), next)
-                .await?;
-            outcome.fired += 1;
+            );
+            schedules.open_attempt().await?;
+            let started = async {
+                runs.create_run(&run).await?;
+                schedules
+                    .advance(
+                        due.workflow_id,
+                        &due.trigger_id,
+                        Some(now),
+                        next_due(now, &rule, zone),
+                    )
+                    .await
+            }
+            .await;
+            match started {
+                Ok(()) => {
+                    schedules.keep_attempt().await?;
+                    outcome.fired += 1;
+                }
+                Err(error) => {
+                    schedules.drop_attempt().await?;
+                    tracing::error!(
+                        %error,
+                        workflow_id = %due.workflow_id,
+                        trigger_id = %due.trigger_id,
+                        "starting a scheduled run failed, the occurrence stays due"
+                    );
+                    outcome.failed += 1;
+                }
+            }
         }
 
         Ok(outcome)
@@ -204,15 +246,16 @@ mod tests {
 
     use super::*;
     use crate::application::automation::trigger_fixtures::{
-        daily, graph_of, seed_organization, set_organization_timezone, webhook, webhook_with,
+        daily, graph_of, key, seed_organization, set_organization_timezone, webhook, webhook_with,
         weekly,
     };
     use crate::application::default_authorizer;
     use crate::application::test_support::automation_pool;
     use crate::domain::automation::credential::{CreateCredentialCommand, CredentialOrigin};
     use crate::domain::automation::workflow::{
-        CreateWorkflowCommand, OnInvalid, SaveWorkflowVersionCommand, TriggerKind,
-        UpdateWorkflowCommand, WebhookMethod, Weekday, WorkflowRefusal, schedule_seeds,
+        CreateWorkflowCommand, Graph, OnInvalid, ResolvedWebhook, SaveWorkflowVersionCommand,
+        TriggerKind, UpdateWorkflowCommand, WebhookMethod, Weekday, WorkflowRefusal,
+        schedule_seeds,
     };
     use crate::infrastructure::automation::webhook::secret::SecretCipher;
     use crate::infrastructure::realtime::EventHub;
@@ -221,6 +264,19 @@ mod tests {
     fn use_case(pool: PgPool) -> MestierUseCase {
         MestierUseCase::new(pool, default_authorizer(), EventHub::new())
             .with_cipher(Some(Arc::new(SecretCipher::new(&[7u8; 32]).unwrap())))
+    }
+
+    fn route_of(org_id: OrganizationId, workflow_id: Uuid, path: &str) -> ResolvedWebhook {
+        ResolvedWebhook {
+            org_id,
+            workflow_id,
+            trigger_id: "t1".to_string(),
+            path: path.to_string(),
+            method: WebhookMethod::Post,
+            credential_id: None,
+            contract: Vec::new(),
+            on_invalid: OnInvalid::Reject,
+        }
     }
 
     fn unique(label: &str) -> String {
@@ -827,7 +883,8 @@ mod tests {
             outcome,
             ScheduleOutcome {
                 fired: 1,
-                unreadable: 0
+                unreadable: 0,
+                failed: 0
             }
         );
         let runs = runs_of(&pool, workflow_id).await;
@@ -835,7 +892,12 @@ mod tests {
         assert_eq!(runs[0].trigger_id.as_deref(), Some("t1"));
         assert_eq!(
             runs[0].payload,
-            Some(json!({ "scheduled_for": "2026-11-06T08:00:00Z" }))
+            Some(json!({
+                "scheduled_for": "2026-11-06T08:00:00Z",
+                "horodatage": "2026-11-06T09:00:00+01:00",
+                "jour": "vendredi",
+                "fuseau": "Europe/Paris"
+            }))
         );
         assert_eq!(runs[0].status, "pending");
         let current = usecase
@@ -1290,7 +1352,8 @@ mod tests {
             outcome,
             ScheduleOutcome {
                 fired: 0,
-                unreadable: 1
+                unreadable: 1,
+                failed: 0
             }
         );
         assert!(runs_of(&pool, workflow_id).await.is_empty());
@@ -1532,18 +1595,20 @@ mod tests {
         let org_id = seed_organization(&pool, "trigger-run").await;
         let usecase = use_case(pool.clone());
         let workflow_id = new_workflow(&usecase, org_id).await;
+        let path_of_run = unique("run");
         save(
             &usecase,
             org_id,
             workflow_id,
-            graph_of(vec![("t1", webhook(WebhookMethod::Post, &unique("run")))]),
+            graph_of(vec![("t1", webhook(WebhookMethod::Post, &path_of_run))]),
         )
         .await
         .unwrap();
         let payload = json!({ "montant": 12, "nested": { "ok": [1, 2, 3] } });
 
+        let route = route_of(org_id, workflow_id, &path_of_run);
         let run_id = usecase
-            .start_trigger_run(org_id, workflow_id, "t1", payload.clone())
+            .start_webhook_run(&route, payload.clone())
             .await
             .unwrap();
 
@@ -1618,7 +1683,7 @@ mod tests {
             (Uuid::now_v7(), org_id),
         ] {
             let refused = usecase
-                .start_trigger_run(org, workflow_id, "t1", json!({}))
+                .start_webhook_run(&route_of(org, workflow_id, "any-path"), json!({}))
                 .await;
 
             assert!(
@@ -1675,5 +1740,670 @@ mod tests {
         assert_eq!(found.map(|route| route.workflow_id), Some(workflow_id));
         assert!(wrong_method.is_none());
         assert!(disabled.is_none());
+    }
+
+    async fn fill_routes(pool: &PgPool, org_id: OrganizationId, workflow_id: Uuid, count: usize) {
+        for index in 0..count {
+            sqlx::query(
+                "INSERT INTO automation.webhook_route (path, org_id, workflow_id, trigger_id, method) \
+                 VALUES ($1, $2, $3, $4, 'POST')",
+            )
+            .bind(format!("fill-{}-{index}", Uuid::now_v7().simple()))
+            .bind(org_id.0)
+            .bind(workflow_id)
+            .bind(format!("fill-{index}"))
+            .execute(pool)
+            .await
+            .unwrap();
+        }
+    }
+
+    async fn fill_schedules(
+        pool: &PgPool,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+        count: usize,
+    ) {
+        for index in 0..count {
+            sqlx::query(
+                "INSERT INTO automation.schedule_state (workflow_id, trigger_id, org_id, next_run_at) \
+                 VALUES ($1, $2, $3, now() + interval '1 day')",
+            )
+            .bind(workflow_id)
+            .bind(format!("fill-{index}"))
+            .bind(org_id.0)
+            .execute(pool)
+            .await
+            .unwrap();
+        }
+    }
+
+    fn quota_refusal(result: Result<(), CoreError>) -> Option<WorkflowRefusal> {
+        match result {
+            Err(CoreError::Conflict(message)) => WorkflowRefusal::from_conflict(&message),
+            _ => None,
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_organization_holds_at_most_two_hundred_webhook_routes() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "quota-routes").await;
+        let other_org = seed_organization(&pool, "quota-routes-other").await;
+        let usecase = use_case(pool.clone());
+        let filler = new_workflow(&usecase, org_id).await;
+        fill_routes(&pool, org_id, filler, 199).await;
+        let two = graph_of(vec![
+            ("t1", webhook(WebhookMethod::Post, &unique("q1"))),
+            ("t2", webhook(WebhookMethod::Post, &unique("q2"))),
+        ]);
+        let one = graph_of(vec![("t1", webhook(WebhookMethod::Post, &unique("q3")))]);
+        let refused_workflow = new_workflow(&usecase, org_id).await;
+        let kept_workflow = new_workflow(&usecase, org_id).await;
+        let foreign_workflow = new_workflow(&usecase, other_org).await;
+
+        let refused = save(&usecase, org_id, refused_workflow, two.clone()).await;
+        let fits = save(&usecase, org_id, kept_workflow, one.clone()).await;
+        let again = save(&usecase, org_id, kept_workflow, one.clone()).await;
+        let beyond = save(&usecase, org_id, refused_workflow, one).await;
+        let foreign = save(&usecase, other_org, foreign_workflow, two).await;
+
+        assert_eq!(
+            quota_refusal(refused),
+            Some(WorkflowRefusal::TooManyWebhookRoutes)
+        );
+        assert!(fits.is_ok(), "{fits:?}");
+        assert!(
+            again.is_ok(),
+            "a workflow's own routes do not count against it: {again:?}"
+        );
+        assert_eq!(
+            quota_refusal(beyond),
+            Some(WorkflowRefusal::TooManyWebhookRoutes)
+        );
+        assert!(
+            foreign.is_ok(),
+            "another organization has its own allowance: {foreign:?}"
+        );
+        assert!(route_rows(&pool, refused_workflow).await.is_empty());
+        assert!(
+            usecase
+                .list_workflow_versions(org_id, refused_workflow)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_organization_at_its_route_limit_can_still_save_graphs_without_webhooks() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "quota-routes-free").await;
+        let usecase = use_case(pool.clone());
+        let filler = new_workflow(&usecase, org_id).await;
+        fill_routes(&pool, org_id, filler, 200).await;
+        let workflow_id = new_workflow(&usecase, org_id).await;
+
+        let saved = save(
+            &usecase,
+            org_id,
+            workflow_id,
+            graph_of(vec![
+                ("t1", TriggerKind::Manual),
+                ("t2", daily("09:00", None)),
+            ]),
+        )
+        .await;
+
+        assert!(saved.is_ok(), "{saved:?}");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_organization_holds_at_most_two_hundred_schedules() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "quota-schedules").await;
+        let other_org = seed_organization(&pool, "quota-schedules-other").await;
+        let usecase = use_case(pool.clone());
+        let filler = new_workflow(&usecase, org_id).await;
+        fill_schedules(&pool, org_id, filler, 199).await;
+        let two = graph_of(vec![
+            ("t1", daily("09:00", None)),
+            ("t2", daily("10:00", None)),
+        ]);
+        let one = graph_of(vec![("t1", daily("09:00", None))]);
+        let refused_workflow = new_workflow(&usecase, org_id).await;
+        let kept_workflow = new_workflow(&usecase, org_id).await;
+        let foreign_workflow = new_workflow(&usecase, other_org).await;
+
+        let refused = save(&usecase, org_id, refused_workflow, two.clone()).await;
+        let fits = save(&usecase, org_id, kept_workflow, one.clone()).await;
+        let again = save(&usecase, org_id, kept_workflow, one).await;
+        let foreign = save(&usecase, other_org, foreign_workflow, two).await;
+
+        assert_eq!(
+            quota_refusal(refused),
+            Some(WorkflowRefusal::TooManySchedules)
+        );
+        assert!(fits.is_ok(), "{fits:?}");
+        assert!(again.is_ok(), "{again:?}");
+        assert!(foreign.is_ok(), "{foreign:?}");
+        assert!(schedule_rows(&pool, refused_workflow).await.is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[ignore = "requires live postgres"]
+    async fn two_saves_racing_for_the_last_route_do_not_both_win() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "quota-race").await;
+        let usecase = use_case(pool.clone());
+        let filler = new_workflow(&usecase, org_id).await;
+        fill_routes(&pool, org_id, filler, 199).await;
+
+        let mut racers = tokio::task::JoinSet::new();
+        for _ in 0..6 {
+            let workflow_id = new_workflow(&usecase, org_id).await;
+            let usecase = usecase.clone();
+            let path = unique("race");
+            racers.spawn(async move {
+                save(
+                    &usecase,
+                    org_id,
+                    workflow_id,
+                    graph_of(vec![("t1", webhook(WebhookMethod::Post, &path))]),
+                )
+                .await
+            });
+        }
+        let mut won = 0;
+        let mut refused = 0;
+        while let Some(finished) = racers.join_next().await {
+            match quota_refusal(finished.unwrap()) {
+                None => won += 1,
+                Some(WorkflowRefusal::TooManyWebhookRoutes) => refused += 1,
+                Some(other) => panic!("unexpected refusal {other:?}"),
+            }
+        }
+
+        assert_eq!((won, refused), (1, 5));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn archiving_frees_the_paths_and_the_schedules_and_re_enabling_brings_them_back() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "archive-frees").await;
+        let usecase = use_case(pool.clone());
+        let workflow_id = new_workflow(&usecase, org_id).await;
+        let path = unique("archived");
+        save(
+            &usecase,
+            org_id,
+            workflow_id,
+            graph_of(vec![
+                ("t1", webhook(WebhookMethod::Post, &path)),
+                ("t2", daily("09:00", Some("UTC"))),
+            ]),
+        )
+        .await
+        .unwrap();
+        let command = |enabled: Option<bool>, archived: Option<bool>| UpdateWorkflowCommand {
+            org_id,
+            id: workflow_id,
+            name: None,
+            description: None,
+            enabled,
+            folder_id: None,
+            tags: None,
+            archived,
+        };
+
+        usecase
+            .update_workflow(command(None, Some(true)))
+            .await
+            .unwrap();
+        assert!(route_rows(&pool, workflow_id).await.is_empty());
+        assert!(schedule_rows(&pool, workflow_id).await.is_empty());
+        let taker = new_workflow(&usecase, org_id).await;
+        save(
+            &usecase,
+            org_id,
+            taker,
+            graph_of(vec![("t1", webhook(WebhookMethod::Post, &path))]),
+        )
+        .await
+        .expect("the freed path can be taken");
+        usecase
+            .update_workflow(command(None, Some(false)))
+            .await
+            .unwrap();
+        assert!(route_rows(&pool, workflow_id).await.is_empty());
+        assert!(schedule_rows(&pool, workflow_id).await.is_empty());
+        save(
+            &usecase,
+            org_id,
+            taker,
+            graph_of(vec![("t1", TriggerKind::Manual)]),
+        )
+        .await
+        .unwrap();
+
+        usecase
+            .update_workflow(command(Some(true), None))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            route_rows(&pool, workflow_id).await,
+            vec![(path, "t1".to_string(), "POST".to_string())]
+        );
+        let schedules = schedule_rows(&pool, workflow_id).await;
+        assert_eq!(schedules.len(), 1);
+        assert!(schedules[0].1 > Utc::now());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn re_enabling_is_refused_while_another_workflow_holds_the_freed_path() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "archive-taken").await;
+        let usecase = use_case(pool.clone());
+        let workflow_id = new_workflow(&usecase, org_id).await;
+        let path = unique("freed");
+        save(
+            &usecase,
+            org_id,
+            workflow_id,
+            graph_of(vec![("t1", webhook(WebhookMethod::Post, &path))]),
+        )
+        .await
+        .unwrap();
+        let command = |enabled: Option<bool>, archived: Option<bool>| UpdateWorkflowCommand {
+            org_id,
+            id: workflow_id,
+            name: None,
+            description: None,
+            enabled,
+            folder_id: None,
+            tags: None,
+            archived,
+        };
+        usecase
+            .update_workflow(command(None, Some(true)))
+            .await
+            .unwrap();
+        usecase
+            .update_workflow(command(None, Some(false)))
+            .await
+            .unwrap();
+        let taker = new_workflow(&usecase, org_id).await;
+        save(
+            &usecase,
+            org_id,
+            taker,
+            graph_of(vec![("t1", webhook(WebhookMethod::Post, &path))]),
+        )
+        .await
+        .unwrap();
+
+        let refused = usecase.update_workflow(command(Some(true), None)).await;
+
+        let Err(CoreError::Conflict(message)) = refused else {
+            panic!("expected a conflict, got {refused:?}");
+        };
+        assert_eq!(
+            WorkflowRefusal::webhook_path_taken_triggers(&message),
+            Some(vec!["t1".to_string()])
+        );
+        let still = usecase
+            .find_workflow(org_id, workflow_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!still.enabled);
+        assert!(route_rows(&pool, workflow_id).await.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn disabling_keeps_the_routes_and_re_enabling_derives_them_again() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "disable-keeps").await;
+        let usecase = use_case(pool.clone());
+        let workflow_id = new_workflow(&usecase, org_id).await;
+        let path = unique("kept");
+        save(
+            &usecase,
+            org_id,
+            workflow_id,
+            graph_of(vec![("t1", webhook(WebhookMethod::Post, &path))]),
+        )
+        .await
+        .unwrap();
+        let command = |enabled: bool| UpdateWorkflowCommand {
+            org_id,
+            id: workflow_id,
+            name: None,
+            description: None,
+            enabled: Some(enabled),
+            folder_id: None,
+            tags: None,
+            archived: None,
+        };
+
+        usecase.update_workflow(command(false)).await.unwrap();
+        assert_eq!(route_rows(&pool, workflow_id).await.len(), 1);
+        sqlx::query("DELETE FROM automation.webhook_route WHERE workflow_id = $1")
+            .bind(workflow_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        usecase.update_workflow(command(true)).await.unwrap();
+
+        assert_eq!(route_rows(&pool, workflow_id).await.len(), 1);
+    }
+
+    fn replacement(case: usize, own_path: &str) -> Graph {
+        match case {
+            0 => graph_of(vec![("t1", TriggerKind::Manual)]),
+            1 => graph_of(vec![("t9", webhook(WebhookMethod::Post, own_path))]),
+            2 => graph_of(vec![("t1", webhook(WebhookMethod::Put, own_path))]),
+            3 => graph_of(vec![(
+                "t1",
+                webhook(WebhookMethod::Post, &format!("{own_path}-moved")),
+            )]),
+            _ => graph_of(vec![("t1", daily("09:00", None))]),
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_run_is_not_started_for_a_trigger_the_current_version_no_longer_holds_like_that() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "revalidate").await;
+        let usecase = use_case(pool.clone());
+        let labels = [
+            "trigger turned manual",
+            "trigger removed",
+            "method changed",
+            "path changed",
+            "trigger turned into a schedule",
+        ];
+
+        for (case, label) in labels.into_iter().enumerate() {
+            let workflow_id = new_workflow(&usecase, org_id).await;
+            let own_path = unique("case");
+            save(
+                &usecase,
+                org_id,
+                workflow_id,
+                graph_of(vec![("t1", webhook(WebhookMethod::Post, &own_path))]),
+            )
+            .await
+            .unwrap();
+            let route = usecase
+                .resolve_webhook(&own_path, WebhookMethod::Post)
+                .await
+                .unwrap()
+                .expect("the route resolves");
+            save(&usecase, org_id, workflow_id, replacement(case, &own_path))
+                .await
+                .unwrap();
+
+            let refused = usecase.start_webhook_run(&route, json!({})).await;
+
+            assert!(
+                matches!(refused, Err(CoreError::NotFound)),
+                "{label}: {refused:?}"
+            );
+            assert!(runs_of(&pool, workflow_id).await.is_empty(), "{label}");
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_new_version_that_keeps_the_trigger_does_not_stop_the_run() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "revalidate-kept").await;
+        let usecase = use_case(pool.clone());
+        let workflow_id = new_workflow(&usecase, org_id).await;
+        let path = unique("kept-trigger");
+        save(
+            &usecase,
+            org_id,
+            workflow_id,
+            graph_of(vec![("t1", webhook(WebhookMethod::Post, &path))]),
+        )
+        .await
+        .unwrap();
+        let route = usecase
+            .resolve_webhook(&path, WebhookMethod::Post)
+            .await
+            .unwrap()
+            .unwrap();
+        save(
+            &usecase,
+            org_id,
+            workflow_id,
+            graph_of(vec![(
+                "t1",
+                webhook_with(
+                    &path,
+                    None,
+                    vec![key(
+                        "montant",
+                        crate::domain::automation::workflow::ContractKind::Number,
+                        true,
+                    )],
+                    OnInvalid::Accept,
+                ),
+            )]),
+        )
+        .await
+        .unwrap();
+
+        let started = usecase
+            .start_webhook_run(&route, json!({ "montant": 1 }))
+            .await;
+
+        assert!(started.is_ok(), "{started:?}");
+        let current = usecase
+            .find_workflow(org_id, workflow_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .current_version_id;
+        assert_eq!(
+            runs_of(&pool, workflow_id).await[0].version_id,
+            current.unwrap()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn saving_a_version_keeps_when_a_schedule_last_ran() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "keep-last-run").await;
+        let usecase = use_case(pool.clone());
+        let due = at("2026-11-06T08:00:00Z");
+        let workflow_id = scheduled(&usecase, &pool, org_id, daily("09:00", None), due).await;
+        let now = due + Duration::seconds(5);
+        usecase.fire_due_schedules(now, 100).await.unwrap();
+
+        save(
+            &usecase,
+            org_id,
+            workflow_id,
+            graph_of(vec![("t1", daily("10:00", None))]),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(schedule_state(&pool, workflow_id).await.1, Some(now));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn one_failing_run_creation_does_not_cancel_the_rest_of_the_batch() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "fire-poison").await;
+        let usecase = use_case(pool.clone());
+        let due = at("2026-11-06T08:00:00Z");
+        let mut healthy = Vec::new();
+        let poisoned_workflow = new_workflow(&usecase, org_id).await;
+        save(
+            &usecase,
+            org_id,
+            poisoned_workflow,
+            graph_of(vec![("poison", daily("09:00", None))]),
+        )
+        .await
+        .unwrap();
+        set_next_run(&pool, poisoned_workflow, due - Duration::minutes(10)).await;
+        for _ in 0..3 {
+            healthy.push(scheduled(&usecase, &pool, org_id, daily("09:00", None), due).await);
+        }
+        sqlx::query(
+            "CREATE OR REPLACE FUNCTION automation.fail_poisoned_run() RETURNS trigger \
+             LANGUAGE plpgsql AS $$ BEGIN \
+             IF NEW.trigger_id = 'poison' THEN RAISE EXCEPTION 'poisoned run'; END IF; \
+             RETURN NEW; END $$",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TRIGGER trg_fail_poisoned_run BEFORE INSERT ON automation.run \
+             FOR EACH ROW EXECUTE FUNCTION automation.fail_poisoned_run()",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let now = due + Duration::seconds(1);
+
+        let outcome = usecase.fire_due_schedules(now, 100).await;
+
+        sqlx::query("DROP TRIGGER trg_fail_poisoned_run ON automation.run")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DROP FUNCTION automation.fail_poisoned_run()")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let outcome = outcome.expect("one failing row must not fail the pass");
+        assert_eq!(
+            outcome,
+            ScheduleOutcome {
+                fired: 3,
+                unreadable: 0,
+                failed: 1
+            }
+        );
+        for workflow_id in healthy {
+            assert_eq!(runs_of(&pool, workflow_id).await.len(), 1);
+            assert!(schedule_state(&pool, workflow_id).await.0 > now);
+        }
+        assert!(runs_of(&pool, poisoned_workflow).await.is_empty());
+        assert_eq!(
+            schedule_state(&pool, poisoned_workflow).await.0,
+            due - Duration::minutes(10),
+            "the failed occurrence stays due and is tried again by the next pass"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_noisy_organization_takes_ten_schedules_per_pass_and_leaves_room_to_the_others() {
+        let pool = automation_pool().await;
+        let noisy = seed_organization(&pool, "fire-noisy").await;
+        let quiet = seed_organization(&pool, "fire-quiet").await;
+        let usecase = use_case(pool.clone());
+        let due = at("2026-11-06T08:00:00Z");
+        let mut noisy_workflows = Vec::new();
+        for _ in 0..12 {
+            noisy_workflows
+                .push(scheduled(&usecase, &pool, noisy, daily("09:00", None), due).await);
+        }
+        let quiet_workflow = scheduled(
+            &usecase,
+            &pool,
+            quiet,
+            daily("09:00", None),
+            due + Duration::seconds(30),
+        )
+        .await;
+        let now = due + Duration::minutes(1);
+
+        let first = usecase.fire_due_schedules(now, 100).await.unwrap();
+        let second = usecase.fire_due_schedules(now, 100).await.unwrap();
+
+        assert_eq!(first.fired, 11);
+        assert_eq!(second.fired, 2);
+        assert_eq!(runs_of(&pool, quiet_workflow).await.len(), 1);
+        let mut total = 0;
+        for workflow_id in noisy_workflows {
+            total += runs_of(&pool, workflow_id).await.len();
+        }
+        assert_eq!(total, 12);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_run_waits_for_a_workflow_being_disabled_and_is_then_refused() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "start-waits").await;
+        let usecase = use_case(pool.clone());
+        let workflow_id = new_workflow(&usecase, org_id).await;
+        let path = unique("waits");
+        save(
+            &usecase,
+            org_id,
+            workflow_id,
+            graph_of(vec![("t1", webhook(WebhookMethod::Post, &path))]),
+        )
+        .await
+        .unwrap();
+        let route = usecase
+            .resolve_webhook(&path, WebhookMethod::Post)
+            .await
+            .unwrap()
+            .unwrap();
+        let (held_tx, held_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+        let changer = tokio::spawn({
+            let pool = pool.clone();
+            async move {
+                let mut tx = pool.begin().await.unwrap();
+                sqlx::query("UPDATE automation.workflow SET enabled = false WHERE id = $1")
+                    .bind(workflow_id)
+                    .execute(&mut *tx)
+                    .await
+                    .unwrap();
+                held_tx.send(()).ok();
+                release_rx.await.ok();
+                tx.commit().await.unwrap();
+            }
+        });
+        held_rx.await.unwrap();
+        let starter = tokio::spawn({
+            let usecase = usecase.clone();
+            async move { usecase.start_webhook_run(&route, json!({})).await }
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        let waited = !starter.is_finished();
+        release_tx.send(()).ok();
+        changer.await.unwrap();
+        let outcome = starter.await.unwrap();
+
+        assert!(
+            waited,
+            "a run must wait for a change to the workflow in flight"
+        );
+        assert!(matches!(outcome, Err(CoreError::NotFound)), "{outcome:?}");
+        assert!(runs_of(&pool, workflow_id).await.is_empty());
     }
 }

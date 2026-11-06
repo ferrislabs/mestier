@@ -2,11 +2,14 @@ use common::OrganizationId;
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
-use super::graph::{ContractKey, ContractKind, OnInvalid, PlacedTrigger, TriggerKind};
+use super::graph::{
+    ContractKey, ContractKind, OnInvalid, PlacedTrigger, TriggerKind, WebhookMethod,
+};
 
 pub const WEBHOOK_PREFIX: &str = "webhooks";
 pub const MAX_WEBHOOK_PATH_LENGTH: usize = 200;
 pub const MAX_WEBHOOK_BODY_BYTES: usize = 1024 * 1024;
+pub const MAX_WEBHOOK_ROUTES_PER_ORGANIZATION: usize = 200;
 pub const WEBHOOK_CREDENTIAL_KINDS: [&str; 3] = ["http_header", "http_basic", "bearer_token"];
 
 #[derive(Debug, Clone, PartialEq)]
@@ -14,6 +17,8 @@ pub struct ResolvedWebhook {
     pub org_id: OrganizationId,
     pub workflow_id: Uuid,
     pub trigger_id: String,
+    pub path: String,
+    pub method: WebhookMethod,
     pub credential_id: Option<Uuid>,
     pub contract: Vec<ContractKey>,
     pub on_invalid: OnInvalid,
@@ -26,10 +31,11 @@ impl ResolvedWebhook {
         trigger: PlacedTrigger,
     ) -> Option<Self> {
         let TriggerKind::Webhook {
+            method,
+            path,
             credential_id,
             contract,
             on_invalid,
-            ..
         } = trigger.kind
         else {
             return None;
@@ -38,6 +44,8 @@ impl ResolvedWebhook {
             org_id,
             workflow_id,
             trigger_id: trigger.id,
+            path,
+            method,
             credential_id,
             contract,
             on_invalid,
@@ -91,6 +99,17 @@ pub fn check_webhook_path(path: &str) -> Result<(), WebhookPathIssue> {
         return Err(WebhookPathIssue::InvalidCharacters);
     }
     Ok(())
+}
+
+pub fn holds_nul(value: &Value) -> bool {
+    match value {
+        Value::String(text) => text.contains('\0'),
+        Value::Array(items) => items.iter().any(holds_nul),
+        Value::Object(fields) => fields
+            .iter()
+            .any(|(key, item)| key.contains('\0') || holds_nul(item)),
+        _ => false,
+    }
 }
 
 pub fn contract_violations(contract: &[ContractKey], body: &Value) -> Vec<String> {
@@ -490,7 +509,7 @@ mod tests {
         let trigger = PlacedTrigger {
             id: "t1".to_string(),
             kind: TriggerKind::Webhook {
-                method: super::super::graph::WebhookMethod::Post,
+                method: WebhookMethod::Post,
                 path: "ping".to_string(),
                 credential_id: Some(Uuid::from_u128(3)),
                 contract: vec![key("a", ContractKind::Text, true, "")],
@@ -508,6 +527,8 @@ mod tests {
                 org_id,
                 workflow_id,
                 trigger_id: "t1".to_string(),
+                path: "ping".to_string(),
+                method: WebhookMethod::Post,
                 credential_id: Some(Uuid::from_u128(3)),
                 contract: vec![key("a", ContractKind::Text, true, "")],
                 on_invalid: OnInvalid::Accept,
@@ -528,5 +549,33 @@ mod tests {
             ResolvedWebhook::from_trigger(OrganizationId(Uuid::from_u128(1)), Uuid::nil(), trigger),
             None
         );
+    }
+
+    #[test]
+    fn a_nul_character_in_a_string_or_a_key_is_found_wherever_it_hides() {
+        for body in [
+            json!("a\u{0}b"),
+            json!({ "a": "x\u{0}" }),
+            json!({ "a\u{0}": 1 }),
+            json!({ "a": { "b": [1, { "c": ["ok", "\u{0}"] }] } }),
+            json!([{ "\u{0}": null }]),
+        ] {
+            assert!(holds_nul(&body), "{body}");
+        }
+    }
+
+    #[test]
+    fn a_body_without_a_nul_character_is_clean() {
+        for body in [
+            json!(null),
+            json!(1),
+            json!(true),
+            json!("texte \u{e9}\u{1F600}"),
+            json!({ "a": [1, "b", { "c": null }] }),
+            json!({}),
+            json!([]),
+        ] {
+            assert!(!holds_nul(&body), "{body}");
+        }
     }
 }

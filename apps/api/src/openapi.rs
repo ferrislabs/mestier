@@ -839,7 +839,7 @@ mod tests {
                 || operation["security"] == serde_json::json!([{}]),
             "{operation}"
         );
-        for status in ["202", "400", "401", "404", "413", "415", "429"] {
+        for status in ["202", "400", "401", "404", "408", "413", "415", "429"] {
             assert!(operation["responses"][status].is_object(), "{status}");
         }
         let schemas = &document["components"]["schemas"];

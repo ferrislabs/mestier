@@ -18,6 +18,8 @@ chrono = { workspace = true }
 http = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+rate-limit = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
@@ -31,7 +33,6 @@ clap = { workspace = true }
 jsonwebtoken = { workspace = true }
 reqwest = { workspace = true }
 sqlx = { workspace = true }
-tokio = { workspace = true }
 url = { workspace = true }
 
 [[test]]

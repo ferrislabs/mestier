@@ -102,8 +102,12 @@ pub async fn run_automation_worker(
         }
 
         match usecase.fire_due_schedules(Utc::now(), schedule.batch).await {
-            Ok(ScheduleOutcome { fired, unreadable }) if fired > 0 || unreadable > 0 => {
-                info!(fired, unreadable, "started scheduled runs");
+            Ok(ScheduleOutcome {
+                fired,
+                unreadable,
+                failed,
+            }) if fired > 0 || unreadable > 0 || failed > 0 => {
+                info!(fired, unreadable, failed, "started scheduled runs");
             }
             Ok(_) => {}
             Err(error) => error!(%error, "starting scheduled runs failed"),

@@ -562,6 +562,12 @@ pub trait WebhookRouteRepository: Send {
         triggers: &[PlacedTrigger],
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
+    fn count_other_routes(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+    ) -> impl Future<Output = Result<i64, CoreError>> + Send;
+
     fn paths_held_by_other_workflows(
         &mut self,
         workflow_id: Uuid,
@@ -584,11 +590,24 @@ pub trait ScheduleRepository: Send {
         schedules: &[ScheduleSeed],
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
+    fn count_other_schedules(
+        &mut self,
+        org_id: OrganizationId,
+        workflow_id: Uuid,
+    ) -> impl Future<Output = Result<i64, CoreError>> + Send;
+
     fn claim_due(
         &mut self,
         now: DateTime<Utc>,
         batch: i64,
+        per_org: i64,
     ) -> impl Future<Output = Result<Vec<DueSchedule>, CoreError>> + Send;
+
+    fn open_attempt(&mut self) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn keep_attempt(&mut self) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn drop_attempt(&mut self) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     fn advance(
         &mut self,

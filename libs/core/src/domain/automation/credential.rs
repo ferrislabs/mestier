@@ -111,7 +111,7 @@ pub struct UpdateCredentialCommand {
     pub data: Option<serde_json::Value>,
 }
 
-#[derive(Debug, thiserror::Error, PartialEq)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq)]
 pub enum CredentialError {
     #[error("unknown auth scheme `{kind}`")]
     UnknownScheme { kind: String },
@@ -123,6 +123,18 @@ pub enum CredentialError {
     UnknownField { field: String },
     #[error("a supplied credential is replaced, never rotated")]
     NotRotatable,
+    #[error("a credential field must be a text that is not blank")]
+    BlankField,
+    #[error("this header name is reserved and cannot carry a credential")]
+    ReservedHeaderName,
+}
+
+impl CredentialError {
+    pub fn from_conflict(message: &str) -> Option<Self> {
+        [Self::BlankField, Self::ReservedHeaderName]
+            .into_iter()
+            .find(|error| error.to_string() == message)
+    }
 }
 
 impl From<CredentialError> for CoreError {
@@ -161,7 +173,46 @@ pub fn validate_credential_data(
         }
     }
 
+    if SECRET_BEARING_SCHEMES.contains(&kind) {
+        for field in scheme.fields {
+            let filled = object
+                .get(field.name)
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|text| !text.trim().is_empty());
+            if !filled {
+                return Err(CredentialError::BlankField);
+            }
+        }
+    }
+
+    if kind == "http_header"
+        && object
+            .get("header_name")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(is_reserved_header_name)
+    {
+        return Err(CredentialError::ReservedHeaderName);
+    }
+
     Ok(())
+}
+
+const SECRET_BEARING_SCHEMES: [&str; 3] = ["http_header", "http_basic", "bearer_token"];
+
+const RESERVED_HEADER_NAMES: [&str; 8] = [
+    "host",
+    "content-type",
+    "content-length",
+    "user-agent",
+    "accept",
+    "connection",
+    "transfer-encoding",
+    "cookie",
+];
+
+fn is_reserved_header_name(name: &str) -> bool {
+    let name = name.trim().to_ascii_lowercase();
+    RESERVED_HEADER_NAMES.contains(&name.as_str()) || name.starts_with("x-forwarded-")
 }
 
 #[cfg(test)]
@@ -281,5 +332,152 @@ mod tests {
 
         assert!(matches!(error, CoreError::Conflict(_)));
         assert!(format!("{error}").contains("never rotated"));
+    }
+
+    fn refused(kind: &str, data: serde_json::Value) -> CredentialError {
+        validate_credential_data(kind, &data).expect_err("the data must be refused")
+    }
+
+    #[test]
+    fn an_inbound_capable_scheme_refuses_a_blank_or_non_text_secret() {
+        for (kind, field, others) in [
+            ("bearer_token", "token", serde_json::json!({})),
+            (
+                "http_basic",
+                "password",
+                serde_json::json!({ "username": "alice" }),
+            ),
+            (
+                "http_basic",
+                "username",
+                serde_json::json!({ "password": "p4ss" }),
+            ),
+            (
+                "http_header",
+                "header_value",
+                serde_json::json!({ "header_name": "X-Signature" }),
+            ),
+            (
+                "http_header",
+                "header_name",
+                serde_json::json!({ "header_value": "sig" }),
+            ),
+        ] {
+            for blank in [
+                serde_json::json!(""),
+                serde_json::json!("   "),
+                serde_json::json!("\t\n"),
+                serde_json::Value::Null,
+                serde_json::json!(12),
+                serde_json::json!(["a"]),
+            ] {
+                let mut data = others.clone();
+                data[field] = blank.clone();
+
+                assert_eq!(
+                    refused(kind, data),
+                    CredentialError::BlankField,
+                    "{kind}.{field} = {blank}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_complete_inbound_capable_credential_is_accepted() {
+        for (kind, data) in [
+            ("bearer_token", serde_json::json!({ "token": "s3cret" })),
+            (
+                "http_basic",
+                serde_json::json!({ "username": "alice", "password": "p4ss" }),
+            ),
+            (
+                "http_header",
+                serde_json::json!({ "header_name": "X-Signature", "header_value": "sig" }),
+            ),
+        ] {
+            assert_eq!(validate_credential_data(kind, &data), Ok(()), "{kind}");
+        }
+    }
+
+    #[test]
+    fn a_header_credential_cannot_take_a_name_the_transport_owns() {
+        for name in [
+            "host",
+            "Host",
+            "CONTENT-TYPE",
+            "content-length",
+            "user-agent",
+            "accept",
+            "connection",
+            "transfer-encoding",
+            "cookie",
+            "Cookie",
+            "x-forwarded-for",
+            "X-Forwarded-Proto",
+            "x-forwarded-host",
+            "x-forwarded-",
+        ] {
+            let data = serde_json::json!({ "header_name": name, "header_value": "v" });
+
+            assert_eq!(
+                refused("http_header", data),
+                CredentialError::ReservedHeaderName,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_header_name_close_to_a_reserved_one_is_fine() {
+        for name in [
+            "X-Signature",
+            "x-forwarded",
+            "X-Forwarded",
+            "hostname",
+            "accept-language",
+            "x-cookie",
+            "authorization",
+            "x-api-key",
+        ] {
+            let data = serde_json::json!({ "header_name": name, "header_value": "v" });
+
+            assert_eq!(
+                validate_credential_data("http_header", &data),
+                Ok(()),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_odoo_scheme_keeps_its_own_rules() {
+        let data = serde_json::json!({
+            "base_url": "",
+            "database": "",
+            "username": "",
+            "api_key": ""
+        });
+
+        assert_eq!(validate_credential_data("odoo_api", &data), Ok(()));
+    }
+
+    #[test]
+    fn the_new_refusals_survive_the_trip_through_a_conflict() {
+        for error in [
+            CredentialError::BlankField,
+            CredentialError::ReservedHeaderName,
+        ] {
+            let CoreError::Conflict(message) = CoreError::from(error.clone()) else {
+                panic!("a credential error becomes a conflict");
+            };
+
+            assert_eq!(CredentialError::from_conflict(&message), Some(error));
+        }
+        assert_eq!(CredentialError::from_conflict("slug taken"), None);
+        assert_eq!(
+            CredentialError::from_conflict(&CredentialError::NotRotatable.to_string()),
+            None
+        );
     }
 }
