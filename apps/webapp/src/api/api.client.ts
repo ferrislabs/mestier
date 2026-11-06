@@ -807,6 +807,7 @@ export namespace Schemas {
     connector_id: string;
     error?: (string | null) | undefined;
     input?: unknown | undefined;
+    iteration_path: string;
     output?: unknown | undefined;
     status: DryRunStepStatus;
   };
