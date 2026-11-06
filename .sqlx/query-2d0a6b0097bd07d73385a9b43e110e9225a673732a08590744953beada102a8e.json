@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.org_id, c.slug, c.title, c.version, c.description, c.base_url,\n                      c.source_kind, c.source_value, c.imported_at, c.security,\n                      c.operations, c.schemas,\n                      COALESCE((\n                          SELECT jsonb_agg(\n                                     jsonb_build_object(\n                                         'version', recent.version,\n                                         'imported_at', recent.imported_at,\n                                         'source_kind', recent.source_kind,\n                                         'source_value', recent.source_value,\n                                         'base_url', recent.base_url,\n                                         'security', recent.security\n                                     )\n                                     ORDER BY recent.id DESC\n                                 )\n                          FROM (\n                              SELECT v.id, v.version, v.imported_at, v.source_kind,\n                                     v.source_value, v.base_url, v.security\n                              FROM automation.collection_version v\n                              WHERE v.collection_id = c.id\n                              ORDER BY v.id DESC\n                              LIMIT $3\n                          ) recent\n                      ), '[]'::jsonb) AS \"history!\"\n               FROM automation.collection c\n               WHERE c.org_id = $1 AND c.id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "base_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "source_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "source_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "imported_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "security",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "operations",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "schemas",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "history!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "2d0a6b0097bd07d73385a9b43e110e9225a673732a08590744953beada102a8e"
+}

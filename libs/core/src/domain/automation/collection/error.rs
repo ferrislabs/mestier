@@ -8,6 +8,10 @@ pub enum CollectionError {
     Oversized { size: usize, limit: usize },
     #[error("invalid collection: {0}")]
     InvalidModel(String),
+    #[error("an organization holds at most 200 collections")]
+    TooMany,
+    #[error("the request body is larger than {limit} bytes")]
+    RequestTooLarge { limit: usize },
 }
 
 impl From<CollectionError> for CoreError {

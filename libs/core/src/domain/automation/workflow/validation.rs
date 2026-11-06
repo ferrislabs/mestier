@@ -12,7 +12,8 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::domain::automation::collection::{
-    COLLECTION_OPERATION_KIND, Collection, ConfigStage, ParameterIssue, check_config,
+    COLLECTION_OPERATION_KIND, Collection, ConfigStage, NESTED_EXPRESSION_FIELDS, ParameterIssue,
+    check_config,
 };
 use crate::domain::automation::connector::{ConnectorCatalogue, FieldKind};
 use crate::domain::automation::credential::Credential;
@@ -106,6 +107,12 @@ pub enum GraphError {
 
     #[error("connector `{connector_id}` sets unknown parameter `{field}`")]
     UnknownParameter { connector_id: String, field: String },
+
+    #[error("connector `{connector_id}` sets parameter `{field}` to a value the call cannot carry")]
+    InvalidParameter { connector_id: String, field: String },
+
+    #[error("connector `{connector_id}` sets parameter `{field}` twice, whatever its case")]
+    DuplicateParameter { connector_id: String, field: String },
 
     #[error("connector `{connector_id}` references unknown credential `{credential_id}`")]
     UnknownCredential {
@@ -327,6 +334,14 @@ fn validate_operation_node(
                 connector_id: connector.id.clone(),
                 field,
             },
+            ParameterIssue::InvalidValue { field } => GraphError::InvalidParameter {
+                connector_id: connector.id.clone(),
+                field,
+            },
+            ParameterIssue::Duplicate { field } => GraphError::DuplicateParameter {
+                connector_id: connector.id.clone(),
+                field,
+            },
             ParameterIssue::NotAnObject { field, got } => GraphError::FieldTypeMismatch {
                 connector_id: connector.id.clone(),
                 field: field.to_owned(),
@@ -334,6 +349,73 @@ fn validate_operation_node(
                 got,
             },
         });
+    }
+}
+
+fn nested_strings<'a>(value: &'a Value, label: &str, found: &mut Vec<(String, &'a Value)>) {
+    match value {
+        Value::String(_) => found.push((label.to_owned(), value)),
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                nested_strings(item, &format!("{label}.{index}"), found);
+            }
+        }
+        Value::Object(map) => {
+            for (key, item) in map {
+                nested_strings(item, &format!("{label}.{key}"), found);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn validate_nested_expressions(
+    connector: &PlacedConnector,
+    connector_ids: &HashSet<&str>,
+    ancestors: &HashSet<&str>,
+    loop_body: &HashSet<&str>,
+    errors: &mut Vec<GraphError>,
+) {
+    let mut found: Vec<(String, &Value)> = Vec::new();
+    for field in NESTED_EXPRESSION_FIELDS {
+        if let Some(raw @ (Value::Object(_) | Value::Array(_))) = connector.config.get(field) {
+            nested_strings(raw, field, &mut found);
+        }
+    }
+
+    for (label, raw) in found {
+        let template = match parse_template(raw) {
+            Ok(template) => template,
+            Err(error) => {
+                errors.push(GraphError::InvalidExpression {
+                    connector_id: connector.id.clone(),
+                    field: label,
+                    message: error.to_string(),
+                });
+                continue;
+            }
+        };
+        for referenced_id in template.referenced_connectors() {
+            if !connector_ids.contains(referenced_id.as_str()) {
+                errors.push(GraphError::UnknownConnectorReference {
+                    connector_id: connector.id.clone(),
+                    field: label.clone(),
+                    referenced_id,
+                });
+            } else if !ancestors.contains(referenced_id.as_str()) {
+                errors.push(GraphError::DownstreamConnectorReference {
+                    connector_id: connector.id.clone(),
+                    field: label.clone(),
+                    referenced_id,
+                });
+            }
+        }
+        if template.uses_loop() && !loop_body.contains(connector.id.as_str()) {
+            errors.push(GraphError::LoopUsedOutsideLoop {
+                connector_id: connector.id.clone(),
+                field: label,
+            });
+        }
     }
 }
 
@@ -670,6 +752,13 @@ pub fn validate_graph(
         }
 
         if connector.kind == COLLECTION_OPERATION_KIND {
+            validate_nested_expressions(
+                connector,
+                &connector_ids,
+                &ancestors,
+                &loop_body,
+                &mut errors,
+            );
             validate_operation_node(connector, collections, &mut errors);
         }
 
@@ -2802,6 +2891,216 @@ mod tests {
                         field: "headers.X-Nope".to_owned(),
                     },
                 ]
+            );
+        }
+
+        fn upstream(id: &str) -> super::super::super::graph::PlacedConnector {
+            super::super::super::graph::PlacedConnector {
+                id: id.to_string(),
+                kind: "flow.config".to_string(),
+                version: 1,
+                credential_id: None,
+                config: json!({ "variables": { "id": "x" } })
+                    .as_object()
+                    .cloned()
+                    .unwrap(),
+                name: None,
+                description: None,
+                disabled: false,
+                operation: None,
+            }
+        }
+
+        fn chain(connectors: Vec<super::super::super::graph::PlacedConnector>) -> Graph {
+            let mut graph = with_trigger(graph_of(connectors), "c0");
+            let ids: Vec<String> = graph.connectors.iter().map(|c| c.id.clone()).collect();
+            for pair in ids.windows(2) {
+                graph.edges.push(Edge {
+                    from: pair[0].clone(),
+                    to: pair[1].clone(),
+                    branch: None,
+                });
+            }
+            graph
+        }
+
+        #[test]
+        fn a_nested_reference_to_an_upstream_node_is_accepted() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({
+                        "path": { "id": "{{ connectors.c0.output.id }}" },
+                        "body": { "items": [{ "name": "{{ trigger.name }}" }] }
+                    }),
+                ),
+            ]);
+
+            assert_eq!(errors_with(&graph, &[collection()]), Vec::new());
+        }
+
+        #[test]
+        fn a_nested_reference_to_an_unknown_node_is_refused_naming_the_nested_field() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({ "path": { "id": "{{ connectors.ghost.output.id }}" } }),
+                ),
+            ]);
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::UnknownConnectorReference {
+                    connector_id: "c1".to_owned(),
+                    field: "path.id".to_owned(),
+                    referenced_id: "ghost".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_nested_reference_to_a_downstream_node_is_refused() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({
+                        "path": { "id": "1" },
+                        "body": { "items": [{ "name": "{{ connectors.c2.output.id }}" }] }
+                    }),
+                ),
+                upstream("c2"),
+            ]);
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::DownstreamConnectorReference {
+                    connector_id: "c1".to_owned(),
+                    field: "body.items.0.name".to_owned(),
+                    referenced_id: "c2".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_nested_loop_reference_outside_a_loop_is_refused() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({
+                        "path": { "id": "1" },
+                        "query": { "limit": ["a", "{{ loop.item }}"] }
+                    }),
+                ),
+            ]);
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::LoopUsedOutsideLoop {
+                    connector_id: "c1".to_owned(),
+                    field: "query.limit.1".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_nested_expression_that_does_not_parse_is_refused_with_its_field() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({
+                        "path": { "id": "1" },
+                        "headers": { "X-Trace": "{{ trigger.a + }}" }
+                    }),
+                ),
+            ]);
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert!(
+                errors.iter().any(|error| matches!(
+                    error,
+                    GraphError::InvalidExpression { connector_id, field, .. }
+                        if connector_id == "c1" && field == "headers.X-Trace"
+                )),
+                "{errors:?}"
+            );
+        }
+
+        #[test]
+        fn another_kind_keeps_not_validating_what_is_nested_in_its_fields() {
+            let mut other = upstream("c0");
+            other.config = json!({ "variables": { "a": "{{ connectors.ghost.output.id }}" } })
+                .as_object()
+                .cloned()
+                .unwrap();
+
+            assert_eq!(errors_with(&chain(vec![other]), &[]), Vec::new());
+        }
+
+        #[test]
+        fn a_dot_segment_literal_is_refused_when_saving_and_an_empty_one_is_missing() {
+            for dots in [".", ".."] {
+                let graph = graph_of_node(node("c1", json!({ "path": { "id": dots } })));
+
+                assert_eq!(
+                    errors_with(&graph, &[collection()]),
+                    vec![GraphError::InvalidParameter {
+                        connector_id: "c1".to_owned(),
+                        field: "path.id".to_owned(),
+                    }],
+                    "{dots}"
+                );
+            }
+
+            let empty = graph_of_node(node("c1", json!({ "path": { "id": "" } })));
+            assert_eq!(
+                errors_with(&empty, &[collection()]),
+                vec![GraphError::MissingParameter {
+                    connector_id: "c1".to_owned(),
+                    field: "path.id".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_header_repeated_under_another_case_is_refused_when_saving() {
+            let mut op = operation();
+            op.parameters.push(Parameter {
+                name: "X-Trace".to_owned(),
+                location: ParameterLocation::Header,
+                required: false,
+                description: String::new(),
+                schema: json!({ "type": "string" }),
+            });
+            let mut col = collection();
+            col.operations = vec![op];
+            let graph = graph_of_node(node(
+                "c1",
+                json!({
+                    "path": { "id": "1" },
+                    "headers": { "X-Trace": "a", "x-trace": "b" }
+                }),
+            ));
+
+            let errors = errors_with(&graph, &[col]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::DuplicateParameter {
+                    connector_id: "c1".to_owned(),
+                    field: "headers.x-trace".to_owned(),
+                }]
             );
         }
 

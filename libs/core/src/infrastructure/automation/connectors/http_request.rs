@@ -471,6 +471,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_literal_ipv6_target_is_refused_before_any_connection() {
+        for target in [
+            "http://[::1]:9/probe",
+            "http://[::ffff:a9fe:a9fe]/probe",
+            "http://[fd00:ec2::254]/probe",
+        ] {
+            let cfg = config(&[
+                ("method", json!("GET")),
+                ("url", json!(target)),
+                ("timeout_seconds", json!(1)),
+            ]);
+            let connector = HttpRequestConnector::new(lazy_usecase(), PrivateNetworkAccess::Denied);
+
+            let outcome = connector.execute(input(&cfg)).await;
+
+            let ConnectorOutcome::Failed { error } = outcome else {
+                panic!("expected Failed, got {outcome:?}");
+            };
+            assert!(
+                error.contains("loopback") || error.contains("metadata"),
+                "{target}: {error}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn a_private_target_reaches_the_network_when_allowed() {
         let cfg = config(&[
             ("method", json!("GET")),

@@ -1,8 +1,11 @@
+use std::collections::HashSet;
+
 use serde_json::{Map, Value};
 
 use super::model::{Collection, HttpMethod, Operation, ParameterLocation};
 
 pub const COLLECTION_OPERATION_KIND: &str = "collection.operation";
+pub const NESTED_EXPRESSION_FIELDS: [&str; 4] = ["path", "query", "headers", "body"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigStage {
@@ -16,6 +19,12 @@ pub enum ParameterIssue {
         field: String,
     },
     Unknown {
+        field: String,
+    },
+    InvalidValue {
+        field: String,
+    },
+    Duplicate {
         field: String,
     },
     NotAnObject {
@@ -51,6 +60,12 @@ fn describe_issues(issues: &[ParameterIssue]) -> String {
             ParameterIssue::Unknown { field } => {
                 format!("`{field}` is not a parameter of the operation")
             }
+            ParameterIssue::InvalidValue { field } => {
+                format!("parameter `{field}` cannot be empty, `.` or `..`")
+            }
+            ParameterIssue::Duplicate { field } => {
+                format!("`{field}` repeats a header already set, whatever its case")
+            }
             ParameterIssue::NotAnObject { field, got } => {
                 format!("`{field}` must be an object, got {got}")
             }
@@ -80,7 +95,7 @@ fn is_expression(value: &Value) -> bool {
     value.as_str().is_some_and(|text| text.contains("{{"))
 }
 
-fn path_placeholders(path: &str) -> Vec<&str> {
+pub(super) fn path_placeholders(path: &str) -> Vec<&str> {
     let mut names = Vec::new();
     let mut rest = path;
     while let Some(start) = rest.find('{') {
@@ -94,10 +109,10 @@ fn path_placeholders(path: &str) -> Vec<&str> {
     names
 }
 
-fn same_name(location: ParameterLocation, left: &str, right: &str) -> bool {
+fn normalized(location: ParameterLocation, name: &str) -> String {
     match location {
-        ParameterLocation::Header => left.eq_ignore_ascii_case(right),
-        ParameterLocation::Path | ParameterLocation::Query => left == right,
+        ParameterLocation::Header => name.to_ascii_lowercase(),
+        ParameterLocation::Path | ParameterLocation::Query => name.to_owned(),
     }
 }
 
@@ -114,13 +129,27 @@ fn declared(operation: &Operation, location: ParameterLocation) -> Vec<(&str, bo
         })
         .collect();
     if location == ParameterLocation::Path {
+        let mut known: HashSet<&str> = names.iter().map(|(name, _)| *name).collect();
         for placeholder in path_placeholders(&operation.path) {
-            if !names.iter().any(|(name, _)| *name == placeholder) {
+            if known.insert(placeholder) {
                 names.push((placeholder, true));
             }
         }
     }
     names
+}
+
+fn is_given(location: ParameterLocation, value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::String(text) => location != ParameterLocation::Path || !text.is_empty(),
+        Value::Array(items) => !items.is_empty(),
+        _ => true,
+    }
+}
+
+fn is_dot_segment(value: &Value) -> bool {
+    matches!(value.as_str(), Some(".") | Some(".."))
 }
 
 pub fn check_config(
@@ -132,8 +161,8 @@ pub fn check_config(
 
     for (location, key) in GROUPS {
         let provided = match config.get(key) {
-            None | Some(Value::Null) => Map::new(),
-            Some(Value::Object(map)) => map.clone(),
+            None | Some(Value::Null) => None,
+            Some(Value::Object(map)) => Some(map),
             Some(value) if stage == ConfigStage::Saved && is_expression(value) => continue,
             Some(value) => {
                 issues.push(ParameterIssue::NotAnObject {
@@ -144,23 +173,39 @@ pub fn check_config(
             }
         };
         let names = declared(operation, location);
+        let known: HashSet<String> = names
+            .iter()
+            .map(|(name, _)| normalized(location, name))
+            .collect();
+        let given: HashSet<String> = provided
+            .into_iter()
+            .flatten()
+            .filter(|(_, value)| is_given(location, value))
+            .map(|(name, _)| normalized(location, name))
+            .collect();
 
         for (name, required) in &names {
-            let given = provided.iter().any(|(provided_name, value)| {
-                same_name(location, name, provided_name) && !value.is_null()
-            });
-            if *required && !given {
+            if *required && !given.contains(&normalized(location, name)) {
                 issues.push(ParameterIssue::Missing {
                     field: format!("{key}.{name}"),
                 });
             }
         }
-        for provided_name in provided.keys() {
-            if !names
-                .iter()
-                .any(|(name, _)| same_name(location, name, provided_name))
-            {
+        let mut seen: HashSet<String> = HashSet::new();
+        for (provided_name, value) in provided.into_iter().flatten() {
+            let normal = normalized(location, provided_name);
+            if !known.contains(&normal) {
                 issues.push(ParameterIssue::Unknown {
+                    field: format!("{key}.{provided_name}"),
+                });
+            }
+            if location == ParameterLocation::Path && is_dot_segment(value) {
+                issues.push(ParameterIssue::InvalidValue {
+                    field: format!("{key}.{provided_name}"),
+                });
+            }
+            if !seen.insert(normal) {
+                issues.push(ParameterIssue::Duplicate {
                     field: format!("{key}.{provided_name}"),
                 });
             }
@@ -225,18 +270,22 @@ fn substitute_path(path: &str, values: &Map<String, Value>) -> Result<String, Re
 }
 
 fn pairs(
+    location: ParameterLocation,
     group: &str,
     values: Option<&Map<String, Value>>,
-    repeat_arrays: bool,
 ) -> Result<Vec<(String, String)>, RequestError> {
     let mut rendered = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
     for (name, value) in values.into_iter().flatten() {
+        if location == ParameterLocation::Header && !seen.insert(name.to_ascii_lowercase()) {
+            continue;
+        }
         let invalid = || RequestError::InvalidValue {
             field: format!("{group}.{name}"),
         };
         match value {
             Value::Null => {}
-            Value::Array(items) if repeat_arrays => {
+            Value::Array(items) if location == ParameterLocation::Query => {
                 for item in items {
                     rendered.push((name.clone(), scalar_text(item).ok_or_else(invalid)?));
                 }
@@ -271,14 +320,14 @@ pub fn build_request(
         method: operation.method,
         url: format!("{base}{path}"),
         query: pairs(
+            ParameterLocation::Query,
             "query",
             config.get("query").and_then(Value::as_object),
-            true,
         )?,
         headers: pairs(
+            ParameterLocation::Header,
             "headers",
             config.get("headers").and_then(Value::as_object),
-            false,
         )?,
         body: config.get("body").filter(|body| !body.is_null()).cloned(),
     })
@@ -561,6 +610,158 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn an_empty_path_value_counts_as_missing_and_dot_segments_are_invalid() {
+        let op = operation(
+            "/things/{id}",
+            vec![parameter("id", ParameterLocation::Path, true)],
+            false,
+        );
+
+        for stage in [ConfigStage::Saved, ConfigStage::Resolved] {
+            let empty = check_config(&op, &config(json!({ "path": { "id": "" } })), stage);
+            assert_eq!(empty, vec![missing("path.id")], "{stage:?}");
+
+            for dots in [".", ".."] {
+                let issues = check_config(&op, &config(json!({ "path": { "id": dots } })), stage);
+                assert_eq!(
+                    issues,
+                    vec![ParameterIssue::InvalidValue {
+                        field: "path.id".to_owned()
+                    }],
+                    "{dots} {stage:?}"
+                );
+            }
+
+            for fine in ["...", "a.b", ".hidden", "..x", "a..", "0"] {
+                let issues = check_config(&op, &config(json!({ "path": { "id": fine } })), stage);
+                assert_eq!(issues, Vec::new(), "{fine} {stage:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_whole_expression_in_a_path_value_is_not_judged_before_it_runs() {
+        let op = operation(
+            "/things/{id}",
+            vec![parameter("id", ParameterLocation::Path, true)],
+            false,
+        );
+
+        let issues = check_config(
+            &op,
+            &config(json!({ "path": { "id": "{{ trigger.id }}" } })),
+            ConfigStage::Saved,
+        );
+
+        assert_eq!(issues, Vec::new());
+    }
+
+    #[test]
+    fn a_dot_segment_never_reaches_the_url() {
+        let op = operation(
+            "/things/{id}",
+            vec![parameter("id", ParameterLocation::Path, true)],
+            false,
+        );
+        let col = collection("https://api.example.com", op.clone());
+
+        for dots in [".", ".."] {
+            let error =
+                build_request(&col, &op, &config(json!({ "path": { "id": dots } }))).unwrap_err();
+
+            assert!(error.to_string().contains("path.id"), "{dots}: {error}");
+        }
+        let error = build_request(&col, &op, &config(json!({ "path": { "id": "" } }))).unwrap_err();
+        assert!(error.to_string().contains("missing"), "{error}");
+    }
+
+    #[test]
+    fn an_empty_array_counts_as_missing_for_a_required_query_parameter() {
+        let op = operation(
+            "/things",
+            vec![
+                parameter("tags", ParameterLocation::Query, true),
+                parameter("more", ParameterLocation::Query, false),
+            ],
+            false,
+        );
+
+        let empty = check_config(
+            &op,
+            &config(json!({ "query": { "tags": [], "more": [] } })),
+            ConfigStage::Resolved,
+        );
+        let filled = check_config(
+            &op,
+            &config(json!({ "query": { "tags": ["a"] } })),
+            ConfigStage::Resolved,
+        );
+
+        assert_eq!(empty, vec![missing("query.tags")]);
+        assert_eq!(filled, Vec::new());
+    }
+
+    #[test]
+    fn headers_repeated_under_another_case_are_a_duplicate() {
+        let op = operation(
+            "/things",
+            vec![parameter("X-Trace", ParameterLocation::Header, false)],
+            false,
+        );
+
+        let issues = check_config(
+            &op,
+            &config(json!({ "headers": { "X-Trace": "a", "x-trace": "b" } })),
+            ConfigStage::Saved,
+        );
+
+        assert_eq!(
+            issues,
+            vec![ParameterIssue::Duplicate {
+                field: "headers.x-trace".to_owned()
+            }]
+        );
+        assert!(
+            RequestError::Parameters(issues)
+                .to_string()
+                .contains("headers.x-trace")
+        );
+    }
+
+    #[test]
+    fn rendering_headers_keeps_the_first_of_two_names_that_differ_only_by_case() {
+        let values = config(json!({ "X-Trace": "first", "x-trace": "second", "X-Other": "o" }));
+
+        let rendered = pairs(ParameterLocation::Header, "headers", Some(&values)).unwrap();
+
+        assert_eq!(rendered.len(), 2);
+        assert!(rendered.iter().any(|(_, value)| value == "o"));
+        let traces: Vec<&String> = rendered
+            .iter()
+            .filter(|(name, _)| name.eq_ignore_ascii_case("x-trace"))
+            .map(|(_, value)| value)
+            .collect();
+        assert_eq!(traces.len(), 1);
+    }
+
+    #[test]
+    fn a_full_hundred_parameter_operation_is_checked_in_one_pass() {
+        let parameters: Vec<Parameter> = (0..100)
+            .map(|n| parameter(&format!("p{n}"), ParameterLocation::Query, true))
+            .collect();
+        let op = operation("/things", parameters, false);
+        let given: Map<String, Value> = (0..100).map(|n| (format!("p{n}"), json!(n))).collect();
+
+        let issues = check_config(
+            &op,
+            &config(json!({ "query": Value::Object(given) })),
+            ConfigStage::Resolved,
+        );
+
+        assert_eq!(issues, Vec::new());
     }
 
     #[test]

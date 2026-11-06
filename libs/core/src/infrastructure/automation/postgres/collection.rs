@@ -7,8 +7,8 @@ use uuid::Uuid;
 use crate::{
     domain::automation::{
         collection::{
-            Collection, CollectionSource, CollectionSummary, CollectionVersion, Operation,
-            SecurityScheme,
+            Collection, CollectionDetail, CollectionSource, CollectionSummary, CollectionVersion,
+            MAX_HISTORY_ENTRIES, Operation, SecurityScheme,
         },
         ports::CollectionRepository,
     },
@@ -48,7 +48,6 @@ struct SummaryRow {
     slug: String,
     title: String,
     version: String,
-    description: String,
     base_url: String,
     source_kind: String,
     source_value: String,
@@ -62,6 +61,35 @@ struct VersionRow {
     imported_at: DateTime<Utc>,
     source_kind: String,
     source_value: String,
+    base_url: String,
+    security: Value,
+}
+
+struct DetailRow {
+    id: Uuid,
+    org_id: Uuid,
+    slug: String,
+    title: String,
+    version: String,
+    description: String,
+    base_url: String,
+    source_kind: String,
+    source_value: String,
+    imported_at: DateTime<Utc>,
+    security: Value,
+    operations: Value,
+    schemas: Value,
+    history: Value,
+}
+
+#[derive(serde::Deserialize)]
+struct HistoryJson {
+    version: String,
+    imported_at: DateTime<Utc>,
+    source_kind: String,
+    source_value: String,
+    base_url: String,
+    security: Value,
 }
 
 fn corrupt(what: &str, error: impl std::fmt::Display) -> CoreError {
@@ -113,7 +141,6 @@ impl TryFrom<SummaryRow> for CollectionSummary {
             slug: row.slug,
             title: row.title,
             version: row.version,
-            description: row.description,
             base_url: row.base_url,
             source: source_of(&row.source_kind, row.source_value)?,
             imported_at: row.imported_at,
@@ -131,8 +158,63 @@ impl TryFrom<VersionRow> for CollectionVersion {
             version: row.version,
             imported_at: row.imported_at,
             source: source_of(&row.source_kind, row.source_value)?,
+            base_url: row.base_url,
+            security: serde_json::from_value(row.security)
+                .map_err(|error| corrupt("history security", error))?,
         })
     }
+}
+
+impl TryFrom<HistoryJson> for CollectionVersion {
+    type Error = CoreError;
+
+    fn try_from(row: HistoryJson) -> Result<Self, Self::Error> {
+        VersionRow {
+            version: row.version,
+            imported_at: row.imported_at,
+            source_kind: row.source_kind,
+            source_value: row.source_value,
+            base_url: row.base_url,
+            security: row.security,
+        }
+        .try_into()
+    }
+}
+
+impl TryFrom<DetailRow> for CollectionDetail {
+    type Error = CoreError;
+
+    fn try_from(row: DetailRow) -> Result<Self, Self::Error> {
+        let history: Vec<HistoryJson> =
+            serde_json::from_value(row.history).map_err(|error| corrupt("history", error))?;
+        let collection = Collection::try_from(CollectionRow {
+            id: row.id,
+            org_id: row.org_id,
+            slug: row.slug,
+            title: row.title,
+            version: row.version,
+            description: row.description,
+            base_url: row.base_url,
+            source_kind: row.source_kind,
+            source_value: row.source_value,
+            imported_at: row.imported_at,
+            security: row.security,
+            operations: row.operations,
+            schemas: row.schemas,
+        })?;
+
+        Ok(Self {
+            collection,
+            history: history
+                .into_iter()
+                .map(CollectionVersion::try_from)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+fn history_limit() -> i64 {
+    i64::try_from(MAX_HISTORY_ENTRIES).unwrap_or(i64::MAX)
 }
 
 struct Stored {
@@ -263,6 +345,64 @@ impl<'tx> CollectionRepository for PgCollectionRepository<'tx> {
         rows.into_iter().map(Collection::try_from).collect()
     }
 
+    async fn find_detail(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> Result<Option<CollectionDetail>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            DetailRow,
+            r#"SELECT c.id, c.org_id, c.slug, c.title, c.version, c.description, c.base_url,
+                      c.source_kind, c.source_value, c.imported_at, c.security,
+                      c.operations, c.schemas,
+                      COALESCE((
+                          SELECT jsonb_agg(
+                                     jsonb_build_object(
+                                         'version', recent.version,
+                                         'imported_at', recent.imported_at,
+                                         'source_kind', recent.source_kind,
+                                         'source_value', recent.source_value,
+                                         'base_url', recent.base_url,
+                                         'security', recent.security
+                                     )
+                                     ORDER BY recent.id DESC
+                                 )
+                          FROM (
+                              SELECT v.id, v.version, v.imported_at, v.source_kind,
+                                     v.source_value, v.base_url, v.security
+                              FROM automation.collection_version v
+                              WHERE v.collection_id = c.id
+                              ORDER BY v.id DESC
+                              LIMIT $3
+                          ) recent
+                      ), '[]'::jsonb) AS "history!"
+               FROM automation.collection c
+               WHERE c.org_id = $1 AND c.id = $2"#,
+            org_id.0,
+            id,
+            history_limit(),
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(CollectionDetail::try_from).transpose()
+    }
+
+    async fn count_by_organization(&mut self, org_id: OrganizationId) -> Result<i64, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let count = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM automation.collection WHERE org_id = $1"#,
+            org_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(count)
+    }
+
     async fn list_by_organization(
         &mut self,
         org_id: OrganizationId,
@@ -270,7 +410,7 @@ impl<'tx> CollectionRepository for PgCollectionRepository<'tx> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             SummaryRow,
-            r#"SELECT id, org_id, slug, title, version, description, base_url,
+            r#"SELECT id, org_id, slug, title, version, base_url,
                       source_kind, source_value, imported_at, security,
                       jsonb_array_length(operations) AS "operation_count!"
                FROM automation.collection
@@ -293,13 +433,16 @@ impl<'tx> CollectionRepository for PgCollectionRepository<'tx> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             VersionRow,
-            r#"SELECT v.version, v.imported_at, v.source_kind, v.source_value
+            r#"SELECT v.version, v.imported_at, v.source_kind, v.source_value,
+                      v.base_url, v.security
                FROM automation.collection_version v
                JOIN automation.collection c ON c.id = v.collection_id
                WHERE c.org_id = $1 AND c.id = $2
-               ORDER BY v.id DESC"#,
+               ORDER BY v.id DESC
+               LIMIT $3"#,
             org_id.0,
             id,
+            history_limit(),
         )
         .fetch_all(&mut ***tx)
         .await
@@ -314,7 +457,7 @@ impl<'tx> CollectionRepository for PgCollectionRepository<'tx> {
 
         let previous = sqlx::query_as!(
             VersionRow,
-            r#"SELECT version, imported_at, source_kind, source_value
+            r#"SELECT version, imported_at, source_kind, source_value, base_url, security
                FROM automation.collection
                WHERE org_id = $1 AND id = $2
                FOR UPDATE"#,
@@ -328,13 +471,16 @@ impl<'tx> CollectionRepository for PgCollectionRepository<'tx> {
 
         sqlx::query!(
             r#"INSERT INTO automation.collection_version
-                   (collection_id, version, imported_at, source_kind, source_value)
-               VALUES ($1, $2, $3, $4, $5)"#,
+                   (collection_id, version, imported_at, source_kind, source_value,
+                    base_url, security)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
             collection.id,
             previous.version,
             previous.imported_at,
             previous.source_kind,
             previous.source_value,
+            previous.base_url,
+            previous.security,
         )
         .execute(&mut ***tx)
         .await
@@ -721,6 +867,174 @@ mod tests {
         let history = history_of(&pool, org_id, first.id).await;
         assert_eq!(history, vec![second.version_entry(), first.version_entry()]);
         assert_eq!(find(&pool, org_id, first.id).await, Some(third));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn replacing_keeps_the_replaced_versions_base_url_and_security_in_the_history() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "collection-history-fields").await;
+        let first = insert(&pool, &collection(org_id, "Adresses", "adresses"))
+            .await
+            .unwrap();
+        let mut second = first.clone();
+        second.version = "2.0.0".to_owned();
+        second.base_url = "https://api.example.com/v2".to_owned();
+        second.security = Vec::new();
+        with_tx(&pool, async |tx| {
+            let mut repo = PgCollectionRepository::new(&tx);
+            repo.replace(&second).await
+        })
+        .await
+        .unwrap();
+
+        let history = history_of(&pool, org_id, first.id).await;
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].base_url, "https://api.example.com/v1");
+        assert_eq!(history[0].security, first.security);
+        assert_eq!(history[0], first.version_entry());
+    }
+
+    async fn replace_n_times(pool: &PgPool, first: &Collection, count: usize) -> Collection {
+        let mut current = first.clone();
+        for n in 1..=count {
+            current.version = format!("{n}");
+            current.imported_at = now_storable();
+            current = with_tx(pool, async |tx| {
+                let mut repo = PgCollectionRepository::new(&tx);
+                repo.replace(&current).await
+            })
+            .await
+            .unwrap();
+        }
+        current
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_history_read_keeps_the_fifty_latest_versions_while_the_table_keeps_all() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "collection-history-cap").await;
+        let mut first = collection(org_id, "Adresses", "adresses");
+        first.version = "0".to_owned();
+        let first = insert(&pool, &first).await.unwrap();
+
+        replace_n_times(&pool, &first, 55).await;
+
+        let history = history_of(&pool, org_id, first.id).await;
+        let versions: Vec<&str> = history.iter().map(|entry| entry.version.as_str()).collect();
+        assert_eq!(versions.len(), 50);
+        assert_eq!(versions.first(), Some(&"54"));
+        assert_eq!(versions.last(), Some(&"5"));
+        let stored: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM automation.collection_version WHERE collection_id = $1",
+        )
+        .bind(first.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(stored, 55);
+        let detail = with_tx(&pool, async |tx| {
+            let mut repo = PgCollectionRepository::new(&tx);
+            repo.find_detail(org_id, first.id).await
+        })
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(detail.history, history);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn collections_are_counted_per_organization() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "collection-count").await;
+        let other = seed_organization(&pool, "collection-count-other").await;
+        insert(&pool, &collection(org_id, "One", "one"))
+            .await
+            .unwrap();
+        insert(&pool, &collection(org_id, "Two", "two"))
+            .await
+            .unwrap();
+        insert(&pool, &collection(other, "Three", "three"))
+            .await
+            .unwrap();
+
+        let (mine, theirs, nobody) = with_tx(&pool, async |tx| {
+            let mut repo = PgCollectionRepository::new(&tx);
+            let mine = repo.count_by_organization(org_id).await?;
+            let theirs = repo.count_by_organization(other).await?;
+            let nobody = repo
+                .count_by_organization(OrganizationId(Uuid::from_u128(5)))
+                .await?;
+            Ok::<_, CoreError>((mine, theirs, nobody))
+        })
+        .await
+        .unwrap();
+
+        assert_eq!((mine, theirs, nobody), (2, 1, 0));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_detail_is_the_collection_and_its_history_and_never_crosses_organizations() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "collection-detail").await;
+        let stranger = seed_organization(&pool, "collection-detail-stranger").await;
+        let first = insert(&pool, &collection(org_id, "Adresses", "adresses"))
+            .await
+            .unwrap();
+        let latest = replace_n_times(&pool, &first, 3).await;
+
+        let (mine, theirs) = with_tx(&pool, async |tx| {
+            let mut repo = PgCollectionRepository::new(&tx);
+            let mine = repo.find_detail(org_id, first.id).await?;
+            let theirs = repo.find_detail(stranger, first.id).await?;
+            Ok::<_, CoreError>((mine, theirs))
+        })
+        .await
+        .unwrap();
+
+        let detail = mine.expect("the owner reads it");
+        assert_eq!(detail.collection, latest);
+        assert_eq!(detail.history, history_of(&pool, org_id, first.id).await);
+        assert_eq!(detail.history.len(), 3);
+        assert_eq!(theirs, None);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[ignore = "requires live postgres"]
+    async fn a_detail_read_during_replacements_always_sees_one_consistent_snapshot() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "collection-snapshot").await;
+        let mut first = collection(org_id, "Adresses", "adresses");
+        first.version = "0".to_owned();
+        let first = insert(&pool, &first).await.unwrap();
+
+        let writer = async {
+            replace_n_times(&pool, &first, 40).await;
+        };
+        let reader = async {
+            let mut inconsistent = Vec::new();
+            for _ in 0..300 {
+                let detail = with_tx(&pool, async |tx| {
+                    let mut repo = PgCollectionRepository::new(&tx);
+                    repo.find_detail(org_id, first.id).await
+                })
+                .await
+                .unwrap()
+                .unwrap();
+                let version: usize = detail.collection.version.parse().unwrap();
+                if detail.history.len() != version {
+                    inconsistent.push((version, detail.history.len()));
+                }
+            }
+            inconsistent
+        };
+        let (_, inconsistent) = tokio::join!(writer, reader);
+
+        assert_eq!(inconsistent, Vec::new());
     }
 
     #[tokio::test]

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, slug, title, version, description, base_url,\n                      source_kind, source_value, imported_at, security,\n                      jsonb_array_length(operations) AS \"operation_count!\"\n               FROM automation.collection\n               WHERE org_id = $1\n               ORDER BY lower(title), id",
+  "query": "SELECT id, org_id, slug, title, version, base_url,\n                      source_kind, source_value, imported_at, security,\n                      jsonb_array_length(operations) AS \"operation_count!\"\n               FROM automation.collection\n               WHERE org_id = $1\n               ORDER BY lower(title), id",
   "describe": {
     "columns": [
       {
@@ -30,36 +30,31 @@
       },
       {
         "ordinal": 5,
-        "name": "description",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
         "name": "base_url",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "source_kind",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "source_value",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "imported_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 9,
         "name": "security",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 11,
+        "ordinal": 10,
         "name": "operation_count!",
         "type_info": "Int4"
       }
@@ -80,9 +75,8 @@
       false,
       false,
       false,
-      false,
       null
     ]
   },
-  "hash": "c4f9e0d68955b3b8c23d6bfdc23bc436e7523cd9837c1b02a6731c5c55b405ca"
+  "hash": "8c9e5de7ffd5b8c75fda81cd90ae078488d69200cfda6357da44ee8cc1ff2726"
 }

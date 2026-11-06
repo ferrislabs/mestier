@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
+use super::address::{cleaned_source_url, normalized_base_url};
 use super::error::CollectionError;
+use super::operation::path_placeholders;
 
 pub const MAX_COLLECTION_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_COLLECTION_TITLE_LENGTH: usize = 200;
@@ -14,6 +16,20 @@ pub const MAX_COLLECTION_VERSION_LENGTH: usize = 100;
 pub const MAX_COLLECTION_URL_LENGTH: usize = 2048;
 pub const MAX_COLLECTION_FILE_NAME_LENGTH: usize = 255;
 pub const MAX_OPERATION_ID_LENGTH: usize = 200;
+pub const MAX_COLLECTION_OPERATIONS: usize = 1000;
+pub const MAX_OPERATION_PARAMETERS: usize = 100;
+pub const MAX_OPERATION_PATH_LENGTH: usize = 2048;
+pub const MAX_PATH_PLACEHOLDERS: usize = 32;
+pub const MAX_COLLECTION_DESCRIPTION_LENGTH: usize = 10_000;
+pub const MAX_COLLECTIONS_PER_ORGANIZATION: usize = 200;
+pub const MAX_HISTORY_ENTRIES: usize = 50;
+pub const TRANSPORT_HEADERS: [&str; 5] = [
+    "host",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "proxy-authorization",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -208,22 +224,37 @@ fn check_text(
     Ok(())
 }
 
-fn check_source(source: &CollectionSource) -> Result<(), CollectionError> {
+fn check_source(source: CollectionSource) -> Result<CollectionSource, CollectionError> {
     match source {
         CollectionSource::Url { url } => {
-            check_text("source url", url.trim(), MAX_COLLECTION_URL_LENGTH, false)
+            check_text("source url", url.trim(), MAX_COLLECTION_URL_LENGTH, false)?;
+            Ok(CollectionSource::Url {
+                url: cleaned_source_url(&url).map_err(invalid)?,
+            })
         }
-        CollectionSource::File { file_name } => check_text(
-            "source file name",
-            file_name.trim(),
-            MAX_COLLECTION_FILE_NAME_LENGTH,
-            false,
-        ),
+        CollectionSource::File { file_name } => {
+            check_text(
+                "source file name",
+                file_name.trim(),
+                MAX_COLLECTION_FILE_NAME_LENGTH,
+                false,
+            )?;
+            Ok(CollectionSource::File { file_name })
+        }
     }
 }
 
+fn check_transport_header(name: &str, owner: &str) -> Result<(), CollectionError> {
+    if TRANSPORT_HEADERS.contains(&name.trim().to_ascii_lowercase().as_str()) {
+        return Err(invalid(format!(
+            "{owner} cannot use the header `{name}`, which belongs to the transport"
+        )));
+    }
+    Ok(())
+}
+
 fn check_operation(operation: &Operation) -> Result<(), CollectionError> {
-    let id = operation.id.trim();
+    let id = operation.id.as_str();
     if id.is_empty() {
         return Err(invalid("an operation id cannot be empty"));
     }
@@ -238,12 +269,30 @@ fn check_operation(operation: &Operation) -> Result<(), CollectionError> {
             operation.path
         )));
     }
+    if operation.path.chars().count() > MAX_OPERATION_PATH_LENGTH {
+        return Err(invalid(format!(
+            "operation `{id}` has a path longer than {MAX_OPERATION_PATH_LENGTH} characters"
+        )));
+    }
+    if path_placeholders(&operation.path).len() > MAX_PATH_PLACEHOLDERS {
+        return Err(invalid(format!(
+            "operation `{id}` has a path with more than {MAX_PATH_PLACEHOLDERS} placeholders"
+        )));
+    }
+    if operation.parameters.len() > MAX_OPERATION_PARAMETERS {
+        return Err(invalid(format!(
+            "operation `{id}` declares more than {MAX_OPERATION_PARAMETERS} parameters"
+        )));
+    }
     let mut seen: HashSet<(ParameterLocation, &str)> = HashSet::new();
     for parameter in &operation.parameters {
         if parameter.name.trim().is_empty() {
             return Err(invalid(format!(
                 "operation `{id}` has a parameter with no name"
             )));
+        }
+        if parameter.location == ParameterLocation::Header {
+            check_transport_header(&parameter.name, &format!("operation `{id}`"))?;
         }
         if !seen.insert((parameter.location, parameter.name.as_str())) {
             return Err(invalid(format!(
@@ -252,6 +301,43 @@ fn check_operation(operation: &Operation) -> Result<(), CollectionError> {
                 parameter.name
             )));
         }
+    }
+    Ok(())
+}
+
+fn contains_nul(value: &Value) -> bool {
+    match value {
+        Value::String(text) => text.contains('\0'),
+        Value::Array(items) => items.iter().any(contains_nul),
+        Value::Object(map) => map
+            .iter()
+            .any(|(key, value)| key.contains('\0') || contains_nul(value)),
+        _ => false,
+    }
+}
+
+fn check_no_nul(input: &CollectionDraftInput) -> Result<(), CollectionError> {
+    let plain = [
+        &input.title,
+        &input.version,
+        &input.description,
+        &input.base_url,
+        match &input.source {
+            CollectionSource::Url { url } => url,
+            CollectionSource::File { file_name } => file_name,
+        },
+    ];
+    let hidden = plain.iter().any(|text| text.contains('\0'))
+        || input
+            .schemas
+            .iter()
+            .any(|(key, value)| key.contains('\0') || contains_nul(value))
+        || serde_json::to_value(&input.operations).is_ok_and(|value| contains_nul(&value))
+        || serde_json::to_value(&input.security).is_ok_and(|value| contains_nul(&value));
+    if hidden {
+        return Err(invalid(
+            "the model cannot contain a NUL character (\\u0000)",
+        ));
     }
     Ok(())
 }
@@ -265,19 +351,36 @@ impl CollectionDraft {
                 limit: MAX_COLLECTION_BYTES,
             });
         }
+        check_no_nul(&input)?;
 
         let title = input.title.trim().to_owned();
         check_text("title", &title, MAX_COLLECTION_TITLE_LENGTH, false)?;
         let version = input.version.trim().to_owned();
         check_text("version", &version, MAX_COLLECTION_VERSION_LENGTH, false)?;
+        check_text(
+            "description",
+            &input.description,
+            MAX_COLLECTION_DESCRIPTION_LENGTH,
+            true,
+        )?;
         check_text("base url", &input.base_url, MAX_COLLECTION_URL_LENGTH, true)?;
-        check_source(&input.source)?;
+        let base_url = normalized_base_url(&input.base_url).map_err(invalid)?;
+        let source = check_source(input.source)?;
 
         if input.operations.is_empty() {
             return Err(invalid("a collection needs at least one operation"));
         }
+        if input.operations.len() > MAX_COLLECTION_OPERATIONS {
+            return Err(invalid(format!(
+                "a collection holds at most {MAX_COLLECTION_OPERATIONS} operations"
+            )));
+        }
+        let mut operations = input.operations;
+        for operation in &mut operations {
+            operation.id = operation.id.trim().to_owned();
+        }
         let mut operation_ids: HashSet<&str> = HashSet::new();
-        for operation in &input.operations {
+        for operation in &operations {
             check_operation(operation)?;
             if !operation_ids.insert(operation.id.as_str()) {
                 return Err(invalid(format!(
@@ -292,6 +395,12 @@ impl CollectionDraft {
             if scheme.name.trim().is_empty() {
                 return Err(invalid("a security scheme needs a name"));
             }
+            if let SecurityKind::ApiKey { parameter_name, .. } = &scheme.kind {
+                check_transport_header(
+                    parameter_name,
+                    &format!("security scheme `{}`", scheme.name),
+                )?;
+            }
             if !scheme_names.insert(scheme.name.as_str()) {
                 return Err(invalid(format!(
                     "security scheme `{}` is declared more than once",
@@ -304,10 +413,10 @@ impl CollectionDraft {
             title,
             version,
             description: input.description,
-            base_url: input.base_url,
-            source: input.source,
+            base_url,
+            source,
             security: input.security,
-            operations: input.operations,
+            operations,
             schemas: input.schemas,
         })
     }
@@ -329,11 +438,13 @@ pub struct Collection {
     pub schemas: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CollectionVersion {
     pub version: String,
     pub imported_at: DateTime<Utc>,
     pub source: CollectionSource,
+    pub base_url: String,
+    pub security: Vec<SecurityScheme>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -349,7 +460,6 @@ pub struct CollectionSummary {
     pub slug: String,
     pub title: String,
     pub version: String,
-    pub description: String,
     pub base_url: String,
     pub source: CollectionSource,
     pub imported_at: DateTime<Utc>,
@@ -409,6 +519,8 @@ impl Collection {
             version: self.version.clone(),
             imported_at: self.imported_at,
             source: self.source.clone(),
+            base_url: self.base_url.clone(),
+            security: self.security.clone(),
         }
     }
 }
@@ -663,6 +775,276 @@ mod tests {
             CollectionDraft::new(candidate),
             Err(CollectionError::Oversized { .. })
         ));
+    }
+
+    fn invalid_with(mutate: impl FnOnce(&mut CollectionDraftInput)) -> String {
+        let mut candidate = input();
+        mutate(&mut candidate);
+        invalid_reason(candidate)
+    }
+
+    #[test]
+    fn a_base_url_is_trimmed_and_must_be_a_plain_http_or_https_address() {
+        let mut candidate = input();
+        candidate.base_url = "  https://api.example.com/v1/  ".to_owned();
+        assert_eq!(
+            CollectionDraft::new(candidate).unwrap().base_url,
+            "https://api.example.com/v1/"
+        );
+
+        for refused in [
+            "ftp://files.example.com",
+            "/v1",
+            "not a url",
+            "https://{region}.example.com",
+            "https://user:secret@api.example.com",
+            "https://user@api.example.com",
+            "https://api.example.com/v1?key=1",
+            "https://api.example.com/v1?",
+            "https://api.example.com/v1#section",
+            "https://",
+        ] {
+            let reason = invalid_with(|candidate| candidate.base_url = refused.to_owned());
+
+            assert!(reason.contains("base url"), "{refused}: {reason}");
+        }
+    }
+
+    #[test]
+    fn a_blank_base_url_is_kept_empty() {
+        let mut candidate = input();
+        candidate.base_url = "   ".to_owned();
+
+        assert_eq!(CollectionDraft::new(candidate).unwrap().base_url, "");
+    }
+
+    #[test]
+    fn the_source_url_loses_its_query_fragment_and_credentials_before_storage() {
+        let mut candidate = input();
+        candidate.source = CollectionSource::Url {
+            url: "https://bot:secret@api.example.com/openapi.json?token=abc&v=2#top".to_owned(),
+        };
+
+        let draft = CollectionDraft::new(candidate).unwrap();
+
+        assert_eq!(
+            draft.source,
+            CollectionSource::Url {
+                url: "https://api.example.com/openapi.json".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn a_source_url_that_is_not_an_http_address_is_refused() {
+        for refused in [
+            "javascript:alert(1)",
+            "not a url",
+            "ftp://x.example.com/spec",
+        ] {
+            let reason = invalid_with(|candidate| {
+                candidate.source = CollectionSource::Url {
+                    url: refused.to_owned(),
+                };
+            });
+
+            assert!(reason.contains("source"), "{refused}: {reason}");
+        }
+    }
+
+    #[test]
+    fn operation_ids_are_stored_trimmed_and_compared_trimmed() {
+        let mut candidate = input();
+        candidate.operations = vec![operation("  list  ")];
+        let draft = CollectionDraft::new(candidate).unwrap();
+        assert_eq!(draft.operations[0].id, "list");
+
+        let reason = invalid_with(|candidate| {
+            candidate.operations = vec![operation("list"), operation(" list ")];
+        });
+        assert!(reason.contains("list"), "{reason}");
+    }
+
+    fn hide_nul(candidate: &mut CollectionDraftInput, place: &str) {
+        let nul = "bad\u{0}value";
+        match place {
+            "title" => candidate.title = nul.to_owned(),
+            "description" => candidate.description = nul.to_owned(),
+            "version" => candidate.version = nul.to_owned(),
+            "schema value" => {
+                candidate
+                    .schemas
+                    .insert("A".to_owned(), json!({ "x": [{ "description": nul }] }));
+            }
+            "schema key" => {
+                candidate.schemas.insert(nul.to_owned(), json!({}));
+            }
+            "summary" => candidate.operations[0].summary = nul.to_owned(),
+            "body schema" => {
+                candidate.operations[0].request_body = Some(RequestBody {
+                    schema: json!({ "enum": [nul] }),
+                });
+            }
+            other => panic!("unknown place {other}"),
+        }
+    }
+
+    #[test]
+    fn a_nul_character_is_refused_wherever_it_hides() {
+        for place in [
+            "title",
+            "description",
+            "version",
+            "schema value",
+            "schema key",
+            "summary",
+            "body schema",
+        ] {
+            let reason = invalid_with(|candidate| hide_nul(candidate, place));
+
+            assert!(reason.contains("NUL"), "{place}: {reason}");
+        }
+    }
+
+    #[test]
+    fn a_backslash_followed_by_u0000_text_is_not_a_nul() {
+        let mut candidate = input();
+        candidate.description = "the escape \\u0000 written out".to_owned();
+
+        assert!(CollectionDraft::new(candidate).is_ok());
+    }
+
+    #[test]
+    fn a_collection_holds_at_most_a_thousand_operations() {
+        let many = |count: usize| (0..count).map(|n| operation(&format!("op{n}"))).collect();
+
+        let mut at_the_limit = input();
+        at_the_limit.operations = many(1000);
+        assert!(CollectionDraft::new(at_the_limit).is_ok());
+
+        let reason = invalid_with(|candidate| candidate.operations = many(1001));
+        assert!(reason.contains("1000"), "{reason}");
+    }
+
+    fn parameter_named(name: String) -> Parameter {
+        Parameter {
+            name,
+            location: ParameterLocation::Query,
+            required: false,
+            description: String::new(),
+            schema: Value::Null,
+        }
+    }
+
+    #[test]
+    fn an_operation_holds_at_most_a_hundred_parameters() {
+        let mut at_the_limit = input();
+        at_the_limit.operations[0].parameters =
+            (0..100).map(|n| parameter_named(format!("p{n}"))).collect();
+        assert!(CollectionDraft::new(at_the_limit).is_ok());
+
+        let reason = invalid_with(|candidate| {
+            candidate.operations[0].parameters =
+                (0..101).map(|n| parameter_named(format!("p{n}"))).collect();
+        });
+        assert!(
+            reason.contains("100") && reason.contains("list"),
+            "{reason}"
+        );
+    }
+
+    #[test]
+    fn a_path_holds_at_most_2048_characters_and_32_placeholders() {
+        let mut long_enough = input();
+        long_enough.operations[0].path = format!("/{}", "a".repeat(2047));
+        assert!(CollectionDraft::new(long_enough).is_ok());
+
+        let reason = invalid_with(|candidate| {
+            candidate.operations[0].path = format!("/{}", "a".repeat(2048));
+        });
+        assert!(reason.contains("2048"), "{reason}");
+
+        let placeholders =
+            |count: usize| (0..count).map(|n| format!("/{{p{n}}}")).collect::<String>();
+        let mut at_the_limit = input();
+        at_the_limit.operations[0].path = placeholders(32);
+        assert!(CollectionDraft::new(at_the_limit).is_ok());
+
+        let reason = invalid_with(|candidate| {
+            candidate.operations[0].path = placeholders(33);
+        });
+        assert!(reason.contains("32"), "{reason}");
+    }
+
+    #[test]
+    fn a_description_holds_at_most_ten_thousand_characters() {
+        let mut at_the_limit = input();
+        at_the_limit.description = "é".repeat(10_000);
+        assert!(CollectionDraft::new(at_the_limit).is_ok());
+
+        let reason = invalid_with(|candidate| candidate.description = "é".repeat(10_001));
+        assert!(
+            reason.contains("description") && reason.contains("10000"),
+            "{reason}"
+        );
+    }
+
+    #[test]
+    fn the_headers_the_transport_owns_cannot_be_declared() {
+        for name in [
+            "Host",
+            "content-length",
+            "Transfer-Encoding",
+            "CONNECTION",
+            "Proxy-Authorization",
+        ] {
+            let reason = invalid_with(|candidate| {
+                candidate.operations[0].parameters = vec![Parameter {
+                    name: name.to_owned(),
+                    location: ParameterLocation::Header,
+                    required: false,
+                    description: String::new(),
+                    schema: Value::Null,
+                }];
+            });
+            assert!(reason.contains(name), "{name}: {reason}");
+
+            let reason = invalid_with(|candidate| {
+                candidate.security = vec![SecurityScheme {
+                    name: "key".to_owned(),
+                    kind: SecurityKind::ApiKey {
+                        location: ApiKeyLocation::Header,
+                        parameter_name: name.to_owned(),
+                    },
+                }];
+            });
+            assert!(reason.contains(name), "{name}: {reason}");
+        }
+
+        let mut fine = input();
+        fine.operations[0].parameters = vec![Parameter {
+            name: "X-Trace".to_owned(),
+            location: ParameterLocation::Header,
+            required: false,
+            description: String::new(),
+            schema: Value::Null,
+        }];
+        fine.security = vec![SecurityScheme {
+            name: "key".to_owned(),
+            kind: SecurityKind::ApiKey {
+                location: ApiKeyLocation::Header,
+                parameter_name: "X-API-Key".to_owned(),
+            },
+        }];
+        assert!(CollectionDraft::new(fine).is_ok());
+    }
+
+    #[test]
+    fn a_query_parameter_may_share_a_name_with_a_forbidden_header() {
+        let mut candidate = input();
+        candidate.operations[0].parameters = vec![parameter_named("host".to_owned())];
+
+        assert!(CollectionDraft::new(candidate).is_ok());
     }
 
     #[test]

@@ -270,6 +270,42 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
+    async fn a_credential_pointing_at_a_literal_ipv6_address_is_refused_before_any_call() {
+        let pool = make_pool().await;
+        let usecase = usecase_with_cipher(pool.clone());
+        for (index, (base_url, reason)) in [
+            ("http://[::1]:9", "loopback"),
+            ("http://[::ffff:a9fe:a9fe]", "metadata"),
+            ("http://[fd00:ec2::254]", "metadata"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let org_id = seed_organization(&pool, &format!("odoo-ipv6-{index}")).await;
+            let credential_id = seed_odoo_credential(&usecase, org_id, base_url).await;
+            let cfg = config(&[("name", json!("Ada"))]);
+            let connector =
+                OdooCreatePartnerConnector::new(usecase.clone(), PrivateNetworkAccess::Denied);
+
+            let outcome = connector
+                .execute(ConnectorInput {
+                    org_id,
+                    run_id: Uuid::from_u128(2),
+                    config: &cfg,
+                    credential_id: Some(credential_id),
+                    operation: None,
+                })
+                .await;
+
+            let ConnectorOutcome::Failed { error } = outcome else {
+                panic!("expected Failed, got {outcome:?}");
+            };
+            assert!(error.contains(reason), "{base_url}: {error}");
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
     async fn a_rejected_credential_names_it() {
         let pool = make_pool().await;
         let org_id = seed_organization(&pool, "odoo-bad-credential").await;

@@ -10,13 +10,14 @@ use uuid::Uuid;
 use crate::{
     application::MestierUseCase,
     domain::automation::{
+        collection::{COLLECTION_OPERATION_KIND, NESTED_EXPRESSION_FIELDS},
         expression::ExpressionContext,
         ports::{AutomationSettingsRepository, RunRepository, WorkflowRepository},
         run::{
             ConnectorInput, ConnectorOutcome, DueRun, LoopStackEntry, Run, RunOverview,
             RunSettlement, RunStatus, RunStep, StepStatus, branch_targets, connectors_by_id,
             descendants_via, disabled_outcome, format_iteration_path, pass_through_output,
-            resolve_config, roots,
+            resolve_config, resolve_config_nested, roots,
         },
         settings::with_jitter,
         workflow::{Branch, Graph, PlacedConnector},
@@ -586,7 +587,11 @@ impl MestierUseCase {
                 loop_frame,
                 now,
             };
-            let resolved = resolve_config(&placed.config, &ctx);
+            let resolved = if placed.kind == COLLECTION_OPERATION_KIND {
+                resolve_config_nested(&placed.config, &ctx, &NESTED_EXPRESSION_FIELDS)
+            } else {
+                resolve_config(&placed.config, &ctx)
+            };
 
             let in_flight = RunStep {
                 id: generate_uuid_v7(),
@@ -2945,6 +2950,7 @@ mod tests {
                 .start_run(org_id, workflow_id, json!({}))
                 .await
                 .unwrap();
+            make_run_due_now(&pool, first).await;
             usecase
                 .run_engine_pass(&connectors, "worker-1", generous_schedule())
                 .await
@@ -2961,6 +2967,7 @@ mod tests {
                 .start_run(org_id, workflow_id, json!({}))
                 .await
                 .unwrap();
+            make_run_due_now(&pool, second).await;
             usecase
                 .run_engine_pass(&connectors, "worker-1", generous_schedule())
                 .await
@@ -2973,6 +2980,96 @@ mod tests {
             assert_eq!(output["body"], json!({ "street": "x" }));
             let paths: Vec<String> = server.requests().into_iter().map(|r| r.path).collect();
             assert_eq!(paths, ["/addresses/7", "/v2/places/7"]);
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn expressions_nested_in_the_node_are_resolved_for_the_call() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "engine-collection-nested").await;
+            let usecase = use_case(pool.clone());
+            let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+            let stored = usecase
+                .import_collection(ImportCollectionCommand {
+                    org_id,
+                    draft: draft(&server.url, "/addresses/{id}"),
+                })
+                .await
+                .unwrap();
+            let mut node = operation_node(stored.id);
+            node.config = json!({ "path": { "id": "{{ trigger.id }}" } })
+                .as_object()
+                .cloned()
+                .unwrap();
+            let graph = Graph {
+                connectors: vec![node],
+                edges: Vec::new(),
+                triggers: Vec::new(),
+            };
+            let workflow_id = start_workflow(&usecase, org_id, graph).await;
+            let run_id = usecase
+                .start_run(org_id, workflow_id, json!({ "id": "from-the-trigger" }))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, run_id).await;
+
+            usecase
+                .run_engine_pass(
+                    &registry_reaching(&usecase),
+                    "worker-1",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            assert_eq!(server.last_request().path, "/addresses/from-the-trigger");
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn another_connector_keeps_its_nested_text_literal() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "engine-http-literal").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![PlacedConnector {
+                    id: "c1".to_string(),
+                    kind: "flow.config".to_string(),
+                    version: 1,
+                    credential_id: None,
+                    config: json!({ "variables": { "name": "{{ trigger.id }}" } })
+                        .as_object()
+                        .cloned()
+                        .unwrap(),
+                    name: None,
+                    description: None,
+                    disabled: false,
+                    operation: None,
+                }],
+                edges: Vec::new(),
+                triggers: Vec::new(),
+            };
+            let workflow_id = start_workflow(&usecase, org_id, graph).await;
+            let run_id = usecase
+                .start_run(org_id, workflow_id, json!({ "id": "42" }))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, run_id).await;
+
+            usecase
+                .run_engine_pass(
+                    &ConnectorRegistry::new(usecase.clone()),
+                    "worker-1",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+
+            let output = step_output(&pool, run_id, "c1").await.unwrap();
+            assert_eq!(output, json!({ "name": "{{ trigger.id }}" }));
         }
 
         #[tokio::test]
@@ -3001,6 +3098,7 @@ mod tests {
                 .start_run(org_id, workflow_id, json!({}))
                 .await
                 .unwrap();
+            make_run_due_now(&pool, run_id).await;
 
             usecase
                 .run_engine_pass(
@@ -3043,6 +3141,7 @@ mod tests {
                 .start_run(org_id, workflow_id, json!({}))
                 .await
                 .unwrap();
+            make_run_due_now(&pool, run_id).await;
 
             usecase
                 .run_engine_pass(

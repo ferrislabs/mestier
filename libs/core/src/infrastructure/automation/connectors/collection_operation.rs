@@ -136,8 +136,19 @@ impl CollectionOperationConnector {
             .headers
             .iter()
             .any(|(name, _)| name.eq_ignore_ascii_case("content-type"));
+        let applied_name = match (&identification, &auth) {
+            (Identification::Credential, Some(HttpAuth::Header { name, .. })) => Some(name.clone()),
+            (Identification::Credential, Some(_)) => Some("authorization".to_owned()),
+            (Identification::HeaderNamed(name), Some(_)) => Some(name.clone()),
+            _ => None,
+        };
         for (name, value) in &built.headers {
-            request = request.header(name, value);
+            let replaced = applied_name
+                .as_deref()
+                .is_some_and(|applied| applied.eq_ignore_ascii_case(name));
+            if !replaced {
+                request = request.header(name, value);
+            }
         }
         match (identification, &auth) {
             (Identification::Credential, Some(auth)) => request = auth.apply(request),
@@ -495,6 +506,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn headers_repeated_under_another_case_fail_before_any_call() {
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let collection = collection(&server.url, Vec::new());
+        let cfg = config(json!({
+            "path": { "id": "1" },
+            "headers": { "X-Trace": "a", "x-trace": "b" }
+        }));
+        let node = reference("getAddress");
+
+        let outcome = CollectionOperationConnector::with_client(lazy_usecase(), test_client())
+            .perform(&collection, &node, &input(&cfg, &node, None))
+            .await;
+
+        let error = failure(outcome);
+        assert!(error.contains("headers.x-trace"), "{error}");
+        assert!(server.requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn dot_segments_and_empty_path_values_fail_before_any_call() {
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let collection = collection(&server.url, Vec::new());
+        let node = reference("getAddress");
+
+        for value in ["..", ".", ""] {
+            let cfg = config(json!({ "path": { "id": value } }));
+
+            let outcome = CollectionOperationConnector::with_client(lazy_usecase(), test_client())
+                .perform(&collection, &node, &input(&cfg, &node, None))
+                .await;
+
+            let error = failure(outcome);
+            assert!(error.contains("path.id"), "{value:?}: {error}");
+        }
+        assert!(server.requests().is_empty());
+    }
+
+    #[tokio::test]
     async fn a_base_url_on_a_private_address_is_refused_at_run_time() {
         let collection = collection("http://10.255.255.1:9", Vec::new());
         let cfg = config(json!({ "path": { "id": "1" } }));
@@ -507,6 +556,27 @@ mod tests {
 
         let error = failure(outcome);
         assert!(error.contains("private"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn a_literal_ipv6_base_url_is_refused_at_run_time() {
+        for (base_url, reason) in [
+            ("http://[::1]:9", "loopback"),
+            ("http://[::ffff:a9fe:a9fe]", "metadata"),
+            ("http://[fd00:ec2::254]", "metadata"),
+        ] {
+            let collection = collection(base_url, Vec::new());
+            let cfg = config(json!({ "path": { "id": "1" } }));
+            let node = reference("getAddress");
+
+            let outcome =
+                CollectionOperationConnector::new(lazy_usecase(), PrivateNetworkAccess::Allowed)
+                    .perform(&collection, &node, &input(&cfg, &node, None))
+                    .await;
+
+            let error = failure(outcome);
+            assert!(error.contains(reason), "{base_url}: {error}");
+        }
     }
 
     #[tokio::test]
@@ -542,7 +612,10 @@ mod tests {
     #[tokio::test]
     async fn a_base_url_that_is_not_an_http_address_fails_and_names_the_collection() {
         for base_url in ["", "/v1", "ftp://files.example.com", "not a url"] {
-            let collection = collection(base_url, Vec::new());
+            let collection = Collection {
+                base_url: base_url.to_owned(),
+                ..collection("https://api.example.com", Vec::new())
+            };
             let cfg = config(json!({ "path": { "id": "1" } }));
             let node = reference("getAddress");
 
@@ -935,6 +1008,90 @@ mod tests {
             Some("shh")
         );
         assert!(!request.headers.contains_key("x-something-else"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_identification_replaces_a_header_of_the_same_name_coming_from_the_config() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "collection-override").await;
+        let usecase = usecase_with_cipher(pool);
+        let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+        let with_headers = |security: Vec<SecurityScheme>| {
+            let mut draft = draft(&server.url, security, "/addresses/{id}");
+            draft.operations[0].parameters.push(parameter(
+                "Authorization",
+                ParameterLocation::Header,
+                false,
+            ));
+            draft.operations[0].parameters.push(parameter(
+                "X-API-Key",
+                ParameterLocation::Header,
+                false,
+            ));
+            draft
+        };
+        let bearer = usecase
+            .import_collection(ImportCollectionCommand {
+                org_id,
+                draft: with_headers(vec![SecurityScheme {
+                    name: "bearerAuth".to_owned(),
+                    kind: SecurityKind::Http {
+                        scheme: "bearer".to_owned(),
+                    },
+                }]),
+            })
+            .await
+            .unwrap();
+        let keyed = usecase
+            .import_collection(ImportCollectionCommand {
+                org_id,
+                draft: with_headers(vec![SecurityScheme {
+                    name: "keyAuth".to_owned(),
+                    kind: SecurityKind::ApiKey {
+                        location: ApiKeyLocation::Header,
+                        parameter_name: "X-API-Key".to_owned(),
+                    },
+                }]),
+            })
+            .await
+            .unwrap();
+        let token = credential(
+            &usecase,
+            org_id,
+            "bearer_token",
+            json!({ "token": "abc123" }),
+        )
+        .await;
+        let key = credential(
+            &usecase,
+            org_id,
+            "http_header",
+            json!({ "header_name": "X-Whatever", "header_value": "shh" }),
+        )
+        .await;
+        let cfg = config(json!({
+            "path": { "id": "7" },
+            "headers": { "authorization": "Bearer evil", "x-api-key": "evil" }
+        }));
+
+        let outcome =
+            run_stored(&usecase, org_id, bearer.id, "getAddress", &cfg, Some(token)).await;
+        assert!(
+            matches!(outcome, ConnectorOutcome::Produced(_)),
+            "{outcome:?}"
+        );
+        let request = server.last_request();
+        assert_eq!(request.header_values("authorization"), ["Bearer abc123"]);
+
+        let outcome = run_stored(&usecase, org_id, keyed.id, "getAddress", &cfg, Some(key)).await;
+        assert!(
+            matches!(outcome, ConnectorOutcome::Produced(_)),
+            "{outcome:?}"
+        );
+        let request = server.last_request();
+        assert_eq!(request.header_values("x-api-key"), ["shh"]);
+        assert_eq!(request.header_values("authorization"), ["Bearer evil"]);
     }
 
     #[tokio::test]

@@ -3,7 +3,9 @@ use common::{CoreError, OrganizationId};
 use events::EventEnvelope;
 use uuid::Uuid;
 
-use crate::domain::automation::collection::{Collection, CollectionSummary, CollectionVersion};
+use crate::domain::automation::collection::{
+    Collection, CollectionDetail, CollectionSummary, CollectionVersion,
+};
 use crate::domain::automation::credential::Credential;
 use crate::domain::automation::folder::{FolderName, WorkflowFolder};
 use crate::domain::automation::run::{DueRun, Run, RunOverview, RunSettlement, RunStep};
@@ -355,6 +357,17 @@ pub trait CollectionRepository: Send {
         org_id: OrganizationId,
         ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Collection>, CoreError>> + Send;
+
+    fn find_detail(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<CollectionDetail>, CoreError>> + Send;
+
+    fn count_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<i64, CoreError>> + Send;
 
     fn list_by_organization(
         &mut self,

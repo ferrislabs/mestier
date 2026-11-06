@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT v.version, v.imported_at, v.source_kind, v.source_value\n               FROM automation.collection_version v\n               JOIN automation.collection c ON c.id = v.collection_id\n               WHERE c.org_id = $1 AND c.id = $2\n               ORDER BY v.id DESC",
+  "query": "SELECT version, imported_at, source_kind, source_value, base_url, security\n               FROM automation.collection\n               WHERE org_id = $1 AND id = $2\n               FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,16 @@
         "ordinal": 3,
         "name": "source_value",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "base_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "security",
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
@@ -34,8 +44,10 @@
       false,
       false,
       false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "05b2c2bc51db4edc45b9b85671eeca930d4107716dc097422a06996bddb3c1c6"
+  "hash": "776571dee725f9041c51382a1079da77a44050bc7c075184a8d3b9b765bc09cd"
 }

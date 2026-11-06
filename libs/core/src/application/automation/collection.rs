@@ -8,7 +8,8 @@ use crate::{
     domain::automation::{
         collection::{
             Collection, CollectionDetail, CollectionError, CollectionSummary,
-            ImportCollectionCommand, ReplaceCollectionCommand, slug_base, unique_slug,
+            ImportCollectionCommand, MAX_COLLECTIONS_PER_ORGANIZATION, ReplaceCollectionCommand,
+            slug_base, unique_slug,
         },
         ports::CollectionRepository,
     },
@@ -22,6 +23,10 @@ impl MestierUseCase {
     ) -> Result<Collection, CoreError> {
         let mut collections = collection_repository;
         collections.lock_slugs(command.org_id).await?;
+        let held = collections.count_by_organization(command.org_id).await?;
+        if usize::try_from(held).unwrap_or(usize::MAX) >= MAX_COLLECTIONS_PER_ORGANIZATION {
+            return Err(CollectionError::TooMany.into());
+        }
         let base = slug_base(&command.draft.title);
         let taken = collections.slugs_matching(command.org_id, &base).await?;
         let slug = unique_slug(&base, &taken);
@@ -95,15 +100,7 @@ impl MestierUseCase {
         id: Uuid,
     ) -> Result<Option<CollectionDetail>, CoreError> {
         let mut collections = collection_repository;
-        let Some(collection) = collections.find_by_id(org_id, id).await? else {
-            return Ok(None);
-        };
-        let history = collections.history(org_id, id).await?;
-
-        Ok(Some(CollectionDetail {
-            collection,
-            history,
-        }))
+        collections.find_detail(org_id, id).await
     }
 
     #[transactional(collection)]
@@ -436,6 +433,87 @@ mod tests {
         assert_eq!(mine.len(), 2);
         assert!(mine.contains(&first) && mine.contains(&second));
         assert!(theirs.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_organization_holds_at_most_two_hundred_collections() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "collection-cap").await;
+        let other = seed_organization(&pool, "collection-cap-other").await;
+        let usecase = use_case(pool);
+        let mut last = None;
+        for n in 0..200 {
+            last = Some(
+                usecase
+                    .import_collection(import(org_id, &format!("Api {n}"), "1"))
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        let refused = usecase
+            .import_collection(import(org_id, "One too many", "1"))
+            .await;
+
+        let Err(CoreError::Conflict(message)) = refused else {
+            panic!("expected a conflict, got {refused:?}");
+        };
+        assert_eq!(message, "an organization holds at most 200 collections");
+        assert!(
+            usecase
+                .import_collection(import(other, "Elsewhere", "1"))
+                .await
+                .is_ok()
+        );
+        usecase
+            .delete_collection(org_id, last.unwrap().id)
+            .await
+            .unwrap();
+        assert!(
+            usecase
+                .import_collection(import(org_id, "Room again", "1"))
+                .await
+                .is_ok()
+        );
+        assert_eq!(usecase.list_collections(org_id).await.unwrap().len(), 200);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_replace_answer_and_the_read_carry_at_most_fifty_history_entries() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "collection-history-cap").await;
+        let usecase = use_case(pool);
+        let first = usecase
+            .import_collection(import(org_id, "Annuaire", "v0"))
+            .await
+            .unwrap();
+        let mut answer = None;
+        for n in 1..=52 {
+            answer = Some(
+                usecase
+                    .replace_collection(ReplaceCollectionCommand {
+                        org_id,
+                        id: first.id,
+                        draft: draft("Annuaire", &format!("v{n}")),
+                    })
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        let answer = answer.unwrap();
+        let read = usecase
+            .find_collection_detail(org_id, first.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(answer.history.len(), 50);
+        assert_eq!(answer.history[0].version, "v51");
+        assert_eq!(read.history, answer.history);
+        assert_eq!(read.collection, answer.collection);
     }
 
     #[tokio::test]

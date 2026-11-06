@@ -115,7 +115,13 @@ impl IntoResponse for AutomationError {
             Self::Collection(error @ CollectionError::InvalidModel(_)) => {
                 ApiError::Validation(error.to_string()).into_response()
             }
-            Self::Collection(error @ CollectionError::Oversized { .. }) => {
+            Self::Collection(error @ CollectionError::TooMany) => {
+                ApiError::Conflict(error.to_string()).into_response()
+            }
+            Self::Collection(
+                error @ (CollectionError::Oversized { .. }
+                | CollectionError::RequestTooLarge { .. }),
+            ) => {
                 let body = TooLargeBody {
                     code: "E_COLLECTION_TOO_LARGE",
                     message: error.to_string(),
@@ -251,6 +257,36 @@ mod tests {
                 .unwrap()
                 .contains("at least one operation")
         );
+    }
+
+    #[tokio::test]
+    async fn too_many_collections_answers_409_with_a_static_message() {
+        let (status, json) = body_of(AutomationError::from(CollectionError::TooMany)).await;
+
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(json["code"], "E_CONFLICT");
+        assert!(
+            json["message"]
+                .as_str()
+                .unwrap()
+                .contains("at most 200 collections")
+        );
+        let through_core = AutomationError::from(CoreError::from(CollectionError::TooMany));
+        let (status, json) = body_of(through_core).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(json["code"], "E_CONFLICT");
+    }
+
+    #[tokio::test]
+    async fn a_request_body_over_the_door_answers_413_with_the_collection_code() {
+        let error = AutomationError::from(CollectionError::RequestTooLarge { limit: 2_359_296 });
+
+        let (status, json) = body_of(error).await;
+
+        assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(json["code"], "E_COLLECTION_TOO_LARGE");
+        assert_eq!(json["status"], 413);
+        assert!(json["message"].as_str().unwrap().contains("2359296"));
     }
 
     #[tokio::test]

@@ -38,9 +38,13 @@ CREATE TABLE automation.collection_version (
     imported_at   TIMESTAMPTZ NOT NULL,
     source_kind   TEXT        NOT NULL,
     source_value  TEXT        NOT NULL,
+    base_url      TEXT        NOT NULL,
+    security      JSONB       NOT NULL DEFAULT '[]',
 
     CONSTRAINT chk_automation_collection_version_source_kind
-        CHECK (source_kind IN ('url', 'file'))
+        CHECK (source_kind IN ('url', 'file')),
+    CONSTRAINT chk_automation_collection_version_security
+        CHECK (jsonb_typeof(security) = 'array')
 );
 
 CREATE INDEX idx_automation_collection_version_collection

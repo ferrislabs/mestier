@@ -367,7 +367,7 @@ impl Modify for SecurityAddon {
         automation::collection::CollectionRequest,
         automation::collection::CollectionResponse,
         automation::collection::CollectionSummaryResponse,
-        automation::collection::CollectionVersionResponse,
+        automation::collection::HistoryEntryResponse,
         automation::collection::CollectionSourceDto,
         automation::collection::OperationDto,
         automation::collection::ParameterDto,
@@ -782,11 +782,23 @@ mod tests {
             );
         }
 
+        let schemas = &json["components"]["schemas"];
+        assert!(
+            schemas["CollectionSummaryResponse"]["properties"]["description"].is_null(),
+            "the list stays light"
+        );
+        for field in ["version", "imported_at", "source", "base_url", "security"] {
+            assert!(
+                schemas["HistoryEntryResponse"]["properties"][field].is_object(),
+                "{field} is missing from the history entry"
+            );
+        }
+
         for schema in [
             "CollectionRequest",
             "CollectionResponse",
             "CollectionSummaryResponse",
-            "CollectionVersionResponse",
+            "HistoryEntryResponse",
             "OperationDto",
             "ParameterDto",
             "RequestBodyDto",

@@ -742,6 +742,14 @@ impl From<&mestier_core::GraphError> for GraphErrorResponse {
             | UnknownParameter {
                 connector_id,
                 field,
+            }
+            | InvalidParameter {
+                connector_id,
+                field,
+            }
+            | DuplicateParameter {
+                connector_id,
+                field,
             } => (Some(connector_id.clone()), None, Some(field.clone())),
             UnknownCredential { connector_id, .. } => (Some(connector_id.clone()), None, None),
             CredentialSchemeNotAccepted { connector_id, .. } => {

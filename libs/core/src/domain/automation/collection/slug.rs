@@ -1,32 +1,37 @@
 pub const FALLBACK_SLUG: &str = "collection";
+const MAX_SLUG_BASE_LENGTH: usize = 200;
+
+const FOLDS: &[(&str, &str)] = &[
+    ("àáâãäåāăąạảấầẩẫậắằẳẵặǎ", "a"),
+    ("æ", "ae"),
+    ("çćĉċč", "c"),
+    ("ďđð", "d"),
+    ("èéêëēĕėęěẹẻẽếềểễệ", "e"),
+    ("ĝğġģ", "g"),
+    ("ĥħ", "h"),
+    ("ìíîïĩīĭįıỉị", "i"),
+    ("ĵ", "j"),
+    ("ķ", "k"),
+    ("ĺļľł", "l"),
+    ("ñńņň", "n"),
+    ("òóôõöøōŏőơọỏốồổỗộớờởỡợǒ", "o"),
+    ("œ", "oe"),
+    ("ŕŗř", "r"),
+    ("śŝşšș", "s"),
+    ("ß", "ss"),
+    ("ţťŧț", "t"),
+    ("þ", "th"),
+    ("ùúûüũūŭůűųưụủứừửữựǔ", "u"),
+    ("ŵ", "w"),
+    ("ýÿŷỳỵỷỹ", "y"),
+    ("źżž", "z"),
+];
 
 fn folded(character: char) -> Option<&'static str> {
-    match character {
-        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' | 'ă' | 'ą' => Some("a"),
-        'æ' => Some("ae"),
-        'ç' | 'ć' | 'ĉ' | 'ċ' | 'č' => Some("c"),
-        'ď' | 'đ' | 'ð' => Some("d"),
-        'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ĕ' | 'ė' | 'ę' | 'ě' => Some("e"),
-        'ĝ' | 'ğ' | 'ġ' | 'ģ' => Some("g"),
-        'ĥ' | 'ħ' => Some("h"),
-        'ì' | 'í' | 'î' | 'ï' | 'ĩ' | 'ī' | 'ĭ' | 'į' | 'ı' => Some("i"),
-        'ĵ' => Some("j"),
-        'ķ' => Some("k"),
-        'ĺ' | 'ļ' | 'ľ' | 'ł' => Some("l"),
-        'ñ' | 'ń' | 'ņ' | 'ň' => Some("n"),
-        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' | 'ŏ' | 'ő' => Some("o"),
-        'œ' => Some("oe"),
-        'ŕ' | 'ŗ' | 'ř' => Some("r"),
-        'ś' | 'ŝ' | 'ş' | 'š' => Some("s"),
-        'ß' => Some("ss"),
-        'ţ' | 'ť' | 'ŧ' => Some("t"),
-        'þ' => Some("th"),
-        'ù' | 'ú' | 'û' | 'ü' | 'ũ' | 'ū' | 'ŭ' | 'ů' | 'ű' | 'ų' => Some("u"),
-        'ŵ' => Some("w"),
-        'ý' | 'ÿ' | 'ŷ' => Some("y"),
-        'ź' | 'ż' | 'ž' => Some("z"),
-        _ => None,
-    }
+    FOLDS
+        .iter()
+        .find(|(letters, _)| letters.contains(character))
+        .map(|(_, folded)| *folded)
 }
 
 fn is_combining_mark(character: char) -> bool {
@@ -64,10 +69,12 @@ pub fn slugify(title: &str) -> String {
 
 pub fn slug_base(title: &str) -> String {
     let slug = slugify(title);
-    if slug.is_empty() {
+    let truncated: String = slug.chars().take(MAX_SLUG_BASE_LENGTH).collect();
+    let trimmed = truncated.trim_end_matches('-');
+    if trimmed.is_empty() {
         FALLBACK_SLUG.to_owned()
     } else {
-        slug
+        trimmed.to_owned()
     }
 }
 
@@ -120,6 +127,41 @@ mod tests {
         assert_eq!(slugify("日本語"), "");
         assert_eq!(slug_base("日本語"), FALLBACK_SLUG);
         assert_eq!(slug_base("API"), "api");
+    }
+
+    #[test]
+    fn vietnamese_precomposed_letters_are_folded() {
+        assert_eq!(
+            slugify("Tiếng Việt: Hà Nội, Đà Nẵng, Phở bò"),
+            "tieng-viet-ha-noi-da-nang-pho-bo"
+        );
+    }
+
+    #[test]
+    fn romanian_comma_below_letters_are_folded() {
+        assert_eq!(slugify("Școală Țară"), "scoala-tara");
+    }
+
+    #[test]
+    fn a_title_of_two_hundred_sharp_s_cannot_overflow_the_slug_column() {
+        let title = "ß".repeat(200);
+
+        let base = slug_base(&title);
+
+        assert!(base.chars().count() <= 200, "{}", base.len());
+        assert!(!base.ends_with('-'));
+        assert_eq!(base, "s".repeat(200));
+        let taken = vec![base.clone()];
+        assert!(unique_slug(&base, &taken).chars().count() <= 210);
+    }
+
+    #[test]
+    fn truncation_never_leaves_a_trailing_hyphen() {
+        let title = format!("{} {}", "a".repeat(199), "tail");
+
+        let base = slug_base(&title);
+
+        assert_eq!(base, "a".repeat(199));
     }
 
     #[test]

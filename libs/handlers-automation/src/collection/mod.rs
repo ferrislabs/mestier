@@ -3,6 +3,7 @@ use axum_extra::routing::RouterExt;
 use handlers::AppState;
 use mestier_core::MAX_COLLECTION_BYTES;
 
+mod body;
 pub mod create;
 pub mod delete;
 mod dto;
@@ -12,8 +13,8 @@ pub mod replace;
 
 pub use dto::{
     ApiKeyLocationDto, CollectionRequest, CollectionResponse, CollectionSourceDto,
-    CollectionSummaryResponse, CollectionVersionResponse, HttpMethodDto, OperationDto,
-    ParameterDto, ParameterLocationDto, RequestBodyDto, SecurityKindDto, SecuritySchemeDto,
+    CollectionSummaryResponse, HistoryEntryResponse, HttpMethodDto, OperationDto, ParameterDto,
+    ParameterLocationDto, RequestBodyDto, SecurityKindDto, SecuritySchemeDto,
 };
 
 pub const REQUEST_LIMIT_BYTES: usize = MAX_COLLECTION_BYTES + 256 * 1024;

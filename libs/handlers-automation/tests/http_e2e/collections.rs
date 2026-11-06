@@ -178,6 +178,7 @@ async fn the_list_is_light_and_carries_the_operation_count() {
         assert!(!object.contains_key("operations"));
         assert!(!object.contains_key("schemas"));
         assert!(!object.contains_key("history"));
+        assert!(!object.contains_key("description"));
         assert_eq!(item["operation_count"], 2);
         assert!(object.contains_key("security"));
     }
@@ -297,6 +298,8 @@ async fn replacing_keeps_the_previous_version_in_the_history() {
     assert_eq!(history[0]["version"], "1.0.0");
     assert_eq!(history[0]["imported_at"], first["imported_at"]);
     assert_eq!(history[0]["source"], first["source"]);
+    assert_eq!(history[0]["base_url"], first["base_url"]);
+    assert_eq!(history[0]["security"], first["security"]);
 
     app.cleanup().await;
 }
@@ -478,8 +481,24 @@ async fn a_spec_over_the_size_limit_is_rejected_and_stores_nothing() {
 
     let mut beyond_the_door = collection_body("Huger", "1.0.0");
     beyond_the_door["schemas"] = json!({ "Big": { "description": "x".repeat(3 * 1024 * 1024) } });
-    let refused = post_collection(&app, &app.token, &beyond_the_door).await;
-    assert_eq!(refused.status(), 413);
+    let (status, answer) = body_of(post_collection(&app, &app.token, &beyond_the_door).await).await;
+    assert_eq!(status, 413);
+    assert_eq!(answer["code"], "E_COLLECTION_TOO_LARGE");
+    assert_eq!(answer["status"], 413);
+    assert!(answer["message"].as_str().unwrap().contains("2359296"));
+
+    let replaced = client()
+        .put(app.collection_url("00000000-0000-7000-8000-000000000999"))
+        .bearer_auth(&app.token)
+        .json(&beyond_the_door)
+        .send()
+        .await
+        .expect("the api answers the oversized replace");
+    assert_eq!(replaced.status(), 413);
+    assert_eq!(
+        replaced.json::<Value>().await.unwrap()["code"],
+        "E_COLLECTION_TOO_LARGE"
+    );
 
     let (_, listed) = body_of(
         client()
@@ -772,6 +791,158 @@ async fn a_collection_of_another_organization_cannot_back_a_node() {
         "{}",
         errors[0].2
     );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn the_model_is_cleaned_or_refused_before_it_is_stored() {
+    let app = harness::start().await;
+
+    let mut with_credentials = collection_body("Credentialed", "1.0.0");
+    with_credentials["base_url"] = json!("https://bot:secret@api.example.com/v1");
+    let (status, answer) =
+        body_of(post_collection(&app, &app.token, &with_credentials).await).await;
+    assert_eq!(status, 400);
+    assert!(answer["message"].as_str().unwrap().contains("base url"));
+
+    let mut with_query = collection_body("Queried", "1.0.0");
+    with_query["base_url"] = json!("https://api.example.com/v1?key=1");
+    assert_eq!(
+        post_collection(&app, &app.token, &with_query)
+            .await
+            .status(),
+        400
+    );
+
+    let mut nul = collection_body("Nul", "1.0.0");
+    nul["title"] = json!("bad\u{0}title");
+    let (status, answer) = body_of(post_collection(&app, &app.token, &nul).await).await;
+    assert_eq!(status, 400);
+    assert!(answer["message"].as_str().unwrap().contains("NUL"));
+
+    let mut nul_in_schema = collection_body("Nul schema", "1.0.0");
+    nul_in_schema["schemas"] = json!({ "A": { "description": "bad\u{0}" } });
+    assert_eq!(
+        post_collection(&app, &app.token, &nul_in_schema)
+            .await
+            .status(),
+        400
+    );
+
+    let mut tracked = collection_body("Tracked", "1.0.0");
+    tracked["source"] = json!({
+        "kind": "url",
+        "url": "https://api.example.com/openapi.json?token=abc#frag"
+    });
+    tracked["operations"][0]["id"] = json!("  getAddress  ");
+    let stored = {
+        let response = post_collection(&app, &app.token, &tracked).await;
+        assert_eq!(response.status(), 201);
+        let envelope: Value = response.json().await.unwrap();
+        envelope["data"].clone()
+    };
+    assert_eq!(
+        stored["source"],
+        json!({ "kind": "url", "url": "https://api.example.com/openapi.json" })
+    );
+    assert_eq!(stored["operations"][0]["id"], "getAddress");
+
+    let mut forbidden_header = collection_body("Header", "1.0.0");
+    forbidden_header["operations"][0]["parameters"] = json!([{
+        "name": "Host",
+        "location": "header",
+        "required": false,
+        "description": "",
+        "schema": { "type": "string" }
+    }]);
+    let (status, answer) =
+        body_of(post_collection(&app, &app.token, &forbidden_header).await).await;
+    assert_eq!(status, 400);
+    assert!(answer["message"].as_str().unwrap().contains("Host"));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_nested_broken_reference_dot_segment_and_repeated_header_are_refused_when_saving() {
+    let app = harness::start().await;
+    let mut body = collection_body("Headers", "1.0.0");
+    body["operations"][0]["parameters"] = json!([
+        { "name": "id", "location": "path", "required": true, "description": "", "schema": {} },
+        { "name": "X-Trace", "location": "header", "required": false, "description": "", "schema": {} }
+    ]);
+    let response = post_collection(&app, &app.token, &body).await;
+    assert_eq!(response.status(), 201);
+    let collection: Value = response.json().await.unwrap();
+    let collection_id = collection["data"]["id"].as_str().unwrap().to_owned();
+    let workflow_id = new_workflow(&app).await;
+
+    let nested = save_graph(
+        &app,
+        &workflow_id,
+        operation_graph(
+            &collection_id,
+            "getAddress",
+            json!({ "path": { "id": "{{ connectors.ghost.output.id }}" } }),
+        ),
+    )
+    .await;
+    let (status, answer) = body_of(nested).await;
+    assert_eq!(status, 422);
+    let errors = graph_errors(&answer);
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert_eq!(errors[0].0.as_deref(), Some("c1"));
+    assert_eq!(errors[0].1.as_deref(), Some("path.id"));
+    assert!(errors[0].2.contains("ghost"), "{}", errors[0].2);
+
+    let dots = save_graph(
+        &app,
+        &workflow_id,
+        operation_graph(
+            &collection_id,
+            "getAddress",
+            json!({ "path": { "id": ".." } }),
+        ),
+    )
+    .await;
+    let (status, answer) = body_of(dots).await;
+    assert_eq!(status, 422);
+    assert_eq!(graph_errors(&answer)[0].1.as_deref(), Some("path.id"));
+
+    let repeated = save_graph(
+        &app,
+        &workflow_id,
+        operation_graph(
+            &collection_id,
+            "getAddress",
+            json!({
+                "path": { "id": "1" },
+                "headers": { "X-Trace": "a", "x-trace": "b" }
+            }),
+        ),
+    )
+    .await;
+    let (status, answer) = body_of(repeated).await;
+    assert_eq!(status, 422);
+    assert_eq!(
+        graph_errors(&answer)[0].1.as_deref(),
+        Some("headers.x-trace")
+    );
+
+    let nested_ok = save_graph(
+        &app,
+        &workflow_id,
+        operation_graph(
+            &collection_id,
+            "getAddress",
+            json!({ "path": { "id": "{{ trigger.id }}" } }),
+        ),
+    )
+    .await;
+    assert_eq!(nested_ok.status(), 201);
 
     app.cleanup().await;
 }

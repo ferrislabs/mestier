@@ -149,6 +149,39 @@ pub fn resolve_config(
     Ok(resolved)
 }
 
+fn resolve_value(raw: &Value, ctx: &ExpressionContext<'_>) -> Result<Value, ExpressionError> {
+    match raw {
+        Value::Object(map) => map
+            .iter()
+            .map(|(key, value)| Ok((key.clone(), resolve_value(value, ctx)?)))
+            .collect::<Result<Map<String, Value>, ExpressionError>>()
+            .map(Value::Object),
+        Value::Array(items) => items
+            .iter()
+            .map(|value| resolve_value(value, ctx))
+            .collect::<Result<Vec<Value>, ExpressionError>>()
+            .map(Value::Array),
+        other => parse_template(other)?.evaluate(ctx),
+    }
+}
+
+pub fn resolve_config_nested(
+    config: &Map<String, Value>,
+    ctx: &ExpressionContext<'_>,
+    nested_fields: &[&str],
+) -> Result<Map<String, Value>, ExpressionError> {
+    let mut resolved = Map::with_capacity(config.len());
+    for (key, raw) in config {
+        let value = if nested_fields.contains(&key.as_str()) {
+            resolve_value(raw, ctx)?
+        } else {
+            parse_template(raw)?.evaluate(ctx)?
+        };
+        resolved.insert(key.clone(), value);
+    }
+    Ok(resolved)
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc};
@@ -289,6 +322,104 @@ mod tests {
 
     fn fixed_now() -> chrono::DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap()
+    }
+
+    fn nested_ctx<'a>(
+        trigger: &'a Value,
+        connectors: &'a BTreeMap<String, Value>,
+    ) -> ExpressionContext<'a> {
+        ExpressionContext {
+            trigger: Some(trigger),
+            connectors,
+            loop_frame: None,
+            now: fixed_now(),
+        }
+    }
+
+    #[test]
+    fn nested_fields_resolve_every_string_inside_objects_and_arrays() {
+        let config = serde_json::from_value::<Map<String, Value>>(json!({
+            "path": { "id": "{{ trigger.id }}", "kept": 5 },
+            "query": { "tags": ["a", "{{ trigger.tag }}", { "deep": "x-{{ trigger.id }}" }] },
+            "headers": "{{ trigger.headers }}",
+            "body": { "list": [{ "name": "{{ upper(trigger.tag) }}" }], "flag": true, "none": null }
+        }))
+        .unwrap();
+        let trigger =
+            json!({ "id": "42", "tag": "red", "headers": { "X-Raw": "{{ not evaluated }}" } });
+        let connectors = BTreeMap::new();
+        let ctx = nested_ctx(&trigger, &connectors);
+
+        let resolved =
+            resolve_config_nested(&config, &ctx, &["path", "query", "headers", "body"]).unwrap();
+
+        assert_eq!(resolved["path"], json!({ "id": "42", "kept": 5 }));
+        assert_eq!(
+            resolved["query"],
+            json!({ "tags": ["a", "red", { "deep": "x-42" }] })
+        );
+        assert_eq!(
+            resolved["headers"],
+            json!({ "X-Raw": "{{ not evaluated }}" })
+        );
+        assert_eq!(
+            resolved["body"],
+            json!({ "list": [{ "name": "RED" }], "flag": true, "none": null })
+        );
+    }
+
+    #[test]
+    fn a_field_outside_the_nested_list_keeps_its_inner_text_literal() {
+        let config = serde_json::from_value::<Map<String, Value>>(json!({
+            "path": { "id": "{{ trigger.id }}" },
+            "variables": { "name": "{{ trigger.id }}" }
+        }))
+        .unwrap();
+        let trigger = json!({ "id": "42" });
+        let connectors = BTreeMap::new();
+        let ctx = nested_ctx(&trigger, &connectors);
+
+        let resolved = resolve_config_nested(&config, &ctx, &["path"]).unwrap();
+
+        assert_eq!(resolved["path"], json!({ "id": "42" }));
+        assert_eq!(resolved["variables"], json!({ "name": "{{ trigger.id }}" }));
+    }
+
+    #[test]
+    fn the_plain_resolution_every_other_connector_uses_is_unchanged() {
+        let config = serde_json::from_value::<Map<String, Value>>(json!({
+            "headers": { "X-Id": "{{ trigger.id }}" },
+            "body": { "name": "{{ trigger.id }}" }
+        }))
+        .unwrap();
+        let trigger = json!({ "id": "42" });
+        let connectors = BTreeMap::new();
+        let ctx = nested_ctx(&trigger, &connectors);
+
+        let resolved = resolve_config(&config, &ctx).unwrap();
+
+        assert_eq!(resolved["headers"], json!({ "X-Id": "{{ trigger.id }}" }));
+        assert_eq!(resolved["body"], json!({ "name": "{{ trigger.id }}" }));
+    }
+
+    #[test]
+    fn a_nested_expression_that_fails_surfaces_its_error() {
+        let config = serde_json::from_value::<Map<String, Value>>(json!({
+            "path": { "id": "{{ trigger.missing }}" }
+        }))
+        .unwrap();
+        let trigger = json!({});
+        let connectors = BTreeMap::new();
+        let ctx = nested_ctx(&trigger, &connectors);
+
+        let error = resolve_config_nested(&config, &ctx, &["path"]).unwrap_err();
+
+        assert_eq!(
+            error,
+            ExpressionError::MissingPath {
+                path: "trigger.missing".to_string()
+            }
+        );
     }
 
     #[test]

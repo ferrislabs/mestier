@@ -1,9 +1,12 @@
 use auth::Identity;
-use axum::{Extension, Json, extract::State};
+use axum::{Extension, extract::State};
 use handlers::{AppState, DataEnvelope, Response};
 use mestier_core::ReplaceCollectionCommand;
 
-use super::dto::{CollectionRequest, CollectionResponse};
+use super::{
+    body::CollectionBody,
+    dto::{CollectionRequest, CollectionResponse},
+};
 use crate::{error::AutomationError, paths::CollectionPath, require_manage_automation};
 
 #[utoipa::path(
@@ -34,7 +37,7 @@ pub async fn handler(
     }: CollectionPath,
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
-    Json(payload): Json<CollectionRequest>,
+    CollectionBody(payload): CollectionBody,
 ) -> Result<Response<CollectionResponse>, AutomationError> {
     require_manage_automation(&state, &identity, organization_id).await?;
 

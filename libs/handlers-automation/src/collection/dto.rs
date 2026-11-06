@@ -339,18 +339,22 @@ impl CollectionRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
-pub struct CollectionVersionResponse {
+pub struct HistoryEntryResponse {
     pub version: String,
     pub imported_at: DateTime<Utc>,
     pub source: CollectionSourceDto,
+    pub base_url: String,
+    pub security: Vec<SecuritySchemeDto>,
 }
 
-impl From<CollectionVersion> for CollectionVersionResponse {
+impl From<CollectionVersion> for HistoryEntryResponse {
     fn from(value: CollectionVersion) -> Self {
         Self {
             version: value.version,
             imported_at: value.imported_at,
             source: value.source.into(),
+            base_url: value.base_url,
+            security: value.security.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -362,7 +366,6 @@ pub struct CollectionSummaryResponse {
     pub slug: String,
     pub title: String,
     pub version: String,
-    pub description: String,
     pub base_url: String,
     pub source: CollectionSourceDto,
     pub imported_at: DateTime<Utc>,
@@ -378,7 +381,6 @@ impl From<CollectionSummary> for CollectionSummaryResponse {
             slug: value.slug,
             title: value.title,
             version: value.version,
-            description: value.description,
             base_url: value.base_url,
             source: value.source.into(),
             imported_at: value.imported_at,
@@ -402,7 +404,7 @@ pub struct CollectionResponse {
     pub security: Vec<SecuritySchemeDto>,
     pub operations: Vec<OperationDto>,
     pub schemas: Map<String, Value>,
-    pub history: Vec<CollectionVersionResponse>,
+    pub history: Vec<HistoryEntryResponse>,
 }
 
 impl CollectionResponse {
@@ -567,6 +569,11 @@ mod tests {
                 source: mestier_core::CollectionSource::File {
                     file_name: "v2.yaml".to_owned(),
                 },
+                base_url: "https://api.example.com/v2".to_owned(),
+                security: vec![mestier_core::SecurityScheme {
+                    name: "oauth".to_owned(),
+                    kind: mestier_core::SecurityKind::Oauth2,
+                }],
             },
             CollectionVersion {
                 version: "1.0.0".to_owned(),
@@ -574,6 +581,8 @@ mod tests {
                 source: mestier_core::CollectionSource::Url {
                     url: "https://api.example.com/openapi.json".to_owned(),
                 },
+                base_url: "https://api.example.com/v1".to_owned(),
+                security: Vec::new(),
             },
         ];
 
@@ -602,6 +611,11 @@ mod tests {
         assert_eq!(json["schemas"]["Address"]["type"], "object");
         assert_eq!(json["history"][0]["version"], "2.0.0");
         assert_eq!(json["history"][0]["source"]["file_name"], "v2.yaml");
+        assert_eq!(json["history"][0]["base_url"], "https://api.example.com/v2");
+        assert_eq!(json["history"][0]["security"][0]["name"], "oauth");
+        assert_eq!(json["history"][0]["security"][0]["kind"]["type"], "oauth2");
+        assert_eq!(json["history"][1]["base_url"], "https://api.example.com/v1");
+        assert_eq!(json["history"][1]["security"], json!([]));
         assert_eq!(json["history"][1]["version"], "1.0.0");
     }
 
@@ -640,7 +654,6 @@ mod tests {
             slug: collection.slug.clone(),
             title: collection.title.clone(),
             version: collection.version.clone(),
-            description: collection.description.clone(),
             base_url: collection.base_url.clone(),
             source: collection.source.clone(),
             imported_at: collection.imported_at,
@@ -657,5 +670,6 @@ mod tests {
         assert!(!object.contains_key("operations"));
         assert!(!object.contains_key("schemas"));
         assert!(!object.contains_key("history"));
+        assert!(!object.contains_key("description"));
     }
 }
