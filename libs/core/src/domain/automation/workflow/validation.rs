@@ -18,7 +18,7 @@ use crate::domain::automation::collection::{
 use crate::domain::automation::connector::smtp::{SMTP_SEND_KIND, SmtpFault, literal_faults};
 use crate::domain::automation::connector::{ConnectorCatalogue, FieldKind};
 use crate::domain::automation::credential::Credential;
-use crate::domain::automation::expression::parse_template;
+use crate::domain::automation::expression::{Template, parse_template};
 
 use super::graph::{Branch, ContractKey, Edge, Graph, PlacedConnector, TriggerKind};
 use super::schedule::{parse_time, parse_timezone};
@@ -142,22 +142,20 @@ pub enum GraphError {
     #[error("connector `{connector_id}` sends to more recipients than an e-mail allows")]
     TooManyRecipients { connector_id: String },
 
-    #[error(
-        "connector `{connector_id}` field `{field}` references unknown connector `{referenced_id}`"
-    )]
-    UnknownConnectorReference {
+    #[error("connector `{connector_id}` field `{field}` references unknown node `{node_name}`")]
+    UnknownNodeReference {
         connector_id: String,
         field: String,
-        referenced_id: String,
+        node_name: String,
     },
 
     #[error(
-        "connector `{connector_id}` field `{field}` references `{referenced_id}`, which runs after it"
+        "connector `{connector_id}` field `{field}` references node `{node_name}`, which does not run before it"
     )]
-    DownstreamConnectorReference {
+    NodeNotUpstream {
         connector_id: String,
         field: String,
-        referenced_id: String,
+        node_name: String,
     },
 
     #[error("connector `{connector_id}` field `{field}` reads `loop` outside a `flow.loop` body")]
@@ -420,10 +418,9 @@ fn json_type_name(value: &Value) -> &'static str {
     }
 }
 
-/// Every connector that can reach `of` by forward edges — the set a
-/// reference from `of` is allowed to name, per `referenced_connectors()`'s
-/// own doc comment: reject a reference to a connector "located downstream".
-/// Walks `predecessors` (the reverse of the edge direction) so it costs one
+/// Every node that can reach `of` by forward edges — the set a reference
+/// from `of` is allowed to name: a reference to a node that does not run
+/// before it is rejected. Walks `predecessors` (the reverse of the edge direction) so it costs one
 /// pass regardless of how deep `of` sits in the graph, and tolerates a cycle
 /// elsewhere in the graph (already reported by [`GraphError::Cycle`]) by
 /// never revisiting a node.
@@ -443,6 +440,31 @@ fn ancestors_of<'a>(predecessors: &HashMap<&'a str, Vec<&'a str>>, of: &str) -> 
         }
     }
     visited
+}
+
+fn check_node_references(
+    template: &Template,
+    connector_id: &str,
+    field: &str,
+    ids_by_name: &HashMap<&str, &str>,
+    ancestors: &HashSet<&str>,
+    errors: &mut Vec<GraphError>,
+) {
+    for node_name in template.referenced_nodes() {
+        match ids_by_name.get(node_name.as_str()) {
+            None => errors.push(GraphError::UnknownNodeReference {
+                connector_id: connector_id.to_owned(),
+                field: field.to_owned(),
+                node_name,
+            }),
+            Some(id) if !ancestors.contains(id) => errors.push(GraphError::NodeNotUpstream {
+                connector_id: connector_id.to_owned(),
+                field: field.to_owned(),
+                node_name,
+            }),
+            Some(_) => {}
+        }
+    }
 }
 
 fn validate_operation_node(
@@ -538,7 +560,7 @@ fn nested_strings<'a>(value: &'a Value, label: &str, found: &mut Vec<(String, &'
 
 fn validate_nested_expressions(
     connector: &PlacedConnector,
-    connector_ids: &HashSet<&str>,
+    ids_by_name: &HashMap<&str, &str>,
     ancestors: &HashSet<&str>,
     loop_body: &HashSet<&str>,
     errors: &mut Vec<GraphError>,
@@ -562,21 +584,14 @@ fn validate_nested_expressions(
                 continue;
             }
         };
-        for referenced_id in template.referenced_connectors() {
-            if !connector_ids.contains(referenced_id.as_str()) {
-                errors.push(GraphError::UnknownConnectorReference {
-                    connector_id: connector.id.clone(),
-                    field: label.clone(),
-                    referenced_id,
-                });
-            } else if !ancestors.contains(referenced_id.as_str()) {
-                errors.push(GraphError::DownstreamConnectorReference {
-                    connector_id: connector.id.clone(),
-                    field: label.clone(),
-                    referenced_id,
-                });
-            }
-        }
+        check_node_references(
+            &template,
+            &connector.id,
+            &label,
+            ids_by_name,
+            ancestors,
+            errors,
+        );
         if template.uses_loop() && !loop_body.contains(connector.id.as_str()) {
             errors.push(GraphError::LoopUsedOutsideLoop {
                 connector_id: connector.id.clone(),
@@ -761,6 +776,29 @@ pub fn validate_graph(
             .push(edge.from.as_str());
         *in_degree.entry(edge.to.as_str()).or_insert(0) += 1;
     }
+    for edge in &trigger_edges {
+        predecessors
+            .entry(edge.to.as_str())
+            .or_default()
+            .push(edge.from.as_str());
+    }
+
+    let mut ids_by_name: HashMap<&str, &str> = HashMap::new();
+    let named_nodes = graph
+        .connectors
+        .iter()
+        .map(|c| (c.name.as_deref(), c.id.as_str()))
+        .chain(
+            graph
+                .triggers
+                .iter()
+                .map(|t| (t.name.as_deref(), t.id.as_str())),
+        );
+    for (name, id) in named_nodes {
+        if let Some(name) = name.map(str::trim).filter(|name| !name.is_empty()) {
+            ids_by_name.entry(name).or_insert(id);
+        }
+    }
 
     // Kahn's algorithm: repeatedly remove connectors with no remaining
     // incoming edge. Whatever is left once nothing more can be removed is
@@ -919,21 +957,14 @@ pub fn validate_graph(
                 });
             }
 
-            for referenced_id in template.referenced_connectors() {
-                if !connector_ids.contains(referenced_id.as_str()) {
-                    errors.push(GraphError::UnknownConnectorReference {
-                        connector_id: connector.id.clone(),
-                        field: field.name.to_string(),
-                        referenced_id,
-                    });
-                } else if !ancestors.contains(referenced_id.as_str()) {
-                    errors.push(GraphError::DownstreamConnectorReference {
-                        connector_id: connector.id.clone(),
-                        field: field.name.to_string(),
-                        referenced_id,
-                    });
-                }
-            }
+            check_node_references(
+                &template,
+                &connector.id,
+                field.name,
+                &ids_by_name,
+                &ancestors,
+                &mut errors,
+            );
 
             if template.uses_loop() && !loop_body.contains(connector.id.as_str()) {
                 errors.push(GraphError::LoopUsedOutsideLoop {
@@ -950,7 +981,7 @@ pub fn validate_graph(
         if connector.kind == COLLECTION_OPERATION_KIND {
             validate_nested_expressions(
                 connector,
-                &connector_ids,
+                &ids_by_name,
                 &ancestors,
                 &loop_body,
                 &mut errors,
@@ -1002,8 +1033,8 @@ mod tests {
 
     use super::super::graph::PlacedTrigger;
     use super::*;
-    use crate::domain::automation::connector::AuthRequirement;
     use crate::domain::automation::connector::connector_catalogue;
+    use crate::domain::automation::connector::{AuthRequirement, ExecutionMode};
     use events::EventDescriptor;
 
     fn condition(id: &str, predicate: &str) -> super::super::graph::PlacedConnector {
@@ -1527,13 +1558,13 @@ mod tests {
         let catalogue = connector_catalogue();
         // `predicate` accepts an expression; whatever it resolves to at
         // runtime is not knowable here, so this must not be flagged.
-        let graph = graph_of(vec![condition("c1", "{{ connectors.c2.output.flag }}")]);
+        let graph = graph_of(vec![condition("c1", "{{ $('Autre').item.json.flag }}")]);
 
         let result = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]);
 
-        // c2 does not exist, so this fails for an unrelated reason (a later
-        // rule); the point of this test is that no `FieldTypeMismatch` is
-        // ever raised for a dynamic expression.
+        // `Autre` does not exist, so this fails for an unrelated reason (a
+        // later rule); the point of this test is that no `FieldTypeMismatch`
+        // is ever raised for a dynamic expression.
         if let Err(errors) = result {
             assert!(
                 !errors
@@ -1594,6 +1625,7 @@ mod tests {
                     visible_when: None,
                 }],
                 branches: &[],
+                execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
                 sample_output: json!({}),
@@ -1679,6 +1711,7 @@ mod tests {
                 auth: AuthRequirement::Exactly("bearer_token"),
                 fields: &[],
                 branches: &[],
+                execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
                 sample_output: json!({}),
@@ -1729,6 +1762,7 @@ mod tests {
                 auth: AuthRequirement::Optional(&["bearer_token"]),
                 fields: &[],
                 branches: &[],
+                execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
                 sample_output: json!({}),
@@ -1772,6 +1806,7 @@ mod tests {
                 auth: AuthRequirement::Optional(&["bearer_token"]),
                 fields: &[],
                 branches: &[],
+                execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
                 sample_output: json!({}),
@@ -2178,10 +2213,10 @@ mod tests {
     // --- expression graph-relative checks ------------------------------------
 
     #[test]
-    fn an_expression_referencing_an_unknown_connector_is_refused_and_named() {
+    fn an_expression_referencing_an_unknown_node_is_refused_and_named() {
         let catalogue = connector_catalogue();
         let graph = with_trigger(
-            graph_of(vec![condition("c1", "{{ connectors.ghost.output.x }}")]),
+            graph_of(vec![condition("c1", "{{ $('Fantôme').item.json.x }}")]),
             "c1",
         );
 
@@ -2190,46 +2225,96 @@ mod tests {
 
         assert_eq!(
             errors,
-            vec![GraphError::UnknownConnectorReference {
+            vec![GraphError::UnknownNodeReference {
                 connector_id: "c1".to_string(),
                 field: "predicate".to_string(),
-                referenced_id: "ghost".to_string(),
+                node_name: "Fantôme".to_string(),
             }]
+        );
+        assert_eq!(
+            errors[0].to_string(),
+            "connector `c1` field `predicate` references unknown node `Fantôme`"
         );
     }
 
     #[test]
-    fn an_expression_referencing_a_downstream_connector_is_refused_and_named() {
+    fn an_expression_referencing_a_downstream_node_is_refused_and_named() {
         let catalogue = connector_catalogue();
         let mut graph = graph_of(vec![
-            condition("c1", "{{ connectors.c2.output.x }}"),
-            condition("c2", "{{ true }}"),
+            condition("c1", "{{ $('Second').item.json.x }}"),
+            labelled(condition("c2", "{{ true }}"), Some("Second"), None),
         ]);
         graph.edges.push(Edge {
             from: "c1".to_string(),
             to: "c2".to_string(),
             branch: Some(Branch::Then),
         });
+        let graph = with_trigger(graph, "c1");
 
         let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("refused");
 
-        assert!(
-            errors.contains(&GraphError::DownstreamConnectorReference {
+        assert_eq!(
+            errors,
+            vec![GraphError::NodeNotUpstream {
                 connector_id: "c1".to_string(),
                 field: "predicate".to_string(),
-                referenced_id: "c2".to_string(),
-            }),
-            "{errors:?}"
+                node_name: "Second".to_string(),
+            }]
         );
     }
 
     #[test]
-    fn an_expression_referencing_an_upstream_connector_is_accepted() {
+    fn an_expression_referencing_a_sibling_branch_or_itself_is_refused() {
         let catalogue = connector_catalogue();
         let mut graph = graph_of(vec![
-            condition("c1", "{{ true }}"),
-            condition("c2", "{{ connectors.c1.output.x }}"),
+            labelled(condition("c1", "{{ true }}"), Some("Début"), None),
+            labelled(
+                condition("c2", "{{ $('Côté B').item.json.x }}"),
+                Some("Côté A"),
+                None,
+            ),
+            labelled(
+                condition("c3", "{{ $('Côté B').item.json.x }}"),
+                Some("Côté B"),
+                None,
+            ),
+        ]);
+        for (to, branch) in [("c2", Branch::Then), ("c3", Branch::Else)] {
+            graph.edges.push(Edge {
+                from: "c1".to_string(),
+                to: to.to_string(),
+                branch: Some(branch),
+            });
+        }
+        let graph = with_trigger(graph, "c1");
+
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
+
+        assert_eq!(
+            errors,
+            vec![
+                GraphError::NodeNotUpstream {
+                    connector_id: "c2".to_string(),
+                    field: "predicate".to_string(),
+                    node_name: "Côté B".to_string(),
+                },
+                GraphError::NodeNotUpstream {
+                    connector_id: "c3".to_string(),
+                    field: "predicate".to_string(),
+                    node_name: "Côté B".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn an_expression_referencing_an_upstream_node_is_accepted() {
+        let catalogue = connector_catalogue();
+        let mut graph = graph_of(vec![
+            labelled(condition("c1", "{{ true }}"), Some("Premier"), None),
+            condition("c2", "{{ $('Premier').item.json.x }}"),
         ]);
         graph.edges.push(Edge {
             from: "c1".to_string(),
@@ -2241,6 +2326,130 @@ mod tests {
         assert_eq!(
             validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]),
             Ok(())
+        );
+    }
+
+    #[test]
+    fn an_expression_may_reference_a_distant_ancestor_and_a_trigger_by_name() {
+        let catalogue = connector_catalogue();
+        let mut graph = graph_of(vec![
+            labelled(condition("c1", "{{ true }}"), Some("Premier"), None),
+            condition("c2", "{{ true }}"),
+            condition(
+                "c3",
+                "{{ $('Premier').first().json.x and $('Départ').item.json.y }}",
+            ),
+        ]);
+        for (from, to) in [("c1", "c2"), ("c2", "c3")] {
+            graph.edges.push(Edge {
+                from: from.to_string(),
+                to: to.to_string(),
+                branch: Some(Branch::Then),
+            });
+        }
+        let mut graph = with_trigger(graph, "c1");
+        graph.triggers[0].name = Some("Départ".to_string());
+
+        assert_eq!(
+            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn a_trigger_that_does_not_feed_the_node_is_not_upstream() {
+        let catalogue = connector_catalogue();
+        let mut graph = graph_of(vec![
+            condition("c1", "{{ $('Autre départ').item.json.y }}"),
+            condition("c2", "{{ $('Autre départ').item.json.y }}"),
+        ]);
+        graph.edges.push(Edge {
+            from: "t1".to_string(),
+            to: "c2".to_string(),
+            branch: None,
+        });
+        graph.triggers.push(PlacedTrigger {
+            id: "t1".to_string(),
+            kind: TriggerKind::Manual,
+            name: Some("Autre départ".to_string()),
+            description: None,
+        });
+        let graph = with_trigger(graph, "c1");
+
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("c1 is not fed by the trigger it names");
+
+        assert_eq!(
+            errors,
+            vec![GraphError::NodeNotUpstream {
+                connector_id: "c1".to_string(),
+                field: "predicate".to_string(),
+                node_name: "Autre départ".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_node_name_is_matched_exactly_after_trimming() {
+        let catalogue = connector_catalogue();
+        let mut graph = graph_of(vec![
+            labelled(condition("c1", "{{ true }}"), Some("  Premier  "), None),
+            condition("c2", "{{ $('Premier').item.json.x }}"),
+            condition("c3", "{{ $('premier').item.json.x }}"),
+        ]);
+        for to in ["c2", "c3"] {
+            graph.edges.push(Edge {
+                from: "c1".to_string(),
+                to: to.to_string(),
+                branch: Some(Branch::Then),
+            });
+        }
+        let graph = with_trigger(graph, "c1");
+
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("the lower-case name is another name");
+
+        assert_eq!(
+            errors,
+            vec![GraphError::UnknownNodeReference {
+                connector_id: "c3".to_string(),
+                field: "predicate".to_string(),
+                node_name: "premier".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn the_connectors_root_is_refused_with_a_message_naming_the_new_syntax() {
+        let catalogue = connector_catalogue();
+        let mut graph = graph_of(vec![
+            labelled(condition("c1", "{{ true }}"), Some("Premier"), None),
+            condition("c2", "{{ connectors.c1.output.matched }}"),
+        ]);
+        graph.edges.push(Edge {
+            from: "c1".to_string(),
+            to: "c2".to_string(),
+            branch: Some(Branch::Then),
+        });
+        let graph = with_trigger(graph, "c1");
+
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
+
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        let GraphError::InvalidExpression {
+            connector_id,
+            field,
+            message,
+        } = &errors[0]
+        else {
+            panic!("expected an invalid expression, got {errors:?}");
+        };
+        assert_eq!((connector_id.as_str(), field.as_str()), ("c2", "predicate"));
+        assert!(message.contains("$('Nom du nœud').item.json"), "{message}");
+        assert!(
+            message.contains("cette expression utilise l'ancienne syntaxe"),
+            "{message}"
         );
     }
 
@@ -2335,6 +2544,7 @@ mod tests {
                 auth: AuthRequirement::None,
                 fields: &[],
                 branches: &[Branch::Then],
+                execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
                 sample_output: json!({}),
@@ -2349,6 +2559,7 @@ mod tests {
                 auth: AuthRequirement::None,
                 fields: &[],
                 branches: &[],
+                execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
                 sample_output: json!({}),
@@ -2438,6 +2649,7 @@ mod tests {
                 auth: AuthRequirement::None,
                 fields: &[],
                 branches: &[Branch::Each],
+                execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
                 sample_output: json!({}),
@@ -2460,6 +2672,7 @@ mod tests {
                     visible_when: None,
                 }],
                 branches: &[],
+                execution: ExecutionMode::PerItem,
                 output_example: json!({}),
                 output_mirrors_field: None,
                 sample_output: json!({}),
@@ -3506,7 +3719,7 @@ mod tests {
                     .as_object()
                     .cloned()
                     .unwrap(),
-                name: None,
+                name: Some(format!("Amont {id}")),
                 description: None,
                 disabled: false,
                 operation: None,
@@ -3533,7 +3746,7 @@ mod tests {
                 node(
                     "c1",
                     json!({
-                        "path": { "id": "{{ connectors.c0.output.id }}" },
+                        "path": { "id": "{{ $('Amont c0').item.json.id }}" },
                         "body": { "items": [{ "name": "{{ trigger.name }}" }] }
                     }),
                 ),
@@ -3548,7 +3761,7 @@ mod tests {
                 upstream("c0"),
                 node(
                     "c1",
-                    json!({ "path": { "id": "{{ connectors.ghost.output.id }}" } }),
+                    json!({ "path": { "id": "{{ $('Fantôme').item.json.id }}" } }),
                 ),
             ]);
 
@@ -3556,10 +3769,10 @@ mod tests {
 
             assert_eq!(
                 errors,
-                vec![GraphError::UnknownConnectorReference {
+                vec![GraphError::UnknownNodeReference {
                     connector_id: "c1".to_owned(),
                     field: "path.id".to_owned(),
-                    referenced_id: "ghost".to_owned(),
+                    node_name: "Fantôme".to_owned(),
                 }]
             );
         }
@@ -3572,7 +3785,7 @@ mod tests {
                     "c1",
                     json!({
                         "path": { "id": "1" },
-                        "body": { "items": [{ "name": "{{ connectors.c2.output.id }}" }] }
+                        "body": { "items": [{ "name": "{{ $('Amont c2').item.json.id }}" }] }
                     }),
                 ),
                 upstream("c2"),
@@ -3582,10 +3795,10 @@ mod tests {
 
             assert_eq!(
                 errors,
-                vec![GraphError::DownstreamConnectorReference {
+                vec![GraphError::NodeNotUpstream {
                     connector_id: "c1".to_owned(),
                     field: "body.items.0.name".to_owned(),
-                    referenced_id: "c2".to_owned(),
+                    node_name: "Amont c2".to_owned(),
                 }]
             );
         }
@@ -3642,7 +3855,7 @@ mod tests {
         #[test]
         fn another_kind_keeps_not_validating_what_is_nested_in_its_fields() {
             let mut other = upstream("c0");
-            other.config = json!({ "variables": { "a": "{{ connectors.ghost.output.id }}" } })
+            other.config = json!({ "variables": { "a": "{{ $('Fantôme').item.json.id }}" } })
                 .as_object()
                 .cloned()
                 .unwrap();

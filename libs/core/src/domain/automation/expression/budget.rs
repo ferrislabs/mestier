@@ -50,6 +50,10 @@ impl Write for Counter {
 }
 
 pub(crate) fn json_size(value: &Value) -> usize {
+    json_size_of(value)
+}
+
+pub(crate) fn json_size_of<T: serde::Serialize + ?Sized>(value: &T) -> usize {
     let mut counter = Counter(0);
     match serde_json::to_writer(&mut counter, value) {
         Ok(()) => counter.0,
@@ -72,6 +76,18 @@ mod tests {
             serde_json::to_string(&value).unwrap().len()
         );
         assert_eq!(json_size(&json!("x")), 3);
+    }
+
+    #[test]
+    fn a_slice_of_values_weighs_the_array_it_serializes_to() {
+        let items = [json!({ "a": 1 }), json!({ "b": [true] })];
+
+        assert_eq!(
+            json_size_of(&items[..]),
+            serde_json::to_string(&json!([{ "a": 1 }, { "b": [true] }]))
+                .unwrap()
+                .len()
+        );
     }
 
     #[test]

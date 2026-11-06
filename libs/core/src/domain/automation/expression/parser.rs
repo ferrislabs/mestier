@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::ast::{BinOp, Expr, Part, Path, PathRoot, PathSegment, Template, UnaryOp};
+use super::ast::{BinOp, Expr, NodeSelector, Part, Path, PathRoot, PathSegment, Template, UnaryOp};
 use super::error::ExpressionError;
 
 /// Entry point used by `parse_template`. A non-string value is always a
@@ -88,6 +88,7 @@ fn parse_one_expression(
 
 #[derive(Debug, Clone, PartialEq)]
 enum Tok {
+    NodeRef(String),
     Ident(String),
     Number(String),
     Str(String),
@@ -284,6 +285,7 @@ impl<'a> Lexer<'a> {
                     })
                 }
             }
+            '$' => self.lex_node_ref(start),
             '"' | '\'' => self.lex_string(c, start),
             '-' if self.peek_char_at(1).is_some_and(|c2| c2.is_ascii_digit()) => {
                 self.lex_number(start)
@@ -295,6 +297,59 @@ impl<'a> Lexer<'a> {
                 message: format!("unexpected character `{other}`"),
             }),
         }
+    }
+
+    fn lex_node_ref(&mut self, start: usize) -> Result<Spanned, ExpressionError> {
+        const EXAMPLE: &str = "$('Nom du nœud')";
+        self.bump_char();
+        self.skip_whitespace();
+        if self.peek_char() != Some('(') {
+            return Err(ExpressionError::Syntax {
+                position: start,
+                message: format!("expected `{EXAMPLE}`"),
+            });
+        }
+        self.bump_char();
+        self.skip_whitespace();
+        if self.peek_char() != Some('\'') {
+            return Err(ExpressionError::Syntax {
+                position: start,
+                message: format!("a node name goes between single quotes, e.g. `{EXAMPLE}`"),
+            });
+        }
+        self.bump_char();
+        let mut name = String::new();
+        loop {
+            match self.bump_char() {
+                None => {
+                    return Err(ExpressionError::Syntax {
+                        position: start,
+                        message: "unterminated node name".to_string(),
+                    });
+                }
+                Some('\'') => break,
+                Some('\\') => match self.peek_char() {
+                    Some(escaped @ ('\'' | '\\')) => {
+                        self.bump_char();
+                        name.push(escaped);
+                    }
+                    _ => name.push('\\'),
+                },
+                Some(c) => name.push(c),
+            }
+        }
+        self.skip_whitespace();
+        if self.peek_char() != Some(')') {
+            return Err(ExpressionError::Syntax {
+                position: self.pos,
+                message: "expected `)` after the node name".to_string(),
+            });
+        }
+        self.bump_char();
+        Ok(Spanned {
+            tok: Tok::NodeRef(name.trim().to_string()),
+            pos: start,
+        })
     }
 
     fn lex_string(&mut self, quote: char, start: usize) -> Result<Spanned, ExpressionError> {
@@ -540,6 +595,7 @@ impl<'a> Parser<'a> {
                 self.bump()?;
                 Ok(Expr::Literal(Value::Null))
             }
+            Tok::NodeRef(name) => self.parse_node_ref(name),
             Tok::Ident(name) => self.parse_ident_start(name),
             Tok::LParen => {
                 self.bump()?;
@@ -566,7 +622,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// An identifier starts either a path (`trigger`, `connectors`, `loop`)
+    /// An identifier starts either a path (`trigger`, `loop`)
     /// or a function call — the two are told apart by what follows it, so
     /// the identifier itself is always consumed first. Anything else is a
     /// syntax error naming the unknown identifier.
@@ -576,20 +632,17 @@ impl<'a> Parser<'a> {
 
         let root = match name.as_str() {
             "trigger" => Some(PathRoot::Trigger),
-            "connectors" => Some(PathRoot::Connectors),
             "loop" => Some(PathRoot::Loop),
+            "connectors" => {
+                return Err(ExpressionError::LegacyConnectorsRoot {
+                    position: start_pos,
+                });
+            }
             _ => None,
         };
 
         if let Some(root) = root {
             let segments = self.parse_path_segments()?;
-            if matches!(root, PathRoot::Connectors) && segments.is_empty() {
-                return Err(ExpressionError::Syntax {
-                    position: start_pos,
-                    message: "`connectors` requires a connector id, e.g. `connectors.c1`"
-                        .to_string(),
-                });
-            }
             return Ok(Expr::Path(Path { root, segments }));
         }
 
@@ -600,9 +653,72 @@ impl<'a> Parser<'a> {
         Err(ExpressionError::Syntax {
             position: start_pos,
             message: format!(
-                "unknown identifier `{name}`; expected `trigger`, `connectors`, `loop`, or a function call"
+                "unknown identifier `{name}`; expected `trigger`, `loop`, `$('Nom du nœud')`, or a function call"
             ),
         })
+    }
+
+    fn parse_node_ref(&mut self, name: String) -> Result<Expr, ExpressionError> {
+        self.bump()?;
+        if !matches!(self.cur.tok, Tok::Dot) {
+            return Err(ExpressionError::Syntax {
+                position: self.cur.pos,
+                message:
+                    "expected `.item`, `.first()`, `.last()`, `.all()` or `.json` after `$('…')`"
+                        .to_string(),
+            });
+        }
+        self.bump()?;
+        let accessor_pos = self.cur.pos;
+        let Tok::Ident(accessor) = self.cur.tok.clone() else {
+            return Err(ExpressionError::Syntax {
+                position: accessor_pos,
+                message: "expected `item`, `first()`, `last()`, `all()` or `json`".to_string(),
+            });
+        };
+        self.bump()?;
+
+        let mut segments = Vec::new();
+        let selector = match accessor.as_str() {
+            "item" => NodeSelector::Item,
+            "json" => {
+                segments.push(PathSegment::Field("json".to_string()));
+                NodeSelector::Item
+            }
+            "first" | "last" | "all" => {
+                self.expect_empty_call(&accessor)?;
+                match accessor.as_str() {
+                    "first" => NodeSelector::First,
+                    "last" => NodeSelector::Last,
+                    _ => NodeSelector::All,
+                }
+            }
+            other => {
+                return Err(ExpressionError::Syntax {
+                    position: accessor_pos,
+                    message: format!(
+                        "unknown accessor `{other}`; expected `item`, `first()`, `last()`, `all()` or `json`"
+                    ),
+                });
+            }
+        };
+        segments.extend(self.parse_path_segments()?);
+
+        Ok(Expr::Path(Path {
+            root: PathRoot::Node { name, selector },
+            segments,
+        }))
+    }
+
+    fn expect_empty_call(&mut self, accessor: &str) -> Result<(), ExpressionError> {
+        if !matches!(self.cur.tok, Tok::LParen) {
+            return Err(ExpressionError::Syntax {
+                position: self.cur.pos,
+                message: format!("expected `{accessor}()`"),
+            });
+        }
+        self.bump()?;
+        self.expect_rparen()
     }
 
     /// `name` is already known to be followed by `(`. Function names and
@@ -653,6 +769,11 @@ impl<'a> Parser<'a> {
                 Tok::LBracket => {
                     self.bump()?;
                     match self.cur.tok.clone() {
+                        Tok::Str(key) => {
+                            self.bump()?;
+                            self.expect_rbracket()?;
+                            segments.push(PathSegment::Field(key));
+                        }
                         Tok::Number(text) if is_index_literal(&text) => {
                             let index: usize =
                                 text.parse().map_err(|_| ExpressionError::Syntax {
@@ -666,7 +787,8 @@ impl<'a> Parser<'a> {
                         _ => {
                             return Err(ExpressionError::Syntax {
                                 position: self.cur.pos,
-                                message: "expected a non-negative integer index".to_string(),
+                                message: "expected a non-negative integer index or a quoted key"
+                                    .to_string(),
                             });
                         }
                     }

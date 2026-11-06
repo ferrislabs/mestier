@@ -83,12 +83,12 @@ impl BinOp {
     }
 }
 
-/// One reference into `trigger`, `connectors` or `loop`.
+/// One reference into `trigger`, `loop` or a node reached by name.
 ///
 /// Kept apart from the rest of [`Expr`] because two independent readers need
 /// just this piece: the evaluator resolves it against an
-/// `ExpressionContext`, and the static pass (`Template::referenced_connectors`,
-/// `Template::uses_loop`) only ever looks at the root and the first segment.
+/// `ExpressionContext`, and the static pass (`Template::referenced_nodes`,
+/// `Template::uses_loop`) only ever looks at the root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Path {
     pub(crate) root: PathRoot,
@@ -96,20 +96,24 @@ pub(crate) struct Path {
 }
 
 impl Path {
-    /// Reconstructs the source text, e.g. `connectors.c1.output.lines[0].total`.
-    /// Used to name the path in `ExpressionError::MissingPath` and
-    /// `TypeMismatch`, so both contexts name it exactly as written.
     pub(crate) fn to_source(&self) -> String {
-        let mut out = match self.root {
+        let mut out = match &self.root {
             PathRoot::Trigger => "trigger".to_string(),
-            PathRoot::Connectors => "connectors".to_string(),
             PathRoot::Loop => "loop".to_string(),
+            PathRoot::Node { name, selector } => {
+                format!("$('{}'){}", escape_node_name(name), selector.accessor())
+            }
         };
         for segment in &self.segments {
             match segment {
-                PathSegment::Field(name) => {
+                PathSegment::Field(name) if is_plain_identifier(name) => {
                     out.push('.');
                     out.push_str(name);
+                }
+                PathSegment::Field(name) => {
+                    out.push_str("[\"");
+                    out.push_str(name);
+                    out.push_str("\"]");
                 }
                 PathSegment::Index(index) => {
                     out.push('[');
@@ -122,11 +126,45 @@ impl Path {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+fn escape_node_name(name: &str) -> String {
+    name.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
+fn is_plain_identifier(name: &str) -> bool {
+    let mut characters = name.chars();
+    characters
+        .next()
+        .is_some_and(|first| first.is_alphabetic() || first == '_')
+        && characters.all(|character| character.is_alphanumeric() || character == '_')
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PathRoot {
     Trigger,
-    Connectors,
     Loop,
+    Node {
+        name: String,
+        selector: NodeSelector,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NodeSelector {
+    Item,
+    First,
+    Last,
+    All,
+}
+
+impl NodeSelector {
+    fn accessor(self) -> &'static str {
+        match self {
+            Self::Item => ".item",
+            Self::First => ".first()",
+            Self::Last => ".last()",
+            Self::All => ".all()",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,7 +174,7 @@ pub(crate) enum PathSegment {
 }
 
 /// Visits every [`Path`] reachable from `expr`. The static pass
-/// (`referenced_connectors`, `uses_loop`) is built entirely on top of this:
+/// (`referenced_nodes`, `uses_loop`) is built entirely on top of this:
 /// it never needs to know how deep a path sits inside the expression tree.
 pub(crate) fn walk_paths<'a>(expr: &'a Expr, visit: &mut impl FnMut(&'a Path)) {
     match expr {

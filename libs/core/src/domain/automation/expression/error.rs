@@ -39,6 +39,15 @@ pub enum ExpressionError {
     TooLarge {
         limit: usize,
     },
+    UnknownNode {
+        name: String,
+    },
+    NoItem {
+        name: String,
+    },
+    LegacyConnectorsRoot {
+        position: usize,
+    },
 }
 
 impl fmt::Display for ExpressionError {
@@ -61,6 +70,17 @@ impl fmt::Display for ExpressionError {
             } => write!(f, "`{path}` expected {expected}, got {got}"),
             Self::LoopOutsideLoop => write!(f, "`loop` is only valid inside a `flow.loop`"),
             Self::TooLarge { limit } => write!(f, "the value built exceeds {limit} bytes"),
+            Self::UnknownNode { name } => {
+                write!(
+                    f,
+                    "node `{name}` has no output available to this expression"
+                )
+            }
+            Self::NoItem { name } => write!(f, "node `{name}` produced no item"),
+            Self::LegacyConnectorsRoot { position } => write!(
+                f,
+                "cette expression utilise l'ancienne syntaxe `connectors.<id>.output` (position {position}) : utilise $('Nom du nœud').item.json…"
+            ),
         }
     }
 }
@@ -87,12 +107,37 @@ mod tests {
     #[test]
     fn a_missing_path_error_message_names_the_path() {
         let error = ExpressionError::MissingPath {
-            path: "connectors.c1.output.total".to_string(),
+            path: "$('Devis').item.json.total".to_string(),
         };
 
         assert!(
-            error.to_string().contains("connectors.c1.output.total"),
+            error.to_string().contains("$('Devis').item.json.total"),
             "the message must name the path: {error}"
         );
+    }
+
+    #[test]
+    fn a_node_error_names_the_node() {
+        let unknown = ExpressionError::UnknownNode {
+            name: "Rechercher".to_string(),
+        };
+        let empty = ExpressionError::NoItem {
+            name: "Rechercher".to_string(),
+        };
+
+        assert!(unknown.to_string().contains("Rechercher"), "{unknown}");
+        assert!(empty.to_string().contains("Rechercher"), "{empty}");
+    }
+
+    #[test]
+    fn the_legacy_root_error_names_the_new_syntax() {
+        let error = ExpressionError::LegacyConnectorsRoot { position: 3 };
+
+        let message = error.to_string();
+        assert!(
+            message.contains("cette expression utilise l'ancienne syntaxe"),
+            "{message}"
+        );
+        assert!(message.contains("$('Nom du nœud').item.json"), "{message}");
     }
 }

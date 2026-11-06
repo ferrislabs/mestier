@@ -1,5 +1,5 @@
 //! The workflow expression language: `{{ ... }}` templates that read a
-//! connector's output, compare and combine values, and call a closed list of
+//! node's items by name, compare and combine values, and call a closed list of
 //! functions. No JavaScript, no loops of their own — see the module's tests
 //! and issue #196 for the grammar this compiles.
 //!
@@ -34,21 +34,16 @@ pub fn parse_template(raw: &serde_json::Value) -> Result<Template, ExpressionErr
 }
 
 impl Template {
-    /// Ids of connectors referenced by this template — read `connectors.c1.…`
-    /// and `c1` is in this set. Used by #199 to reject a reference to a
-    /// connector that does not exist, before any run happens.
-    pub fn referenced_connectors(&self) -> BTreeSet<String> {
-        let mut ids = BTreeSet::new();
+    pub fn referenced_nodes(&self) -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
         for root in self.expr_roots() {
             ast::walk_paths(root, &mut |path| {
-                if path.root == ast::PathRoot::Connectors
-                    && let Some(ast::PathSegment::Field(id)) = path.segments.first()
-                {
-                    ids.insert(id.clone());
+                if let ast::PathRoot::Node { name, .. } = &path.root {
+                    names.insert(name.clone());
                 }
             });
         }
-        ids
+        names
     }
 
     /// True when the template reads `loop.*`. Used by #199 to reject `loop`
@@ -57,7 +52,7 @@ impl Template {
         let mut found = false;
         for root in self.expr_roots() {
             ast::walk_paths(root, &mut |path| {
-                if path.root == ast::PathRoot::Loop {
+                if matches!(path.root, ast::PathRoot::Loop) {
                     found = true;
                 }
             });
@@ -86,13 +81,34 @@ mod tests {
         chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap()
     }
 
-    fn empty_context(connectors: &BTreeMap<String, serde_json::Value>) -> ExpressionContext<'_> {
+    fn empty_context(nodes: &BTreeMap<String, Vec<Value>>) -> ExpressionContext<'_> {
         ExpressionContext {
             trigger: None,
-            connectors,
+            nodes,
+            position: 0,
             loop_frame: None,
             now: fixed_now(),
         }
+    }
+
+    fn nodes_of(entries: &[(&str, Vec<Value>)]) -> BTreeMap<String, Vec<Value>> {
+        entries
+            .iter()
+            .map(|(name, items)| ((*name).to_string(), items.clone()))
+            .collect()
+    }
+
+    fn at(nodes: &BTreeMap<String, Vec<Value>>, position: usize) -> ExpressionContext<'_> {
+        ExpressionContext {
+            position,
+            ..empty_context(nodes)
+        }
+    }
+
+    fn read(ctx: &ExpressionContext<'_>, source: &str) -> Result<Value, ExpressionError> {
+        parse_template(&json!(source))
+            .unwrap_or_else(|error| panic!("`{source}` must parse: {error}"))
+            .evaluate(ctx)
     }
 
     #[test]
@@ -100,7 +116,7 @@ mod tests {
         let template = parse_template(&json!(42)).expect("a number is always a valid template");
 
         assert!(template.is_static());
-        assert!(template.referenced_connectors().is_empty());
+        assert!(template.referenced_nodes().is_empty());
         assert!(!template.uses_loop());
     }
 
@@ -108,8 +124,8 @@ mod tests {
     fn a_static_literal_evaluates_to_itself_unchanged() {
         let template = parse_template(&json!({ "a": 1, "b": [true, null] }))
             .expect("an object is a valid literal template");
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let result = template
             .evaluate(&ctx)
@@ -122,8 +138,8 @@ mod tests {
     fn a_plain_string_with_no_braces_is_a_static_literal() {
         let template =
             parse_template(&json!("hello world")).expect("plain text is a valid template");
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         assert!(template.is_static());
         assert_eq!(
@@ -144,8 +160,8 @@ mod tests {
 
     #[test]
     fn whole_expression_literals_preserve_their_json_type() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let cases: &[(&str, Value)] = &[
             ("{{ 42 }}", json!(42)),
@@ -171,8 +187,8 @@ mod tests {
     #[test]
     fn surrounding_whitespace_does_not_prevent_a_whole_expression() {
         let template = parse_template(&json!("   {{ 42 }}   ")).expect("valid expression");
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         assert!(!template.is_static());
         assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(42));
@@ -194,10 +210,11 @@ mod tests {
     #[test]
     fn a_trigger_path_reads_a_nested_field() {
         let trigger = json!({ "payload": { "quote": { "total": 42 } } });
-        let connectors = BTreeMap::new();
+        let nodes = BTreeMap::new();
         let ctx = ExpressionContext {
             trigger: Some(&trigger),
-            connectors: &connectors,
+            nodes: &nodes,
+            position: 0,
             loop_frame: None,
             now: fixed_now(),
         };
@@ -208,26 +225,27 @@ mod tests {
     }
 
     #[test]
-    fn a_connectors_path_reads_a_nested_array_element() {
-        let mut connectors = BTreeMap::new();
-        connectors.insert(
-            "c1".to_string(),
-            json!({ "output": { "lines": [{ "total": 12 }, { "total": 34 }] } }),
-        );
-        let ctx = empty_context(&connectors);
-        let template = parse_template(&json!("{{ connectors.c1.output.lines[1].total }}"))
-            .expect("valid path expression");
+    fn a_node_path_reads_a_nested_array_element() {
+        let nodes = nodes_of(&[(
+            "Rechercher",
+            vec![json!({ "lines": [{ "total": 12 }, { "total": 34 }] })],
+        )]);
+        let ctx = empty_context(&nodes);
 
-        assert_eq!(template.evaluate(&ctx).expect("resolves"), json!(34));
+        assert_eq!(
+            read(&ctx, "{{ $('Rechercher').item.json.lines[1].total }}").unwrap(),
+            json!(34)
+        );
     }
 
     #[test]
     fn a_bare_trigger_path_returns_the_whole_payload() {
         let trigger = json!({ "quote_id": "q-1" });
-        let connectors = BTreeMap::new();
+        let nodes = BTreeMap::new();
         let ctx = ExpressionContext {
             trigger: Some(&trigger),
-            connectors: &connectors,
+            nodes: &nodes,
+            position: 0,
             loop_frame: None,
             now: fixed_now(),
         };
@@ -241,28 +259,23 @@ mod tests {
 
     #[test]
     fn a_missing_field_fails_naming_the_full_path() {
-        let mut connectors = BTreeMap::new();
-        connectors.insert("c1".to_string(), json!({ "output": { "total": 1 } }));
-        let ctx = empty_context(&connectors);
-        let template = parse_template(&json!("{{ connectors.c1.output.items }}"))
-            .expect("valid path expression");
+        let nodes = nodes_of(&[("Rechercher", vec![json!({ "total": 1 })])]);
+        let ctx = empty_context(&nodes);
 
-        let err = template
-            .evaluate(&ctx)
-            .expect_err("the field does not exist");
+        let err = read(&ctx, "{{ $('Rechercher').item.json.items }}").unwrap_err();
 
         assert_eq!(
             err,
             ExpressionError::MissingPath {
-                path: "connectors.c1.output.items".to_string(),
+                path: "$('Rechercher').item.json.items".to_string(),
             }
         );
     }
 
     #[test]
     fn an_absent_trigger_fails_naming_the_path() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let template =
             parse_template(&json!("{{ trigger.quote_id }}")).expect("valid path expression");
 
@@ -277,51 +290,66 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_connector_id_fails_naming_the_path() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
-        let template =
-            parse_template(&json!("{{ connectors.missing.output }}")).expect("valid path");
+    fn an_unknown_node_fails_naming_it() {
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
-        let err = template.evaluate(&ctx).expect_err("no such connector");
+        let err = read(&ctx, "{{ $('Absent').item.json }}").unwrap_err();
 
         assert_eq!(
             err,
-            ExpressionError::MissingPath {
-                path: "connectors.missing.output".to_string(),
+            ExpressionError::UnknownNode {
+                name: "Absent".to_string(),
             }
         );
     }
 
     #[test]
-    fn connectors_alone_without_an_id_is_a_syntax_error() {
-        let err = parse_template(&json!("{{ connectors }}")).expect_err("no connector id");
+    fn the_connectors_root_is_refused_with_the_new_syntax() {
+        for source in [
+            "{{ connectors.c1.output.total }}",
+            "{{ connectors }}",
+            "Total {{ upper(connectors.c1.output.name) }}",
+        ] {
+            let err = syntax_error(source);
 
-        assert!(matches!(err, ExpressionError::Syntax { .. }), "{err:?}");
+            assert!(
+                matches!(err, ExpressionError::LegacyConnectorsRoot { .. }),
+                "{source}: {err:?}"
+            );
+            assert!(
+                err.to_string().contains("$('Nom du nœud').item.json"),
+                "{err}"
+            );
+        }
     }
 
     #[test]
-    fn referenced_connectors_names_the_connector_id_of_a_path() {
-        let template = parse_template(&json!("{{ connectors.c1.output.a }}")).expect("valid path");
+    fn referenced_nodes_names_the_node_of_a_path() {
+        let template =
+            parse_template(&json!("{{ $('Rechercher').item.json.a }}")).expect("valid path");
 
-        let ids: Vec<_> = template.referenced_connectors().into_iter().collect();
-        assert_eq!(ids, vec!["c1".to_string()]);
+        let names: Vec<_> = template.referenced_nodes().into_iter().collect();
+        assert_eq!(names, vec!["Rechercher".to_string()]);
     }
 
     #[test]
-    fn a_trigger_or_loop_path_is_never_a_referenced_connector() {
+    fn a_trigger_or_loop_path_is_never_a_referenced_node() {
         let template = parse_template(&json!("{{ trigger.quote_id }}")).expect("valid path");
+        let looped = parse_template(&json!("{{ loop.item.id }}")).expect("valid path");
 
-        assert!(template.referenced_connectors().is_empty());
+        assert!(template.referenced_nodes().is_empty());
+        assert!(looped.referenced_nodes().is_empty());
     }
 
     #[test]
     fn loop_item_and_index_resolve_inside_a_loop_frame() {
         let item = json!({ "name": "brioche" });
-        let connectors = BTreeMap::new();
+        let nodes = BTreeMap::new();
         let ctx = ExpressionContext {
             trigger: None,
-            connectors: &connectors,
+            nodes: &nodes,
+            position: 0,
             loop_frame: Some(LoopFrame {
                 item: &item,
                 index: 3,
@@ -343,8 +371,8 @@ mod tests {
 
     #[test]
     fn loop_outside_a_loop_frame_fails_explicitly() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let template = parse_template(&json!("{{ loop.item }}")).expect("valid loop path");
 
         let err = template
@@ -356,8 +384,8 @@ mod tests {
 
     #[test]
     fn comparison_operators_evaluate_on_numbers() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let cases = [
             ("{{ 1 == 1 }}", true),
@@ -383,8 +411,8 @@ mod tests {
 
     #[test]
     fn equality_also_works_on_strings_and_null() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let template = parse_template(&json!("{{ \"a\" == \"a\" }}")).expect("valid");
         assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(true));
@@ -395,8 +423,8 @@ mod tests {
 
     #[test]
     fn boolean_operators_and_not_evaluate() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let cases = [
             ("{{ not true }}", false),
@@ -420,8 +448,8 @@ mod tests {
     #[test]
     fn not_binds_tighter_than_comparisons_which_bind_tighter_than_and_which_binds_tighter_than_or()
     {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         // (not false) and false == false, not `not (false and false)` == true.
         let template = parse_template(&json!("{{ not false and false }}")).expect("valid");
@@ -434,8 +462,8 @@ mod tests {
 
     #[test]
     fn parentheses_override_precedence() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let template = parse_template(&json!("{{ not (1 == 1) }}")).expect("valid");
         assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(false));
@@ -446,12 +474,10 @@ mod tests {
 
     #[test]
     fn and_short_circuits_without_evaluating_the_right_operand() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
-        // connectors.missing does not exist: if the right side were
-        // evaluated, this would fail with MissingPath instead.
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let template =
-            parse_template(&json!("{{ false and connectors.missing.output }}")).expect("valid");
+            parse_template(&json!("{{ false and $('Missing').item.json.ok }}")).expect("valid");
 
         assert_eq!(
             template.evaluate(&ctx).expect("short-circuits"),
@@ -461,10 +487,10 @@ mod tests {
 
     #[test]
     fn or_short_circuits_without_evaluating_the_right_operand() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let template =
-            parse_template(&json!("{{ true or connectors.missing.output }}")).expect("valid");
+            parse_template(&json!("{{ true or $('Missing').item.json.ok }}")).expect("valid");
 
         assert_eq!(
             template.evaluate(&ctx).expect("short-circuits"),
@@ -474,8 +500,8 @@ mod tests {
 
     #[test]
     fn comparing_a_number_to_a_string_is_a_type_mismatch() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let template = parse_template(&json!("{{ 1 < \"a\" }}")).expect("valid syntax");
 
         let err = template.evaluate(&ctx).expect_err("not comparable");
@@ -492,8 +518,8 @@ mod tests {
 
     #[test]
     fn and_on_a_non_boolean_is_a_type_mismatch() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let template = parse_template(&json!("{{ 1 and true }}")).expect("valid syntax");
 
         let err = template.evaluate(&ctx).expect_err("1 is not a boolean");
@@ -546,8 +572,8 @@ mod tests {
 
     #[test]
     fn string_functions_evaluate() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let cases = [
             ("{{ upper(\"abc\") }}", json!("ABC")),
@@ -571,43 +597,39 @@ mod tests {
 
     #[test]
     fn len_counts_strings_arrays_and_objects() {
-        let mut connectors = BTreeMap::new();
-        connectors.insert(
-            "c1".to_string(),
-            json!({ "output": { "items": [1, 2, 3] } }),
+        let nodes = nodes_of(&[("Source", vec![json!({ "items": [1, 2, 3] })])]);
+        let ctx = empty_context(&nodes);
+
+        assert_eq!(read(&ctx, "{{ len(\"abc\") }}").unwrap(), json!(3));
+        assert_eq!(
+            read(&ctx, "{{ len($('Source').item.json.items) }}").unwrap(),
+            json!(3)
         );
-        let ctx = empty_context(&connectors);
-
-        let template = parse_template(&json!("{{ len(\"abc\") }}")).expect("valid");
-        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(3));
-
-        let template =
-            parse_template(&json!("{{ len(connectors.c1.output.items) }}")).expect("valid");
-        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(3));
+        assert_eq!(
+            read(&ctx, "{{ len($('Source').all()) }}").unwrap(),
+            json!(1)
+        );
     }
 
     #[test]
     fn contains_also_works_on_arrays() {
-        let mut connectors = BTreeMap::new();
-        connectors.insert(
-            "c1".to_string(),
-            json!({ "output": { "items": [1, 2, 3] } }),
+        let nodes = nodes_of(&[("Source", vec![json!({ "items": [1, 2, 3] })])]);
+        let ctx = empty_context(&nodes);
+
+        assert_eq!(
+            read(&ctx, "{{ contains($('Source').item.json.items, 2) }}").unwrap(),
+            json!(true)
         );
-        let ctx = empty_context(&connectors);
-
-        let template =
-            parse_template(&json!("{{ contains(connectors.c1.output.items, 2) }}")).expect("valid");
-        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(true));
-
-        let template =
-            parse_template(&json!("{{ contains(connectors.c1.output.items, 5) }}")).expect("valid");
-        assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(false));
+        assert_eq!(
+            read(&ctx, "{{ contains($('Source').item.json.items, 5) }}").unwrap(),
+            json!(false)
+        );
     }
 
     #[test]
     fn to_number_and_to_string_convert() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let template = parse_template(&json!("{{ to_number(\"42\") }}")).expect("valid");
         assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(42));
@@ -621,8 +643,8 @@ mod tests {
 
     #[test]
     fn to_number_on_a_non_numeric_string_is_a_type_mismatch() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let template = parse_template(&json!("{{ to_number(\"abc\") }}")).expect("valid syntax");
 
         let err = template.evaluate(&ctx).expect_err("not numeric");
@@ -637,8 +659,8 @@ mod tests {
     // collision with clippy's known-constant list is coincidental.
     #[allow(clippy::approx_constant)]
     fn round_rounds_to_the_given_number_of_decimals() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let template = parse_template(&json!("{{ round(3.14159, 2) }}")).expect("valid");
         assert_eq!(template.evaluate(&ctx).expect("evaluates"), json!(3.14));
@@ -649,8 +671,8 @@ mod tests {
 
     #[test]
     fn concat_stringifies_and_joins_every_argument() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let template = parse_template(&json!("{{ concat(\"total: \", 42, \" (\", true, \")\") }}"))
             .expect("valid");
 
@@ -662,21 +684,19 @@ mod tests {
 
     #[test]
     fn json_serializes_arrays_and_objects_as_a_string() {
-        let mut connectors = BTreeMap::new();
-        connectors.insert("c1".to_string(), json!({ "output": { "a": 1 } }));
-        let ctx = empty_context(&connectors);
-        let template = parse_template(&json!("{{ json(connectors.c1.output) }}")).expect("valid");
+        let nodes = nodes_of(&[("Source", vec![json!({ "a": 1 })])]);
+        let ctx = empty_context(&nodes);
 
         assert_eq!(
-            template.evaluate(&ctx).expect("evaluates"),
+            read(&ctx, "{{ json($('Source').item.json) }}").unwrap(),
             json!("{\"a\":1}")
         );
     }
 
     #[test]
     fn now_reads_the_injected_clock_not_the_system_clock() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let template =
             parse_template(&json!("{{ format_date(now(), \"%Y-%m-%d\") }}")).expect("valid");
 
@@ -689,10 +709,11 @@ mod tests {
     #[test]
     fn format_date_formats_a_path_value_too() {
         let trigger = json!({ "created_at": "2025-06-15T10:30:00Z" });
-        let connectors = BTreeMap::new();
+        let nodes = BTreeMap::new();
         let ctx = ExpressionContext {
             trigger: Some(&trigger),
-            connectors: &connectors,
+            nodes: &nodes,
+            position: 0,
             loop_frame: None,
             now: fixed_now(),
         };
@@ -709,33 +730,31 @@ mod tests {
 
     #[test]
     fn default_returns_the_fallback_only_when_the_path_is_missing() {
-        let mut connectors = BTreeMap::new();
-        connectors.insert("c1".to_string(), json!({ "output": { "name": "brioche" } }));
-        let ctx = empty_context(&connectors);
+        let nodes = nodes_of(&[("Source", vec![json!({ "name": "brioche" })])]);
+        let ctx = empty_context(&nodes);
 
-        let template = parse_template(&json!(
-            "{{ default(connectors.c1.output.missing, \"fallback\") }}"
-        ))
-        .expect("valid");
         assert_eq!(
-            template.evaluate(&ctx).expect("evaluates"),
+            read(
+                &ctx,
+                "{{ default($('Source').item.json.missing, \"fallback\") }}"
+            )
+            .unwrap(),
             json!("fallback")
         );
-
-        let template = parse_template(&json!(
-            "{{ default(connectors.c1.output.name, \"fallback\") }}"
-        ))
-        .expect("valid");
         assert_eq!(
-            template.evaluate(&ctx).expect("evaluates"),
+            read(
+                &ctx,
+                "{{ default($('Source').item.json.name, \"fallback\") }}"
+            )
+            .unwrap(),
             json!("brioche")
         );
     }
 
     #[test]
     fn default_does_not_catch_a_type_mismatch_or_an_unknown_function() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let template =
             parse_template(&json!("{{ default(1 and true, \"fallback\") }}")).expect("valid");
@@ -757,24 +776,16 @@ mod tests {
 
     #[test]
     fn an_array_alone_stays_an_array_but_interpolated_it_becomes_a_string() {
-        let mut connectors = BTreeMap::new();
-        connectors.insert(
-            "c1".to_string(),
-            json!({ "output": { "items": [1, 2, 3] } }),
-        );
-        let ctx = empty_context(&connectors);
+        let nodes = nodes_of(&[("Source", vec![json!({ "items": [1, 2, 3] })])]);
+        let ctx = empty_context(&nodes);
 
-        let whole = parse_template(&json!("{{ connectors.c1.output.items }}")).expect("valid");
         assert_eq!(
-            whole.evaluate(&ctx).expect("evaluates"),
+            read(&ctx, "{{ $('Source').item.json.items }}").unwrap(),
             json!([1, 2, 3]),
             "a whole expression keeps its JSON type"
         );
-
-        let interpolated =
-            parse_template(&json!("Items: {{ connectors.c1.output.items }}")).expect("valid");
         assert_eq!(
-            interpolated.evaluate(&ctx).expect("evaluates"),
+            read(&ctx, "Items: {{ $('Source').item.json.items }}").unwrap(),
             json!("Items: [1,2,3]"),
             "the same expression in a sentence always renders a string"
         );
@@ -782,8 +793,8 @@ mod tests {
 
     #[test]
     fn interpolation_stringifies_every_json_type_without_requoting_strings() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
 
         let cases = [
             ("Hello {{ \"World\" }}!", "Hello World!"),
@@ -802,14 +813,15 @@ mod tests {
     }
 
     #[test]
-    fn interpolation_is_not_static_and_referenced_connectors_covers_every_expression() {
-        let mut connectors = BTreeMap::new();
-        connectors.insert("c1".to_string(), json!({ "output": { "a": 1 } }));
-        connectors.insert("c2".to_string(), json!({ "output": { "b": 2 } }));
-        let ctx = empty_context(&connectors);
+    fn interpolation_is_not_static_and_referenced_nodes_covers_every_expression() {
+        let nodes = nodes_of(&[
+            ("Premier", vec![json!({ "a": 1 })]),
+            ("Second", vec![json!({ "b": 2 })]),
+        ]);
+        let ctx = empty_context(&nodes);
 
         let template = parse_template(&json!(
-            "{{ connectors.c1.output.a }} and {{ connectors.c2.output.b }} and {{ connectors.c1.output.a }}"
+            "{{ $('Premier').item.json.a }} and {{ $('Second').item.json.b }} and {{ $('Premier').item.json.a }}"
         ))
         .expect("valid");
 
@@ -818,8 +830,8 @@ mod tests {
             template.evaluate(&ctx).expect("evaluates"),
             json!("1 and 2 and 1")
         );
-        let ids: Vec<_> = template.referenced_connectors().into_iter().collect();
-        assert_eq!(ids, vec!["c1".to_string(), "c2".to_string()]);
+        let names: Vec<_> = template.referenced_nodes().into_iter().collect();
+        assert_eq!(names, vec!["Premier".to_string(), "Second".to_string()]);
     }
 
     #[test]
@@ -832,11 +844,12 @@ mod tests {
 
     fn payload_context<'a>(
         trigger: &'a Value,
-        connectors: &'a BTreeMap<String, Value>,
+        nodes: &'a BTreeMap<String, Vec<Value>>,
     ) -> ExpressionContext<'a> {
         ExpressionContext {
             trigger: Some(trigger),
-            connectors,
+            nodes,
+            position: 0,
             loop_frame: None,
             now: fixed_now(),
         }
@@ -875,8 +888,8 @@ mod tests {
 
     #[test]
     fn nesting_within_the_ceiling_still_evaluates() {
-        let connectors = BTreeMap::new();
-        let ctx = empty_context(&connectors);
+        let nodes = BTreeMap::new();
+        let ctx = empty_context(&nodes);
         let source = format!("{{{{ {}1{} }}}}", "(".repeat(30), ")".repeat(30));
         let chain = format!("{{{{ false{} }}}}", " or true".repeat(30));
 
@@ -890,8 +903,8 @@ mod tests {
     #[test]
     fn a_path_clones_its_leaf_only_never_the_root_it_hangs_from() {
         let trigger = json!({ "big": "x".repeat(2 * 1024 * 1024), "small": 7 });
-        let connectors = BTreeMap::new();
-        let ctx = payload_context(&trigger, &connectors);
+        let nodes = BTreeMap::new();
+        let ctx = payload_context(&trigger, &nodes);
         let small = parse_template(&json!("{{ trigger.small }}")).unwrap();
         let big = parse_template(&json!("{{ trigger.big }}")).unwrap();
 
@@ -908,8 +921,8 @@ mod tests {
     #[test]
     fn eighty_thousand_references_to_a_megabyte_leaf_are_refused_long_before_they_are_built() {
         let trigger = json!({ "p": "x".repeat(1024 * 1024) });
-        let connectors = BTreeMap::new();
-        let ctx = payload_context(&trigger, &connectors);
+        let nodes = BTreeMap::new();
+        let ctx = payload_context(&trigger, &nodes);
         let source = "{{trigger.p}}".repeat(80_000);
         let template = parse_template(&json!(source)).unwrap();
         let started = std::time::Instant::now();
@@ -928,8 +941,8 @@ mod tests {
     #[test]
     fn every_function_that_builds_a_string_counts_what_it_builds() {
         let trigger = json!({ "p": "x".repeat(600) });
-        let connectors = BTreeMap::new();
-        let ctx = payload_context(&trigger, &connectors);
+        let nodes = BTreeMap::new();
+        let ctx = payload_context(&trigger, &nodes);
 
         for source in [
             "{{ concat(trigger.p, trigger.p) }}",
@@ -957,8 +970,8 @@ mod tests {
     #[test]
     fn a_budget_is_shared_by_everything_evaluated_against_it() {
         let trigger = json!({ "p": "x".repeat(400) });
-        let connectors = BTreeMap::new();
-        let ctx = payload_context(&trigger, &connectors);
+        let nodes = BTreeMap::new();
+        let ctx = payload_context(&trigger, &nodes);
         let template = parse_template(&json!("{{ trigger.p }}")).unwrap();
         let mut budget = EvalBudget::new(1000);
 
@@ -975,11 +988,12 @@ mod tests {
 
     #[test]
     fn loop_paths_resolve_the_same_without_building_the_synthetic_object() {
-        let connectors = BTreeMap::new();
+        let nodes = BTreeMap::new();
         let item = json!({ "name": "Ada", "tags": ["a", "b"] });
         let ctx = ExpressionContext {
             trigger: None,
-            connectors: &connectors,
+            nodes: &nodes,
+            position: 0,
             loop_frame: Some(LoopFrame {
                 item: &item,
                 index: 4,
@@ -1002,5 +1016,310 @@ mod tests {
             read("{{ loop.index.deeper }}").unwrap_err(),
             ExpressionError::MissingPath { .. }
         ));
+    }
+
+    #[test]
+    fn item_pairs_with_the_element_of_the_same_rank() {
+        let nodes = nodes_of(&[(
+            "Rechercher",
+            vec![
+                json!({ "client": { "nom": "Ada" } }),
+                json!({ "client": { "nom": "Grace" } }),
+                json!({ "client": { "nom": "Linus" } }),
+            ],
+        )]);
+        let source = "{{ $('Rechercher').item.json.client.nom }}";
+
+        assert_eq!(read(&at(&nodes, 0), source).unwrap(), json!("Ada"));
+        assert_eq!(read(&at(&nodes, 1), source).unwrap(), json!("Grace"));
+        assert_eq!(read(&at(&nodes, 2), source).unwrap(), json!("Linus"));
+    }
+
+    #[test]
+    fn item_falls_back_to_the_last_element_when_the_list_is_shorter() {
+        let nodes = nodes_of(&[("Court", vec![json!({ "n": 1 }), json!({ "n": 2 })])]);
+
+        assert_eq!(
+            read(&at(&nodes, 5), "{{ $('Court').item.json.n }}").unwrap(),
+            json!(2)
+        );
+    }
+
+    #[test]
+    fn item_on_an_empty_list_is_an_error_naming_the_node() {
+        let nodes = nodes_of(&[("Vide", Vec::new())]);
+        let ctx = empty_context(&nodes);
+
+        for source in [
+            "{{ $('Vide').item.json.n }}",
+            "{{ $('Vide').first().json.n }}",
+            "{{ $('Vide').last().json.n }}",
+        ] {
+            let err = read(&ctx, source).unwrap_err();
+
+            assert_eq!(
+                err,
+                ExpressionError::NoItem {
+                    name: "Vide".to_string()
+                },
+                "{source}"
+            );
+            assert!(err.to_string().contains("Vide"));
+        }
+    }
+
+    #[test]
+    fn first_last_and_all_read_the_list_whatever_the_position() {
+        let nodes = nodes_of(&[(
+            "Liste",
+            vec![json!({ "n": 1 }), json!({ "n": 2 }), json!({ "n": 3 })],
+        )]);
+        let ctx = at(&nodes, 1);
+
+        assert_eq!(
+            read(&ctx, "{{ $('Liste').first().json.n }}").unwrap(),
+            json!(1)
+        );
+        assert_eq!(
+            read(&ctx, "{{ $('Liste').last().json.n }}").unwrap(),
+            json!(3)
+        );
+        assert_eq!(
+            read(&ctx, "{{ $('Liste').all() }}").unwrap(),
+            json!([{ "n": 1 }, { "n": 2 }, { "n": 3 }])
+        );
+        assert_eq!(read(&ctx, "{{ $('Liste').all()[1].n }}").unwrap(), json!(2));
+        assert_eq!(
+            read(&ctx, "{{ $('Liste').all()[2].json.n }}").unwrap(),
+            json!(3)
+        );
+        assert_eq!(read(&ctx, "{{ len($('Liste').all()) }}").unwrap(), json!(3));
+    }
+
+    #[test]
+    fn json_is_an_alias_of_the_element_and_is_optional() {
+        let nodes = nodes_of(&[("Devis", vec![json!({ "client": { "nom": "Ada" } })])]);
+        let ctx = empty_context(&nodes);
+
+        for source in [
+            "{{ $('Devis').item.json.client.nom }}",
+            "{{ $('Devis').item.client.nom }}",
+            "{{ $('Devis').json.client.nom }}",
+            "{{ $('Devis').first().json.client.nom }}",
+        ] {
+            assert_eq!(read(&ctx, source).unwrap(), json!("Ada"), "{source}");
+        }
+        assert_eq!(
+            read(&ctx, "{{ $('Devis').item.json }}").unwrap(),
+            json!({ "client": { "nom": "Ada" } })
+        );
+        assert_eq!(
+            read(&ctx, "{{ $('Devis').item }}").unwrap(),
+            json!({ "client": { "nom": "Ada" } })
+        );
+    }
+
+    #[test]
+    fn a_bracketed_key_reads_a_field_that_is_not_an_identifier() {
+        let nodes = nodes_of(&[(
+            "Appel",
+            vec![
+                json!({ "headers": { "content-type": "text/plain" }, "lignes": [{ "code": "A1" }] }),
+            ],
+        )]);
+        let ctx = empty_context(&nodes);
+        let trigger = json!({ "a b": 3 });
+        let with_trigger = ExpressionContext {
+            trigger: Some(&trigger),
+            ..empty_context(&nodes)
+        };
+
+        assert_eq!(
+            read(&ctx, "{{ $('Appel').item.json.headers[\"content-type\"] }}").unwrap(),
+            json!("text/plain")
+        );
+        assert_eq!(
+            read(&ctx, "{{ $('Appel').item.json.lignes[0].code }}").unwrap(),
+            json!("A1")
+        );
+        assert_eq!(
+            read(&with_trigger, "{{ trigger[\"a b\"] }}").unwrap(),
+            json!(3)
+        );
+    }
+
+    #[test]
+    fn a_node_name_keeps_its_spaces_accents_and_escaped_quotes() {
+        let nodes = nodes_of(&[
+            ("Prix d'achat", vec![json!({ "n": 1 })]),
+            ("Appel l’API d’Hugo", vec![json!({ "n": 2 })]),
+            ("Back\\slash", vec![json!({ "n": 3 })]),
+            ("Rechercher les devis envoyés", vec![json!({ "n": 4 })]),
+        ]);
+        let ctx = empty_context(&nodes);
+
+        assert_eq!(
+            read(&ctx, r"{{ $('Prix d\'achat').item.json.n }}").unwrap(),
+            json!(1)
+        );
+        assert_eq!(
+            read(&ctx, "{{ $('Appel l’API d’Hugo').item.json.n }}").unwrap(),
+            json!(2)
+        );
+        assert_eq!(
+            read(&ctx, r"{{ $('Back\\slash').item.json.n }}").unwrap(),
+            json!(3)
+        );
+        assert_eq!(
+            read(
+                &ctx,
+                "{{ $( 'Rechercher les devis envoyés' ).item.json.n }}"
+            )
+            .unwrap(),
+            json!(4)
+        );
+    }
+
+    #[test]
+    fn a_node_name_is_compared_exactly_after_trimming() {
+        let nodes = nodes_of(&[("Devis", vec![json!({ "n": 1 })])]);
+        let ctx = empty_context(&nodes);
+
+        assert_eq!(
+            read(&ctx, "{{ $('  Devis ').item.json.n }}").unwrap(),
+            json!(1)
+        );
+        assert_eq!(
+            read(&ctx, "{{ $('devis').item.json.n }}").unwrap_err(),
+            ExpressionError::UnknownNode {
+                name: "devis".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn a_node_reference_inside_a_sentence_renders_its_value() {
+        let nodes = nodes_of(&[(
+            "Si",
+            vec![
+                json!({ "numero": "DV-1", "client": { "nom": "Ada" }, "montant": 7450 }),
+                json!({ "numero": "DV-2", "client": { "nom": "Grace" }, "montant": 3280 }),
+            ],
+        )]);
+        let source = "Devis {{ $('Si').item.json.numero }} pour {{ $('Si').item.json.client.nom }} ({{ $('Si').item.json.montant }} €)";
+
+        assert_eq!(
+            read(&at(&nodes, 1), source).unwrap(),
+            json!("Devis DV-2 pour Grace (3280 €)")
+        );
+    }
+
+    #[test]
+    fn a_node_reference_works_inside_operators_and_functions() {
+        let nodes = nodes_of(&[("Devis", vec![json!({ "montant": 7450, "nom": "ada" })])]);
+        let ctx = empty_context(&nodes);
+
+        assert_eq!(
+            read(&ctx, "{{ $('Devis').item.json.montant > 5000 }}").unwrap(),
+            json!(true)
+        );
+        assert_eq!(
+            read(&ctx, "{{ upper($('Devis').item.json.nom) }}").unwrap(),
+            json!("ADA")
+        );
+    }
+
+    #[test]
+    fn the_malformed_node_references_are_syntax_errors() {
+        for source in [
+            "{{ $('Devis') }}",
+            "{{ $('Devis').nope }}",
+            "{{ $('Devis').first }}",
+            "{{ $(\"Devis\").item }}",
+            "{{ $(Devis).item }}",
+            "{{ $('Devis' }}",
+            "{{ $('Devis).item }}",
+            "{{ $ }}",
+        ] {
+            let err = syntax_error(source);
+
+            assert!(
+                matches!(err, ExpressionError::Syntax { .. }),
+                "{source}: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_missing_node_path_is_written_as_the_expression_reads() {
+        let nodes = nodes_of(&[("Prix d'achat", vec![json!({ "a": 1 })])]);
+        let ctx = empty_context(&nodes);
+
+        let err = read(
+            &ctx,
+            r#"{{ $('Prix d\'achat').item.json.headers["x-y"][2] }}"#,
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            err,
+            ExpressionError::MissingPath {
+                path: r#"$('Prix d\'achat').item.json.headers["x-y"][2]"#.to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn default_does_not_catch_a_node_without_items() {
+        let nodes = nodes_of(&[("Vide", Vec::new())]);
+        let ctx = empty_context(&nodes);
+
+        let err = read(&ctx, "{{ default($('Vide').item.json.n, 0) }}").unwrap_err();
+
+        assert!(matches!(err, ExpressionError::NoItem { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn a_node_list_is_charged_to_the_budget_before_it_is_built() {
+        let big = json!({ "p": "x".repeat(600) });
+        let nodes = nodes_of(&[("Gros", vec![big.clone(), big.clone(), big])]);
+        let ctx = empty_context(&nodes);
+        let all = parse_template(&json!("{{ $('Gros').all() }}")).unwrap();
+        let sentence = parse_template(&json!("tout : {{ $('Gros').all() }}")).unwrap();
+        let one = parse_template(&json!("{{ $('Gros').item.json.p }}")).unwrap();
+
+        assert_eq!(
+            all.evaluate_within(&ctx, &mut EvalBudget::new(1000))
+                .unwrap_err(),
+            ExpressionError::TooLarge { limit: 1000 }
+        );
+        assert_eq!(
+            sentence
+                .evaluate_within(&ctx, &mut EvalBudget::new(1000))
+                .unwrap_err(),
+            ExpressionError::TooLarge { limit: 1000 }
+        );
+        assert!(
+            one.evaluate_within(&ctx, &mut EvalBudget::new(1000))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn the_loop_can_hand_its_item_to_a_node_lookup_expression() {
+        let item = json!({ "name": "Ada" });
+        let nodes = nodes_of(&[("Devis", vec![json!({ "n": 1 })])]);
+        let ctx = ExpressionContext {
+            loop_frame: Some(LoopFrame {
+                item: &item,
+                index: 0,
+            }),
+            ..empty_context(&nodes)
+        };
+
+        assert_eq!(
+            read(&ctx, "{{ concat(loop.item.name, $('Devis').item.json.n) }}").unwrap(),
+            json!("Ada1")
+        );
     }
 }

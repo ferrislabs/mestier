@@ -147,8 +147,25 @@ pub struct ConnectorDescriptorResponse {
     pub auth: AuthRequirementResponse,
     pub fields: Vec<FieldResponse>,
     pub branches: Vec<BranchDto>,
+    pub execution: ExecutionModeResponse,
     pub output_example: Value,
     pub output_mirrors_field: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionModeResponse {
+    PerItem,
+    Once,
+}
+
+impl From<mestier_core::ExecutionMode> for ExecutionModeResponse {
+    fn from(value: mestier_core::ExecutionMode) -> Self {
+        match value {
+            mestier_core::ExecutionMode::PerItem => Self::PerItem,
+            mestier_core::ExecutionMode::Once => Self::Once,
+        }
+    }
 }
 
 impl From<&mestier_core::ConnectorDescriptor> for ConnectorDescriptorResponse {
@@ -166,6 +183,7 @@ impl From<&mestier_core::ConnectorDescriptor> for ConnectorDescriptorResponse {
                 .copied()
                 .map(BranchDto::from)
                 .collect(),
+            execution: value.execution.into(),
             output_example: value.output_example.clone(),
             output_mirrors_field: value.output_mirrors_field.map(str::to_owned),
         }
@@ -1026,12 +1044,12 @@ impl From<&mestier_core::GraphError> for GraphErrorResponse {
             TooManyRecipients { connector_id } => {
                 (Some(connector_id.clone()), None, Some("to".to_owned()))
             }
-            UnknownConnectorReference {
+            UnknownNodeReference {
                 connector_id,
                 field,
                 ..
             } => (Some(connector_id.clone()), None, Some(field.clone())),
-            DownstreamConnectorReference {
+            NodeNotUpstream {
                 connector_id,
                 field,
                 ..
@@ -1476,6 +1494,46 @@ mod tests {
 
         assert_eq!(response.connector_id, Some("c1".to_string()));
         assert_eq!(response.field, None);
+    }
+
+    #[test]
+    fn a_node_reference_error_names_the_connector_the_field_and_the_node() {
+        let unknown = GraphErrorResponse::from(&GraphError::UnknownNodeReference {
+            connector_id: "c2".to_string(),
+            field: "url".to_string(),
+            node_name: "Rechercher les devis".to_string(),
+        });
+        let downstream = GraphErrorResponse::from(&GraphError::NodeNotUpstream {
+            connector_id: "c2".to_string(),
+            field: "body.items.0.name".to_string(),
+            node_name: "Créer un projet".to_string(),
+        });
+
+        assert_eq!(unknown.connector_id, Some("c2".to_string()));
+        assert_eq!(unknown.field, Some("url".to_string()));
+        assert!(unknown.message.contains("Rechercher les devis"));
+        assert_eq!(downstream.connector_id, Some("c2".to_string()));
+        assert_eq!(downstream.field, Some("body.items.0.name".to_string()));
+        assert!(downstream.message.contains("Créer un projet"));
+    }
+
+    #[test]
+    fn a_descriptor_response_carries_how_the_connector_runs_over_items() {
+        let catalogue = connector_catalogue();
+
+        let once = ConnectorDescriptorResponse::from(catalogue.get("flow.merge", 1).unwrap());
+        let per_item = ConnectorDescriptorResponse::from(catalogue.get("smtp.send", 1).unwrap());
+
+        assert_eq!(once.execution, ExecutionModeResponse::Once);
+        assert_eq!(per_item.execution, ExecutionModeResponse::PerItem);
+        assert_eq!(
+            serde_json::to_value(once.execution).unwrap(),
+            serde_json::json!("once")
+        );
+        assert_eq!(
+            serde_json::to_value(per_item.execution).unwrap(),
+            serde_json::json!("per_item")
+        );
     }
 
     // --- catalogue DTOs are enough to render a form data-driven --------

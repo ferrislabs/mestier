@@ -301,6 +301,20 @@ pub fn sample_of(kind: &str) -> Value {
 
 pub fn assert_same_shape(actual: &Value, kind: &str) {
     let sample = sample_of(kind);
+    if let (Some(actual_items), Some(sample_items)) = (actual.as_array(), sample.as_array()) {
+        assert!(
+            !sample_items.is_empty(),
+            "the sample of `{kind}` is an empty list"
+        );
+        for item in actual_items {
+            assert_same_item(item, &sample_items[0], kind);
+        }
+        return;
+    }
+    assert_same_item(actual, &sample, kind);
+}
+
+fn assert_same_item(actual: &Value, sample: &Value, kind: &str) {
     let (Some(actual_fields), Some(sample_fields)) = (actual.as_object(), sample.as_object())
     else {
         panic!("`{kind}` must produce an object, got {actual} against {sample}");

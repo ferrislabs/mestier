@@ -4,7 +4,7 @@ use serde::Serialize;
 use serde_json::json;
 use thiserror::Error;
 
-use super::descriptor::{AuthRequirement, ConnectorDescriptor};
+use super::descriptor::{AuthRequirement, ConnectorDescriptor, ExecutionMode};
 use super::field::{Field, FieldKind, SelectOption, VisibleWhen};
 use crate::domain::automation::credential_kind::HTTP_CREDENTIAL_KINDS;
 use crate::domain::automation::workflow::Branch;
@@ -704,6 +704,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: LOOP_FIELDS,
             branches: &[Branch::Each, Branch::After],
+            execution: ExecutionMode::Once,
             output_example: json!({ "item": "…", "index": 0 }),
             output_mirrors_field: None,
             sample_output: json!({ "items": ["…"] }),
@@ -716,6 +717,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: CONDITION_FIELDS,
             branches: &[Branch::Then, Branch::Else],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "matched": true }),
             output_mirrors_field: None,
             sample_output: json!({ "matched": true }),
@@ -728,6 +730,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: CONFIG_FIELDS,
             branches: &[],
+            execution: ExecutionMode::Once,
             output_example: json!({ "customer_id": "…", "retry_limit": 3 }),
             output_mirrors_field: Some("variables"),
             sample_output: json!({ "customer_id": "…", "retry_limit": 3 }),
@@ -740,6 +743,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: WAIT_FIELDS,
             branches: &[],
+            execution: ExecutionMode::Once,
             output_example: json!({
                 "duration": 2,
                 "unit": "days",
@@ -760,9 +764,10 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: MERGE_FIELDS,
             branches: &[],
-            output_example: json!({ "items": [{ "id": "…" }] }),
+            execution: ExecutionMode::Once,
+            output_example: json!({ "id": "…" }),
             output_mirrors_field: None,
-            sample_output: json!({ "items": [{ "id": "…" }] }),
+            sample_output: json!([{ "id": "…" }]),
         },
     ]
 }
@@ -779,6 +784,7 @@ fn customer_descriptors() -> Vec<ConnectorDescriptor> {
         auth: AuthRequirement::None,
         fields: CUSTOMER_CREATE_FIELDS,
         branches: &[],
+        execution: ExecutionMode::PerItem,
         output_example: json!({ "id": "…", "name": "…" }),
         output_mirrors_field: None,
         sample_output: json!({ "id": "00000000-0000-0000-0000-000000000000", "name": "…" }),
@@ -795,6 +801,7 @@ fn support_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: SUPPORT_ASSIGN_TICKET_FIELDS,
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "ticket_id": "…", "assignee_member_id": "…" }),
             output_mirrors_field: None,
             sample_output: json!({
@@ -810,6 +817,7 @@ fn support_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: SUPPORT_ADD_BADGE_FIELDS,
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "ticket_id": "…", "label": "High", "tone": "neutral" }),
             output_mirrors_field: None,
             sample_output: json!({
@@ -831,6 +839,7 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: NOTE_ADD_FIELDS,
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "ticket_id": "…", "note_id": "…" }),
             output_mirrors_field: None,
             sample_output: json!({
@@ -846,35 +855,30 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: QUOTE_SEARCH_FIELDS,
             branches: &[],
+            execution: ExecutionMode::Once,
             output_example: json!({
-                "items": [{
-                    "id": "…",
-                    "reference": "DV-2026-0001",
-                    "title": "…",
-                    "status": "SENT",
-                    "customer_id": "…",
-                    "net_cents": 0,
-                    "gross_cents": 0,
-                    "created_at": "2026-01-01T00:00:00Z",
-                    "updated_at": "2026-01-01T00:00:00Z",
-                }],
-                "count": 1,
+                "id": "…",
+                "reference": "DV-2026-0001",
+                "title": "…",
+                "status": "SENT",
+                "customer_id": "…",
+                "net_cents": 0,
+                "gross_cents": 0,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
             }),
             output_mirrors_field: None,
-            sample_output: json!({
-                "items": [{
-                    "id": "00000000-0000-0000-0000-000000000000",
-                    "reference": "DV-2026-0001",
-                    "title": "Rénovation de la salle de bain",
-                    "status": "SENT",
-                    "customer_id": "00000000-0000-0000-0000-000000000000",
-                    "net_cents": 100000,
-                    "gross_cents": 120000,
-                    "created_at": "2026-01-01T00:00:00Z",
-                    "updated_at": "2026-01-01T00:00:00Z",
-                }],
-                "count": 1,
-            }),
+            sample_output: json!([{
+                "id": "00000000-0000-0000-0000-000000000000",
+                "reference": "DV-2026-0001",
+                "title": "Rénovation de la salle de bain",
+                "status": "SENT",
+                "customer_id": "00000000-0000-0000-0000-000000000000",
+                "net_cents": 100000,
+                "gross_cents": 120000,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+            }]),
         },
         ConnectorDescriptor {
             kind: "mestier.project.create",
@@ -884,6 +888,7 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: PROJECT_CREATE_FIELDS,
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "project_id": "…", "name": "…", "quote_id": "…" }),
             output_mirrors_field: None,
             sample_output: json!({
@@ -900,6 +905,7 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::None,
             fields: CHAT_POST_MESSAGE_FIELDS,
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "message_id": "…", "channel_id": "…" }),
             output_mirrors_field: None,
             sample_output: json!({
@@ -919,6 +925,7 @@ fn smtp_descriptors() -> Vec<ConnectorDescriptor> {
         auth: AuthRequirement::Exactly("smtp"),
         fields: SMTP_SEND_FIELDS,
         branches: &[],
+        execution: ExecutionMode::PerItem,
         output_example: json!({
             "message_id": "<8f2c1d@duval.fr>",
             "accepted": ["claire.fontaine@fontaine-immo.fr"],
@@ -945,6 +952,7 @@ fn http_descriptors() -> Vec<ConnectorDescriptor> {
         auth: AuthRequirement::Optional(HTTP_CREDENTIAL_KINDS),
         fields: HTTP_REQUEST_FIELDS,
         branches: &[],
+        execution: ExecutionMode::PerItem,
         output_example: json!({
             "status": 200,
             "headers": { "content-type": "application/json" },
@@ -964,6 +972,7 @@ fn collection_descriptors() -> Vec<ConnectorDescriptor> {
         auth: AuthRequirement::Optional(HTTP_CREDENTIAL_KINDS),
         fields: COLLECTION_OPERATION_FIELDS,
         branches: &[],
+        execution: ExecutionMode::PerItem,
         output_example: json!({
             "status": 200,
             "headers": { "content-type": "application/json" },
@@ -988,6 +997,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::Exactly("odoo_api"),
             fields: ODOO_CREATE_PARTNER_FIELDS,
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "id": 42 }),
             output_mirrors_field: None,
             sample_output: json!({ "id": 42 }),
@@ -1000,6 +1010,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::Exactly("odoo_api"),
             fields: ODOO_UPDATE_PARTNER_FIELDS,
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "id": 42, "updated": true }),
             output_mirrors_field: None,
             sample_output: json!({ "id": 42, "updated": true }),
@@ -1012,6 +1023,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             auth: AuthRequirement::Exactly("odoo_api"),
             fields: ODOO_CREATE_INVOICE_FIELDS,
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "id": 99 }),
             output_mirrors_field: None,
             sample_output: json!({ "id": 99 }),
@@ -1038,6 +1050,7 @@ fn task_recurrence_descriptors() -> Vec<ConnectorDescriptor> {
         auth: AuthRequirement::None,
         fields: &[],
         branches: &[],
+        execution: ExecutionMode::PerItem,
         output_example: json!({ "materialized": 0 }),
         output_mirrors_field: None,
         sample_output: json!({ "materialized": 0 }),
@@ -1060,6 +1073,7 @@ mod tests {
             auth: AuthRequirement::None,
             fields: &[],
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "index": 0 }),
             output_mirrors_field: None,
             sample_output: json!({ "index": 0 }),
@@ -1476,6 +1490,49 @@ mod tests {
                 "`{}` has no output example, so nothing documents its shape",
                 descriptor.kind
             );
+        }
+    }
+
+    #[test]
+    fn only_the_connectors_that_work_on_the_whole_list_run_once() {
+        let catalogue = connector_catalogue();
+        let mut once: Vec<&str> = catalogue
+            .descriptors()
+            .filter(|descriptor| descriptor.execution == ExecutionMode::Once)
+            .map(|descriptor| descriptor.kind)
+            .collect();
+        once.sort_unstable();
+
+        assert_eq!(
+            once,
+            [
+                "flow.config",
+                "flow.loop",
+                "flow.merge",
+                "flow.wait",
+                "mestier.quote.search"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_list_sources_sample_a_list_of_items_and_the_others_one_item() {
+        let catalogue = connector_catalogue();
+
+        for descriptor in catalogue.descriptors() {
+            let is_list = matches!(descriptor.kind, "flow.merge" | "mestier.quote.search");
+            assert_eq!(
+                descriptor.sample_output.is_array(),
+                is_list,
+                "{}",
+                descriptor.kind
+            );
+            let first = if is_list {
+                &descriptor.sample_output[0]
+            } else {
+                &descriptor.sample_output
+            };
+            assert!(first.is_object(), "{}", descriptor.kind);
         }
     }
 

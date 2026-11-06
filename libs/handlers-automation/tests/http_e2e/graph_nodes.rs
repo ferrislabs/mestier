@@ -221,3 +221,110 @@ async fn a_trigger_and_a_connector_cannot_share_a_name() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn every_connector_descriptor_declares_how_it_runs_over_items() {
+    let app = harness::start().await;
+
+    let read: Value = client()
+        .get(app.connectors_url())
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the catalogue call")
+        .json()
+        .await
+        .expect("json");
+
+    let connectors = read["data"]["connectors"].as_array().expect("connectors");
+    assert!(!connectors.is_empty());
+    for connector in connectors {
+        let mode = connector["execution"].as_str().expect("an execution mode");
+        assert!(["per_item", "once"].contains(&mode), "{connector}");
+    }
+    let execution_of = |kind: &str| {
+        connectors
+            .iter()
+            .find(|connector| connector["kind"] == kind)
+            .unwrap_or_else(|| panic!("`{kind}` is in the catalogue"))["execution"]
+            .clone()
+    };
+    for once in [
+        "flow.loop",
+        "flow.merge",
+        "flow.wait",
+        "flow.config",
+        "mestier.quote.search",
+    ] {
+        assert_eq!(execution_of(once), "once", "{once}");
+    }
+    for per_item in [
+        "flow.condition",
+        "mestier.customer.create",
+        "http.request",
+        "smtp.send",
+    ] {
+        assert_eq!(execution_of(per_item), "per_item", "{per_item}");
+    }
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_graph_reading_another_node_by_name_saves_and_the_old_syntax_is_refused() {
+    let app = harness::start().await;
+    let workflow_id = new_workflow(&app).await;
+    let by_name = {
+        let mut graph = graph(json!({ "name": "Premier" }), Some("Second"));
+        graph["connectors"][1]["config"] =
+            json!({ "predicate": "{{ $('Premier').item.json.matched }}" });
+        graph
+    };
+    let by_id = {
+        let mut graph = graph(json!({ "name": "Premier" }), Some("Second"));
+        graph["connectors"][1]["config"] =
+            json!({ "predicate": "{{ connectors.c1.output.matched }}" });
+        graph
+    };
+    let unknown = {
+        let mut graph = graph(json!({ "name": "Premier" }), Some("Second"));
+        graph["connectors"][1]["config"] =
+            json!({ "predicate": "{{ $('Fantôme').item.json.matched }}" });
+        graph
+    };
+
+    let saved = save(&app, &workflow_id, by_name).await;
+    let refused_old = save(&app, &workflow_id, by_id).await;
+    let refused_unknown = save(&app, &workflow_id, unknown).await;
+
+    assert_eq!(saved.status(), 201);
+    assert_eq!(refused_old.status(), 422);
+    let old: Value = refused_old.json().await.expect("json");
+    let errors = old["details"]["errors"].as_array().expect("errors");
+    let fault = errors
+        .iter()
+        .find(|error| error["connector_id"] == "c2" && error["field"] == "predicate")
+        .unwrap_or_else(|| panic!("no error on c2.predicate: {errors:?}"));
+    assert!(
+        fault["message"]
+            .as_str()
+            .expect("a message")
+            .contains("$('Nom du nœud').item.json"),
+        "{fault}"
+    );
+    assert_eq!(refused_unknown.status(), 422);
+    let unknown: Value = refused_unknown.json().await.expect("json");
+    let errors = unknown["details"]["errors"].as_array().expect("errors");
+    assert!(
+        errors.iter().any(|error| error["connector_id"] == "c2"
+            && error["field"] == "predicate"
+            && error["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("Fantôme"))),
+        "{errors:?}"
+    );
+
+    app.cleanup().await;
+}

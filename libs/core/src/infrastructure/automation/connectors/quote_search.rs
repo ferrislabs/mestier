@@ -95,7 +95,7 @@ impl Connector for QuoteSearchConnector {
         match self.usecase.search_quotes(search).await {
             Ok(results) => {
                 let items: Vec<Value> = results.items().iter().map(summary_json).collect();
-                ConnectorOutcome::Produced(json!({ "count": items.len(), "items": items }))
+                ConnectorOutcome::Produced(Value::Array(items))
             }
             Err(error) => ConnectorOutcome::Failed {
                 error: error.to_string(),
@@ -253,17 +253,14 @@ mod tests {
             updated_at: noon(),
         };
         let item = summary_json(&summary);
-        let sample_item = &descriptor.sample_output["items"][0];
+        let sample_item = &descriptor.sample_output[0];
         let names = |value: &Value| {
             let mut names: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
             names.sort();
             names
         };
         assert_eq!(names(&item), names(sample_item));
-        assert_same_shape(
-            &json!({ "count": 1, "items": [item] }),
-            "mestier.quote.search",
-        );
+        assert_same_shape(&json!([item]), "mestier.quote.search");
     }
 
     fn connector(pool: PgPool) -> QuoteSearchConnector {
@@ -286,14 +283,12 @@ mod tests {
 
     fn titles(outcome: ConnectorOutcome) -> Vec<String> {
         match outcome {
-            ConnectorOutcome::Produced(output) => {
-                let items = output["items"].as_array().unwrap();
-                assert_eq!(output["count"], items.len());
-                items
-                    .iter()
-                    .map(|item| item["title"].as_str().unwrap().to_owned())
-                    .collect()
-            }
+            ConnectorOutcome::Produced(output) => output
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item["title"].as_str().unwrap().to_owned())
+                .collect(),
             other => panic!("expected an output, got {other:?}"),
         }
     }

@@ -33,8 +33,8 @@ pub struct ConnectorInput<'a> {
 /// ever produce them.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConnectorOutcome {
-    /// Rangée sous `connectors.<id>.output` for every expression evaluated
-    /// afterwards.
+    /// An object is one item, an array is a list of items (flattened with the
+    /// results of the other items a per-item connector ran for).
     Produced(Value),
     Failed {
         error: String,
@@ -145,6 +145,8 @@ mod tests {
     }
 
     fn descriptor_sampling(sample: Value) -> ConnectorDescriptor {
+        use crate::domain::automation::connector::ExecutionMode;
+
         ConnectorDescriptor {
             kind: "test.unexecutable",
             version: 1,
@@ -153,6 +155,7 @@ mod tests {
             auth: crate::domain::automation::connector::AuthRequirement::None,
             fields: &[],
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: Value::Null,
             output_mirrors_field: None,
             sample_output: sample,

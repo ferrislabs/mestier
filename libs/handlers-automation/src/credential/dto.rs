@@ -320,7 +320,7 @@ mod tests {
         );
         assert_eq!(
             wire["usages"],
-            json!([{ "usage": "smtp", "label": "E-mail SMTP", "has_node": false }])
+            json!([{ "usage": "smtp", "label": "E-mail SMTP", "has_node": true }])
         );
         assert_eq!(wire["fields"][1]["name"], json!("port"));
         assert_eq!(wire["fields"][1]["kind"], json!("number"));

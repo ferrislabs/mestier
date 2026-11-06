@@ -9,5 +9,5 @@ mod field;
 pub mod smtp;
 
 pub use catalogue::{ConnectorCatalogue, ConnectorCatalogueError, connector_catalogue};
-pub use descriptor::{AuthRequirement, ConnectorDescriptor};
+pub use descriptor::{AuthRequirement, ConnectorDescriptor, ExecutionMode};
 pub use field::{Field, FieldKind, SelectOption, VisibleWhen};

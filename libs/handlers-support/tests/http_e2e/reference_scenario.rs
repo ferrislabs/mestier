@@ -38,6 +38,34 @@ fn connector(id: &str, kind: &str, config: Value) -> PlacedConnector {
     }
 }
 
+fn assert_taken_then(steps: &BTreeMap<String, (StepStatus, Option<Value>)>, id: &str) {
+    let (status, output) = steps.get(id).unwrap_or_else(|| panic!("no step {id}"));
+    assert_eq!(*status, StepStatus::Succeeded, "{id}");
+    let output = output
+        .as_ref()
+        .unwrap_or_else(|| panic!("no output for {id}"));
+    assert_eq!(
+        output["Then"].as_array().map(Vec::len),
+        Some(1),
+        "{id}: {output}"
+    );
+    assert_eq!(output["Else"], json!([]), "{id}: {output}");
+}
+
+fn assert_taken_else(steps: &BTreeMap<String, (StepStatus, Option<Value>)>, id: &str) {
+    let (status, output) = steps.get(id).unwrap_or_else(|| panic!("no step {id}"));
+    assert_eq!(*status, StepStatus::Succeeded, "{id}");
+    let output = output
+        .as_ref()
+        .unwrap_or_else(|| panic!("no output for {id}"));
+    assert_eq!(output["Then"], json!([]), "{id}: {output}");
+    assert_eq!(
+        output["Else"].as_array().map(Vec::len),
+        Some(1),
+        "{id}: {output}"
+    );
+}
+
 fn edge(from: &str, to: &str, branch: Option<Branch>) -> Edge {
     Edge {
         from: from.to_owned(),
@@ -209,29 +237,23 @@ async fn a_ticket_created_through_intake_is_assigned_badged_and_followed_to_reso
     assert_eq!(run.error, None);
     assert_eq!(run.trigger_id.as_deref(), Some("t1"));
     let steps = steps_of(&app, run).await;
-    assert_eq!(
-        steps.get("c1"),
-        Some(&(StepStatus::Succeeded, Some(json!({ "matched": true }))))
-    );
+    assert_taken_then(&steps, "c1");
     assert_eq!(
         steps.get("c2"),
         Some(&(
             StepStatus::Succeeded,
-            Some(json!({
+            Some(json!([{
                 "ticket_id": ticket_id,
                 "assignee_member_id": app.admin.member_id,
-            }))
+            }]))
         ))
     );
-    assert_eq!(
-        steps.get("c3"),
-        Some(&(StepStatus::Succeeded, Some(json!({ "matched": true }))))
-    );
+    assert_taken_then(&steps, "c3");
     assert_eq!(
         steps.get("c4"),
         Some(&(
             StepStatus::Succeeded,
-            Some(json!({ "ticket_id": ticket_id, "label": "High", "tone": "neutral" }))
+            Some(json!([{ "ticket_id": ticket_id, "label": "High", "tone": "neutral" }]))
         ))
     );
 
@@ -360,18 +382,12 @@ async fn a_ticket_created_through_intake_is_assigned_badged_and_followed_to_reso
     assert_eq!(plain_run.status, RunStatus::Succeeded, "{plain_run:#?}");
     assert_eq!(plain_run.error, None);
     let plain_steps = steps_of(&app, plain_run).await;
-    assert_eq!(
-        plain_steps.get("c1"),
-        Some(&(StepStatus::Succeeded, Some(json!({ "matched": false }))))
-    );
+    assert_taken_else(&plain_steps, "c1");
     assert_eq!(
         plain_steps.get("c2").map(|step| step.0),
         Some(StepStatus::Skipped)
     );
-    assert_eq!(
-        plain_steps.get("c3"),
-        Some(&(StepStatus::Succeeded, Some(json!({ "matched": false }))))
-    );
+    assert_taken_else(&plain_steps, "c3");
     assert_eq!(
         plain_steps.get("c4").map(|step| step.0),
         Some(StepStatus::Skipped)
