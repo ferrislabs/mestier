@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+	useMutation,
+	useQueries,
+	useQuery,
+	useQueryClient,
+} from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 import { isTerminalRunStatus } from '#/pages/automation/lib/workflow-runs'
 
@@ -13,6 +18,8 @@ const CREDENTIAL_ROTATE_PATH =
 	'/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate'
 const SETTINGS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/settings'
+const FOLDERS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/folders'
 const WORKFLOWS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows'
 const WORKFLOW_PATH =
@@ -147,12 +154,22 @@ export function useReplayRun() {
 	})
 }
 
-/** Fetched only to resolve `workflow_id` into a name for the run log — no
- * write path needed here, that is the workflow editor's job (#204). */
-export function useAutomationWorkflows(organizationId: string) {
+export function useAutomationFolders(organizationId: string) {
+	return useQuery(
+		window.tanstackApi.get(FOLDERS_PATH, {
+			path: { organization_id: organizationId },
+		}).queryOptions,
+	)
+}
+
+export function useAutomationWorkflows(
+	organizationId: string,
+	archived = false,
+) {
 	return useQuery(
 		window.tanstackApi.get(WORKFLOWS_PATH, {
 			path: { organization_id: organizationId },
+			query: archived ? { archived: true } : {},
 		}).queryOptions,
 	)
 }
@@ -170,7 +187,11 @@ export function useUpdateWorkflow() {
 	const queryClient = useQueryClient()
 	return useMutation({
 		...window.tanstackApi.mutation('patch', WORKFLOW_PATH).mutationOptions,
-		onSuccess: () => invalidate(queryClient, WORKFLOWS_PATH),
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, WORKFLOWS_PATH),
+				invalidate(queryClient, WORKFLOW_PATH),
+			]),
 	})
 }
 
@@ -182,12 +203,13 @@ export function useDeleteWorkflow() {
 	})
 }
 
-export function useWorkflow(organizationId: string, workflowId: string) {
-	return useQuery(
-		window.tanstackApi.get(WORKFLOW_PATH, {
-			path: { organization_id: organizationId, workflow_id: workflowId },
+export function useWorkflow(organizationId: string, workflowId: string | null) {
+	return useQuery({
+		...window.tanstackApi.get(WORKFLOW_PATH, {
+			path: { organization_id: organizationId, workflow_id: workflowId ?? '' },
 		}).queryOptions,
-	)
+		enabled: workflowId !== null,
+	})
 }
 
 export function useSaveWorkflowVersion() {
@@ -195,7 +217,11 @@ export function useSaveWorkflowVersion() {
 	return useMutation({
 		...window.tanstackApi.mutation('put', WORKFLOW_VERSIONS_PATH)
 			.mutationOptions,
-		onSuccess: () => invalidate(queryClient, WORKFLOW_PATH),
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, WORKFLOWS_PATH),
+				invalidate(queryClient, WORKFLOW_PATH),
+			]),
 	})
 }
 
@@ -214,6 +240,32 @@ export function useStartRun() {
 	return useMutation({
 		...window.tanstackApi.mutation('post', WORKFLOW_RUNS_PATH).mutationOptions,
 		onSuccess: () => invalidate(queryClient, RUNS_PATH),
+	})
+}
+
+function graphsByVersion(
+	results: readonly { data?: { data: Schemas.RunDetailResponse } }[],
+): ReadonlyMap<string, Schemas.GraphDto | null> {
+	const graphs = new Map<string, Schemas.GraphDto | null>()
+	for (const result of results) {
+		const detail = result.data?.data
+		if (detail) graphs.set(detail.workflow_version_id, detail.graph ?? null)
+	}
+	return graphs
+}
+
+export function useRunGraphs(
+	organizationId: string,
+	runIds: readonly string[],
+) {
+	return useQueries({
+		queries: runIds.map((runId) => ({
+			...window.tanstackApi.get(RUN_PATH, {
+				path: { organization_id: organizationId, run_id: runId },
+			}).queryOptions,
+			staleTime: Number.POSITIVE_INFINITY,
+		})),
+		combine: graphsByVersion,
 	})
 }
 
@@ -248,4 +300,5 @@ export type CreatedCredential = Credential & { secret: unknown }
 export type AutomationSettings = Schemas.AutomationSettingsBody
 export type Run = Schemas.RunResponse
 export type Workflow = Schemas.WorkflowResponse
+export type AutomationFolder = Schemas.FolderResponse
 export type WorkflowDetail = Schemas.WorkflowDetailResponse

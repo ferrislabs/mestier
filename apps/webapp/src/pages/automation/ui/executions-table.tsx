@@ -182,11 +182,11 @@ export function ExecutionsTable({
 										organizationSlug,
 										workflowPath(row.workflowId),
 									)}
-									search={workflowExecutionsSearch(row.runId)}
-									aria-label={`Ouvrir l’exécution ${row.shortId} de ${row.workflowName}`}
+									search={workflowExecutionsSearch(row.number)}
+									aria-label={`Ouvrir l’exécution ${row.number} de ${row.workflowName}`}
 									className="rounded font-mono text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 								>
-									#{row.shortId}
+									#{row.number}
 								</Link>
 							</TableCell>
 							<TableCell className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
@@ -207,12 +207,26 @@ export function ExecutionsTable({
 							</TableCell>
 							<TableCell className="w-full max-w-0 px-4 py-2.5 max-lg:hidden">
 								{row.failure ? (
-									<span
-										className="block truncate text-sm text-state-alert"
-										title={row.failure}
-									>
-										{row.failure}
-									</span>
+									row.failure.nodeLabel === null ? (
+										<span
+											className="block truncate text-sm text-state-alert"
+											title={row.failure.message}
+										>
+											{row.failure.message}
+										</span>
+									) : (
+										<span
+											className="block truncate text-sm"
+											title={`${row.failure.nodeLabel} : ${row.failure.message}`}
+										>
+											<span className="font-medium text-state-alert">
+												{row.failure.nodeLabel}
+											</span>{' '}
+											<span className="text-muted-foreground">
+												: {row.failure.message}
+											</span>
+										</span>
+									)
 								) : (
 									<span className="text-muted-foreground">—</span>
 								)}

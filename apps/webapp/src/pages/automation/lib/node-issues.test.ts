@@ -14,8 +14,9 @@ function node(id: string, config: Record<string, unknown> = {}) {
 		kind: 'http.request',
 		version: 1,
 		config,
+		name: id,
 	}
-	return connectorNode(connector, { x: 0, y: 0 }, lookup, { label: id })
+	return connectorNode(connector, { x: 0, y: 0 }, lookup)
 }
 
 const nothing = () => undefined

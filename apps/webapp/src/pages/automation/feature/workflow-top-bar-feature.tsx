@@ -4,9 +4,9 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useWorkflow } from '#/hooks/use-automation'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { buildOrgPath } from '#/modules/org-path'
-import { useWorkflowTags } from '#/pages/automation/feature/use-workflow-folders'
 import type { GraphChange } from '#/pages/automation/feature/use-workflow-graph'
 import {
+	NEW_WORKFLOW_ID,
 	workflowExecutionsLocation,
 	workflowPath,
 } from '#/pages/automation/lib/automation-paths'
@@ -38,6 +38,8 @@ export function useEditorSession(): EditorSession | null {
 	return useContext(EditorSessionContext)
 }
 
+const NO_TAGS: readonly string[] = []
+
 export interface WorkflowTopBarFeatureProps {
 	workflowId: string
 	view: EditorView
@@ -66,7 +68,8 @@ function SessionTopBar({
 	view,
 }: WorkflowTopBarFeatureProps & { session: EditorSession }) {
 	const { activeOrganization } = useActiveOrganization()
-	const tags = useWorkflowTags(session.workflowId)
+	const workflowQuery = useWorkflow(activeOrganization.id, session.workflowId)
+	const tags = workflowQuery.data?.data.tags ?? NO_TAGS
 	const canManage = useHasPermission('MANAGE_AUTOMATION')
 	const changeView = useViewSwitch(workflowId, view)
 
@@ -93,10 +96,13 @@ function SessionTopBar({
 
 function StandaloneTopBar({ workflowId, view }: WorkflowTopBarFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
-	const workflowQuery = useWorkflow(activeOrganization.id, workflowId)
-	const tags = useWorkflowTags(workflowId)
+	const workflowQuery = useWorkflow(
+		activeOrganization.id,
+		workflowId === NEW_WORKFLOW_ID ? null : workflowId,
+	)
 	const changeView = useViewSwitch(workflowId, view)
 	const workflow = workflowQuery.data?.data
+	const tags = workflow?.tags ?? NO_TAGS
 
 	return (
 		<EditorTopBar

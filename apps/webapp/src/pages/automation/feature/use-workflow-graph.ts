@@ -15,6 +15,7 @@ import {
 	type EditorLookup,
 	type EditorNode,
 	edgeIdOf,
+	type NodeDetailsPatch,
 	type NodeMeta,
 	type NodeMetaMap,
 	type OutputSource,
@@ -25,6 +26,8 @@ import {
 	toLayout,
 	toMeta,
 	triggerNode,
+	withDetails,
+	withDisabled,
 	withPresentation,
 } from '#/pages/automation/lib/editor-nodes'
 import {
@@ -62,9 +65,14 @@ function sameErrors(
 	return a.length === b.length && a.every((error, index) => error === b[index])
 }
 
+export interface ConnectorPresetMeta extends NodeMeta {
+	label?: string
+	subtitle?: string
+}
+
 export interface ConnectorPreset {
 	config?: Record<string, unknown>
-	meta?: NodeMeta
+	meta?: ConnectorPresetMeta
 }
 
 export interface GraphChange {
@@ -101,7 +109,7 @@ export interface WorkflowGraphState {
 		>,
 	) => void
 	updateTriggerKind: (nodeId: string, kind: Schemas.TriggerKindDto) => void
-	updateMeta: (nodeId: string, patch: NodeMeta) => void
+	updateDetails: (nodeId: string, patch: NodeDetailsPatch) => void
 	selectNode: (nodeId: string) => void
 	setDisabled: (nodeIds: readonly string[], disabled: boolean) => void
 	applyPositions: (positions: ReadonlyMap<string, NodePosition>) => void
@@ -273,17 +281,22 @@ export function useWorkflowGraph({
 						)
 					})()
 				: fallbackPosition
+			const presetMeta = preset?.meta
 			const connector: Schemas.PlacedConnectorDto = {
 				id,
 				kind: descriptor.kind,
 				version: descriptor.version,
 				config: preset?.config ?? withFieldDefaults(descriptor.kind, {}) ?? {},
+				...(presetMeta?.label === undefined ? {} : { name: presetMeta.label }),
+				...(presetMeta?.subtitle === undefined
+					? {}
+					: { description: presetMeta.subtitle }),
 			}
 			const created = connectorNode(
 				connector,
 				findFreePosition(snapToGrid(origin), nodes),
 				lookupRef.current,
-				preset?.meta,
+				presetMeta?.operation ? { operation: presetMeta.operation } : {},
 			)
 			const label = uniqueLabel(
 				created.data.label,
@@ -292,16 +305,7 @@ export function useWorkflowGraph({
 			const named =
 				label === created.data.label
 					? created
-					: withPresentation(
-							{
-								...created,
-								data: {
-									...created.data,
-									meta: { ...created.data.meta, label },
-								},
-							},
-							lookupRef.current,
-						)
+					: withDetails(created, { name: label }, lookupRef.current)
 			commit(
 				{
 					nodes: [...selectOnly(nodes, id), { ...named, selected: true }],
@@ -342,16 +346,7 @@ export function useWorkflowGraph({
 			const named =
 				label === created.data.label
 					? created
-					: withPresentation(
-							{
-								...created,
-								data: {
-									...created.data,
-									meta: { ...created.data.meta, label },
-								},
-							},
-							lookupRef.current,
-						)
+					: withDetails(created, { name: label }, lookupRef.current)
 			commit(
 				{
 					nodes: [...selectOnly(nodes, id), { ...named, selected: true }],
@@ -421,42 +416,26 @@ export function useWorkflowGraph({
 		[mapNode, record],
 	)
 
-	const updateMeta = useCallback(
-		(nodeId: string, patch: NodeMeta) => {
+	const updateDetails = useCallback(
+		(nodeId: string, patch: NodeDetailsPatch) => {
 			record(`meta:${nodeId}`)
-			mapNode(nodeId, (node) =>
-				withPresentation(
-					{
-						...node,
-						data: { ...node.data, meta: { ...node.data.meta, ...patch } },
-					},
-					lookupRef.current,
-				),
-			)
+			mapNode(nodeId, (node) => withDetails(node, patch, lookupRef.current))
 		},
 		[mapNode, record],
 	)
 
 	const setDisabled = useCallback(
 		(nodeIds: readonly string[], disabled: boolean) => {
-			if (nodeIds.length === 0) return
-			record()
 			const targets = new Set(nodeIds)
 			const { nodes, edges } = stateRef.current
+			if (!nodes.some((node) => targets.has(node.id) && node.data.connector))
+				return
+			record()
 			commit(
 				{
 					nodes: nodes.map((node) =>
 						targets.has(node.id)
-							? withPresentation(
-									{
-										...node,
-										data: {
-											...node.data,
-											meta: { ...node.data.meta, disabled },
-										},
-									},
-									lookupRef.current,
-								)
+							? withDisabled(node, disabled, lookupRef.current)
 							: node,
 					),
 					edges,
@@ -527,33 +506,33 @@ export function useWorkflowGraph({
 			const current = toGraph(nodes, edges)
 			const slot = findFreePosition(snapToGrid(position), nodes)
 			const taken = nodes.map((node) => node.data.label)
-			const meta: NodeMeta = {
-				...source.data.meta,
-				label: uniqueLabel(label, taken),
-			}
+			const name = uniqueLabel(label, taken)
 			const copy = source.data.connector
 				? connectorNode(
 						{
 							...source.data.connector,
 							id: nextConnectorId(current),
 							config: structuredClone(source.data.connector.config),
+							name,
 						},
 						slot,
 						lookupRef.current,
-						meta,
+						source.data.meta,
 					)
 				: source.data.trigger
 					? triggerNode(
 							{
+								...source.data.trigger,
 								id: nextTriggerId(current),
 								kind:
 									source.data.trigger.kind === 'Manual'
 										? 'Manual'
 										: { Events: [...source.data.trigger.kind.Events] },
+								name,
 							},
 							slot,
 							lookupRef.current,
-							meta,
+							source.data.meta,
 						)
 					: null
 			if (!copy) return
@@ -608,7 +587,7 @@ export function useWorkflowGraph({
 		addTrigger,
 		updateConnector,
 		updateTriggerKind,
-		updateMeta,
+		updateDetails,
 		selectNode,
 		setDisabled,
 		applyPositions,

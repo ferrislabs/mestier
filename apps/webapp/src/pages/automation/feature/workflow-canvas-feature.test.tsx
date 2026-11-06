@@ -71,6 +71,7 @@ const ORGANIZATION: Organization = {
 	missing_legal_identity_fields: [],
 	field_clock_enabled: false,
 	vat_on_debits: false,
+	mcp_enabled: false,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
 }
@@ -586,6 +587,54 @@ describe('WorkflowPageFeature (editor) — a 422 from the backend', () => {
 		expect(await screen.findByText('URL manquante')).toBeDefined()
 	})
 
+	it('says in the node details, in French, that the name is already taken', async () => {
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				{ ...connector('c1'), name: 'Facturer' },
+				{ ...connector('c2'), name: 'facturer' },
+			],
+			edges: [],
+			triggers: [],
+		}
+		const layout = { c1: { x: 0, y: 0 }, c2: { x: 280, y: 0 } }
+
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout }),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				throw Object.assign(new Error('Invalid graph'), {
+					status: 422,
+					data: {
+						code: 'E_GRAPH_INVALID',
+						message: 'Invalid graph',
+						status: 422,
+						details: {
+							errors: [
+								{
+									connector_id: 'c2',
+									field: 'name',
+									message:
+										'connector `c2` reuses the name `facturer`, already given to another node',
+								},
+							],
+						},
+					},
+				})
+			})
+		})
+
+		await clickSave()
+
+		fireEvent.doubleClick(await screen.findByTestId('rf__node-c2'))
+		const dialog = await screen.findByRole('dialog')
+
+		expect((await within(dialog).findByRole('alert')).textContent).toBe(
+			'Un autre nœud porte déjà ce nom.',
+		)
+	})
+
 	it('lands a trigger-scoped 422 on the trigger wired to nothing, not on the graph banner', async () => {
 		const graph: Schemas.GraphDto = {
 			connectors: [],
@@ -953,8 +1002,71 @@ describe('WorkflowPageFeature (editor) — a trigger saved with the workflow', (
 			.body
 		expect(body.graph.triggers).toEqual([
 			{ id: 't1', kind: 'Manual' },
-			{ id: 't2', kind: 'Manual' },
+			{ id: 't2', kind: 'Manual', name: 'Clic 2' },
 		])
+	})
+})
+
+describe('WorkflowPageFeature (editor) — the node fields', () => {
+	it('shows the fields saved with the graph and sends a new name back with the next version', async () => {
+		const user = userEvent.setup()
+		const saved: Schemas.PlacedConnectorDto = {
+			...connector('c1'),
+			name: 'Facturer',
+			description: 'Crée la facture',
+			disabled: true,
+		}
+		const api = renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({
+					graph: { connectors: [saved], edges: [], triggers: [] },
+					layout: { c1: { x: 0, y: 0 } },
+				}),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, (params) => ({
+				data: {
+					id: 'version-2',
+					workflow_id: 'workflow-1',
+					version: 2,
+					graph: (params as { body: { graph: Schemas.GraphDto } }).body.graph,
+					created_at: '2026-08-02T00:00:00Z',
+					created_by: null,
+				},
+			}))
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		expect(within(node).getByText('Facturer')).toBeDefined()
+		expect(within(node).getByText('Crée la facture')).toBeDefined()
+		expect(within(node).getByText('Désactivé')).toBeDefined()
+
+		fireEvent.contextMenu(node, { clientX: 200, clientY: 150 })
+		await user.click(await screen.findByRole('menuitem', { name: /Renommer/ }))
+		const input = await screen.findByLabelText('Nom du nœud')
+		await user.clear(input)
+		await user.type(input, 'Facturer le client')
+		await user.click(screen.getByRole('button', { name: 'Renommer' }))
+		await clickSave()
+
+		await waitFor(() => {
+			expect(
+				api.calls.some(
+					(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
+				),
+			).toBe(true)
+		})
+		const call = api.calls.find(
+			(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
+		)
+		const body = (call?.params as { body: Schemas.SaveWorkflowVersionRequest })
+			.body
+		expect(body.graph.connectors).toEqual([
+			{ ...saved, name: 'Facturer le client' },
+		])
+		expect(
+			window.localStorage.getItem('mestier:automation:node-meta:workflow-1'),
+		).not.toContain('Facturer le client')
 	})
 })
 

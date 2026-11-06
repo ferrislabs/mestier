@@ -18,6 +18,7 @@ function workflow(overrides: Partial<WorkflowRow> = {}): WorkflowRow {
 		lastRun: null,
 		updatedAt: '2026-08-01T00:00:00Z',
 		tags: [],
+		folderId: null,
 		folderLabel: null,
 		...overrides,
 	}
@@ -34,6 +35,7 @@ function baseProps(
 		folder: null,
 		folderPath: [],
 		folderMissing: false,
+		folderPending: false,
 		subfolders: [],
 		hasWorkflowsInScope: true,
 		query: '',
@@ -370,6 +372,15 @@ describe('AutomationWorkflowsList — projects', () => {
 				.getByRole('link', { name: 'Ventes' })
 				.getAttribute('href'),
 		).toBe('/o/atelier-bois/automatisation/projets/ventes')
+	})
+
+	it('shows only the loading state while the project is being fetched', async () => {
+		await render({ folderPending: true, workflows: [] })
+
+		expect(screen.getByText('Chargement des workflows…')).toBeDefined()
+		expect(screen.queryByRole('heading', { name: 'Workflows' })).toBeNull()
+		expect(screen.queryByText('Projet introuvable')).toBeNull()
+		expect(screen.queryByRole('link', { name: 'Nouveau workflow' })).toBeNull()
 	})
 
 	it('says so when the project does not exist', async () => {

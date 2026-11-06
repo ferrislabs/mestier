@@ -46,6 +46,64 @@ export function connectorLevelErrors(
 		.map((error) => error.message)
 }
 
+const KNOWN_NODE_TEXT_ERRORS: readonly {
+	pattern: RegExp
+	french: (match: RegExpExecArray) => string
+}[] = [
+	{
+		pattern: /has an empty name$/,
+		french: () => 'Le nom ne peut pas être vide.',
+	},
+	{
+		pattern: /has a name longer than (\d+) characters$/,
+		french: ([, limit]) => `Le nom ne peut pas dépasser ${limit} caractères.`,
+	},
+	{
+		pattern: /has a description longer than (\d+) characters$/,
+		french: ([, limit]) =>
+			`La description ne peut pas dépasser ${limit} caractères.`,
+	},
+	{
+		pattern: /reuses the name `.*`, already given to another node$/,
+		french: () => 'Un autre nœud porte déjà ce nom.',
+	},
+]
+
+function knownNodeTextError(message: string): string | null {
+	for (const { pattern, french } of KNOWN_NODE_TEXT_ERRORS) {
+		const match = pattern.exec(message)
+		if (match) return french(match)
+	}
+	return null
+}
+
+export interface NodeTextErrors {
+	name: string | null
+	description: string | null
+	rest: ConnectorValidationError[]
+}
+
+export function nodeTextErrors(
+	errors: readonly ConnectorValidationError[],
+	configFieldNames: ReadonlySet<string>,
+): NodeTextErrors {
+	const result: NodeTextErrors = { name: null, description: null, rest: [] }
+	for (const error of errors) {
+		const field = error.field
+		if (field !== 'name' && field !== 'description') {
+			result.rest.push(error)
+			continue
+		}
+		const known = knownNodeTextError(error.message)
+		if (known === null && configFieldNames.has(field)) {
+			result.rest.push(error)
+			continue
+		}
+		result[field] ??= known ?? error.message
+	}
+	return result
+}
+
 function placedDefinitions(graph: Schemas.GraphDto): Map<string, string> {
 	return new Map([
 		...graph.triggers.map(

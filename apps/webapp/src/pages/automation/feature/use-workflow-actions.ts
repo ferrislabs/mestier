@@ -16,6 +16,7 @@ export interface WorkflowSource {
 	id: string
 	name: string
 	description: string | null
+	folderId: string | null
 	tags: readonly string[]
 }
 
@@ -38,6 +39,9 @@ export function useWorkflowActions(organizationId: string) {
 			body: {
 				name: copyName(source.name),
 				description: source.description,
+				enabled: false,
+				folder_id: source.folderId,
+				tags: [...source.tags],
 			},
 		})
 		const version = detail.data.current_version

@@ -3,21 +3,30 @@ import {
 	type ExecutionStatus,
 	toExecutionStatus,
 } from '#/pages/automation/lib/execution-status'
-import { formatStartedAt } from '#/pages/automation/lib/format'
+import {
+	formatStartedAt,
+	formatVersionLabel,
+} from '#/pages/automation/lib/format'
 import { normalizeText } from '#/pages/automation/lib/text'
 import {
 	runElapsedMs,
 	runTriggerLabel,
+	type TriggerLabels,
 } from '#/pages/automation/lib/workflow-runs'
 
 export const ALL = 'all'
 
 const DAY_MS = 86_400_000
 
+export interface ExecutionFailure {
+	nodeLabel: string | null
+	message: string
+}
+
 export interface ExecutionRow {
 	key: string
 	runId: string
-	shortId: string
+	number: number
 	workflowId: string
 	workflowName: string
 	startedLabel: string
@@ -27,7 +36,7 @@ export interface ExecutionRow {
 	durationMs: number | null
 	stepsDone: number
 	stepsTotal: number
-	failure: string | null
+	failure: ExecutionFailure | null
 	version: string
 }
 
@@ -71,33 +80,43 @@ const STATUS_ORDER: Record<ExecutionStatus, number> = {
 	skipped: 5,
 }
 
-export function shortRunId(id: string): string {
-	return id.slice(0, 8)
+export interface RowLabels {
+	trigger?: TriggerLabels
+	failedNode?: string | null
+}
+
+function failureOf(
+	run: Run,
+	status: ExecutionStatus,
+	failedNode: string | null,
+): ExecutionFailure | null {
+	const message = run.error ?? (status === 'error' ? 'Erreur inconnue' : null)
+	return message === null ? null : { nodeLabel: failedNode, message }
 }
 
 export function buildRow(
 	run: Run,
 	workflowName: string,
 	now: number = Date.now(),
-	nodes: { done: number; total: number } = { done: 0, total: 0 },
-	eventLabel: string | null = null,
+	labels: RowLabels = {},
 ): ExecutionRow {
 	const startedIso = run.started_at ?? run.created_at
+	const status = toExecutionStatus(run.status)
 	return {
 		key: run.id,
 		runId: run.id,
-		shortId: shortRunId(run.id),
+		number: run.number,
 		workflowId: run.workflow_id,
 		workflowName,
 		startedLabel: formatStartedAt(startedIso, now),
 		startedMs: new Date(startedIso).getTime() || 0,
-		trigger: runTriggerLabel(run, eventLabel),
-		stepsDone: nodes.done,
-		stepsTotal: nodes.total,
-		status: toExecutionStatus(run.status),
+		trigger: runTriggerLabel(run, labels.trigger),
+		stepsDone: run.steps_done,
+		stepsTotal: run.steps_total,
+		status,
 		durationMs: runElapsedMs(run, now),
-		failure: run.error ?? null,
-		version: `Version ${shortRunId(run.workflow_version_id)}`,
+		failure: failureOf(run, status, labels.failedNode ?? null),
+		version: formatVersionLabel(run.workflow_version_created_at),
 	}
 }
 
@@ -133,7 +152,7 @@ export function filterRows(
 		if (!inPeriod(row, filters.period, now)) return false
 		if (query === '') return true
 		return normalizeText(
-			`${row.workflowName} ${row.runId} ${row.trigger} ${row.failure ?? ''}`,
+			`${row.workflowName} ${row.number} ${row.trigger} ${row.failure?.nodeLabel ?? ''} ${row.failure?.message ?? ''}`,
 		).includes(query)
 	})
 }
@@ -156,7 +175,7 @@ export function sortRows(
 		else order = STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
 		return order !== 0 && Number.isFinite(order)
 			? order * sign
-			: b.startedMs - a.startedMs || b.runId.localeCompare(a.runId)
+			: b.startedMs - a.startedMs || b.number - a.number
 	})
 }
 

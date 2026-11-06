@@ -62,7 +62,7 @@ describe('NodeDetailsFeature', () => {
 				testRun={{ running: false, start: vi.fn() }}
 				onUpdateConnector={vi.fn()}
 				onUpdateTriggerKind={vi.fn()}
-				onUpdateMeta={vi.fn()}
+				onUpdateDetails={vi.fn()}
 				onCreateCredential={vi.fn()}
 				onEvaluateExpression={vi.fn()}
 				onClose={vi.fn()}
@@ -186,7 +186,7 @@ async function openNode(
 				testRun={{ running: false, start: vi.fn() }}
 				onUpdateConnector={handlers.onUpdateConnector ?? vi.fn()}
 				onUpdateTriggerKind={vi.fn()}
-				onUpdateMeta={vi.fn()}
+				onUpdateDetails={vi.fn()}
 				onCreateCredential={vi.fn()}
 				onEvaluateExpression={vi.fn()}
 				onClose={vi.fn()}
@@ -212,10 +212,10 @@ function chain(): { nodes: EditorNode[]; edges: EditorEdge[] } {
 					kind: 'http.request',
 					version: 1,
 					config: { method: 'POST', url: 'https://a' },
+					name: 'Appeler le fournisseur',
 				},
 				{ x: 300, y: 0 },
 				LOOKUP,
-				{ label: 'Appeler le fournisseur' },
 			),
 		],
 		edges: [edge('t1', 'c1'), edge('c1', 'c2', 'Then')],
@@ -345,5 +345,110 @@ describe('NodeDetailsFeature — the parameters', () => {
 				? `La spec déclare : ${collection.security.join(', ')}.`
 				: 'La spec ne déclare pas d’authentification.'
 		expect(within(dialog).getByText(new RegExp(declared))).toBeDefined()
+	})
+})
+
+describe('NodeDetailsFeature — what the server says of the name', () => {
+	const REUSED =
+		'connector `c1` reuses the name `Appeler le fournisseur`, already given to another node'
+
+	function withErrors(
+		errors: { field: string | null; message: string }[],
+		kind: 'connector' | 'trigger' = 'connector',
+	) {
+		const { nodes, edges } = chain()
+		return {
+			edges,
+			nodes: nodes.map((node) =>
+				node.id === (kind === 'trigger' ? 't1' : 'c1')
+					? { ...node, data: { ...node.data, errors } }
+					: node,
+			),
+		}
+	}
+
+	it('says under the name, in French, that another node already has it', async () => {
+		const { nodes, edges } = withErrors([{ field: 'name', message: REUSED }])
+
+		const dialog = await openNode('c1', nodes, edges)
+
+		const alert = within(dialog).getByRole('alert')
+		expect(alert.textContent).toBe('Un autre nœud porte déjà ce nom.')
+		expect(within(dialog).queryByText(REUSED)).toBeNull()
+		const heading = alert.parentElement
+		expect(
+			within(heading as HTMLElement).getByLabelText('Nom du nœud', {
+				exact: false,
+			}),
+		).toBeDefined()
+	})
+
+	it('shows a message it does not know as the server sent it', async () => {
+		const { nodes, edges } = withErrors([
+			{ field: 'name', message: 'nom refusé par le serveur' },
+		])
+
+		const dialog = await openNode('c1', nodes, edges)
+
+		expect(within(dialog).getByRole('alert').textContent).toBe(
+			'nom refusé par le serveur',
+		)
+	})
+
+	it('puts the description error under the description', async () => {
+		const { nodes, edges } = withErrors([
+			{
+				field: 'description',
+				message: 'connector `c1` has a description longer than 500 characters',
+			},
+		])
+
+		const dialog = await openNode('c1', nodes, edges)
+
+		expect(within(dialog).getByRole('alert').textContent).toBe(
+			'La description ne peut pas dépasser 500 caractères.',
+		)
+	})
+
+	it('shows it once for a trigger, not again in the alert of its parameters', async () => {
+		const { nodes, edges } = withErrors(
+			[
+				{
+					field: 'name',
+					message:
+						'trigger `t1` reuses the name `Clic`, already given to another node',
+				},
+			],
+			'trigger',
+		)
+
+		const dialog = await openNode('t1', nodes, edges)
+
+		expect(within(dialog).getAllByRole('alert')).toHaveLength(1)
+		expect(
+			within(dialog).getAllByText('Un autre nœud porte déjà ce nom.'),
+		).toHaveLength(1)
+	})
+
+	it('leaves the error of a connector field under that field, not under the name', async () => {
+		const { nodes, edges } = chain()
+		const named = nodes.map((node) =>
+			node.id === 'c2'
+				? {
+						...node,
+						data: {
+							...node.data,
+							errors: [{ field: 'url', message: 'URL manquante' }],
+						},
+					}
+				: node,
+		)
+
+		const dialog = await openNode('c2', named, edges)
+
+		expect(within(dialog).queryByText('URL manquante')).not.toBeNull()
+		expect(
+			within(dialog).queryByText('Un autre nœud porte déjà ce nom.'),
+		).toBeNull()
 	})
 })

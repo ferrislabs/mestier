@@ -2,16 +2,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
-import {
-	resetPlacementsMock,
-	setPlacementMock,
-} from '#/pages/automation/feature/mocks/workflow-placements'
 import {
 	type EditorSession,
 	EditorSessionContext,
@@ -67,6 +63,7 @@ function render(
 	view: EditorView,
 	session?: EditorSession,
 	workflowId = 'workflow-1',
+	tags: string[] = [],
 ) {
 	const api = installFakeTanstackApi()
 	api.mockGet(WORKFLOW_PATH, () => ({
@@ -76,6 +73,9 @@ function render(
 			name: 'Créer une facture Odoo',
 			description: null,
 			enabled: true,
+			folder_id: null,
+			tags,
+			archived_at: null,
 			layout: null,
 			current_version: null,
 			created_at: '2026-08-01T00:00:00Z',
@@ -110,7 +110,7 @@ function render(
 				<WorkflowTopBarFeature workflowId={workflowId} view={view} />
 			</EditorSessionContext>
 		</Providers>,
-	)
+	).then((rendered) => ({ ...rendered, api }))
 }
 
 describe('WorkflowTopBarFeature — switching the view', () => {
@@ -211,46 +211,54 @@ describe('WorkflowTopBarFeature — with an editor session', () => {
 })
 
 describe('WorkflowTopBarFeature — the tags', () => {
-	afterEach(() => {
-		resetPlacementsMock()
-	})
-
 	function tagsOfBar(): string[] {
 		return within(screen.getByRole('list', { name: 'Tags du workflow' }))
 			.queryAllByRole('listitem')
 			.map((item) => item.textContent ?? '')
 	}
 
-	it('shows the tags of a saved workflow, with or without an editor session', async () => {
-		setPlacementMock('workflow-1', { folderId: null, tags: ['Support'] })
+	it('shows the tags the API sends for a stored workflow, without an editor session', async () => {
+		await render('executions', undefined, 'workflow-1', ['Support'])
 
-		await render('executions')
-		await screen.findByLabelText('Nom du workflow')
+		await screen.findByDisplayValue('Créer une facture Odoo')
 		expect(tagsOfBar()).toEqual(['Support'])
 	})
 
-	it('shows the tags of the session workflow', async () => {
-		setPlacementMock('workflow-1', {
-			folderId: null,
-			tags: ['Ventes', 'Clients'],
-		})
+	it('shows the tags of the session workflow, in the order of the API', async () => {
+		await render('editor', sessionStub(), 'workflow-1', ['Ventes', 'Clients'])
 
-		await render('editor', sessionStub())
-		await screen.findByLabelText('Nom du workflow')
-		expect(tagsOfBar()).toEqual(['Ventes', 'Clients'])
+		await waitFor(() => expect(tagsOfBar()).toEqual(['Ventes', 'Clients']))
 	})
 
-	it('shows no tag on a draft, whose session has no workflow yet', async () => {
-		await render('editor', sessionStub({ workflowId: null }), NEW_WORKFLOW_ID)
+	it('shows no tag on a workflow that has none', async () => {
+		const { api } = await render('editor', sessionStub())
 
-		await screen.findByLabelText('Nom du workflow')
+		await waitFor(() =>
+			expect(api.calls.some((call) => call.path === WORKFLOW_PATH)).toBe(true),
+		)
 		expect(tagsOfBar()).toEqual([])
 	})
 
-	it('shows no tag on a draft without an editor session', async () => {
-		await render('editor', undefined, NEW_WORKFLOW_ID)
+	it('shows no tag, and fetches nothing, on a draft whose session has no workflow yet', async () => {
+		const { api } = await render(
+			'editor',
+			sessionStub({ workflowId: null }),
+			NEW_WORKFLOW_ID,
+			['Support'],
+		)
 
 		await screen.findByLabelText('Nom du workflow')
 		expect(tagsOfBar()).toEqual([])
+		expect(api.calls.some((call) => call.path === WORKFLOW_PATH)).toBe(false)
+	})
+
+	it('shows no tag, and fetches nothing, on a draft without an editor session', async () => {
+		const { api } = await render('editor', undefined, NEW_WORKFLOW_ID, [
+			'Support',
+		])
+
+		await screen.findByLabelText('Nom du workflow')
+		expect(tagsOfBar()).toEqual([])
+		expect(api.calls.some((call) => call.path === WORKFLOW_PATH)).toBe(false)
 	})
 })

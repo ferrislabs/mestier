@@ -66,6 +66,7 @@ import { labelConflict } from '#/pages/automation/lib/references'
 import {
 	type CanvasShortcut,
 	canvasShortcutFor,
+	disableToggleFor,
 	isMacPlatform,
 	shortcutLabels,
 } from '#/pages/automation/lib/shortcuts'
@@ -388,12 +389,15 @@ function EditorCanvas({
 				else setOpenNodeId(single.id)
 				return true
 			case 'toggle-disabled': {
-				if (selected.length === 0) return false
-				const allDisabled = selected.every((node) => node.data.disabled)
-				graph.setDisabled(
-					selected.map((node) => node.id),
-					!allDisabled,
+				const toggle = disableToggleFor(
+					selected.map((node) => ({
+						id: node.id,
+						kind: node.data.kind,
+						disabled: node.data.disabled,
+					})),
 				)
+				if (!toggle) return false
+				graph.setDisabled(toggle.ids, toggle.disabled)
 				return true
 			}
 			case 'delete':
@@ -592,6 +596,7 @@ function EditorCanvas({
 					>
 						{menuNode ? (
 							<NodeMenuItems
+								canToggleDisabled={menuNode.data.kind === 'connector'}
 								disabled={menuNode.data.disabled}
 								shortcuts={shortcuts}
 								onOpen={() => setOpenNodeId(menuNode.id)}
@@ -645,7 +650,9 @@ function EditorCanvas({
 							onUpdateTriggerKind={(kind) =>
 								graph.updateTriggerKind(detailsNode.id, kind)
 							}
-							onUpdateMeta={(patch) => graph.updateMeta(detailsNode.id, patch)}
+							onUpdateDetails={(patch) =>
+								graph.updateDetails(detailsNode.id, patch)
+							}
 							onCreateCredential={onCreateCredential}
 							onEvaluateExpression={onEvaluateExpression}
 							onClose={() => setOpenNodeId(null)}
@@ -663,7 +670,7 @@ function EditorCanvas({
 							}
 							onCancel={() => setRenameNodeId(null)}
 							onConfirm={(label) => {
-								graph.updateMeta(renameNode.id, { label })
+								graph.updateDetails(renameNode.id, { name: label })
 								setRenameNodeId(null)
 							}}
 						/>

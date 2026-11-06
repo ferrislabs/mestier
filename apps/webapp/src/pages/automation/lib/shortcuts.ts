@@ -26,6 +26,23 @@ export function shortcutLabels(mac: boolean): ShortcutLabels {
 	}
 }
 
+export interface DisableCandidate {
+	id: string
+	kind: 'connector' | 'trigger'
+	disabled: boolean
+}
+
+export function disableToggleFor(
+	selected: readonly DisableCandidate[],
+): { ids: string[]; disabled: boolean } | null {
+	const connectors = selected.filter((node) => node.kind === 'connector')
+	if (connectors.length === 0) return null
+	return {
+		ids: connectors.map((node) => node.id),
+		disabled: !connectors.every((node) => node.disabled),
+	}
+}
+
 export function isMacPlatform(userAgent: string): boolean {
 	return /Mac|iPhone|iPad/.test(userAgent)
 }

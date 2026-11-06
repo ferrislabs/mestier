@@ -534,6 +534,28 @@ describe('WorkflowCanvas — adding nodes', () => {
 		})
 	})
 
+	it('keeps the default name of a new node out of the graph, and numbers it when another node already carries it', async () => {
+		const user = userEvent.setup()
+		const { onSaveSpy } = renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)]),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR, OTHER_DESCRIPTOR),
+		})
+
+		await screen.findByTestId('rf__node-c1')
+		await user.click(screen.getByRole('button', { name: 'Ajouter un nœud' }))
+		await pickInCreator(user, 'simple', /Étape simple/)
+		await user.click(screen.getByRole('button', { name: 'Ajouter un nœud' }))
+		await pickInCreator(user, 'autre', /Autre étape/)
+
+		const { connectors } = saved(onSaveSpy).graph
+		expect(connectors.map((item) => item.name)).toEqual([
+			undefined,
+			'Étape simple 2',
+			undefined,
+		])
+	})
+
 	it('finds a node across categories with a search, ignoring accents', async () => {
 		const user = userEvent.setup()
 		renderHarness({
@@ -610,6 +632,8 @@ describe('WorkflowCanvas — a node made from a collection operation', () => {
 		expect(created.kind).toBe('http.request')
 		expect(created.config.url).toMatch(/^https?:\/\//)
 		expect(change.meta.c1?.operation).toBeDefined()
+		expect(created.name).toBeTruthy()
+		expect(created.description).toMatch(/^(GET|POST|PUT|PATCH|DELETE) \//)
 
 		const dialog = await openDetails('c1')
 		expect(within(dialog).getByText('Opération')).toBeDefined()
@@ -806,7 +830,7 @@ describe('WorkflowCanvas — the node details', () => {
 		expect(saved(onSaveSpy).graph.connectors[0].config).toEqual({ url: 'abc' })
 	})
 
-	it('renames the node inline and keeps the name out of the saved graph', async () => {
+	it('renames the node inline and saves the name with the graph', async () => {
 		const user = userEvent.setup()
 		const { onSaveSpy } = renderHarness({
 			graph: graphWith([connector('c1', SIMPLE_KIND)]),
@@ -825,9 +849,63 @@ describe('WorkflowCanvas — the node details', () => {
 		await user.type(input, 'Créer le projet{Enter}')
 
 		const change = saved(onSaveSpy)
-		expect(change.meta).toEqual({ c1: { label: 'Créer le projet' } })
-		expect(change.graph.connectors[0]).toEqual(connector('c1', SIMPLE_KIND))
+		expect(change.graph.connectors[0]).toEqual({
+			...connector('c1', SIMPLE_KIND),
+			name: 'Créer le projet',
+		})
+		expect(change.meta).toEqual({})
 		expect(screen.getAllByText('Créer le projet').length).toBeGreaterThan(0)
+	})
+
+	it('saves the description typed under the name as the node description', async () => {
+		const user = userEvent.setup()
+		const { onSaveSpy } = renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)]),
+			layout: layoutOf(['c1', 0, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const dialog = await openDetails('c1')
+		await user.click(
+			within(dialog).getByRole('button', { name: /Description du nœud/ }),
+		)
+		const input = within(dialog).getByLabelText('Description du nœud')
+		await user.clear(input)
+		await user.type(input, 'Crée le projet du chantier{Enter}')
+
+		const change = saved(onSaveSpy)
+		expect(change.graph.connectors[0]).toEqual({
+			...connector('c1', SIMPLE_KIND),
+			description: 'Crée le projet du chantier',
+		})
+		expect(change.meta).toEqual({})
+	})
+
+	it('shows the name, description and disabled flag saved in the graph', async () => {
+		renderHarness({
+			graph: graphWith(
+				[
+					{
+						...connector('c1', SIMPLE_KIND),
+						name: 'Créer le projet',
+						description: 'Après l’acceptation',
+						disabled: true,
+					},
+				],
+				[],
+				[{ ...trigger('t1'), name: 'Au clic', description: 'Départ manuel' }],
+			),
+			layout: layoutOf(['c1', 0, 0], ['t1', -200, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+		expect(within(node).getByText('Créer le projet')).toBeDefined()
+		expect(within(node).getByText('Après l’acceptation')).toBeDefined()
+		expect(within(node).getByText('Désactivé')).toBeDefined()
+		const start = await screen.findByTestId('rf__node-t1')
+		expect(within(start).getByText('Au clic')).toBeDefined()
+		expect(within(start).getByText('Départ manuel')).toBeDefined()
 	})
 
 	it('refuses a name another node already carries', async () => {
@@ -1354,7 +1432,7 @@ describe('WorkflowCanvas — the node menu', () => {
 		await user.type(input, 'Nouveau nom')
 		await user.click(screen.getByRole('button', { name: 'Renommer' }))
 
-		expect(saved(onSaveSpy).meta).toEqual({ c1: { label: 'Nouveau nom' } })
+		expect(saved(onSaveSpy).graph.connectors[0].name).toBe('Nouveau nom')
 	})
 
 	it('disables and re-enables a node, marking it on the canvas', async () => {
@@ -1374,7 +1452,7 @@ describe('WorkflowCanvas — the node menu', () => {
 		)
 
 		expect(screen.getByText('Désactivé')).toBeDefined()
-		expect(saved(onSaveSpy).meta).toEqual({ c1: { disabled: true } })
+		expect(saved(onSaveSpy).graph.connectors[0].disabled).toBe(true)
 
 		fireEvent.contextMenu(screen.getByTestId('rf__node-c1'), {
 			clientX: 200,
@@ -1383,6 +1461,39 @@ describe('WorkflowCanvas — the node menu', () => {
 		await user.click(await screen.findByRole('menuitem', { name: /Réactiver/ }))
 
 		expect(screen.queryByText('Désactivé')).toBeNull()
+		expect(saved(onSaveSpy).graph.connectors[0].disabled).toBe(false)
+	})
+
+	it('offers to disable a connector, never a trigger', async () => {
+		renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)], [], [trigger('t1')]),
+			layout: layoutOf(['c1', 0, 0], ['t1', -200, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		fireEvent.contextMenu(await screen.findByTestId('rf__node-t1'), {
+			clientX: 100,
+			clientY: 100,
+		})
+		expect(
+			await screen.findByRole('menuitem', { name: /Renommer/ }),
+		).toBeDefined()
+		expect(screen.queryByRole('menuitem', { name: /Désactiver/ })).toBeNull()
+		expect(screen.queryByRole('menuitem', { name: /Réactiver/ })).toBeNull()
+		fireEvent.keyDown(document.activeElement ?? document.body, {
+			key: 'Escape',
+		})
+		await waitFor(() => {
+			expect(screen.queryByRole('menuitem', { name: /Renommer/ })).toBeNull()
+		})
+
+		fireEvent.contextMenu(screen.getByTestId('rf__node-c1'), {
+			clientX: 200,
+			clientY: 150,
+		})
+		expect(
+			await screen.findByRole('menuitem', { name: /Désactiver/ }),
+		).toBeDefined()
 	})
 
 	it('duplicates a node under a new id and a copy name', async () => {
@@ -1402,7 +1513,8 @@ describe('WorkflowCanvas — the node menu', () => {
 		const change = saved(onSaveSpy)
 		expect(change.graph.connectors.map((c) => c.id)).toEqual(['c1', 'c2'])
 		expect(change.graph.connectors[1].config).toEqual({ url: 'https://a' })
-		expect(change.meta.c2?.label).toBe('Étape simple (copie)')
+		expect(change.graph.connectors[1].name).toBe('Étape simple (copie)')
+		expect(change.meta).toEqual({})
 	})
 
 	it('copies a node, then offers to paste it from the pane menu', async () => {
@@ -1483,7 +1595,21 @@ describe('WorkflowCanvas — keyboard shortcuts', () => {
 
 		fireEvent.keyDown(window, { key: 'y', ctrlKey: true })
 		expect(await screen.findByText('Désactivé')).toBeDefined()
-		expect(saved(onSaveSpy).meta).toEqual({ c1: { disabled: true } })
+		expect(saved(onSaveSpy).graph.connectors[0].disabled).toBe(true)
+	})
+
+	it('leaves a trigger enabled: only connectors are disabled by D', async () => {
+		const { onSaveSpy } = renderHarness({
+			graph: graphWith([connector('c1', SIMPLE_KIND)], [], [trigger('t1')]),
+			layout: layoutOf(['c1', 0, 0], ['t1', -200, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		fireEvent.click(await screen.findByTestId('rf__node-t1'))
+		fireEvent.keyDown(window, { key: 'd' })
+
+		expect(screen.queryByText('Désactivé')).toBeNull()
+		expect(saved(onSaveSpy).graph.triggers[0]).toEqual(trigger('t1'))
 	})
 })
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import {
 	buildRunView,
+	graphNodeNames,
 	realEdgeId,
 	skipReason,
 } from '#/pages/automation/lib/run-view'
@@ -54,9 +55,13 @@ function run(
 ): Schemas.RunDetailResponse {
 	return {
 		id: 'r1',
+		number: 12,
 		organization_id: 'org-1',
 		workflow_id: 'w1',
 		workflow_version_id: 'v1',
+		workflow_version_created_at: '2026-07-31T18:20:00Z',
+		steps_done: steps.filter((item) => item.status === 'succeeded').length,
+		steps_total: GRAPH.connectors.length,
 		status,
 		created_at: '2026-08-01T10:00:00Z',
 		started_at: '2026-08-01T10:00:00Z',
@@ -84,6 +89,7 @@ describe('buildRunView', () => {
 		)
 
 		expect(view.steps.map((s) => [s.nodeId, s.status])).toEqual([
+			['t1', 'success'],
 			['c1', 'success'],
 			['c2', 'error'],
 		])
@@ -134,7 +140,9 @@ describe('buildRunView', () => {
 			DESCRIPTORS,
 		)
 
-		expect(view.steps[0]?.label).toBe('Facture Odoo · itération 2')
+		expect(view.steps.find((s) => s.nodeId === 'c1')?.label).toBe(
+			'Facture Odoo · itération 2',
+		)
 		expect(view.nodes.find((n) => n.kind === 'trigger')?.subtitle).toBe(
 			'quote.accepted',
 		)
@@ -189,7 +197,7 @@ describe('buildRunView', () => {
 			DESCRIPTORS,
 		)
 
-		const [first, loop] = view.stepGroups
+		const [, first, loop] = view.stepGroups
 		expect(first?.kind).toBe('step')
 		expect(loop?.kind).toBe('loop')
 		if (loop?.kind !== 'loop') return
@@ -215,7 +223,9 @@ describe('buildRunView', () => {
 			DESCRIPTORS,
 		)
 
-		expect(view.nodes.find((node) => node.id === 'c2')?.order).toBe(2)
+		expect(view.nodes.find((node) => node.id === 't1')?.order).toBe(1)
+		expect(view.nodes.find((node) => node.id === 'c1')?.order).toBe(2)
+		expect(view.nodes.find((node) => node.id === 'c2')?.order).toBe(3)
 		expect(view.nodes.find((node) => node.id === 'c3')?.order).toBeNull()
 	})
 })
@@ -249,9 +259,9 @@ describe('buildRunView — the statuses of a step', () => {
 		expect(view.nodes.find((n) => n.id === 'c1')).toMatchObject({
 			status: 'running',
 			note: 'En cours…',
-			order: 1,
+			order: 2,
 		})
-		expect(view.steps[0]).toMatchObject({
+		expect(view.steps.find((s) => s.nodeId === 'c1')).toMatchObject({
 			status: 'running',
 			detail: 'En cours · 2,2 s',
 		})
@@ -273,7 +283,7 @@ describe('buildRunView — the statuses of a step', () => {
 			NOW,
 		)
 
-		expect(view.steps[0]?.detail).toBe('En cours')
+		expect(view.steps.find((s) => s.nodeId === 'c1')?.detail).toBe('En cours')
 	})
 
 	it('treats a dead step as a failure with its message', () => {
@@ -335,12 +345,12 @@ describe('buildRunView — the statuses of a step', () => {
 			note: 'Non appelé',
 			order: null,
 		})
-		expect(view.steps.map((s) => s.nodeId)).toEqual(['c1'])
+		expect(view.steps.map((s) => s.nodeId)).toEqual(['t1', 'c1'])
 		expect(
 			view.stepGroups.map((group) =>
 				group.kind === 'step' ? group.step.nodeId : null,
 			),
-		).toEqual(['c1'])
+		).toEqual(['t1', 'c1'])
 		expect(view.pending.map((s) => [s.nodeId, s.status, s.detail])).toEqual([
 			['c2', 'skipped', 'Aucun élément reçu'],
 			['c3', 'skipped', 'Aucun élément reçu'],
@@ -383,7 +393,7 @@ describe('buildRunView — the statuses of a step', () => {
 			note: 'En attente',
 			order: null,
 		})
-		expect(view.steps.map((s) => s.nodeId)).toEqual(['c1'])
+		expect(view.steps.map((s) => s.nodeId)).toEqual(['t1', 'c1'])
 		expect(view.pending.map((s) => [s.nodeId, s.status, s.detail])).toEqual([
 			['c2', 'waiting', 'Pas encore atteint'],
 			['c3', 'waiting', 'Pas encore atteint'],
@@ -428,7 +438,7 @@ describe('buildRunView — the statuses of a step', () => {
 
 		expect(view.nodes.find((n) => n.id === 'c2')?.status).toBe('success')
 		expect(view.pending.map((s) => s.nodeId)).not.toContain('c2')
-		expect(view.steps.map((s) => s.stepId)).toEqual(['s2'])
+		expect(view.steps.map((s) => s.stepId)).toEqual(['trigger:t1', 's2'])
 	})
 
 	it('does not list a node twice when one of its iterations is still pending', () => {
@@ -454,9 +464,9 @@ describe('buildRunView — the statuses of a step', () => {
 			NOW,
 		)
 
-		expect(view.steps.map((s) => s.stepId)).toEqual(['s1'])
+		expect(view.steps.map((s) => s.stepId)).toEqual(['trigger:t1', 's1'])
 		expect(view.pending.map((s) => s.nodeId)).not.toContain('c2')
-		expect(view.nodes.find((n) => n.id === 'c2')?.order).toBe(1)
+		expect(view.nodes.find((n) => n.id === 'c2')?.order).toBe(2)
 	})
 
 	it('names the node the run stopped on for everything that came after it', () => {
@@ -653,5 +663,208 @@ describe('skipReason', () => {
 		})
 		expect(skipReason('c1', GRAPH, 'c2')).toEqual({ type: 'no-items' })
 		expect(skipReason('c3', GRAPH, null)).toEqual({ type: 'no-items' })
+	})
+})
+
+describe('buildRunView — the names saved in the graph', () => {
+	const EVENTS = [
+		{ name: 'quote.accepted', label: 'Devis accepté' },
+	] as unknown as Schemas.EventDescriptorResponse[]
+	const NAMED: Schemas.GraphDto = {
+		triggers: [
+			{
+				id: 't1',
+				kind: { Events: ['quote.accepted'] },
+				name: 'Quand le client accepte',
+				description: 'Démarre la relance',
+			},
+		],
+		connectors: [
+			{
+				id: 'c1',
+				kind: 'flow.condition',
+				version: 1,
+				config: {},
+				name: 'Montant élevé ?',
+				description: 'Plus de 5 000 €',
+			},
+			{ id: 'c2', kind: 'flow.condition', version: 1, config: {} },
+		],
+		edges: [
+			{ from: 't1', to: 'c1' },
+			{ from: 'c1', to: 'c2', branch: 'Then' },
+		],
+	}
+
+	it('shows the name and the description of every node on the canvas', () => {
+		const view = buildRunView(
+			{ ...run('succeeded', []), graph: NAMED },
+			DESCRIPTORS,
+			undefined,
+			EVENTS,
+		)
+
+		expect(
+			view.nodes.map((node) => [node.id, node.label, node.subtitle]),
+		).toEqual([
+			['t1', 'Quand le client accepte', 'Démarre la relance'],
+			['c1', 'Montant élevé ?', 'Plus de 5 000 €'],
+			['c2', 'Si', 'Condition'],
+		])
+	})
+
+	it('carries the names into the steps, the loops, the failure and the unreached nodes', () => {
+		const view = buildRunView(
+			{
+				...run('failed', [
+					step({
+						id: 's1',
+						connector_id: 'c1',
+						status: 'dead',
+						error: 'boom',
+						iteration_path: 'c1[0]',
+					}),
+				]),
+				graph: NAMED,
+			},
+			DESCRIPTORS,
+			undefined,
+			EVENTS,
+		)
+
+		expect(view.steps.map((s) => s.label)).toEqual([
+			'Quand le client accepte',
+			'Montant élevé ? · itération 1',
+		])
+		expect(view.failed?.plainLabel).toBe('Montant élevé ?')
+		expect(view.pending.map((s) => [s.nodeId, s.label, s.detail])).toEqual([
+			['c2', 'Si', 'Arrêt sur « Montant élevé ? »'],
+		])
+		const loop = view.stepGroups[1]
+		expect(loop?.kind === 'loop' ? loop.label : null).toBe('Montant élevé ?')
+	})
+
+	it('lists the name of every node of a graph, the default one when it has none', () => {
+		expect(graphNodeNames(NAMED, DESCRIPTORS, EVENTS)).toEqual(
+			new Map([
+				['t1', 'Quand le client accepte'],
+				['c1', 'Montant élevé ?'],
+				['c2', 'Si'],
+			]),
+		)
+	})
+
+	it('names a trigger that has no name of its own after its event', () => {
+		const view = buildRunView(
+			{
+				...run('succeeded', []),
+				graph: {
+					...NAMED,
+					triggers: [{ id: 't1', kind: { Events: ['quote.accepted'] } }],
+				},
+			},
+			DESCRIPTORS,
+			undefined,
+			EVENTS,
+		)
+
+		expect(view.nodes[0]).toMatchObject({
+			label: 'Devis accepté',
+			subtitle: 'quote.accepted',
+		})
+	})
+})
+
+describe('buildRunView — the trigger of the run', () => {
+	const TWO_TRIGGERS: Schemas.GraphDto = {
+		triggers: [
+			{ id: 't1', kind: { Events: ['quote.accepted'] }, name: 'Devis accepté' },
+			{ id: 't2', kind: 'Manual', name: 'Lancement à la main' },
+		],
+		connectors: [{ id: 'c1', kind: 'mestier.mail', version: 1, config: {} }],
+		edges: [
+			{ from: 't1', to: 'c1' },
+			{ from: 't2', to: 'c1' },
+		],
+	}
+
+	it('numbers the trigger first, under its own name, before the connectors', () => {
+		const view = buildRunView(
+			{
+				...run('succeeded', [step({ id: 's1', connector_id: 'c1' })]),
+				trigger_id: 't1',
+				graph: TWO_TRIGGERS,
+			},
+			DESCRIPTORS,
+		)
+
+		expect(
+			view.steps.map((s) => [s.nodeId, s.label, s.status, s.detail]),
+		).toEqual([
+			['t1', 'Devis accepté', 'success', 'Démarré'],
+			['c1', 'c1', 'success', '2 s'],
+		])
+		expect(view.nodes.find((n) => n.id === 't1')).toMatchObject({
+			status: 'success',
+			order: 1,
+		})
+		expect(view.nodes.find((n) => n.id === 'c1')?.order).toBe(2)
+		const [first] = view.stepGroups
+		expect(first?.kind === 'step' ? first.step.nodeId : null).toBe('t1')
+	})
+
+	it('only counts the trigger that started the run, the other one was not called', () => {
+		const view = buildRunView(
+			{
+				...run('succeeded', [step({ id: 's1', connector_id: 'c1' })]),
+				trigger_id: 't1',
+				graph: TWO_TRIGGERS,
+			},
+			DESCRIPTORS,
+		)
+
+		expect(view.nodes.find((n) => n.id === 't2')).toMatchObject({
+			status: 'skipped',
+			note: 'Non appelé',
+			order: null,
+		})
+		expect([...view.traversedEdges]).toEqual([
+			realEdgeId({ from: 't1', to: 'c1' }),
+		])
+		expect(view.pending.map((s) => s.nodeId)).toEqual([])
+	})
+
+	it('takes the manual trigger for a run that no trigger started', () => {
+		const view = buildRunView(
+			{
+				...run('succeeded', [step({ id: 's1', connector_id: 'c1' })]),
+				graph: TWO_TRIGGERS,
+			},
+			DESCRIPTORS,
+		)
+
+		expect(view.nodes.find((n) => n.id === 't2')?.status).toBe('success')
+		expect(view.nodes.find((n) => n.id === 't1')?.status).toBe('skipped')
+		expect(view.steps[0]?.nodeId).toBe('t2')
+	})
+
+	it('keeps the trigger out of the steps until the run has started', () => {
+		const view = buildRunView(
+			{
+				...run('pending', []),
+				started_at: null,
+				finished_at: null,
+				trigger_id: 't1',
+				graph: TWO_TRIGGERS,
+			},
+			DESCRIPTORS,
+		)
+
+		expect(view.steps).toEqual([])
+		expect(view.nodes.find((n) => n.id === 't1')).toMatchObject({
+			status: 'waiting',
+			note: 'En attente',
+			order: null,
+		})
 	})
 })

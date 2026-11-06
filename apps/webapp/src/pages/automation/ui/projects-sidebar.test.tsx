@@ -35,4 +35,13 @@ describe('ProjectsSidebar', () => {
 				.getAttribute('aria-current'),
 		).toBeNull()
 	})
+
+	it('shows no Projets heading when the organization has no project yet', async () => {
+		await renderWithRouter(
+			<ProjectsSidebar organizationSlug="atelier-bois" entries={[]} />,
+		)
+
+		expect(screen.queryByRole('heading', { name: 'Projets' })).toBeNull()
+		expect(screen.queryByRole('navigation')).toBeNull()
+	})
 })

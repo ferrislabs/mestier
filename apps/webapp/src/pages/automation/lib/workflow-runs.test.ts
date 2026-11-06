@@ -6,6 +6,7 @@ import {
 	canReplay,
 	connectorOutputsFromSteps,
 	elapsedMsSince,
+	failedRunProbes,
 	groupRunSteps,
 	isTerminalRunStatus,
 	latestRunByWorkflow,
@@ -14,16 +15,19 @@ import {
 	runDurationMs,
 	runElapsedMs,
 	runTriggerLabel,
-	triggerEventLabel,
 } from '#/pages/automation/lib/workflow-runs'
 
 function run(overrides: Partial<Run> = {}): Run {
 	return {
 		id: 'run-1',
+		number: 1,
 		organization_id: 'org-1',
 		workflow_id: 'workflow-1',
 		workflow_version_id: 'v1',
+		workflow_version_created_at: '2026-07-31T00:00:00Z',
 		status: 'succeeded',
+		steps_done: 0,
+		steps_total: 0,
 		created_at: '2026-08-01T00:00:00Z',
 		...overrides,
 	}
@@ -280,18 +284,92 @@ describe('runElapsedMs', () => {
 })
 
 describe('runTriggerLabel', () => {
-	it('names a run with no trigger event as a manual test', () => {
-		expect(runTriggerLabel({ trigger_event_id: null })).toBe('Test manuel')
+	it('names a run that came from no trigger a manual test', () => {
+		expect(runTriggerLabel(run())).toBe('Test manuel')
 	})
 
-	it('names an event-triggered run after its event when the label is known', () => {
+	it('names an event-triggered run after the label of its event', () => {
+		const events = new Map([['quote.accepted', 'Devis accepté']])
+
 		expect(
-			runTriggerLabel({ trigger_event_id: 'evt-1' }, 'Devis accepté'),
+			runTriggerLabel(run({ trigger_event_name: 'quote.accepted' }), {
+				events,
+			}),
 		).toBe('Devis accepté')
 	})
 
-	it('names a run carrying a trigger event as event-triggered', () => {
-		expect(runTriggerLabel({ trigger_event_id: 'evt-1' })).toBe('Événement')
+	it('falls back to the raw event name when the catalogue has no label for it', () => {
+		expect(
+			runTriggerLabel(run({ trigger_event_name: 'task.done' }), {
+				events: new Map(),
+			}),
+		).toBe('task.done')
+	})
+
+	it('names a run after its trigger node when no event came with it', () => {
+		const nodeNames = new Map([['t1', 'Chaque lundi']])
+
+		expect(runTriggerLabel(run({ trigger_id: 't1' }), { nodeNames })).toBe(
+			'Chaque lundi',
+		)
+		expect(runTriggerLabel(run({ trigger_id: 't9' }), { nodeNames })).toBe(
+			'Déclencheur',
+		)
+	})
+
+	it('prefers the event over the trigger node', () => {
+		expect(
+			runTriggerLabel(
+				run({ trigger_id: 't1', trigger_event_name: 'quote.accepted' }),
+				{
+					events: new Map([['quote.accepted', 'Devis accepté']]),
+					nodeNames: new Map([['t1', 'Mon déclencheur']]),
+				},
+			),
+		).toBe('Devis accepté')
+	})
+
+	it('names a run that carries an event it cannot name as event-triggered', () => {
+		expect(runTriggerLabel(run({ trigger_event_id: 'evt-1' }))).toBe(
+			'Événement',
+		)
+	})
+})
+
+describe('failedRunProbes', () => {
+	it('picks one failed run per version of the workflow, the oldest of them', () => {
+		const runs = [
+			run({
+				id: 'new-v2',
+				workflow_version_id: 'v2',
+				failed_connector_id: 'c1',
+			}),
+			run({
+				id: 'new-v1',
+				workflow_version_id: 'v1',
+				failed_connector_id: 'c1',
+			}),
+			run({
+				id: 'old-v1',
+				workflow_version_id: 'v1',
+				failed_connector_id: 'c2',
+			}),
+		]
+
+		expect(failedRunProbes(runs)).toEqual(['new-v2', 'old-v1'])
+	})
+
+	it('ignores the runs that name no failed node', () => {
+		expect(
+			failedRunProbes([
+				run({ id: 'fine' }),
+				run({ id: 'failed-without-node', status: 'failed', error: 'boom' }),
+			]),
+		).toEqual([])
+	})
+
+	it('has nothing to ask when no run failed', () => {
+		expect(failedRunProbes([])).toEqual([])
 	})
 })
 
@@ -525,34 +603,5 @@ describe('representativeStepByConnector', () => {
 
 	it('has nothing to say about a connector with no step', () => {
 		expect(representativeStepByConnector([]).get('c1')).toBeUndefined()
-	})
-})
-
-describe('triggerEventLabel', () => {
-	const labels = new Map([['quote.accepted', 'Devis accepté']])
-
-	it('resolves the label of a single-event trigger', () => {
-		expect(
-			triggerEventLabel(
-				[{ id: 't1', kind: { Events: ['quote.accepted'] } }],
-				labels,
-			),
-		).toBe('Devis accepté')
-	})
-
-	it('falls back to the raw event name when it has no label', () => {
-		expect(
-			triggerEventLabel(
-				[{ id: 't1', kind: { Events: ['task.done'] } }],
-				labels,
-			),
-		).toBe('task.done')
-	})
-
-	it('has no label for a manual or multi-event trigger', () => {
-		expect(triggerEventLabel([{ id: 't1', kind: 'Manual' }], labels)).toBeNull()
-		expect(
-			triggerEventLabel([{ id: 't1', kind: { Events: ['a', 'b'] } }], labels),
-		).toBeNull()
 	})
 })

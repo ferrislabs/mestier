@@ -43,6 +43,7 @@ export interface AutomationWorkflowsListProps {
 	folder: WorkflowFolder | null
 	folderPath: WorkflowFolder[]
 	folderMissing: boolean
+	folderPending: boolean
 	subfolders: SubfolderRow[]
 	hasWorkflowsInScope: boolean
 	query: string
@@ -61,6 +62,15 @@ export interface AutomationWorkflowsListProps {
 	onDelete: (workflow: WorkflowRow) => void
 }
 
+function WorkflowsLoading() {
+	return (
+		<div className="flex min-h-40 items-center justify-center gap-3 rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
+			<Loader2 className="size-5 animate-spin" />
+			Chargement des workflows…
+		</div>
+	)
+}
+
 export function AutomationWorkflowsList({
 	organizationSlug,
 	workflows,
@@ -69,6 +79,7 @@ export function AutomationWorkflowsList({
 	folder,
 	folderPath,
 	folderMissing,
+	folderPending,
 	subfolders,
 	hasWorkflowsInScope,
 	query,
@@ -86,6 +97,14 @@ export function AutomationWorkflowsList({
 	onArchive,
 	onDelete,
 }: AutomationWorkflowsListProps) {
+	if (folderPending) {
+		return (
+			<PageShell className="gap-0">
+				<WorkflowsLoading />
+			</PageShell>
+		)
+	}
+
 	if (folderMissing) {
 		return (
 			<PageShell className="gap-0">
@@ -162,10 +181,7 @@ export function AutomationWorkflowsList({
 				</ul>
 			)}
 			{isLoading ? (
-				<div className="flex min-h-40 items-center justify-center gap-3 rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
-					<Loader2 className="size-5 animate-spin" />
-					Chargement des workflows…
-				</div>
+				<WorkflowsLoading />
 			) : !hasWorkflowsInScope ? (
 				folder ? (
 					<p className="rounded-lg border border-border border-dashed bg-card px-4 py-8 text-center text-muted-foreground text-sm">

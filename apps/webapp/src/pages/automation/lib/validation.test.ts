@@ -4,6 +4,7 @@ import {
 	connectorLevelErrors,
 	fieldErrorMessage,
 	type GraphValidation,
+	nodeTextErrors,
 	projectGraphErrors,
 	pruneCorrectedErrors,
 } from '#/pages/automation/lib/validation'
@@ -239,5 +240,114 @@ describe('pruneCorrectedErrors', () => {
 
 		expect(pruneCorrectedErrors(current, before, after)).toBe(current)
 		expect(pruneCorrectedErrors(current, before, before)).toBe(current)
+	})
+})
+
+describe('nodeTextErrors', () => {
+	const NO_FIELDS: ReadonlySet<string> = new Set()
+
+	it('puts a name error on the name, in French when the server message is known', () => {
+		const result = nodeTextErrors(
+			[
+				{
+					field: 'name',
+					message:
+						'connector `c2` reuses the name `Envoyer`, already given to another node',
+				},
+			],
+			NO_FIELDS,
+		)
+
+		expect(result.name).toBe('Un autre nœud porte déjà ce nom.')
+		expect(result.description).toBeNull()
+		expect(result.rest).toEqual([])
+	})
+
+	it.each([
+		['connector `c1` has an empty name', 'Le nom ne peut pas être vide.'],
+		[
+			'trigger `t1` has a name longer than 120 characters',
+			'Le nom ne peut pas dépasser 120 caractères.',
+		],
+	])('translates “%s”', (message, expected) => {
+		expect(nodeTextErrors([{ field: 'name', message }], NO_FIELDS).name).toBe(
+			expected,
+		)
+	})
+
+	it('puts a description error on the description', () => {
+		const result = nodeTextErrors(
+			[
+				{
+					field: 'description',
+					message:
+						'connector `c1` has a description longer than 500 characters',
+				},
+			],
+			NO_FIELDS,
+		)
+
+		expect(result.description).toBe(
+			'La description ne peut pas dépasser 500 caractères.',
+		)
+		expect(result.name).toBeNull()
+	})
+
+	it('shows a message it does not know as it came', () => {
+		expect(
+			nodeTextErrors([{ field: 'name', message: 'nom refusé' }], NO_FIELDS)
+				.name,
+		).toBe('nom refusé')
+	})
+
+	it('leaves the other errors of the node where they were', () => {
+		const other = { field: 'url', message: 'manquant' }
+		const connectorLevel = { field: null, message: 'identification inconnue' }
+
+		const result = nodeTextErrors(
+			[
+				other,
+				{ field: 'name', message: 'x has an empty name' },
+				connectorLevel,
+			],
+			NO_FIELDS,
+		)
+
+		expect(result.rest).toEqual([other, connectorLevel])
+	})
+
+	it('does not take a problem of a connector field called “name” for a problem of the node name', () => {
+		const configError = {
+			field: 'name',
+			message: 'missing required field `name`',
+		}
+
+		const result = nodeTextErrors([configError], new Set(['name']))
+
+		expect(result.name).toBeNull()
+		expect(result.rest).toEqual([configError])
+	})
+
+	it('still knows the node name error when the connector has a field called “name”', () => {
+		const result = nodeTextErrors(
+			[
+				{
+					field: 'name',
+					message: 'connector `c1` has an empty name',
+				},
+			],
+			new Set(['name']),
+		)
+
+		expect(result.name).toBe('Le nom ne peut pas être vide.')
+		expect(result.rest).toEqual([])
+	})
+
+	it('has nothing to say about a node without errors', () => {
+		expect(nodeTextErrors([], NO_FIELDS)).toEqual({
+			name: null,
+			description: null,
+			rest: [],
+		})
 	})
 })

@@ -15,7 +15,7 @@ import { collectionCredentialHint } from '#/pages/automation/lib/connector-field
 import type {
 	EditorEdge,
 	EditorNode,
-	NodeMeta,
+	NodeDetailsPatch,
 } from '#/pages/automation/lib/editor-nodes'
 import { type Neighbour, neighboursOf } from '#/pages/automation/lib/graph'
 import { appearanceOf } from '#/pages/automation/lib/node-appearance'
@@ -40,6 +40,7 @@ import {
 	type UpstreamSources,
 	upstreamEntries,
 } from '#/pages/automation/lib/upstream-entries'
+import { nodeTextErrors } from '#/pages/automation/lib/validation'
 import { EventInputPanel } from '#/pages/automation/ui/event-input-panel'
 import { InlineEditField } from '#/pages/automation/ui/inline-edit-field'
 import type { NdvNavItem } from '#/pages/automation/ui/ndv-node-nav'
@@ -71,7 +72,7 @@ export interface NodeDetailsFeatureProps {
 		>,
 	) => void
 	onUpdateTriggerKind: (kind: Schemas.TriggerKindDto) => void
-	onUpdateMeta: (patch: NodeMeta) => void
+	onUpdateDetails: (patch: NodeDetailsPatch) => void
 	onCreateCredential: ConnectorParametersFeatureProps['onCreateCredential']
 	onEvaluateExpression: ConnectorParametersFeatureProps['onEvaluateExpression']
 	onClose: () => void
@@ -97,7 +98,7 @@ export function NodeDetailsFeature({
 	testRun,
 	onUpdateConnector,
 	onUpdateTriggerKind,
-	onUpdateMeta,
+	onUpdateDetails,
 	onCreateCredential,
 	onEvaluateExpression,
 	onClose,
@@ -165,6 +166,10 @@ export function NodeDetailsFeature({
 		setPicking(null)
 	}
 
+	const textErrors = nodeTextErrors(
+		node.data.errors,
+		new Set(descriptor?.fields.map((field) => field.name)),
+	)
 	const fieldIssues = issues
 	const acceptsExpressions =
 		descriptor?.fields.some((field) => field.expression) ?? false
@@ -187,16 +192,26 @@ export function NodeDetailsFeature({
 							value={node.data.label}
 							label="Nom du nœud"
 							validate={(name) => labelConflict(name, node.id, nodes)}
-							onCommit={(label) => onUpdateMeta({ label })}
+							onCommit={(name) => onUpdateDetails({ name })}
 							className="font-semibold text-base leading-tight"
 						/>
+						{textErrors.name && (
+							<p role="alert" className="mt-0.5 text-state-alert text-xs">
+								{textErrors.name}
+							</p>
+						)}
 						<InlineEditField
 							value={node.data.subtitle}
 							label="Description du nœud"
 							placeholder="Ajouter une description"
-							onCommit={(subtitle) => onUpdateMeta({ subtitle })}
+							onCommit={(description) => onUpdateDetails({ description })}
 							className="text-muted-foreground text-sm"
 						/>
+						{textErrors.description && (
+							<p role="alert" className="mt-0.5 text-state-alert text-xs">
+								{textErrors.description}
+							</p>
+						)}
 					</div>
 				}
 				badge={
@@ -245,7 +260,7 @@ export function NodeDetailsFeature({
 								credentialId={connector.credential_id ?? null}
 								credentials={credentials}
 								authSchemes={authSchemes}
-								errors={node.data.errors}
+								errors={textErrors.rest}
 								bindingIssues={fieldIssues}
 								credentialHint={
 									operation
@@ -262,12 +277,12 @@ export function NodeDetailsFeature({
 							/>
 						) : trigger ? (
 							<>
-								{node.data.errors.length > 0 && (
+								{textErrors.rest.length > 0 && (
 									<div
 										role="alert"
 										className="rounded-md border border-state-alert/60 bg-state-alert/10 px-3 py-2 text-sm text-state-alert"
 									>
-										{node.data.errors.map((error) => (
+										{textErrors.rest.map((error) => (
 											<p key={error.message}>{error.message}</p>
 										))}
 									</div>

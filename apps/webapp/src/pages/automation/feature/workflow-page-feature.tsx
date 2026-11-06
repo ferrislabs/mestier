@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useRef, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
@@ -44,9 +43,6 @@ import {
 	WorkflowLoading,
 	WorkflowNotFound,
 } from '#/pages/automation/ui/workflow-not-found'
-
-const WORKFLOW_PATH =
-	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
 
 const DRAFT_NAME = 'Mon workflow'
 
@@ -114,12 +110,6 @@ function isNotFound(error: unknown): boolean {
 	return (error as { status?: number } | null)?.status === 404
 }
 
-function workflowQueryKey(organizationId: string, workflowId: string) {
-	return window.tanstackApi.get(WORKFLOW_PATH, {
-		path: { organization_id: organizationId, workflow_id: workflowId },
-	}).queryOptions.queryKey
-}
-
 function useEditorSession({
 	organizationId,
 	persistedId,
@@ -131,7 +121,6 @@ function useEditorSession({
 	source: EditorSource
 	onReady: (workflowId: string) => void
 }): EditorSession {
-	const queryClient = useQueryClient()
 	const createWorkflow = useCreateWorkflow(organizationId)
 	const updateWorkflow = useUpdateWorkflow()
 	const saveVersion = useSaveWorkflowVersion()
@@ -202,7 +191,7 @@ function useEditorSession({
 			try {
 				const created = await createWorkflow.mutateAsync({
 					path: { organization_id: organizationId },
-					body: { name: target.name },
+					body: { name: target.name, enabled: target.enabled },
 				})
 				id = created.data.id
 				baseline = { name: created.data.name, enabled: created.data.enabled }
@@ -231,9 +220,6 @@ function useEditorSession({
 				})
 				setSaved(target)
 				setName(target.name)
-				await queryClient.invalidateQueries({
-					queryKey: workflowQueryKey(organizationId, id),
-				})
 			} catch (error) {
 				setSaveError(failure(SETTINGS_FAILED, error))
 			}
@@ -276,11 +262,11 @@ function useEditorSession({
 interface HostProps {
 	workflow: WorkflowDetail | null
 	view: EditorView
-	executionId?: string
+	executionNumber?: number
 	onCreated?: (workflowId: string) => void
 }
 
-function EditorHost({ workflow, view, executionId, onCreated }: HostProps) {
+function EditorHost({ workflow, view, executionNumber, onCreated }: HostProps) {
 	const { activeOrganization } = useActiveOrganization()
 	const navigate = useNavigate()
 	const [source] = useState(() =>
@@ -306,7 +292,7 @@ function EditorHost({ workflow, view, executionId, onCreated }: HostProps) {
 				session.workflowId ? (
 					<WorkflowExecutionsFeature
 						workflowId={session.workflowId}
-						runId={executionId}
+						executionNumber={executionNumber}
 					/>
 				) : (
 					<div className="flex min-h-0 flex-1 flex-col">
@@ -326,11 +312,11 @@ function EditorHost({ workflow, view, executionId, onCreated }: HostProps) {
 function PersistedWorkflow({
 	workflowId,
 	view,
-	executionId,
+	executionNumber,
 }: {
 	workflowId: string
 	view: EditorView
-	executionId?: string
+	executionNumber?: number
 }) {
 	const { activeOrganization } = useActiveOrganization()
 	const workflowQuery = useWorkflow(activeOrganization.id, workflowId)
@@ -341,7 +327,7 @@ function PersistedWorkflow({
 			<EditorHost
 				workflow={workflow as WorkflowDetail}
 				view={view}
-				executionId={executionId}
+				executionNumber={executionNumber}
 			/>
 		)
 
@@ -375,13 +361,13 @@ interface Epoch {
 export interface WorkflowPageFeatureProps {
 	workflowId: string
 	view: EditorView
-	executionId?: string
+	executionNumber?: number
 }
 
 export function WorkflowPageFeature({
 	workflowId,
 	view,
-	executionId,
+	executionNumber,
 }: WorkflowPageFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 	const [epoch, setEpoch] = useState<Epoch>(() => ({
@@ -413,7 +399,7 @@ export function WorkflowPageFeature({
 			key={key}
 			workflow={null}
 			view={view}
-			executionId={executionId}
+			executionNumber={executionNumber}
 			onCreated={(createdId) =>
 				setEpoch((previous) => ({
 					...previous,
@@ -426,7 +412,7 @@ export function WorkflowPageFeature({
 			key={key}
 			workflowId={workflowId}
 			view={view}
-			executionId={executionId}
+			executionNumber={executionNumber}
 		/>
 	)
 }

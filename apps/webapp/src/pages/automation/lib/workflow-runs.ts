@@ -88,24 +88,29 @@ export function runElapsedMs(
 	return run.status === 'running' ? elapsedMsSince(run.started_at, now) : null
 }
 
-export function runTriggerLabel(
-	run: { trigger_event_id?: string | null },
-	eventLabel: string | null = null,
-): string {
-	if (run.trigger_event_id) return eventLabel ?? 'Événement'
-	return 'Test manuel'
+export function failedRunProbes(runs: readonly Run[]): string[] {
+	const byVersion = new Map<string, string>()
+	for (const run of runs) {
+		if (run.failed_connector_id) byVersion.set(run.workflow_version_id, run.id)
+	}
+	return [...byVersion.values()]
 }
 
-export function triggerEventLabel(
-	triggers: readonly Schemas.PlacedTriggerDto[],
-	eventLabels: ReadonlyMap<string, string>,
-): string | null {
-	const names = triggers.flatMap((trigger) =>
-		trigger.kind === 'Manual' ? [] : trigger.kind.Events,
-	)
-	const [only] = names
-	if (names.length !== 1 || only === undefined) return null
-	return eventLabels.get(only) ?? only
+export interface TriggerLabels {
+	events?: ReadonlyMap<string, string>
+	nodeNames?: ReadonlyMap<string, string>
+}
+
+export function runTriggerLabel(
+	run: Pick<Run, 'trigger_id' | 'trigger_event_id' | 'trigger_event_name'>,
+	labels: TriggerLabels = {},
+): string {
+	if (run.trigger_event_name)
+		return labels.events?.get(run.trigger_event_name) ?? run.trigger_event_name
+	if (run.trigger_id)
+		return labels.nodeNames?.get(run.trigger_id) ?? 'Déclencheur'
+	if (run.trigger_event_id) return 'Événement'
+	return 'Test manuel'
 }
 
 const STATUS_PRIORITY: Record<string, number> = {

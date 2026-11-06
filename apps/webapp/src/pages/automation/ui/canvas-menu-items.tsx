@@ -45,6 +45,7 @@ export function PaneMenuItems({
 }
 
 export function NodeMenuItems({
+	canToggleDisabled,
 	disabled,
 	shortcuts,
 	onOpen,
@@ -54,6 +55,7 @@ export function NodeMenuItems({
 	onDuplicate,
 	onDelete,
 }: {
+	canToggleDisabled: boolean
 	disabled: boolean
 	shortcuts: ShortcutLabels
 	onOpen: () => void
@@ -75,13 +77,15 @@ export function NodeMenuItems({
 				Renommer
 				<DropdownMenuShortcut>{shortcuts.rename}</DropdownMenuShortcut>
 			</DropdownMenuItem>
-			<DropdownMenuItem onSelect={onToggleDisabled}>
-				{disabled ? <Power /> : <PowerOff />}
-				{disabled ? 'Réactiver' : 'Désactiver'}
-				<DropdownMenuShortcut>
-					{shortcuts['toggle-disabled']}
-				</DropdownMenuShortcut>
-			</DropdownMenuItem>
+			{canToggleDisabled && (
+				<DropdownMenuItem onSelect={onToggleDisabled}>
+					{disabled ? <Power /> : <PowerOff />}
+					{disabled ? 'Réactiver' : 'Désactiver'}
+					<DropdownMenuShortcut>
+						{shortcuts['toggle-disabled']}
+					</DropdownMenuShortcut>
+				</DropdownMenuItem>
+			)}
 			<DropdownMenuSeparator />
 			<DropdownMenuItem onSelect={onCopy}>
 				<Copy />

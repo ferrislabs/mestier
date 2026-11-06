@@ -8,6 +8,22 @@ interface FolderedWorkflow {
 	folderId: string | null
 }
 
+interface FolderRecord {
+	id: string
+	name: string
+	parent_id?: string | null
+}
+
+export function toWorkflowFolders(
+	records: readonly FolderRecord[],
+): WorkflowFolder[] {
+	return records.map((record) => ({
+		id: record.id,
+		name: record.name,
+		parentId: record.parent_id ?? null,
+	}))
+}
+
 export function findFolder(
 	folders: readonly WorkflowFolder[],
 	id: string,
