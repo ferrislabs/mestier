@@ -124,6 +124,7 @@ fn request_span(request: &Request) -> tracing::Span {
     if !query_hidden && let Some(query) = request.uri().query() {
         span.record("url.query", query);
     }
+    telemetry::set_remote_parent(&span, request.headers());
     span
 }
 

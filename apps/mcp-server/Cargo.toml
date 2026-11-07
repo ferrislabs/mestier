@@ -13,14 +13,16 @@ name = "mcp-server"
 path = "src/main.rs"
 
 [dependencies]
+args = { workspace = true }
 mcp-tools = { workspace = true }
+telemetry = { workspace = true }
+tower-http = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 clap = { workspace = true }
 base64 = { workspace = true }
 http = { workspace = true }
@@ -29,3 +31,6 @@ rmcp = { version = "=3.5.1", features = ["server", "macros", "transport-streamab
 
 [dev-dependencies]
 reqwest = { workspace = true }
+args = { workspace = true }
+telemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
