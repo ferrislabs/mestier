@@ -1,7 +1,10 @@
 use thiserror::Error;
 
 use crate::application::MestierUseCase;
-use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
+use crate::domain::automation::connector::ConnectorDescriptor;
+use crate::domain::automation::run::{
+    Connector, ConnectorInput, ConnectorOutcome, DryRunDispatch, DryRunInput,
+};
 use crate::infrastructure::automation::webhook::address_policy::PrivateNetworkAccess;
 
 use super::collection_operation::CollectionOperationConnector;
@@ -110,6 +113,33 @@ impl ConnectorRegistry {
         ]
     }
 
+    pub fn dry_run(
+        descriptor: &ConnectorDescriptor,
+        input: &DryRunInput<'_>,
+    ) -> Option<ConnectorOutcome> {
+        Some(match (descriptor.kind, descriptor.version) {
+            ("flow.loop", 1) => FlowLoopConnector::dry_run(descriptor, input),
+            ("flow.condition", 1) => FlowConditionConnector::dry_run(descriptor, input),
+            ("flow.config", 1) => FlowConfigConnector::dry_run(descriptor, input),
+            ("mestier.customer.create", 1) => CustomerCreateConnector::dry_run(descriptor, input),
+            ("mestier.support.assign_ticket", 1) => {
+                SupportAssignTicketConnector::dry_run(descriptor, input)
+            }
+            ("mestier.support.add_badge", 1) => {
+                SupportAddBadgeConnector::dry_run(descriptor, input)
+            }
+            ("http.request", 1) => HttpRequestConnector::dry_run(descriptor, input),
+            ("collection.operation", 1) => CollectionOperationConnector::dry_run(descriptor, input),
+            ("odoo.create_partner", 1) => OdooCreatePartnerConnector::dry_run(descriptor, input),
+            ("odoo.update_partner", 1) => OdooUpdatePartnerConnector::dry_run(descriptor, input),
+            ("odoo.create_invoice", 1) => OdooCreateInvoiceConnector::dry_run(descriptor, input),
+            ("mestier.task_recurrence.extend_horizon", 1) => {
+                TaskRecurrenceExtendHorizonConnector::dry_run(descriptor, input)
+            }
+            _ => return None,
+        })
+    }
+
     pub async fn execute(
         &self,
         kind: &str,
@@ -141,6 +171,18 @@ impl ConnectorRegistry {
     }
 }
 
+pub struct ConnectorDryRun;
+
+impl DryRunDispatch for ConnectorDryRun {
+    fn dry_run(
+        &self,
+        descriptor: &ConnectorDescriptor,
+        input: &DryRunInput<'_>,
+    ) -> Option<ConnectorOutcome> {
+        ConnectorRegistry::dry_run(descriptor, input)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -153,6 +195,7 @@ mod tests {
     use super::*;
     use crate::application::default_authorizer;
     use crate::domain::automation::connector::connector_catalogue;
+    use crate::domain::automation::run::DryRunDispatch;
     use crate::infrastructure::realtime::EventHub;
 
     fn registry() -> ConnectorRegistry {
@@ -184,6 +227,70 @@ mod tests {
         assert_eq!(
             catalogue_kinds, registry_kinds,
             "the catalogue and the connector registry have drifted apart"
+        );
+    }
+
+    fn dry_run_input(config: &serde_json::Map<String, serde_json::Value>) -> DryRunInput<'_> {
+        DryRunInput {
+            config,
+            stored: None,
+        }
+    }
+
+    #[test]
+    fn every_catalogue_kind_has_a_dry_run() {
+        let catalogue = connector_catalogue();
+        let config = serde_json::Map::new();
+
+        for descriptor in catalogue.descriptors() {
+            assert!(
+                ConnectorRegistry::dry_run(descriptor, &dry_run_input(&config)).is_some(),
+                "`{}` has no dry run entry",
+                descriptor.kind
+            );
+        }
+    }
+
+    #[test]
+    fn a_connector_without_its_own_dry_run_answers_with_its_descriptors_sample() {
+        let catalogue = connector_catalogue();
+        let config = serde_json::Map::new();
+
+        for kind in [
+            "mestier.customer.create",
+            "mestier.support.assign_ticket",
+            "mestier.support.add_badge",
+            "http.request",
+            "odoo.create_partner",
+            "odoo.update_partner",
+            "odoo.create_invoice",
+            "mestier.task_recurrence.extend_horizon",
+        ] {
+            let descriptor = catalogue.get(kind, 1).unwrap();
+
+            let outcome = ConnectorRegistry::dry_run(descriptor, &dry_run_input(&config));
+
+            assert_eq!(
+                outcome,
+                Some(ConnectorOutcome::Produced(descriptor.sample_output.clone())),
+                "{kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_kind_the_registry_does_not_know_has_no_dry_run() {
+        let mut descriptor = connector_catalogue().get("flow.config", 1).unwrap().clone();
+        descriptor.kind = "not.a.real.kind";
+        let config = serde_json::Map::new();
+
+        assert_eq!(
+            ConnectorRegistry::dry_run(&descriptor, &dry_run_input(&config)),
+            None
+        );
+        assert_eq!(
+            ConnectorDryRun.dry_run(&descriptor, &dry_run_input(&config)),
+            None
         );
     }
 

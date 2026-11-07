@@ -83,6 +83,7 @@ pub struct ConnectorDescriptor {
     /// invented. `None` for every connector whose output only exists once it
     /// has run.
     pub output_mirrors_field: Option<&'static str>,
+    pub sample_output: Value,
 }
 
 #[cfg(test)]
@@ -150,6 +151,7 @@ mod tests {
             branches: &[],
             output_example: json!({ "id": 42 }),
             output_mirrors_field: None,
+            sample_output: json!({ "id": 42 }),
         };
 
         let json = to_value(&descriptor).expect("descriptor serializes");
@@ -158,6 +160,7 @@ mod tests {
         assert_eq!(json["version"], 1);
         assert_eq!(json["family"], "odoo");
         assert_eq!(json["output_example"], json!({ "id": 42 }));
+        assert_eq!(json["sample_output"], json!({ "id": 42 }));
         assert_eq!(
             json["auth"],
             json!({ "AnyOf": ["odoo_api", "bearer_token"] })

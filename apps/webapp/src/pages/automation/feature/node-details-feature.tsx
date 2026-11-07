@@ -34,8 +34,10 @@ import { type Neighbour, neighboursOf } from '#/pages/automation/lib/graph'
 import { appearanceOf } from '#/pages/automation/lib/node-appearance'
 import type { NodeIssue } from '#/pages/automation/lib/node-issues'
 import {
+	inputViewFromDryStep,
 	type NodeInputView,
 	nodeDescription,
+	outputViewFromDryStep,
 	outputViewFromPayload,
 	outputViewFromStep,
 } from '#/pages/automation/lib/node-view'
@@ -54,6 +56,7 @@ import {
 	upstreamEntries,
 } from '#/pages/automation/lib/upstream-entries'
 import { nodeTextErrors } from '#/pages/automation/lib/validation'
+import type { DryRunPasses } from '#/pages/automation/lib/workflow-runs'
 import { EventInputPanel } from '#/pages/automation/ui/event-input-panel'
 import { InlineEditField } from '#/pages/automation/ui/inline-edit-field'
 import type { NdvNavItem } from '#/pages/automation/ui/ndv-node-nav'
@@ -68,7 +71,10 @@ import { OperationContractTabs } from '#/pages/automation/ui/operation-contract-
 import { OperationOutputPanel } from '#/pages/automation/ui/operation-output-panel'
 import { RunStatusLabel } from '#/pages/automation/ui/run-status-label'
 import { TriggerParameters } from '#/pages/automation/ui/trigger-parameters'
-import type { TestRun } from '#/pages/automation/ui/variables-panel'
+import type {
+	PassSelector,
+	TestRun,
+} from '#/pages/automation/ui/variables-panel'
 
 export interface NodeDetailsFeatureProps {
 	node: EditorNode
@@ -80,7 +86,8 @@ export interface NodeDetailsFeatureProps {
 	authSchemes: Schemas.AuthSchemeResponse[]
 	credentials: Schemas.CredentialResponse[]
 	issues: readonly NodeIssue[]
-	testRun: TestRun
+	dryRunSteps: DryRunPasses | null
+	testRun: TestRun | null
 	onUpdateConnector: (
 		patch: Partial<
 			Pick<Schemas.PlacedConnectorDto, 'config' | 'credential_id'>
@@ -93,6 +100,8 @@ export interface NodeDetailsFeatureProps {
 	onClose: () => void
 	onNavigate: (nodeId: string) => void
 }
+
+const NO_PASSES: readonly Schemas.DryRunStepResponse[] = []
 
 function byVerticalPosition(
 	nodes: ReadonlyMap<string, EditorNode>,
@@ -111,6 +120,7 @@ export function NodeDetailsFeature({
 	authSchemes,
 	credentials,
 	issues,
+	dryRunSteps,
 	testRun,
 	onUpdateConnector,
 	onUpdateTriggerKind,
@@ -123,6 +133,10 @@ export function NodeDetailsFeature({
 	const [picking, setPicking] = useState<{ replacing: string | null } | null>(
 		null,
 	)
+	const [pickedPass, setPickedPass] = useState<{
+		nodeId: string
+		index: number
+	} | null>(null)
 	const { connector, trigger } = node.data
 	const isOperationNode = connector?.kind === COLLECTION_OPERATION_KIND
 	const lookup =
@@ -169,7 +183,30 @@ export function NodeDetailsFeature({
 		return event ? [event] : []
 	})
 	const currentEvent = chosenEvents[0] ?? null
-	const step = connector ? sources.runSteps.get(connector.id) : undefined
+	const step =
+		connector && !dryRunSteps ? sources.runSteps.get(connector.id) : undefined
+	const passes = (connector && dryRunSteps?.get(connector.id)) || NO_PASSES
+	const passIndex =
+		pickedPass?.nodeId === node.id
+			? Math.min(pickedPass.index, passes.length - 1)
+			: passes.length - 1
+	const dryStep = passes[passIndex]
+	const passSelector: PassSelector | null =
+		passes.length > 1
+			? {
+					index: passIndex,
+					count: passes.length,
+					onChange: (index) =>
+						setPickedPass(
+							index >= passes.length - 1 ? null : { nodeId: node.id, index },
+						),
+				}
+			: null
+	const executionInput =
+		connector && dryRunSteps
+			? inputViewFromDryStep(dryStep, node.data.disabled)
+			: null
+	const shownStatus = dryStep?.status ?? step?.status
 	const inputFallback: NodeInputView = trigger
 		? { state: 'trigger' }
 		: { state: 'unconnected' }
@@ -241,7 +278,7 @@ export function NodeDetailsFeature({
 				}
 				icon={appearance.icon}
 				hue={appearance.hue}
-				status={step && <RunStatusLabel status={step.status} />}
+				status={shownStatus && <RunStatusLabel status={shownStatus} />}
 				input={
 					trigger && trigger.kind !== 'Manual' ? (
 						<EventInputPanel
@@ -252,6 +289,8 @@ export function NodeDetailsFeature({
 						<NodeInputSection
 							entries={entries}
 							fallback={inputFallback}
+							execution={executionInput}
+							passes={passSelector}
 							testRun={testRun}
 						/>
 					)
@@ -376,7 +415,7 @@ export function NodeDetailsFeature({
 					.flatMap(toNavItem(true))}
 				onNavigate={onNavigate}
 				output={
-					output && !step ? (
+					output && !step && !dryStep ? (
 						<OperationOutputPanel
 							summary={output.summary}
 							status={output.status}
@@ -385,10 +424,13 @@ export function NodeDetailsFeature({
 					) : (
 						<NodeOutputPanel
 							key={node.id}
+							passes={passSelector}
 							view={
 								trigger
 									? outputViewFromPayload(sources.lastRun?.triggerPayload)
-									: outputViewFromStep(step)
+									: dryStep
+										? outputViewFromDryStep(dryStep)
+										: outputViewFromStep(step)
 							}
 							errorAction={
 								<Button asChild variant="outline" size="sm">

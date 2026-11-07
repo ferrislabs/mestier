@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::{DateTime, Utc};
@@ -14,9 +15,9 @@ use crate::{
         expression::ExpressionContext,
         ports::{AutomationSettingsRepository, RunRepository, WorkflowRepository},
         run::{
-            ConnectorInput, ConnectorOutcome, DueRun, LoopStackEntry, Run, RunOverview,
-            RunSettlement, RunStatus, RunStep, StepStatus, branch_targets, connectors_by_id,
-            descendants_via, disabled_outcome, format_iteration_path, pass_through_output,
+            ConnectorInput, ConnectorOutcome, DueRun, LoopStackEntry, Next, Run, RunOverview,
+            RunSettlement, RunStatus, RunStep, StepStatus, connectors_by_id, descendants_via,
+            disabled_outcome, format_iteration_path, next_after, pass_through_output,
             resolve_config, resolve_config_nested, roots,
         },
         settings::with_jitter,
@@ -43,10 +44,10 @@ pub struct EnginePassOutcome {
 /// `ExpressionContext::loop_frame` and every frame can render its
 /// `iteration_path`.
 #[derive(Debug, Clone)]
-struct LoopStep {
-    loop_id: String,
-    index: usize,
-    item: Value,
+pub(super) struct LoopStep {
+    pub(super) loop_id: String,
+    pub(super) index: usize,
+    pub(super) item: Arc<Value>,
 }
 
 /// One connector waiting to be visited, with the loop nesting that got the
@@ -729,30 +730,11 @@ impl MestierUseCase {
         stack: &mut Vec<Frame>,
         index: &mut HashMap<(String, String), RunStep>,
     ) -> Result<(), CoreError> {
-        match outcome {
-            ConnectorOutcome::Produced(_) => {
-                for target in branch_targets(graph, &frame.connector_id, None) {
-                    stack.push(Frame {
-                        connector_id: target.to_string(),
-                        path: frame.path.clone(),
-                    });
-                }
-            }
-            ConnectorOutcome::Branch { taken, .. } => {
-                let untaken = if *taken == Branch::Then {
-                    Branch::Else
-                } else {
-                    Branch::Then
-                };
-                let taken_targets = branch_targets(graph, &frame.connector_id, Some(*taken));
-                let untaken_targets = branch_targets(graph, &frame.connector_id, Some(untaken));
-                let taken_reach = descendants_via(graph, &taken_targets);
-                let untaken_reach = descendants_via(graph, &untaken_targets);
-
+        match next_after(graph, &frame.connector_id, outcome) {
+            Next::Follow { targets, skipped } => {
                 let iteration_path = frame.iteration_path();
-                let to_skip: Vec<&str> = untaken_reach
-                    .difference(&taken_reach)
-                    .copied()
+                let to_skip: Vec<&str> = skipped
+                    .into_iter()
                     .filter(|id| !index.contains_key(&(id.to_string(), iteration_path.clone())))
                     .collect();
 
@@ -784,33 +766,28 @@ impl MestierUseCase {
                     }
                 }
 
-                for target in taken_targets {
+                for target in targets {
                     stack.push(Frame {
                         connector_id: target.to_string(),
                         path: frame.path.clone(),
                     });
                 }
             }
-            ConnectorOutcome::Iterate { items } => {
-                let each_targets = branch_targets(graph, &frame.connector_id, Some(Branch::Each));
-                let after_targets = branch_targets(graph, &frame.connector_id, Some(Branch::After));
-
-                // Pushed first, so it sits at the bottom of the stack:
-                // it only pops once every item's subtree (pushed after,
-                // therefore above it) has fully drained.
-                for after in after_targets {
+            Next::Iterate { after, each, items } => {
+                for after in after {
                     stack.push(Frame {
                         connector_id: after.to_string(),
                         path: frame.path.clone(),
                     });
                 }
                 for (idx, item) in items.iter().enumerate().rev() {
-                    for target in &each_targets {
+                    let shared = Arc::new(item.clone());
+                    for target in &each {
                         let mut path = frame.path.clone();
                         path.push(LoopStep {
                             loop_id: frame.connector_id.clone(),
                             index: idx,
-                            item: item.clone(),
+                            item: Arc::clone(&shared),
                         });
                         stack.push(Frame {
                             connector_id: (*target).to_string(),
@@ -819,7 +796,6 @@ impl MestierUseCase {
                     }
                 }
             }
-            ConnectorOutcome::Failed { .. } => unreachable!("a failed step never advances"),
         }
 
         Ok(())

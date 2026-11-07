@@ -11,6 +11,7 @@
 //! there to catch.
 
 mod ast;
+mod budget;
 mod context;
 mod error;
 mod eval;
@@ -18,6 +19,8 @@ mod parser;
 
 use std::collections::BTreeSet;
 
+pub use budget::EvalBudget;
+pub(crate) use budget::json_size;
 pub use context::{ExpressionContext, LoopFrame};
 pub use error::ExpressionError;
 
@@ -76,6 +79,7 @@ mod tests {
     use chrono::TimeZone;
     use serde_json::{Value, json};
 
+    use super::budget::MAX_RESOLVED_BYTES;
     use super::*;
 
     fn fixed_now() -> chrono::DateTime<chrono::Utc> {
@@ -824,5 +828,179 @@ mod tests {
             parse_template(&json!("Item #{{ loop.index }}: {{ loop.item.name }}")).expect("valid");
 
         assert!(template.uses_loop());
+    }
+
+    fn payload_context<'a>(
+        trigger: &'a Value,
+        connectors: &'a BTreeMap<String, Value>,
+    ) -> ExpressionContext<'a> {
+        ExpressionContext {
+            trigger: Some(trigger),
+            connectors,
+            loop_frame: None,
+            now: fixed_now(),
+        }
+    }
+
+    fn syntax_error(source: &str) -> ExpressionError {
+        parse_template(&json!(source)).expect_err("the template must be refused")
+    }
+
+    #[test]
+    fn parentheses_nested_past_the_ceiling_are_a_syntax_error_not_a_stack_overflow() {
+        let depth = 100_000;
+        let source = format!("{{{{ {}1{} }}}}", "(".repeat(depth), ")".repeat(depth));
+
+        let error = syntax_error(&source);
+
+        assert!(matches!(error, ExpressionError::Syntax { .. }), "{error:?}");
+    }
+
+    #[test]
+    fn a_run_of_nots_calls_and_chained_operators_is_bounded_too() {
+        let nots = format!("{{{{ {}true }}}}", "not ".repeat(100_000));
+        let calls = format!(
+            "{{{{ {}1{} }}}}",
+            "upper(".repeat(100_000),
+            ")".repeat(100_000)
+        );
+        let chain = format!("{{{{ true{} }}}}", " or true".repeat(100_000));
+
+        for source in [nots, calls, chain] {
+            let error = syntax_error(&source);
+
+            assert!(matches!(error, ExpressionError::Syntax { .. }), "{error:?}");
+        }
+    }
+
+    #[test]
+    fn nesting_within_the_ceiling_still_evaluates() {
+        let connectors = BTreeMap::new();
+        let ctx = empty_context(&connectors);
+        let source = format!("{{{{ {}1{} }}}}", "(".repeat(30), ")".repeat(30));
+        let chain = format!("{{{{ false{} }}}}", " or true".repeat(30));
+
+        let nested = parse_template(&json!(source)).expect("shallow nesting parses");
+        let chained = parse_template(&json!(chain)).expect("a short chain parses");
+
+        assert_eq!(nested.evaluate(&ctx).unwrap(), json!(1));
+        assert_eq!(chained.evaluate(&ctx).unwrap(), json!(true));
+    }
+
+    #[test]
+    fn a_path_clones_its_leaf_only_never_the_root_it_hangs_from() {
+        let trigger = json!({ "big": "x".repeat(2 * 1024 * 1024), "small": 7 });
+        let connectors = BTreeMap::new();
+        let ctx = payload_context(&trigger, &connectors);
+        let small = parse_template(&json!("{{ trigger.small }}")).unwrap();
+        let big = parse_template(&json!("{{ trigger.big }}")).unwrap();
+
+        let mut budget = EvalBudget::new(1024);
+        let value = small.evaluate_within(&ctx, &mut budget).unwrap();
+        let refused = big
+            .evaluate_within(&ctx, &mut EvalBudget::new(1024))
+            .unwrap_err();
+
+        assert_eq!(value, json!(7));
+        assert_eq!(refused, ExpressionError::TooLarge { limit: 1024 });
+    }
+
+    #[test]
+    fn eighty_thousand_references_to_a_megabyte_leaf_are_refused_long_before_they_are_built() {
+        let trigger = json!({ "p": "x".repeat(1024 * 1024) });
+        let connectors = BTreeMap::new();
+        let ctx = payload_context(&trigger, &connectors);
+        let source = "{{trigger.p}}".repeat(80_000);
+        let template = parse_template(&json!(source)).unwrap();
+        let started = std::time::Instant::now();
+
+        let error = template.evaluate(&ctx).unwrap_err();
+
+        assert_eq!(
+            error,
+            ExpressionError::TooLarge {
+                limit: MAX_RESOLVED_BYTES
+            }
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
+
+    #[test]
+    fn every_function_that_builds_a_string_counts_what_it_builds() {
+        let trigger = json!({ "p": "x".repeat(600) });
+        let connectors = BTreeMap::new();
+        let ctx = payload_context(&trigger, &connectors);
+
+        for source in [
+            "{{ concat(trigger.p, trigger.p) }}",
+            "{{ to_string(trigger.p) }}",
+            "{{ upper(trigger.p) }}",
+            "{{ lower(trigger.p) }}",
+            "{{ trim(trigger.p) }}",
+            "{{ json(trigger.p) }}",
+            "text {{ trigger.p }} {{ trigger.p }}",
+        ] {
+            let template = parse_template(&json!(source)).unwrap();
+
+            let refused = template
+                .evaluate_within(&ctx, &mut EvalBudget::new(1000))
+                .unwrap_err();
+
+            assert_eq!(
+                refused,
+                ExpressionError::TooLarge { limit: 1000 },
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_budget_is_shared_by_everything_evaluated_against_it() {
+        let trigger = json!({ "p": "x".repeat(400) });
+        let connectors = BTreeMap::new();
+        let ctx = payload_context(&trigger, &connectors);
+        let template = parse_template(&json!("{{ trigger.p }}")).unwrap();
+        let mut budget = EvalBudget::new(1000);
+
+        let first = template.evaluate_within(&ctx, &mut budget);
+        let second = template.evaluate_within(&ctx, &mut budget);
+        let third = template.evaluate_within(&ctx, &mut budget);
+
+        assert!(first.is_ok() && second.is_ok());
+        assert_eq!(
+            third.unwrap_err(),
+            ExpressionError::TooLarge { limit: 1000 }
+        );
+    }
+
+    #[test]
+    fn loop_paths_resolve_the_same_without_building_the_synthetic_object() {
+        let connectors = BTreeMap::new();
+        let item = json!({ "name": "Ada", "tags": ["a", "b"] });
+        let ctx = ExpressionContext {
+            trigger: None,
+            connectors: &connectors,
+            loop_frame: Some(LoopFrame {
+                item: &item,
+                index: 4,
+            }),
+            now: fixed_now(),
+        };
+        let read = |source: &str| parse_template(&json!(source)).unwrap().evaluate(&ctx);
+
+        assert_eq!(read("{{ loop.index }}").unwrap(), json!(4));
+        assert_eq!(read("{{ loop.item.tags[1] }}").unwrap(), json!("b"));
+        assert_eq!(
+            read("{{ loop }}").unwrap(),
+            json!({ "item": { "name": "Ada", "tags": ["a", "b"] }, "index": 4 })
+        );
+        assert!(matches!(
+            read("{{ loop.other }}").unwrap_err(),
+            ExpressionError::MissingPath { .. }
+        ));
+        assert!(matches!(
+            read("{{ loop.index.deeper }}").unwrap_err(),
+            ExpressionError::MissingPath { .. }
+        ));
     }
 }

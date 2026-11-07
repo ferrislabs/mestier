@@ -72,6 +72,7 @@ impl Modify for SecurityAddon {
         automation::workflow::update::handler,
         automation::workflow::delete::handler,
         automation::workflow::save_version::handler,
+        automation::workflow::dry_run::handler,
         automation::run::list::handler,
         automation::run::get_one::handler,
         automation::run::replay::handler,
@@ -384,6 +385,10 @@ impl Modify for SecurityAddon {
         automation::workflow::save_version::SaveWorkflowVersionRequest,
         automation::workflow::save_version::GraphInvalidBody,
         automation::workflow::save_version::GraphInvalidDetails,
+        automation::workflow::dry_run::DryRunRequest,
+        automation::workflow::dry_run::DryRunResponse,
+        automation::workflow::dry_run::DryRunStepResponse,
+        automation::workflow::dry_run::DryRunStepStatus,
         automation::run::replay::ReplayRunRequest,
         automation::run::start::StartRunRequest,
         automation::run::start::StartedRunResponse,
@@ -684,6 +689,7 @@ pub struct ApiDoc;
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
     use utoipa::OpenApi;
 
     use super::ApiDoc;
@@ -1331,6 +1337,57 @@ mod tests {
                 .any(|parameter| parameter["name"] == "archived" && parameter["in"] == "query"),
             "{parameters:?}"
         );
+    }
+
+    #[test]
+    fn the_dry_run_route_and_its_shapes_reach_the_document() {
+        let document = ApiDoc::openapi();
+        let path = "/api/v1/organizations/{organization_id}/automation/workflows/dry-run";
+
+        let item = document
+            .paths
+            .paths
+            .get(path)
+            .unwrap_or_else(|| panic!("{path} is missing from the document"));
+        let json = serde_json::to_value(item).expect("the path item serializes");
+        assert_eq!(json["post"]["operationId"], "dryRunWorkflow");
+        assert!(json["post"]["responses"].get("200").is_some());
+        assert!(json["post"]["responses"].get("422").is_some());
+
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+        for schema in [
+            "DryRunRequest",
+            "DryRunResponse",
+            "DryRunStepResponse",
+            "DryRunStepStatus",
+        ] {
+            assert!(schemas.contains_key(schema), "{schema} is not registered");
+        }
+        let request = serde_json::to_value(schemas.get("DryRunRequest").unwrap()).unwrap();
+        let required = request["required"].as_array().expect("required fields");
+        assert_eq!(required, &[json!("graph")]);
+        for field in ["graph", "trigger_id", "trigger_payload"] {
+            assert!(request["properties"].get(field).is_some(), "{field}");
+        }
+        let step = serde_json::to_value(schemas.get("DryRunStepResponse").unwrap()).unwrap();
+        for field in [
+            "connector_id",
+            "iteration_path",
+            "status",
+            "input",
+            "output",
+            "error",
+        ] {
+            assert!(step["properties"].get(field).is_some(), "{field}");
+        }
+        let required = step["required"].as_array().expect("required fields");
+        assert!(required.iter().any(|name| name == "iteration_path"));
+        let status = serde_json::to_value(schemas.get("DryRunStepStatus").unwrap()).unwrap();
+        assert_eq!(status["enum"], json!(["succeeded", "failed", "skipped"]));
     }
 
     #[test]

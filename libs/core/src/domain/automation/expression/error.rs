@@ -36,6 +36,9 @@ pub enum ExpressionError {
         got: &'static str,
     },
     LoopOutsideLoop,
+    TooLarge {
+        limit: usize,
+    },
 }
 
 impl fmt::Display for ExpressionError {
@@ -57,6 +60,7 @@ impl fmt::Display for ExpressionError {
                 got,
             } => write!(f, "`{path}` expected {expected}, got {got}"),
             Self::LoopOutsideLoop => write!(f, "`loop` is only valid inside a `flow.loop`"),
+            Self::TooLarge { limit } => write!(f, "the value built exceeds {limit} bytes"),
         }
     }
 }

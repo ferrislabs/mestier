@@ -10,6 +10,7 @@ import {
 	useCollectionDetails,
 	useCollections,
 	useDeleteCollection,
+	useDryRunWorkflow,
 	useImportCollection,
 	useReplaceCollection,
 	useRunGraphs,
@@ -214,6 +215,86 @@ describe('workflow mutations — refreshing what the screens show', () => {
 			expect(fetched(WORKFLOWS_PATH)).toBe(2)
 			expect(fetched(WORKFLOW_PATH)).toBe(2)
 		})
+	})
+})
+
+const DRY_RUN_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/dry-run'
+
+describe('useDryRunWorkflow', () => {
+	const GRAPH = { connectors: [], edges: [], triggers: [] }
+
+	it('posts the graph to the dry-run endpoint and hands the steps back', async () => {
+		const { api } = installWorkflowApi()
+		api.mockMutation('post', DRY_RUN_PATH, () => ({
+			data: {
+				steps: [
+					{
+						connector_id: 'c1',
+						status: 'succeeded',
+						input: null,
+						output: { n: 1 },
+						error: null,
+					},
+				],
+			},
+			pagination: null,
+		}))
+		const { result } = renderHook(() => useDryRunWorkflow(), {
+			wrapper: stableWrapper(),
+		})
+
+		const response = await act(() =>
+			result.current.mutateAsync({
+				path: { organization_id: 'org-1' },
+				body: { graph: GRAPH, trigger_id: 't1' },
+			}),
+		)
+
+		expect(response.data.steps.map((step) => step.connector_id)).toEqual(['c1'])
+		expect(api.calls.filter((call) => call.path === DRY_RUN_PATH)).toEqual([
+			{
+				method: 'post',
+				path: DRY_RUN_PATH,
+				params: {
+					path: { organization_id: 'org-1' },
+					body: { graph: GRAPH, trigger_id: 't1' },
+				},
+			},
+		])
+	})
+
+	it('refetches nothing: a dry run writes nothing the screens show', async () => {
+		const { api, fetched } = installWorkflowApi()
+		api.mockMutation('post', DRY_RUN_PATH, () => ({
+			data: { steps: [] },
+			pagination: null,
+		}))
+		const { result } = renderHook(
+			() => ({
+				list: useAutomationWorkflows('org-1'),
+				detail: useWorkflow('org-1', 'wf-1'),
+				dryRun: useDryRunWorkflow(),
+			}),
+			{ wrapper: stableWrapper() },
+		)
+		await waitFor(() => {
+			expect(result.current.list.isSuccess).toBe(true)
+			expect(result.current.detail.isSuccess).toBe(true)
+		})
+
+		await act(() =>
+			result.current.dryRun.mutateAsync({
+				path: { organization_id: 'org-1' },
+				body: { graph: GRAPH },
+			}),
+		)
+		await act(async () => {
+			await Promise.resolve()
+		})
+
+		expect(fetched(WORKFLOWS_PATH)).toBe(1)
+		expect(fetched(WORKFLOW_PATH)).toBe(1)
 	})
 })
 

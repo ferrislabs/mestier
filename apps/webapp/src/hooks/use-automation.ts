@@ -34,6 +34,8 @@ const WORKFLOWS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows'
 const WORKFLOW_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
+const WORKFLOW_DRY_RUN_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/dry-run'
 const WORKFLOW_VERSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
@@ -237,6 +239,13 @@ export function useSaveWorkflowVersion() {
 				invalidate(queryClient, WORKFLOWS_PATH),
 				invalidate(queryClient, WORKFLOW_PATH),
 			]),
+	})
+}
+
+export function useDryRunWorkflow() {
+	return useMutation({
+		...window.tanstackApi.mutation('post', WORKFLOW_DRY_RUN_PATH)
+			.mutationOptions,
 	})
 }
 

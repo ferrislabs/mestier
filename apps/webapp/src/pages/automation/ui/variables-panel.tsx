@@ -22,6 +22,12 @@ export interface TestRun {
 	start: () => void
 }
 
+export interface PassSelector {
+	index: number
+	count: number
+	onChange: (index: number) => void
+}
+
 const DRAGGING_FLAG = 'draggingExpression'
 
 function distanceLabel(entry: UpstreamEntry): string {
@@ -133,26 +139,28 @@ function DataNotice({ testRun }: { testRun: TestRun }) {
 	)
 }
 
-function ItemPager({
+export function ItemPager({
 	index,
 	count,
 	onChange,
+	noun = 'Élément',
 }: {
 	index: number
 	count: number
 	onChange: (index: number) => void
+	noun?: string
 }) {
 	return (
 		<div className="flex items-center justify-between gap-2 px-2 pt-1 pb-1.5 text-muted-foreground text-xs">
 			<span className="tabular-nums">
-				Élément {index + 1} sur {count}
+				{noun} {index + 1} sur {count}
 			</span>
 			<span className="flex gap-0.5">
 				<Button
 					variant="ghost"
 					size="icon-sm"
 					className="size-6"
-					aria-label="Élément précédent"
+					aria-label={`${noun} précédent`}
 					disabled={index === 0}
 					onClick={() => onChange(index - 1)}
 				>
@@ -162,7 +170,7 @@ function ItemPager({
 					variant="ghost"
 					size="icon-sm"
 					className="size-6"
-					aria-label="Élément suivant"
+					aria-label={`${noun} suivant`}
 					disabled={index >= count - 1}
 					onClick={() => onChange(index + 1)}
 				>

@@ -39,6 +39,39 @@ export function outputViewFromStep(
 	return readyView(step.output)
 }
 
+export type DryRunStepView = Pick<
+	Schemas.DryRunStepResponse,
+	'status' | 'input' | 'output' | 'error'
+>
+
+export type ExecutionInputView =
+	| { state: 'absent' }
+	| { state: 'not-reached' }
+	| { state: 'ready'; items: unknown[] }
+
+export function outputViewFromDryStep(
+	step: DryRunStepView | undefined,
+): NodeOutputView {
+	if (!step || step.status === 'skipped') return { state: 'not-executed' }
+	if (step.status === 'failed') {
+		return {
+			state: 'error',
+			message: step.error || 'Ce nœud a échoué lors du test.',
+		}
+	}
+	return readyView(step.output)
+}
+
+export function inputViewFromDryStep(
+	step: DryRunStepView | undefined,
+	passesThrough: boolean,
+): ExecutionInputView {
+	if (!step) return { state: 'absent' }
+	if (step.status === 'skipped') return { state: 'not-reached' }
+	const input = step.input ?? (passesThrough ? step.output : undefined)
+	return { state: 'ready', items: toItems(input) }
+}
+
 export function outputViewFromPayload(payload: unknown): NodeOutputView {
 	if (payload === undefined || payload === null) {
 		return { state: 'not-executed' }

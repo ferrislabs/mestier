@@ -14,6 +14,7 @@ import {
 	removeConnector,
 	removeTrigger,
 	rootConnectorIds,
+	sameGraph,
 	snapToGrid,
 	upstreamConnectorIds,
 	upstreamOf,
@@ -538,5 +539,84 @@ describe('neighboursOf', () => {
 			previous: [{ id: 'a', handle: null }],
 			next: [{ id: 'c', handle: 'Else' }],
 		})
+	})
+})
+
+describe('sameGraph', () => {
+	it('holds two graphs with the same content equal whatever the key order', () => {
+		const left = graphOf(
+			[connector('c1', { url: 'a', method: 'GET' })],
+			[{ from: 't1', to: 'c1', branch: null }],
+		)
+		const right: Schemas.GraphDto = {
+			triggers: [],
+			edges: [{ branch: null, to: 'c1', from: 't1' }],
+			connectors: [
+				{
+					config: { method: 'GET', url: 'a' },
+					version: 1,
+					kind: 'http.request',
+					id: 'c1',
+				},
+			],
+		}
+
+		expect(sameGraph(left, right)).toBe(true)
+	})
+
+	it('ignores a field that is present but undefined', () => {
+		expect(
+			sameGraph(
+				graphOf([{ ...connector('c1'), disabled: undefined }]),
+				graphOf([connector('c1')]),
+			),
+		).toBe(true)
+	})
+
+	it('tells a changed config, name, edge or node apart', () => {
+		const base = graphOf(
+			[connector('c1', { url: 'a' }), connector('c2')],
+			[{ from: 'c1', to: 'c2', branch: null }],
+		)
+
+		expect(
+			sameGraph(
+				base,
+				graphOf(
+					[connector('c1', { url: 'b' }), connector('c2')],
+					[{ from: 'c1', to: 'c2', branch: null }],
+				),
+			),
+		).toBe(false)
+		expect(
+			sameGraph(
+				base,
+				graphOf(
+					[
+						{ ...connector('c1', { url: 'a' }), name: 'Appeler' },
+						connector('c2'),
+					],
+					[{ from: 'c1', to: 'c2', branch: null }],
+				),
+			),
+		).toBe(false)
+		expect(
+			sameGraph(
+				base,
+				graphOf([connector('c1', { url: 'a' }), connector('c2')]),
+			),
+		).toBe(false)
+		expect(sameGraph(base, graphOf([connector('c1', { url: 'a' })]))).toBe(
+			false,
+		)
+	})
+
+	it('tells a disabled node from an enabled one', () => {
+		expect(
+			sameGraph(
+				graphOf([connector('c1')]),
+				graphOf([{ ...connector('c1'), disabled: true }]),
+			),
+		).toBe(false)
 	})
 })

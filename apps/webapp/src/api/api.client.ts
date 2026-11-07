@@ -772,9 +772,48 @@ export namespace Schemas {
     updated_at: string;
   };
   export type DraftSupplyRequest = { product_id: ProductId };
+  export type OperationRefDto = { collection_id: string; operation_id: string };
+  export type PlacedConnectorDto = {
+    config: Record<string, unknown>;
+    credential_id?: (string | null) | undefined;
+    description?: (string | null) | undefined;
+    disabled?: boolean | undefined;
+    id: string;
+    kind: string;
+    name?: (string | null) | undefined;
+    operation?: (null | OperationRefDto) | undefined;
+    version: number;
+  };
+  export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
+  export type TriggerKindDto = "Manual" | { Events: Array<string> };
+  export type PlacedTriggerDto = {
+    description?: (string | null) | undefined;
+    id: string;
+    kind: TriggerKindDto;
+    name?: (string | null) | undefined;
+  };
+  export type GraphDto = {
+    connectors: Array<PlacedConnectorDto>;
+    edges: Array<EdgeDto>;
+    triggers: Array<PlacedTriggerDto>;
+  };
+  export type DryRunRequest = {
+    graph: GraphDto;
+    trigger_id?: (string | null) | undefined;
+    trigger_payload?: (Record<string, unknown> | null) | undefined;
+  };
+  export type DryRunStepStatus = "succeeded" | "failed" | "skipped";
+  export type DryRunStepResponse = {
+    connector_id: string;
+    error?: (string | null) | undefined;
+    input?: unknown | undefined;
+    iteration_path: string;
+    output?: unknown | undefined;
+    status: DryRunStepStatus;
+  };
+  export type DryRunResponse = { steps: Array<DryRunStepResponse> };
   export type DueStatus = "PLANNED" | "OVERDUE" | "THIS_WEEK" | "NEXT_WEEK" | "LATER" | "DONE";
   export type Due = { on?: (string | null) | undefined; status: DueStatus };
-  export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
   export type EditSupportDraftRequest = { body: string };
   export type EmployeeCostBasisId = string;
   export type EmployeeCostBasisResponse = {
@@ -859,30 +898,6 @@ export namespace Schemas {
     id: string;
     name: string;
     parent_id?: (string | null) | undefined;
-  };
-  export type OperationRefDto = { collection_id: string; operation_id: string };
-  export type PlacedConnectorDto = {
-    config: Record<string, unknown>;
-    credential_id?: (string | null) | undefined;
-    description?: (string | null) | undefined;
-    disabled?: boolean | undefined;
-    id: string;
-    kind: string;
-    name?: (string | null) | undefined;
-    operation?: (null | OperationRefDto) | undefined;
-    version: number;
-  };
-  export type TriggerKindDto = "Manual" | { Events: Array<string> };
-  export type PlacedTriggerDto = {
-    description?: (string | null) | undefined;
-    id: string;
-    kind: TriggerKindDto;
-    name?: (string | null) | undefined;
-  };
-  export type GraphDto = {
-    connectors: Array<PlacedConnectorDto>;
-    edges: Array<EdgeDto>;
-    triggers: Array<PlacedTriggerDto>;
   };
   export type GraphErrorResponse = {
     connector_id?: (string | null) | undefined;
@@ -4887,6 +4902,26 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       409: unknown;
+    };
+  };
+  export type post_DryRunWorkflow = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/workflows/dry-run";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.DryRunRequest;
+    };
+    responses: {
+      200: {
+        data: { steps: Array<Schemas.DryRunStepResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      413: unknown;
+      422: { code: string; details: Schemas.GraphInvalidDetails; message: string; status: number };
     };
   };
   export type get_GetWorkflow = {
@@ -9524,6 +9559,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/folders": Endpoints.post_CreateWorkflowFolder;
     "/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay": Endpoints.post_ReplayRun;
     "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.post_CreateWorkflow;
+    "/api/v1/organizations/{organization_id}/automation/workflows/dry-run": Endpoints.post_DryRunWorkflow;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.post_CreateCustomUnit;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;

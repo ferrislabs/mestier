@@ -314,6 +314,12 @@ mod tests {
                 "assignee_member_id": world.plain.member_id.0.to_string(),
             }))
         );
+        if let ConnectorOutcome::Produced(value) = &to_first {
+            crate::infrastructure::automation::connectors::test_support::assert_same_shape(
+                value,
+                "mestier.support.assign_ticket",
+            );
+        }
         assert_eq!(
             to_second,
             ConnectorOutcome::Produced(json!({

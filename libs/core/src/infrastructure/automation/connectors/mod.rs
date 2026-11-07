@@ -20,4 +20,4 @@ mod task_recurrence_extend_horizon;
 #[cfg(test)]
 pub(crate) mod test_support;
 
-pub use registry::{ConnectorRegistry, UnknownConnectorKind};
+pub use registry::{ConnectorDryRun, ConnectorRegistry, UnknownConnectorKind};

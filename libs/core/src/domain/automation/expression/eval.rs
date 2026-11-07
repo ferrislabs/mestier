@@ -1,20 +1,41 @@
+use std::borrow::Cow;
+
 use serde_json::Value;
 
 use super::ast::{BinOp, Expr, Part, Path, PathRoot, PathSegment, Template, TemplateKind, UnaryOp};
+use super::budget::{EvalBudget, json_size};
 use super::context::ExpressionContext;
 use super::error::ExpressionError;
 
 impl Template {
     pub fn evaluate(&self, ctx: &ExpressionContext<'_>) -> Result<Value, ExpressionError> {
+        self.evaluate_within(ctx, &mut EvalBudget::default())
+    }
+
+    pub fn evaluate_within(
+        &self,
+        ctx: &ExpressionContext<'_>,
+        budget: &mut EvalBudget,
+    ) -> Result<Value, ExpressionError> {
         match self.kind() {
             TemplateKind::Literal(value) => Ok(value.clone()),
-            TemplateKind::Whole(expr) => eval_expr(expr, ctx),
+            TemplateKind::Whole(expr) => eval_expr(expr, ctx, budget),
             TemplateKind::Interpolated(parts) => {
                 let mut out = String::new();
                 for part in parts {
                     match part {
-                        Part::Text(text) => out.push_str(text),
-                        Part::Expr(expr) => out.push_str(&stringify(&eval_expr(expr, ctx)?)),
+                        Part::Text(text) => {
+                            budget.charge(text.len())?;
+                            out.push_str(text);
+                        }
+                        Part::Expr(Expr::Path(path)) => {
+                            let resolved = resolve_path(path, ctx)?;
+                            push_stringified(&mut out, &resolved, budget)?;
+                        }
+                        Part::Expr(expr) => {
+                            let value = eval_expr(expr, ctx, budget)?;
+                            push_stringified(&mut out, &value, budget)?;
+                        }
                     }
                 }
                 Ok(Value::String(out))
@@ -23,20 +44,28 @@ impl Template {
     }
 }
 
-fn eval_expr(expr: &Expr, ctx: &ExpressionContext<'_>) -> Result<Value, ExpressionError> {
+fn eval_expr(
+    expr: &Expr,
+    ctx: &ExpressionContext<'_>,
+    budget: &mut EvalBudget,
+) -> Result<Value, ExpressionError> {
     match expr {
         Expr::Literal(value) => Ok(value.clone()),
-        Expr::Path(path) => resolve_path(path, ctx),
+        Expr::Path(path) => {
+            let resolved = resolve_path(path, ctx)?;
+            budget.charge(json_size(&resolved))?;
+            Ok(resolved.into_owned())
+        }
         Expr::Unary {
             op: UnaryOp::Not,
             expr: inner,
         } => {
-            let value = eval_expr(inner, ctx)?;
+            let value = eval_expr(inner, ctx, budget)?;
             let flag = as_bool(&value, inner)?;
             Ok(Value::Bool(!flag))
         }
-        Expr::Binary { op, left, right } => eval_binary(*op, left, right, ctx),
-        Expr::Call { name, args } => eval_call(name, args, ctx),
+        Expr::Binary { op, left, right } => eval_binary(*op, left, right, ctx, budget),
+        Expr::Call { name, args } => eval_call(name, args, ctx, budget),
     }
 }
 
@@ -49,27 +78,38 @@ fn eval_binary(
     left: &Expr,
     right: &Expr,
     ctx: &ExpressionContext<'_>,
+    budget: &mut EvalBudget,
 ) -> Result<Value, ExpressionError> {
     match op {
         BinOp::And => {
-            let flag = as_bool(&eval_expr(left, ctx)?, left)?;
+            let flag = as_bool(&eval_expr(left, ctx, budget)?, left)?;
             if !flag {
                 return Ok(Value::Bool(false));
             }
-            Ok(Value::Bool(as_bool(&eval_expr(right, ctx)?, right)?))
+            Ok(Value::Bool(as_bool(
+                &eval_expr(right, ctx, budget)?,
+                right,
+            )?))
         }
         BinOp::Or => {
-            let flag = as_bool(&eval_expr(left, ctx)?, left)?;
+            let flag = as_bool(&eval_expr(left, ctx, budget)?, left)?;
             if flag {
                 return Ok(Value::Bool(true));
             }
-            Ok(Value::Bool(as_bool(&eval_expr(right, ctx)?, right)?))
+            Ok(Value::Bool(as_bool(
+                &eval_expr(right, ctx, budget)?,
+                right,
+            )?))
         }
-        BinOp::Eq => Ok(Value::Bool(eval_expr(left, ctx)? == eval_expr(right, ctx)?)),
-        BinOp::Ne => Ok(Value::Bool(eval_expr(left, ctx)? != eval_expr(right, ctx)?)),
+        BinOp::Eq => Ok(Value::Bool(
+            eval_expr(left, ctx, budget)? == eval_expr(right, ctx, budget)?,
+        )),
+        BinOp::Ne => Ok(Value::Bool(
+            eval_expr(left, ctx, budget)? != eval_expr(right, ctx, budget)?,
+        )),
         BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-            let left_value = eval_expr(left, ctx)?;
-            let right_value = eval_expr(right, ctx)?;
+            let left_value = eval_expr(left, ctx, budget)?;
+            let right_value = eval_expr(right, ctx, budget)?;
             let l = as_number(&left_value, left)?;
             let r = as_number(&right_value, right)?;
             let result = match op {
@@ -145,26 +185,34 @@ fn eval_call(
     name: &str,
     args: &[Expr],
     ctx: &ExpressionContext<'_>,
+    budget: &mut EvalBudget,
 ) -> Result<Value, ExpressionError> {
     match name {
-        "default" => match eval_expr(&args[0], ctx) {
+        "default" => match eval_expr(&args[0], ctx, budget) {
             Ok(value) => Ok(value),
-            Err(ExpressionError::MissingPath { .. }) => eval_expr(&args[1], ctx),
+            Err(ExpressionError::MissingPath { .. }) => eval_expr(&args[1], ctx, budget),
             Err(other) => Err(other),
         },
-        "upper" => Ok(Value::String(
-            as_string(&eval_expr(&args[0], ctx)?, &args[0])?.to_uppercase(),
-        )),
-        "lower" => Ok(Value::String(
-            as_string(&eval_expr(&args[0], ctx)?, &args[0])?.to_lowercase(),
-        )),
-        "trim" => Ok(Value::String(
-            as_string(&eval_expr(&args[0], ctx)?, &args[0])?
-                .trim()
-                .to_string(),
-        )),
+        "upper" => {
+            let value = eval_expr(&args[0], ctx, budget)?;
+            let upper = as_str(&value, &args[0])?.to_uppercase();
+            budget.charge(upper.len())?;
+            Ok(Value::String(upper))
+        }
+        "lower" => {
+            let value = eval_expr(&args[0], ctx, budget)?;
+            let lower = as_str(&value, &args[0])?.to_lowercase();
+            budget.charge(lower.len())?;
+            Ok(Value::String(lower))
+        }
+        "trim" => {
+            let value = eval_expr(&args[0], ctx, budget)?;
+            let trimmed = as_str(&value, &args[0])?.trim().to_string();
+            budget.charge(trimmed.len())?;
+            Ok(Value::String(trimmed))
+        }
         "len" => {
-            let value = eval_expr(&args[0], ctx)?;
+            let value = eval_expr(&args[0], ctx, budget)?;
             let count = match &value {
                 Value::String(s) => s.chars().count(),
                 Value::Array(a) => a.len(),
@@ -180,12 +228,12 @@ fn eval_call(
             Ok(Value::Number(serde_json::Number::from(count)))
         }
         "contains" => {
-            let haystack = eval_expr(&args[0], ctx)?;
-            let needle = eval_expr(&args[1], ctx)?;
+            let haystack = eval_expr(&args[0], ctx, budget)?;
+            let needle = eval_expr(&args[1], ctx, budget)?;
             match &haystack {
                 Value::String(s) => {
-                    let needle = as_string(&needle, &args[1])?;
-                    Ok(Value::Bool(s.contains(&needle)))
+                    let needle = as_str(&needle, &args[1])?;
+                    Ok(Value::Bool(s.contains(needle)))
                 }
                 Value::Array(items) => Ok(Value::Bool(items.contains(&needle))),
                 other => Err(ExpressionError::TypeMismatch {
@@ -196,12 +244,14 @@ fn eval_call(
             }
         }
         "starts_with" => {
-            let s = as_string(&eval_expr(&args[0], ctx)?, &args[0])?;
-            let prefix = as_string(&eval_expr(&args[1], ctx)?, &args[1])?;
-            Ok(Value::Bool(s.starts_with(&prefix)))
+            let value = eval_expr(&args[0], ctx, budget)?;
+            let s = as_str(&value, &args[0])?;
+            let prefix = eval_expr(&args[1], ctx, budget)?;
+            let prefix = as_str(&prefix, &args[1])?;
+            Ok(Value::Bool(s.starts_with(prefix)))
         }
         "to_number" => {
-            let value = eval_expr(&args[0], ctx)?;
+            let value = eval_expr(&args[0], ctx, budget)?;
             match &value {
                 Value::Number(_) => Ok(value),
                 Value::String(s) => {
@@ -218,40 +268,58 @@ fn eval_call(
                 }),
             }
         }
-        "to_string" => Ok(Value::String(stringify(&eval_expr(&args[0], ctx)?))),
-        "round" => eval_round(args, ctx),
+        "to_string" => {
+            let value = eval_expr(&args[0], ctx, budget)?;
+            let mut out = String::new();
+            push_stringified(&mut out, &value, budget)?;
+            Ok(Value::String(out))
+        }
+        "round" => eval_round(args, ctx, budget),
         "concat" => {
             let mut out = String::new();
             for arg in args {
-                out.push_str(&stringify(&eval_expr(arg, ctx)?));
+                let value = eval_expr(arg, ctx, budget)?;
+                push_stringified(&mut out, &value, budget)?;
             }
             Ok(Value::String(out))
         }
         "now" => Ok(Value::String(ctx.now.to_rfc3339())),
         "format_date" => {
-            let s = as_string(&eval_expr(&args[0], ctx)?, &args[0])?;
-            let fmt = as_string(&eval_expr(&args[1], ctx)?, &args[1])?;
-            let parsed = chrono::DateTime::parse_from_rfc3339(&s).map_err(|_| {
+            let value = eval_expr(&args[0], ctx, budget)?;
+            let s = as_str(&value, &args[0])?;
+            let format = eval_expr(&args[1], ctx, budget)?;
+            let fmt = as_str(&format, &args[1])?;
+            let parsed = chrono::DateTime::parse_from_rfc3339(s).map_err(|_| {
                 ExpressionError::TypeMismatch {
                     path: describe(&args[0]),
                     expected: "an RFC 3339 datetime string",
                     got: "string",
                 }
             })?;
-            Ok(Value::String(parsed.format(&fmt).to_string()))
+            let rendered = parsed.format(fmt).to_string();
+            budget.charge(rendered.len())?;
+            Ok(Value::String(rendered))
         }
-        "json" => Ok(Value::String(
-            serde_json::to_string(&eval_expr(&args[0], ctx)?).unwrap_or_default(),
-        )),
+        "json" => {
+            let value = eval_expr(&args[0], ctx, budget)?;
+            budget.charge(json_size(&value))?;
+            Ok(Value::String(
+                serde_json::to_string(&value).unwrap_or_default(),
+            ))
+        }
         other => unreachable!(
             "the parser only ever builds Expr::Call for a known function; got `{other}`"
         ),
     }
 }
 
-fn eval_round(args: &[Expr], ctx: &ExpressionContext<'_>) -> Result<Value, ExpressionError> {
-    let n = as_number(&eval_expr(&args[0], ctx)?, &args[0])?;
-    let decimals_value = eval_expr(&args[1], ctx)?;
+fn eval_round(
+    args: &[Expr],
+    ctx: &ExpressionContext<'_>,
+    budget: &mut EvalBudget,
+) -> Result<Value, ExpressionError> {
+    let n = as_number(&eval_expr(&args[0], ctx, budget)?, &args[0])?;
+    let decimals_value = eval_expr(&args[1], ctx, budget)?;
     let decimals_f = as_number(&decimals_value, &args[1])?;
     if decimals_f < 0.0 || decimals_f.fract() != 0.0 {
         return Err(ExpressionError::TypeMismatch {
@@ -277,9 +345,9 @@ fn eval_round(args: &[Expr], ctx: &ExpressionContext<'_>) -> Result<Value, Expre
     }
 }
 
-fn as_string(value: &Value, source: &Expr) -> Result<String, ExpressionError> {
+fn as_str<'v>(value: &'v Value, source: &Expr) -> Result<&'v str, ExpressionError> {
     match value {
-        Value::String(s) => Ok(s.clone()),
+        Value::String(s) => Ok(s),
         other => Err(ExpressionError::TypeMismatch {
             path: describe(source),
             expected: "string",
@@ -292,14 +360,35 @@ fn as_string(value: &Value, source: &Expr) -> Result<String, ExpressionError> {
 /// through unquoted, everything else renders as its JSON form (`json()`
 /// implicitly for arrays and objects) — so `{{ concat("items: ", arr) }}`
 /// never produces `"[object Object]"`.
-fn stringify(value: &Value) -> String {
+fn push_stringified(
+    out: &mut String,
+    value: &Value,
+    budget: &mut EvalBudget,
+) -> Result<(), ExpressionError> {
     match value {
-        Value::String(s) => s.clone(),
-        Value::Null => "null".to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Number(n) => n.to_string(),
-        Value::Array(_) | Value::Object(_) => serde_json::to_string(value).unwrap_or_default(),
+        Value::String(s) => {
+            budget.charge(s.len())?;
+            out.push_str(s);
+        }
+        Value::Null => {
+            budget.charge(4)?;
+            out.push_str("null");
+        }
+        Value::Bool(b) => {
+            budget.charge(5)?;
+            out.push_str(if *b { "true" } else { "false" });
+        }
+        Value::Number(n) => {
+            let rendered = n.to_string();
+            budget.charge(rendered.len())?;
+            out.push_str(&rendered);
+        }
+        Value::Array(_) | Value::Object(_) => {
+            budget.charge(json_size(value))?;
+            out.push_str(&serde_json::to_string(value).unwrap_or_default());
+        }
     }
+    Ok(())
 }
 
 /// Mirrors `literal_number` in the parser: an integer string stays an
@@ -326,56 +415,62 @@ fn parse_number_string(s: &str) -> Option<Value> {
 /// missing trigger, an unknown connector id, a missing field, an
 /// out-of-bounds index, indexing into the wrong container type — collapses
 /// into a single `MissingPath` naming the whole path as written.
-fn resolve_path(path: &Path, ctx: &ExpressionContext<'_>) -> Result<Value, ExpressionError> {
-    let full_path = path.to_source();
+fn resolve_path<'c>(
+    path: &Path,
+    ctx: &ExpressionContext<'c>,
+) -> Result<Cow<'c, Value>, ExpressionError> {
+    let missing = || ExpressionError::MissingPath {
+        path: path.to_source(),
+    };
 
-    let (base, remaining): (Value, &[PathSegment]) = match path.root {
+    match path.root {
         PathRoot::Trigger => {
-            let value = ctx.trigger.ok_or_else(|| ExpressionError::MissingPath {
-                path: full_path.clone(),
-            })?;
-            (value.clone(), &path.segments[..])
+            let root = ctx.trigger.ok_or_else(missing)?;
+            follow(root, &path.segments)
+                .map(Cow::Borrowed)
+                .ok_or_else(missing)
         }
         PathRoot::Connectors => {
-            // The parser guarantees `connectors` always has a leading field
-            // segment (the connector id) — see `parse_ident_start`.
-            let id = match path.segments.first() {
-                Some(PathSegment::Field(id)) => id,
-                _ => return Err(ExpressionError::MissingPath { path: full_path }),
+            let Some((PathSegment::Field(id), rest)) = path.segments.split_first() else {
+                return Err(missing());
             };
-            let value = ctx
-                .connectors
-                .get(id)
-                .ok_or_else(|| ExpressionError::MissingPath {
-                    path: full_path.clone(),
-                })?;
-            (value.clone(), &path.segments[1..])
+            let root = ctx.connectors.get(id).ok_or_else(missing)?;
+            follow(root, rest).map(Cow::Borrowed).ok_or_else(missing)
         }
         PathRoot::Loop => {
             let frame = ctx
                 .loop_frame
                 .as_ref()
                 .ok_or(ExpressionError::LoopOutsideLoop)?;
-            let mut synthetic = serde_json::Map::new();
-            synthetic.insert("item".to_string(), frame.item.clone());
-            synthetic.insert("index".to_string(), Value::from(frame.index));
-            (Value::Object(synthetic), &path.segments[..])
+            match path.segments.split_first() {
+                None => {
+                    let mut whole = serde_json::Map::new();
+                    whole.insert("item".to_string(), frame.item.clone());
+                    whole.insert("index".to_string(), Value::from(frame.index));
+                    Ok(Cow::Owned(Value::Object(whole)))
+                }
+                Some((PathSegment::Field(name), rest)) if name == "item" => {
+                    follow(frame.item, rest)
+                        .map(Cow::Borrowed)
+                        .ok_or_else(missing)
+                }
+                Some((PathSegment::Field(name), rest)) if name == "index" && rest.is_empty() => {
+                    Ok(Cow::Owned(Value::from(frame.index)))
+                }
+                Some(_) => Err(missing()),
+            }
         }
-    };
-
-    walk(base, remaining).ok_or(ExpressionError::MissingPath { path: full_path })
+    }
 }
 
 /// Walks a resolved base value through the remaining path segments. `None`
 /// means the path does not exist from here on — the caller turns that into
 /// a `MissingPath` naming the path in full, not just the part that broke.
-fn walk(mut current: Value, segments: &[PathSegment]) -> Option<Value> {
+fn follow<'v>(mut current: &'v Value, segments: &[PathSegment]) -> Option<&'v Value> {
     for segment in segments {
         current = match (current, segment) {
-            (Value::Object(mut map), PathSegment::Field(name)) => map.remove(name)?,
-            (Value::Array(mut array), PathSegment::Index(index)) if *index < array.len() => {
-                array.swap_remove(*index)
-            }
+            (Value::Object(map), PathSegment::Field(name)) => map.get(name)?,
+            (Value::Array(array), PathSegment::Index(index)) => array.get(*index)?,
             _ => return None,
         };
     }

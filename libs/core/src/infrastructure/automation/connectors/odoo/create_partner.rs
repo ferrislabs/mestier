@@ -259,6 +259,12 @@ mod tests {
             .await;
 
         assert_eq!(outcome, ConnectorOutcome::Produced(json!({ "id": 42 })));
+        if let ConnectorOutcome::Produced(value) = &outcome {
+            crate::infrastructure::automation::connectors::test_support::assert_same_shape(
+                value,
+                "odoo.create_partner",
+            );
+        }
         let requests = server.requests();
         assert_eq!(requests.len(), 2, "authenticate, then execute_kw");
         let create_args = requests[1].body_json()["params"]["args"].clone();

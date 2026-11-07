@@ -258,6 +258,12 @@ mod tests {
                 "tone": "neutral",
             }))
         );
+        if let ConnectorOutcome::Produced(value) = &absent {
+            crate::infrastructure::automation::connectors::test_support::assert_same_shape(
+                value,
+                "mestier.support.add_badge",
+            );
+        }
         assert!(matches!(null, ConnectorOutcome::Produced(_)), "{null:?}");
         assert!(matches!(empty, ConnectorOutcome::Produced(_)), "{empty:?}");
         let stored = world.get(ticket.id).await.unwrap();

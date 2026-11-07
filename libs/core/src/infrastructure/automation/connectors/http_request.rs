@@ -341,6 +341,10 @@ mod tests {
         assert_eq!(value["status"], 200);
         assert_eq!(value["body"], json!({"id": 42}));
         assert_eq!(value["headers"]["content-type"], json!("application/json"));
+        crate::infrastructure::automation::connectors::test_support::assert_same_shape(
+            &value,
+            "http.request",
+        );
 
         let request = server.last_request();
         assert_eq!(request.method, "POST");

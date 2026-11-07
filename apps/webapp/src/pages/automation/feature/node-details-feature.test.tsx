@@ -15,6 +15,11 @@ import {
 } from '#/pages/automation/lib/editor-nodes'
 import type { NodeIssue } from '#/pages/automation/lib/node-issues'
 import type { UpstreamSources } from '#/pages/automation/lib/upstream-entries'
+import {
+	type DryRunPasses,
+	dryRunPassesByConnector,
+} from '#/pages/automation/lib/workflow-runs'
+import type { TestRun } from '#/pages/automation/ui/variables-panel'
 import { renderWithRouter } from '#/test/render-with-router'
 
 for (const method of [
@@ -73,6 +78,7 @@ describe('NodeDetailsFeature', () => {
 				authSchemes={[]}
 				credentials={[]}
 				issues={[]}
+				dryRunSteps={null}
 				testRun={{ running: false, start: vi.fn() }}
 				onUpdateConnector={vi.fn()}
 				onUpdateTriggerKind={vi.fn()}
@@ -212,6 +218,9 @@ interface OpenOptions {
 	reads?: ReadonlyMap<string, CollectionRead>
 	issues?: readonly NodeIssue[]
 	runSteps?: Map<string, Schemas.RunStepResponse>
+	lastRun?: UpstreamSources['lastRun']
+	dryRunSteps?: DryRunPasses | null
+	testRun?: TestRun | null
 }
 
 async function openNode(
@@ -229,16 +238,21 @@ async function openNode(
 				nodes={nodes}
 				edges={edges}
 				organizationSlug="atelier-bois"
-				sources={
-					handlers.runSteps
-						? { ...SOURCES, runSteps: handlers.runSteps }
-						: SOURCES
-				}
+				sources={{
+					...SOURCES,
+					...(handlers.runSteps ? { runSteps: handlers.runSteps } : {}),
+					...(handlers.lastRun ? { lastRun: handlers.lastRun } : {}),
+				}}
 				collectionReads={handlers.reads ?? new Map()}
 				authSchemes={[]}
 				credentials={[]}
 				issues={handlers.issues ?? []}
-				testRun={{ running: false, start: vi.fn() }}
+				dryRunSteps={handlers.dryRunSteps ?? null}
+				testRun={
+					handlers.testRun === undefined
+						? { running: false, start: vi.fn() }
+						: handlers.testRun
+				}
 				onUpdateConnector={handlers.onUpdateConnector ?? vi.fn()}
 				onUpdateTriggerKind={vi.fn()}
 				onUpdateDetails={vi.fn()}
@@ -960,5 +974,372 @@ describe('NodeDetailsFeature — a node made from a collection operation', () =>
 		const dialog = await openOperation(SAVED, { reads: new Map() })
 
 		expect(dialog.getByText('Chargement de l’opération…')).toBeDefined()
+	})
+})
+
+describe('NodeDetailsFeature — the dry run', () => {
+	function dryStep(
+		connectorId: string,
+		patch: Partial<Schemas.DryRunStepResponse> = {},
+	): Schemas.DryRunStepResponse {
+		return {
+			connector_id: connectorId,
+			iteration_path: '',
+			status: 'succeeded',
+			input: null,
+			output: null,
+			error: null,
+			...patch,
+		}
+	}
+
+	function stepsOf(...steps: Schemas.DryRunStepResponse[]) {
+		return dryRunPassesByConnector(steps)
+	}
+
+	const FILLED = stepsOf(
+		dryStep('c2', {
+			input: { url: 'https://fournisseur.test/commandes' },
+			output: { numero: 'CMD-77' },
+		}),
+	)
+
+	async function openExecutionTab(
+		nodeId: string,
+		options: OpenOptions = {},
+	): Promise<HTMLElement> {
+		const { nodes, edges } = chain()
+		const dialog = await openNode(nodeId, nodes, edges, options)
+		await userEvent.click(
+			within(dialog).getByRole('radio', { name: 'Exécution' }),
+		)
+		return dialog
+	}
+
+	it('shows the input of the step in the input column and its output in the output column', async () => {
+		const dialog = await openExecutionTab('c2', { dryRunSteps: FILLED })
+
+		const input = within(dialog).getByRole('region', { name: 'Entrée' })
+		expect(input.textContent).toContain('https://fournisseur.test/commandes')
+		const output = within(dialog).getByRole('region', { name: 'Sortie' })
+		expect(output.textContent).toContain('CMD-77')
+	})
+
+	it('tells the status of the step in the header', async () => {
+		const dialog = await openExecutionTab('c2', { dryRunSteps: FILLED })
+
+		expect(within(dialog).getByText('Succès')).toBeDefined()
+	})
+
+	it('shows the error of a failed step in the output column, with what the node was called with', async () => {
+		const dialog = await openExecutionTab('c2', {
+			dryRunSteps: stepsOf(
+				dryStep('c2', {
+					status: 'failed',
+					input: { url: 'https://fournisseur.test/commandes' },
+					error: 'connectors.c1.output.body.nope est introuvable',
+				}),
+			),
+		})
+
+		const output = within(dialog).getByRole('region', { name: 'Sortie' })
+		expect(output.textContent).toContain('Erreur dans ce nœud')
+		expect(output.textContent).toContain(
+			'connectors.c1.output.body.nope est introuvable',
+		)
+		expect(
+			within(dialog).getByRole('region', { name: 'Entrée' }).textContent,
+		).toContain('https://fournisseur.test/commandes')
+		expect(within(dialog).getByText('Échec')).toBeDefined()
+	})
+
+	it('says a node the test did not reach was not reached, in both columns', async () => {
+		const dialog = await openExecutionTab('c2', {
+			dryRunSteps: stepsOf(dryStep('c2', { status: 'skipped' })),
+		})
+
+		expect(
+			within(within(dialog).getByRole('region', { name: 'Entrée' })).getByText(
+				'Ce nœud n’a pas été atteint',
+			),
+		).toBeDefined()
+		expect(
+			within(within(dialog).getByRole('region', { name: 'Sortie' })).getByText(
+				'Ce nœud n’a pas été exécuté',
+			),
+		).toBeDefined()
+		expect(within(dialog).getByText('Non appelé')).toBeDefined()
+	})
+
+	it('shows a node left unreached by a failure as not reached, with no status of its own', async () => {
+		const { nodes, edges } = chain()
+		const withThird = [
+			...nodes,
+			connectorNode(
+				{ id: 'c3', kind: 'http.request', version: 1, config: {} },
+				{ x: 600, y: 0 },
+				LOOKUP,
+			),
+		]
+		const dialog = await openNode(
+			'c3',
+			withThird,
+			[...edges, edge('c2', 'c3')],
+			{
+				dryRunSteps: dryRunPassesByConnector([
+					dryStep('c1'),
+					dryStep('c2', { status: 'failed', error: 'URL introuvable' }),
+					dryStep('c3', { status: 'skipped' }),
+				]),
+			},
+		)
+		await userEvent.click(
+			within(dialog).getByRole('radio', { name: 'Exécution' }),
+		)
+
+		expect(
+			within(within(dialog).getByRole('region', { name: 'Entrée' })).getByText(
+				'Ce nœud n’a pas été atteint',
+			),
+		).toBeDefined()
+		expect(within(dialog).getByText('Non appelé')).toBeDefined()
+	})
+
+	it('tells a node outside the path of the test from a node the test skipped, once the test is over', async () => {
+		const dialog = await openExecutionTab('c2', { dryRunSteps: stepsOf() })
+
+		const input = within(dialog).getByRole('region', { name: 'Entrée' })
+		expect(
+			within(input).getByText('Ce nœud est hors du chemin du test'),
+		).toBeDefined()
+		expect(within(input).queryByText('Ce nœud n’a pas été atteint')).toBeNull()
+		expect(within(input).queryByText('En attente du test')).toBeNull()
+	})
+
+	it('waits for the test to reach the node while it is still running', async () => {
+		const dialog = await openExecutionTab('c2', {
+			dryRunSteps: stepsOf(),
+			testRun: { running: true, start: vi.fn() },
+		})
+
+		const input = within(dialog).getByRole('region', { name: 'Entrée' })
+		expect(within(input).getByText('En attente du test')).toBeDefined()
+		expect(within(input).queryByText('Ce nœud n’a pas été atteint')).toBeNull()
+		expect(
+			within(input).queryByText('Ce nœud est hors du chemin du test'),
+		).toBeNull()
+	})
+
+	it('says the node received nothing when the step carries no input', async () => {
+		const dialog = await openExecutionTab('c2', {
+			dryRunSteps: stepsOf(dryStep('c2', { output: { ok: true } })),
+		})
+
+		expect(
+			within(within(dialog).getByRole('region', { name: 'Entrée' })).getByText(
+				'Aucune donnée en entrée',
+			),
+		).toBeDefined()
+	})
+
+	it('shows a disabled node as receiving what it lets pass', async () => {
+		const { nodes, edges } = chain()
+		const disabled = nodes.map((node) =>
+			node.id === 'c2'
+				? { ...node, data: { ...node.data, disabled: true } }
+				: node,
+		)
+		const dialog = await openNode('c2', disabled, edges, {
+			dryRunSteps: stepsOf(dryStep('c2', { output: { passe: 'oui' } })),
+		})
+		await userEvent.click(
+			within(dialog).getByRole('radio', { name: 'Exécution' }),
+		)
+
+		expect(
+			within(dialog).getByRole('region', { name: 'Entrée' }).textContent,
+		).toContain('oui')
+	})
+
+	it('keeps the empty slots and the button before any test', async () => {
+		const start = vi.fn()
+		const dialog = await openExecutionTab('c2', {
+			testRun: { running: false, start },
+		})
+
+		expect(
+			within(dialog).getByText('Aucune exécution pour le moment'),
+		).toBeDefined()
+		expect(
+			within(within(dialog).getByRole('region', { name: 'Sortie' })).getByText(
+				'Ce nœud n’a pas été exécuté',
+			),
+		).toBeDefined()
+		await userEvent.click(
+			within(dialog).getByRole('button', { name: 'Tester le workflow' }),
+		)
+		expect(start).toHaveBeenCalledTimes(1)
+	})
+
+	it('offers no test button to somebody who cannot run one', async () => {
+		const dialog = await openExecutionTab('c2', { testRun: null })
+
+		expect(
+			within(dialog).queryByRole('button', { name: 'Tester le workflow' }),
+		).toBeNull()
+	})
+
+	it('prefers the dry run to the last real run for this node, and gives the real run back without it', async () => {
+		const realStep: Schemas.RunStepResponse = {
+			...FAILED_STEP,
+			connector_id: 'c2',
+			status: 'succeeded',
+			error: null,
+			output: { numero: 'REEL-1' },
+		}
+		const withDry = await openExecutionTab('c2', {
+			runSteps: new Map([['c2', realStep]]),
+			dryRunSteps: FILLED,
+		})
+		const output = within(withDry).getByRole('region', { name: 'Sortie' })
+		expect(output.textContent).toContain('CMD-77')
+		expect(output.textContent).not.toContain('REEL-1')
+	})
+
+	it('shows the last real run in the output column when no test has run', async () => {
+		const realStep: Schemas.RunStepResponse = {
+			...FAILED_STEP,
+			connector_id: 'c2',
+			status: 'succeeded',
+			error: null,
+			output: { numero: 'REEL-1' },
+		}
+		const dialog = await openExecutionTab('c2', {
+			runSteps: new Map([['c2', realStep]]),
+		})
+
+		expect(
+			within(dialog).getByRole('region', { name: 'Sortie' }).textContent,
+		).toContain('REEL-1')
+	})
+
+	it('leaves the output of a trigger to the last real run: a dry run has no trigger payload', async () => {
+		const { nodes, edges } = chain()
+		const dialog = await openNode('t1', nodes, edges, {
+			lastRun: { triggerPayload: { quote_id: 'q-real' }, connectorOutputs: {} },
+			dryRunSteps: FILLED,
+		})
+
+		expect(
+			within(dialog).getByRole('region', { name: 'Sortie' }).textContent,
+		).toContain('q-real')
+	})
+
+	describe('a node of a loop', () => {
+		const PASSES = stepsOf(
+			dryStep('c2', {
+				iteration_path: 'c1[0]',
+				input: { url: 'https://un.test' },
+				output: { numero: 'PASSAGE-A' },
+			}),
+			dryStep('c2', {
+				iteration_path: 'c1[1]',
+				input: { url: 'https://deux.test' },
+				output: { numero: 'PASSAGE-B' },
+			}),
+			dryStep('c2', {
+				iteration_path: 'c1[2]',
+				input: { url: 'https://trois.test' },
+				output: { numero: 'PASSAGE-C' },
+			}),
+		)
+
+		function columns(dialog: HTMLElement) {
+			return {
+				input: within(dialog).getByRole('region', { name: 'Entrée' }),
+				output: within(dialog).getByRole('region', { name: 'Sortie' }),
+			}
+		}
+
+		it('shows the last pass first, and which one it is', async () => {
+			const dialog = await openExecutionTab('c2', { dryRunSteps: PASSES })
+
+			const { input, output } = columns(dialog)
+			expect(input.textContent).toContain('https://trois.test')
+			expect(output.textContent).toContain('PASSAGE-C')
+			expect(within(input).getByText('Passage 3 sur 3')).toBeDefined()
+			expect(within(output).getByText('Passage 3 sur 3')).toBeDefined()
+		})
+
+		it('steps back to an earlier pass in both columns, and forward again', async () => {
+			const user = userEvent.setup()
+			const dialog = await openExecutionTab('c2', { dryRunSteps: PASSES })
+
+			await user.click(
+				within(columns(dialog).input).getByRole('button', {
+					name: 'Passage précédent',
+				}),
+			)
+
+			expect(columns(dialog).input.textContent).toContain('https://deux.test')
+			expect(columns(dialog).output.textContent).toContain('PASSAGE-B')
+			expect(columns(dialog).output.textContent).not.toContain('PASSAGE-C')
+			expect(
+				within(columns(dialog).output).getByText('Passage 2 sur 3'),
+			).toBeDefined()
+
+			await user.click(
+				within(columns(dialog).output).getByRole('button', {
+					name: 'Passage précédent',
+				}),
+			)
+			expect(columns(dialog).input.textContent).toContain('https://un.test')
+			expect(
+				(
+					within(columns(dialog).output).getByRole('button', {
+						name: 'Passage précédent',
+					}) as HTMLButtonElement
+				).disabled,
+			).toBe(true)
+
+			await user.click(
+				within(columns(dialog).input).getByRole('button', {
+					name: 'Passage suivant',
+				}),
+			)
+			expect(columns(dialog).output.textContent).toContain('PASSAGE-B')
+		})
+
+		it('shows the status of the pass chosen', async () => {
+			const user = userEvent.setup()
+			const dialog = await openExecutionTab('c2', {
+				dryRunSteps: stepsOf(
+					dryStep('c2', { iteration_path: 'c1[0]', output: 1 }),
+					dryStep('c2', {
+						iteration_path: 'c1[1]',
+						status: 'failed',
+						error: 'boom',
+					}),
+				),
+			})
+			expect(within(dialog).getByText('Échec')).toBeDefined()
+
+			await user.click(
+				within(columns(dialog).output).getByRole('button', {
+					name: 'Passage précédent',
+				}),
+			)
+
+			expect(within(dialog).getByText('Succès')).toBeDefined()
+		})
+
+		it('offers no choice of pass to a node that ran once', async () => {
+			const dialog = await openExecutionTab('c2', { dryRunSteps: FILLED })
+
+			expect(within(dialog).queryByText(/Passage \d+ sur/)).toBeNull()
+			expect(
+				within(dialog).queryByRole('button', { name: 'Passage précédent' }),
+			).toBeNull()
+		})
 	})
 })

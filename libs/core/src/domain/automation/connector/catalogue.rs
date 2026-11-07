@@ -453,6 +453,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             branches: &[Branch::Each, Branch::After],
             output_example: json!({ "item": "…", "index": 0 }),
             output_mirrors_field: None,
+            sample_output: json!({ "items": ["…"] }),
         },
         ConnectorDescriptor {
             kind: "flow.condition",
@@ -464,6 +465,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             branches: &[Branch::Then, Branch::Else],
             output_example: json!({ "matched": true }),
             output_mirrors_field: None,
+            sample_output: json!({ "matched": true }),
         },
         ConnectorDescriptor {
             kind: "flow.config",
@@ -475,6 +477,7 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             branches: &[],
             output_example: json!({ "customer_id": "…", "retry_limit": 3 }),
             output_mirrors_field: Some("variables"),
+            sample_output: json!({ "customer_id": "…", "retry_limit": 3 }),
         },
     ]
 }
@@ -493,6 +496,7 @@ fn customer_descriptors() -> Vec<ConnectorDescriptor> {
         branches: &[],
         output_example: json!({ "id": "…", "name": "…" }),
         output_mirrors_field: None,
+        sample_output: json!({ "id": "00000000-0000-0000-0000-000000000000", "name": "…" }),
     }]
 }
 
@@ -508,6 +512,10 @@ fn support_descriptors() -> Vec<ConnectorDescriptor> {
             branches: &[],
             output_example: json!({ "ticket_id": "…", "assignee_member_id": "…" }),
             output_mirrors_field: None,
+            sample_output: json!({
+                "ticket_id": "00000000-0000-0000-0000-000000000000",
+                "assignee_member_id": "00000000-0000-0000-0000-000000000000",
+            }),
         },
         ConnectorDescriptor {
             kind: "mestier.support.add_badge",
@@ -519,6 +527,11 @@ fn support_descriptors() -> Vec<ConnectorDescriptor> {
             branches: &[],
             output_example: json!({ "ticket_id": "…", "label": "High", "tone": "neutral" }),
             output_mirrors_field: None,
+            sample_output: json!({
+                "ticket_id": "00000000-0000-0000-0000-000000000000",
+                "label": "High",
+                "tone": "neutral",
+            }),
         },
     ]
 }
@@ -543,6 +556,7 @@ fn http_descriptors() -> Vec<ConnectorDescriptor> {
             "body": {},
         }),
         output_mirrors_field: None,
+        sample_output: json!({ "status": 200, "headers": {}, "body": {} }),
     }]
 }
 
@@ -561,6 +575,7 @@ fn collection_descriptors() -> Vec<ConnectorDescriptor> {
             "body": {},
         }),
         output_mirrors_field: None,
+        sample_output: json!({ "status": 200, "headers": {}, "body": {} }),
     }]
 }
 
@@ -580,6 +595,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             branches: &[],
             output_example: json!({ "id": 42 }),
             output_mirrors_field: None,
+            sample_output: json!({ "id": 42 }),
         },
         ConnectorDescriptor {
             kind: "odoo.update_partner",
@@ -591,6 +607,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             branches: &[],
             output_example: json!({ "id": 42, "updated": true }),
             output_mirrors_field: None,
+            sample_output: json!({ "id": 42, "updated": true }),
         },
         ConnectorDescriptor {
             kind: "odoo.create_invoice",
@@ -602,6 +619,7 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             branches: &[],
             output_example: json!({ "id": 99 }),
             output_mirrors_field: None,
+            sample_output: json!({ "id": 99 }),
         },
     ]
 }
@@ -627,6 +645,7 @@ fn task_recurrence_descriptors() -> Vec<ConnectorDescriptor> {
         branches: &[],
         output_example: json!({ "materialized": 0 }),
         output_mirrors_field: None,
+        sample_output: json!({ "materialized": 0 }),
     }]
 }
 
@@ -648,6 +667,7 @@ mod tests {
             branches: &[],
             output_example: json!({ "index": 0 }),
             output_mirrors_field: None,
+            sample_output: json!({ "index": 0 }),
         }
     }
 
@@ -1035,6 +1055,77 @@ mod tests {
                 descriptor.kind
             );
         }
+    }
+
+    #[test]
+    fn every_descriptor_carries_a_sample_output() {
+        for descriptor in connector_catalogue().descriptors() {
+            assert!(
+                !descriptor.sample_output.is_null(),
+                "`{}` has no sample output, so a dry run has nothing to answer with",
+                descriptor.kind
+            );
+        }
+    }
+
+    #[test]
+    fn http_request_and_collection_operation_sample_a_bare_ok_response() {
+        let catalogue = connector_catalogue();
+
+        for kind in ["http.request", "collection.operation"] {
+            assert_eq!(
+                catalogue.get(kind, 1).unwrap().sample_output,
+                json!({ "status": 200, "headers": {}, "body": {} }),
+                "{kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_flow_samples_have_the_shape_the_engine_stores_for_them() {
+        let catalogue = connector_catalogue();
+
+        let looped = &catalogue.get("flow.loop", 1).unwrap().sample_output;
+        assert!(looped["items"].is_array(), "{looped}");
+        assert_eq!(
+            catalogue.get("flow.condition", 1).unwrap().sample_output,
+            json!({ "matched": true })
+        );
+        assert!(
+            catalogue
+                .get("flow.config", 1)
+                .unwrap()
+                .sample_output
+                .is_object()
+        );
+    }
+
+    #[test]
+    fn the_samples_of_the_internal_and_odoo_connectors_name_what_a_run_returns() {
+        let catalogue = connector_catalogue();
+        let keys = |kind: &str| -> Vec<String> {
+            let sample = &catalogue.get(kind, 1).unwrap().sample_output;
+            let mut keys: Vec<String> = sample.as_object().unwrap().keys().cloned().collect();
+            keys.sort();
+            keys
+        };
+
+        assert_eq!(keys("mestier.customer.create"), ["id", "name"]);
+        assert_eq!(
+            keys("mestier.support.assign_ticket"),
+            ["assignee_member_id", "ticket_id"]
+        );
+        assert_eq!(
+            keys("mestier.support.add_badge"),
+            ["label", "ticket_id", "tone"]
+        );
+        assert_eq!(
+            keys("mestier.task_recurrence.extend_horizon"),
+            ["materialized"]
+        );
+        assert_eq!(keys("odoo.create_partner"), ["id"]);
+        assert_eq!(keys("odoo.update_partner"), ["id", "updated"]);
+        assert_eq!(keys("odoo.create_invoice"), ["id"]);
     }
 
     /// The catalogue leaves the crate as JSON (#203): both registered

@@ -51,6 +51,48 @@ export function connectorOutputsFromSteps(
 	return Object.fromEntries([...chosen].map(([id, step]) => [id, step.output]))
 }
 
+export type DryRunPasses = ReadonlyMap<
+	string,
+	readonly Schemas.DryRunStepResponse[]
+>
+
+export function dryRunPassesByConnector(
+	steps: readonly Schemas.DryRunStepResponse[],
+): Map<string, Schemas.DryRunStepResponse[]> {
+	const passes = new Map<string, Schemas.DryRunStepResponse[]>()
+
+	for (const step of steps) {
+		const kept = (passes.get(step.connector_id) ?? []).filter(
+			(pass) => pass.iteration_path !== step.iteration_path,
+		)
+		passes.set(step.connector_id, [...kept, step])
+	}
+
+	return passes
+}
+
+export function dryRunStatuses(passes: DryRunPasses): Map<string, string> {
+	return new Map(
+		[...passes].flatMap(([id, node]) => {
+			const last = node.at(-1)
+			return last ? [[id, last.status] as const] : []
+		}),
+	)
+}
+
+export function dryRunReveals(steps: readonly Schemas.DryRunStepResponse[]): {
+	lead: number
+	beats: number[]
+} {
+	const ran = steps.flatMap((step, index) =>
+		step.status === 'skipped' ? [] : [index],
+	)
+	return {
+		lead: ran[0] ?? steps.length,
+		beats: ran.map((_, beat) => ran[beat + 1] ?? steps.length),
+	}
+}
+
 const TERMINAL_RUN_STATUSES = new Set(['succeeded', 'failed', 'cancelled'])
 
 export function isTerminalRunStatus(status: string): boolean {

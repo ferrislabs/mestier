@@ -78,6 +78,7 @@ import {
 	type UpstreamSources,
 } from '#/pages/automation/lib/upstream-entries'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
+import type { DryRunPasses } from '#/pages/automation/lib/workflow-runs'
 import {
 	NodeMenuItems,
 	PaneMenuItems,
@@ -125,6 +126,7 @@ export interface WorkflowCanvasProps {
 	lastRun: LastRunData | null
 	runStatuses: Map<string, string>
 	runSteps: Map<string, Schemas.RunStepResponse>
+	dryRunSteps: DryRunPasses | null
 	onEvaluateExpression: (
 		template: unknown,
 		context: Schemas.EvaluateContextBody,
@@ -176,6 +178,7 @@ function EditorCanvas({
 	lastRun,
 	runStatuses,
 	runSteps,
+	dryRunSteps,
 	onEvaluateExpression,
 	credentials = [],
 	authSchemes = [],
@@ -585,25 +588,22 @@ function EditorCanvas({
 							<Plus />
 						</Button>
 					)}
-					<div className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2">
-						<Button
-							size="lg"
-							onClick={testRun.start}
-							disabled={!canTest || testRun.running || graph.nodes.length === 0}
-							title={
-								canTest
-									? undefined
-									: 'Workflow à enregistrer avant de pouvoir le tester'
-							}
-						>
-							{testRun.running ? (
-								<LoaderCircle className="animate-spin" />
-							) : (
-								<FlaskConical />
-							)}
-							{testRun.running ? 'Exécution en cours…' : 'Tester le workflow'}
-						</Button>
-					</div>
+					{canTest && (
+						<div className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2">
+							<Button
+								size="lg"
+								onClick={testRun.start}
+								disabled={testRun.running || graph.nodes.length === 0}
+							>
+								{testRun.running ? (
+									<LoaderCircle className="animate-spin" />
+								) : (
+									<FlaskConical />
+								)}
+								{testRun.running ? 'Exécution en cours…' : 'Tester le workflow'}
+							</Button>
+						</div>
+					)}
 					<ContextMenuAt
 						anchor={menu?.anchor ?? null}
 						label={
@@ -663,7 +663,8 @@ function EditorCanvas({
 							authSchemes={authSchemes}
 							credentials={credentials}
 							issues={issuesByNode.get(detailsNode.id) ?? []}
-							testRun={testRun}
+							dryRunSteps={dryRunSteps}
+							testRun={canTest ? testRun : null}
 							onUpdateConnector={(patch) =>
 								graph.updateConnector(detailsNode.id, patch)
 							}

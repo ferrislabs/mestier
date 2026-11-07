@@ -1,6 +1,7 @@
 use serde_json::json;
 
-use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
+use crate::domain::automation::connector::ConnectorDescriptor;
+use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome, DryRunInput};
 use crate::domain::automation::workflow::Branch;
 
 /// `flow.condition`: reads its resolved `predicate` field and tells the
@@ -8,23 +9,31 @@ use crate::domain::automation::workflow::Branch;
 /// descriptor in `domain::automation::connector::catalogue`.
 pub struct FlowConditionConnector;
 
+fn decide(config: &serde_json::Map<String, serde_json::Value>) -> ConnectorOutcome {
+    match config.get("predicate") {
+        Some(serde_json::Value::Bool(matched)) => {
+            let taken = if *matched { Branch::Then } else { Branch::Else };
+            ConnectorOutcome::Branch {
+                taken,
+                output: json!({ "matched": matched }),
+            }
+        }
+        Some(_) => ConnectorOutcome::Failed {
+            error: "`predicate` must resolve to a boolean".to_string(),
+        },
+        None => ConnectorOutcome::Failed {
+            error: "`predicate` is required".to_string(),
+        },
+    }
+}
+
 impl Connector for FlowConditionConnector {
     async fn execute(&self, input: ConnectorInput<'_>) -> ConnectorOutcome {
-        match input.config.get("predicate") {
-            Some(serde_json::Value::Bool(matched)) => {
-                let taken = if *matched { Branch::Then } else { Branch::Else };
-                ConnectorOutcome::Branch {
-                    taken,
-                    output: json!({ "matched": matched }),
-                }
-            }
-            Some(_) => ConnectorOutcome::Failed {
-                error: "`predicate` must resolve to a boolean".to_string(),
-            },
-            None => ConnectorOutcome::Failed {
-                error: "`predicate` is required".to_string(),
-            },
-        }
+        decide(input.config)
+    }
+
+    fn dry_run(_descriptor: &ConnectorDescriptor, input: &DryRunInput<'_>) -> ConnectorOutcome {
+        decide(input.config)
     }
 }
 
@@ -101,5 +110,60 @@ mod tests {
             matches!(outcome, ConnectorOutcome::Failed { .. }),
             "{outcome:?}"
         );
+    }
+
+    fn sample() -> crate::domain::automation::connector::ConnectorDescriptor {
+        crate::domain::automation::connector::connector_catalogue()
+            .get("flow.condition", 1)
+            .expect("flow.condition is described")
+            .clone()
+    }
+
+    fn dry_run_of(config: &serde_json::Map<String, Value>) -> ConnectorOutcome {
+        FlowConditionConnector::dry_run(
+            &sample(),
+            &crate::domain::automation::run::DryRunInput {
+                config,
+                stored: None,
+            },
+        )
+    }
+
+    #[test]
+    fn a_dry_run_takes_the_branch_the_resolved_predicate_selects() {
+        let mut config = serde_json::Map::new();
+        config.insert("predicate".to_string(), json!(false));
+
+        assert_eq!(
+            dry_run_of(&config),
+            ConnectorOutcome::Branch {
+                taken: Branch::Else,
+                output: json!({ "matched": false })
+            }
+        );
+
+        config.insert("predicate".to_string(), json!(true));
+        assert_eq!(
+            dry_run_of(&config),
+            ConnectorOutcome::Branch {
+                taken: Branch::Then,
+                output: json!({ "matched": true })
+            }
+        );
+    }
+
+    #[test]
+    fn a_dry_run_refuses_a_predicate_that_is_not_a_boolean_like_a_run_does() {
+        let mut config = serde_json::Map::new();
+        config.insert("predicate".to_string(), json!("not a bool"));
+
+        assert!(matches!(
+            dry_run_of(&config),
+            ConnectorOutcome::Failed { .. }
+        ));
+        assert!(matches!(
+            dry_run_of(&serde_json::Map::new()),
+            ConnectorOutcome::Failed { .. }
+        ));
     }
 }

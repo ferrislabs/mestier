@@ -1,25 +1,34 @@
-use serde_json::Value;
+use serde_json::{Map, Value};
 
-use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
+use crate::domain::automation::connector::ConnectorDescriptor;
+use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome, DryRunInput};
 
 /// `flow.loop`: reads its resolved `items` field and hands the engine the
 /// list to iterate. Pure and side-effect free — see the descriptor in
 /// `domain::automation::connector::catalogue`.
 pub struct FlowLoopConnector;
 
+fn decide(config: &Map<String, Value>) -> ConnectorOutcome {
+    match config.get("items") {
+        Some(Value::Array(items)) => ConnectorOutcome::Iterate {
+            items: items.clone(),
+        },
+        Some(_) => ConnectorOutcome::Failed {
+            error: "`items` must resolve to an array".to_string(),
+        },
+        None => ConnectorOutcome::Failed {
+            error: "`items` is required".to_string(),
+        },
+    }
+}
+
 impl Connector for FlowLoopConnector {
     async fn execute(&self, input: ConnectorInput<'_>) -> ConnectorOutcome {
-        match input.config.get("items") {
-            Some(Value::Array(items)) => ConnectorOutcome::Iterate {
-                items: items.clone(),
-            },
-            Some(_) => ConnectorOutcome::Failed {
-                error: "`items` must resolve to an array".to_string(),
-            },
-            None => ConnectorOutcome::Failed {
-                error: "`items` is required".to_string(),
-            },
-        }
+        decide(input.config)
+    }
+
+    fn dry_run(_descriptor: &ConnectorDescriptor, input: &DryRunInput<'_>) -> ConnectorOutcome {
+        decide(input.config)
     }
 }
 
@@ -89,5 +98,47 @@ mod tests {
             matches!(outcome, ConnectorOutcome::Failed { .. }),
             "{outcome:?}"
         );
+    }
+
+    fn dry_run_of(config: &serde_json::Map<String, Value>) -> ConnectorOutcome {
+        let descriptor = crate::domain::automation::connector::connector_catalogue()
+            .get("flow.loop", 1)
+            .expect("flow.loop is described")
+            .clone();
+        FlowLoopConnector::dry_run(
+            &descriptor,
+            &crate::domain::automation::run::DryRunInput {
+                config,
+                stored: None,
+            },
+        )
+    }
+
+    #[test]
+    fn a_dry_run_hands_over_the_resolved_items_untouched() {
+        let mut config = serde_json::Map::new();
+        config.insert("items".to_string(), json!(["a", "b", "c", "d"]));
+
+        assert_eq!(
+            dry_run_of(&config),
+            ConnectorOutcome::Iterate {
+                items: vec![json!("a"), json!("b"), json!("c"), json!("d")]
+            }
+        );
+    }
+
+    #[test]
+    fn a_dry_run_refuses_items_that_are_not_an_array_like_a_run_does() {
+        let mut config = serde_json::Map::new();
+        config.insert("items".to_string(), json!("not an array"));
+
+        assert!(matches!(
+            dry_run_of(&config),
+            ConnectorOutcome::Failed { .. }
+        ));
+        assert!(matches!(
+            dry_run_of(&serde_json::Map::new()),
+            ConnectorOutcome::Failed { .. }
+        ));
     }
 }

@@ -401,12 +401,30 @@ impl<'a> Lexer<'a> {
 struct Parser<'a> {
     lexer: Lexer<'a>,
     cur: Spanned,
+    depth: usize,
 }
+
+pub(crate) const MAX_EXPRESSION_DEPTH: usize = 64;
 
 impl<'a> Parser<'a> {
     fn new(mut lexer: Lexer<'a>) -> Result<Self, ExpressionError> {
         let cur = lexer.next_token()?;
-        Ok(Self { lexer, cur })
+        Ok(Self {
+            lexer,
+            cur,
+            depth: 0,
+        })
+    }
+
+    fn descend(&mut self) -> Result<(), ExpressionError> {
+        self.depth += 1;
+        if self.depth > MAX_EXPRESSION_DEPTH {
+            return Err(ExpressionError::Syntax {
+                position: self.cur.pos,
+                message: format!("expression nested more than {MAX_EXPRESSION_DEPTH} levels deep"),
+            });
+        }
+        Ok(())
     }
 
     fn bump(&mut self) -> Result<Spanned, ExpressionError> {
@@ -418,12 +436,18 @@ impl<'a> Parser<'a> {
     /// primary. `not` binding tighter than a comparison is deliberate (see
     /// the frozen grammar): `not a == b` parses as `(not a) == b`.
     fn parse_expression(&mut self) -> Result<Expr, ExpressionError> {
-        self.parse_or()
+        let entered = self.depth;
+        self.descend()?;
+        let parsed = self.parse_or();
+        self.depth = entered;
+        parsed
     }
 
     fn parse_or(&mut self) -> Result<Expr, ExpressionError> {
+        let entered = self.depth;
         let mut left = self.parse_and()?;
         while matches!(self.cur.tok, Tok::Or) {
+            self.descend()?;
             self.bump()?;
             let right = self.parse_and()?;
             left = Expr::Binary {
@@ -432,12 +456,15 @@ impl<'a> Parser<'a> {
                 right: Box::new(right),
             };
         }
+        self.depth = entered;
         Ok(left)
     }
 
     fn parse_and(&mut self) -> Result<Expr, ExpressionError> {
+        let entered = self.depth;
         let mut left = self.parse_comparison()?;
         while matches!(self.cur.tok, Tok::And) {
+            self.descend()?;
             self.bump()?;
             let right = self.parse_comparison()?;
             left = Expr::Binary {
@@ -446,6 +473,7 @@ impl<'a> Parser<'a> {
                 right: Box::new(right),
             };
         }
+        self.depth = entered;
         Ok(left)
     }
 
@@ -476,8 +504,11 @@ impl<'a> Parser<'a> {
 
     fn parse_not(&mut self) -> Result<Expr, ExpressionError> {
         if matches!(self.cur.tok, Tok::Not) {
+            let entered = self.depth;
+            self.descend()?;
             self.bump()?;
             let inner = self.parse_not()?;
+            self.depth = entered;
             return Ok(Expr::Unary {
                 op: UnaryOp::Not,
                 expr: Box::new(inner),

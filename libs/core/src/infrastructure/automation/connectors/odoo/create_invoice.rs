@@ -247,6 +247,12 @@ mod tests {
             .await;
 
         assert_eq!(outcome, ConnectorOutcome::Produced(json!({ "id": 99 })));
+        if let ConnectorOutcome::Produced(value) = &outcome {
+            crate::infrastructure::automation::connectors::test_support::assert_same_shape(
+                value,
+                "odoo.create_invoice",
+            );
+        }
         let create_args = server.requests()[1].body_json()["params"]["args"].clone();
         assert_eq!(create_args[3], "account.move");
         assert_eq!(create_args[4], "create");

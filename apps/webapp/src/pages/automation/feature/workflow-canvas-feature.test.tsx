@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useRouterState } from '@tanstack/react-router'
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
@@ -48,6 +48,8 @@ const WORKFLOW_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
 const WORKFLOWS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows'
+const WORKFLOW_DRY_RUN_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/dry-run'
 const WORKFLOW_VERSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions'
 const CONNECTORS_PATH =
@@ -1905,18 +1907,35 @@ describe('WorkflowPageFeature (editor) — the new workflow draft', () => {
 		expect(screen.queryByTestId('rf__node-t1')).toBeNull()
 	})
 
-	it('cannot be tested before it exists', async () => {
+	it('can be tested before it exists, on the graph as it stands, without creating anything', async () => {
 		const user = userEvent.setup()
-		renderPage(mockCreation, DRAFT_URL)
+		const rendered = renderPage((api) => {
+			mockCreation(api)
+			api.mockMutation('post', WORKFLOW_DRY_RUN_PATH, () => ({
+				data: { steps: [] },
+				pagination: null,
+			}))
+		}, DRAFT_URL)
 		await addClickTrigger(user)
 
-		expect(
-			(
-				screen.getByRole('button', {
-					name: 'Tester le workflow',
-				}) as HTMLButtonElement
-			).disabled,
-		).toBe(true)
+		const button = screen.getByRole('button', {
+			name: 'Tester le workflow',
+		}) as HTMLButtonElement
+		expect(button.disabled).toBe(false)
+		expect(button.getAttribute('title')).toBeNull()
+		await user.click(button)
+
+		await waitFor(() => {
+			expect(
+				mutationCalls(rendered.api).map(
+					(call) => `${call.method} ${call.path}`,
+				),
+			).toEqual([`post ${WORKFLOW_DRY_RUN_PATH}`])
+		})
+		expect(mutationCalls(rendered.api)[0].params).toMatchObject({
+			path: { organization_id: 'org-1' },
+			body: { graph: { triggers: [{ id: 't1', kind: 'Manual' }] } },
+		})
 	})
 
 	it('says there is nothing to list in the executions of a draft', async () => {
@@ -1931,5 +1950,631 @@ describe('WorkflowPageFeature (editor) — the new workflow draft', () => {
 				'Aucune exécution : ce workflow n’est pas encore enregistré.',
 			),
 		).toBeDefined()
+	})
+})
+
+describe('WorkflowPageFeature (editor) — testing the workflow', () => {
+	const TESTED_GRAPH: Schemas.GraphDto = {
+		connectors: [connector('c1'), connector('c2')],
+		edges: [
+			{ from: 't1', to: 'c1', branch: null },
+			{ from: 'c1', to: 'c2', branch: null },
+		],
+		triggers: [{ id: 't1', kind: 'Manual' }],
+	}
+	const TESTED_LAYOUT = {
+		t1: { x: -220, y: 0 },
+		c1: { x: 0, y: 0 },
+		c2: { x: 280, y: 0 },
+	}
+
+	function dryStep(
+		connectorId: string,
+		patch: Partial<Schemas.DryRunStepResponse> = {},
+	): Schemas.DryRunStepResponse {
+		return {
+			connector_id: connectorId,
+			iteration_path: '',
+			status: 'succeeded',
+			input: null,
+			output: null,
+			error: null,
+			...patch,
+		}
+	}
+
+	function dryRunCalls(api: FakeApi) {
+		return api.calls.filter((call) => call.path === WORKFLOW_DRY_RUN_PATH)
+	}
+
+	function renderTested(
+		respond: (params: unknown) => unknown,
+		configure: (api: FakeApi) => void = () => {},
+		graph: Schemas.GraphDto = TESTED_GRAPH,
+	) {
+		return renderFeature((api) => {
+			api.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({ graph, layout: TESTED_LAYOUT }),
+				pagination: null,
+			}))
+			api.mockMutation('post', WORKFLOW_DRY_RUN_PATH, respond)
+			configure(api)
+		})
+	}
+
+	function answering(...steps: Schemas.DryRunStepResponse[]) {
+		return () => ({ data: { steps }, pagination: null })
+	}
+
+	function refusal(status: number, message: string, errors?: unknown) {
+		return Object.assign(new Error(message), {
+			status,
+			data: errors === undefined ? undefined : { details: { errors } },
+		})
+	}
+
+	async function clickTest(user: ReturnType<typeof userEvent.setup>) {
+		await user.click(
+			await screen.findByRole('button', { name: 'Tester le workflow' }),
+		)
+	}
+
+	async function elapse(ms: number) {
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(ms)
+		})
+	}
+
+	function badgeOn(nodeId: string, label: string) {
+		return within(screen.getByTestId(`rf__node-${nodeId}`)).queryByRole('img', {
+			name: label,
+		})
+	}
+
+	const SUCCEEDED = 'Exécuté avec succès'
+	const FAILED = 'Exécution en échec'
+
+	describe('with real timers', () => {
+		it('runs the graph as it stands in the editor, unsaved edits included, and saves nothing', async () => {
+			const user = userEvent.setup()
+			const api = renderTested(answering(dryStep('c1')))
+
+			const node = await screen.findByTestId('rf__node-c2')
+			fireEvent.contextMenu(node, { clientX: 200, clientY: 150 })
+			await user.click(
+				await screen.findByRole('menuitem', { name: /Renommer/ }),
+			)
+			const input = await screen.findByLabelText('Nom du nœud')
+			await user.clear(input)
+			await user.type(input, 'Facturer')
+			await user.click(screen.getByRole('button', { name: 'Renommer' }))
+			expect(screen.getByText('Modifications non enregistrées')).toBeDefined()
+
+			await clickTest(user)
+
+			await waitFor(() => {
+				expect(dryRunCalls(api)).toHaveLength(1)
+			})
+			expect(dryRunCalls(api)[0].params).toEqual({
+				path: { organization_id: 'org-1' },
+				body: {
+					graph: {
+						...TESTED_GRAPH,
+						connectors: [
+							connector('c1'),
+							{ ...connector('c2'), name: 'Facturer' },
+						],
+					},
+				},
+			})
+			expect(mutationCalls(api).map((call) => call.method)).toEqual(['post'])
+			expect(screen.getByText('Modifications non enregistrées')).toBeDefined()
+		})
+
+		it('runs a saved workflow as saved when nothing was touched', async () => {
+			const user = userEvent.setup()
+			const api = renderTested(answering())
+
+			await clickTest(user)
+
+			await waitFor(() => {
+				expect(dryRunCalls(api)).toHaveLength(1)
+			})
+			expect(dryRunCalls(api)[0].params).toMatchObject({
+				body: { graph: TESTED_GRAPH },
+			})
+		})
+
+		it('writes nothing to the journal of executions: the runs are not read again', async () => {
+			const user = userEvent.setup()
+			const api = renderTested(answering(dryStep('c1')))
+			await screen.findByTestId('rf__node-c1')
+			const runReads = () =>
+				api.calls.filter((call) => call.path === RUNS_PATH).length
+			const before = runReads()
+
+			await clickTest(user)
+			await waitFor(() => {
+				expect(dryRunCalls(api)).toHaveLength(1)
+			})
+
+			expect(runReads()).toBe(before)
+		})
+
+		it('does not offer the test to somebody who cannot manage the automation', async () => {
+			renderTested(answering(), (api) => {
+				api.mockGet(MY_PERMISSIONS_PATH, () => ({
+					data: { permissions: ['VIEW_AUTOMATION'] },
+					pagination: null,
+				}))
+			})
+
+			await screen.findByTestId('rf__node-c1')
+			await waitFor(() => {
+				expect(
+					screen.queryByRole('button', { name: 'Tester le workflow' }),
+				).toBeNull()
+			})
+			fireEvent.doubleClick(screen.getByTestId('rf__node-c2'))
+			const dialog = await screen.findByRole('dialog')
+			fireEvent.click(within(dialog).getByRole('radio', { name: 'Exécution' }))
+			expect(
+				within(dialog).queryByRole('button', { name: 'Tester le workflow' }),
+			).toBeNull()
+		})
+
+		it('badges the nodes named by a 422 and banners the graph errors, like a save', async () => {
+			const user = userEvent.setup()
+			renderTested(() => {
+				throw refusal(422, 'Invalid graph', [
+					{
+						connector_id: 'c1',
+						field: null,
+						message: 'Identification manquante',
+					},
+					{
+						connector_id: null,
+						field: null,
+						message: 'Le graphe contient un cycle',
+					},
+				])
+			})
+
+			await clickTest(user)
+
+			const node = await screen.findByTestId('rf__node-c1')
+			expect(
+				await within(node).findByLabelText(
+					'À corriger : Identification manquante',
+				),
+			).toBeDefined()
+			expect(
+				await screen.findByText('Le graphe contient un cycle'),
+			).toBeDefined()
+			expect(
+				(
+					screen.getByRole('button', {
+						name: 'Tester le workflow',
+					}) as HTMLButtonElement
+				).disabled,
+			).toBe(false)
+		})
+
+		it('lifts the badge of a node a test refused once it is corrected', async () => {
+			const user = userEvent.setup()
+			renderTested(() => {
+				throw refusal(422, 'Invalid graph', [
+					{
+						connector_id: 'c1',
+						field: null,
+						message: 'Identification manquante',
+					},
+					{ connector_id: 'c2', field: null, message: 'Autre souci' },
+				])
+			})
+			await clickTest(user)
+			const first = await screen.findByTestId('rf__node-c1')
+			await within(first).findByLabelText(
+				'À corriger : Identification manquante',
+			)
+
+			fireEvent.contextMenu(first, { clientX: 200, clientY: 150 })
+			await user.click(
+				await screen.findByRole('menuitem', { name: /Renommer/ }),
+			)
+			const input = await screen.findByLabelText('Nom du nœud')
+			await user.clear(input)
+			await user.type(input, 'Appeler')
+			await user.click(screen.getByRole('button', { name: 'Renommer' }))
+
+			await waitFor(() => {
+				expect(
+					within(screen.getByTestId('rf__node-c1')).queryByLabelText(
+						/À corriger/,
+					),
+				).toBeNull()
+			})
+			expect(
+				within(screen.getByTestId('rf__node-c2')).getByLabelText(
+					'À corriger : Autre souci',
+				),
+			).toBeDefined()
+		})
+
+		it.each([
+			[400, 'Failed to parse the request body as JSON'],
+			[403, 'Forbidden'],
+			[413, 'Payload Too Large'],
+			[422, 'trigger `ghost` is not in this graph'],
+			[503, 'Service Unavailable'],
+		])('says a %i that carries no graph errors below the canvas', async (status, message) => {
+			const user = userEvent.setup()
+			renderTested(() => {
+				throw refusal(status, message)
+			})
+
+			await clickTest(user)
+
+			const alert = await screen.findByRole('alert')
+			expect(alert.textContent).toBe(
+				`Le test du workflow a échoué : ${message}`,
+			)
+			expect(
+				within(screen.getByTestId('rf__node-c1')).queryByLabelText(
+					/À corriger/,
+				),
+			).toBeNull()
+		})
+
+		it('lets the error go with the next test', async () => {
+			const user = userEvent.setup()
+			let attempts = 0
+			renderTested(() => {
+				attempts += 1
+				if (attempts === 1) throw refusal(503, 'Service Unavailable')
+				return { data: { steps: [] }, pagination: null }
+			})
+			await clickTest(user)
+			await screen.findByRole('alert')
+
+			await clickTest(user)
+
+			await waitFor(() => {
+				expect(screen.queryByRole('alert')).toBeNull()
+			})
+		})
+	})
+
+	describe('with a clock we hold', () => {
+		beforeEach(() => {
+			vi.useFakeTimers({ shouldAdvanceTime: true })
+		})
+
+		afterEach(() => {
+			vi.useRealTimers()
+		})
+
+		function setupUser() {
+			return userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+		}
+
+		it('clears the badges at the answer, then reveals the nodes one by one in the order of the answer', async () => {
+			const user = setupUser()
+			renderTested(
+				answering(
+					dryStep('c1', { output: { id: 1 } }),
+					dryStep('c2', { status: 'failed', error: 'URL introuvable' }),
+				),
+				(api) => {
+					api.mockGet(RUNS_PATH, () => ({
+						data: [
+							{
+								id: 'run-1',
+								organization_id: 'org-1',
+								workflow_id: 'workflow-1',
+								workflow_version_id: 'v1',
+								status: 'succeeded',
+								created_at: '2026-08-05T00:00:00Z',
+							},
+						],
+						pagination: null,
+					}))
+					api.mockGet(RUN_PATH, () => ({
+						data: {
+							id: 'run-1',
+							organization_id: 'org-1',
+							workflow_id: 'workflow-1',
+							workflow_version_id: 'v1',
+							status: 'succeeded',
+							created_at: '2026-08-05T00:00:00Z',
+							steps: [
+								{
+									id: 's1',
+									connector_id: 'c1',
+									iteration_path: '',
+									attempts: 1,
+									status: 'succeeded',
+									created_at: '2026-08-05T00:00:01Z',
+									output: { id: 9 },
+								},
+							],
+						},
+						pagination: null,
+					}))
+				},
+			)
+			await screen.findByTestId('rf__node-c1')
+			await waitFor(() => {
+				expect(badgeOn('c1', SUCCEEDED)).not.toBeNull()
+			})
+
+			await clickTest(user)
+
+			const running = await screen.findByRole('button', {
+				name: 'Exécution en cours…',
+			})
+			expect((running as HTMLButtonElement).disabled).toBe(true)
+			await waitFor(() => {
+				expect(badgeOn('c1', SUCCEEDED)).toBeNull()
+			})
+			expect(badgeOn('c2', FAILED)).toBeNull()
+
+			await elapse(500)
+			expect(badgeOn('c1', SUCCEEDED)).not.toBeNull()
+			expect(badgeOn('c2', FAILED)).toBeNull()
+
+			await elapse(350)
+			expect(badgeOn('c1', SUCCEEDED)).not.toBeNull()
+			expect(badgeOn('c2', FAILED)).not.toBeNull()
+			expect(
+				screen.getByRole('button', { name: 'Exécution en cours…' }),
+			).toBeDefined()
+
+			await elapse(350)
+			expect(
+				(
+					screen.getByRole('button', {
+						name: 'Tester le workflow',
+					}) as HTMLButtonElement
+				).disabled,
+			).toBe(false)
+		})
+
+		it('gives no badge to a node the test did not take, and says so in its details', async () => {
+			const user = setupUser()
+			renderTested(
+				answering(dryStep('c1'), dryStep('c2', { status: 'skipped' })),
+			)
+
+			await clickTest(user)
+			await elapse(1500)
+
+			expect(badgeOn('c1', SUCCEEDED)).not.toBeNull()
+			expect(badgeOn('c2', SUCCEEDED)).toBeNull()
+			expect(badgeOn('c2', FAILED)).toBeNull()
+			fireEvent.doubleClick(screen.getByTestId('rf__node-c2'))
+			const dialog = await screen.findByRole('dialog')
+			expect(
+				within(
+					within(dialog).getByRole('region', { name: 'Sortie' }),
+				).getByText('Ce nœud n’a pas été exécuté'),
+			).toBeDefined()
+		})
+
+		it('updates a node at every pass of a loop and ends on the last one, which the details tell by its number', async () => {
+			const user = setupUser()
+			renderTested(
+				answering(
+					dryStep('c1'),
+					dryStep('c2', { iteration_path: 'c1[0]', output: { n: 'premier' } }),
+					dryStep('c2', { iteration_path: 'c1[1]', output: { n: 'deuxieme' } }),
+					dryStep('c2', { iteration_path: 'c1[2]', output: { n: 'dernier' } }),
+				),
+			)
+
+			await clickTest(user)
+			await elapse(500)
+			expect(badgeOn('c1', SUCCEEDED)).not.toBeNull()
+			expect(badgeOn('c2', SUCCEEDED)).toBeNull()
+
+			await elapse(350)
+			expect(badgeOn('c2', SUCCEEDED)).not.toBeNull()
+			await elapse(1000)
+
+			fireEvent.doubleClick(screen.getByTestId('rf__node-c2'))
+			const dialog = await screen.findByRole('dialog')
+			const output = within(dialog).getByRole('region', { name: 'Sortie' })
+			expect(output.textContent).toContain('dernier')
+			expect(within(output).getByText('Passage 3 sur 3')).toBeDefined()
+		})
+
+		it('stops at the first failure: that node is ✗, the nodes left unreached have no badge and say so', async () => {
+			const user = setupUser()
+			renderTested(
+				answering(
+					dryStep('c1', { status: 'failed', error: 'URL introuvable' }),
+					dryStep('c2', { status: 'skipped' }),
+				),
+			)
+
+			await clickTest(user)
+			await elapse(500)
+
+			expect(badgeOn('c1', FAILED)).not.toBeNull()
+			expect(badgeOn('c2', SUCCEEDED)).toBeNull()
+			expect(badgeOn('c2', FAILED)).toBeNull()
+			await elapse(700)
+			expect(
+				(
+					screen.getByRole('button', {
+						name: 'Tester le workflow',
+					}) as HTMLButtonElement
+				).disabled,
+			).toBe(false)
+
+			fireEvent.doubleClick(screen.getByTestId('rf__node-c1'))
+			let dialog = await screen.findByRole('dialog')
+			expect(
+				within(
+					within(dialog).getByRole('region', { name: 'Sortie' }),
+				).getByText('URL introuvable'),
+			).toBeDefined()
+			await user.click(
+				screen.getByRole('button', { name: 'Fermer les détails du nœud' }),
+			)
+			await waitFor(() => {
+				expect(screen.queryByRole('dialog')).toBeNull()
+			})
+
+			fireEvent.doubleClick(screen.getByTestId('rf__node-c2'))
+			dialog = await screen.findByRole('dialog')
+			await user.click(within(dialog).getByRole('radio', { name: 'Exécution' }))
+			expect(
+				within(
+					within(dialog).getByRole('region', { name: 'Entrée' }),
+				).getByText('Ce nœud n’a pas été atteint'),
+			).toBeDefined()
+		})
+
+		it('ends on the failure of a pass of a loop: the step at fault is ✗', async () => {
+			const user = setupUser()
+			renderTested(
+				answering(
+					dryStep('c1'),
+					dryStep('c2', { iteration_path: 'c1[0]', output: 1 }),
+					dryStep('c2', {
+						iteration_path: 'c1[1]',
+						status: 'failed',
+						error: 'boom',
+					}),
+				),
+			)
+
+			await clickTest(user)
+			await elapse(1500)
+
+			expect(badgeOn('c2', FAILED)).not.toBeNull()
+			fireEvent.doubleClick(screen.getByTestId('rf__node-c2'))
+			const dialog = await screen.findByRole('dialog')
+			const output = within(dialog).getByRole('region', { name: 'Sortie' })
+			expect(within(output).getByText('boom')).toBeDefined()
+			expect(within(output).getByText('Passage 2 sur 2')).toBeDefined()
+		})
+
+		it('fills the details of a node left open, in place, as the test reaches it', async () => {
+			const user = setupUser()
+			renderTested(
+				answering(
+					dryStep('c1', {
+						input: { url: 'https://un.test' },
+						output: { a: 1 },
+					}),
+					dryStep('c2', {
+						input: { url: 'https://deux.test' },
+						output: { b: 'deuxieme-sortie' },
+					}),
+				),
+			)
+			fireEvent.doubleClick(await screen.findByTestId('rf__node-c2'))
+			const dialog = await screen.findByRole('dialog')
+			await user.click(within(dialog).getByRole('radio', { name: 'Exécution' }))
+			expect(
+				within(dialog).getByText('Aucune exécution pour le moment'),
+			).toBeDefined()
+
+			await user.click(
+				within(dialog).getByRole('button', { name: 'Tester le workflow' }),
+			)
+			await waitFor(() => {
+				expect(
+					within(
+						within(dialog).getByRole('region', { name: 'Entrée' }),
+					).getByText('En attente du test'),
+				).toBeDefined()
+			})
+			await elapse(500)
+			expect(
+				within(
+					within(dialog).getByRole('region', { name: 'Entrée' }),
+				).getByText('En attente du test'),
+			).toBeDefined()
+
+			await elapse(350)
+			expect(
+				within(dialog).getByRole('region', { name: 'Entrée' }).textContent,
+			).toContain('https://deux.test')
+			expect(
+				within(dialog).getByRole('region', { name: 'Sortie' }).textContent,
+			).toContain('deuxieme-sortie')
+		})
+
+		it('keeps the results through a move of the canvas and drops them with a change of the graph, giving the real run back', async () => {
+			const user = setupUser()
+			renderTested(
+				answering(dryStep('c1', { status: 'failed', error: 'boom' })),
+				(api) => {
+					api.mockGet(RUNS_PATH, () => ({
+						data: [
+							{
+								id: 'run-1',
+								organization_id: 'org-1',
+								workflow_id: 'workflow-1',
+								workflow_version_id: 'v1',
+								status: 'succeeded',
+								created_at: '2026-08-05T00:00:00Z',
+							},
+						],
+						pagination: null,
+					}))
+					api.mockGet(RUN_PATH, () => ({
+						data: {
+							id: 'run-1',
+							organization_id: 'org-1',
+							workflow_id: 'workflow-1',
+							workflow_version_id: 'v1',
+							status: 'succeeded',
+							created_at: '2026-08-05T00:00:00Z',
+							steps: [
+								{
+									id: 's1',
+									connector_id: 'c1',
+									iteration_path: '',
+									attempts: 1,
+									status: 'succeeded',
+									created_at: '2026-08-05T00:00:01Z',
+									output: { id: 9 },
+								},
+							],
+						},
+						pagination: null,
+					}))
+				},
+			)
+			await waitFor(() => {
+				expect(badgeOn('c1', SUCCEEDED)).not.toBeNull()
+			})
+			await clickTest(user)
+			await elapse(1500)
+			expect(badgeOn('c1', FAILED)).not.toBeNull()
+
+			dragNodeBy(screen.getByTestId('rf__node-c1'), 40, 30)
+			await elapse(100)
+			expect(badgeOn('c1', FAILED)).not.toBeNull()
+
+			const node = screen.getByTestId('rf__node-c2')
+			fireEvent.contextMenu(node, { clientX: 200, clientY: 150 })
+			await user.click(
+				await screen.findByRole('menuitem', { name: /Renommer/ }),
+			)
+			const input = await screen.findByLabelText('Nom du nœud')
+			await user.clear(input)
+			await user.type(input, 'Facturer')
+			await user.click(screen.getByRole('button', { name: 'Renommer' }))
+
+			await waitFor(() => {
+				expect(badgeOn('c1', FAILED)).toBeNull()
+			})
+			expect(badgeOn('c1', SUCCEEDED)).not.toBeNull()
+		})
 	})
 })
