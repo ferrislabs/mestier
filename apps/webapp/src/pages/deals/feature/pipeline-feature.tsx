@@ -2,12 +2,11 @@ import { AlertCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
-import { CURRENT_PERSON_ID } from '#/pages/customers/feature/mocks/people'
+import { useOrganizationPeople } from '#/pages/customers/feature/use-organization-people'
 import { todayIso } from '#/pages/customers/lib/format'
-import { useDealQuotes } from '#/pages/deals/feature/mocks/deal-quotes'
 import { useDeals } from '#/pages/deals/feature/use-deals'
-import type { DealDraft, DealStage } from '#/pages/deals/lib/deal-types'
-import { findDeal, pipelineSummary } from '#/pages/deals/lib/pipeline'
+import type { DealStage } from '#/pages/deals/lib/deal-types'
+import { findDeal } from '#/pages/deals/lib/pipeline'
 import {
 	DEFAULT_FILTERS,
 	type DealFilters,
@@ -45,6 +44,7 @@ export function PipelineFeature(props: PipelineFeatureProps) {
 	return (
 		<Pipeline
 			key={activeOrganization.id}
+			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
 			{...props}
 		/>
@@ -52,12 +52,16 @@ export function PipelineFeature(props: PipelineFeatureProps) {
 }
 
 function Pipeline({
+	organizationId,
 	organizationSlug,
 	filters,
 	onFiltersChange,
-}: PipelineFeatureProps & { organizationSlug: string }) {
+}: PipelineFeatureProps & {
+	organizationId: string
+	organizationSlug: string
+}) {
 	const store = useDeals()
-	const quotes = useDealQuotes()
+	const { people, currentPersonId } = useOrganizationPeople(organizationId)
 	const canManage = useHasPermission('MANAGE_CUSTOMERS')
 	const today = todayIso()
 	const [query, setQuery] = useState(filters.query)
@@ -92,24 +96,21 @@ function Pipeline({
 			setLosingId(dealId)
 			return
 		}
-		setNotice(store.move(dealId, stage))
-	}
-
-	function create(draft: DealDraft) {
-		store.create(draft)
+		store.move(dealId, stage, '', setNotice)
 	}
 
 	return (
 		<PipelineUI
 			deals={visible}
 			customers={store.customers}
-			quotes={quotes}
-			summary={pipelineSummary(store.deals, store.conversions, today)}
+			people={people}
+			quotes={store.quotes}
+			summary={store.summary}
 			filters={active}
 			canReset={hasActiveFilters(active)}
 			today={today}
 			organizationSlug={organizationSlug}
-			defaultOwnerId={CURRENT_PERSON_ID}
+			defaultOwnerId={currentPersonId ?? ''}
 			canManage={canManage}
 			isLoading={store.isLoading}
 			error={store.error}
@@ -122,15 +123,15 @@ function Pipeline({
 			onReset={reset}
 			onDismissNotice={() => setNotice(null)}
 			onCreatingChange={setCreating}
-			onCreate={create}
+			onCreate={store.create}
 			onOpen={setSelectedId}
 			onCloseSelected={() => setSelectedId(null)}
 			onMove={moveTo}
 			onSave={store.update}
-			onDelete={(dealId) => store.remove(dealId, quotes)}
+			onDelete={store.remove}
 			onCancelLoss={() => setLosingId(null)}
 			onConfirmLoss={(dealId, reason) => {
-				store.move(dealId, 'lost', reason)
+				store.move(dealId, 'lost', reason, setNotice)
 				setNotice(null)
 				setLosingId(null)
 			}}

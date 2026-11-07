@@ -15,6 +15,7 @@ export function deal(overrides: Partial<Deal> = {}): Deal {
 		source: null,
 		lostReason: '',
 		notes: '',
+		quoteCount: 0,
 		createdAt: '2026-10-01',
 		stageChangedAt: '2026-10-01',
 		closedAt: null,
@@ -43,18 +44,9 @@ export function customer(overrides: Partial<Customer> = {}): Customer {
 		email: null,
 		phone: null,
 		status: 'PROSPECT',
-		pipeline_stage: 'NEW',
 		kind: 'PROFESSIONAL',
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
 		...overrides,
-	}
-}
-
-export function ctxAt(date: string, ids: readonly string[] = ['t-1']) {
-	let index = 0
-	return {
-		today: date,
-		newId: () => ids[index++] ?? `t-${index}`,
 	}
 }

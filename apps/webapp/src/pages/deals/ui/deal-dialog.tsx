@@ -14,6 +14,7 @@ import {
 } from '#/components/ui/dialog'
 import type { Customer } from '#/hooks/use-customers'
 import { buildOrgPath } from '#/modules/org-path'
+import type { Person } from '#/pages/customers/lib/people'
 import { accountStatusOf } from '#/pages/customers/types'
 import { hueOf, NameAvatar } from '#/pages/customers/ui/avatars'
 import { Money } from '#/pages/customers/ui/money'
@@ -45,6 +46,7 @@ function plural(count: number, one: string, many: string): string {
 export function DealDialog({
 	deal,
 	customers,
+	people,
 	quotes,
 	organizationSlug,
 	canManage,
@@ -55,6 +57,7 @@ export function DealDialog({
 }: {
 	deal: Deal
 	customers: readonly Customer[]
+	people: readonly Person[]
 	quotes: readonly DealQuote[]
 	organizationSlug: string
 	canManage: boolean
@@ -68,9 +71,10 @@ export function DealDialog({
 	const [submitted, setSubmitted] = useState(false)
 	const [confirmingDelete, setConfirmingDelete] = useState(false)
 	const customer = customers.find((item) => item.id === deal.customerId)
-	const result = buildDraft(form)
+	const result = buildDraft(form, people)
 	const open = isOpenStage(deal.stage)
-	const locked = quotes.length > 0
+	const quoteCount = Math.max(deal.quoteCount, quotes.length)
+	const locked = quoteCount > 0
 	const deleteHintId = `${idPrefix}-delete-hint`
 
 	function save(event: { preventDefault: () => void }) {
@@ -139,6 +143,7 @@ export function DealDialog({
 									form={form}
 									errors={submitted ? result.errors : {}}
 									customers={accountOptions(customers, deal.customerId)}
+									people={people}
 									clientLocked={locked}
 									clientNote={
 										locked
@@ -275,7 +280,7 @@ export function DealDialog({
 											className="min-w-0 flex-1 text-[12px] text-muted-foreground"
 										>
 											{locked
-												? `Suppression impossible : ${plural(quotes.length, 'devis est lié', 'devis sont liés')} à cette opportunité.`
+												? `Suppression impossible : ${plural(quoteCount, 'devis est lié', 'devis sont liés')} à cette opportunité.`
 												: 'Supprime définitivement cette opportunité.'}
 										</p>
 										<Button

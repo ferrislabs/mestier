@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            FROM quotes\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            FROM quotes\n            WHERE org_id = $1 AND deleted_at IS NULL AND ($2::uuid IS NULL OR deal_id = $2)\n            ORDER BY created_at DESC, id DESC\n            LIMIT $3 OFFSET $4\n            ",
   "describe": {
     "columns": [
       {
@@ -35,43 +35,51 @@
       },
       {
         "ordinal": 6,
+        "name": "deal_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
         "name": "status!",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "net_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "vat_breakdown",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "gross_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -81,6 +89,7 @@
       false,
       false,
       false,
+      true,
       null,
       false,
       false,
@@ -90,5 +99,5 @@
       false
     ]
   },
-  "hash": "e71dd98eb0edccb223774a7045290ab063e0ea7725156f2edc8bb91e2f7c78c0"
+  "hash": "780e4449c54731a67a8090533642d1e5fd4398dc9649ae72ea87eeb5e80f6d0f"
 }

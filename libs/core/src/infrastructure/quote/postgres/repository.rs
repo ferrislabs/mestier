@@ -6,7 +6,7 @@ use mestier_macros::repository;
 use sqlx::PgConnection;
 
 use crate::{
-    CustomerId, OrganizationId, Quote, QuoteId, QuoteLine, QuoteStatus,
+    CustomerId, DealId, OrganizationId, Quote, QuoteId, QuoteLine, QuoteStatus,
     domain::{
         organization::{billing_settings::NumberPadding, numbering::format_number},
         quote::{
@@ -125,9 +125,9 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
-            INSERT INTO quotes (id, org_id, reference, title, customer_id, customer_context_id, status, net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, CAST($7 AS text)::quote_status, $8, $9, $10, $11, $12, $13)
-            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            INSERT INTO quotes (id, org_id, reference, title, customer_id, customer_context_id, deal_id, status, net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, CAST($8 AS text)::quote_status, $9, $10, $11, $12, $13, $14)
+            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             quote.id.0,
             quote.organization_id.0,
@@ -135,6 +135,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
             quote.title,
             quote.customer_id.0,
             quote.customer_context_id.0,
+            quote.deal_id.map(|id| id.0),
             quote.status.as_str(),
             quote.net_cents,
             vat_breakdown,
@@ -156,7 +157,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
-            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             FROM quotes
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -178,20 +179,23 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
     async fn list_by_organization(
         &mut self,
         organization_id: OrganizationId,
+        deal_id: Option<DealId>,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Quote>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
+        let deal_id = deal_id.map(|id| id.0);
         let rows = sqlx::query_as!(
             QuoteRow,
             r#"
-            SELECT id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             FROM quotes
-            WHERE org_id = $1 AND deleted_at IS NULL
+            WHERE org_id = $1 AND deleted_at IS NULL AND ($2::uuid IS NULL OR deal_id = $2)
             ORDER BY created_at DESC, id DESC
-            LIMIT $2 OFFSET $3
+            LIMIT $3 OFFSET $4
             "#,
             organization_id.0,
+            deal_id,
             limit as i64,
             offset as i64,
         )
@@ -200,8 +204,9 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         let total: i64 = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) AS "count!" FROM quotes WHERE org_id = $1 AND deleted_at IS NULL"#,
+            r#"SELECT COUNT(*) AS "count!" FROM quotes WHERE org_id = $1 AND deleted_at IS NULL AND ($2::uuid IS NULL OR deal_id = $2)"#,
             organization_id.0,
+            deal_id,
         )
         .fetch_one(&mut ***tx)
         .await
@@ -269,19 +274,21 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
                 title = $3,
                 customer_id = $4,
                 customer_context_id = $5,
-                status = CAST($6 AS text)::quote_status,
-                net_cents = $7,
-                vat_breakdown = $8,
-                gross_cents = $9,
-                updated_at = $10
+                deal_id = $6,
+                status = CAST($7 AS text)::quote_status,
+                net_cents = $8,
+                vat_breakdown = $9,
+                gross_cents = $10,
+                updated_at = $11
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             quote.id.0,
             quote.reference,
             quote.title,
             quote.customer_id.0,
             quote.customer_context_id.0,
+            quote.deal_id.map(|id| id.0),
             quote.status.as_str(),
             quote.net_cents,
             vat_breakdown,
@@ -327,7 +334,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
                 reference = COALESCE($3, reference),
                 updated_at = $4
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
             "#,
             id.0,
             status.as_str(),

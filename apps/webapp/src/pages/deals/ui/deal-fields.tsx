@@ -9,7 +9,7 @@ import {
 	SelectValue,
 } from '#/components/ui/select'
 import type { Customer } from '#/hooks/use-customers'
-import { PEOPLE } from '#/pages/customers/feature/mocks/people'
+import type { Person } from '#/pages/customers/lib/people'
 import { LEAD_SOURCE_LABELS, LEAD_SOURCES } from '#/pages/customers/types'
 import { CustomerPicker } from '#/pages/customers/ui/customer-picker'
 import { TextArea } from '#/pages/customers/ui/text-area'
@@ -33,6 +33,7 @@ export function DealFields({
 	form,
 	errors,
 	customers,
+	people,
 	clientLocked,
 	clientNote,
 	onChange,
@@ -41,6 +42,7 @@ export function DealFields({
 	form: DealForm
 	errors: DealFormErrors
 	customers: readonly Customer[]
+	people: readonly Person[]
 	clientLocked?: boolean
 	clientNote?: ReactNode
 	onChange: (patch: Partial<DealForm>) => void
@@ -126,7 +128,7 @@ export function DealFields({
 					</SelectTrigger>
 					<SelectContent>
 						<SelectItem value={NONE}>Non assigné</SelectItem>
-						{PEOPLE.map((person) => (
+						{people.map((person) => (
 							<SelectItem key={person.id} value={person.id}>
 								{person.name}
 							</SelectItem>

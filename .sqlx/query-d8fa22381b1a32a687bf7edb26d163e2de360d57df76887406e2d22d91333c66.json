@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE customers\n            SET status = $2, pipeline_stage = $3, name = $4, registration_number = $5, phone = $6, email = $7,\n                kind = $8, website = $9, vat_number = $10, owner_member_id = $11, lead_source = $12, notes = $13,\n                payment_terms_days = $14, billing_contact_id = $15, billing_address_id = $16,\n                converted_at = $17, archived_at = $18, updated_at = $19\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            SELECT id, org_id, status, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at\n            FROM customers\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -20,125 +20,101 @@
       },
       {
         "ordinal": 3,
-        "name": "pipeline_stage",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
         "name": "name",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "registration_number",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "phone",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "email",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "kind",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "website",
         "type_info": "Text"
       },
       {
-        "ordinal": 10,
+        "ordinal": 9,
         "name": "vat_number",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 10,
         "name": "owner_member_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 12,
+        "ordinal": 11,
         "name": "lead_source",
         "type_info": "Text"
       },
       {
-        "ordinal": 13,
+        "ordinal": 12,
         "name": "notes",
         "type_info": "Text"
       },
       {
-        "ordinal": 14,
+        "ordinal": 13,
         "name": "payment_terms_days",
         "type_info": "Int4"
       },
       {
-        "ordinal": 15,
+        "ordinal": 14,
         "name": "billing_contact_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 16,
+        "ordinal": 15,
         "name": "billing_address_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 17,
+        "ordinal": 16,
         "name": "converted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 18,
+        "ordinal": 17,
         "name": "archived_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 19,
+        "ordinal": 18,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 20,
+        "ordinal": 19,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 21,
+        "ordinal": 20,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Uuid",
-        "Text",
-        "Text",
-        "Int4",
-        "Uuid",
-        "Uuid",
-        "Timestamptz",
-        "Timestamptz",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
-      false,
       false,
       false,
       false,
@@ -162,5 +138,5 @@
       false
     ]
   },
-  "hash": "c7055e3c92b7eb731b7fdefc7c7c658b7e45a5d74a60f34411b1351fef0bb507"
+  "hash": "d8fa22381b1a32a687bf7edb26d163e2de360d57df76887406e2d22d91333c66"
 }

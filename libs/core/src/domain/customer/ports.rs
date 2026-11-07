@@ -39,6 +39,12 @@ pub trait CustomerRepository: Send {
         address_id: CustomerContextId,
     ) -> impl Future<Output = Result<bool, CoreError>> + Send;
 
+    fn count_converted_since(
+        &mut self,
+        organization_id: OrganizationId,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<i64, CoreError>> + Send;
+
     fn soft_delete(
         &mut self,
         id: CustomerId,

@@ -8,10 +8,13 @@ pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
 pub mod customer_error;
+pub mod deal;
+pub mod deal_error;
 pub mod paths;
 pub mod response;
 
 pub const TAG: &str = "customers";
+pub const DEALS_TAG: &str = "deals";
 
 #[derive(Debug, serde::Serialize, PartialEq)]
 pub struct EmptyResponse;
@@ -134,6 +137,13 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(customer_context::get_one::handler)
         .typed_patch(customer_context::update::handler)
         .typed_delete(customer_context::soft_delete::handler)
+        .typed_get(deal::list::handler)
+        .typed_post(deal::create::handler)
+        .typed_get(deal::summary::handler)
+        .typed_get(deal::get_one::handler)
+        .typed_patch(deal::update::handler)
+        .typed_delete(deal::delete::handler)
+        .typed_post(deal::move_stage::handler)
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

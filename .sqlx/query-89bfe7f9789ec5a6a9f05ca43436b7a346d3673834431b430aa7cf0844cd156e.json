@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE deals\n            SET stage = 'LOST', lost_reason = $2, stage_changed_at = $3, closed_at = $3\n            WHERE customer_id = $1 AND stage IN ('NEW', 'VISIT', 'QUOTE_SENT', 'NEGOTIATION')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "89bfe7f9789ec5a6a9f05ca43436b7a346d3673834431b430aa7cf0844cd156e"
+}

@@ -1,9 +1,6 @@
 use authz::Subject;
 
-use crate::{
-    CustomerId, CustomerPipelineStage, CustomerProfile, CustomerStatus, OrganizationId,
-    RegistrationNumber,
-};
+use crate::{CustomerId, CustomerProfile, CustomerStatus, OrganizationId, RegistrationNumber};
 
 #[derive(Debug, Clone)]
 pub struct CreateCustomerCommand {
@@ -13,7 +10,6 @@ pub struct CreateCustomerCommand {
     pub actor: Subject,
     pub organization_id: OrganizationId,
     pub status: CustomerStatus,
-    pub pipeline_stage: CustomerPipelineStage,
     pub name: String,
     pub registration_number: Option<RegistrationNumber>,
     pub phone: Option<String>,
@@ -29,7 +25,6 @@ pub struct UpdateCustomerCommand {
     pub actor: Subject,
     pub id: CustomerId,
     pub status: CustomerStatus,
-    pub pipeline_stage: CustomerPipelineStage,
     pub name: String,
     pub registration_number: Option<RegistrationNumber>,
     pub phone: Option<String>,

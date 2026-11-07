@@ -4,14 +4,15 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{
-    CreateQuoteCommand, CustomerContextId, CustomerId, QuoteLineCommand, ServiceRateId,
+    CreateQuoteCommand, CustomerContextId, CustomerId, DealId, QuoteLineCommand, ServiceRateId,
 };
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    paths::QuotesPath, require_org_membership, require_quote_targets, response::QuoteResponse,
+    paths::QuotesPath, require_org_membership, require_quote_deal, require_quote_targets,
+    response::QuoteResponse,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -54,6 +55,8 @@ pub struct CreateQuoteRequest {
     pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
+    #[serde(default)]
+    pub deal_id: Option<DealId>,
     pub lines: Vec<QuoteLineRequest>,
 }
 
@@ -94,6 +97,7 @@ pub async fn handler(
         payload.customer_context_id,
     )
     .await?;
+    require_quote_deal(&state, path.organization_id, payload.deal_id).await?;
 
     let quote = state
         .usecase
@@ -104,6 +108,7 @@ pub async fn handler(
                 title: payload.title,
                 customer_id: payload.customer_id,
                 customer_context_id: payload.customer_context_id,
+                deal_id: payload.deal_id,
                 lines: into_line_commands(payload.lines)?,
             },
             actor,

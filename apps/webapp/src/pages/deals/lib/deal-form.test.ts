@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { dealBodyOfDraft } from '#/pages/deals/lib/deal-api'
 import {
 	buildDraft,
 	type DealForm,
@@ -6,8 +7,12 @@ import {
 	formFromDeal,
 	isFormChanged,
 } from '#/pages/deals/lib/deal-form'
-import { createDeal, updateDeal } from '#/pages/deals/lib/pipeline'
-import { ctxAt, deal, TODAY } from '#/pages/deals/lib/testing'
+import { deal } from '#/pages/deals/lib/testing'
+
+const PEOPLE = [
+	{ id: 'julien', name: 'Julien', hue: 10 },
+	{ id: 'baptiste', name: 'Baptiste', hue: 200 },
+]
 
 const valid: DealForm = {
 	customerId: 'c8',
@@ -35,7 +40,7 @@ describe('emptyForm', () => {
 
 describe('buildDraft', () => {
 	it('turns a valid form into a draft in cents', () => {
-		const result = buildDraft(valid)
+		const result = buildDraft(valid, PEOPLE)
 		expect(result.errors).toEqual({})
 		expect(result.draft).toEqual({
 			customerId: 'c8',
@@ -49,13 +54,16 @@ describe('buildDraft', () => {
 	})
 
 	it('falls back to null for optional fields and zero for an empty amount', () => {
-		const result = buildDraft({
-			...valid,
-			amount: '',
-			expectedCloseDate: '',
-			ownerId: '',
-			source: '',
-		})
+		const result = buildDraft(
+			{
+				...valid,
+				amount: '',
+				expectedCloseDate: '',
+				ownerId: '',
+				source: '',
+			},
+			PEOPLE,
+		)
 		expect(result.draft).toMatchObject({
 			amount: 0,
 			expectedCloseDate: null,
@@ -65,13 +73,16 @@ describe('buildDraft', () => {
 	})
 
 	it('ignores unknown owners and sources', () => {
-		const result = buildDraft({ ...valid, ownerId: 'inconnu', source: 'x' })
+		const result = buildDraft(
+			{ ...valid, ownerId: 'inconnu', source: 'x' },
+			PEOPLE,
+		)
 		expect(result.draft?.ownerId).toBeNull()
 		expect(result.draft?.source).toBeNull()
 	})
 
 	it('attaches messages to their field', () => {
-		const result = buildDraft({ ...valid, customerId: '', title: ' ' })
+		const result = buildDraft({ ...valid, customerId: '', title: ' ' }, PEOPLE)
 		expect(result.draft).toBeNull()
 		expect(result.errors.title).toBe('L’intitulé est obligatoire.')
 		expect(result.errors.customerId).toBe('Choisis un client.')
@@ -79,18 +90,21 @@ describe('buildDraft', () => {
 	})
 
 	it('requires a readable and positive amount', () => {
-		const unreadable = buildDraft({ ...valid, amount: 'beaucoup' })
+		const unreadable = buildDraft({ ...valid, amount: 'beaucoup' }, PEOPLE)
 		expect(unreadable.draft).toBeNull()
 		expect(unreadable.errors.amount).toBe(
 			'Saisis un montant valide, par exemple 12 500,00.',
 		)
-		const negative = buildDraft({ ...valid, amount: '-5' })
+		const negative = buildDraft({ ...valid, amount: '-5' }, PEOPLE)
 		expect(negative.draft).toBeNull()
 		expect(negative.errors.amount).toBe('Le montant estimé doit être positif.')
 	})
 
 	it('requires a real close date', () => {
-		const result = buildDraft({ ...valid, expectedCloseDate: '2026-02-30' })
+		const result = buildDraft(
+			{ ...valid, expectedCloseDate: '2026-02-30' },
+			PEOPLE,
+		)
 		expect(result.draft).toBeNull()
 		expect(result.errors.expectedCloseDate).toBe('Saisis une date valide.')
 	})
@@ -111,23 +125,29 @@ describe('formFromDeal', () => {
 		expect(isFormChanged({ ...form, title: `${form.title} 2` }, source)).toBe(
 			true,
 		)
-		const draft = buildDraft(form).draft
+		const draft = buildDraft(form, PEOPLE).draft
 		expect(draft).not.toBeNull()
 		if (!draft) return
-		expect(updateDeal([source], source.id, draft)[0]).toEqual(source)
+		expect(dealBodyOfDraft(draft)).toEqual({
+			customer_id: source.customerId,
+			title: source.title,
+			amount_cents: 198900,
+			expected_close_date: '2026-11-20',
+			owner_member_id: 'julien',
+			source: 'site_web',
+			notes: 'Rappeler',
+		})
 	})
 })
 
-describe('createDeal', () => {
-	it('accepts a built draft', () => {
-		const draft = buildDraft(valid).draft
+describe('the API body of a built draft', () => {
+	it('sends integer cents', () => {
+		const draft = buildDraft(valid, PEOPLE).draft
 		expect(draft).not.toBeNull()
 		if (!draft) return
-		const created = createDeal([], ctxAt(TODAY, ['d-new']), draft)
-		expect(created[0]).toMatchObject({
-			id: 'd-new',
-			amount: 1250050,
-			stage: 'new',
+		expect(dealBodyOfDraft(draft)).toMatchObject({
+			amount_cents: 1250050,
+			title: 'Bureaux',
 		})
 	})
 })

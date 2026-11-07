@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT COUNT(*) AS \"count!\" FROM quotes WHERE org_id = $1 AND deleted_at IS NULL",
+  "query": "SELECT COUNT(*) AS \"count!\" FROM quotes WHERE org_id = $1 AND deleted_at IS NULL AND ($2::uuid IS NULL OR deal_id = $2)",
   "describe": {
     "columns": [
       {
@@ -11,6 +11,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -18,5 +19,5 @@
       null
     ]
   },
-  "hash": "3e759aa72510407cecc359d55fa6a620c248d0653d3e0e00c4483168e0d9522a"
+  "hash": "d1539d0020d457fc30ab9787a95568a253bc31cc84cc1235ed5f2f6ba22f6895"
 }

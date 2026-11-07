@@ -12,6 +12,7 @@ import {
 } from '#/components/ui/dialog'
 import type { Customer } from '#/hooks/use-customers'
 import { buildOrgPath } from '#/modules/org-path'
+import type { Person } from '#/pages/customers/lib/people'
 import {
 	buildDraft,
 	type DealForm,
@@ -26,6 +27,7 @@ export function DealCreateDialog({
 	onOpenChange,
 	trigger,
 	customers,
+	people,
 	defaultOwnerId,
 	organizationSlug,
 	onCreate,
@@ -34,6 +36,7 @@ export function DealCreateDialog({
 	onOpenChange: (open: boolean) => void
 	trigger?: ReactNode
 	customers: readonly Customer[]
+	people: readonly Person[]
 	defaultOwnerId: string
 	organizationSlug: string
 	onCreate: (draft: DealDraft) => void
@@ -44,6 +47,7 @@ export function DealCreateDialog({
 			<DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0 sm:max-w-xl">
 				<DealCreateForm
 					customers={customers}
+					people={people}
 					defaultOwnerId={defaultOwnerId}
 					organizationSlug={organizationSlug}
 					onCancel={() => onOpenChange(false)}
@@ -59,12 +63,14 @@ export function DealCreateDialog({
 
 function DealCreateForm({
 	customers,
+	people,
 	defaultOwnerId,
 	organizationSlug,
 	onCancel,
 	onCreate,
 }: {
 	customers: readonly Customer[]
+	people: readonly Person[]
 	defaultOwnerId: string
 	organizationSlug: string
 	onCancel: () => void
@@ -73,7 +79,7 @@ function DealCreateForm({
 	const idPrefix = useId()
 	const [form, setForm] = useState<DealForm>(() => emptyForm(defaultOwnerId))
 	const [submitted, setSubmitted] = useState(false)
-	const result = buildDraft(form)
+	const result = buildDraft(form, people)
 
 	return (
 		<form
@@ -98,6 +104,7 @@ function DealCreateForm({
 					form={form}
 					errors={submitted ? result.errors : {}}
 					customers={accountOptions(customers, null)}
+					people={people}
 					onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
 					clientNote={
 						<>

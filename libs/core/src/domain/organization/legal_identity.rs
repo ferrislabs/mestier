@@ -392,7 +392,6 @@ mod tests {
             id: crate::CustomerId(Uuid::new_v4()),
             organization_id: crate::OrganizationId(Uuid::new_v4()),
             status: crate::CustomerStatus::Client,
-            pipeline_stage: crate::CustomerPipelineStage::Won,
             name: "Jean Dupont".into(),
             registration_number: value.map(str::to_owned),
             phone: None,

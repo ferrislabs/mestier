@@ -31,6 +31,7 @@ const QUOTE_LABELS: Record<DealQuoteStatus, string> = {
 	sent: 'Envoyé',
 	accepted: 'Accepté',
 	declined: 'Refusé',
+	cancelled: 'Annulé',
 	superseded: 'Remplacé',
 }
 
@@ -39,6 +40,7 @@ const QUOTE_TONES: Record<DealQuoteStatus, Tone> = {
 	sent: 'info',
 	accepted: 'ok',
 	declined: 'alert',
+	cancelled: 'neutral',
 	superseded: 'neutral',
 }
 

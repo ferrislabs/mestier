@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE quotes SET deal_id = NULL WHERE deal_id = $1 AND deleted_at IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "39905379f99ed83f4c50d6981072af1cfa3ee2a24578bebe72ba2037e6431aaf"
+}

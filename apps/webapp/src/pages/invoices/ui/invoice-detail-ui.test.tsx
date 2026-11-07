@@ -50,7 +50,6 @@ const CUSTOMER = {
 	id: 'customer-1',
 	organization_id: 'org-1',
 	name: 'Menuiserie Dupont',
-	pipeline_stage: 'QUALIFIED',
 	status: 'CLIENT',
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',

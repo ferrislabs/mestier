@@ -29,14 +29,13 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerRow,
             r#"
-            INSERT INTO customers (id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-            RETURNING id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
+            INSERT INTO customers (id, org_id, status, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+            RETURNING id, org_id, status, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
             "#,
             customer.id.0,
             customer.organization_id.0,
             customer.status.as_str(),
-            customer.pipeline_stage.as_str(),
             customer.name,
             customer.registration_number,
             customer.phone,
@@ -68,7 +67,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerRow,
             r#"
-            SELECT id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
+            SELECT id, org_id, status, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
             FROM customers
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -91,7 +90,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let rows = sqlx::query_as!(
             CustomerRow,
             r#"
-            SELECT id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
+            SELECT id, org_id, status, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
             FROM customers
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY name ASC, created_at ASC
@@ -127,16 +126,15 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
             CustomerRow,
             r#"
             UPDATE customers
-            SET status = $2, pipeline_stage = $3, name = $4, registration_number = $5, phone = $6, email = $7,
-                kind = $8, website = $9, vat_number = $10, owner_member_id = $11, lead_source = $12, notes = $13,
-                payment_terms_days = $14, billing_contact_id = $15, billing_address_id = $16,
-                converted_at = $17, archived_at = $18, updated_at = $19
+            SET status = $2, name = $3, registration_number = $4, phone = $5, email = $6,
+                kind = $7, website = $8, vat_number = $9, owner_member_id = $10, lead_source = $11, notes = $12,
+                payment_terms_days = $13, billing_contact_id = $14, billing_address_id = $15,
+                converted_at = $16, archived_at = $17, updated_at = $18
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
+            RETURNING id, org_id, status, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
             "#,
             customer.id.0,
             customer.status.as_str(),
-            customer.pipeline_stage.as_str(),
             customer.name,
             customer.registration_number,
             customer.phone,
@@ -207,6 +205,26 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         Ok(found)
+    }
+
+    async fn count_converted_since(
+        &mut self,
+        organization_id: OrganizationId,
+        since: DateTime<Utc>,
+    ) -> Result<i64, CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) AS "count!"
+            FROM customers
+            WHERE org_id = $1 AND deleted_at IS NULL AND converted_at >= $2
+            "#,
+            organization_id.0,
+            since,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
     }
 
     async fn soft_delete(

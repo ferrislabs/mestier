@@ -1,0 +1,111 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.id, d.org_id, d.customer_id, d.title, d.amount_cents, d.stage, d.expected_close_date, d.owner_member_id, d.source, d.lost_reason, d.notes, d.created_at, d.stage_changed_at, d.closed_at,\n                (SELECT COUNT(*) FROM quotes q WHERE q.deal_id = d.id AND q.deleted_at IS NULL) AS \"quote_count!\"\n            FROM deals d\n            JOIN customers c ON c.id = d.customer_id\n            WHERE d.org_id = $1\n              AND ($2::uuid IS NULL OR d.customer_id = $2)\n              AND ($3::text IS NULL OR d.stage = $3)\n              AND ($4::text IS NULL OR d.title ILIKE $4 OR c.name ILIKE $4)\n            ORDER BY d.stage_changed_at DESC, d.id DESC\n            LIMIT $5 OFFSET $6\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "stage",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "expected_close_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "owner_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "lost_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "stage_changed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "closed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "quote_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "3ab307d87f1e09c0bf653e792f221ce7509e23f5b0ca6b32b5176cfc5b33b9c2"
+}

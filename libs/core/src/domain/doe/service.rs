@@ -1055,7 +1055,6 @@ mod tests {
             id: CustomerId(Uuid::new_v4()),
             organization_id,
             status: crate::CustomerStatus::Client,
-            pipeline_stage: crate::CustomerPipelineStage::New,
             name: "Commune de Lapalisse".to_owned(),
             registration_number: None,
             phone: Some("0400000000".to_owned()),

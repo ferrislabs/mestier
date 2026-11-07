@@ -23,7 +23,6 @@ mod issuer;
 fn create_payload() -> serde_json::Value {
     serde_json::json!({
         "status": "PROSPECT",
-        "pipeline_stage": "NEW",
         "name": "Duval Masonry",
         "phone": null,
         "email": null,
@@ -292,7 +291,6 @@ async fn create_customer(
 fn profile_payload(name: &str) -> serde_json::Value {
     serde_json::json!({
         "status": "PROSPECT",
-        "pipeline_stage": "NEW",
         "name": name,
         "registration_number": "123 456 789 00012",
         "kind": "INDIVIDUAL",
@@ -482,6 +480,489 @@ async fn contacts_addresses_and_billing_designations_over_http() {
         accepted["data"]["billing_contact_id"], contact["data"]["id"],
         "{accepted}"
     );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn the_customer_response_no_longer_carries_pipeline_stage() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let created: serde_json::Value = create_customer(&app, &client, create_payload())
+        .await
+        .json()
+        .await
+        .expect("the created customer is json");
+    assert!(created["data"].get("pipeline_stage").is_none(), "{created}");
+    let id: uuid::Uuid = created["data"]["id"].as_str().unwrap().parse().unwrap();
+
+    let one: serde_json::Value = client
+        .get(app.customer_url(id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the get call")
+        .json()
+        .await
+        .expect("the customer is json");
+    assert!(one["data"].get("pipeline_stage").is_none(), "{one}");
+
+    let list: serde_json::Value = client
+        .get(app.url(""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("the api answers the list call")
+        .json()
+        .await
+        .expect("the page is json");
+    assert!(
+        list["data"]
+            .as_array()
+            .expect("a page of customers")
+            .iter()
+            .all(|customer| customer.get("pipeline_stage").is_none()),
+        "{list}"
+    );
+
+    app.cleanup().await;
+}
+
+async fn create_deal(
+    app: &harness::App,
+    client: &reqwest::Client,
+    body: serde_json::Value,
+) -> reqwest::Response {
+    client
+        .post(app.deals_url(""))
+        .bearer_auth(&app.token)
+        .json(&body)
+        .send()
+        .await
+        .expect("the api answers the deal create call")
+}
+
+async fn move_deal(
+    app: &harness::App,
+    client: &reqwest::Client,
+    id: uuid::Uuid,
+    body: serde_json::Value,
+) -> reqwest::Response {
+    client
+        .post(app.deal_url(id, "/stage"))
+        .bearer_auth(&app.token)
+        .json(&body)
+        .send()
+        .await
+        .expect("the api answers the stage call")
+}
+
+fn id_of(body: &serde_json::Value) -> uuid::Uuid {
+    body["data"]["id"].as_str().unwrap().parse().unwrap()
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_deal_runs_through_its_stages_over_http() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let created = create_deal(
+        &app,
+        &client,
+        serde_json::json!({
+            "customer_id": app.customer_id,
+            "title": "  Rénovation du fournil ",
+            "amount_cents": 1250000,
+            "expected_close_date": "2026-12-15",
+            "source": "salon",
+        }),
+    )
+    .await;
+    assert_eq!(created.status(), 201);
+    let created: serde_json::Value = created.json().await.unwrap();
+    let data = &created["data"];
+    assert_eq!(data["stage"], "NEW", "{created}");
+    assert_eq!(data["title"], "Rénovation du fournil", "{created}");
+    assert_eq!(data["quote_count"], 0, "{created}");
+    assert_eq!(data["closed_at"], serde_json::Value::Null, "{created}");
+    assert_eq!(data["expected_close_date"], "2026-12-15", "{created}");
+    let id = id_of(&created);
+
+    let no_reason = move_deal(&app, &client, id, serde_json::json!({ "stage": "LOST" })).await;
+    assert_eq!(no_reason.status(), 422);
+    let refused: serde_json::Value = no_reason.json().await.unwrap();
+    assert_eq!(refused["code"], "E_DEAL_LOST_REASON_REQUIRED", "{refused}");
+    assert_eq!(refused["details"]["field"], "lost_reason", "{refused}");
+
+    let lost: serde_json::Value = move_deal(
+        &app,
+        &client,
+        id,
+        serde_json::json!({ "stage": "LOST", "lost_reason": "Prix trop élevé" }),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(lost["data"]["stage"], "LOST", "{lost}");
+    assert_eq!(lost["data"]["lost_reason"], "Prix trop élevé", "{lost}");
+    assert!(lost["data"]["closed_at"].is_string(), "{lost}");
+
+    let reopened: serde_json::Value = move_deal(
+        &app,
+        &client,
+        id,
+        serde_json::json!({ "stage": "NEGOTIATION" }),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(
+        reopened["data"]["lost_reason"],
+        serde_json::Value::Null,
+        "{reopened}"
+    );
+    assert_eq!(
+        reopened["data"]["closed_at"],
+        serde_json::Value::Null,
+        "{reopened}"
+    );
+
+    let won: serde_json::Value =
+        move_deal(&app, &client, id, serde_json::json!({ "stage": "WON" }))
+            .await
+            .json()
+            .await
+            .unwrap();
+    assert_eq!(won["data"]["stage"], "WON", "{won}");
+
+    let customer: serde_json::Value = client
+        .get(app.customer_url(app.customer_id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(customer["data"]["status"], "CLIENT", "{customer}");
+    assert!(customer["data"]["converted_at"].is_string(), "{customer}");
+
+    let summary: serde_json::Value = client
+        .get(app.deals_url("/summary"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(summary["data"]["won_count"], 1, "{summary}");
+    assert_eq!(summary["data"]["win_rate"], 100, "{summary}");
+    assert_eq!(summary["data"]["conversions"], 1, "{summary}");
+    assert_eq!(
+        summary["data"]["stages"].as_array().unwrap().len(),
+        6,
+        "{summary}"
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_deal_is_validated_filtered_and_gated_over_http() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    let empty_title = create_deal(
+        &app,
+        &client,
+        serde_json::json!({ "customer_id": app.customer_id, "title": "  ", "amount_cents": 0 }),
+    )
+    .await;
+    assert_eq!(empty_title.status(), 422);
+    let body: serde_json::Value = empty_title.json().await.unwrap();
+    assert_eq!(body["details"]["field"], "title", "{body}");
+
+    let negative = create_deal(
+        &app,
+        &client,
+        serde_json::json!({ "customer_id": app.customer_id, "title": "X", "amount_cents": -5 }),
+    )
+    .await;
+    assert_eq!(negative.status(), 422);
+
+    let unknown = create_deal(
+        &app,
+        &client,
+        serde_json::json!({ "customer_id": uuid::Uuid::now_v7(), "title": "X", "amount_cents": 0 }),
+    )
+    .await;
+    assert_eq!(unknown.status(), 404);
+
+    let first: serde_json::Value = create_deal(
+        &app,
+        &client,
+        serde_json::json!({ "customer_id": app.customer_id, "title": "Fournil", "amount_cents": 100 }),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    let second: serde_json::Value = create_deal(
+        &app,
+        &client,
+        serde_json::json!({ "customer_id": app.customer_id, "title": "Vitrine", "amount_cents": 200 }),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    move_deal(
+        &app,
+        &client,
+        id_of(&second),
+        serde_json::json!({ "stage": "VISIT" }),
+    )
+    .await;
+
+    let by_stage: serde_json::Value = client
+        .get(app.deals_url("?stage=VISIT"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(by_stage["data"].as_array().unwrap().len(), 1, "{by_stage}");
+    assert_eq!(by_stage["data"][0]["title"], "Vitrine", "{by_stage}");
+
+    let by_text: serde_json::Value = client
+        .get(app.deals_url("?q=four"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(by_text["data"].as_array().unwrap().len(), 1, "{by_text}");
+
+    let by_customer: serde_json::Value = client
+        .get(app.deals_url(&format!("?customer_id={}", app.customer_id)))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        by_customer["data"].as_array().unwrap().len(),
+        2,
+        "{by_customer}"
+    );
+
+    let refused = client
+        .post(app.deals_url(""))
+        .bearer_auth(&app.restricted_token)
+        .json(
+            &serde_json::json!({ "customer_id": app.customer_id, "title": "X", "amount_cents": 0 }),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refused.status(), 403);
+
+    let write_without_manage = client
+        .patch(app.deal_url(id_of(&first), ""))
+        .bearer_auth(&app.view_customers_token)
+        .json(&serde_json::json!({
+            "customer_id": app.customer_id, "title": "Y", "amount_cents": 1
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(write_without_manage.status(), 403);
+
+    let read_without_view = client
+        .get(app.deals_url(""))
+        .bearer_auth(&app.restricted_token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(read_without_view.status(), 403);
+
+    let read_with_view = client
+        .get(app.deal_url(id_of(&first), ""))
+        .bearer_auth(&app.view_customers_token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(read_with_view.status(), 200);
+
+    let patched: serde_json::Value = client
+        .patch(app.deal_url(id_of(&first), ""))
+        .bearer_auth(&app.token)
+        .json(&serde_json::json!({
+            "customer_id": app.customer_id, "title": "Fournil 2", "amount_cents": 300, "notes": "  "
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(patched["data"]["title"], "Fournil 2", "{patched}");
+    assert_eq!(patched["data"]["amount_cents"], 300, "{patched}");
+    assert_eq!(
+        patched["data"]["notes"],
+        serde_json::Value::Null,
+        "{patched}"
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_deal_with_a_quote_cannot_be_deleted_over_http() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+    let created: serde_json::Value = create_deal(
+        &app,
+        &client,
+        serde_json::json!({ "customer_id": app.customer_id, "title": "Fournil", "amount_cents": 100 }),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    let id = id_of(&created);
+    let quote_id = uuid::Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO quotes (id, org_id, customer_id, customer_context_id, deal_id, status, net_cents, gross_cents, title) VALUES ($1, $2, $3, $4, $5, 'DRAFT'::quote_status, 0, 0, 'Devis')",
+    )
+    .bind(quote_id)
+    .bind(app.organization_id)
+    .bind(app.customer_id)
+    .bind(app.customer_context_id)
+    .bind(id)
+    .execute(&app.pool)
+    .await
+    .expect("seed the quote");
+
+    let one: serde_json::Value = client
+        .get(app.deal_url(id, ""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(one["data"]["quote_count"], 1, "{one}");
+
+    let refused = client
+        .delete(app.deal_url(id, ""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refused.status(), 409);
+    let body: serde_json::Value = refused.json().await.unwrap();
+    assert_eq!(body["code"], "E_DEAL_HAS_QUOTE", "{body}");
+
+    sqlx::query("DELETE FROM quotes WHERE id = $1")
+        .bind(quote_id)
+        .execute(&app.pool)
+        .await
+        .unwrap();
+    let deleted = client
+        .delete(app.deal_url(id, ""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), 204);
+    let gone = client
+        .get(app.deal_url(id, ""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(gone.status(), 404);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn archiving_a_customer_loses_its_open_deals_over_http() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+    let open: serde_json::Value = create_deal(
+        &app,
+        &client,
+        serde_json::json!({ "customer_id": app.customer_id, "title": "Ouverte", "amount_cents": 100 }),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    let won: serde_json::Value = create_deal(
+        &app,
+        &client,
+        serde_json::json!({ "customer_id": app.customer_id, "title": "Gagnée", "amount_cents": 100 }),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    move_deal(
+        &app,
+        &client,
+        id_of(&won),
+        serde_json::json!({ "stage": "WON" }),
+    )
+    .await;
+
+    let archived = client
+        .patch(app.customer_url(app.customer_id))
+        .bearer_auth(&app.token)
+        .json(&serde_json::json!({ "status": "ARCHIVED", "name": "Duval Masonry" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(archived.status(), 200);
+
+    let lost: serde_json::Value = client
+        .get(app.deal_url(id_of(&open), ""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(lost["data"]["stage"], "LOST", "{lost}");
+    assert_eq!(lost["data"]["lost_reason"], "Compte archivé", "{lost}");
+    let kept: serde_json::Value = client
+        .get(app.deal_url(id_of(&won), ""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(kept["data"]["stage"], "WON", "{kept}");
 
     app.cleanup().await;
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE quotes\n            SET reference = $2,\n                title = $3,\n                customer_id = $4,\n                customer_context_id = $5,\n                status = CAST($6 AS text)::quote_status,\n                net_cents = $7,\n                vat_breakdown = $8,\n                gross_cents = $9,\n                updated_at = $10\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            UPDATE quotes\n            SET status = CAST($2 AS text)::quote_status,\n                reference = COALESCE($3, reference),\n                updated_at = $4\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -35,36 +35,41 @@
       },
       {
         "ordinal": 6,
+        "name": "deal_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
         "name": "status!",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "net_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "vat_breakdown",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "gross_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -74,12 +79,6 @@
         "Uuid",
         "Text",
         "Text",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Int4",
-        "Jsonb",
-        "Int4",
         "Timestamptz"
       ]
     },
@@ -90,6 +89,7 @@
       false,
       false,
       false,
+      true,
       null,
       false,
       false,
@@ -99,5 +99,5 @@
       false
     ]
   },
-  "hash": "d005d20d32c5d45cf790b2cda5091bdd1ced24e47f9f220d6dad1452a91138d7"
+  "hash": "140ae677b2374433d77908394f36a80efd8c35a7456deedeef311aefbb2089f0"
 }

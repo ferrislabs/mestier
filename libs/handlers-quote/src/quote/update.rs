@@ -1,14 +1,16 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{CustomerContextId, CustomerId, QuoteId, QuoteStatus, UpdateQuoteCommand};
+use mestier_core::{
+    CustomerContextId, CustomerId, DealId, QuoteId, QuoteStatus, UpdateQuoteCommand,
+};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
     paths::QuotePath,
     quote::create::{QuoteLineRequest, into_line_commands},
-    require_quote_membership, require_quote_targets,
+    require_quote_deal, require_quote_membership, require_quote_targets,
     response::QuoteResponse,
 };
 
@@ -17,6 +19,8 @@ pub struct UpdateQuoteRequest {
     pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
+    #[serde(default)]
+    pub deal_id: Option<DealId>,
     pub status: QuoteStatus,
     pub lines: Vec<QuoteLineRequest>,
 }
@@ -55,6 +59,7 @@ pub async fn handler(
         payload.customer_context_id,
     )
     .await?;
+    require_quote_deal(&state, current.organization_id, payload.deal_id).await?;
 
     let quote = state
         .usecase
@@ -65,6 +70,7 @@ pub async fn handler(
                 title: payload.title,
                 customer_id: payload.customer_id,
                 customer_context_id: payload.customer_context_id,
+                deal_id: payload.deal_id,
                 status: payload.status,
                 lines: into_line_commands(payload.lines)?,
             },

@@ -71,6 +71,7 @@ where
                 title: command.title.trim().to_owned(),
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
+                deal_id: command.deal_id,
                 status: crate::QuoteStatus::Draft,
                 net_cents: totals.net_cents,
                 vat_breakdown: totals.vat_breakdown,
@@ -99,11 +100,12 @@ where
     pub async fn list_quotes(
         &mut self,
         organization_id: OrganizationId,
+        deal_id: Option<crate::DealId>,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Quote>, u64), CoreError> {
         self.repo
-            .list_by_organization(organization_id, limit, offset)
+            .list_by_organization(organization_id, deal_id, limit, offset)
             .await
     }
 
@@ -144,6 +146,7 @@ where
                 title: command.title.trim().to_owned(),
                 customer_id: command.customer_id,
                 customer_context_id: command.customer_context_id,
+                deal_id: command.deal_id,
                 status: command.status,
                 net_cents: totals.net_cents,
                 vat_breakdown: totals.vat_breakdown,
@@ -674,6 +677,7 @@ mod tests {
             title: "Rénovation cuisine".to_owned(),
             customer_id: CustomerId(Uuid::new_v4()),
             customer_context_id: CustomerContextId(Uuid::new_v4()),
+            deal_id: None,
             status: QuoteStatus::Draft,
             net_cents: 5500,
             vat_breakdown: Vec::new(),
@@ -768,6 +772,7 @@ mod tests {
                     title: "Rénovation cuisine".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     lines: vec![
                         line_command(Decimal::new(25, 1), 1200),
                         line_command(Decimal::new(1, 0), 500),
@@ -811,6 +816,7 @@ mod tests {
                     title: "Rénovation".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     lines: vec![reduced_rate, standard_rate],
                 },
                 mock_organization_repository(organization_subject_to_vat(organization_id)),
@@ -861,6 +867,7 @@ mod tests {
                     title: "Rénovation".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     lines: vec![line],
                 },
                 mock_organization_repository(organization),
@@ -897,6 +904,7 @@ mod tests {
                     title: "Trois lignes".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     lines: vec![line.clone(), line.clone(), line],
                 },
                 mock_organization_repository(organization_subject_to_vat(organization_id)),
@@ -936,6 +944,7 @@ mod tests {
                     title: "Version ajustée".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     status: QuoteStatus::Draft,
                     lines: vec![line_command(Decimal::new(3, 0), 2000)],
                 },
@@ -981,6 +990,7 @@ mod tests {
                     title: "Version ajustée".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     status: QuoteStatus::Sent,
                     lines: vec![line_command(Decimal::new(3, 0), 2000)],
                 },
@@ -1182,13 +1192,13 @@ mod tests {
         let org_id = OrganizationId(Uuid::new_v4());
         let mut repo = MockQuoteRepository::new();
         repo.expect_list_by_organization()
-            .with(eq(org_id), eq(25), eq(50))
-            .returning(move |_, _, _| {
+            .with(eq(org_id), eq(None), eq(25), eq(50))
+            .returning(move |_, _, _, _| {
                 Box::pin(async move { Ok((vec![quote(QuoteId(Uuid::new_v4()))], 1)) })
             });
 
         let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
-        let (items, total) = service.list_quotes(org_id, 25, 50).await.unwrap();
+        let (items, total) = service.list_quotes(org_id, None, 25, 50).await.unwrap();
 
         assert_eq!(items.len(), 1);
         assert_eq!(total, 1);
@@ -1254,6 +1264,7 @@ mod tests {
                     title: "Rénovation cuisine".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     lines: vec![line_command(Decimal::ZERO, 1000)],
                 },
                 mock_organization_repository(organization_without_vat_status(organization_id)),
@@ -1278,6 +1289,7 @@ mod tests {
                     title: "Rénovation cuisine".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     lines: vec![line],
                 },
                 mock_organization_repository(organization_subject_to_vat(organization_id)),
@@ -1299,6 +1311,7 @@ mod tests {
                     title: " ".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     lines: vec![line_command(Decimal::new(1, 0), 1000)],
                 },
                 MockOrganizationRepository::new(),
@@ -1352,6 +1365,7 @@ mod emission_tests {
             title: title.to_owned(),
             customer_id: from.customer_id,
             customer_context_id: from.customer_context_id,
+            deal_id: None,
             status,
             lines: vec![unchanged_line()],
         }
@@ -1413,6 +1427,7 @@ mod emission_tests {
                     title: "Rénovation cuisine".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     lines: vec![line_command(Decimal::new(1, 0), 5500)],
                 },
                 no_vat_status_repo(),
@@ -1641,6 +1656,7 @@ mod emission_tests {
                     title: "Rénovation cuisine".to_owned(),
                     customer_id: CustomerId(Uuid::new_v4()),
                     customer_context_id: CustomerContextId(Uuid::new_v4()),
+                    deal_id: None,
                     lines: vec![line_command(Decimal::new(1, 0), 5500)],
                 },
                 no_vat_status_repo(),

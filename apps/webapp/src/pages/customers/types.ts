@@ -4,7 +4,6 @@ import type {
 	CustomerContact,
 	CustomerContext,
 	CustomerKind,
-	CustomerPipelineStage,
 	CustomerStatus,
 	LeadSource,
 } from '#/hooks/use-customers'
@@ -17,7 +16,6 @@ export type AddressKind = 'billing' | 'site' | 'other'
 
 export interface CustomerFormValues {
 	status: CustomerStatus
-	pipelineStage: CustomerPipelineStage
 	/** Legal or full name — a customer is an entity, not a person. */
 	name: string
 	/**
@@ -70,7 +68,6 @@ export function customerInitials(customer: Customer): string {
 export function customerToForm(customer: Customer): CustomerFormValues {
 	return {
 		status: customer.status,
-		pipelineStage: customer.pipeline_stage,
 		name: customer.name,
 		registrationNumber: customer.registration_number ?? '',
 		email: customer.email ?? '',
@@ -96,17 +93,6 @@ export function customerStatusLabel(status: CustomerStatus): string {
 	if (status === 'PROSPECT') return 'Prospect'
 	if (status === 'CLIENT') return 'Client'
 	return 'Archivé'
-}
-
-export function customerPipelineStageLabel(
-	stage: CustomerPipelineStage,
-): string {
-	if (stage === 'NEW') return 'Nouveau'
-	if (stage === 'CONTACTED') return 'Contacté'
-	if (stage === 'QUALIFIED') return 'Qualifié'
-	if (stage === 'QUOTE_SENT') return 'Devis envoyé'
-	if (stage === 'WON') return 'Gagné'
-	return 'Perdu'
 }
 
 export function customerContextToForm(
@@ -201,7 +187,6 @@ export function apiAddressKindOf(kind: AddressKind): ApiAddressKind {
 
 export type CustomerBodyOverrides = Partial<{
 	status: CustomerStatus
-	pipeline_stage: CustomerPipelineStage
 	name: string
 	registration_number: string | null
 	email: string | null
@@ -223,7 +208,6 @@ export function customerBody(
 ) {
 	return {
 		status: customer.status,
-		pipeline_stage: customer.pipeline_stage,
 		name: customer.name,
 		registration_number: customer.registration_number ?? null,
 		email: customer.email ?? null,

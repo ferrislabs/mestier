@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Router, middleware::from_fn_with_state};
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
-use mestier_core::{CustomerContextId, CustomerId, OrganizationId, Permissions, QuoteId};
+use mestier_core::{CustomerContextId, CustomerId, DealId, OrganizationId, Permissions, QuoteId};
 
 pub mod paths;
 pub mod pdf;
@@ -102,6 +102,22 @@ async fn require_quote_targets(
         .await?;
     if customer_context.customer_id != customer_id {
         return Err(ApiError::Forbidden);
+    }
+
+    Ok(())
+}
+
+async fn require_quote_deal(
+    state: &AppState,
+    organization_id: OrganizationId,
+    deal_id: Option<DealId>,
+) -> Result<(), ApiError> {
+    let Some(deal_id) = deal_id else {
+        return Ok(());
+    };
+    let deal = state.usecase.get_deal(deal_id).await?;
+    if deal.organization_id != organization_id {
+        return Err(ApiError::NotFound);
     }
 
     Ok(())

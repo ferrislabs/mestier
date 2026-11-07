@@ -17,7 +17,7 @@ use crate::domain::customer_context::commands::{
 };
 use crate::{
     AddressKind, Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId,
-    CustomerId, CustomerPipelineStage, CustomerStatus, RegistrationNumber,
+    CustomerId, CustomerStatus, RegistrationNumber,
 };
 
 #[cfg(test)]
@@ -286,7 +286,6 @@ fn customer_json(customer: &Customer) -> Value {
         "id": customer.id.0,
         "organization_id": customer.organization_id.0,
         "status": customer.status.as_str(),
-        "pipeline_stage": customer.pipeline_stage.as_str(),
         "name": customer.name,
         "registration_number": customer.registration_number,
         "phone": customer.phone,
@@ -355,7 +354,6 @@ async fn list_customers(context: &ActionContext<'_>) -> Result<Value, String> {
 async fn update_customer(context: &ActionContext<'_>) -> Result<Value, String> {
     let id = customer_id(context)?;
     let status = select::<CustomerStatus>(context, "status")?;
-    let pipeline_stage = select::<CustomerPipelineStage>(context, "pipeline_stage")?;
     let name = context.text("name")?.to_owned();
     let registration_number = context
         .optional_text("registration_number")?
@@ -372,7 +370,6 @@ async fn update_customer(context: &ActionContext<'_>) -> Result<Value, String> {
             actor: context.actor(),
             id,
             status,
-            pipeline_stage,
             name,
             registration_number,
             phone,

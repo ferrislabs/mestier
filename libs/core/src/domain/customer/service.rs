@@ -4,41 +4,46 @@ use common::{CoreError, generate_uuid_v7};
 
 use crate::{
     Customer, CustomerError, CustomerField, CustomerId, CustomerOutcome, CustomerProfile,
-    CustomerStatus, MemberId, OrganizationId, RegistrationNumber,
+    CustomerStatus, LostReason, MemberId, OrganizationId, RegistrationNumber,
     application::policy,
     domain::{
         customer::{
             commands::{CreateCustomerCommand, UpdateCustomerCommand},
             ports::CustomerRepository,
         },
+        deal::ports::DealRepository,
         member::ports::MemberRepository,
         role::ports::RoleRepository,
     },
 };
 
-pub struct CustomerService<R, M, Ro, A>
+pub struct CustomerService<R, D, M, Ro, A>
 where
     R: CustomerRepository,
+    D: DealRepository,
     M: MemberRepository,
     Ro: RoleRepository,
     A: Authorizer,
 {
     repo: R,
+    deals: D,
     member_repository: M,
     role_repository: Ro,
     authz: A,
 }
 
-impl<R, M, Ro, A> CustomerService<R, M, Ro, A>
+impl<R, D, M, Ro, A> CustomerService<R, D, M, Ro, A>
 where
     R: CustomerRepository,
+    D: DealRepository,
     M: MemberRepository,
     Ro: RoleRepository,
     A: Authorizer,
 {
-    pub fn new(repo: R, member_repository: M, role_repository: Ro, authz: A) -> Self {
+    pub fn new(repo: R, deals: D, member_repository: M, role_repository: Ro, authz: A) -> Self {
         Self {
             repo,
+            deals,
             member_repository,
             role_repository,
             authz,
@@ -125,7 +130,6 @@ where
             id,
             organization_id: command.organization_id,
             status: CustomerStatus::Prospect,
-            pipeline_stage: command.pipeline_stage,
             name: command.name,
             registration_number: command
                 .registration_number
@@ -198,8 +202,8 @@ where
         }
 
         let now = Utc::now();
+        let was_archived = customer.status == CustomerStatus::Archived;
         customer.change_status(command.status, now);
-        customer.pipeline_stage = command.pipeline_stage;
         customer.name = command.name;
         customer.registration_number = command
             .registration_number
@@ -209,7 +213,14 @@ where
         customer.profile = profile;
         customer.updated_at = now;
 
-        self.repo.update(&customer).await.map(Ok)
+        let updated = self.repo.update(&customer).await?;
+        if !was_archived && updated.status == CustomerStatus::Archived {
+            self.deals
+                .lose_open_of_customer(updated.id, &LostReason::archived_account(), now)
+                .await?;
+        }
+
+        Ok(Ok(updated))
     }
 
     pub async fn soft_delete_customer(
@@ -270,6 +281,7 @@ mod tests {
     use super::*;
     use crate::OrganizationId;
     use crate::domain::customer::ports::MockCustomerRepository;
+    use crate::domain::deal::ports::MockDealRepository;
     use crate::domain::member::ports::MockMemberRepository;
     use crate::domain::role::ports::MockRoleRepository;
     use authz::{Decision, MockAuthorizer};
@@ -282,7 +294,6 @@ mod tests {
             id,
             organization_id: OrganizationId(Uuid::new_v4()),
             status: crate::CustomerStatus::Prospect,
-            pipeline_stage: crate::CustomerPipelineStage::New,
             name: "Alice Dupont".to_owned(),
             registration_number: None,
             phone: Some("+33123456789".to_owned()),
@@ -322,13 +333,18 @@ mod tests {
         let mut authz = MockAuthorizer::new();
         allow_once(&mut authz);
 
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
         let created = service
             .create_customer(CreateCustomerCommand {
                 actor: system_actor(),
                 organization_id: OrganizationId(Uuid::new_v4()),
                 status: crate::CustomerStatus::Prospect,
-                pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Alice Dupont".to_owned(),
                 registration_number: None,
                 phone: None,
@@ -358,13 +374,18 @@ mod tests {
         let mut authz = MockAuthorizer::new();
         allow_once(&mut authz);
 
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
         let updated = service
             .update_customer(UpdateCustomerCommand {
                 actor: system_actor(),
                 id,
                 status: crate::CustomerStatus::Client,
-                pipeline_stage: crate::CustomerPipelineStage::Won,
                 name: "Syndic Martin".to_owned(),
                 registration_number: None,
                 phone: Some("0102030405".to_owned()),
@@ -377,7 +398,6 @@ mod tests {
 
         assert_eq!(updated.name, "Syndic Martin");
         assert_eq!(updated.status, crate::CustomerStatus::Client);
-        assert_eq!(updated.pipeline_stage, crate::CustomerPipelineStage::Won);
         assert_eq!(updated.phone.as_deref(), Some("0102030405"));
     }
 
@@ -394,7 +414,13 @@ mod tests {
         let role_repository = MockRoleRepository::new();
         let authz = MockAuthorizer::new();
 
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
         let (items, total) = service.list_customers(org_id, 10, 20).await.unwrap();
 
         assert_eq!(items.len(), 1);
@@ -416,7 +442,13 @@ mod tests {
         let mut authz = MockAuthorizer::new();
         allow_once(&mut authz);
 
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
         service
             .soft_delete_customer(id, system_actor())
             .await
@@ -429,14 +461,19 @@ mod tests {
         let member_repository = MockMemberRepository::new();
         let role_repository = MockRoleRepository::new();
         let authz = MockAuthorizer::new();
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
 
         let err = service
             .create_customer(CreateCustomerCommand {
                 actor: system_actor(),
                 organization_id: OrganizationId(Uuid::new_v4()),
                 status: crate::CustomerStatus::Prospect,
-                pipeline_stage: crate::CustomerPipelineStage::New,
                 name: " ".to_owned(),
                 registration_number: None,
                 phone: None,
@@ -461,13 +498,18 @@ mod tests {
         let mut authz = MockAuthorizer::new();
         allow_once(&mut authz);
 
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
         let created = service
             .create_customer(CreateCustomerCommand {
                 actor: system_actor(),
                 organization_id: OrganizationId(Uuid::new_v4()),
                 status: crate::CustomerStatus::Prospect,
-                pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Alice Dupont".to_owned(),
                 registration_number: Some(RegistrationNumber::try_from("123 456 789").unwrap()),
                 phone: None,
@@ -493,13 +535,18 @@ mod tests {
         let mut authz = MockAuthorizer::new();
         allow_once(&mut authz);
 
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
         let created = service
             .create_customer(CreateCustomerCommand {
                 actor: system_actor(),
                 organization_id: OrganizationId(Uuid::new_v4()),
                 status: crate::CustomerStatus::Client,
-                pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Alice Dupont".to_owned(),
                 registration_number: None,
                 phone: None,
@@ -535,13 +582,18 @@ mod tests {
         let mut authz = MockAuthorizer::new();
         allow_once(&mut authz);
 
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
         let updated = service
             .update_customer(UpdateCustomerCommand {
                 actor: system_actor(),
                 id,
                 status: crate::CustomerStatus::Client,
-                pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Alice Dupont".to_owned(),
                 registration_number: None,
                 phone: None,
@@ -575,13 +627,18 @@ mod tests {
         let mut authz = MockAuthorizer::new();
         allow_once(&mut authz);
 
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
         let refused = service
             .update_customer(UpdateCustomerCommand {
                 actor: system_actor(),
                 id,
                 status: crate::CustomerStatus::Prospect,
-                pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Alice Dupont".to_owned(),
                 registration_number: None,
                 phone: None,
@@ -616,13 +673,18 @@ mod tests {
         let role_repository = MockRoleRepository::new();
         let authz = MockAuthorizer::new();
 
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            member_repository,
+            role_repository,
+            authz,
+        );
         let err = service
             .update_customer(UpdateCustomerCommand {
                 actor: policy::user_subject(user_id, Vec::new()),
                 id,
                 status: crate::CustomerStatus::Client,
-                pipeline_stage: crate::CustomerPipelineStage::Won,
                 name: "Syndic Martin".to_owned(),
                 registration_number: None,
                 phone: None,

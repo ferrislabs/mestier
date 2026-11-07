@@ -110,12 +110,7 @@ export function AccountFields({
 					label="Statut"
 					value={form.status}
 					options={STATUSES}
-					onChange={(status) =>
-						onChange({
-							status,
-							pipelineStage: status === 'client' ? 'WON' : 'NEW',
-						})
-					}
+					onChange={(status) => onChange({ status })}
 				/>
 			) : (
 				<div aria-hidden className="max-sm:hidden" />

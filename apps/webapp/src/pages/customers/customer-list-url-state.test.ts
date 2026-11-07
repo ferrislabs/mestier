@@ -18,7 +18,6 @@ function customer(overrides: Partial<Customer>): Customer {
 		email: null,
 		phone: null,
 		status: 'CLIENT',
-		pipeline_stage: 'WON',
 		kind: 'PROFESSIONAL',
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',

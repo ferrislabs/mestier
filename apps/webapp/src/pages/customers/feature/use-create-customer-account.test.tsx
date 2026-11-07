@@ -120,7 +120,6 @@ describe('useCreateCustomerAccount', () => {
 		expect(customer?.path).toBe(CUSTOMERS_PATH)
 		expect(customer?.params.body).toEqual({
 			status: 'CLIENT',
-			pipeline_stage: 'WON',
 			name: 'Boulangerie Lemoine',
 			registration_number: '12345678900012',
 			email: 'marc@lemoine.fr',
@@ -168,7 +167,6 @@ describe('useCreateCustomerAccount', () => {
 		await waitFor(() => expect(calls).toHaveLength(1))
 		expect(calls[0]?.params.body).toMatchObject({
 			status: 'PROSPECT',
-			pipeline_stage: 'NEW',
 			kind: 'PROFESSIONAL',
 			owner_member_id: null,
 			payment_terms_days: null,

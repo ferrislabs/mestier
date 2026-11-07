@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT stage AS \"stage!\", COUNT(*) AS \"count!\", COALESCE(SUM(amount_cents), 0)::bigint AS \"amount_cents!\"\n            FROM deals\n            WHERE org_id = $1 AND stage IN ('WON', 'LOST') AND closed_at >= $2\n            GROUP BY stage\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stage!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "amount_cents!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "2cb5e70eda1a3893279f8a93229b72c1815379fc7bbff93c05767d4aeb01315d"
+}

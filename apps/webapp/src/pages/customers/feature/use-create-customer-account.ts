@@ -36,7 +36,6 @@ export function useCreateCustomerAccount(
 			path: { organization_id: organizationId },
 			body: {
 				status: form.status === 'client' ? 'CLIENT' : 'PROSPECT',
-				pipeline_stage: form.status === 'client' ? 'WON' : form.pipelineStage,
 				name: form.name.trim(),
 				registration_number: registrationNumberOf(form),
 				email: contact?.email.trim() || null,

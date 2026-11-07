@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { dealBodyOfDraft } from '#/pages/deals/lib/deal-api'
 import {
 	amountOf,
 	dealDraftOf,
 	EMPTY_DEAL_FORM,
 	validateDealForm,
 } from '#/pages/deals/lib/deal-draft'
-import { createDeal } from '#/pages/deals/lib/pipeline'
-import { ctxAt, TODAY } from '#/pages/deals/lib/testing'
 
 const prefill = { id: 'c1', ownerId: 'julien', source: 'salon' as const }
 
@@ -70,14 +69,22 @@ describe('validateDealForm', () => {
 	})
 })
 
-describe('createDeal', () => {
-	it('creates the deal at the new stage from a valid draft', () => {
+describe('the API body of a customer-page draft', () => {
+	it('sends the amount in cents and the customer owner and source', () => {
 		const draft = dealDraftOf(prefill, {
 			title: 'Pose de volets',
 			amount: '900',
 			expectedCloseDate: '',
 		})
-		const created = createDeal([], ctxAt(TODAY, ['d-new']), draft)
-		expect(created[0]).toMatchObject({ stage: 'new', amount: 90000 })
+
+		expect(dealBodyOfDraft(draft)).toEqual({
+			customer_id: 'c1',
+			title: 'Pose de volets',
+			amount_cents: 90000,
+			expected_close_date: null,
+			owner_member_id: 'julien',
+			source: 'salon',
+			notes: null,
+		})
 	})
 })

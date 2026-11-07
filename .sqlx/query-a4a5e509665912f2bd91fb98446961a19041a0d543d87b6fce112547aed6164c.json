@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO quotes (id, org_id, customer_id, customer_context_id, deal_id, status, net_cents, gross_cents, title)\n        VALUES ($1, $2, $3, $4, $5, 'DRAFT'::quote_status, 0, 0, 'Devis')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4a5e509665912f2bd91fb98446961a19041a0d543d87b6fce112547aed6164c"
+}
