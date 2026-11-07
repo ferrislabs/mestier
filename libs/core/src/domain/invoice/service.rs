@@ -2275,23 +2275,19 @@ mod tests {
         customer_context_id: CustomerContextId,
         net_cents: i32,
     ) -> Quote {
-        let now = Utc::now();
         Quote {
-            id,
-            organization_id,
             reference: Some("DEV-2026-0001".to_owned()),
-            title: "Chantier".to_owned(),
-            customer_id,
-            customer_context_id,
-            deal_id: None,
             status: QuoteStatus::Accepted,
             net_cents,
-            vat_breakdown: Vec::new(),
             gross_cents: net_cents,
-            lines: Vec::new(),
-            deleted_at: None,
-            created_at: now,
-            updated_at: now,
+            ..Quote::draft(
+                id,
+                organization_id,
+                customer_id,
+                customer_context_id,
+                "Chantier".to_owned(),
+                Utc::now(),
+            )
         }
     }
 

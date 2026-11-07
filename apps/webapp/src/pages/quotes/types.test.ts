@@ -36,14 +36,8 @@ describe('eurosToCents', () => {
 		expect(eurosToCents('1000')).toBe(100000)
 	})
 
-	/**
-	 * A third decimal on a euro amount has no backend counterpart to match, so
-	 * it follows the same rule as the rest of this file and lands on the even
-	 * cent. What matters is that it is exact: `1.005 * 100` in floating point is
-	 * `100.49999999999999`, which is not a half at all.
-	 */
-	it('rounds a third decimal to the even cent, exactly', () => {
-		expect(eurosToCents('1,005')).toBe(100)
+	it('rounds a third decimal half up, exactly', () => {
+		expect(eurosToCents('1,005')).toBe(101)
 		expect(eurosToCents('1,015')).toBe(102)
 		expect(eurosToCents('2,675')).toBe(268)
 	})
@@ -63,31 +57,34 @@ describe('quoteLineTotalCents', () => {
 		expect(quoteLineTotalCents(line('8', '27,50'))).toBe(22000)
 	})
 
-	/**
-	 * The same vectors `domain::quote::service` pins, and the reason both files
-	 * carry them: the draft total is computed here while the stored total is
-	 * computed in Rust, so one pricing rule has two implementations. Each product
-	 * below lands exactly on a half cent, which is where the rounding mode
-	 * decides the answer, and each goes to the even neighbour rather than up.
-	 *
-	 * These are also the cases the previous float implementation got wrong, by
-	 * one cent, roughly once every fifty lines.
-	 */
 	it('agrees with the backend on products that land on a half cent', () => {
-		expect(quoteLineTotalCents(line('631,9', '388,75'))).toBe(24_565_112)
-		expect(quoteLineTotalCents(line('1723,1', '54,55'))).toBe(9_399_510)
-		expect(quoteLineTotalCents(line('710,1', '134,85'))).toBe(9_575_698)
-		expect(quoteLineTotalCents(line('1274,7', '138,95'))).toBe(17_711_956)
-		expect(quoteLineTotalCents(line('1024,5', '375,25'))).toBe(38_444_362)
-		expect(quoteLineTotalCents(line('1744,9', '263,85'))).toBe(46_039_186)
+		expect(quoteLineTotalCents(line('631,9', '388,75'))).toBe(24_565_113)
+		expect(quoteLineTotalCents(line('1723,1', '54,55'))).toBe(9_399_511)
+		expect(quoteLineTotalCents(line('710,1', '134,85'))).toBe(9_575_699)
+		expect(quoteLineTotalCents(line('1274,7', '138,95'))).toBe(17_711_957)
+		expect(quoteLineTotalCents(line('1024,5', '375,25'))).toBe(38_444_363)
+		expect(quoteLineTotalCents(line('1744,9', '263,85'))).toBe(46_039_187)
 	})
 
-	/** Verified against the backend: 0,5 goes to 0 and 1,5 goes to 2. */
-	it('rounds a half to its even neighbour, in both directions', () => {
-		expect(quoteLineTotalCents(line('0,5', '0,01'))).toBe(0)
+	it('rounds a half away from zero, in both directions', () => {
+		expect(quoteLineTotalCents(line('0,5', '0,01'))).toBe(1)
 		expect(quoteLineTotalCents(line('1,5', '0,01'))).toBe(2)
-		expect(quoteLineTotalCents(line('2,5', '0,01'))).toBe(2)
+		expect(quoteLineTotalCents(line('2,5', '0,01'))).toBe(3)
 		expect(quoteLineTotalCents(line('3,5', '0,01'))).toBe(4)
+	})
+
+	it('applies the discount of a line before rounding', () => {
+		const discounted = (discount: string) => ({
+			...line('3', '100,00'),
+			discountPercent: discount,
+		})
+
+		expect(quoteLineTotalCents(discounted('10'))).toBe(27_000)
+		expect(quoteLineTotalCents(discounted('12,5'))).toBe(26_250)
+		expect(quoteLineTotalCents(discounted('100'))).toBe(0)
+		expect(
+			quoteLineTotalCents({ ...line('1,5', '3,33'), discountPercent: '' }),
+		).toBe(500)
 	})
 
 	it('is nothing at all when the line has no quantity yet', () => {
@@ -131,22 +128,28 @@ describe('quoteLinesVatBreakdown', () => {
 		])
 	})
 
-	/**
-	 * The exact vector `domain::quote::service`'s
-	 * `three_half_cent_vat_lines_round_per_line_then_sum` pins: three lines at
-	 * 1,05 € net and 10 % VAT each round to 10 cents of VAT (10,5 lands on the
-	 * even neighbour), summing to 30 — not 32, which is what rounding the
-	 * 3,15 € net total once would give.
-	 */
-	it('rounds VAT per line before summing, agreeing with the backend', () => {
+	it('computes the VAT once per rate on the summed base, like the backend', () => {
 		const lines = [
 			lineWithVat('1', '1,05', '1000'),
 			lineWithVat('1', '1,05', '1000'),
 			lineWithVat('1', '1,05', '1000'),
 		]
 		expect(quoteLinesVatBreakdown(lines, true)).toEqual([
-			{ rateBp: 1000, vatCents: 30 },
+			{ rateBp: 1000, vatCents: 32 },
 		])
+	})
+
+	it('gives a base of 20066 cents and VAT of 4013 for two lines of 100,33 at 20 %', () => {
+		const lines = [
+			lineWithVat('1', '100,33', '2000'),
+			lineWithVat('1', '100,33', '2000'),
+		]
+		expect(quoteLinesVatBreakdown(lines, true)).toEqual([
+			{ rateBp: 2000, vatCents: 4013 },
+		])
+		expect(
+			lines.reduce((sum, item) => sum + quoteLineTotalCents(item), 0),
+		).toBe(20_066)
 	})
 
 	it('treats an unset rate as 0 %, not as excluded', () => {

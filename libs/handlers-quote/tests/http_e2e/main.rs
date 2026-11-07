@@ -21,6 +21,7 @@
 
 mod harness;
 mod issuer;
+mod lifecycle;
 
 use serde_json::json;
 
@@ -462,6 +463,15 @@ async fn create_and_accept_a_quote(app: &harness::App) -> (String, serde_json::V
         .await
         .expect("the create answer is json");
     let quote_id = created["data"]["id"].as_str().expect("an id").to_owned();
+
+    let sent = reqwest::Client::new()
+        .patch(format!("{}/api/v1/quotes/{quote_id}/status", app.base_url))
+        .bearer_auth(&app.token)
+        .json(&json!({ "status": "SENT" }))
+        .send()
+        .await
+        .expect("the api answers the send call");
+    assert!(sent.status().is_success(), "{}", sent.status());
 
     let accepted = reqwest::Client::new()
         .patch(format!("{}/api/v1/quotes/{quote_id}/status", app.base_url))

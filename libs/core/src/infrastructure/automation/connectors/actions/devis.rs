@@ -1,14 +1,16 @@
+use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
 use super::clients::{Row, array, not_found, optional_array, select, targets_of_run};
 use super::{ActionContext, failure};
 use crate::domain::project::commands::{CreateProjectFromQuoteCommand, PlannedTaskCommand};
 use crate::domain::quote::commands::{
-    CreateQuoteCommand, QuoteLineCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand,
+    CreateQuoteCommand, QuoteLineCommand, QuoteTermsCommand, UpdateQuoteCommand,
+    UpdateQuoteStatusCommand,
 };
 use crate::{
-    CustomerContextId, CustomerId, Project, Quote, QuoteId, QuoteLineId, QuoteStatus,
-    ServiceRateId, Task, TaskProposal,
+    BillingFrequency, CustomerContextId, CustomerId, Project, Quote, QuoteId, QuoteLineId,
+    QuoteStatus, ServiceRateId, Task, TaskProposal,
 };
 
 #[cfg(test)]
@@ -113,6 +115,9 @@ fn quote_lines(context: &ActionContext<'_>) -> Result<Vec<QuoteLineCommand>, Str
             let row = Row::new(item, "lines", position)?;
             Ok(QuoteLineCommand {
                 service_rate_id: row.optional_uuid("service_rate_id")?.map(ServiceRateId),
+                product_id: None,
+                discount_percent: Decimal::ZERO,
+                billing_frequency: BillingFrequency::OneShot,
                 label: row.text("label")?.to_owned(),
                 quantity: row.decimal("quantity")?,
                 unit: row.text("unit")?.to_owned(),
@@ -191,13 +196,15 @@ async fn create_quote(context: &ActionContext<'_>) -> Result<Value, String> {
                 customer_id,
                 customer_context_id,
                 deal_id: None,
+                terms: QuoteTermsCommand::default(),
                 lines,
             },
             context.actor(),
         )
         .await
+        .map_err(failure)?
         .map(|quote| quote_json(&quote))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn update_quote(context: &ActionContext<'_>) -> Result<Value, String> {
@@ -220,13 +227,15 @@ async fn update_quote(context: &ActionContext<'_>) -> Result<Value, String> {
                 customer_context_id,
                 deal_id: None,
                 status,
+                terms: QuoteTermsCommand::default(),
                 lines,
             },
             context.actor(),
         )
         .await
+        .map_err(failure)?
         .map(|quote| quote_json(&quote))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn update_status(context: &ActionContext<'_>) -> Result<Value, String> {
@@ -236,10 +245,11 @@ async fn update_status(context: &ActionContext<'_>) -> Result<Value, String> {
 
     context
         .usecase
-        .update_quote_status(UpdateQuoteStatusCommand { id, status }, context.actor())
+        .update_quote_status(UpdateQuoteStatusCommand::to(id, status), context.actor())
         .await
+        .map_err(failure)?
         .map(|quote| quote_json(&quote))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn delete_quote(context: &ActionContext<'_>) -> Result<Value, String> {
@@ -250,7 +260,8 @@ async fn delete_quote(context: &ActionContext<'_>) -> Result<Value, String> {
         .usecase
         .soft_delete_quote(id, context.actor())
         .await
-        .map_err(failure)?;
+        .map_err(failure)?
+        .map_err(|refusal| refusal.to_string())?;
 
     Ok(json!({ "quote_id": id.0, "deleted": true }))
 }

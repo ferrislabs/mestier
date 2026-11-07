@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO quote_lines (\n                id,\n                org_id,\n                quote_id,\n                service_rate_id,\n                product_id,\n                label,\n                quantity,\n                unit,\n                unit_price_cents,\n                vat_rate_bp,\n                discount_percent,\n                billing_frequency,\n                notes,\n                photo_keys,\n                deleted_at,\n                created_at,\n                updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Numeric",
+        "Text",
+        "Int4",
+        "Int4",
+        "Numeric",
+        "Text",
+        "Text",
+        "TextArray",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "33f9b801fe81174d2b4e50022527a55739e9770be414ee83af1e97202e59f553"
+}

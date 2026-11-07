@@ -1,15 +1,18 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
+use chrono::NaiveDate;
+use handlers::{AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::{
-    CustomerContextId, CustomerId, DealId, QuoteId, QuoteStatus, UpdateQuoteCommand,
+    CustomerContactId, CustomerContextId, CustomerId, DealId, MemberId, QuoteId, QuoteStatus,
+    UpdateQuoteCommand,
 };
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
     paths::QuotePath,
-    quote::create::{QuoteLineRequest, into_line_commands},
+    quote::create::{QuoteLineRequest, into_line_commands, into_terms},
+    quote_error::QuoteFailure,
     require_quote_deal, require_quote_membership, require_quote_targets,
     response::QuoteResponse,
 };
@@ -22,6 +25,18 @@ pub struct UpdateQuoteRequest {
     #[serde(default)]
     pub deal_id: Option<DealId>,
     pub status: QuoteStatus,
+    #[serde(default)]
+    pub valid_until: Option<NaiveDate>,
+    #[serde(default)]
+    pub deposit_percent: Option<String>,
+    #[serde(default)]
+    pub owner_member_id: Option<MemberId>,
+    #[serde(default)]
+    pub notes: Option<String>,
+    #[serde(default)]
+    pub billing_contact_id: Option<CustomerContactId>,
+    #[serde(default)]
+    pub billing_address_id: Option<CustomerContextId>,
     pub lines: Vec<QuoteLineRequest>,
 }
 
@@ -40,7 +55,8 @@ pub struct UpdateQuoteRequest {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Quote not found"),
-        (status = 409, description = "Quote conflict"),
+        (status = 409, description = "Quote locked or in conflict (E_QUOTE_LOCKED)"),
+        (status = 422, description = "A rule refused the quote, the field is named in details"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -49,7 +65,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpdateQuoteRequest>,
-) -> Result<Response<QuoteResponse>, ApiError> {
+) -> Result<Response<QuoteResponse>, QuoteFailure> {
     let current = require_quote_membership(&state, &identity, quote_id).await?;
     let (user_id, actor) = resolve_actor(&state, &identity).await?;
     require_quote_targets(
@@ -60,6 +76,15 @@ pub async fn handler(
     )
     .await?;
     require_quote_deal(&state, current.organization_id, payload.deal_id).await?;
+
+    let terms = into_terms(
+        payload.valid_until,
+        payload.deposit_percent,
+        payload.owner_member_id,
+        payload.notes,
+        payload.billing_contact_id,
+        payload.billing_address_id,
+    )?;
 
     let quote = state
         .usecase
@@ -72,11 +97,12 @@ pub async fn handler(
                 customer_context_id: payload.customer_context_id,
                 deal_id: payload.deal_id,
                 status: payload.status,
+                terms,
                 lines: into_line_commands(payload.lines)?,
             },
             actor,
         )
-        .await?;
+        .await??;
 
     Ok(Response::OK(quote.into()))
 }

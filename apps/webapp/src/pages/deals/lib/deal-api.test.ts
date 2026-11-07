@@ -114,10 +114,20 @@ describe('dealQuoteOfApi', () => {
 		net_cents: 100000,
 		vat_breakdown: [],
 		gross_cents: 120000,
+		deposit_percent: '0',
+		is_expired: false,
+		recurring: [],
 		lines: [],
 		created_at: '2026-10-02T08:00:00Z',
 		updated_at: '2026-10-02T08:00:00Z',
 	}
+
+	it.each([
+		['CANCELLED', 'cancelled'],
+		['SUPERSEDED', 'superseded'],
+	] as const)('maps the quote status %s to %s', (status, expected) => {
+		expect(dealQuoteOfApi({ ...quote, status })?.status).toBe(expected)
+	})
 
 	it('keeps the quotes linked to a deal, with their net amount', () => {
 		expect(dealQuoteOfApi(quote)).toEqual({

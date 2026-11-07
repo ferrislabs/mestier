@@ -24,6 +24,7 @@ pub struct App {
     pub organization_id: Uuid,
     pub customer_id: Uuid,
     pub customer_context_id: Uuid,
+    pub member_id: Uuid,
     /// A second member of the same organization, holding membership but no
     /// role assignment at all — #305's `quote.manage` gate refuses this one
     /// outright on every write, and #396's `VIEW_QUOTES` gate refuses it on
@@ -84,6 +85,7 @@ pub async fn start() -> App {
         organization_id: fixture.organization_id,
         customer_id: fixture.customer_id,
         customer_context_id: fixture.customer_context_id,
+        member_id: fixture.member_id,
         user_id: fixture.user_id,
         no_role_user_id: fixture.no_role_user_id,
         view_quotes_user_id: fixture.view_quotes_user_id,
@@ -118,6 +120,9 @@ impl App {
             "DELETE FROM projects WHERE org_id = $1",
             "DELETE FROM quote_lines WHERE org_id = $1",
             "DELETE FROM quotes WHERE org_id = $1",
+            "DELETE FROM deals WHERE org_id = $1",
+            "UPDATE customers SET billing_address_id = NULL, billing_contact_id = NULL WHERE org_id = $1",
+            "DELETE FROM customer_contacts WHERE customer_id IN (SELECT id FROM customers WHERE org_id = $1)",
             "DELETE FROM customer_contexts WHERE customer_id IN (SELECT id FROM customers WHERE org_id = $1)",
             "DELETE FROM customers WHERE org_id = $1",
             "DELETE FROM organization_members WHERE organization_id = $1",
@@ -148,6 +153,7 @@ struct Fixture {
     organization_id: Uuid,
     customer_id: Uuid,
     customer_context_id: Uuid,
+    member_id: Uuid,
 }
 
 /// The smallest graph a quote needs: a user, the organization they belong to,
@@ -284,7 +290,25 @@ async fn seed(pool: &PgPool) -> Fixture {
         .await
         .expect("seed the customer context");
 
+    let billing_address_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO customer_contexts (id, customer_id, label, kind, address_line, postal_code, city) VALUES ($1, $2, $3, 'BILLING', '12 rue des Lilas', '69003', 'Lyon')",
+    )
+    .bind(billing_address_id)
+    .bind(customer_id)
+    .bind("Head office")
+    .execute(pool)
+    .await
+    .expect("seed the billing address");
+    sqlx::query("UPDATE customers SET billing_address_id = $2 WHERE id = $1")
+        .bind(customer_id)
+        .bind(billing_address_id)
+        .execute(pool)
+        .await
+        .expect("set the billing address of the customer");
+
     Fixture {
+        member_id,
         sub,
         user_id,
         no_role_sub,

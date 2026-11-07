@@ -538,11 +538,13 @@ mod tests {
                     customer_id: customer.id,
                     customer_context_id: context.id,
                     deal_id: None,
+                    terms: crate::QuoteTermsCommand::default(),
                     lines: Vec::new(),
                 },
                 authz::Subject::system(),
             )
             .await
+            .unwrap()
             .unwrap();
 
         let row = sqlx::query!(

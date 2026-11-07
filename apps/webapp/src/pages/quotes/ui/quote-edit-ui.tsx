@@ -254,6 +254,7 @@ export function QuoteEditUI({
 
 			{mode === 'edit' ? (
 				<QuoteEditForm
+					savedLineCount={quote.lines.length}
 					organizationSlug={activeOrganization.slug}
 					idPrefix={`quote-${quote.id}`}
 					values={values}

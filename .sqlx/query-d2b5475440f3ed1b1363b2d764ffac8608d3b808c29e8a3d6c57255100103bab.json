@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, org_id, quote_id, service_rate_id, label, quantity, unit, unit_price_cents, vat_rate_bp, notes, photo_keys, deleted_at, created_at, updated_at\n        FROM quote_lines\n        WHERE quote_id = $1 AND deleted_at IS NULL\n        ORDER BY created_at ASC, id ASC\n        ",
+  "query": "\n        SELECT id, org_id, quote_id, service_rate_id, product_id, label, quantity, unit, unit_price_cents, vat_rate_bp, discount_percent, billing_frequency, notes, photo_keys, deleted_at, created_at, updated_at\n        FROM quote_lines\n        WHERE quote_id = $1 AND deleted_at IS NULL\n        ORDER BY created_at ASC, id ASC\n        ",
   "describe": {
     "columns": [
       {
@@ -25,51 +25,66 @@
       },
       {
         "ordinal": 4,
+        "name": "product_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
         "name": "label",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "quantity",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "unit",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "unit_price_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "vat_rate_bp",
         "type_info": "Int4"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
+        "name": "discount_percent",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
+        "name": "billing_frequency",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
         "name": "notes",
         "type_info": "Text"
       },
       {
-        "ordinal": 10,
+        "ordinal": 13,
         "name": "photo_keys",
         "type_info": "TextArray"
       },
       {
-        "ordinal": 11,
+        "ordinal": 14,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 15,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 16,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -84,11 +99,14 @@
       false,
       false,
       true,
+      true,
       false,
       false,
       false,
       false,
       true,
+      false,
+      false,
       true,
       false,
       true,
@@ -96,5 +114,5 @@
       false
     ]
   },
-  "hash": "08189d1e3a13a295e273c8d1a8c464a924262dca345774a9f20b96061bfa8039"
+  "hash": "d2b5475440f3ed1b1363b2d764ffac8608d3b808c29e8a3d6c57255100103bab"
 }

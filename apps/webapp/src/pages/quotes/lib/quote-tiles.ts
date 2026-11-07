@@ -1,7 +1,7 @@
 import type { Quote } from '#/hooks/use-quotes'
 import { addDays } from '#/pages/quotes/lib/quote-draft'
-import type { QuoteExtras } from '#/pages/quotes/lib/quote-extras'
 import { quoteDisplayStatus } from '#/pages/quotes/lib/quote-status'
+import type { QuoteTerms } from '#/pages/quotes/lib/quote-terms'
 
 export const ACCEPTANCE_WINDOW_DAYS = 90
 
@@ -19,7 +19,7 @@ export interface QuoteTiles {
 
 export interface QuoteTilesView {
 	today: string
-	extrasOf: (quoteId: string) => QuoteExtras
+	termsOf: (quoteId: string) => QuoteTerms
 }
 
 function tileOf(quotes: readonly Quote[]): QuoteTile {
@@ -29,8 +29,8 @@ function tileOf(quotes: readonly Quote[]): QuoteTile {
 	}
 }
 
-function answeredOn(quote: Quote, extras: QuoteExtras): string {
-	return extras.respondedAt ?? quote.updated_at.slice(0, 10)
+function answeredOn(quote: Quote, terms: QuoteTerms): string {
+	return terms.respondedAt ?? quote.updated_at.slice(0, 10)
 }
 
 function countedOnList(quotes: readonly Quote[]): QuoteTiles {
@@ -53,10 +53,9 @@ export function computeQuoteTiles(
 ): QuoteTiles {
 	if (!view) return countedOnList(quotes)
 	const since = addDays(view.today, -ACCEPTANCE_WINDOW_DAYS)
-	const displayOf = (quote: Quote) =>
-		quoteDisplayStatus(quote.status, view.extrasOf(quote.id), view.today)
+	const displayOf = (quote: Quote) => quoteDisplayStatus(quote)
 	const answeredSince = (quote: Quote) =>
-		answeredOn(quote, view.extrasOf(quote.id)) >= since
+		answeredOn(quote, view.termsOf(quote.id)) >= since
 
 	const pending = quotes.filter((quote) => displayOf(quote) === 'sent')
 	const accepted = quotes.filter(
@@ -68,7 +67,7 @@ export function computeQuoteTiles(
 	const expired = quotes.filter(
 		(quote) =>
 			displayOf(quote) === 'expired' &&
-			(view.extrasOf(quote.id).validUntil ?? '') >= since,
+			(view.termsOf(quote.id).validUntil ?? '') >= since,
 	)
 	const decided = accepted.length + declined.length + expired.length
 	return {

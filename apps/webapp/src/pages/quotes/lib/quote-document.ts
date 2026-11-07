@@ -1,6 +1,7 @@
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Organization } from '#/hooks/use-organizations'
 import type { Quote } from '#/hooks/use-quotes'
+import { frequencyOfApi } from '#/pages/quotes/lib/billing-frequency'
 import {
 	paperIssuer,
 	paperLine,
@@ -8,7 +9,7 @@ import {
 	vatNoticeOf,
 } from '#/pages/quotes/lib/paper-parties'
 import { parsePercent } from '#/pages/quotes/lib/quote-draft'
-import type { QuoteExtras } from '#/pages/quotes/lib/quote-extras'
+import type { QuoteTerms } from '#/pages/quotes/lib/quote-terms'
 import {
 	billingAddressLines,
 	eurosToCents,
@@ -23,6 +24,12 @@ import type { DocTotals } from '#/pages/quotes/ui/doc/totals-panel'
 
 export function savedQuoteTotals(quote: Quote): DocTotals {
 	return {
+		recurring: quote.recurring.map((row) => ({
+			frequency: frequencyOfApi(row.frequency),
+			netCents: row.net_cents,
+			vatCents: row.vat_cents,
+			grossCents: row.gross_cents,
+		})),
 		netCents: quote.net_cents,
 		vat: quote.vat_breakdown.map((line) => ({
 			rateBp: line.rate_bp,
@@ -101,7 +108,7 @@ function siteAddressLines(context: CustomerContext | undefined): string[] {
 
 function statusEvent(
 	quote: Quote,
-	extras: QuoteExtras,
+	terms: QuoteTerms,
 ): { kind: HistoryEntry['kind']; detail: string } | undefined {
 	switch (quote.status) {
 		case 'SENT':
@@ -109,15 +116,15 @@ function statusEvent(
 		case 'ACCEPTED':
 			return {
 				kind: 'accepted',
-				detail: extras.signer
-					? `Devis accepté par ${extras.signer}`
+				detail: terms.signer
+					? `Devis accepté par ${terms.signer}`
 					: 'Devis accepté par le client',
 			}
 		case 'DECLINED':
 			return {
 				kind: 'declined',
-				detail: extras.declineReason
-					? `Devis refusé : ${extras.declineReason}`
+				detail: terms.declineReason
+					? `Devis refusé : ${terms.declineReason}`
 					: 'Devis refusé par le client',
 			}
 		default:
@@ -127,7 +134,7 @@ function statusEvent(
 
 export function buildQuoteHistory(
 	quote: Quote,
-	extras: QuoteExtras,
+	terms: QuoteTerms,
 ): HistoryEntry[] {
 	const entries: HistoryEntry[] = [
 		{
@@ -137,16 +144,16 @@ export function buildQuoteHistory(
 			at: quote.created_at,
 		},
 	]
-	if (extras.revisionOf) {
+	if (terms.revisionOf) {
 		entries.push({
 			id: 'revision-of',
 			kind: 'revised',
-			detail: `Révision de ${extras.revisionOf.label}`,
+			detail: `Révision de ${terms.revisionOf.label}`,
 			at: quote.created_at,
 		})
 	}
-	if (quote.updated_at !== quote.created_at) {
-		const event = statusEvent(quote, extras)
+	if (quote.updated_at !== quote.created_at && quote.status !== 'SUPERSEDED') {
+		const event = statusEvent(quote, terms)
 		entries.push({
 			id: 'updated',
 			kind: event?.kind ?? 'updated',
@@ -154,12 +161,12 @@ export function buildQuoteHistory(
 			at: quote.updated_at,
 		})
 	}
-	for (const event of extras.events) {
+	if (terms.supersededBy && quote.status === 'SUPERSEDED') {
 		entries.push({
-			id: event.id,
-			kind: event.kind,
-			detail: event.detail,
-			at: event.at,
+			id: 'superseded',
+			kind: 'revised',
+			detail: `Remplacé par ${terms.supersededBy.label}`,
+			at: quote.updated_at,
 		})
 	}
 	return entries.sort((a, b) => a.at.localeCompare(b.at))

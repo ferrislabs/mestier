@@ -16,7 +16,7 @@ use crate::{
     },
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
-        quote::postgres::model::{QuoteLineRow, QuoteRow, vat_breakdown_to_json},
+        quote::postgres::model::{QuoteLineRow, QuoteRow, snapshot_to_json, vat_breakdown_to_json},
     },
 };
 
@@ -122,12 +122,14 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
     async fn insert(&mut self, quote: &Quote) -> Result<Quote, CoreError> {
         let mut tx = self.tx.lock().await;
         let vat_breakdown = vat_breakdown_to_json(&quote.vat_breakdown);
+        let issuer_snapshot = snapshot_to_json(quote.issuer_snapshot.as_ref());
+        let recipient_snapshot = snapshot_to_json(quote.recipient_snapshot.as_ref());
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
-            INSERT INTO quotes (id, org_id, reference, title, customer_id, customer_context_id, deal_id, status, net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, CAST($8 AS text)::quote_status, $9, $10, $11, $12, $13, $14)
-            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            INSERT INTO quotes (id, org_id, reference, title, customer_id, customer_context_id, deal_id, status, net_cents, vat_breakdown, gross_cents, valid_until, deposit_percent, owner_member_id, notes, billing_contact_id, billing_address_id, responded_at, responded_by, decline_reason, revision_of_id, issuer_snapshot, recipient_snapshot, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, CAST($8 AS text)::quote_status, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, valid_until, deposit_percent, owner_member_id, notes, billing_contact_id, billing_address_id, responded_at, responded_by, decline_reason, revision_of_id, (SELECT r.id FROM quotes r WHERE r.revision_of_id = quotes.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS "superseded_by_id?", issuer_snapshot, recipient_snapshot, deleted_at, created_at, updated_at
             "#,
             quote.id.0,
             quote.organization_id.0,
@@ -140,6 +142,18 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
             quote.net_cents,
             vat_breakdown,
             quote.gross_cents,
+            quote.valid_until,
+            quote.deposit_percent.get(),
+            quote.owner_member_id.map(|id| id.0),
+            quote.notes,
+            quote.billing_contact_id.map(|id| id.0),
+            quote.billing_address_id.map(|id| id.0),
+            quote.responded_at,
+            quote.responded_by,
+            quote.decline_reason,
+            quote.revision_of_id.map(|id| id.0),
+            issuer_snapshot,
+            recipient_snapshot,
             quote.deleted_at,
             quote.created_at,
             quote.updated_at,
@@ -157,7 +171,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
-            SELECT id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, valid_until, deposit_percent, owner_member_id, notes, billing_contact_id, billing_address_id, responded_at, responded_by, decline_reason, revision_of_id, (SELECT r.id FROM quotes r WHERE r.revision_of_id = quotes.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS "superseded_by_id?", issuer_snapshot, recipient_snapshot, deleted_at, created_at, updated_at
             FROM quotes
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -188,7 +202,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         let rows = sqlx::query_as!(
             QuoteRow,
             r#"
-            SELECT id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            SELECT id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, valid_until, deposit_percent, owner_member_id, notes, billing_contact_id, billing_address_id, responded_at, responded_by, decline_reason, revision_of_id, (SELECT r.id FROM quotes r WHERE r.revision_of_id = quotes.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS "superseded_by_id?", issuer_snapshot, recipient_snapshot, deleted_at, created_at, updated_at
             FROM quotes
             WHERE org_id = $1 AND deleted_at IS NULL AND ($2::uuid IS NULL OR deal_id = $2)
             ORDER BY created_at DESC, id DESC
@@ -266,6 +280,8 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
     async fn update(&mut self, quote: &Quote) -> Result<Quote, CoreError> {
         let mut tx = self.tx.lock().await;
         let vat_breakdown = vat_breakdown_to_json(&quote.vat_breakdown);
+        let issuer_snapshot = snapshot_to_json(quote.issuer_snapshot.as_ref());
+        let recipient_snapshot = snapshot_to_json(quote.recipient_snapshot.as_ref());
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
@@ -279,9 +295,20 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
                 net_cents = $8,
                 vat_breakdown = $9,
                 gross_cents = $10,
-                updated_at = $11
+                valid_until = $11,
+                deposit_percent = $12,
+                owner_member_id = $13,
+                notes = $14,
+                billing_contact_id = $15,
+                billing_address_id = $16,
+                responded_at = $17,
+                responded_by = $18,
+                decline_reason = $19,
+                issuer_snapshot = $20,
+                recipient_snapshot = $21,
+                updated_at = $22
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, valid_until, deposit_percent, owner_member_id, notes, billing_contact_id, billing_address_id, responded_at, responded_by, decline_reason, revision_of_id, (SELECT r.id FROM quotes r WHERE r.revision_of_id = quotes.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS "superseded_by_id?", issuer_snapshot, recipient_snapshot, deleted_at, created_at, updated_at
             "#,
             quote.id.0,
             quote.reference,
@@ -293,6 +320,17 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
             quote.net_cents,
             vat_breakdown,
             quote.gross_cents,
+            quote.valid_until,
+            quote.deposit_percent.get(),
+            quote.owner_member_id.map(|id| id.0),
+            quote.notes,
+            quote.billing_contact_id.map(|id| id.0),
+            quote.billing_address_id.map(|id| id.0),
+            quote.responded_at,
+            quote.responded_by,
+            quote.decline_reason,
+            issuer_snapshot,
+            recipient_snapshot,
             quote.updated_at,
         )
         .fetch_optional(&mut ***tx)
@@ -318,35 +356,43 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         row.into_quote(quote.lines.clone())
     }
 
-    async fn update_status(
-        &mut self,
-        id: QuoteId,
-        status: QuoteStatus,
-        reference: Option<String>,
-        updated_at: DateTime<Utc>,
-    ) -> Result<Quote, CoreError> {
+    async fn update_lifecycle(&mut self, quote: &Quote) -> Result<Quote, CoreError> {
         let mut tx = self.tx.lock().await;
+        let issuer_snapshot = snapshot_to_json(quote.issuer_snapshot.as_ref());
+        let recipient_snapshot = snapshot_to_json(quote.recipient_snapshot.as_ref());
         let row = sqlx::query_as!(
             QuoteRow,
             r#"
             UPDATE quotes
             SET status = CAST($2 AS text)::quote_status,
-                reference = COALESCE($3, reference),
-                updated_at = $4
+                reference = $3,
+                valid_until = $4,
+                responded_at = $5,
+                responded_by = $6,
+                decline_reason = $7,
+                issuer_snapshot = $8,
+                recipient_snapshot = $9,
+                updated_at = $10
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at
+            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS "status!", net_cents, vat_breakdown, gross_cents, valid_until, deposit_percent, owner_member_id, notes, billing_contact_id, billing_address_id, responded_at, responded_by, decline_reason, revision_of_id, (SELECT r.id FROM quotes r WHERE r.revision_of_id = quotes.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS "superseded_by_id?", issuer_snapshot, recipient_snapshot, deleted_at, created_at, updated_at
             "#,
-            id.0,
-            status.as_str(),
-            reference,
-            updated_at,
+            quote.id.0,
+            quote.status.as_str(),
+            quote.reference,
+            quote.valid_until,
+            quote.responded_at,
+            quote.responded_by,
+            quote.decline_reason,
+            issuer_snapshot,
+            recipient_snapshot,
+            quote.updated_at,
         )
         .fetch_optional(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
         let row = row.ok_or(CoreError::NotFound)?;
-        let lines = fetch_lines(&mut tx, id).await?;
+        let lines = fetch_lines(&mut tx, quote.id).await?;
         row.into_quote(lines)
     }
 
@@ -397,7 +443,7 @@ async fn fetch_lines(
     let rows = sqlx::query_as!(
         QuoteLineRow,
         r#"
-        SELECT id, org_id, quote_id, service_rate_id, label, quantity, unit, unit_price_cents, vat_rate_bp, notes, photo_keys, deleted_at, created_at, updated_at
+        SELECT id, org_id, quote_id, service_rate_id, product_id, label, quantity, unit, unit_price_cents, vat_rate_bp, discount_percent, billing_frequency, notes, photo_keys, deleted_at, created_at, updated_at
         FROM quote_lines
         WHERE quote_id = $1 AND deleted_at IS NULL
         ORDER BY created_at ASC, id ASC
@@ -420,28 +466,34 @@ async fn insert_lines(conn: &mut PgConnection, lines: &[QuoteLine]) -> Result<()
                 org_id,
                 quote_id,
                 service_rate_id,
+                product_id,
                 label,
                 quantity,
                 unit,
                 unit_price_cents,
                 vat_rate_bp,
+                discount_percent,
+                billing_frequency,
                 notes,
                 photo_keys,
                 deleted_at,
                 created_at,
                 updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             "#,
             line.id.0,
             line.organization_id.0,
             line.quote_id.0,
             line.service_rate_id.map(|id| id.0),
+            line.product_id.map(|id| id.0),
             line.label,
             line.quantity,
             line.unit,
             line.unit_price_cents,
             line.vat_rate_bp,
+            line.discount_percent.get(),
+            line.billing_frequency.as_str(),
             line.notes,
             &line.photo_keys,
             line.deleted_at,

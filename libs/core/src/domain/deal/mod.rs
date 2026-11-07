@@ -10,11 +10,13 @@ use crate::{CustomerId, LeadSource, MemberId, OrganizationId};
 pub mod commands;
 pub mod error;
 pub mod ports;
+pub mod quote_link;
 pub mod service;
 pub mod stage;
 pub mod summary;
 
 pub use error::{DealError, DealField, DealOutcome};
+pub use quote_link::DealQuoteLinks;
 pub use service::DealService;
 pub use stage::{ARCHIVED_ACCOUNT_REASON, DealStage, DealStageName, LostReason};
 pub use summary::{PipelineSummary, SUMMARY_WINDOW_DAYS, StageTotal};

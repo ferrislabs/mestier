@@ -3,6 +3,8 @@ import type { Schemas } from '#/api/api.client'
 
 const QUOTES_PATH = '/api/v1/organizations/{organization_id}/quotes'
 const QUOTE_PATH = '/api/v1/quotes/{quote_id}'
+const QUOTE_STATUS_PATH = '/api/v1/quotes/{quote_id}/status'
+const QUOTE_REVISION_PATH = '/api/v1/quotes/{quote_id}/revision'
 const QUOTE_PLAN_PROPOSAL_PATH = '/api/v1/quotes/{quote_id}/plan-proposal'
 const QUOTE_PLAN_PATH = '/api/v1/quotes/{quote_id}/plan'
 const PROJECTS_PATH = '/api/v1/organizations/{organization_id}/projects'
@@ -35,6 +37,11 @@ function isQuoteListQuery(
 		meta?._id === QUOTES_PATH &&
 		(!organizationId || meta.path?.organization_id === organizationId)
 	)
+}
+
+function isDealQuery(queryKey: readonly unknown[]) {
+	const id = queryKeyMeta(queryKey)?._id
+	return typeof id === 'string' && id.includes('/deals')
 }
 
 function listParams(organizationId: string, params: QuoteListParams) {
@@ -108,6 +115,47 @@ export function useUpdateQuote() {
 	})
 }
 
+function useQuoteInvalidation() {
+	const queryClient = useQueryClient()
+
+	return async (quote: Schemas.QuoteResponse) => {
+		await Promise.all([
+			queryClient.invalidateQueries({
+				predicate: (query) =>
+					isQuoteListQuery(query.queryKey, quote.organization_id),
+			}),
+			queryClient.invalidateQueries({ queryKey: quoteKey(quote.id) }),
+			queryClient.invalidateQueries({
+				predicate: (query) => isDealQuery(query.queryKey),
+			}),
+		])
+	}
+}
+
+export function useUpdateQuoteStatus() {
+	const invalidate = useQuoteInvalidation()
+
+	return useMutation({
+		...window.tanstackApi.mutation('patch', QUOTE_STATUS_PATH).mutationOptions,
+		onSuccess: (quote) => invalidate(quote.data),
+	})
+}
+
+export function useReviseQuote() {
+	const invalidate = useQuoteInvalidation()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', QUOTE_REVISION_PATH).mutationOptions,
+		onSuccess: async (revision, variables) => {
+			await invalidate(revision.data)
+			await invalidate({
+				...revision.data,
+				id: variables.path.quote_id,
+			})
+		},
+	})
+}
+
 export function useDeleteQuote(organizationId?: string) {
 	const queryClient = useQueryClient()
 
@@ -170,6 +218,8 @@ export function useCreateQuotePlan() {
 export type Quote = Schemas.QuoteResponse
 export type QuotePayload = Schemas.CreateQuoteRequest
 export type QuoteLinePayload = Schemas.QuoteLineRequest
+export type QuoteRecurringTotal = Schemas.RecurringTotalResponse
+export type QuoteBillingFrequency = Schemas.BillingFrequency
 export type QuoteStatus = Schemas.QuoteStatus
 export type PaginationMetadata = Schemas.PaginationMetadata
 export type TaskProposal = Schemas.TaskProposalResponse

@@ -8,6 +8,7 @@ edition.workspace = true
 handlers = { workspace = true }
 mestier-core = { workspace = true }
 auth = { workspace = true }
+common = { workspace = true }
 
 axum = { workspace = true }
 axum-extra = { workspace = true }
@@ -15,6 +16,7 @@ chrono = { workspace = true }
 http = { workspace = true }
 rust_decimal = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 
@@ -25,7 +27,6 @@ args = { workspace = true }
 clap = { workspace = true }
 jsonwebtoken = { workspace = true }
 reqwest = { workspace = true }
-serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }

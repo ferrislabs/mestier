@@ -1,11 +1,11 @@
 import { AlertCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomers } from '#/hooks/use-customers'
 import { useDeleteQuote, useQuotes } from '#/hooks/use-quotes'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
-import { useQuoteExtrasOf } from '#/pages/quotes/feature/mocks/quote-extras'
 import { toIsoDate } from '#/pages/quotes/lib/quote-status'
+import { EMPTY_TERMS, termsOfQuote } from '#/pages/quotes/lib/quote-terms'
 import {
 	getQuoteListUrlState,
 	readQuoteClientParam,
@@ -61,7 +61,6 @@ function QuoteListWorkspace({
 	)
 	const [clientFilter, setClientFilter] = useState(readQuoteClientParam)
 	const [today] = useState(() => toIsoDate(new Date()))
-	const extrasOf = useQuoteExtrasOf()
 	const catalog = useReferenceCatalog(organizationId, {
 		members: true,
 		employeeProfiles: false,
@@ -80,6 +79,14 @@ function QuoteListWorkspace({
 		perPage: quotePageSize,
 	})
 	const deleteQuote = useDeleteQuote(organizationId)
+	const quoteList = quotes.data?.data
+	const termsOf = useCallback(
+		(quoteId: string) => {
+			const quote = quoteList?.find((item) => item.id === quoteId)
+			return quote ? termsOfQuote(quote) : EMPTY_TERMS
+		},
+		[quoteList],
+	)
 
 	return (
 		<QuoteListUI
@@ -88,7 +95,7 @@ function QuoteListWorkspace({
 			customers={customers.data?.data ?? []}
 			quotes={quotes.data?.data ?? []}
 			owners={owners}
-			extrasOf={extrasOf}
+			termsOf={termsOf}
 			today={today}
 			clientFilter={clientFilter}
 			onClearClientFilter={() => {

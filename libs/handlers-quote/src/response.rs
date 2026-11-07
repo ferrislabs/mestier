@@ -1,8 +1,9 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
-    CustomerContextId, CustomerId, DealId, OrganizationId, Project, ProjectId, Quote, QuoteId,
-    QuoteLine, QuoteLineId, QuoteStatus, QuoteVatBreakdownLine, ServiceRateId, Task, TaskId,
-    TaskProposal,
+    BillingFrequency, CustomerContactId, CustomerContextId, CustomerId, DealId, IssuerSnapshot,
+    MemberId, OrganizationId, ProductId, Project, ProjectId, Quote, QuoteId, QuoteLine,
+    QuoteLineId, QuoteStatus, QuoteVatBreakdownLine, RecipientSnapshot, RecurringTotal,
+    ServiceRateId, Task, TaskId, TaskProposal,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -13,11 +14,15 @@ pub struct QuoteLineResponse {
     pub organization_id: OrganizationId,
     pub quote_id: QuoteId,
     pub service_rate_id: Option<ServiceRateId>,
+    pub product_id: Option<ProductId>,
     pub label: String,
     pub quantity: String,
     pub unit: String,
     pub unit_price_cents: i32,
     pub vat_rate_bp: Option<i32>,
+    pub discount_percent: String,
+    pub billing_frequency: BillingFrequency,
+    pub net_cents: i64,
     pub notes: Option<String>,
     pub photo_keys: Vec<String>,
     pub created_at: DateTime<Utc>,
@@ -26,16 +31,21 @@ pub struct QuoteLineResponse {
 
 impl From<QuoteLine> for QuoteLineResponse {
     fn from(value: QuoteLine) -> Self {
+        let net_cents = value.net_cents().unwrap_or_default();
         Self {
             id: value.id,
             organization_id: value.organization_id,
             quote_id: value.quote_id,
             service_rate_id: value.service_rate_id,
+            product_id: value.product_id,
             label: value.label,
             quantity: value.quantity.normalize().to_string(),
             unit: value.unit,
             unit_price_cents: value.unit_price_cents,
             vat_rate_bp: value.vat_rate_bp,
+            discount_percent: value.discount_percent.get().normalize().to_string(),
+            billing_frequency: value.billing_frequency,
+            net_cents,
             notes: value.notes,
             photo_keys: value.photo_keys,
             created_at: value.created_at,
@@ -59,6 +69,25 @@ impl From<QuoteVatBreakdownLine> for QuoteVatBreakdownLineResponse {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+pub struct RecurringTotalResponse {
+    pub frequency: BillingFrequency,
+    pub net_cents: i32,
+    pub vat_cents: i32,
+    pub gross_cents: i32,
+}
+
+impl From<RecurringTotal> for RecurringTotalResponse {
+    fn from(value: RecurringTotal) -> Self {
+        Self {
+            frequency: value.frequency,
+            net_cents: value.net_cents,
+            vat_cents: value.vat_cents,
+            gross_cents: value.gross_cents,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct QuoteResponse {
     pub id: QuoteId,
@@ -73,6 +102,21 @@ pub struct QuoteResponse {
     pub net_cents: i32,
     pub vat_breakdown: Vec<QuoteVatBreakdownLineResponse>,
     pub gross_cents: i32,
+    pub recurring: Vec<RecurringTotalResponse>,
+    pub valid_until: Option<NaiveDate>,
+    pub is_expired: bool,
+    pub deposit_percent: String,
+    pub owner_member_id: Option<MemberId>,
+    pub notes: Option<String>,
+    pub billing_contact_id: Option<CustomerContactId>,
+    pub billing_address_id: Option<CustomerContextId>,
+    pub responded_at: Option<DateTime<Utc>>,
+    pub responded_by: Option<String>,
+    pub decline_reason: Option<String>,
+    pub revision_of_id: Option<QuoteId>,
+    pub superseded_by_id: Option<QuoteId>,
+    pub issuer_snapshot: Option<IssuerSnapshot>,
+    pub recipient_snapshot: Option<RecipientSnapshot>,
     pub lines: Vec<QuoteLineResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -80,6 +124,18 @@ pub struct QuoteResponse {
 
 impl From<Quote> for QuoteResponse {
     fn from(value: Quote) -> Self {
+        Self::at(value, Utc::now().date_naive())
+    }
+}
+
+impl QuoteResponse {
+    pub fn at(value: Quote, today: NaiveDate) -> Self {
+        let is_expired = value.is_expired(today);
+        let recurring = value
+            .recurring()
+            .into_iter()
+            .map(RecurringTotalResponse::from)
+            .collect();
         Self {
             id: value.id,
             organization_id: value.organization_id,
@@ -96,6 +152,21 @@ impl From<Quote> for QuoteResponse {
                 .map(QuoteVatBreakdownLineResponse::from)
                 .collect(),
             gross_cents: value.gross_cents,
+            recurring,
+            valid_until: value.valid_until,
+            is_expired,
+            deposit_percent: value.deposit_percent.get().normalize().to_string(),
+            owner_member_id: value.owner_member_id,
+            notes: value.notes,
+            billing_contact_id: value.billing_contact_id,
+            billing_address_id: value.billing_address_id,
+            responded_at: value.responded_at,
+            responded_by: value.responded_by,
+            decline_reason: value.decline_reason,
+            revision_of_id: value.revision_of_id,
+            superseded_by_id: value.superseded_by_id,
+            issuer_snapshot: value.issuer_snapshot,
+            recipient_snapshot: value.recipient_snapshot,
             lines: value
                 .lines
                 .into_iter()

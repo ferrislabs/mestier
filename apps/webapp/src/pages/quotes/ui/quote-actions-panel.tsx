@@ -9,7 +9,6 @@ import {
 	Loader2,
 	type LucideIcon,
 	Receipt,
-	RotateCcw,
 	Save,
 	Send,
 	Trash2,
@@ -32,14 +31,13 @@ import {
 import { invoiceNewPath } from '#/pages/quotes/lib/quote-invoicing'
 import type { QuoteDisplayStatus } from '#/pages/quotes/lib/quote-status'
 
-type Dialog = 'send' | 'accept' | 'decline' | 'cancel' | 'reopen' | 'delete'
+type Dialog = 'send' | 'accept' | 'decline' | 'cancel' | 'delete'
 
 const LABELS: Record<Exclude<QuoteAction, 'project' | 'invoice'>, string> = {
 	send: 'Envoyer au client',
 	accept: 'Marquer comme accepté',
 	decline: 'Marquer comme refusé',
 	cancel: 'Annuler le devis',
-	reopen: 'Repasser en brouillon',
 	revise: 'Créer une révision',
 	duplicate: 'Dupliquer',
 	delete: 'Supprimer',
@@ -50,7 +48,6 @@ const ICONS: Record<Exclude<QuoteAction, 'project' | 'invoice'>, LucideIcon> = {
 	accept: CircleCheck,
 	decline: CircleX,
 	cancel: CircleX,
-	reopen: RotateCcw,
 	revise: GitBranch,
 	duplicate: Copy,
 	delete: Trash2,
@@ -308,17 +305,6 @@ export function QuoteActionsPanel({
 					destructive
 					onConfirm={() => {
 						onTransition('CANCELLED')
-						close()
-					}}
-				/>
-				<ConfirmDialog
-					open={dialog === 'reopen'}
-					onOpenChange={(open) => !open && close()}
-					title="Repasser le devis en brouillon ?"
-					description="Le devis redevient un brouillon que tu peux modifier librement."
-					confirmLabel="Repasser en brouillon"
-					onConfirm={() => {
-						onTransition('DRAFT')
 						close()
 					}}
 				/>

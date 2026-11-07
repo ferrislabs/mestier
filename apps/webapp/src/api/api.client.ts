@@ -90,6 +90,7 @@ export namespace Schemas {
   export type AvailabilityResponse = { resources: Array<AvailabilityResourceResponse> };
   export type BadgeTone = "neutral" | "brand" | "success" | "warning" | "error";
   export type BadgeResponse = { label: string; tone: BadgeTone };
+  export type BillingFrequency = "ONE_SHOT" | "MONTHLY" | "QUARTERLY" | "YEARLY";
   export type BillingSettingsResponse = {
     bic?: (string | null) | undefined;
     default_vat_rate_bp: number;
@@ -567,11 +568,15 @@ export namespace Schemas {
     tasks?: Array<PlannedTaskRequest> | undefined;
   };
   export type DealId = string;
+  export type ProductId = string;
   export type ServiceRateId = string;
   export type QuoteLineRequest = {
+    billing_frequency?: (null | BillingFrequency) | undefined;
+    discount_percent?: (string | null) | undefined;
     label: string;
     notes?: (string | null) | undefined;
     photo_keys: Array<string>;
+    product_id?: (null | ProductId) | undefined;
     quantity: string;
     service_rate_id?: (null | ServiceRateId) | undefined;
     unit: string;
@@ -579,11 +584,17 @@ export namespace Schemas {
     vat_rate_bp?: (number | null) | undefined;
   };
   export type CreateQuoteRequest = {
+    billing_address_id?: (null | CustomerContextId) | undefined;
+    billing_contact_id?: (null | CustomerContactId) | undefined;
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
     deal_id?: (null | DealId) | undefined;
+    deposit_percent?: (string | null) | undefined;
     lines: Array<QuoteLineRequest>;
+    notes?: (string | null) | undefined;
+    owner_member_id?: (null | MemberId) | undefined;
     title: string;
+    valid_until?: (string | null) | undefined;
   };
   export type CreateRoleRequest = { name: string; permissions: Array<string> };
   export type CreateServiceRateRequest = {
@@ -848,7 +859,6 @@ export namespace Schemas {
     role: PartyRole;
   };
   export type Revision = string;
-  export type ProductId = string;
   export type SupplierSnapshot = {
     address?: (string | null) | undefined;
     email?: (string | null) | undefined;
@@ -1293,6 +1303,30 @@ export namespace Schemas {
     notes: string | null;
   }>;
   export type IssueInvoiceRequest = Partial<{ allow_exceeding_total: boolean }>;
+  export type SnapshotAddress = Partial<{
+    city: string | null;
+    country: string | null;
+    line1: string | null;
+    line2: string | null;
+    postal_code: string | null;
+  }>;
+  export type IssuerSnapshot = {
+    address: SnapshotAddress;
+    bic?: (string | null) | undefined;
+    contact_email?: (string | null) | undefined;
+    contact_phone?: (string | null) | undefined;
+    iban?: (string | null) | undefined;
+    insurance_mention?: (string | null) | undefined;
+    invoice_footer: string;
+    late_penalty: string;
+    legal_form?: (string | null) | undefined;
+    name: string;
+    recovery_fee_cents: number;
+    registration_number?: (string | null) | undefined;
+    share_capital_cents?: (number | null) | undefined;
+    vat_exemption_basis?: (string | null) | undefined;
+    vat_number?: (string | null) | undefined;
+  };
   export type LineAllocationShareRequest = { amount_cents: number; project_id: ProjectId };
   export type MaintenanceLine = {
     cadence: Cadence;
@@ -1604,12 +1638,16 @@ export namespace Schemas {
   export type WorkSlotRequest = { ends_minute: number; starts_minute: number; work_date: string };
   export type PutWorkSlotsRequest = { slots: Array<WorkSlotRequest> };
   export type QuoteLineResponse = {
+    billing_frequency: BillingFrequency;
     created_at: string;
+    discount_percent: string;
     id: QuoteLineId;
     label: string;
+    net_cents: number;
     notes?: (string | null) | undefined;
     organization_id: OrganizationId;
     photo_keys: Array<string>;
+    product_id?: (null | ProductId) | undefined;
     quantity: string;
     quote_id: QuoteId;
     service_rate_id?: (null | ServiceRateId) | undefined;
@@ -1618,22 +1656,51 @@ export namespace Schemas {
     updated_at: string;
     vat_rate_bp?: (number | null) | undefined;
   };
-  export type QuoteStatus = "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "CANCELLED";
+  export type RecipientSnapshot = {
+    address: SnapshotAddress;
+    contact_email?: (string | null) | undefined;
+    contact_name?: (string | null) | undefined;
+    name: string;
+    registration_number?: (string | null) | undefined;
+    vat_number?: (string | null) | undefined;
+  };
+  export type RecurringTotalResponse = {
+    frequency: BillingFrequency;
+    gross_cents: number;
+    net_cents: number;
+    vat_cents: number;
+  };
+  export type QuoteStatus = "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "CANCELLED" | "SUPERSEDED";
   export type QuoteVatBreakdownLineResponse = { rate_bp: number; vat_cents: number };
   export type QuoteResponse = {
+    billing_address_id?: (null | CustomerContextId) | undefined;
+    billing_contact_id?: (null | CustomerContactId) | undefined;
     created_at: string;
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
     deal_id?: (null | DealId) | undefined;
+    decline_reason?: (string | null) | undefined;
+    deposit_percent: string;
     gross_cents: number;
     id: QuoteId;
+    is_expired: boolean;
+    issuer_snapshot?: (null | IssuerSnapshot) | undefined;
     lines: Array<QuoteLineResponse>;
     net_cents: number;
+    notes?: (string | null) | undefined;
     organization_id: OrganizationId;
+    owner_member_id?: (null | MemberId) | undefined;
+    recipient_snapshot?: (null | RecipientSnapshot) | undefined;
+    recurring: Array<RecurringTotalResponse>;
     reference?: (string | null) | undefined;
+    responded_at?: (string | null) | undefined;
+    responded_by?: (string | null) | undefined;
+    revision_of_id?: (null | QuoteId) | undefined;
     status: QuoteStatus;
+    superseded_by_id?: (null | QuoteId) | undefined;
     title: string;
     updated_at: string;
+    valid_until?: (string | null) | undefined;
     vat_breakdown: Array<QuoteVatBreakdownLineResponse>;
   };
   export type TaskProposalResponse = {
@@ -2034,14 +2101,24 @@ export namespace Schemas {
   };
   export type UpdateProjectTemplateRequest = { description?: (string | null) | undefined; name: string };
   export type UpdateQuoteRequest = {
+    billing_address_id?: (null | CustomerContextId) | undefined;
+    billing_contact_id?: (null | CustomerContactId) | undefined;
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
     deal_id?: (null | DealId) | undefined;
+    deposit_percent?: (string | null) | undefined;
     lines: Array<QuoteLineRequest>;
+    notes?: (string | null) | undefined;
+    owner_member_id?: (null | MemberId) | undefined;
     status: QuoteStatus;
     title: string;
+    valid_until?: (string | null) | undefined;
   };
-  export type UpdateQuoteStatusRequest = { status: QuoteStatus };
+  export type UpdateQuoteStatusRequest = {
+    decline_reason?: (string | null) | undefined;
+    responded_by?: (string | null) | undefined;
+    status: QuoteStatus;
+  };
   export type UpdateRoleRequest = { name: string; permissions: Array<string> };
   export type UpdateServiceRateRequest = {
     default_vat_rate_bp?: (number | null) | undefined;
@@ -7768,19 +7845,34 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           deal_id?: (null | Schemas.DealId) | undefined;
+          decline_reason?: (string | null) | undefined;
+          deposit_percent: string;
           gross_cents: number;
           id: Schemas.QuoteId;
+          is_expired: boolean;
+          issuer_snapshot?: (null | Schemas.IssuerSnapshot) | undefined;
           lines: Array<Schemas.QuoteLineResponse>;
           net_cents: number;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          recipient_snapshot?: (null | Schemas.RecipientSnapshot) | undefined;
+          recurring: Array<Schemas.RecurringTotalResponse>;
           reference?: (string | null) | undefined;
+          responded_at?: (string | null) | undefined;
+          responded_by?: (string | null) | undefined;
+          revision_of_id?: (null | Schemas.QuoteId) | undefined;
           status: Schemas.QuoteStatus;
+          superseded_by_id?: (null | Schemas.QuoteId) | undefined;
           title: string;
           updated_at: string;
+          valid_until?: (string | null) | undefined;
           vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -7801,19 +7893,34 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           deal_id?: (null | Schemas.DealId) | undefined;
+          decline_reason?: (string | null) | undefined;
+          deposit_percent: string;
           gross_cents: number;
           id: Schemas.QuoteId;
+          is_expired: boolean;
+          issuer_snapshot?: (null | Schemas.IssuerSnapshot) | undefined;
           lines: Array<Schemas.QuoteLineResponse>;
           net_cents: number;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          recipient_snapshot?: (null | Schemas.RecipientSnapshot) | undefined;
+          recurring: Array<Schemas.RecurringTotalResponse>;
           reference?: (string | null) | undefined;
+          responded_at?: (string | null) | undefined;
+          responded_by?: (string | null) | undefined;
+          revision_of_id?: (null | Schemas.QuoteId) | undefined;
           status: Schemas.QuoteStatus;
+          superseded_by_id?: (null | Schemas.QuoteId) | undefined;
           title: string;
           updated_at: string;
+          valid_until?: (string | null) | undefined;
           vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -7822,6 +7929,7 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type get_GetProfitability = {
@@ -9322,19 +9430,34 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           deal_id?: (null | Schemas.DealId) | undefined;
+          decline_reason?: (string | null) | undefined;
+          deposit_percent: string;
           gross_cents: number;
           id: Schemas.QuoteId;
+          is_expired: boolean;
+          issuer_snapshot?: (null | Schemas.IssuerSnapshot) | undefined;
           lines: Array<Schemas.QuoteLineResponse>;
           net_cents: number;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          recipient_snapshot?: (null | Schemas.RecipientSnapshot) | undefined;
+          recurring: Array<Schemas.RecurringTotalResponse>;
           reference?: (string | null) | undefined;
+          responded_at?: (string | null) | undefined;
+          responded_by?: (string | null) | undefined;
+          revision_of_id?: (null | Schemas.QuoteId) | undefined;
           status: Schemas.QuoteStatus;
+          superseded_by_id?: (null | Schemas.QuoteId) | undefined;
           title: string;
           updated_at: string;
+          valid_until?: (string | null) | undefined;
           vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -9351,7 +9474,7 @@ export namespace Endpoints {
     parameters: {
       path: { quote_id: string };
     };
-    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
   };
   export type patch_UpdateQuote = {
     method: "PATCH";
@@ -9365,19 +9488,34 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           deal_id?: (null | Schemas.DealId) | undefined;
+          decline_reason?: (string | null) | undefined;
+          deposit_percent: string;
           gross_cents: number;
           id: Schemas.QuoteId;
+          is_expired: boolean;
+          issuer_snapshot?: (null | Schemas.IssuerSnapshot) | undefined;
           lines: Array<Schemas.QuoteLineResponse>;
           net_cents: number;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          recipient_snapshot?: (null | Schemas.RecipientSnapshot) | undefined;
+          recurring: Array<Schemas.RecurringTotalResponse>;
           reference?: (string | null) | undefined;
+          responded_at?: (string | null) | undefined;
+          responded_by?: (string | null) | undefined;
+          revision_of_id?: (null | Schemas.QuoteId) | undefined;
           status: Schemas.QuoteStatus;
+          superseded_by_id?: (null | Schemas.QuoteId) | undefined;
           title: string;
           updated_at: string;
+          valid_until?: (string | null) | undefined;
           vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -9387,6 +9525,7 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type get_ExportQuotePdf = {
@@ -9436,6 +9575,54 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type post_ReviseQuote = {
+    method: "POST";
+    path: "/api/v1/quotes/{quote_id}/revision";
+    requestFormat: "json";
+    parameters: {
+      path: { quote_id: string };
+    };
+    responses: {
+      201: {
+        data: {
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
+          created_at: string;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          deal_id?: (null | Schemas.DealId) | undefined;
+          decline_reason?: (string | null) | undefined;
+          deposit_percent: string;
+          gross_cents: number;
+          id: Schemas.QuoteId;
+          is_expired: boolean;
+          issuer_snapshot?: (null | Schemas.IssuerSnapshot) | undefined;
+          lines: Array<Schemas.QuoteLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          recipient_snapshot?: (null | Schemas.RecipientSnapshot) | undefined;
+          recurring: Array<Schemas.RecurringTotalResponse>;
+          reference?: (string | null) | undefined;
+          responded_at?: (string | null) | undefined;
+          responded_by?: (string | null) | undefined;
+          revision_of_id?: (null | Schemas.QuoteId) | undefined;
+          status: Schemas.QuoteStatus;
+          superseded_by_id?: (null | Schemas.QuoteId) | undefined;
+          title: string;
+          updated_at: string;
+          valid_until?: (string | null) | undefined;
+          vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type patch_UpdateQuoteStatus = {
     method: "PATCH";
     path: "/api/v1/quotes/{quote_id}/status";
@@ -9448,19 +9635,34 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           deal_id?: (null | Schemas.DealId) | undefined;
+          decline_reason?: (string | null) | undefined;
+          deposit_percent: string;
           gross_cents: number;
           id: Schemas.QuoteId;
+          is_expired: boolean;
+          issuer_snapshot?: (null | Schemas.IssuerSnapshot) | undefined;
           lines: Array<Schemas.QuoteLineResponse>;
           net_cents: number;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          recipient_snapshot?: (null | Schemas.RecipientSnapshot) | undefined;
+          recurring: Array<Schemas.RecurringTotalResponse>;
           reference?: (string | null) | undefined;
+          responded_at?: (string | null) | undefined;
+          responded_by?: (string | null) | undefined;
+          revision_of_id?: (null | Schemas.QuoteId) | undefined;
           status: Schemas.QuoteStatus;
+          superseded_by_id?: (null | Schemas.QuoteId) | undefined;
           title: string;
           updated_at: string;
+          valid_until?: (string | null) | undefined;
           vat_breakdown: Array<Schemas.QuoteVatBreakdownLineResponse>;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -9469,6 +9671,8 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       404: unknown;
+      409: unknown;
+      422: unknown;
     };
   };
   export type delete_DeleteRole = {
@@ -10341,6 +10545,7 @@ export type EndpointByMethod = {
     "/api/v1/projects/{project_id}/invoices/deposit": Endpoints.post_IssueProjectDeposit;
     "/api/v1/projects/{project_id}/invoices/final": Endpoints.post_IssueProjectFinalInvoice;
     "/api/v1/quotes/{quote_id}/plan": Endpoints.post_CreateQuotePlan;
+    "/api/v1/quotes/{quote_id}/revision": Endpoints.post_ReviseQuote;
     "/api/v1/supplier-invoices/{supplier_invoice_id}/confirm": Endpoints.post_ConfirmSupplierInvoice;
     "/api/v1/supplier-invoices/{supplier_invoice_id}/reject": Endpoints.post_RejectSupplierInvoice;
     "/api/v1/support/intake/tickets": Endpoints.post_CreateIntakeTicket;

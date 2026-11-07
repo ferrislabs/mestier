@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{
     AddressKind, Customer, CustomerContext, CustomerContextId, CustomerId, CustomerProfile,
     CustomerStatus, Deal, DealAmount, DealId, DealStage, DealStageName, DealTitle, LostReason,
-    MemberId, OrganizationId, Quote, QuoteId, QuoteStatus,
+    MemberId, OrganizationId, Quote, QuoteId,
     application::test_support::dev_pool,
     domain::{
         customer::ports::CustomerRepository,
@@ -625,21 +625,15 @@ async fn a_quote_carries_its_deal_and_the_list_filters_on_it() {
             })
             .await?;
         let quote = |deal_id: Option<DealId>, title: &str| Quote {
-            id: QuoteId(generate_uuid_v7()),
-            organization_id: org,
-            reference: None,
-            title: title.to_owned(),
-            customer_id: customer.id,
-            customer_context_id: context.id,
             deal_id,
-            status: QuoteStatus::Draft,
-            net_cents: 0,
-            vat_breakdown: Vec::new(),
-            gross_cents: 0,
-            lines: Vec::new(),
-            deleted_at: None,
-            created_at: now,
-            updated_at: now,
+            ..Quote::draft(
+                QuoteId(generate_uuid_v7()),
+                org,
+                customer.id,
+                context.id,
+                title.to_owned(),
+                now,
+            )
         };
         let mut quotes = PgQuoteRepository::new(&tx);
         let with_deal = quotes.insert(&quote(Some(linked.id), "Lié")).await?;

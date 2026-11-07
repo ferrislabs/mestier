@@ -101,7 +101,7 @@ impl QuoteTransitioned {
             QuoteStatus::Accepted => Some("quote.accepted"),
             QuoteStatus::Declined => Some("quote.declined"),
             QuoteStatus::Cancelled => Some("quote.cancelled"),
-            QuoteStatus::Draft => None,
+            QuoteStatus::Draft | QuoteStatus::Superseded => None,
         }
     }
 }
@@ -248,5 +248,6 @@ fn transition_label(status: QuoteStatus) -> &'static str {
         QuoteStatus::Declined => "Devis refusé",
         QuoteStatus::Cancelled => "Devis annulé",
         QuoteStatus::Draft => "Devis repassé en brouillon",
+        QuoteStatus::Superseded => "Devis remplacé",
     }
 }

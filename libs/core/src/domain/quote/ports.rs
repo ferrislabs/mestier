@@ -3,8 +3,7 @@ use common::CoreError;
 
 use super::search::{QuoteSearch, QuoteSummary};
 use crate::{
-    DealId, OrganizationId, Quote, QuoteId, QuoteStatus,
-    domain::organization::billing_settings::NumberPadding,
+    DealId, OrganizationId, Quote, QuoteId, domain::organization::billing_settings::NumberPadding,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -56,15 +55,9 @@ pub trait QuoteRepository: Send {
 
     fn update(&mut self, quote: &Quote) -> impl Future<Output = Result<Quote, CoreError>> + Send;
 
-    /// `reference` is `Some` only on the call that allocates it — the
-    /// transition into `Sent` that finds none yet. Every other call passes
-    /// `None`, which leaves whatever the row already holds untouched.
-    fn update_status(
+    fn update_lifecycle(
         &mut self,
-        id: QuoteId,
-        status: QuoteStatus,
-        reference: Option<String>,
-        updated_at: DateTime<Utc>,
+        quote: &Quote,
     ) -> impl Future<Output = Result<Quote, CoreError>> + Send;
 
     fn soft_delete(

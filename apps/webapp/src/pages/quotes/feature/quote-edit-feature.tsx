@@ -20,17 +20,14 @@ import {
 	useCreateQuote,
 	useDeleteQuote,
 	useQuote,
+	useReviseQuote,
 	useUpdateQuote,
+	useUpdateQuoteStatus,
 } from '#/hooks/use-quotes'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { downloadAuthenticatedFile } from '#/lib/download-file'
 import { buildOrgPath } from '#/modules/org-path'
 import { invoiceKindLabel } from '#/pages/invoices/types'
-import {
-	readQuoteExtras,
-	saveQuoteExtras,
-	useQuoteExtras,
-} from '#/pages/quotes/feature/mocks/quote-extras'
 import { computeBillingPipelineSteps } from '#/pages/quotes/lib/billing-pipeline'
 import {
 	duplicateItem,
@@ -44,29 +41,27 @@ import {
 	previewQuoteTotals,
 	savedQuoteTotals,
 } from '#/pages/quotes/lib/quote-document'
-import { defaultValidUntil } from '#/pages/quotes/lib/quote-draft'
 import {
-	acceptedPatch,
-	declinedPatch,
-	type QuoteExtras,
-	revisionPatches,
-} from '#/pages/quotes/lib/quote-extras'
-import {
-	copiedExtras,
-	extrasFormFields,
-	extrasPatchFromForm,
-	lineWithExtras,
-} from '#/pages/quotes/lib/quote-form-extras'
+	areTermsValid,
+	lineWithTerms,
+	termsBody,
+	termsFormFields,
+} from '#/pages/quotes/lib/quote-form-terms'
 import {
 	copyQuoteLine,
 	lineFromCatalogItem,
+	quoteLineBodies,
 } from '#/pages/quotes/lib/quote-lines'
 import { buildQuoteSideInfo } from '#/pages/quotes/lib/quote-side-info'
 import { toIsoDate } from '#/pages/quotes/lib/quote-status'
 import {
+	type QuoteTerms,
+	quoteLinkOf,
+	termsOfQuote,
+} from '#/pages/quotes/lib/quote-terms'
+import {
 	centsToEuros,
 	emptyQuoteLine,
-	eurosToCents,
 	formatCents,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
@@ -114,7 +109,18 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	const navigate = useNavigate()
 	const { activeOrganization } = useActiveOrganization()
 	const customers = useCustomers(quote.organization_id)
-	const extras = useQuoteExtras(quote.id)
+	const revisionSource = useQuote(
+		quote.revision_of_id ?? '',
+		Boolean(quote.revision_of_id),
+	)
+	const replacement = useQuote(
+		quote.superseded_by_id ?? '',
+		Boolean(quote.superseded_by_id),
+	)
+	const terms = termsOfQuote(quote, {
+		revisionOf: quoteLinkOf(revisionSource.data?.data, null),
+		supersededBy: quoteLinkOf(replacement.data?.data, null),
+	})
 	const [today] = useState(() => toIsoDate(new Date()))
 	const catalog = useReferenceCatalog(quote.organization_id, {
 		members: true,
@@ -169,13 +175,15 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		id: member.id,
 		name: member.display_name,
 	}))
-	const info = buildQuoteSideInfo(quote, extras, owners, today)
+	const info = buildQuoteSideInfo(quote, terms, owners, today)
 	const updateQuote = useUpdateQuote()
+	const updateStatus = useUpdateQuoteStatus()
+	const reviseQuote = useReviseQuote()
 	const createQuote = useCreateQuote(quote.organization_id)
 	const deleteQuote = useDeleteQuote(quote.organization_id)
 	const uploadFile = useUploadFile()
 	const [values, setValues] = useState<QuoteFormValues>(() =>
-		quoteToForm(quote, catalogItems, extras),
+		quoteToForm(quote, catalogItems, terms),
 	)
 	const [isDownloading, setIsDownloading] = useState(false)
 	const [downloadError, setDownloadError] = useState<string | null>(null)
@@ -200,7 +208,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		if (loadedVersion.current === version) return
 		loadedVersion.current = version
 
-		setValues(quoteToForm(quote, catalogItems, readQuoteExtras(quote.id)))
+		setValues(quoteToForm(quote, catalogItems, termsOfQuote(quote)))
 	}, [catalogItems, quote])
 
 	const updateValues = (patch: Partial<QuoteFormValues>) => {
@@ -273,7 +281,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		Boolean(values.title.trim()) &&
 		Boolean(values.customerId) &&
 		Boolean(values.customerContextId) &&
-		values.lines.every(isValidQuoteLine)
+		values.lines.every(isValidQuoteLine) &&
+		areTermsValid(values)
 
 	// Sending is refused server-side when the organization's legal identity
 	// is incomplete (#310, enforced again on export by #314) — caught here
@@ -282,10 +291,11 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	const identityIncompleteForSending =
 		!quote.reference && missingLegalIdentityFields.length > 0
 
-	const canSave = hasValidContent
+	const locked = quote.status !== 'DRAFT'
+	const canSave = hasValidContent && !locked
 	const canSend = hasValidContent && !identityIncompleteForSending
 
-	const savedValues = quoteToForm(quote, catalogItems, extras)
+	const savedValues = quoteToForm(quote, catalogItems, terms)
 	const isDirty = JSON.stringify(values) !== JSON.stringify(savedValues)
 	const previewTotals = previewQuoteTotals(values, vatEnabled)
 	const totals = isDirty ? previewTotals : savedQuoteTotals(quote)
@@ -314,6 +324,8 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		catalog.serviceRates.error?.message ??
 		catalog.products.error?.message ??
 		updateQuote.error?.message ??
+		updateStatus.error?.message ??
+		reviseQuote.error?.message ??
 		createQuote.error?.message ??
 		deleteQuote.error?.message ??
 		uploadFile.error?.message ??
@@ -323,93 +335,83 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 		title: values.title.trim(),
 		customer_id: values.customerId,
 		customer_context_id: values.customerContextId,
+		deal_id: quote.deal_id ?? null,
+		billing_contact_id: quote.billing_contact_id ?? null,
+		billing_address_id: quote.billing_address_id ?? null,
 		status: targetStatus,
+		...termsBody(values),
 		lines: quoteLineBodies(values.lines),
 	})
 
 	const saveQuote = async () => {
 		if (!canSave) return
-		saveQuoteExtras(quote.id, extrasPatchFromForm(values))
 		await updateQuote.mutateAsync({
 			path: { quote_id: quote.id },
 			body: buildUpdateBody(quote.status),
 		})
 	}
 
-	// Every transition goes through the same write as a save, on the literal
-	// target: the form is saved with it, as the old inline status select did.
-	const transitionTo = async (target: QuoteStatus): Promise<boolean> => {
-		if (!hasValidContent) return false
-		if (target === 'SENT' && identityIncompleteForSending) return false
-		saveQuoteExtras(quote.id, {
-			...extrasPatchFromForm(values),
-			...(target === 'SENT' && values.validUntil === ''
-				? { validUntil: defaultValidUntil(today) }
-				: {}),
-		})
+	const sendQuote = async () => {
+		if (!hasValidContent || identityIncompleteForSending) return
 		await updateQuote.mutateAsync({
 			path: { quote_id: quote.id },
-			body: buildUpdateBody(target),
+			body: buildUpdateBody('SENT'),
 		})
-		return true
 	}
 
-	const acceptQuote = async (signer: string) => {
-		if (await transitionTo('ACCEPTED')) {
-			saveQuoteExtras(quote.id, acceptedPatch(signer, today))
+	const answerQuote = async (
+		body: { status: QuoteStatus } & {
+			responded_by?: string
+			decline_reason?: string
+		},
+	) => {
+		await updateStatus.mutateAsync({
+			path: { quote_id: quote.id },
+			body,
+		})
+	}
+
+	const transitionTo = async (target: QuoteStatus) => {
+		if (target === 'SENT') {
+			await sendQuote()
+			return
 		}
+		await answerQuote({ status: target })
 	}
 
-	const declineQuote = async (reason: string) => {
-		if (await transitionTo('DECLINED')) {
-			saveQuoteExtras(quote.id, declinedPatch(reason, today))
-		}
-	}
+	const acceptQuote = (signer: string) =>
+		answerQuote({ status: 'ACCEPTED', responded_by: signer.trim() })
 
-	const createCopy = async (extrasOfCopy: Partial<QuoteExtras>) => {
+	const declineQuote = (reason: string) =>
+		answerQuote({ status: 'DECLINED', decline_reason: reason.trim() })
+
+	const createCopy = async () => {
 		const created = await createQuote.mutateAsync({
 			path: { organization_id: quote.organization_id },
 			body: {
 				title: values.title.trim(),
 				customer_id: values.customerId,
 				customer_context_id: values.customerContextId,
+				deal_id: quote.deal_id ?? null,
+				...termsBody(values),
+				valid_until: null,
 				lines: quoteLineBodies(values.lines),
 			},
-		})
-		saveQuoteExtras(created.data.id, {
-			...copiedExtras(readQuoteExtras(quote.id)),
-			...extrasPatchFromForm(values),
-			validUntil: null,
-			...extrasOfCopy,
 		})
 		await navigate({
 			to: buildOrgPath(activeOrganization.slug, '/crm/devis/$quoteId'),
 			params: { quoteId: created.data.id },
 		})
-		return created.data.id
 	}
 
 	const reviseCurrentQuote = async () => {
-		if (!hasValidContent) return
-		const next = { id: '', label: 'Brouillon' }
-		const previous = { id: quote.id, label: quote.reference ?? 'Brouillon' }
-		const newId = await createCopy(
-			revisionPatches({
-				previous,
-				previousExtras: readQuoteExtras(quote.id),
-				next,
-				at: new Date().toISOString(),
-			}).next,
-		)
-		saveQuoteExtras(
-			quote.id,
-			revisionPatches({
-				previous,
-				previousExtras: readQuoteExtras(quote.id),
-				next: { ...next, id: newId },
-				at: new Date().toISOString(),
-			}).previous,
-		)
+		const revision = await reviseQuote.mutateAsync({
+			path: { quote_id: quote.id },
+		})
+		await navigate({
+			to: buildOrgPath(activeOrganization.slug, '/crm/devis/$quoteId'),
+			params: { quoteId: revision.data.id },
+		})
 	}
 
 	const deleteCurrentQuote = async () => {
@@ -421,7 +423,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 
 	const duplicateCurrentQuote = async () => {
 		if (!hasValidContent) return
-		await createCopy({})
+		await createCopy()
 	}
 
 	const downloadPdf = async () => {
@@ -464,16 +466,16 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 				catalog.serviceRates.isLoading ||
 				catalog.products.isLoading
 			}
-			isSaving={updateQuote.isPending}
+			isSaving={updateQuote.isPending || updateStatus.isPending}
 			isDeleting={deleteQuote.isPending}
 			isDuplicating={createQuote.isPending}
-			isRevising={createQuote.isPending}
+			isRevising={reviseQuote.isPending}
 			isUploading={uploadFile.isPending}
 			isDownloading={isDownloading}
 			billingSteps={visibleBillingSteps}
 			linkedInvoices={linkedInvoices}
 			paper={paper}
-			history={buildQuoteHistory(quote, extras)}
+			history={buildQuoteHistory(quote, terms)}
 			totals={savedQuoteTotals(quote)}
 			unsavedNotice={
 				isDirty ? `Aperçu non enregistré : ${formatCents(totalLines)} HT` : null
@@ -507,33 +509,19 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	)
 }
 
-function quoteLineBodies(lines: QuoteLineFormValues[]) {
-	return lines.map((line) => ({
-		service_rate_id: line.serviceRateId || null,
-		label: line.label.trim(),
-		quantity: line.quantity.replace(',', '.').trim(),
-		unit: line.unit,
-		unit_price_cents: eurosToCents(line.unitPrice),
-		vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
-		notes: line.notes.trim() || null,
-		photo_keys: line.photoKeys,
-	}))
-}
-
 function quoteToForm(
 	quote: Quote,
 	catalogItems: CatalogItem[],
-	extras: QuoteExtras,
+	terms: QuoteTerms,
 ): QuoteFormValues {
 	const lines: QuoteLineFormValues[] = quote.lines.map((line, index) => {
-		const catalogItem = line.service_rate_id
-			? catalogItems.find(
-					(item) =>
-						item.type === 'SERVICE' && item.sourceId === line.service_rate_id,
-				)
-			: undefined
+		const catalogItem = catalogItems.find(
+			(item) =>
+				(item.type === 'SERVICE' && item.sourceId === line.service_rate_id) ||
+				(item.type === 'PRODUCT' && item.sourceId === line.product_id),
+		)
 
-		return lineWithExtras(
+		return lineWithTerms(
 			{
 				clientId: line.id || `line-${index + 1}`,
 				catalogItemId: catalogItem?.id ?? '',
@@ -549,7 +537,7 @@ function quoteToForm(
 				discountPercent: '',
 				frequency: 'one_shot',
 			},
-			extras,
+			terms,
 			index,
 		)
 	})
@@ -559,6 +547,6 @@ function quoteToForm(
 		customerId: quote.customer_id,
 		customerContextId: quote.customer_context_id,
 		lines: lines.length ? lines : [emptyQuoteLine()],
-		...extrasFormFields(extras),
+		...termsFormFields(terms),
 	}
 }

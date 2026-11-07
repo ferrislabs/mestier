@@ -54,6 +54,24 @@ pub(crate) async fn customer(pool: &PgPool, org: OrganizationId) -> Customer {
     Customer { id, context_id }
 }
 
+pub(crate) async fn customer_billed_in_nantes(pool: &PgPool, org: OrganizationId) -> Customer {
+    let customer = customer(pool, org).await;
+    sqlx::query(
+        "UPDATE customer_contexts SET address_line = '3 rue des Tilleuls', city = 'Nantes' WHERE id = $1",
+    )
+    .bind(customer.context_id)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE customers SET billing_address_id = $2 WHERE id = $1")
+        .bind(customer.id)
+        .bind(customer.context_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    customer
+}
+
 pub(crate) async fn quote(
     pool: &PgPool,
     org: OrganizationId,

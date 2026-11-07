@@ -1,18 +1,30 @@
 pub mod events;
 use std::{fmt::Display, str::FromStr};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CustomerContextId, CustomerId, DealId, OrganizationId, ServiceRateId};
+use crate::{
+    CustomerContactId, CustomerContextId, CustomerId, DealId, MemberId, OrganizationId, ProductId,
+    ServiceRateId,
+};
 
 pub mod commands;
+pub mod error;
 pub mod ports;
+pub mod pricing;
 pub mod search;
 pub mod service;
+pub mod snapshot;
+pub mod values;
+
+pub use error::{QuoteError, QuoteField, QuoteOutcome};
+pub use pricing::{QuoteTotals, RecurringTotal};
+pub use snapshot::{IssuerSnapshot, RecipientSnapshot, SnapshotAddress};
+pub use values::{BillingFrequency, DepositPercent, DiscountPercent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct QuoteId(pub Uuid);
@@ -39,18 +51,20 @@ pub enum QuoteStatus {
     Accepted,
     Declined,
     Cancelled,
+    Superseded,
 }
 
 impl QuoteStatus {
     /// Every variant, for exhaustive iteration. Adding one here is not
     /// enforced by the compiler, but naming its event is: `event_name` matches
     /// exhaustively, so a new status cannot be ignored silently.
-    pub const ALL: [QuoteStatus; 5] = [
+    pub const ALL: [QuoteStatus; 6] = [
         QuoteStatus::Draft,
         QuoteStatus::Sent,
         QuoteStatus::Accepted,
         QuoteStatus::Declined,
         QuoteStatus::Cancelled,
+        QuoteStatus::Superseded,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -60,6 +74,7 @@ impl QuoteStatus {
             Self::Accepted => "ACCEPTED",
             Self::Declined => "DECLINED",
             Self::Cancelled => "CANCELLED",
+            Self::Superseded => "SUPERSEDED",
         }
     }
 }
@@ -80,6 +95,7 @@ impl FromStr for QuoteStatus {
             "ACCEPTED" => Ok(Self::Accepted),
             "DECLINED" => Ok(Self::Declined),
             "CANCELLED" => Ok(Self::Cancelled),
+            "SUPERSEDED" => Ok(Self::Superseded),
             other => Err(format!("invalid quote status `{other}`")),
         }
     }
@@ -108,6 +124,7 @@ pub struct QuoteLine {
     pub organization_id: OrganizationId,
     pub quote_id: QuoteId,
     pub service_rate_id: Option<ServiceRateId>,
+    pub product_id: Option<ProductId>,
     pub label: String,
     pub quantity: Decimal,
     /// One of [`crate::ServiceRateUnit`]'s built-in codes, or an
@@ -121,6 +138,8 @@ pub struct QuoteLine {
     /// `None` on an organization not subject to VAT, or on a line created
     /// before this field existed.
     pub vat_rate_bp: Option<i32>,
+    pub discount_percent: DiscountPercent,
+    pub billing_frequency: BillingFrequency,
     pub notes: Option<String>,
     pub photo_keys: Vec<String>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -160,10 +179,77 @@ pub struct Quote {
     /// `net_cents` plus the VAT breakdown's total. Equal to `net_cents`
     /// when the organization is not subject to VAT.
     pub gross_cents: i32,
+    pub valid_until: Option<NaiveDate>,
+    pub deposit_percent: DepositPercent,
+    pub owner_member_id: Option<MemberId>,
+    pub notes: Option<String>,
+    pub billing_contact_id: Option<CustomerContactId>,
+    pub billing_address_id: Option<CustomerContextId>,
+    pub responded_at: Option<DateTime<Utc>>,
+    pub responded_by: Option<String>,
+    pub decline_reason: Option<String>,
+    pub revision_of_id: Option<QuoteId>,
+    pub superseded_by_id: Option<QuoteId>,
+    pub issuer_snapshot: Option<IssuerSnapshot>,
+    pub recipient_snapshot: Option<RecipientSnapshot>,
     pub lines: Vec<QuoteLine>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl Quote {
+    pub fn draft(
+        id: QuoteId,
+        organization_id: OrganizationId,
+        customer_id: CustomerId,
+        customer_context_id: CustomerContextId,
+        title: String,
+        now: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            id,
+            organization_id,
+            reference: None,
+            title,
+            customer_id,
+            customer_context_id,
+            deal_id: None,
+            status: QuoteStatus::Draft,
+            net_cents: 0,
+            vat_breakdown: Vec::new(),
+            gross_cents: 0,
+            valid_until: None,
+            deposit_percent: DepositPercent::ZERO,
+            owner_member_id: None,
+            notes: None,
+            billing_contact_id: None,
+            billing_address_id: None,
+            responded_at: None,
+            responded_by: None,
+            decline_reason: None,
+            revision_of_id: None,
+            superseded_by_id: None,
+            issuer_snapshot: None,
+            recipient_snapshot: None,
+            lines: Vec::new(),
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    pub fn is_draft(&self) -> bool {
+        self.status == QuoteStatus::Draft
+    }
+
+    pub fn is_expired(&self, today: NaiveDate) -> bool {
+        self.status == QuoteStatus::Sent && self.valid_until.is_some_and(|until| until < today)
+    }
+
+    pub fn recurring(&self) -> Vec<RecurringTotal> {
+        pricing::recurring_totals(&self.lines, !self.vat_breakdown.is_empty())
+    }
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ import {
 	previewQuoteTotals,
 	savedQuoteTotals,
 } from './quote-document'
-import { EMPTY_QUOTE_EXTRAS } from './quote-extras'
+import { EMPTY_TERMS } from './quote-terms'
 
 function quote(overrides: Partial<Quote> = {}): Quote {
 	return {
@@ -22,6 +22,9 @@ function quote(overrides: Partial<Quote> = {}): Quote {
 		net_cents: 10000,
 		gross_cents: 12000,
 		vat_breakdown: [{ rate_bp: 2000, vat_cents: 2000 }],
+		deposit_percent: '0',
+		is_expired: false,
+		recurring: [],
 		created_at: '2026-01-01T09:00:00Z',
 		updated_at: '2026-01-01T09:00:00Z',
 		...overrides,
@@ -34,7 +37,27 @@ describe('savedQuoteTotals', () => {
 			netCents: 10000,
 			vat: [{ rateBp: 2000, vatCents: 2000 }],
 			grossCents: 12000,
+			recurring: [],
 		})
+	})
+
+	it('relays the recurring totals of the backend, one per frequency', () => {
+		const totals = savedQuoteTotals(
+			quote({
+				recurring: [
+					{
+						frequency: 'MONTHLY',
+						net_cents: 2000,
+						vat_cents: 400,
+						gross_cents: 2400,
+					},
+				],
+			}),
+		)
+
+		expect(totals.recurring).toEqual([
+			{ frequency: 'monthly', netCents: 2000, vatCents: 400, grossCents: 2400 },
+		])
 	})
 })
 
@@ -87,14 +110,14 @@ describe('previewQuoteTotals', () => {
 describe('buildQuoteHistory', () => {
 	it('only lists the creation of a quote never touched', () => {
 		expect(
-			buildQuoteHistory(quote(), EMPTY_QUOTE_EXTRAS).map((entry) => entry.kind),
+			buildQuoteHistory(quote(), EMPTY_TERMS).map((entry) => entry.kind),
 		).toEqual(['created'])
 	})
 
 	it('reads the last status change as an event', () => {
 		const entries = buildQuoteHistory(
 			quote({ status: 'ACCEPTED', updated_at: '2026-01-05T09:00:00Z' }),
-			EMPTY_QUOTE_EXTRAS,
+			EMPTY_TERMS,
 		)
 
 		expect(entries.map((entry) => entry.kind)).toEqual(['created', 'accepted'])
@@ -103,7 +126,7 @@ describe('buildQuoteHistory', () => {
 	it('names the signer of an acceptance', () => {
 		const entries = buildQuoteHistory(
 			quote({ status: 'ACCEPTED', updated_at: '2026-01-05T09:00:00Z' }),
-			{ ...EMPTY_QUOTE_EXTRAS, signer: 'Mme Durand' },
+			{ ...EMPTY_TERMS, signer: 'Mme Durand' },
 		)
 
 		expect(entries.at(-1)?.detail).toBe('Devis accepté par Mme Durand')
@@ -112,7 +135,7 @@ describe('buildQuoteHistory', () => {
 	it('gives the reason of a refusal', () => {
 		const entries = buildQuoteHistory(
 			quote({ status: 'DECLINED', updated_at: '2026-01-05T09:00:00Z' }),
-			{ ...EMPTY_QUOTE_EXTRAS, declineReason: 'trop cher' },
+			{ ...EMPTY_TERMS, declineReason: 'trop cher' },
 		)
 
 		expect(entries.at(-1)?.detail).toBe('Devis refusé : trop cher')
@@ -120,7 +143,7 @@ describe('buildQuoteHistory', () => {
 
 	it('shows the quote this one revises', () => {
 		const entries = buildQuoteHistory(quote(), {
-			...EMPTY_QUOTE_EXTRAS,
+			...EMPTY_TERMS,
 			revisionOf: { id: 'q0', label: 'DEV-000' },
 		})
 
@@ -128,30 +151,14 @@ describe('buildQuoteHistory', () => {
 		expect(entries[1]?.detail).toBe('Révision de DEV-000')
 	})
 
-	it('adds the revised and reminder events kept in the extras', () => {
-		const entries = buildQuoteHistory(quote({ status: 'SENT' }), {
-			...EMPTY_QUOTE_EXTRAS,
-			events: [
-				{
-					id: 'e1',
-					kind: 'reminder',
-					detail: 'Devis relancé',
-					at: '2026-01-03T09:00:00Z',
-				},
-				{
-					id: 'e2',
-					kind: 'revised',
-					detail: 'Remplacé par DEV-002',
-					at: '2026-01-04T09:00:00Z',
-				},
-			],
-		})
+	it('says by which quote a replaced quote was succeeded', () => {
+		const entries = buildQuoteHistory(
+			quote({ status: 'SUPERSEDED', updated_at: '2026-01-04T09:00:00Z' }),
+			{ ...EMPTY_TERMS, supersededBy: { id: 'q2', label: 'DEV-002' } },
+		)
 
-		expect(entries.map((entry) => entry.kind)).toEqual([
-			'created',
-			'reminder',
-			'revised',
-		])
+		expect(entries.map((entry) => entry.kind)).toEqual(['created', 'revised'])
+		expect(entries[1]?.detail).toBe('Remplacé par DEV-002')
 	})
 })
 
@@ -174,6 +181,8 @@ describe('buildQuotePaper', () => {
 				address_line: '5 rue des Forges',
 				postal_code: '69001',
 				city: 'Lyon',
+				country: 'FR',
+				kind: 'SITE',
 				created_at: '2026-01-01T00:00:00Z',
 				updated_at: '2026-01-01T00:00:00Z',
 			},

@@ -23,8 +23,6 @@ export interface QuoteLineFormValues {
 	vatRateBp: string
 	notes: string
 	photoKeys: string[]
-	/** Percent as typed, `''` when none. No API field yet: lives in the quote
-	 * extras mock and never changes the totals the backend computes. */
 	discountPercent: string
 	frequency: BillingFrequency
 }
@@ -115,15 +113,6 @@ export function centsToEuros(cents: number): string {
 	return (cents / 100).toFixed(2)
 }
 
-/**
- * A decimal amount typed by hand, in exact cents.
- *
- * Integer arithmetic rather than `Number(value) * 100`, which is inexact: in
- * floating point `1.005 * 100` is `100.49999999999999`. A third decimal on a
- * euro amount has no authority to match, since the backend receives cents
- * already; it rounds the same way as everything else here, to even, so the file
- * has one rule rather than two.
- */
 export function eurosToCents(value: string): number {
 	const parsed = parseDecimal(value)
 	if (!parsed) return 0
@@ -152,15 +141,6 @@ function parseDecimal(value: string): { digits: bigint; scale: number } | null {
 	return { digits: BigInt(digits), scale: fraction.length }
 }
 
-/**
- * Restates `digits × 10^-scale` at `targetScale`, rounding halves to even.
- *
- * Banker's rounding, because that is what `rust_decimal`'s `round_dp` does by
- * default and the backend computes the stored total with it. Verified rather
- * than assumed: on the backend `0.5` rounds to `0`, `1.5` to `2` and `2.5` to
- * `2`. `Math.round` rounds halves up instead, which is what made the preview
- * and the saved quote disagree by a cent about once every fifty lines.
- */
 function scaleTo(digits: bigint, scale: number, targetScale: number): bigint {
 	if (scale <= targetScale) {
 		return digits * 10n ** BigInt(targetScale - scale)
@@ -170,10 +150,7 @@ function scaleTo(digits: bigint, scale: number, targetScale: number): bigint {
 	const quotient = digits / divisor
 	const doubled = (digits % divisor) * 2n
 
-	if (doubled > divisor) return quotient + 1n
-	if (doubled < divisor) return quotient
-	// Exactly a half: land on the even neighbour.
-	return quotient % 2n === 0n ? quotient : quotient + 1n
+	return doubled >= divisor ? quotient + 1n : quotient
 }
 
 export function formatCents(cents: number): string {
@@ -197,26 +174,29 @@ export function quoteStatusLabel(status: string): string {
 	if (status === 'ACCEPTED') return 'Accepté'
 	if (status === 'DECLINED') return 'Refusé'
 	if (status === 'CANCELLED') return 'Annulé'
+	if (status === 'SUPERSEDED') return 'Remplacé'
 	return status
 }
 
-/**
- * The line's total, to the cent, computed the way the backend computes it.
- *
- * The stored total has always come from `domain::quote::service`, which
- * multiplies with `Decimal` and rounds halves to even. This preview used to
- * multiply with floats and round halves up, and the two disagreed by a cent
- * about once every fifty lines. Impossible to explain to a customer when it
- * lands, so this does the same integer arithmetic instead. `types.test.ts` pins
- * cases that used to diverge, and `domain::quote::service` pins the same ones.
- */
 export function quoteLineTotalCents(line: QuoteLineFormValues): number {
 	const quantity = parseDecimal(line.quantity)
 	if (!quantity || quantity.digits === 0n) return 0
 
 	const unitPriceCents = BigInt(eurosToCents(line.unitPrice))
+	const discount = parseDecimal(line.discountPercent) ?? {
+		digits: 0n,
+		scale: 0,
+	}
+	const remaining = 100n * 10n ** BigInt(discount.scale) - discount.digits
+	if (remaining < 0n) return 0
 
-	return Number(scaleTo(quantity.digits * unitPriceCents, quantity.scale, 0))
+	return Number(
+		scaleTo(
+			quantity.digits * unitPriceCents * remaining,
+			quantity.scale + discount.scale + 2,
+			0,
+		),
+	)
 }
 
 export interface QuoteLineDraftVatBreakdown {
@@ -224,13 +204,6 @@ export interface QuoteLineDraftVatBreakdown {
 	vatCents: number
 }
 
-/**
- * VAT broken down per rate for a draft that has not been saved yet — the same
- * algorithm as `domain::quote::service::calculate_totals` (rounded per line,
- * then summed per rate), so the paper preview and the eventual saved quote
- * never disagree by a cent. Lines with nothing chargeable yet are left out
- * rather than shown as a "0,00 €" rate nobody asked for.
- */
 export function quoteLinesVatBreakdown(
 	lines: QuoteLineFormValues[],
 	vatEnabled: boolean,
@@ -243,13 +216,15 @@ export function quoteLinesVatBreakdown(
 		if (lineNet === 0n) continue
 
 		const rateBp = line.vatRateBp === '' ? 0 : Number(line.vatRateBp)
-		const lineVat = divRoundHalfEven(lineNet * BigInt(rateBp), 10_000n)
-		byRate.set(rateBp, (byRate.get(rateBp) ?? 0n) + lineVat)
+		byRate.set(rateBp, (byRate.get(rateBp) ?? 0n) + lineNet)
 	}
 
 	return Array.from(byRate.entries())
 		.sort(([a], [b]) => a - b)
-		.map(([rateBp, vatCents]) => ({ rateBp, vatCents: Number(vatCents) }))
+		.map(([rateBp, base]) => ({
+			rateBp,
+			vatCents: Number(scaleTo(base * BigInt(rateBp), 4, 0)),
+		}))
 }
 
 export function quoteLinesGrossCents(
@@ -257,16 +232,6 @@ export function quoteLinesGrossCents(
 	vatBreakdown: QuoteLineDraftVatBreakdown[],
 ): number {
 	return netCents + vatBreakdown.reduce((sum, line) => sum + line.vatCents, 0)
-}
-
-function divRoundHalfEven(numerator: bigint, denominator: bigint): bigint {
-	const quotient = numerator / denominator
-	const remainder = numerator % denominator
-	const doubled = remainder * 2n
-
-	if (doubled > denominator) return quotient + 1n
-	if (doubled < denominator) return quotient
-	return quotient % 2n === 0n ? quotient : quotient + 1n
 }
 
 export function quoteLineSourceLabel(

@@ -49,10 +49,19 @@ export function canChangeClient(
 	)
 }
 
+export function isClientLocked(
+	hasCustomer: boolean,
+	savedLineCount: number,
+	lines: Parameters<typeof canChangeClient>[0],
+): boolean {
+	return hasCustomer && (savedLineCount > 0 || !canChangeClient(lines))
+}
+
 export function validityNote(
 	status: QuoteStatus,
 	validUntil: string | null,
 	today: string,
+	isExpired = false,
 ): ValidityNote {
 	if (validUntil === null)
 		return {
@@ -61,6 +70,6 @@ export function validityNote(
 		}
 	return {
 		text: `Valable jusqu’au ${formatDocumentDate(validUntil)}`,
-		expired: (status === 'SENT' || status === 'DRAFT') && validUntil < today,
+		expired: status === 'DRAFT' ? validUntil < today : isExpired,
 	}
 }

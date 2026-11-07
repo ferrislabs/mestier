@@ -33,7 +33,7 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 | B1 | Réglages d'organisation : IBAN, BIC, pénalités, indemnité de recouvrement, pied de facture, padding, validité des devis, délai de paiement, TVA par défaut, compteur d'avoirs | – | PR ouverte |
 | B2 | Client : type, site web, TVA, responsable, source, notes, délai de paiement, contact et adresse de facturation, dates de conversion et d'archivage, SIRET. Contact : mobile. Adresse : type, pays | – | PR ouverte |
 | B3 | Opportunités (`deal`) + migration depuis `pipeline_stage` | B2 | PR ouverte |
-| B4 | Devis : validité, acompte, motif de refus, signataire, responsable, opportunité, notes, remise et fréquence par ligne, révisions, « remplacé » | B3 | à faire |
+| B4 | Devis : validité, acompte, motif de refus, signataire, responsable, opportunité, notes, remise et fréquence par ligne, révisions, « remplacé » | B3 | PR ouverte |
 | B5 | Factures : titre, délai de paiement, mentions légales, note interne, envoi et relance, création depuis un devis, suppression de brouillon, date d'émission, mode de règlement typé, remboursement | B1, B4 | à faire |
 | B6 | Dépenses et catégories, journal, fournisseurs enrichis, catalogue enrichi | B1 | à faire |
 | B7 | Indicateurs : CA 12 mois, encours en retard, dernière activité | B3, B5, B6 | à faire |
@@ -79,6 +79,14 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 - `DealQuoteStatus` du front gagne `cancelled` ; B4 y ajoute `superseded`.
 - `tsc --noEmit` passe de 43 à 48 erreurs, toutes dans des fixtures de tests (`quote-new-ui.test.tsx`, `quote-edit-ui.test.tsx`) auxquelles manquent les champs client de B2. À corriger quand B4 touche ces tests.
 - Le bloc de sortie de B3 a été interrompu par un disque plein (`target/debug/incremental`, 21 Go, supprimé) ; relancé en entier par l'orchestrateur.
+
+## Reports issus de B4
+- TVA désormais calculée une fois par taux sur la base agrégée (moitié éloignée de zéro) : 2 × 100,33 € à 20 % donne 20066 / 4013 au lieu de 4014. Les totaux déjà stockés ne changent pas, seuls les brouillons ré-enregistrés.
+- Le PDF ne lit pas `issuer_snapshot` / `recipient_snapshot` : il rend l'identité en direct. À décider.
+- Le compteur d'usage du catalogue (4-13) est reporté en B6.
+- Contact et adresse de facturation du devis : stockés, sans champ d'édition dans l'UI.
+- `tsc --noEmit` : 43 erreurs, hors périmètre, antérieures à B2.
+- Vérification de B4 allégée (clippy, tests Rust, migration, Biome, vitest) ; les tests de base et l'e2e ont été lancés par l'agent (810 et 19/19).
 
 ## À vérifier au lot concerné
 - Sémantique de `POST /invoices/{id}/cancel` et d'un montant négatif sur un paiement (B5, remboursement).

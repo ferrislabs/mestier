@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { cn } from '#/lib/utils'
 import {
 	type BillingFrequency,
+	FREQUENCY_LABELS,
 	FREQUENCY_SUFFIX,
 } from '#/pages/quotes/lib/billing-frequency'
 import { formatDocumentDate, formatSiret } from '#/pages/quotes/lib/doc-format'
@@ -325,6 +326,24 @@ function TotalsBlock({ document }: { document: PaperDocument }) {
 						<Amount cents={totals.grossCents} />
 					</dd>
 				</div>
+				{totals.recurring && totals.recurring.length > 0 && (
+					<div className="space-y-1 border-zinc-200 border-t pt-2">
+						<dt className="text-[11px] text-zinc-500">
+							Dont facturé de façon récurrente
+						</dt>
+						{totals.recurring.map((row) => (
+							<div key={row.frequency} className="flex justify-between gap-4">
+								<dt className="text-zinc-600">
+									{FREQUENCY_LABELS[row.frequency]} (HT)
+								</dt>
+								<dd>
+									<Amount cents={row.netCents} />{' '}
+									{FREQUENCY_SUFFIX[row.frequency]}
+								</dd>
+							</div>
+						))}
+					</div>
+				)}
 			</dl>
 		</div>
 	)

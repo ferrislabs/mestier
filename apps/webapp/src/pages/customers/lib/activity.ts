@@ -48,6 +48,7 @@ const QUOTE_STATUS: Record<
 	ACCEPTED: { label: 'Accepté', tone: 'ok' },
 	DECLINED: { label: 'Refusé', tone: 'alert' },
 	CANCELLED: { label: 'Annulé', tone: 'neutral' },
+	SUPERSEDED: { label: 'Remplacé', tone: 'neutral' },
 }
 
 const INVOICE_STATUS: Record<

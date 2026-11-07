@@ -37,3 +37,9 @@ pub struct QuotePlanProposalPath {
 pub struct QuotePlanPath {
     pub quote_id: QuoteId,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/quotes/{quote_id}/revision")]
+pub struct QuoteRevisionPath {
+    pub quote_id: QuoteId,
+}

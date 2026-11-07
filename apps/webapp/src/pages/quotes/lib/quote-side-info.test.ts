@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Quote } from '#/hooks/use-quotes'
-import { EMPTY_QUOTE_EXTRAS } from './quote-extras'
 import { buildQuoteSideInfo } from './quote-side-info'
+import { EMPTY_TERMS } from './quote-terms'
 
 const TODAY = '2026-11-07'
 
@@ -17,6 +17,9 @@ function quote(overrides: Partial<Quote> = {}): Quote {
 		net_cents: 0,
 		gross_cents: 0,
 		vat_breakdown: [],
+		deposit_percent: '0',
+		is_expired: false,
+		recurring: [],
 		created_at: '2026-10-01T09:00:00Z',
 		updated_at: '2026-10-02T09:00:00Z',
 		...overrides,
@@ -28,8 +31,8 @@ const OWNERS = [{ id: 'm1', name: 'Julien Roche' }]
 describe('buildQuoteSideInfo', () => {
 	it('derives the display status and the validity note', () => {
 		const info = buildQuoteSideInfo(
-			quote(),
-			{ ...EMPTY_QUOTE_EXTRAS, validUntil: '2026-11-01' },
+			quote({ is_expired: true }),
+			{ ...EMPTY_TERMS, validUntil: '2026-11-01' },
 			OWNERS,
 			TODAY,
 		)
@@ -41,7 +44,7 @@ describe('buildQuoteSideInfo', () => {
 	it('names the owner', () => {
 		const info = buildQuoteSideInfo(
 			quote(),
-			{ ...EMPTY_QUOTE_EXTRAS, ownerId: 'm1' },
+			{ ...EMPTY_TERMS, ownerId: 'm1' },
 			OWNERS,
 			TODAY,
 		)
@@ -52,7 +55,7 @@ describe('buildQuoteSideInfo', () => {
 	it('has no owner name when the owner is unknown', () => {
 		const info = buildQuoteSideInfo(
 			quote(),
-			{ ...EMPTY_QUOTE_EXTRAS, ownerId: 'gone' },
+			{ ...EMPTY_TERMS, ownerId: 'gone' },
 			OWNERS,
 			TODAY,
 		)
@@ -64,7 +67,7 @@ describe('buildQuoteSideInfo', () => {
 		const info = buildQuoteSideInfo(
 			quote({ status: 'ACCEPTED' }),
 			{
-				...EMPTY_QUOTE_EXTRAS,
+				...EMPTY_TERMS,
 				signer: 'Mme Durand',
 				respondedAt: '2026-11-02',
 			},
@@ -79,7 +82,7 @@ describe('buildQuoteSideInfo', () => {
 		const info = buildQuoteSideInfo(
 			quote({ status: 'DECLINED' }),
 			{
-				...EMPTY_QUOTE_EXTRAS,
+				...EMPTY_TERMS,
 				respondedAt: '2026-11-02',
 				declineReason: 'trop cher',
 			},
@@ -94,7 +97,7 @@ describe('buildQuoteSideInfo', () => {
 	it('falls back on the last update when no answer date was kept', () => {
 		const info = buildQuoteSideInfo(
 			quote({ status: 'ACCEPTED', updated_at: '2026-10-05T09:00:00Z' }),
-			EMPTY_QUOTE_EXTRAS,
+			EMPTY_TERMS,
 			OWNERS,
 			TODAY,
 		)
@@ -104,7 +107,7 @@ describe('buildQuoteSideInfo', () => {
 
 	it('has no answer note on a quote nobody answered', () => {
 		expect(
-			buildQuoteSideInfo(quote(), EMPTY_QUOTE_EXTRAS, OWNERS, TODAY).answerNote,
+			buildQuoteSideInfo(quote(), EMPTY_TERMS, OWNERS, TODAY).answerNote,
 		).toBeNull()
 	})
 
@@ -112,7 +115,7 @@ describe('buildQuoteSideInfo', () => {
 		const info = buildQuoteSideInfo(
 			quote(),
 			{
-				...EMPTY_QUOTE_EXTRAS,
+				...EMPTY_TERMS,
 				revisionOf: { id: 'q0', label: 'DEV-000' },
 				supersededBy: { id: 'q2', label: 'Brouillon' },
 				dealId: 'd1',

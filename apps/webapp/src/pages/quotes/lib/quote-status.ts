@@ -1,5 +1,4 @@
-import type { QuoteStatus } from '#/hooks/use-quotes'
-import type { QuoteExtras } from '#/pages/quotes/lib/quote-extras'
+import type { Quote } from '#/hooks/use-quotes'
 
 export type QuoteDisplayStatus =
 	| 'draft'
@@ -27,22 +26,10 @@ export function toIsoDate(date: Date): string {
 }
 
 export function quoteDisplayStatus(
-	status: QuoteStatus,
-	extras: Pick<QuoteExtras, 'validUntil' | 'supersededBy'>,
-	today: string,
+	quote: Pick<Quote, 'status' | 'is_expired'>,
 ): QuoteDisplayStatus {
-	if (
-		(status === 'SENT' || status === 'DECLINED') &&
-		extras.supersededBy !== null
-	)
-		return 'superseded'
-	if (
-		status === 'SENT' &&
-		extras.validUntil !== null &&
-		extras.validUntil < today
-	)
-		return 'expired'
-	switch (status) {
+	if (quote.is_expired) return 'expired'
+	switch (quote.status) {
 		case 'DRAFT':
 			return 'draft'
 		case 'SENT':
@@ -53,5 +40,7 @@ export function quoteDisplayStatus(
 			return 'declined'
 		case 'CANCELLED':
 			return 'cancelled'
+		case 'SUPERSEDED':
+			return 'superseded'
 	}
 }
