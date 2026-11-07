@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                payment_terms_days, quote_validity_days, default_vat_rate_bp, late_penalty,\n                recovery_fee_cents, invoice_footer, number_padding, iban, bic\n            FROM organization_billing_settings\n            WHERE org_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payment_terms_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "quote_validity_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "default_vat_rate_bp",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "late_penalty",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "recovery_fee_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "invoice_footer",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "number_padding",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "iban",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "bic",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "20c277ef5488bd29d8cec18a81960103037f486531b11b28a3d09c0d1db0ee75"
+}

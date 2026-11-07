@@ -3,8 +3,9 @@ use common::{CoreError, UserId};
 
 use crate::{
     Customer, CustomerOutstandingBalance, DraftInvoice, ElectronicInvoicingFacts,
-    GeneratedInvoiceDocument, Invoice, InvoiceId, InvoicePayment, InvoicePaymentId, InvoiceStatus,
-    LegalIdentity, OrganizationId, ProjectId,
+    GeneratedInvoiceDocument, Invoice, InvoiceId, InvoiceNumberSeries, InvoicePayment,
+    InvoicePaymentId, InvoiceStatus, LegalIdentity, OrganizationId, ProjectId,
+    domain::organization::billing_settings::NumberPadding,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -20,9 +21,26 @@ pub trait InvoiceRepository: Send {
     fn allocate_number(
         &mut self,
         organization_id: OrganizationId,
+        series: InvoiceNumberSeries,
         prefix: &str,
         year: i32,
+        padding: NumberPadding,
     ) -> impl Future<Output = Result<String, CoreError>> + Send;
+
+    fn last_assigned_number(
+        &mut self,
+        organization_id: OrganizationId,
+        series: InvoiceNumberSeries,
+        year: i32,
+    ) -> impl Future<Output = Result<i32, CoreError>> + Send;
+
+    fn raise_last_assigned_number(
+        &mut self,
+        organization_id: OrganizationId,
+        series: InvoiceNumberSeries,
+        year: i32,
+        last_assigned: i32,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     fn insert_draft(
         &mut self,

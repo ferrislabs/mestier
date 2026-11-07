@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 
 use super::search::{QuoteSearch, QuoteSummary};
-use crate::{OrganizationId, Quote, QuoteId, QuoteStatus};
+use crate::{
+    OrganizationId, Quote, QuoteId, QuoteStatus,
+    domain::organization::billing_settings::NumberPadding,
+};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait QuoteRepository: Send {
@@ -15,7 +18,21 @@ pub trait QuoteRepository: Send {
         organization_id: OrganizationId,
         prefix: &str,
         year: i32,
+        padding: NumberPadding,
     ) -> impl Future<Output = Result<String, CoreError>> + Send;
+
+    fn last_assigned_number(
+        &mut self,
+        organization_id: OrganizationId,
+        year: i32,
+    ) -> impl Future<Output = Result<i32, CoreError>> + Send;
+
+    fn raise_last_assigned_number(
+        &mut self,
+        organization_id: OrganizationId,
+        year: i32,
+        last_assigned: i32,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     fn insert(&mut self, quote: &Quote) -> impl Future<Output = Result<Quote, CoreError>> + Send;
 

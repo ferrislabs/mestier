@@ -10,8 +10,8 @@ use serde_json::{Value, json};
 use crate::{
     CustomerContextId, CustomerId, CustomerOutstandingBalance, DraftInvoice,
     GeneratedInvoiceDocument, Invoice, InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId,
-    InvoicePayment, InvoicePaymentId, InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity,
-    Organization, OrganizationId, Project, ProjectBillingSummary, ProjectId,
+    InvoiceNumberSeries, InvoicePayment, InvoicePaymentId, InvoiceStatus, InvoiceVatBreakdownLine,
+    LegalIdentity, Organization, OrganizationId, Project, ProjectBillingSummary, ProjectId,
     application::policy,
     domain::{
         invoice::{
@@ -28,7 +28,10 @@ use crate::{
             ports::InvoiceRepository,
         },
         member::ports::MemberRepository,
-        organization::{legal_identity::VatStatus, ports::OrganizationRepository},
+        organization::{
+            billing_settings::IssuerBilling, legal_identity::VatStatus,
+            numbering::CREDIT_NOTE_NUMBER_PREFIX, ports::OrganizationRepository,
+        },
         project::{ports::ProjectRepository, service::remaining_to_bill_cents},
         quote::ports::QuoteRepository,
         role::ports::RoleRepository,
@@ -966,13 +969,26 @@ where
         )
         .await?;
 
+        let settings = organization_repository
+            .find_billing_settings(invoice.organization_id)
+            .await?
+            .unwrap_or_default();
+        let legal_identity = legal_identity.with_billing(IssuerBilling::from(&settings));
+
+        let series = InvoiceNumberSeries::for_kind(invoice.kind);
+        let prefix = match series {
+            InvoiceNumberSeries::Invoice => organization.invoice_number_prefix.as_str(),
+            InvoiceNumberSeries::CreditNote => CREDIT_NOTE_NUMBER_PREFIX,
+        };
         let year = Utc::now().year();
         let number = self
             .repo
             .allocate_number(
                 invoice.organization_id,
-                &organization.invoice_number_prefix,
+                series,
+                prefix,
                 year,
+                settings.number_padding,
             )
             .await?;
         let now = Utc::now();
@@ -1853,6 +1869,8 @@ mod tests {
         organization: Organization,
     ) -> crate::domain::organization::ports::MockOrganizationRepository {
         let mut repo = crate::domain::organization::ports::MockOrganizationRepository::new();
+        repo.expect_find_billing_settings()
+            .returning(|_| Box::pin(async { Ok(None) }));
         repo.expect_find_by_id().times(1).returning(move |_| {
             let organization = organization.clone();
             Box::pin(async move { Ok(Some(organization)) })
@@ -1870,6 +1888,8 @@ mod tests {
         organization: Organization,
     ) -> crate::domain::organization::ports::MockOrganizationRepository {
         let mut repo = crate::domain::organization::ports::MockOrganizationRepository::new();
+        repo.expect_find_billing_settings()
+            .returning(|_| Box::pin(async { Ok(None) }));
         repo.expect_find_by_id().returning(move |_| {
             let organization = organization.clone();
             Box::pin(async move { Ok(Some(organization)) })
@@ -2399,7 +2419,7 @@ mod tests {
 
         let mut next_number = 0u32;
         repo.expect_allocate_number()
-            .returning(move |_, prefix, year| {
+            .returning(move |_, _, prefix, year, _| {
                 next_number += 1;
                 let number = format!("{prefix}-{year}-{next_number:04}");
                 Box::pin(async move { Ok(number) })
@@ -3040,10 +3060,11 @@ mod tests {
             let draft = draft.clone();
             Box::pin(async move { Ok(Some(draft)) })
         });
-        repo.expect_allocate_number().returning(|_, prefix, year| {
-            let number = format!("{prefix}-{year}-0001");
-            Box::pin(async move { Ok(number) })
-        });
+        repo.expect_allocate_number()
+            .returning(|_, _, prefix, year, _| {
+                let number = format!("{prefix}-{year}-0001");
+                Box::pin(async move { Ok(number) })
+            });
         repo.expect_issue().returning(
             move |issued_id, number, issued_at, issuer_identity, updated_at| {
                 let mut issued = invoice(issued_id);
@@ -3800,5 +3821,252 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(CoreError::Forbidden { .. })));
+    }
+
+    fn settings_with(
+        padding: i64,
+        iban: Option<&str>,
+        late_penalty: &str,
+        recovery_fee_cents: i64,
+        footer: &str,
+    ) -> crate::domain::organization::billing_settings::BillingSettings {
+        use crate::domain::organization::billing_settings::{
+            BillingSettings, BillingSettingsInput,
+        };
+
+        BillingSettings::try_from(BillingSettingsInput {
+            payment_terms_days: 30,
+            quote_validity_days: 30,
+            default_vat_rate_bp: 2000,
+            late_penalty: late_penalty.to_owned(),
+            recovery_fee_cents,
+            invoice_footer: footer.to_owned(),
+            number_padding: padding,
+            iban: iban.map(str::to_owned),
+            bic: None,
+        })
+        .unwrap()
+    }
+
+    fn organization_repository_with_settings(
+        organization: Organization,
+        settings: crate::domain::organization::billing_settings::BillingSettings,
+    ) -> crate::domain::organization::ports::MockOrganizationRepository {
+        let mut repo = crate::domain::organization::ports::MockOrganizationRepository::new();
+        repo.expect_find_by_id().returning(move |_| {
+            let organization = organization.clone();
+            Box::pin(async move { Ok(Some(organization)) })
+        });
+        repo.expect_find_billing_settings().returning(move |_| {
+            let settings = settings.clone();
+            Box::pin(async move { Ok(Some(settings)) })
+        });
+        repo
+    }
+
+    #[tokio::test]
+    async fn spec_crm_1_4_a_credit_note_takes_its_number_from_the_av_series() {
+        use crate::domain::invoice::InvoiceNumberSeries;
+
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let id = InvoiceId(Uuid::new_v4());
+        let draft = Invoice {
+            organization_id,
+            kind: InvoiceKind::CreditNote,
+            project_id: None,
+            ..invoice(id)
+        };
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().returning(move |_| {
+            let draft = draft.clone();
+            Box::pin(async move { Ok(Some(draft)) })
+        });
+        repo.expect_allocate_number()
+            .withf(|_, series, prefix, year, padding| {
+                *series == InvoiceNumberSeries::CreditNote
+                    && prefix == "AV"
+                    && *year == Utc::now().year()
+                    && padding.get() == 3
+            })
+            .times(1)
+            .returning(|_, _, prefix, year, _| {
+                let number = format!("{prefix}-{year}-001");
+                Box::pin(async move { Ok(number) })
+            });
+        repo.expect_issue().returning(
+            move |issued_id, number, issued_at, issuer_identity, updated_at| {
+                let issued = Invoice {
+                    status: InvoiceStatus::Issued,
+                    number: Some(number),
+                    issued_at: Some(issued_at),
+                    issuer_identity: Some(issuer_identity.clone()),
+                    updated_at,
+                    kind: InvoiceKind::CreditNote,
+                    project_id: None,
+                    ..invoice(issued_id)
+                };
+                Box::pin(async move { Ok(issued) })
+            },
+        );
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
+
+        let issued = service
+            .issue_invoice(
+                IssueInvoiceCommand {
+                    actor: system_actor(),
+                    id,
+                    allow_exceeding_total: false,
+                },
+                organization_repository_with_settings(
+                    complete_organization(organization_id),
+                    settings_with(3, None, "penalty", 4000, ""),
+                ),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            issued.number.as_deref(),
+            Some(format!("AV-{}-001", Utc::now().year()).as_str())
+        );
+    }
+
+    #[tokio::test]
+    async fn spec_crm_1_4_a_standard_invoice_keeps_the_invoice_series() {
+        use crate::domain::invoice::InvoiceNumberSeries;
+
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let id = InvoiceId(Uuid::new_v4());
+        let draft = Invoice {
+            organization_id,
+            project_id: None,
+            ..invoice(id)
+        };
+        let mut repo = crate::domain::invoice::ports::MockInvoiceRepository::new();
+        repo.expect_find_by_id().returning(move |_| {
+            let draft = draft.clone();
+            Box::pin(async move { Ok(Some(draft)) })
+        });
+        repo.expect_allocate_number()
+            .withf(|_, series, prefix, _, _| {
+                *series == InvoiceNumberSeries::Invoice && prefix == "FAC"
+            })
+            .times(1)
+            .returning(|_, _, prefix, year, _| {
+                let number = format!("{prefix}-{year}-0001");
+                Box::pin(async move { Ok(number) })
+            });
+        repo.expect_issue().returning(
+            move |issued_id, number, issued_at, issuer_identity, updated_at| {
+                let issued = Invoice {
+                    status: InvoiceStatus::Issued,
+                    number: Some(number),
+                    issued_at: Some(issued_at),
+                    issuer_identity: Some(issuer_identity.clone()),
+                    updated_at,
+                    project_id: None,
+                    ..invoice(issued_id)
+                };
+                Box::pin(async move { Ok(issued) })
+            },
+        );
+        let mut service = new_permissive_service(repo, events::testing::RecordingEmitter::new());
+
+        service
+            .issue_invoice(
+                IssueInvoiceCommand {
+                    actor: system_actor(),
+                    id,
+                    allow_exceeding_total: false,
+                },
+                organization_repository_with_settings(
+                    complete_organization(organization_id),
+                    settings_with(4, None, "penalty", 4000, ""),
+                ),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn spec_crm_1_6_an_issued_invoice_keeps_the_billing_mentions_it_had_at_issue() {
+        use crate::domain::organization::billing_settings::IssuerBilling;
+
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let first_id = InvoiceId(Uuid::new_v4());
+        let second_id = InvoiceId(Uuid::new_v4());
+        let drafts = [first_id, second_id].map(|id| Invoice {
+            organization_id,
+            project_id: None,
+            ..invoice(id)
+        });
+        let store: Arc<Mutex<Vec<Invoice>>> = Arc::new(Mutex::new(drafts.to_vec()));
+        let mut service = new_permissive_service(
+            invoice_repository_over(store.clone()),
+            events::testing::RecordingEmitter::new(),
+        );
+        let before = settings_with(
+            4,
+            Some("FR76 3000 6000 0112 3456 7890 189"),
+            "trois fois le taux légal",
+            4000,
+            "Merci.",
+        );
+        let after = settings_with(
+            4,
+            Some("FR14 2004 1010 0505 0001 3M02 606"),
+            "dix pour cent",
+            0,
+            "",
+        );
+
+        service
+            .issue_invoice(
+                IssueInvoiceCommand {
+                    actor: system_actor(),
+                    id: first_id,
+                    allow_exceeding_total: false,
+                },
+                organization_repository_with_settings(
+                    complete_organization(organization_id),
+                    before.clone(),
+                ),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await
+            .unwrap();
+        service
+            .issue_invoice(
+                IssueInvoiceCommand {
+                    actor: system_actor(),
+                    id: second_id,
+                    allow_exceeding_total: false,
+                },
+                organization_repository_with_settings(
+                    complete_organization(organization_id),
+                    after.clone(),
+                ),
+                MockProjectRepository::new(),
+                MockQuoteRepository::new(),
+            )
+            .await
+            .unwrap();
+
+        let stored = store.lock().unwrap();
+        let frozen = |id: InvoiceId| {
+            stored
+                .iter()
+                .find(|invoice| invoice.id == id)
+                .and_then(|invoice| invoice.issuer_identity.as_ref())
+                .and_then(|identity| identity.billing.clone())
+        };
+        assert_eq!(frozen(first_id), Some(IssuerBilling::from(&before)));
+        assert_eq!(frozen(second_id), Some(IssuerBilling::from(&after)));
+        assert_ne!(frozen(first_id), frozen(second_id));
     }
 }

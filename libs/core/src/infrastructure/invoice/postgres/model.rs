@@ -9,7 +9,7 @@ use crate::{
     CustomerContextId, CustomerId, CustomerOutstandingBalance, GeneratedInvoiceDocument, Invoice,
     InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId,
     InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity, OperationNature, OrganizationAddress,
-    OrganizationId, ProjectId, VatStatus,
+    OrganizationId, ProjectId, VatStatus, domain::organization::billing_settings::IssuerBilling,
 };
 
 #[derive(Debug, Clone)]
@@ -206,6 +206,17 @@ struct LegalIdentityJson {
     contact_email: Option<String>,
     contact_phone: Option<String>,
     insurance_mention: String,
+    #[serde(default)]
+    billing: Option<IssuerBillingJson>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct IssuerBillingJson {
+    iban: Option<String>,
+    bic: Option<String>,
+    late_penalty: String,
+    recovery_fee_cents: i32,
+    invoice_footer: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -239,6 +250,13 @@ pub fn legal_identity_to_json(identity: &LegalIdentity) -> serde_json::Value {
         contact_email: identity.contact_email.clone(),
         contact_phone: identity.contact_phone.clone(),
         insurance_mention: identity.insurance_mention.clone(),
+        billing: identity.billing.as_ref().map(|billing| IssuerBillingJson {
+            iban: billing.iban.clone(),
+            bic: billing.bic.clone(),
+            late_penalty: billing.late_penalty.clone(),
+            recovery_fee_cents: billing.recovery_fee_cents,
+            invoice_footer: billing.invoice_footer.clone(),
+        }),
     })
     .expect("a plain struct of owned fields always serializes")
 }
@@ -269,6 +287,13 @@ fn parse_legal_identity(value: serde_json::Value) -> Result<LegalIdentity, CoreE
         contact_email: parsed.contact_email,
         contact_phone: parsed.contact_phone,
         insurance_mention: parsed.insurance_mention,
+        billing: parsed.billing.map(|billing| IssuerBilling {
+            iban: billing.iban,
+            bic: billing.bic,
+            late_penalty: billing.late_penalty,
+            recovery_fee_cents: billing.recovery_fee_cents,
+            invoice_footer: billing.invoice_footer,
+        }),
     })
 }
 

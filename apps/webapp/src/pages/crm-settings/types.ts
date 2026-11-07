@@ -13,7 +13,6 @@ export type Company = {
 	legalForm: string
 	capital: string
 	legalId: string
-	registry: string
 	vatNumber: string
 	address: PostalAddress
 	email: string
@@ -24,8 +23,6 @@ export type Company = {
 }
 
 export type SequenceKind = 'quote' | 'invoice' | 'creditNote'
-
-export type Sequences = Record<SequenceKind, Record<string, number>>
 
 export type Settings = {
 	company: Company
@@ -38,11 +35,6 @@ export type Settings = {
 	numberPadding: number
 	stripeEndpoint: string
 	stripeSecretSet: boolean
-}
-
-export type CrmSettingsState = {
-	settings: Settings
-	sequences: Sequences
 }
 
 export type StripeEventType =

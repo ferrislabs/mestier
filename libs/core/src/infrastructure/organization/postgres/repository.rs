@@ -5,9 +5,12 @@ use tracing::info;
 
 use crate::{
     UserId,
-    domain::organization::{Organization, OrganizationId, ports::OrganizationRepository},
+    domain::organization::{
+        Organization, OrganizationId, billing_settings::BillingSettings,
+        ports::OrganizationRepository,
+    },
     infrastructure::{
-        organization::postgres::model::{OrganizationRow, vat_status_columns},
+        organization::postgres::model::{BillingSettingsRow, OrganizationRow, vat_status_columns},
         postgres::{SharedTx, error::map_sqlx_error},
     },
 };
@@ -327,5 +330,216 @@ impl<'tx> OrganizationRepository for PgOrganizationRepository<'tx> {
             return Err(CoreError::NotFound);
         }
         Ok(())
+    }
+
+    async fn find_billing_settings(
+        &mut self,
+        id: OrganizationId,
+    ) -> Result<Option<BillingSettings>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            BillingSettingsRow,
+            r#"
+            SELECT
+                payment_terms_days, quote_validity_days, default_vat_rate_bp, late_penalty,
+                recovery_fee_cents, invoice_footer, number_padding, iban, bic
+            FROM organization_billing_settings
+            WHERE org_id = $1
+            "#,
+            id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(BillingSettings::try_from).transpose()
+    }
+
+    async fn upsert_billing_settings(
+        &mut self,
+        id: OrganizationId,
+        settings: &BillingSettings,
+    ) -> Result<BillingSettings, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            BillingSettingsRow,
+            r#"
+            INSERT INTO organization_billing_settings (
+                org_id, payment_terms_days, quote_validity_days, default_vat_rate_bp,
+                late_penalty, recovery_fee_cents, invoice_footer, number_padding, iban, bic
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT (org_id) DO UPDATE SET
+                payment_terms_days = EXCLUDED.payment_terms_days,
+                quote_validity_days = EXCLUDED.quote_validity_days,
+                default_vat_rate_bp = EXCLUDED.default_vat_rate_bp,
+                late_penalty = EXCLUDED.late_penalty,
+                recovery_fee_cents = EXCLUDED.recovery_fee_cents,
+                invoice_footer = EXCLUDED.invoice_footer,
+                number_padding = EXCLUDED.number_padding,
+                iban = EXCLUDED.iban,
+                bic = EXCLUDED.bic,
+                updated_at = now()
+            RETURNING
+                payment_terms_days, quote_validity_days, default_vat_rate_bp, late_penalty,
+                recovery_fee_cents, invoice_footer, number_padding, iban, bic
+            "#,
+            id.0,
+            settings.payment_terms_days.get(),
+            settings.quote_validity_days.get(),
+            settings.default_vat_rate.basis_points(),
+            settings.late_penalty.as_str(),
+            settings.recovery_fee.get(),
+            settings.invoice_footer,
+            settings.number_padding.as_i32(),
+            settings.iban,
+            settings.bic,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        BillingSettings::try_from(row)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common::generate_uuid_v7;
+    use sqlx::PgPool;
+
+    use super::*;
+    use crate::{
+        application::test_support::{dev_pool, purge},
+        domain::organization::billing_settings::BillingSettingsInput,
+        infrastructure::postgres::with_tx,
+    };
+
+    async fn seed_organization(pool: &PgPool, label: &str) -> (OrganizationId, uuid::Uuid) {
+        let owner_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO users (id, email, username, display_name, sub)
+               VALUES ($1, $2, $3, $4, $5)"#,
+            owner_id,
+            format!("owner-{owner_id}@example.com"),
+            format!("owner-{owner_id}"),
+            "Owner User",
+            format!("sub-owner-{owner_id}"),
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        let org_id = generate_uuid_v7();
+        sqlx::query!(
+            r#"INSERT INTO organizations (id, name, slug, owner_id)
+               VALUES ($1, $2, $3, $4)"#,
+            org_id,
+            format!("{label} Org"),
+            format!("{label}-{org_id}"),
+            owner_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+
+        (OrganizationId(org_id), owner_id)
+    }
+
+    async fn cleanup(pool: &PgPool, org_id: OrganizationId, owner_id: uuid::Uuid) {
+        purge(
+            pool,
+            "DELETE FROM organization_billing_settings WHERE org_id = $1",
+            org_id.0,
+        )
+        .await;
+        purge(pool, "DELETE FROM organizations WHERE id = $1", org_id.0).await;
+        purge(pool, "DELETE FROM users WHERE id = $1", owner_id).await;
+    }
+
+    fn settings(padding: i64, iban: Option<&str>) -> BillingSettings {
+        BillingSettings::try_from(BillingSettingsInput {
+            payment_terms_days: 45,
+            quote_validity_days: 15,
+            default_vat_rate_bp: 1000,
+            late_penalty: "dix pour cent".to_owned(),
+            recovery_fee_cents: 5000,
+            invoice_footer: "Merci.".to_owned(),
+            number_padding: padding,
+            iban: iban.map(str::to_owned),
+            bic: Some("AGRIFRPP".to_owned()),
+        })
+        .unwrap()
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn billing_settings_are_absent_until_saved_then_replaced_whole_and_scoped_by_organization()
+     {
+        let pool = dev_pool().await;
+        let (org_id, owner_id) = seed_organization(&pool, "billing-settings").await;
+        let (other_id, other_owner) = seed_organization(&pool, "billing-settings-other").await;
+
+        let (before, first, replaced, other) = with_tx(&pool, async |tx| {
+            let mut repo = PgOrganizationRepository::new(&tx);
+            let before = repo.find_billing_settings(org_id).await?;
+            let first = repo
+                .upsert_billing_settings(org_id, &settings(5, Some("FR76 3000")))
+                .await?;
+            let replaced = repo
+                .upsert_billing_settings(org_id, &settings(3, None))
+                .await?;
+            let other = repo.find_billing_settings(other_id).await?;
+            Ok((before, first, replaced, other))
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(before, None);
+        assert_eq!(first, settings(5, Some("FR76 3000")));
+        assert_eq!(replaced, settings(3, None));
+        assert_eq!(other, None);
+
+        cleanup(&pool, org_id, owner_id).await;
+        cleanup(&pool, other_id, other_owner).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_database_refuses_settings_out_of_bounds() {
+        let pool = dev_pool().await;
+        let (org_id, owner_id) = seed_organization(&pool, "billing-bounds").await;
+
+        let payment_terms = sqlx::query(
+            "INSERT INTO organization_billing_settings (org_id, payment_terms_days) VALUES ($1, 61)",
+        )
+        .bind(org_id.0)
+        .execute(&pool)
+        .await;
+        let padding = sqlx::query(
+            "INSERT INTO organization_billing_settings (org_id, number_padding) VALUES ($1, 7)",
+        )
+        .bind(org_id.0)
+        .execute(&pool)
+        .await;
+        let validity = sqlx::query(
+            "INSERT INTO organization_billing_settings (org_id, quote_validity_days) VALUES ($1, 0)",
+        )
+        .bind(org_id.0)
+        .execute(&pool)
+        .await;
+        let fee = sqlx::query(
+            "INSERT INTO organization_billing_settings (org_id, recovery_fee_cents) VALUES ($1, -1)",
+        )
+        .bind(org_id.0)
+        .execute(&pool)
+        .await;
+
+        assert!(payment_terms.is_err());
+        assert!(padding.is_err());
+        assert!(validity.is_err());
+        assert!(fee.is_err());
+
+        cleanup(&pool, org_id, owner_id).await;
     }
 }

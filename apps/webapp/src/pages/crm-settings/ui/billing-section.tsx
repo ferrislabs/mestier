@@ -42,10 +42,14 @@ const FIELD_ORDER: readonly BillingField[] = [
 export function BillingSection({
 	settings,
 	year,
+	invoicePrefix,
+	error,
 	onSave,
 }: {
 	settings: Settings
 	year: number
+	invoicePrefix: string
+	error: string | null
 	onSave: (patch: BillingPatch) => Promise<void>
 }) {
 	const baseId = useId()
@@ -58,7 +62,7 @@ export function BillingSection({
 	const padding = Number(draft.numberPadding)
 	const example =
 		Number.isInteger(padding) && padding >= 1 && padding <= 6
-			? formatNumber('invoice', year, 7, padding)
+			? formatNumber(invoicePrefix, year, 7, padding)
 			: null
 
 	function change(patch: Partial<BillingForm>) {
@@ -75,10 +79,13 @@ export function BillingSection({
 			if (first) document.getElementById(id(first))?.focus()
 			return
 		}
-		void onSave(patch).then(() => {
-			setShowErrors(false)
-			setSaved(true)
-		})
+		void onSave(patch).then(
+			() => {
+				setShowErrors(false)
+				setSaved(true)
+			},
+			() => setSaved(false),
+		)
 	}
 
 	return (
@@ -87,7 +94,7 @@ export function BillingSection({
 			title="Facturation"
 			description="Valeurs proposées pour les nouveaux devis et factures, et mentions légales reprises sur chaque facture."
 		>
-			<SettingsForm onSubmit={submit} dirty={dirty} saved={saved}>
+			<SettingsForm onSubmit={submit} dirty={dirty} saved={saved} error={error}>
 				<div className="grid gap-4 sm:grid-cols-2">
 					<TextField
 						id={id('paymentTermsDays')}

@@ -123,7 +123,12 @@ where
         let lines = build_quote_lines(existing.organization_id, existing.id, command.lines, now)?;
         let totals = calculate_totals(&lines, organization.vat_status.as_ref())?;
         let newly_allocated = self
-            .allocate_reference_if_entering_sent(&existing, &organization, command.status)
+            .allocate_reference_if_entering_sent(
+                &existing,
+                &organization,
+                command.status,
+                &mut organization_repository,
+            )
             .await?;
 
         let updated = self
@@ -181,7 +186,12 @@ where
         let organization =
             resolve_organization(&mut organization_repository, existing.organization_id).await?;
         let reference = self
-            .allocate_reference_if_entering_sent(&existing, &organization, command.status)
+            .allocate_reference_if_entering_sent(
+                &existing,
+                &organization,
+                command.status,
+                &mut organization_repository,
+            )
             .await?;
 
         let updated = self
@@ -206,15 +216,26 @@ where
         existing: &Quote,
         organization: &Organization,
         target_status: QuoteStatus,
+        organization_repository: &mut impl OrganizationRepository,
     ) -> Result<Option<String>, CoreError> {
         if existing.reference.is_some() || target_status != QuoteStatus::Sent {
             return Ok(None);
         }
 
         let year = Utc::now().year();
+        let padding = organization_repository
+            .find_billing_settings(organization.id)
+            .await?
+            .unwrap_or_default()
+            .number_padding;
         let number = self
             .repo
-            .allocate_number(organization.id, &organization.quote_number_prefix, year)
+            .allocate_number(
+                organization.id,
+                &organization.quote_number_prefix,
+                year,
+                padding,
+            )
             .await?;
 
         Ok(Some(number))
@@ -721,6 +742,8 @@ mod tests {
 
     fn mock_organization_repository(organization: Organization) -> MockOrganizationRepository {
         let mut repo = MockOrganizationRepository::new();
+        repo.expect_find_billing_settings()
+            .returning(|_| Box::pin(async { Ok(None) }));
         repo.expect_find_by_id().times(1).returning(move |_| {
             let organization = organization.clone();
             Box::pin(async move { Ok(Some(organization)) })
@@ -938,9 +961,9 @@ mod tests {
             .with(eq(id))
             .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
         repo.expect_allocate_number()
-            .withf(|_, prefix, year| prefix == "DEV" && *year == chrono::Utc::now().year())
+            .withf(|_, prefix, year, _| prefix == "DEV" && *year == chrono::Utc::now().year())
             .times(1)
-            .returning(|_, prefix, year| {
+            .returning(|_, prefix, year, _| {
                 let reference = format!("{prefix}-{year}-0001");
                 Box::pin(async move { Ok(reference) })
             });
@@ -1011,7 +1034,7 @@ mod tests {
             .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
         repo.expect_allocate_number()
             .times(1)
-            .returning(|_, prefix, year| {
+            .returning(|_, prefix, year, _| {
                 let reference = format!("{prefix}-{year}-0001");
                 Box::pin(async move { Ok(reference) })
             });
@@ -1041,6 +1064,74 @@ mod tests {
             .unwrap();
 
         assert!(updated.reference.is_some());
+    }
+
+    #[tokio::test]
+    async fn spec_crm_1_5_a_new_padding_applies_to_the_number_allocated_next() {
+        use crate::domain::organization::billing_settings::{
+            BillingSettings, BillingSettingsInput,
+        };
+
+        let id = QuoteId(Uuid::new_v4());
+        let mut repo = MockQuoteRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| Box::pin(async move { Ok(Some(quote(id))) }));
+        repo.expect_allocate_number()
+            .withf(|_, _, _, padding| padding.get() == 6)
+            .times(1)
+            .returning(|_, prefix, year, padding| {
+                let reference =
+                    crate::domain::organization::numbering::format_number(prefix, year, 8, padding);
+                Box::pin(async move { Ok(reference) })
+            });
+        repo.expect_update_status()
+            .returning(move |_, status, reference, _| {
+                let mut q = quote(id);
+                q.status = status;
+                q.reference = reference;
+                Box::pin(async move { Ok(q) })
+            });
+        let settings = BillingSettings::try_from(BillingSettingsInput {
+            payment_terms_days: 30,
+            quote_validity_days: 30,
+            default_vat_rate_bp: 2000,
+            late_penalty: "penalty".to_owned(),
+            recovery_fee_cents: 4000,
+            invoice_footer: String::new(),
+            number_padding: 6,
+            iban: None,
+            bic: None,
+        })
+        .unwrap();
+        let organization_id = quote(id).organization_id;
+        let mut organizations = MockOrganizationRepository::new();
+        let organization = organization_without_vat_status(organization_id);
+        organizations.expect_find_by_id().returning(move |_| {
+            let organization = organization.clone();
+            Box::pin(async move { Ok(Some(organization)) })
+        });
+        organizations
+            .expect_find_billing_settings()
+            .returning(move |_| {
+                let settings = settings.clone();
+                Box::pin(async move { Ok(Some(settings)) })
+            });
+        let mut service = QuoteService::new(repo, events::testing::RecordingEmitter::new());
+
+        let updated = service
+            .update_quote_status(
+                UpdateQuoteStatusCommand {
+                    id,
+                    status: QuoteStatus::Sent,
+                },
+                organizations,
+            )
+            .await
+            .unwrap();
+
+        let year = chrono::Utc::now().year();
+        assert_eq!(updated.reference, Some(format!("DEV-{year}-000008")));
     }
 
     #[tokio::test]
@@ -1268,6 +1359,8 @@ mod emission_tests {
 
     fn no_vat_status_repo() -> MockOrganizationRepository {
         let mut repo = MockOrganizationRepository::new();
+        repo.expect_find_billing_settings()
+            .returning(|_| Box::pin(async { Ok(None) }));
         repo.expect_find_by_id().returning(|id| {
             let now = Utc::now();
             let organization = crate::Organization {
@@ -1404,7 +1497,7 @@ mod emission_tests {
         });
         repo.expect_allocate_number()
             .times(1)
-            .returning(|_, prefix, year| {
+            .returning(|_, prefix, year, _| {
                 let reference = format!("{prefix}-{year}-0001");
                 Box::pin(async move { Ok(reference) })
             });
@@ -1457,10 +1550,11 @@ mod emission_tests {
             // whose starting quote (`quote(id)`, a draft) has no number yet
             // — the mock permits any number of calls, including zero, when
             // `.times()` is not stated.
-            repo.expect_allocate_number().returning(|_, prefix, year| {
-                let reference = format!("{prefix}-{year}-0001");
-                Box::pin(async move { Ok(reference) })
-            });
+            repo.expect_allocate_number()
+                .returning(|_, prefix, year, _| {
+                    let reference = format!("{prefix}-{year}-0001");
+                    Box::pin(async move { Ok(reference) })
+                });
             repo.expect_update_status().returning(move |_, _, _, _| {
                 let q = landed.clone();
                 Box::pin(async move { Ok(q) })

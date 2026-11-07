@@ -1,4 +1,7 @@
-use crate::domain::{customer::Customer, organization::Organization};
+use crate::domain::{
+    customer::Customer,
+    organization::{Organization, billing_settings::IssuerBilling},
+};
 
 /// Whether an organization charges VAT on what it issues, and — either way —
 /// the fact that makes the document valid without it: the number when it
@@ -52,6 +55,7 @@ pub struct LegalIdentity {
     pub contact_email: Option<String>,
     pub contact_phone: Option<String>,
     pub insurance_mention: String,
+    pub billing: Option<IssuerBilling>,
 }
 
 impl LegalIdentity {
@@ -115,7 +119,15 @@ impl LegalIdentity {
             contact_email: organization.contact_email.clone(),
             contact_phone: organization.contact_phone.clone(),
             insurance_mention: insurance_mention.expect("checked above"),
+            billing: None,
         })
+    }
+
+    pub fn with_billing(self, billing: IssuerBilling) -> Self {
+        Self {
+            billing: Some(billing),
+            ..self
+        }
     }
 }
 

@@ -5,9 +5,12 @@ use sqlx::PgConnection;
 
 use crate::{
     CustomerOutstandingBalance, DraftInvoice, GeneratedInvoiceDocument, Invoice, InvoiceId,
-    InvoiceLine, InvoicePayment, InvoicePaymentId, InvoiceStatus, LegalIdentity, OrganizationId,
-    ProjectId,
-    domain::invoice::ports::InvoiceRepository,
+    InvoiceLine, InvoiceNumberSeries, InvoicePayment, InvoicePaymentId, InvoiceStatus,
+    LegalIdentity, OrganizationId, ProjectId,
+    domain::{
+        invoice::ports::InvoiceRepository,
+        organization::{billing_settings::NumberPadding, numbering::format_number},
+    },
     infrastructure::{
         invoice::postgres::model::{
             CustomerOutstandingBalanceRow, InvoiceLineRow, InvoicePaymentRow, InvoiceRow,
@@ -32,33 +35,147 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
     async fn allocate_number(
         &mut self,
         organization_id: OrganizationId,
+        series: InvoiceNumberSeries,
         prefix: &str,
         year: i32,
+        padding: NumberPadding,
     ) -> Result<String, CoreError> {
         let mut tx = self.tx.lock().await;
 
-        // Same locking device as `PgQuoteRepository::allocate_number`: the
-        // `ON CONFLICT DO UPDATE` takes a row lock on the counter for the
-        // duration of this transaction, which is what makes two invoices
-        // issued at the same instant unable to collide.
-        let next_number: i32 = sqlx::query_scalar!(
-            r#"
-            INSERT INTO invoice_number_counters (organization_id, year, next_number)
-            VALUES ($1, $2, 1)
-            ON CONFLICT (organization_id, year)
-            DO UPDATE SET
-                next_number = invoice_number_counters.next_number + 1,
-                updated_at = now()
-            RETURNING next_number
-            "#,
-            organization_id.0,
-            year,
-        )
-        .fetch_one(&mut ***tx)
-        .await
+        let sequence: i32 = match series {
+            InvoiceNumberSeries::Invoice => {
+                sqlx::query_scalar!(
+                    r#"
+                    INSERT INTO invoice_number_counters (organization_id, year, next_number)
+                    VALUES ($1, $2, 1)
+                    ON CONFLICT (organization_id, year)
+                    DO UPDATE SET
+                        next_number = invoice_number_counters.next_number + 1,
+                        updated_at = now()
+                    RETURNING next_number
+                    "#,
+                    organization_id.0,
+                    year,
+                )
+                .fetch_one(&mut ***tx)
+                .await
+            }
+            InvoiceNumberSeries::CreditNote => {
+                sqlx::query_scalar!(
+                    r#"
+                    INSERT INTO credit_note_number_counters (organization_id, year, last_number)
+                    VALUES ($1, $2, 1)
+                    ON CONFLICT (organization_id, year)
+                    DO UPDATE SET
+                        last_number = credit_note_number_counters.last_number + 1,
+                        updated_at = now()
+                    RETURNING last_number
+                    "#,
+                    organization_id.0,
+                    year,
+                )
+                .fetch_one(&mut ***tx)
+                .await
+            }
+        }
         .map_err(map_sqlx_error)?;
 
-        Ok(format!("{prefix}-{year}-{next_number:04}"))
+        Ok(format_number(prefix, year, sequence, padding))
+    }
+
+    async fn last_assigned_number(
+        &mut self,
+        organization_id: OrganizationId,
+        series: InvoiceNumberSeries,
+        year: i32,
+    ) -> Result<i32, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        let last = match series {
+            InvoiceNumberSeries::Invoice => {
+                sqlx::query_scalar!(
+                    r#"
+                    SELECT next_number
+                    FROM invoice_number_counters
+                    WHERE organization_id = $1 AND year = $2
+                    "#,
+                    organization_id.0,
+                    year,
+                )
+                .fetch_optional(&mut ***tx)
+                .await
+            }
+            InvoiceNumberSeries::CreditNote => {
+                sqlx::query_scalar!(
+                    r#"
+                    SELECT last_number
+                    FROM credit_note_number_counters
+                    WHERE organization_id = $1 AND year = $2
+                    "#,
+                    organization_id.0,
+                    year,
+                )
+                .fetch_optional(&mut ***tx)
+                .await
+            }
+        }
+        .map_err(map_sqlx_error)?;
+
+        Ok(last.unwrap_or(0))
+    }
+
+    async fn raise_last_assigned_number(
+        &mut self,
+        organization_id: OrganizationId,
+        series: InvoiceNumberSeries,
+        year: i32,
+        last_assigned: i32,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        match series {
+            InvoiceNumberSeries::Invoice => {
+                sqlx::query!(
+                    r#"
+                    INSERT INTO invoice_number_counters (organization_id, year, next_number)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (organization_id, year)
+                    DO UPDATE SET
+                        next_number = GREATEST(
+                            invoice_number_counters.next_number, EXCLUDED.next_number
+                        ),
+                        updated_at = now()
+                    "#,
+                    organization_id.0,
+                    year,
+                    last_assigned,
+                )
+                .execute(&mut ***tx)
+                .await
+            }
+            InvoiceNumberSeries::CreditNote => {
+                sqlx::query!(
+                    r#"
+                    INSERT INTO credit_note_number_counters (organization_id, year, last_number)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (organization_id, year)
+                    DO UPDATE SET
+                        last_number = GREATEST(
+                            credit_note_number_counters.last_number, EXCLUDED.last_number
+                        ),
+                        updated_at = now()
+                    "#,
+                    organization_id.0,
+                    year,
+                    last_assigned,
+                )
+                .execute(&mut ***tx)
+                .await
+            }
+        }
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
     }
 
     async fn insert_draft(&mut self, draft: &DraftInvoice) -> Result<Invoice, CoreError> {
@@ -876,6 +993,12 @@ mod tests {
     async fn cleanup(pool: &PgPool, org_id: OrganizationId, owner_id: uuid::Uuid) {
         purge(
             pool,
+            "DELETE FROM credit_note_number_counters WHERE organization_id = $1",
+            org_id.0,
+        )
+        .await;
+        purge(
+            pool,
             "DELETE FROM invoice_number_counters WHERE organization_id = $1",
             org_id.0,
         )
@@ -895,19 +1018,40 @@ mod tests {
 
         let first = with_tx(&pool, async |tx| {
             let mut repo = PgInvoiceRepository::new(&tx);
-            repo.allocate_number(org_id, "FAC", 2026).await
+            repo.allocate_number(
+                org_id,
+                InvoiceNumberSeries::Invoice,
+                "FAC",
+                2026,
+                NumberPadding::DEFAULT,
+            )
+            .await
         })
         .await
         .unwrap();
         let second = with_tx(&pool, async |tx| {
             let mut repo = PgInvoiceRepository::new(&tx);
-            repo.allocate_number(org_id, "FAC", 2026).await
+            repo.allocate_number(
+                org_id,
+                InvoiceNumberSeries::Invoice,
+                "FAC",
+                2026,
+                NumberPadding::DEFAULT,
+            )
+            .await
         })
         .await
         .unwrap();
         let different_year = with_tx(&pool, async |tx| {
             let mut repo = PgInvoiceRepository::new(&tx);
-            repo.allocate_number(org_id, "FAC", 2027).await
+            repo.allocate_number(
+                org_id,
+                InvoiceNumberSeries::Invoice,
+                "FAC",
+                2027,
+                NumberPadding::DEFAULT,
+            )
+            .await
         })
         .await
         .unwrap();
@@ -915,6 +1059,92 @@ mod tests {
         assert_eq!(first, "FAC-2026-0001");
         assert_eq!(second, "FAC-2026-0002");
         assert_eq!(different_year, "FAC-2027-0001");
+
+        let owner_id =
+            sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        cleanup(&pool, org_id, owner_id).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn spec_crm_1_4_credit_notes_have_their_own_series_that_restarts_each_year() {
+        let pool = dev_pool().await;
+        let org_id = seed_organization(&pool, "credit-note-series").await;
+        let padding = NumberPadding::try_from(5).unwrap();
+
+        let invoice = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.allocate_number(org_id, InvoiceNumberSeries::Invoice, "FAC", 2026, padding)
+                .await
+        })
+        .await
+        .unwrap();
+        let first = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.allocate_number(org_id, InvoiceNumberSeries::CreditNote, "AV", 2026, padding)
+                .await
+        })
+        .await
+        .unwrap();
+        let second = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.allocate_number(org_id, InvoiceNumberSeries::CreditNote, "AV", 2026, padding)
+                .await
+        })
+        .await
+        .unwrap();
+        let next_year = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.allocate_number(org_id, InvoiceNumberSeries::CreditNote, "AV", 2027, padding)
+                .await
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(invoice, "FAC-2026-00001");
+        assert_eq!(first, "AV-2026-00001");
+        assert_eq!(second, "AV-2026-00002");
+        assert_eq!(next_year, "AV-2027-00001");
+
+        let owner_id =
+            sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        cleanup(&pool, org_id, owner_id).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_series_counter_only_moves_forward() {
+        let pool = dev_pool().await;
+        let org_id = seed_organization(&pool, "counter-forward").await;
+
+        let (last_before, last_after_raise, last_after_lower, next) = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            let series = InvoiceNumberSeries::CreditNote;
+            let before = repo.last_assigned_number(org_id, series, 2026).await?;
+            repo.raise_last_assigned_number(org_id, series, 2026, 119)
+                .await?;
+            let raised = repo.last_assigned_number(org_id, series, 2026).await?;
+            repo.raise_last_assigned_number(org_id, series, 2026, 50)
+                .await?;
+            let lowered = repo.last_assigned_number(org_id, series, 2026).await?;
+            let next = repo
+                .allocate_number(org_id, series, "AV", 2026, NumberPadding::DEFAULT)
+                .await?;
+            Ok((before, raised, lowered, next))
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(last_before, 0);
+        assert_eq!(last_after_raise, 119);
+        assert_eq!(last_after_lower, 119);
+        assert_eq!(next, "AV-2026-0120");
 
         let owner_id =
             sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
@@ -940,11 +1170,25 @@ mod tests {
         let (a, b) = tokio::join!(
             with_tx(&pool_a, async |tx| {
                 let mut repo = PgInvoiceRepository::new(&tx);
-                repo.allocate_number(org_id, "FAC", 2026).await
+                repo.allocate_number(
+                    org_id,
+                    InvoiceNumberSeries::Invoice,
+                    "FAC",
+                    2026,
+                    NumberPadding::DEFAULT,
+                )
+                .await
             }),
             with_tx(&pool_b, async |tx| {
                 let mut repo = PgInvoiceRepository::new(&tx);
-                repo.allocate_number(org_id, "FAC", 2026).await
+                repo.allocate_number(
+                    org_id,
+                    InvoiceNumberSeries::Invoice,
+                    "FAC",
+                    2026,
+                    NumberPadding::DEFAULT,
+                )
+                .await
             }),
         );
 
@@ -1021,6 +1265,7 @@ mod tests {
             contact_email: None,
             contact_phone: None,
             insurance_mention: "RC Pro n°123456 - MAAF Assurances".to_owned(),
+            billing: None,
         }
     }
 
