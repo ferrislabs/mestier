@@ -547,6 +547,7 @@ impl MestierTools {
     #[tool(
         description = "List the organizations the user belongs to and that allow AI access. Returns id, name and slug; use the slug as the `organization` argument of the other tools."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "list_organizations"))]
     async fn list_organizations(&self, Extension(parts): Extension<Parts>) -> CallToolResult {
         let s = match self.session(&parts, "list_organizations") {
             Ok(s) => s,
@@ -558,6 +559,7 @@ impl MestierTools {
     #[tool(
         description = "List the projects of an organization (paginated, active projects only). Returns data and meta; each project has an id usable with get_project and create_doe."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "list_projects"))]
     async fn list_projects(
         &self,
         Parameters(args): Parameters<ListArgs>,
@@ -579,6 +581,7 @@ impl MestierTools {
     }
 
     #[tool(description = "Get one project of an organization by id.")]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "get_project"))]
     async fn get_project(
         &self,
         Parameters(args): Parameters<ProjectArgs>,
@@ -602,6 +605,7 @@ impl MestierTools {
     #[tool(
         description = "List the DOEs (dossiers des ouvrages exécutés) of an organization, most recently edited first. Returns summaries with ids usable with get_doe."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "list_does"))]
     async fn list_does(
         &self,
         Parameters(args): Parameters<ListArgs>,
@@ -625,6 +629,7 @@ impl MestierTools {
     #[tool(
         description = "Get the full content of a DOE: header, parties and sections with their supplies. Section ids returned here are used by add_doe_supply_from_product."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "get_doe"))]
     async fn get_doe(
         &self,
         Parameters(args): Parameters<DoeArgs>,
@@ -648,6 +653,7 @@ impl MestierTools {
     #[tool(
         description = "List the active DOE models of an organization. A model is the starting structure of a new DOE; its id is the `model_id` of create_doe."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "list_doe_models"))]
     async fn list_doe_models(
         &self,
         Parameters(args): Parameters<ListArgs>,
@@ -671,6 +677,7 @@ impl MestierTools {
     #[tool(
         description = "Search the product catalogue of an organization by name, SKU or manufacturer (case-insensitive substring). Returns at most 50 products with their id, price and technical sheet."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "search_products"))]
     async fn search_products(
         &self,
         Parameters(args): Parameters<SearchProductsArgs>,
@@ -694,6 +701,7 @@ impl MestierTools {
     #[tool(
         description = "Get one catalogue product by id, with its technical sheet (specs, photos, datasheets)."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "get_product"))]
     async fn get_product(
         &self,
         Parameters(args): Parameters<ProductArgs>,
@@ -715,6 +723,7 @@ impl MestierTools {
     }
 
     #[tool(description = "List the quotes (devis) of an organization (paginated).")]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "list_quotes"))]
     async fn list_quotes(
         &self,
         Parameters(args): Parameters<ListArgs>,
@@ -736,6 +745,7 @@ impl MestierTools {
     }
 
     #[tool(description = "Get one quote (devis) by id, with its lines.")]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "get_quote"))]
     async fn get_quote(
         &self,
         Parameters(args): Parameters<QuoteArgs>,
@@ -757,6 +767,7 @@ impl MestierTools {
     }
 
     #[tool(description = "List the invoices (factures) of an organization (paginated).")]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "list_invoices"))]
     async fn list_invoices(
         &self,
         Parameters(args): Parameters<ListArgs>,
@@ -778,6 +789,7 @@ impl MestierTools {
     }
 
     #[tool(description = "Get one invoice (facture) by id, with its lines.")]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "get_invoice"))]
     async fn get_invoice(
         &self,
         Parameters(args): Parameters<InvoiceArgs>,
@@ -801,6 +813,7 @@ impl MestierTools {
     #[tool(
         description = "Create the DOE of a project from a DOE model. A project has at most one DOE. Returns the new DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "create_doe"))]
     async fn create_doe(
         &self,
         Parameters(args): Parameters<CreateDoeArgs>,
@@ -827,6 +840,11 @@ impl MestierTools {
 
     #[tool(
         description = "Add a supply to a DOE by copying a catalogue product's technical sheet into a supplies section. The copy is a snapshot: later product edits do not change the DOE. Returns the updated DOE."
+    )]
+    #[tracing::instrument(
+        name = "mcp.tool",
+        skip_all,
+        fields(tool = "add_doe_supply_from_product")
     )]
     async fn add_doe_supply_from_product(
         &self,
@@ -861,6 +879,7 @@ impl MestierTools {
     #[tool(
         description = "Add a supply to a DOE from details given by the user, without a catalogue product: designation, DPGF line, destination, supplier, manufacturer and technical characteristics. Use add_doe_supply_from_product instead when the supply exists in the catalogue. Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "add_doe_supply"))]
     async fn add_doe_supply(
         &self,
         Parameters(args): Parameters<AddManualSupplyArgs>,
@@ -901,6 +920,7 @@ impl MestierTools {
     #[tool(
         description = "Update the header of a DOE (title, place, lot, issue date, author, revision). Only the given fields change; sections and parties are kept. Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "update_doe_header"))]
     async fn update_doe_header(
         &self,
         Parameters(args): Parameters<UpdateHeaderArgs>,
@@ -935,6 +955,7 @@ impl MestierTools {
     #[tool(
         description = "Update a supply of a DOE. Only the given fields change; an empty string clears an optional field, and an empty supplier_name removes the supplier. The designation cannot be blank. Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "update_doe_supply"))]
     async fn update_doe_supply(
         &self,
         Parameters(args): Parameters<UpdateSupplyArgs>,
@@ -974,6 +995,7 @@ impl MestierTools {
     #[tool(
         description = "Remove a supply from a DOE (the DOE itself is never deleted). Its photos and datasheets leave the DOE with it. Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "delete_doe_supply"))]
     async fn delete_doe_supply(
         &self,
         Parameters(args): Parameters<DeleteSupplyArgs>,
@@ -997,6 +1019,7 @@ impl MestierTools {
     #[tool(
         description = "Add a section to a DOE: kind supplies, photos, plans or blank_pages, at a 1-based position (default: at the end). Settings maker_label, per_page and count only apply to their own kind. Returns the updated DOE with the new section id."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "add_doe_section"))]
     async fn add_doe_section(
         &self,
         Parameters(args): Parameters<AddSectionArgs>,
@@ -1031,6 +1054,7 @@ impl MestierTools {
     #[tool(
         description = "Update a section of a DOE, designated by section_id or section_title: rename it, enable or disable it, or change its settings (maker_label for supplies, per_page for photos, count for blank_pages). A setting that does not match the section kind is refused. Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "update_doe_section"))]
     async fn update_doe_section(
         &self,
         Parameters(args): Parameters<UpdateSectionArgs>,
@@ -1068,6 +1092,7 @@ impl MestierTools {
     #[tool(
         description = "Delete an empty section of a DOE by section_id. A section holding supplies, photos or plans is refused: remove its content first. Blank pages sections count as empty. Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "delete_doe_section"))]
     async fn delete_doe_section(
         &self,
         Parameters(args): Parameters<DeleteSectionArgs>,
@@ -1091,6 +1116,7 @@ impl MestierTools {
     #[tool(
         description = "Reorder the sections of a DOE. section_ids must list every section id of the DOE exactly once, in the new order (see get_doe). Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "reorder_doe_sections"))]
     async fn reorder_doe_sections(
         &self,
         Parameters(args): Parameters<ReorderSectionsArgs>,
@@ -1119,6 +1145,7 @@ impl MestierTools {
         meta = file_param_meta(),
         description = "Add a file to a DOE: target photo (photos section), plan (plans section), supply_photo or supply_datasheet (a supply, by supply_id), cover_photo (the cover picture, printed when the organization's style shows it). Attach the file through `file` when the client supports attachments, else give content_base64; exactly one of the two. The type is detected from the content: JPEG, PNG and WebP, plus PDF for plans and datasheets. Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "add_doe_file"))]
     async fn add_doe_file(
         &self,
         Parameters(args): Parameters<AddFileArgs>,
@@ -1155,6 +1182,7 @@ impl MestierTools {
     #[tool(
         description = "Update a file of a DOE by its storage key: change the caption (photos, plans, supply photos; an empty string clears it) and/or move a photo or plan to another section of the same kind with section_id. Datasheets have no caption. Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "update_doe_file"))]
     async fn update_doe_file(
         &self,
         Parameters(args): Parameters<UpdateFileArgs>,
@@ -1184,6 +1212,7 @@ impl MestierTools {
     #[tool(
         description = "Remove a file from a DOE by its storage key, wherever it is (photos, plans, supply photos, supply datasheets, cover photo). The stored object itself is kept. Returns the updated DOE."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "delete_doe_file"))]
     async fn delete_doe_file(
         &self,
         Parameters(args): Parameters<DeleteFileArgs>,
@@ -1207,6 +1236,7 @@ impl MestierTools {
     #[tool(
         description = "List the maintenance services (entretien) to schedule for an ISO week, for example 2026-W43: the ones due in that week, a window still open in it, and the ones overdue from before. Grouped by town, overdue first. Services already carried by an open task, finished or on-demand services, draft contracts and archived contracts are not listed. Each line has its contract_id, usable with get_maintenance_contract."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "list_maintenance_due"))]
     async fn list_maintenance_due(
         &self,
         Parameters(args): Parameters<MaintenanceDueArgs>,
@@ -1230,6 +1260,7 @@ impl MestierTools {
     #[tool(
         description = "Get one maintenance contract (contrat d'entretien) by id: customer, site, season, status (DRAFT or ACTIVE) and its lines with their cadence."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "get_maintenance_contract"))]
     async fn get_maintenance_contract(
         &self,
         Parameters(args): Parameters<MaintenanceContractArgs>,
@@ -1257,6 +1288,11 @@ impl MestierTools {
     #[tool(
         description = "Create a maintenance contract (contrat d'entretien) as a DRAFT from a paper or Excel sheet: one contract for one customer site and one season, with a line per service and its cadence (rolling every N days, windows of weeks, or on demand). A draft is never due and stays out of the weekly recap until a person reviews and activates it in Mestier; this tool cannot activate a contract. The customer and the site must already exist. Returns the draft."
     )]
+    #[tracing::instrument(
+        name = "mcp.tool",
+        skip_all,
+        fields(tool = "create_maintenance_contract_draft")
+    )]
     async fn create_maintenance_contract_draft(
         &self,
         Parameters(args): Parameters<CreateMaintenanceDraftArgs>,
@@ -1280,6 +1316,7 @@ impl MestierTools {
     #[tool(
         description = "Export a DOE as a PDF, returned as an embedded application/pdf resource. Refused above 10 MB."
     )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "export_doe_pdf"))]
     async fn export_doe_pdf(
         &self,
         Parameters(args): Parameters<DoeArgs>,

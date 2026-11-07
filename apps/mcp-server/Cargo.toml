@@ -33,3 +33,4 @@ rmcp = { version = "=3.5.1", features = ["server", "macros", "transport-streamab
 reqwest = { workspace = true }
 args = { workspace = true }
 telemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
