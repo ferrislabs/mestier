@@ -76,9 +76,10 @@ export function AuthGate({ children, redirectState }: AuthGateProps) {
 					// Purge the stale user first: without it they stay in
 					// `localStorage` and the next load replays the same dead token.
 					await auth.removeUser()
-					await auth.signinRedirect(
-						redirectState ? { state: redirectState } : undefined,
-					)
+					await auth.signinRedirect({
+						prompt: 'select_account',
+						...(redirectState ? { state: redirectState } : {}),
+					})
 				} catch {
 					setRecovery('exhausted')
 				}
@@ -87,9 +88,10 @@ export function AuthGate({ children, redirectState }: AuthGateProps) {
 		}
 
 		if (!auth.isAuthenticated && !auth.error) {
-			void auth.signinRedirect(
-				redirectState ? { state: redirectState } : undefined,
-			)
+			void auth.signinRedirect({
+				prompt: 'select_account',
+				...(redirectState ? { state: redirectState } : undefined),
+			})
 		}
 	}, [auth, isConfigured, sessionEnded, recovery, redirectState])
 
@@ -112,7 +114,9 @@ export function AuthGate({ children, redirectState }: AuthGateProps) {
 				action={
 					<Button
 						onClick={() => {
-							void auth.removeUser().then(() => auth.signinRedirect())
+							void auth
+								.removeUser()
+								.then(() => auth.signinRedirect({ prompt: 'select_account' }))
 						}}
 					>
 						Se reconnecter
