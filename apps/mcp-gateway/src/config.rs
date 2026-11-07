@@ -1,5 +1,6 @@
 use std::{net::SocketAddr, time::Duration};
 
+use args::{log::LogArgs, observability::ObservabilityArgs};
 use clap::{Parser, ValueEnum};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -53,6 +54,12 @@ pub struct Config {
 
     #[arg(long, env = "MCP_GATEWAY_UPSTREAM_URL")]
     pub upstream_url: String,
+
+    #[command(flatten)]
+    pub log: LogArgs,
+
+    #[command(flatten)]
+    pub observability: ObservabilityArgs,
 }
 
 impl Config {
