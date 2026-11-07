@@ -698,7 +698,7 @@ describe('NodeCreatorFeature — the generated Mestier actions', () => {
 		},
 	]
 
-	it('shows the groups collapsed, alphabetical, and opens one on click', async () => {
+	it('lists every generated action at once, grouped in order, with its description', async () => {
 		const user = userEvent.setup()
 		const { panel } = await renderCreator({ descriptors: GROUPED })
 
@@ -706,22 +706,15 @@ describe('NodeCreatorFeature — the generated Mestier actions', () => {
 			within(panel).getByRole('button', { name: /Actions Mestier/ }),
 		)
 
-		const headings = within(panel).getAllByRole('heading', { level: 4 })
-		expect(headings.map((heading) => heading.textContent)).toEqual([
-			'DOE1',
-			'Factures2',
-		])
-		expect(within(panel).queryByText('Annuler une facture')).toBeNull()
-
-		await user.click(within(panel).getByRole('button', { name: /Factures/ }))
-
+		expect(within(panel).queryAllByRole('heading', { level: 4 })).toEqual([])
 		expect(rowsOf(panel)).toEqual([
+			'Générer un DOE',
 			'Annuler une facture',
 			'Envoyer une facture',
 		])
 	})
 
-	it('opens every matching group while searching', async () => {
+	it('searches across every group', async () => {
 		const user = userEvent.setup()
 		const { panel } = await renderCreator({ descriptors: GROUPED })
 

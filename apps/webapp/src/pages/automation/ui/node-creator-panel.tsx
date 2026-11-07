@@ -1,12 +1,5 @@
-import {
-	ArrowLeft,
-	ArrowRight,
-	ChevronRight,
-	Library,
-	Search,
-	X,
-} from 'lucide-react'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, Library, Search, X } from 'lucide-react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import type { CollectionOperation } from '#/pages/automation/lib/collections'
@@ -124,70 +117,17 @@ function KindRow({ kind, onPick }: { kind: CreatorKind; onPick: () => void }) {
 	)
 }
 
-function KindGroupSection({
-	label,
-	kinds,
-	forceOpen,
-	renderKind,
-}: {
-	label: string
-	kinds: readonly CreatorKind[]
-	forceOpen: boolean
-	renderKind: (kind: CreatorKind) => ReactNode
-}) {
-	const [opened, setOpened] = useState(false)
-	const open = forceOpen || opened
-	return (
-		<section aria-label={label}>
-			<h4 className="m-0">
-				<button
-					type="button"
-					aria-expanded={open}
-					onClick={() => setOpened(!opened)}
-					className="flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-left font-medium text-muted-foreground text-xs outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-				>
-					<ChevronRight
-						className={open ? 'size-3.5 rotate-90' : 'size-3.5'}
-						aria-hidden
-					/>
-					<span className="flex-1">{label}</span>
-					<span className="font-normal">{kinds.length}</span>
-				</button>
-			</h4>
-			{open && <ul>{kinds.map(renderKind)}</ul>}
-		</section>
-	)
-}
-
 function KindList({
 	kinds,
-	forceOpen,
 	renderKind,
 }: {
 	kinds: readonly CreatorKind[]
-	forceOpen: boolean
 	renderKind: (kind: CreatorKind) => ReactNode
 }) {
-	if (!kinds.some((kind) => kind.group !== null)) {
-		return <ul>{kinds.map(renderKind)}</ul>
-	}
-	return (
-		<>
-			{groupCreatorKinds(kinds).map((group) =>
-				group.label === null ? (
-					<ul key="">{group.kinds.map(renderKind)}</ul>
-				) : (
-					<KindGroupSection
-						key={group.label}
-						label={group.label}
-						kinds={group.kinds}
-						forceOpen={forceOpen}
-						renderKind={renderKind}
-					/>
-				),
-			)}
-		</>
-	)
+	const ordered = kinds.some((kind) => kind.group !== null)
+		? groupCreatorKinds(kinds).flatMap((group) => group.kinds)
+		: kinds
+	return <ul>{ordered.map(renderKind)}</ul>
 }
 
 export function NodeCreatorPanel({
@@ -325,11 +265,7 @@ export function NodeCreatorPanel({
 					</>
 				)}
 				{view.type === 'kinds' && (
-					<KindList
-						kinds={view.kinds}
-						forceOpen={false}
-						renderKind={renderKind}
-					/>
+					<KindList kinds={view.kinds} renderKind={renderKind} />
 				)}
 				{view.type === 'collections' &&
 					(view.status === 'loading' ? (
@@ -407,11 +343,7 @@ export function NodeCreatorPanel({
 									<h3 className="px-3 pt-2 pb-1 font-medium text-muted-foreground text-xs">
 										{group.label}
 									</h3>
-									<KindList
-										kinds={group.kinds}
-										forceOpen
-										renderKind={renderKind}
-									/>
+									<KindList kinds={group.kinds} renderKind={renderKind} />
 								</section>
 							))}
 							{view.operations.length > 0 && (
