@@ -320,14 +320,23 @@ fn render_invoice_pdf(
             String::new()
         };
 
+        let discount = if line.discount_percent.get().is_zero() {
+            String::new()
+        } else {
+            format!(", remise {} %", line.discount_percent.get().normalize())
+        };
+
         text_lines.push(format!(
-            "{}. {} - {} x {}{} = {}",
+            "{}. {} - {} x {}{}{} = {}",
             index + 1,
             line.label,
             line.quantity.normalize(),
             format_cents(line.unit_price_cents),
+            discount,
             rate,
-            format_cents(line_net_cents(line.quantity, line.unit_price_cents)),
+            format_cents(
+                i32::try_from(mestier_core::invoice_line_net_cents(line).unwrap_or(0)).unwrap_or(0)
+            ),
         ));
     }
 
@@ -353,6 +362,11 @@ fn render_invoice_pdf(
 
     text_lines.push(format!("Total TTC: {}", format_cents(invoice.gross_cents)));
 
+    if !invoice.legal_notice.trim().is_empty() {
+        text_lines.push(String::new());
+        text_lines.push(invoice.legal_notice.clone());
+    }
+
     let content = render_pdf_text_stream(&text_lines);
     build_pdf(content.as_bytes())
 }
@@ -363,13 +377,4 @@ fn operation_nature_label(operation_nature: mestier_core::OperationNature) -> &'
         mestier_core::OperationNature::Services => "Prestation de services",
         mestier_core::OperationNature::Both => "Livraison de biens et prestation de services",
     }
-}
-
-fn line_net_cents(quantity: rust_decimal::Decimal, unit_price_cents: i32) -> i32 {
-    use rust_decimal::prelude::ToPrimitive;
-
-    (quantity * rust_decimal::Decimal::from(unit_price_cents))
-        .round_dp(0)
-        .to_i32()
-        .unwrap_or(0)
 }

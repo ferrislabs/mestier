@@ -1,7 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{AppState, DataEnvelope, Response};
 use mestier_core::{
     CustomerContextId, CustomerId, InvoiceId, OperationNature, OrganizationAddress, ProjectId,
     UpdateInvoiceCommand,
@@ -11,6 +10,7 @@ use utoipa::ToSchema;
 
 use crate::{
     invoice::create::{DeliveryAddressRequest, InvoiceLineRequest, into_line_commands},
+    invoice_error::InvoiceFailure,
     paths::InvoicePath,
     require_invoice_membership, require_invoice_project, require_invoice_targets,
     response::InvoiceResponse,
@@ -26,7 +26,12 @@ pub struct UpdateInvoiceRequest {
     pub project_id: Option<ProjectId>,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
-    pub due_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub payment_terms_days: Option<i64>,
+    #[serde(default)]
+    pub legal_notice: Option<String>,
     pub notes: Option<String>,
     pub operation_nature: Option<OperationNature>,
     pub delivery_address: Option<DeliveryAddressRequest>,
@@ -48,7 +53,8 @@ pub struct UpdateInvoiceRequest {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Invoice not found"),
-        (status = 409, description = "Invoice is not a draft and cannot be edited"),
+        (status = 409, description = "Invoice is not a draft and cannot be edited (E_INVOICE_LOCKED)"),
+        (status = 422, description = "A rule refused the invoice, the field is named in details"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -57,7 +63,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpdateInvoiceRequest>,
-) -> Result<Response<InvoiceResponse>, ApiError> {
+) -> Result<Response<InvoiceResponse>, InvoiceFailure> {
     let current = require_invoice_membership(&state, &identity, invoice_id).await?;
     let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
     require_invoice_targets(
@@ -80,13 +86,15 @@ pub async fn handler(
             project_id: payload.project_id,
             customer_id: payload.customer_id,
             customer_context_id: payload.customer_context_id,
-            due_at: payload.due_at,
+            title: payload.title,
+            payment_terms_days: payload.payment_terms_days,
+            legal_notice: payload.legal_notice,
             notes: payload.notes,
             operation_nature: payload.operation_nature,
             delivery_address: payload.delivery_address.map(OrganizationAddress::from),
             lines: into_line_commands(payload.lines)?,
         })
-        .await?;
+        .await??;
 
     Ok(Response::OK(invoice.into()))
 }

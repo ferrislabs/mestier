@@ -472,6 +472,8 @@ export namespace Schemas {
     subject: string;
   };
   export type CreateInvitationRequest = Partial<{ expires_at: string | null; member_id: null | MemberId }>;
+  export type QuoteInvoiceKind = "FULL" | "DEPOSIT";
+  export type CreateInvoiceFromQuoteRequest = { mode: QuoteInvoiceKind; percent?: (string | null) | undefined };
   export type DeliveryAddressRequest = {
     city: string;
     country: string;
@@ -480,9 +482,14 @@ export namespace Schemas {
     postal_code: string;
   };
   export type InvoiceKind = "STANDARD" | "DEPOSIT" | "FINAL" | "CREDIT_NOTE";
+  export type ProductId = string;
+  export type ServiceRateId = string;
   export type InvoiceLineRequest = {
+    discount_percent?: (string | null) | undefined;
     label: string;
+    product_id?: (null | ProductId) | undefined;
     quantity: string;
+    service_rate_id?: (null | ServiceRateId) | undefined;
     unit_price_cents: number;
     vat_rate_basis_points?: (number | null) | undefined;
   };
@@ -491,12 +498,14 @@ export namespace Schemas {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
     delivery_address?: (null | DeliveryAddressRequest) | undefined;
-    due_at?: (string | null) | undefined;
     kind: InvoiceKind;
+    legal_notice?: (string | null) | undefined;
     lines: Array<InvoiceLineRequest>;
     notes?: (string | null) | undefined;
     operation_nature?: (null | OperationNature) | undefined;
+    payment_terms_days?: (number | null) | undefined;
     project_id?: (null | ProjectId) | undefined;
+    title?: string | undefined;
   };
   export type CreateMaintenanceContractRequest = ContractBody & {
     customer_context_id: CustomerContextId;
@@ -568,8 +577,6 @@ export namespace Schemas {
     tasks?: Array<PlannedTaskRequest> | undefined;
   };
   export type DealId = string;
-  export type ProductId = string;
-  export type ServiceRateId = string;
   export type QuoteLineRequest = {
     billing_frequency?: (null | BillingFrequency) | undefined;
     discount_percent?: (string | null) | undefined;
@@ -722,6 +729,8 @@ export namespace Schemas {
     used_by_workflows: number;
   };
   export type CredentialWithSecretResponse = CredentialResponse & { secret: unknown };
+  export type InvoiceLineId = string;
+  export type CreditLineBody = { quantity: string; source_line_id: InvoiceLineId };
   export type CustomUnitId = string;
   export type CustomUnitResponse = {
     code: string;
@@ -1230,23 +1239,37 @@ export namespace Schemas {
     paid_cents: number;
     remaining_cents: number;
   };
+  export type InvoiceDisplayState = "DRAFT" | "UNPAID" | "PARTIAL" | "OVERDUE" | "PAID" | "CANCELLED" | "REFUND_DUE";
   export type InvoiceDocumentFormatQuery = "pdf" | "facturx";
+  export type InvoiceEventId = string;
+  export type InvoiceEventKind = "SENT" | "REMINDER" | "NOTE";
+  export type UserId = string;
+  export type InvoiceEventResponse = {
+    actor?: (null | UserId) | undefined;
+    at: string;
+    detail: string;
+    id: InvoiceEventId;
+    kind: InvoiceEventKind;
+  };
   export type InvoiceId = string;
-  export type InvoiceLineId = string;
   export type InvoiceLineResponse = {
     created_at: string;
+    discount_percent: string;
     id: InvoiceLineId;
     invoice_id: InvoiceId;
     label: string;
     organization_id: OrganizationId;
     position: number;
+    product_id?: (null | ProductId) | undefined;
     quantity: string;
+    service_rate_id?: (null | ServiceRateId) | undefined;
+    source_line_id?: (null | InvoiceLineId) | undefined;
     unit_price_cents: number;
     updated_at: string;
     vat_rate_basis_points?: (number | null) | undefined;
   };
   export type InvoicePaymentId = string;
-  export type UserId = string;
+  export type PaymentMethod = "CARD" | "TRANSFER" | "CHECK" | "CASH" | "DIRECT_DEBIT";
   export type InvoicePaymentResponse = {
     amount_cents: number;
     created_at: string;
@@ -1254,7 +1277,7 @@ export namespace Schemas {
     deleted_by?: (null | UserId) | undefined;
     id: InvoicePaymentId;
     invoice_id: InvoiceId;
-    method: string;
+    method: PaymentMethod;
     note?: (string | null) | undefined;
     organization_id: OrganizationId;
     paid_on: string;
@@ -1265,44 +1288,60 @@ export namespace Schemas {
   export type InvoiceStatus = "DRAFT" | "ISSUED" | "PAID" | "PARTIALLY_PAID" | "CANCELLED";
   export type InvoiceVatBreakdownLineResponse = { rate_bp: number; vat_cents: number };
   export type InvoiceResponse = {
+    balance_cents: number;
     created_at: string;
+    credited_cents: number;
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
     delivery_address?: (null | DeliveryAddressResponse) | undefined;
+    display_state: InvoiceDisplayState;
     due_at?: (string | null) | undefined;
+    due_on?: (string | null) | undefined;
+    events: Array<InvoiceEventResponse>;
+    full_cancellation: boolean;
     gross_cents: number;
     id: InvoiceId;
+    internal_note?: (string | null) | undefined;
     issued_at?: (string | null) | undefined;
+    issued_on?: (string | null) | undefined;
     kind: InvoiceKind;
+    legal_notice: string;
     lines: Array<InvoiceLineResponse>;
     net_cents: number;
     notes?: (string | null) | undefined;
     number?: (string | null) | undefined;
     operation_nature?: (null | OperationNature) | undefined;
     organization_id: OrganizationId;
+    paid_cents: number;
+    payment_terms_days: number;
     project_id?: (null | ProjectId) | undefined;
+    quote_id?: (null | QuoteId) | undefined;
+    reason?: (string | null) | undefined;
+    sent_at?: (string | null) | undefined;
     source_invoice_id?: (null | InvoiceId) | undefined;
     status: InvoiceStatus;
+    title: string;
     updated_at: string;
     vat_breakdown: Array<InvoiceVatBreakdownLineResponse>;
   };
   export type IssueCreditNoteRequest = {
-    allow_exceeding_invoice_total?: boolean | undefined;
-    lines: Array<InvoiceLineRequest>;
+    full?: boolean | undefined;
+    lines?: Array<CreditLineBody> | undefined;
     notes?: (string | null) | undefined;
+    reason: string;
   };
   export type IssueDepositRequest = {
     allow_exceeding_total?: boolean | undefined;
-    due_at?: (string | null) | undefined;
     notes?: (string | null) | undefined;
+    payment_terms_days?: (number | null) | undefined;
     percentage_bp: number;
   };
   export type IssueFinalInvoiceRequest = Partial<{
     allow_exceeding_total: boolean;
-    due_at: string | null;
     notes: string | null;
+    payment_terms_days: number | null;
   }>;
-  export type IssueInvoiceRequest = Partial<{ allow_exceeding_total: boolean }>;
+  export type IssueInvoiceRequest = Partial<{ allow_exceeding_total: boolean; issued_on: string | null }>;
   export type SnapshotAddress = Partial<{
     city: string | null;
     country: string | null;
@@ -1395,6 +1434,7 @@ export namespace Schemas {
   export type MoveDealRequest = { lost_reason?: (string | null) | undefined; stage: DealStageName };
   export type MyPermissionsResponse = { permissions: Array<string> };
   export type NodePositionDto = { x: number; y: number };
+  export type NoteInvoiceRequest = { note: string };
   export type NotificationId = string;
   export type NotificationResponse = {
     channel_id: ChannelId;
@@ -1637,6 +1677,15 @@ export namespace Schemas {
   };
   export type WorkSlotRequest = { ends_minute: number; starts_minute: number; work_date: string };
   export type PutWorkSlotsRequest = { slots: Array<WorkSlotRequest> };
+  export type QuoteInvoicingBlockerResponse = "QUOTE_NOT_ACCEPTED" | "QUOTE_ALREADY_INVOICED" | "DEPOSITS_COVER_QUOTE";
+  export type QuoteInvoicingResponse = {
+    blocker?: (null | QuoteInvoicingBlockerResponse) | undefined;
+    can_deposit: boolean;
+    can_full: boolean;
+    invoiced_percent: string;
+    invoices: Array<InvoiceResponse>;
+    remaining_percent: string;
+  };
   export type QuoteLineResponse = {
     billing_frequency: BillingFrequency;
     created_at: string;
@@ -1724,9 +1773,8 @@ export namespace Schemas {
   export type Recap = { groups: Array<RecapGroup>; week: IsoWeekNumber; year: number };
   export type RecordInterventionRequest = { done_on: string };
   export type RecordInvoicePaymentRequest = {
-    allow_exceeding_total?: boolean | undefined;
     amount_cents: number;
-    method: string;
+    method: PaymentMethod;
     note?: (string | null) | undefined;
     paid_on: string;
     reference?: (string | null) | undefined;
@@ -2049,11 +2097,13 @@ export namespace Schemas {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
     delivery_address?: (null | DeliveryAddressRequest) | undefined;
-    due_at?: (string | null) | undefined;
+    legal_notice?: (string | null) | undefined;
     lines: Array<InvoiceLineRequest>;
     notes?: (string | null) | undefined;
     operation_nature?: (null | OperationNature) | undefined;
+    payment_terms_days?: (number | null) | undefined;
     project_id?: (null | ProjectId) | undefined;
+    title?: (string | null) | undefined;
   };
   export type VatStatusRequest = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type UpdateLegalIdentityRequest = Partial<{
@@ -3944,24 +3994,39 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         };
@@ -3971,6 +4036,15 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
     };
+  };
+  export type delete_DeleteInvoice = {
+    method: "DELETE";
+    path: "/api/v1/invoices/{invoice_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
   };
   export type patch_UpdateInvoice = {
     method: "PATCH";
@@ -3984,24 +4058,39 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         };
@@ -4012,6 +4101,7 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type get_GetInvoiceBalance = {
@@ -4041,24 +4131,39 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         };
@@ -4080,24 +4185,39 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         }>;
@@ -4120,24 +4240,39 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         };
@@ -4148,6 +4283,7 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type post_IssueInvoice = {
@@ -4162,24 +4298,39 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         };
@@ -4189,6 +4340,62 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+      422: unknown;
+    };
+  };
+  export type post_NoteInvoice = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/note";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+
+      body: Schemas.NoteInvoiceRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          balance_cents: number;
+          created_at: string;
+          credited_cents: number;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
+          due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
+          issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          legal_notice: string;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          title: string;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
     };
   };
   export type get_ListInvoicePayments = {
@@ -4207,7 +4414,7 @@ export namespace Endpoints {
           deleted_by?: (null | Schemas.UserId) | undefined;
           id: Schemas.InvoicePaymentId;
           invoice_id: Schemas.InvoiceId;
-          method: string;
+          method: Schemas.PaymentMethod;
           note?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
           paid_on: string;
@@ -4240,7 +4447,7 @@ export namespace Endpoints {
           deleted_by?: (null | Schemas.UserId) | undefined;
           id: Schemas.InvoicePaymentId;
           invoice_id: Schemas.InvoiceId;
-          method: string;
+          method: Schemas.PaymentMethod;
           note?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
           paid_on: string;
@@ -4255,6 +4462,7 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type get_ExportInvoicePdf = {
@@ -4265,6 +4473,114 @@ export namespace Endpoints {
       path: { invoice_id: string; format: "pdf" | "facturx" };
     };
     responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown; 422: unknown };
+  };
+  export type post_RemindInvoice = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/remind";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          balance_cents: number;
+          created_at: string;
+          credited_cents: number;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
+          due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
+          issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          legal_notice: string;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          title: string;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_SendInvoice = {
+    method: "POST";
+    path: "/api/v1/invoices/{invoice_id}/send";
+    requestFormat: "json";
+    parameters: {
+      path: { invoice_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          balance_cents: number;
+          created_at: string;
+          credited_cents: number;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
+          due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
+          issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          legal_notice: string;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          title: string;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
   };
   export type get_GetMember = {
     method: "GET";
@@ -6573,24 +6889,39 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         }>;
@@ -6612,24 +6943,39 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         };
@@ -6639,6 +6985,7 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type get_ListOutstandingBalanceByCustomer = {
@@ -9287,24 +9634,39 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         }>;
@@ -9327,24 +9689,39 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         };
@@ -9369,24 +9746,39 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          balance_cents: number;
           created_at: string;
+          credited_cents: number;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
           delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
           due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
           gross_cents: number;
           id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
           issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
           kind: Schemas.InvoiceKind;
+          legal_notice: string;
           lines: Array<Schemas.InvoiceLineResponse>;
           net_cents: number;
           notes?: (string | null) | undefined;
           number?: (string | null) | undefined;
           operation_nature?: (null | Schemas.OperationNature) | undefined;
           organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
           project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
           source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
           status: Schemas.InvoiceStatus;
+          title: string;
           updated_at: string;
           vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
         };
@@ -9526,6 +9918,88 @@ export namespace Endpoints {
       404: unknown;
       409: unknown;
       422: unknown;
+    };
+  };
+  export type post_CreateInvoiceFromQuote = {
+    method: "POST";
+    path: "/api/v1/quotes/{quote_id}/invoices";
+    requestFormat: "json";
+    parameters: {
+      path: { quote_id: string };
+
+      body: Schemas.CreateInvoiceFromQuoteRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          balance_cents: number;
+          created_at: string;
+          credited_cents: number;
+          customer_context_id: Schemas.CustomerContextId;
+          customer_id: Schemas.CustomerId;
+          delivery_address?: (null | Schemas.DeliveryAddressResponse) | undefined;
+          display_state: Schemas.InvoiceDisplayState;
+          due_at?: (string | null) | undefined;
+          due_on?: (string | null) | undefined;
+          events: Array<Schemas.InvoiceEventResponse>;
+          full_cancellation: boolean;
+          gross_cents: number;
+          id: Schemas.InvoiceId;
+          internal_note?: (string | null) | undefined;
+          issued_at?: (string | null) | undefined;
+          issued_on?: (string | null) | undefined;
+          kind: Schemas.InvoiceKind;
+          legal_notice: string;
+          lines: Array<Schemas.InvoiceLineResponse>;
+          net_cents: number;
+          notes?: (string | null) | undefined;
+          number?: (string | null) | undefined;
+          operation_nature?: (null | Schemas.OperationNature) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_cents: number;
+          payment_terms_days: number;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          quote_id?: (null | Schemas.QuoteId) | undefined;
+          reason?: (string | null) | undefined;
+          sent_at?: (string | null) | undefined;
+          source_invoice_id?: (null | Schemas.InvoiceId) | undefined;
+          status: Schemas.InvoiceStatus;
+          title: string;
+          updated_at: string;
+          vat_breakdown: Array<Schemas.InvoiceVatBreakdownLineResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetQuoteInvoicing = {
+    method: "GET";
+    path: "/api/v1/quotes/{quote_id}/invoicing";
+    requestFormat: "json";
+    parameters: {
+      path: { quote_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          blocker?: (null | Schemas.QuoteInvoicingBlockerResponse) | undefined;
+          can_deposit: boolean;
+          can_full: boolean;
+          invoiced_percent: string;
+          invoices: Array<Schemas.InvoiceResponse>;
+          remaining_percent: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
     };
   };
   export type get_ExportQuotePdf = {
@@ -10318,6 +10792,7 @@ export type EndpointByMethod = {
     "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.delete_WithdrawAssignmentReport;
     "/api/v1/invitations/{invitation_id}": Endpoints.delete_RevokeInvitation;
     "/api/v1/invoice-payments/{invoice_payment_id}": Endpoints.delete_DeleteInvoicePayment;
+    "/api/v1/invoices/{invoice_id}": Endpoints.delete_DeleteInvoice;
     "/api/v1/members/{member_id}": Endpoints.delete_DeleteMember;
     "/api/v1/members/{member_id}/employee-profile": Endpoints.delete_RemoveEmployeeProfile;
     "/api/v1/members/{member_id}/roles/{role_id}": Endpoints.delete_UnassignRole;
@@ -10449,6 +10924,7 @@ export type EndpointByMethod = {
     "/api/v1/projects/{project_id}/invoices": Endpoints.get_ListProjectInvoices;
     "/api/v1/projects/{project_id}/supplier-costs": Endpoints.get_GetProjectSupplierCosts;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
+    "/api/v1/quotes/{quote_id}/invoicing": Endpoints.get_GetQuoteInvoicing;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
     "/api/v1/quotes/{quote_id}/plan-proposal": Endpoints.get_GetQuotePlanProposal;
     "/api/v1/service-rates/{service_rate_id}": Endpoints.get_GetServiceRate;
@@ -10479,7 +10955,10 @@ export type EndpointByMethod = {
     "/api/v1/invoices/{invoice_id}/cancel": Endpoints.post_CancelInvoice;
     "/api/v1/invoices/{invoice_id}/credit-notes": Endpoints.post_IssueCreditNote;
     "/api/v1/invoices/{invoice_id}/issue": Endpoints.post_IssueInvoice;
+    "/api/v1/invoices/{invoice_id}/note": Endpoints.post_NoteInvoice;
     "/api/v1/invoices/{invoice_id}/payments": Endpoints.post_RecordInvoicePayment;
+    "/api/v1/invoices/{invoice_id}/remind": Endpoints.post_RemindInvoice;
+    "/api/v1/invoices/{invoice_id}/send": Endpoints.post_SendInvoice;
     "/api/v1/members/{member_id}/roles": Endpoints.post_AssignRole;
     "/api/v1/organizations": Endpoints.post_CreateOrganization;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
@@ -10544,6 +11023,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.post_CreateTaskComment;
     "/api/v1/projects/{project_id}/invoices/deposit": Endpoints.post_IssueProjectDeposit;
     "/api/v1/projects/{project_id}/invoices/final": Endpoints.post_IssueProjectFinalInvoice;
+    "/api/v1/quotes/{quote_id}/invoices": Endpoints.post_CreateInvoiceFromQuote;
     "/api/v1/quotes/{quote_id}/plan": Endpoints.post_CreateQuotePlan;
     "/api/v1/quotes/{quote_id}/revision": Endpoints.post_ReviseQuote;
     "/api/v1/supplier-invoices/{supplier_invoice_id}/confirm": Endpoints.post_ConfirmSupplierInvoice;

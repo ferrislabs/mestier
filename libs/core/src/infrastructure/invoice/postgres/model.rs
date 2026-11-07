@@ -6,10 +6,12 @@ use rust_decimal::Decimal;
 use uuid::Uuid;
 
 use crate::{
-    CustomerContextId, CustomerId, CustomerOutstandingBalance, GeneratedInvoiceDocument, Invoice,
-    InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId,
-    InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity, OperationNature, OrganizationAddress,
-    OrganizationId, ProjectId, VatStatus, domain::organization::billing_settings::IssuerBilling,
+    CustomerContextId, CustomerId, CustomerOutstandingBalance, DiscountPercent,
+    GeneratedInvoiceDocument, Invoice, InvoiceCollection, InvoiceDerived, InvoiceEvent,
+    InvoiceEventId, InvoiceEventKind, InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId,
+    InvoicePayment, InvoicePaymentId, InvoiceStatus, InvoiceVatBreakdownLine, LegalIdentity,
+    OperationNature, OrganizationAddress, OrganizationId, PaymentMethod, ProductId, ProjectId,
+    QuoteId, ServiceRateId, VatStatus, domain::organization::billing_settings::IssuerBilling,
 };
 
 #[derive(Debug, Clone)]
@@ -40,6 +42,15 @@ pub struct InvoiceRow {
     pub document_mime_type: Option<String>,
     pub document_generated_at: Option<DateTime<Utc>>,
     pub source_invoice_id: Option<Uuid>,
+    pub title: String,
+    pub payment_terms_days: i32,
+    pub legal_notice: String,
+    pub internal_note: Option<String>,
+    pub sent_at: Option<DateTime<Utc>>,
+    pub quote_id: Option<Uuid>,
+    pub issued_on: Option<NaiveDate>,
+    pub reason: Option<String>,
+    pub full_cancellation: bool,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -54,6 +65,10 @@ pub struct InvoiceLineRow {
     pub quantity: Decimal,
     pub unit_price_cents: i32,
     pub vat_rate_basis_points: Option<i32>,
+    pub discount_percent: Decimal,
+    pub product_id: Option<Uuid>,
+    pub service_rate_id: Option<Uuid>,
+    pub source_line_id: Option<Uuid>,
     pub position: i32,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -112,6 +127,16 @@ impl InvoiceRow {
             generated_document,
             lines,
             source_invoice_id: self.source_invoice_id.map(InvoiceId),
+            title: self.title,
+            payment_terms_days: self.payment_terms_days,
+            legal_notice: self.legal_notice,
+            internal_note: self.internal_note,
+            sent_at: self.sent_at,
+            quote_id: self.quote_id.map(QuoteId),
+            issued_on: self.issued_on,
+            reason: self.reason,
+            full_cancellation: self.full_cancellation,
+            derived: InvoiceDerived::default(),
             deleted_at: self.deleted_at,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -318,13 +343,17 @@ impl TryFrom<InvoicePaymentRow> for InvoicePayment {
     type Error = CoreError;
 
     fn try_from(row: InvoicePaymentRow) -> Result<Self, Self::Error> {
+        let method = PaymentMethod::from_str(&row.method).map_err(|e| {
+            CoreError::Internal(format!("invalid invoice payment method in database: {e}"))
+        })?;
+
         Ok(Self {
             id: InvoicePaymentId(row.id),
             organization_id: OrganizationId(row.org_id),
             invoice_id: InvoiceId(row.invoice_id),
             amount_cents: row.amount_cents,
             paid_on: row.paid_on,
-            method: row.method,
+            method,
             reference: row.reference,
             note: row.note,
             recorded_by: UserId(row.recorded_by),
@@ -369,10 +398,58 @@ impl TryFrom<InvoiceLineRow> for InvoiceLine {
             quantity: row.quantity,
             unit_price_cents: row.unit_price_cents,
             vat_rate_basis_points: row.vat_rate_basis_points,
+            discount_percent: DiscountPercent::try_from(row.discount_percent).map_err(|e| {
+                CoreError::Internal(format!("invalid invoice line discount in database: {e}"))
+            })?,
+            product_id: row.product_id.map(ProductId),
+            service_rate_id: row.service_rate_id.map(ServiceRateId),
+            source_line_id: row.source_line_id.map(InvoiceLineId),
             position: row.position,
             deleted_at: row.deleted_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InvoiceCollectionRow {
+    pub invoice_id: Uuid,
+    pub paid_cents: i64,
+    pub credited_cents: i64,
+}
+
+impl From<InvoiceCollectionRow> for InvoiceCollection {
+    fn from(row: InvoiceCollectionRow) -> Self {
+        Self {
+            invoice_id: InvoiceId(row.invoice_id),
+            paid_cents: row.paid_cents,
+            credited_cents: row.credited_cents,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InvoiceEventRow {
+    pub id: Uuid,
+    pub kind: String,
+    pub detail: String,
+    pub at: DateTime<Utc>,
+    pub actor: Option<Uuid>,
+}
+
+impl TryFrom<InvoiceEventRow> for InvoiceEvent {
+    type Error = CoreError;
+
+    fn try_from(row: InvoiceEventRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: InvoiceEventId(row.id),
+            kind: InvoiceEventKind::from_str(&row.kind).map_err(|e| {
+                CoreError::Internal(format!("invalid invoice event kind in database: {e}"))
+            })?,
+            detail: row.detail,
+            at: row.at,
+            actor: row.actor.map(UserId),
         })
     }
 }

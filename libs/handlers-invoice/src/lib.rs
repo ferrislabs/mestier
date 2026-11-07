@@ -21,13 +21,15 @@ use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::{
     CustomerContextId, CustomerId, Invoice, InvoicePayment, InvoicePaymentId, OrganizationId,
-    Permissions, Project, ProjectId,
+    Permissions, Project, ProjectId, QuoteId,
 };
 
 pub mod invoice;
+pub mod invoice_error;
 pub mod paths;
 pub mod payment;
 pub mod project;
+pub mod quote;
 pub mod response;
 
 pub const TAG: &str = "invoices";
@@ -90,6 +92,17 @@ async fn require_invoice_membership(
     require_org_membership(state, identity, invoice.organization_id).await?;
 
     Ok(invoice)
+}
+
+async fn require_quote_membership(
+    state: &AppState,
+    identity: &Identity,
+    quote_id: QuoteId,
+) -> Result<mestier_core::Quote, ApiError> {
+    let quote = state.usecase.get_quote(quote_id).await?;
+    require_org_membership(state, identity, quote.organization_id).await?;
+
+    Ok(quote)
 }
 
 /// Same shape as `require_invoice_membership`, for the project-scoped
@@ -176,7 +189,13 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(invoice::create::handler)
         .typed_get(invoice::get_one::handler)
         .typed_patch(invoice::update::handler)
+        .typed_delete(invoice::delete::handler)
         .typed_post(invoice::issue::handler)
+        .typed_post(invoice::send::handler)
+        .typed_post(invoice::remind::handler)
+        .typed_post(invoice::note::handler)
+        .typed_post(quote::create_invoice::handler)
+        .typed_get(quote::invoicing::handler)
         .typed_post(invoice::cancel::handler)
         .typed_post(invoice::credit_note::handler)
         .typed_get(invoice::credit_note::list_handler)

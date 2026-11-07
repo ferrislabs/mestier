@@ -6,6 +6,7 @@ import { useCustomerContexts, useCustomers } from '#/hooks/use-customers'
 import {
 	type Invoice,
 	useCancelInvoice,
+	useDeleteInvoice,
 	useDeletePayment,
 	useInvoice,
 	useInvoiceBalance,
@@ -14,37 +15,29 @@ import {
 	useInvoices,
 	useIssueCreditNote,
 	useIssueInvoice,
+	useNoteInvoice,
 	useRecordPayment,
+	useRemindInvoice,
+	useSendInvoice,
 	useUpdateInvoice,
 } from '#/hooks/use-invoices'
 import { useProject } from '#/hooks/use-projects'
 import { useQuote } from '#/hooks/use-quotes'
 import { downloadAuthenticatedFile } from '#/lib/download-file'
 import { buildOrgPath } from '#/modules/org-path'
-import {
-	hideDraft,
-	recordRefund,
-	setIssueDate,
-} from '#/pages/invoices/feature/mocks/invoice-extras'
-import {
-	useInvoiceActivity,
-	useRemindInvoice,
-	useSaveInvoiceNote,
-	useSendInvoice,
-} from '#/pages/invoices/feature/use-invoice-activity'
-import { useInvoiceExtras } from '#/pages/invoices/feature/use-invoice-extras'
 import { invoiceActions } from '#/pages/invoices/lib/invoice-actions'
 import {
 	buildInvoiceHistory,
 	buildInvoicePaper,
+	invoiceActivity,
 	savedInvoiceTotals,
 } from '#/pages/invoices/lib/invoice-document'
 import { issueDateBounds } from '#/pages/invoices/lib/invoice-issue'
+import { parseTerms } from '#/pages/invoices/lib/invoice-new'
 import { isValidInvoiceLine } from '#/pages/invoices/lib/new-invoice-form'
 import {
-	effectiveRemainingCents,
 	paymentRequest,
-	refundRecord,
+	paymentsAndRefunds,
 	todayDate,
 } from '#/pages/invoices/lib/payment-form'
 import {
@@ -162,23 +155,24 @@ function InvoiceDetailWorkspace({
 	const updateInvoice = useUpdateInvoice()
 	const issueInvoice = useIssueInvoice()
 	const cancelInvoice = useCancelInvoice()
+	const deleteInvoice = useDeleteInvoice()
 	const balance = useInvoiceBalance(invoice.id)
 	const payments = useInvoicePayments(invoice.id)
 	const creditNotes = useInvoiceCreditNotes(invoice.id)
 	const recordPayment = useRecordPayment()
 	const deletePayment = useDeletePayment(invoice.id, invoice.organization_id)
 	const issueCreditNote = useIssueCreditNote()
-	const activity = useInvoiceActivity(invoice.id)
-	const sendInvoice = useSendInvoice(invoice.id)
-	const remindInvoice = useRemindInvoice(invoice.id)
-	const saveNote = useSaveInvoiceNote(invoice.id)
-	const extras = useInvoiceExtras()
+	const sendInvoice = useSendInvoice()
+	const remindInvoice = useRemindInvoice()
+	const noteInvoice = useNoteInvoice()
 	const allInvoices = useInvoices(invoice.organization_id, {
 		page: 1,
 		perPage: 100,
 	})
-	const quoteLink = extras.quoteLinks[invoice.id]
-	const linkedQuote = useQuote(quoteLink?.quoteId ?? '', Boolean(quoteLink))
+	const linkedQuote = useQuote(
+		invoice.quote_id ?? '',
+		Boolean(invoice.quote_id),
+	)
 	const [isDownloading, setIsDownloading] = useState(false)
 	const [downloadError, setDownloadError] = useState<string | null>(null)
 
@@ -263,7 +257,9 @@ function InvoiceDetailWorkspace({
 				customer_id: values.customerId,
 				customer_context_id: values.customerContextId,
 				project_id: invoice.project_id ?? null,
-				due_at: values.dueAt ? new Date(values.dueAt).toISOString() : null,
+				title: values.title.trim(),
+				payment_terms_days: parseTerms(values.termsDays),
+				legal_notice: values.legalNotice.trim() || null,
 				notes: values.notes.trim() || null,
 				operation_nature: values.operationNature || null,
 				lines: values.lines.map((line) => ({
@@ -272,6 +268,9 @@ function InvoiceDetailWorkspace({
 					unit_price_cents: eurosToCents(line.unitPrice),
 					vat_rate_basis_points:
 						line.vatRateBp === '' ? null : Number(line.vatRateBp),
+					discount_percent: line.discountPercent,
+					product_id: line.productId,
+					service_rate_id: line.serviceRateId,
 				})),
 			},
 		})
@@ -313,19 +312,17 @@ function InvoiceDetailWorkspace({
 				)
 			: undefined
 	const creditNoteList = creditNotes.data?.data ?? []
-	const paymentList = payments.data?.data ?? []
-	const refunds = extras.refunds[invoice.id] ?? []
-	const remainingCents = effectiveRemainingCents(
-		balance.data?.data.remaining_cents ?? null,
-		refunds.reduce((sum, refund) => sum + refund.amountCents, 0),
-	)
-	const displayState = invoiceDisplayState(invoice, remainingCents)
+	const allPayments = payments.data?.data ?? []
+	const { payments: paymentList, refunds } = paymentsAndRefunds(allPayments)
+	const activity = invoiceActivity(invoice)
+	const remainingCents = invoice.balance_cents
+	const displayState = invoiceDisplayState(invoice)
 	const actions = invoiceActions({
 		status: invoice.status,
 		grossCents: invoice.gross_cents,
-		creditedCents: balance.data?.data.credited_cents ?? null,
+		creditedCents: invoice.credited_cents,
 		remainingCents,
-		sentAt: activity.data.sentAt,
+		sentAt: activity.sentAt,
 	})
 
 	const error =
@@ -333,6 +330,7 @@ function InvoiceDetailWorkspace({
 		customerContexts.error?.message ??
 		updateInvoice.error?.message ??
 		cancelInvoice.error?.message ??
+		deleteInvoice.error?.message ??
 		balance.error?.message ??
 		payments.error?.message ??
 		creditNotes.error?.message ??
@@ -361,9 +359,9 @@ function InvoiceDetailWorkspace({
 			remainingCents={remainingCents}
 			refunds={refunds}
 			quote={
-				quoteLink
+				invoice.quote_id
 					? {
-							id: quoteLink.quoteId,
+							id: invoice.quote_id,
 							reference: linkedQuote.data?.data.reference ?? null,
 						}
 					: null
@@ -373,7 +371,7 @@ function InvoiceDetailWorkspace({
 			paymentsLoading={payments.isLoading}
 			creditNotes={creditNoteList}
 			creditNotesLoading={creditNotes.isLoading}
-			activity={activity.data}
+			activity={activity}
 			paper={buildInvoicePaper({
 				invoice,
 				customer,
@@ -382,10 +380,8 @@ function InvoiceDetailWorkspace({
 			})}
 			history={buildInvoiceHistory({
 				invoice,
-				payments: paymentList,
+				payments: allPayments,
 				creditNotes: creditNoteList,
-				activity: activity.data,
-				refunds,
 			})}
 			totals={savedInvoiceTotals(invoice)}
 			vatNotice={
@@ -415,26 +411,32 @@ function InvoiceDetailWorkspace({
 			onDuplicateLine={duplicateLine}
 			onRemoveLine={removeLine}
 			onSave={() => void saveInvoice()}
-			onIssue={async (issueDate) => {
-				const issued = await attempt(() =>
+			onIssue={(issueDate) =>
+				attempt(() =>
 					issueInvoice.mutateAsync({
 						path: { invoice_id: invoice.id },
-						body: {},
+						body: { issued_on: issueDate },
 					}),
 				)
-				if (issued) setIssueDate(invoice.id, issueDate)
-				return issued
-			}}
-			onDeleteDraft={() => {
-				hideDraft(invoice.id)
-				void navigate({
-					to: buildOrgPath(activeOrganization.slug, '/crm/factures'),
+			}
+			onDeleteDraft={() =>
+				void attempt(async () => {
+					await deleteInvoice.mutateAsync({
+						path: { invoice_id: invoice.id },
+					})
+					await navigate({
+						to: buildOrgPath(activeOrganization.slug, '/crm/factures'),
+					})
 				})
-			}}
-			onRefund={async (refundValues) => {
-				recordRefund(invoice.id, refundRecord(refundValues))
-				return true
-			}}
+			}
+			onRefund={(refundValues) =>
+				attempt(() =>
+					recordPayment.mutateAsync({
+						path: { invoice_id: invoice.id },
+						body: paymentRequest(refundValues, 'refund'),
+					}),
+				)
+			}
 			onCancel={() =>
 				attempt(() =>
 					cancelInvoice.mutateAsync({ path: { invoice_id: invoice.id } }),
@@ -455,11 +457,11 @@ function InvoiceDetailWorkspace({
 					}),
 				)
 			}
-			onIssueCreditNote={({ reason, lines }) =>
+			onIssueCreditNote={({ reason, ...request }) =>
 				attempt(async () => {
 					const created = await issueCreditNote.mutateAsync({
 						path: { invoice_id: invoice.id },
-						body: { lines, notes: reason },
+						body: { reason, ...request },
 					})
 					await navigate({
 						to: buildOrgPath(
@@ -471,14 +473,19 @@ function InvoiceDetailWorkspace({
 				})
 			}
 			onSend={async () => {
-				await sendInvoice.mutateAsync()
+				await sendInvoice.mutateAsync({ path: { invoice_id: invoice.id } })
 				return 'Facture marquée comme envoyée.'
 			}}
 			onRemind={async () => {
-				await remindInvoice.mutateAsync()
+				await remindInvoice.mutateAsync({ path: { invoice_id: invoice.id } })
 				return 'Relance enregistrée dans l’historique de la facture.'
 			}}
-			onSaveNote={(text) => void saveNote.mutateAsync(text)}
+			onSaveNote={(text) =>
+				void noteInvoice.mutateAsync({
+					path: { invoice_id: invoice.id },
+					body: { note: text },
+				})
+			}
 			onDownloadPdf={() => void downloadPdf()}
 		/>
 	)
@@ -494,6 +501,9 @@ function invoiceToForm(invoice: Invoice): InvoiceFormValues {
 			line.vat_rate_basis_points != null
 				? String(line.vat_rate_basis_points)
 				: '',
+		discountPercent: line.discount_percent,
+		productId: line.product_id ?? null,
+		serviceRateId: line.service_rate_id ?? null,
 	}))
 
 	return {
@@ -501,7 +511,9 @@ function invoiceToForm(invoice: Invoice): InvoiceFormValues {
 		projectId: invoice.project_id ?? '',
 		customerId: invoice.customer_id,
 		customerContextId: invoice.customer_context_id,
-		dueAt: invoice.due_at ? invoice.due_at.slice(0, 10) : '',
+		title: invoice.title,
+		termsDays: String(invoice.payment_terms_days),
+		legalNotice: invoice.legal_notice,
 		notes: invoice.notes ?? '',
 		operationNature: invoice.operation_nature ?? '',
 		lines: lines.length ? lines : [emptyInvoiceLine()],

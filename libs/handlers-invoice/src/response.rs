@@ -1,9 +1,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
-    CustomerContextId, CustomerId, CustomerOutstandingBalance, Invoice, InvoiceId, InvoiceKind,
-    InvoiceLine, InvoiceLineId, InvoicePayment, InvoicePaymentId, InvoiceStatus,
-    InvoiceVatBreakdownLine, OperationNature, OrganizationAddress, OrganizationId,
-    ProjectBillingSummary, ProjectId, UserId,
+    CustomerContextId, CustomerId, CustomerOutstandingBalance, Invoice, InvoiceDisplayState,
+    InvoiceEvent, InvoiceEventId, InvoiceEventKind, InvoiceId, InvoiceKind, InvoiceLine,
+    InvoiceLineId, InvoicePayment, InvoicePaymentId, InvoiceStatus, InvoiceVatBreakdownLine,
+    OperationNature, OrganizationAddress, OrganizationId, PaymentMethod, ProductId,
+    ProjectBillingSummary, ProjectId, QuoteId, QuoteInvoicing, QuoteInvoicingBlocker,
+    QuoteInvoicingView, ServiceRateId, UserId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -43,6 +45,10 @@ pub struct InvoiceLineResponse {
     pub quantity: String,
     pub unit_price_cents: i32,
     pub vat_rate_basis_points: Option<i32>,
+    pub discount_percent: String,
+    pub product_id: Option<ProductId>,
+    pub service_rate_id: Option<ServiceRateId>,
+    pub source_line_id: Option<InvoiceLineId>,
     pub position: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -58,6 +64,10 @@ impl From<InvoiceLine> for InvoiceLineResponse {
             quantity: value.quantity.normalize().to_string(),
             unit_price_cents: value.unit_price_cents,
             vat_rate_basis_points: value.vat_rate_basis_points,
+            discount_percent: value.discount_percent.get().normalize().to_string(),
+            product_id: value.product_id,
+            service_rate_id: value.service_rate_id,
+            source_line_id: value.source_line_id,
             position: value.position,
             created_at: value.created_at,
             updated_at: value.updated_at,
@@ -76,6 +86,27 @@ impl From<InvoiceVatBreakdownLine> for InvoiceVatBreakdownLineResponse {
         Self {
             rate_bp: value.rate_bp,
             vat_cents: value.vat_cents,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct InvoiceEventResponse {
+    pub id: InvoiceEventId,
+    pub kind: InvoiceEventKind,
+    pub detail: String,
+    pub at: DateTime<Utc>,
+    pub actor: Option<UserId>,
+}
+
+impl From<InvoiceEvent> for InvoiceEventResponse {
+    fn from(value: InvoiceEvent) -> Self {
+        Self {
+            id: value.id,
+            kind: value.kind,
+            detail: value.detail,
+            at: value.at,
+            actor: value.actor,
         }
     }
 }
@@ -108,12 +139,29 @@ pub struct InvoiceResponse {
     /// Set exactly when `kind` is `CREDIT_NOTE` — the invoice this one
     /// corrects.
     pub source_invoice_id: Option<InvoiceId>,
+    pub title: String,
+    pub payment_terms_days: i32,
+    pub legal_notice: String,
+    pub internal_note: Option<String>,
+    pub sent_at: Option<DateTime<Utc>>,
+    pub quote_id: Option<QuoteId>,
+    pub issued_on: Option<NaiveDate>,
+    pub due_on: Option<NaiveDate>,
+    pub reason: Option<String>,
+    pub full_cancellation: bool,
+    pub paid_cents: i64,
+    pub credited_cents: i64,
+    pub balance_cents: i64,
+    pub display_state: InvoiceDisplayState,
+    pub events: Vec<InvoiceEventResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl From<Invoice> for InvoiceResponse {
     fn from(value: Invoice) -> Self {
+        let due_on = value.due_on();
+
         Self {
             id: value.id,
             organization_id: value.organization_id,
@@ -141,6 +189,26 @@ impl From<Invoice> for InvoiceResponse {
                 .map(InvoiceLineResponse::from)
                 .collect(),
             source_invoice_id: value.source_invoice_id,
+            title: value.title,
+            payment_terms_days: value.payment_terms_days,
+            legal_notice: value.legal_notice,
+            internal_note: value.internal_note,
+            sent_at: value.sent_at,
+            quote_id: value.quote_id,
+            issued_on: value.issued_on,
+            due_on,
+            reason: value.reason,
+            full_cancellation: value.full_cancellation,
+            paid_cents: value.derived.settlement.paid_cents,
+            credited_cents: value.derived.settlement.credited_cents,
+            balance_cents: value.derived.settlement.balance_cents,
+            display_state: value.derived.display_state,
+            events: value
+                .derived
+                .events
+                .into_iter()
+                .map(InvoiceEventResponse::from)
+                .collect(),
             created_at: value.created_at,
             updated_at: value.updated_at,
         }
@@ -154,7 +222,7 @@ pub struct InvoicePaymentResponse {
     pub invoice_id: InvoiceId,
     pub amount_cents: i32,
     pub paid_on: NaiveDate,
-    pub method: String,
+    pub method: PaymentMethod,
     pub reference: Option<String>,
     pub note: Option<String>,
     pub recorded_by: UserId,
@@ -232,6 +300,59 @@ impl From<ProjectBillingSummary> for ProjectBillingSummaryResponse {
             quoted_cents: value.quoted_cents,
             billed_cents: value.billed_cents,
             remaining_cents: value.remaining_cents,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum QuoteInvoicingBlockerResponse {
+    QuoteNotAccepted,
+    QuoteAlreadyInvoiced,
+    DepositsCoverQuote,
+}
+
+impl From<QuoteInvoicingBlocker> for QuoteInvoicingBlockerResponse {
+    fn from(value: QuoteInvoicingBlocker) -> Self {
+        match value {
+            QuoteInvoicingBlocker::QuoteNotAccepted => Self::QuoteNotAccepted,
+            QuoteInvoicingBlocker::QuoteAlreadyInvoiced => Self::QuoteAlreadyInvoiced,
+            QuoteInvoicingBlocker::DepositsCoverQuote => Self::DepositsCoverQuote,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct QuoteInvoicingResponse {
+    pub invoiced_percent: String,
+    pub remaining_percent: String,
+    pub can_full: bool,
+    pub can_deposit: bool,
+    pub blocker: Option<QuoteInvoicingBlockerResponse>,
+    pub invoices: Vec<InvoiceResponse>,
+}
+
+impl From<QuoteInvoicingView> for QuoteInvoicingResponse {
+    fn from(value: QuoteInvoicingView) -> Self {
+        let QuoteInvoicing {
+            invoiced_percent,
+            remaining_percent,
+            can_full,
+            can_deposit,
+            blocker,
+        } = value.invoicing;
+
+        Self {
+            invoiced_percent: invoiced_percent.normalize().to_string(),
+            remaining_percent: remaining_percent.normalize().to_string(),
+            can_full,
+            can_deposit,
+            blocker: blocker.map(QuoteInvoicingBlockerResponse::from),
+            invoices: value
+                .invoices
+                .into_iter()
+                .map(InvoiceResponse::from)
+                .collect(),
         }
     }
 }

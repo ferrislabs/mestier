@@ -8,8 +8,12 @@ import type {
 	InvoicePayment,
 } from '#/hooks/use-invoices'
 import type { Organization } from '#/hooks/use-organizations'
-import type { RefundRecord } from '#/pages/invoices/feature/mocks/invoice-extras'
 import { invoiceActions } from '#/pages/invoices/lib/invoice-actions'
+import type { RefundRecord } from '#/pages/invoices/lib/payment-form'
+import {
+	invoiceFixture,
+	lineFixture,
+} from '#/pages/invoices/test-support/invoice-fixture'
 import {
 	emptyInvoiceLine,
 	type InvoiceDisplayState,
@@ -64,36 +68,21 @@ const CONTEXT = {
 } as CustomerContext
 
 function invoice(overrides: Partial<Invoice> = {}): Invoice {
-	return {
-		id: 'invoice-1',
-		organization_id: 'org-1',
-		customer_id: 'customer-1',
-		customer_context_id: 'context-1',
-		kind: 'STANDARD',
-		status: 'ISSUED',
-		number: 'FAC-001',
-		gross_cents: 12000,
-		net_cents: 10000,
+	return invoiceFixture({
 		lines: [
-			{
-				id: 'line-1',
-				invoice_id: 'invoice-1',
-				organization_id: 'org-1',
+			lineFixture({
 				label: 'Pose de parquet',
-				position: 0,
 				quantity: '4',
 				unit_price_cents: 2500,
-				created_at: '2026-01-01T00:00:00Z',
-				updated_at: '2026-01-01T00:00:00Z',
-			},
+			}),
 		],
 		vat_breakdown: [{ rate_bp: 2000, vat_cents: 2000 }],
 		due_at: '2026-07-01T00:00:00Z',
+		due_on: '2026-07-01',
 		issued_at: '2026-06-02T09:00:00Z',
-		created_at: '2026-06-01T09:00:00Z',
-		updated_at: '2026-06-02T09:00:00Z',
+		issued_on: '2026-06-02',
 		...overrides,
-	}
+	})
 }
 
 const PAPER: PaperDocument = {
@@ -143,7 +132,9 @@ function values(overrides: Partial<InvoiceFormValues> = {}): InvoiceFormValues {
 		projectId: '',
 		customerId: 'customer-1',
 		customerContextId: 'context-1',
-		dueAt: '',
+		title: '',
+		termsDays: '30',
+		legalNotice: '',
 		notes: '',
 		operationNature: '',
 		lines: [{ ...emptyInvoiceLine(), label: 'Pose', unitPrice: '10' }],
@@ -288,7 +279,7 @@ describe('InvoiceDetailUI — issued invoice', () => {
 		)
 
 		expect(props.onRecordPayment).toHaveBeenCalledWith(
-			expect.objectContaining({ amount: '60,00', method: 'Virement' }),
+			expect.objectContaining({ amount: '60,00', method: 'TRANSFER' }),
 		)
 	})
 
@@ -335,14 +326,8 @@ describe('InvoiceDetailUI — issued invoice', () => {
 
 		expect(props.onIssueCreditNote).toHaveBeenCalledWith({
 			reason: 'Erreur de quantité',
-			lines: [
-				{
-					label: 'Pose de parquet',
-					quantity: '1',
-					unit_price_cents: 2500,
-					vat_rate_basis_points: null,
-				},
-			],
+			full: false,
+			lines: [{ source_line_id: 'line-1', quantity: '1' }],
 		})
 	})
 
@@ -421,7 +406,7 @@ describe('InvoiceDetailUI — issued invoice', () => {
 				invoice_id: 'invoice-1',
 				organization_id: 'org-1',
 				amount_cents: 4000,
-				method: 'Chèque',
+				method: 'CHECK',
 				paid_on: '2026-06-05',
 				recorded_by: 'user-1',
 				created_at: '2026-06-05T09:00:00Z',
@@ -646,9 +631,9 @@ describe('InvoiceDetailUI — refund and cancellation by credit note', () => {
 				id: 'refund-1',
 				date: '2026-06-09',
 				amountCents: 1000,
-				method: 'Virement',
-				reference: '',
-				note: '',
+				method: 'TRANSFER',
+				reference: null,
+				note: null,
 			},
 		]
 		await renderUi(props)

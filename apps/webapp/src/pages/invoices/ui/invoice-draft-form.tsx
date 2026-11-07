@@ -93,6 +93,13 @@ export function InvoiceDraftForm({
 			</FormCard>
 			<FormCard id={`${idPrefix}-terms-title`} title="Type et conditions">
 				<div className="@container grid gap-4">
+					<FormField id={`${idPrefix}-title`} label="Objet">
+						<Input
+							id={`${idPrefix}-title`}
+							value={values.title}
+							onChange={(event) => onChange({ title: event.target.value })}
+						/>
+					</FormField>
 					<div className="grid gap-4 @md:grid-cols-3">
 						<FormField id={`${idPrefix}-kind`} label="Type">
 							<p
@@ -102,12 +109,18 @@ export function InvoiceDraftForm({
 								{invoiceKindLabel(values.kind)}
 							</p>
 						</FormField>
-						<FormField id={`${idPrefix}-due`} label="Échéance">
+						<FormField
+							id={`${idPrefix}-terms`}
+							label="Délai de paiement (jours)"
+							hint="Entre 0 et 60 jours : l’échéance se calcule à l’émission."
+						>
 							<Input
-								id={`${idPrefix}-due`}
-								type="date"
-								value={values.dueAt}
-								onChange={(event) => onChange({ dueAt: event.target.value })}
+								id={`${idPrefix}-terms`}
+								inputMode="numeric"
+								value={values.termsDays}
+								onChange={(event) =>
+									onChange({ termsDays: event.target.value })
+								}
 							/>
 						</FormField>
 						<FormField id={`${idPrefix}-nature`} label="Nature de l’opération">
@@ -158,6 +171,20 @@ export function InvoiceDraftForm({
 					notice={unsavedNotice}
 					className="ml-auto w-full max-w-sm"
 				/>
+			</FormCard>
+			<FormCard id={`${idPrefix}-legal-title`} title="Mentions légales">
+				<FormField
+					id={`${idPrefix}-legal`}
+					label="Pénalités et indemnité de recouvrement"
+					hint="Reprises des réglages, modifiables tant que la facture est en brouillon."
+				>
+					<AutoTextarea
+						id={`${idPrefix}-legal`}
+						value={values.legalNotice}
+						onChange={(event) => onChange({ legalNotice: event.target.value })}
+						className="min-h-16"
+					/>
+				</FormField>
 			</FormCard>
 			<FormCard id={`${idPrefix}-notes-title`} title="Notes">
 				<FormField

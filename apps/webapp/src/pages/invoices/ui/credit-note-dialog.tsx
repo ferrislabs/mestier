@@ -22,11 +22,12 @@ import {
 import type { Invoice } from '#/hooks/use-invoices'
 import {
 	type CreditMode,
+	type CreditNoteRequest,
 	creditConsequenceText,
 	creditedQuantity,
 	creditLineIssue,
 	creditNoteErrors,
-	creditNoteLines,
+	creditNoteRequest,
 	creditPreviewNetCents,
 	creditPreviewTotals,
 	fillAll,
@@ -62,10 +63,9 @@ interface CreditNoteDialogProps {
 	remainingCents: number | null
 	isPending: boolean
 	error: string | null
-	onSubmit: (request: {
-		reason: string
-		lines: ReturnType<typeof creditNoteLines>
-	}) => Promise<boolean>
+	onSubmit: (
+		request: { reason: string } & CreditNoteRequest,
+	) => Promise<boolean>
 }
 
 function CreditForm({
@@ -103,7 +103,7 @@ function CreditForm({
 		}
 		const done = await onSubmit({
 			reason: reason.trim(),
-			lines: creditNoteLines(lines, mode, inputs),
+			...creditNoteRequest(lines, mode, inputs),
 		})
 		if (done) onClose()
 	}

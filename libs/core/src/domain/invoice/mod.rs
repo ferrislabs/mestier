@@ -25,13 +25,23 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    CustomerContextId, CustomerId, LegalIdentity, OrganizationAddress, OrganizationId, ProjectId,
+    CustomerContextId, CustomerId, DiscountPercent, LegalIdentity, OrganizationAddress,
+    OrganizationId, ProductId, ProjectId, QuoteId, ServiceRateId,
 };
 
 pub mod commands;
+pub mod error;
 pub mod events;
 pub mod ports;
+pub mod rules;
 pub mod service;
+pub mod values;
+
+pub use error::{InvoiceError, InvoiceField, InvoiceOutcome};
+pub use values::{
+    InvoiceDisplayState, InvoiceEvent, InvoiceEventId, InvoiceEventKind, InvoiceSettlement,
+    PaymentMethod,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct InvoiceId(pub Uuid);
@@ -144,7 +154,7 @@ pub enum InvoiceKind {
     CreditNote,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InvoiceNumberSeries {
     Invoice,
     CreditNote,
@@ -258,6 +268,10 @@ pub struct InvoiceLine {
     /// same reason it does on a quote line: a document already issued must
     /// not change because a rate was edited afterwards.
     pub vat_rate_basis_points: Option<i32>,
+    pub discount_percent: DiscountPercent,
+    pub product_id: Option<ProductId>,
+    pub service_rate_id: Option<ServiceRateId>,
+    pub source_line_id: Option<InvoiceLineId>,
     /// Display order. Lines are a snapshot, not a set — reordering after
     /// creation is a new draft edit, not a live reorder endpoint.
     pub position: i32,
@@ -340,9 +354,49 @@ pub struct Invoice {
     /// fixed the instant it is built, not something an edit-in-place flow
     /// ever needs to change.
     pub source_invoice_id: Option<InvoiceId>,
+    pub title: String,
+    pub payment_terms_days: i32,
+    pub legal_notice: String,
+    pub internal_note: Option<String>,
+    pub sent_at: Option<DateTime<Utc>>,
+    pub quote_id: Option<QuoteId>,
+    pub issued_on: Option<NaiveDate>,
+    pub reason: Option<String>,
+    pub full_cancellation: bool,
+    pub derived: InvoiceDerived,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InvoiceDerived {
+    pub settlement: InvoiceSettlement,
+    pub display_state: InvoiceDisplayState,
+    pub events: Vec<InvoiceEvent>,
+}
+
+impl Default for InvoiceDerived {
+    fn default() -> Self {
+        Self {
+            settlement: InvoiceSettlement::default(),
+            display_state: InvoiceDisplayState::Draft,
+            events: Vec::new(),
+        }
+    }
+}
+
+impl Invoice {
+    pub fn due_on(&self) -> Option<NaiveDate> {
+        self.due_at.map(|due| due.date_naive())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvoiceCollection {
+    pub invoice_id: InvoiceId,
+    pub paid_cents: i64,
+    pub credited_cents: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
@@ -368,10 +422,7 @@ impl Display for InvoicePaymentId {
 /// #318, a credit note.
 ///
 /// Soft-deleted, never hard-deleted: `deleted_at`/`deleted_by` are the
-/// audit trail #320 asks for, set together or not at all. A refund is a
-/// credit note (#318), never a negative `amount_cents` — enforced at the
-/// database (`chk_invoice_payments_amount_cents_positive`) and again in
-/// `InvoiceService::record_payment`.
+/// audit trail #320 asks for, set together or not at all.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InvoicePayment {
     pub id: InvoicePaymentId,
@@ -379,7 +430,7 @@ pub struct InvoicePayment {
     pub invoice_id: InvoiceId,
     pub amount_cents: i32,
     pub paid_on: NaiveDate,
-    pub method: String,
+    pub method: PaymentMethod,
     pub reference: Option<String>,
     pub note: Option<String>,
     pub recorded_by: UserId,
@@ -467,8 +518,16 @@ impl DraftInvoice {
         self.0.customer_context_id = customer_context_id;
     }
 
-    pub fn set_due_at(&mut self, due_at: Option<DateTime<Utc>>) {
-        self.0.due_at = due_at;
+    pub fn set_title(&mut self, title: String) {
+        self.0.title = title;
+    }
+
+    pub fn set_payment_terms_days(&mut self, days: i32) {
+        self.0.payment_terms_days = days;
+    }
+
+    pub fn set_legal_notice(&mut self, legal_notice: String) {
+        self.0.legal_notice = legal_notice;
     }
 
     pub fn set_notes(&mut self, notes: Option<String>) {

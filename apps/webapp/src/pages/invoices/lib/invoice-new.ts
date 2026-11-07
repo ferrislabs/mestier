@@ -1,11 +1,4 @@
-import type { InvoiceLinePayload, InvoiceStatus } from '#/hooks/use-invoices'
-import type { Quote } from '#/hooks/use-quotes'
-import { addDaysIso } from '#/pages/invoices/lib/iso-date'
-import {
-	centsToEuros,
-	formatVatRateBp,
-	invoiceLineTotalCents,
-} from '#/pages/invoices/types'
+import type { QuoteInvoicingData } from '#/hooks/use-invoices'
 
 export const MAX_PAYMENT_TERMS_DAYS = 60
 export const DEFAULT_PAYMENT_TERMS_DAYS = 30
@@ -15,9 +8,10 @@ const DEFAULT_DEPOSIT_PERCENT = 30
 
 export interface QuoteInvoiceLink {
 	invoiceId: string
-	kind: 'full' | 'deposit'
-	percent: number
-	status: InvoiceStatus
+	number: string | null
+	draft: boolean
+	grossCents: number
+	issuedAt: string | null
 }
 
 export interface QuoteInvoicing {
@@ -27,6 +21,7 @@ export interface QuoteInvoicing {
 	canDeposit: boolean
 	reasons: string[]
 	existingInvoiceId: string | null
+	existingInvoiceNumber: string | null
 	deposits: { issued: QuoteInvoiceLink[]; drafts: QuoteInvoiceLink[] }
 }
 
@@ -45,39 +40,41 @@ export function formatPercent(value: number): string {
 	return `${String(value).replace('.', ',')} %`
 }
 
-export function quoteInvoicing(
-	quote: Pick<Quote, 'status'>,
-	links: readonly QuoteInvoiceLink[],
-): QuoteInvoicing {
-	const active = links.filter((link) => link.status !== 'CANCELLED')
-	const deposits = active.filter((link) => link.kind === 'deposit')
-	const full = active.find((link) => link.kind === 'full') ?? null
-	const invoiced = roundPercent(
-		deposits.reduce((sum, link) => sum + link.percent, 0),
+const BLOCKER_REASONS: Record<
+	NonNullable<QuoteInvoicingData['blocker']>,
+	string
+> = {
+	QUOTE_NOT_ACCEPTED: 'Le devis doit être accepté.',
+	QUOTE_ALREADY_INVOICED: 'Ce devis a déjà une facture.',
+	DEPOSITS_COVER_QUOTE:
+		'Les acomptes déjà facturés couvrent 100 % du devis : seule la facture complète est possible.',
+}
+
+export function quoteInvoicingView(data: QuoteInvoicingData): QuoteInvoicing {
+	const links = data.invoices.map(
+		(invoice): QuoteInvoiceLink & { kind: string } => ({
+			kind: invoice.kind,
+			invoiceId: invoice.id,
+			number: invoice.number ?? null,
+			draft: invoice.status === 'DRAFT',
+			grossCents: invoice.gross_cents,
+			issuedAt: invoice.issued_at ?? null,
+		}),
 	)
-	const remaining = Math.max(0, roundPercent(100 - invoiced))
-	const accepted = quote.status === 'ACCEPTED'
-	const canFull = accepted && full === null
-	const canDeposit = canFull && remaining > 0
-	const reasons = !accepted
-		? ['Le devis doit être accepté.']
-		: full !== null
-			? ['Ce devis a déjà une facture.']
-			: canDeposit
-				? []
-				: [
-						'Les acomptes déjà facturés couvrent 100 % du devis : seule la facture complète est possible.',
-					]
+	const deposits = links.filter((link) => link.kind === 'DEPOSIT')
+	const full = data.invoices.find((invoice) => invoice.kind === 'STANDARD')
+
 	return {
-		invoiced,
-		remaining,
-		canFull,
-		canDeposit,
-		reasons,
-		existingInvoiceId: full?.invoiceId ?? null,
+		invoiced: Number(data.invoiced_percent),
+		remaining: Number(data.remaining_percent),
+		canFull: data.can_full,
+		canDeposit: data.can_deposit,
+		reasons: data.blocker ? [BLOCKER_REASONS[data.blocker]] : [],
+		existingInvoiceId: full?.id ?? null,
+		existingInvoiceNumber: full?.number ?? null,
 		deposits: {
-			issued: deposits.filter((link) => link.status !== 'DRAFT'),
-			drafts: deposits.filter((link) => link.status === 'DRAFT'),
+			issued: deposits.filter((link) => !link.draft),
+			drafts: deposits.filter((link) => link.draft),
 		},
 	}
 }
@@ -99,74 +96,6 @@ export function depositPercentError(
 	return null
 }
 
-interface RateBase {
-	rateBp: number | null
-	netCents: number
-}
-
-function netByRate(quote: Pick<Quote, 'lines'>): RateBase[] {
-	const bases = new Map<number | null, number>()
-	for (const line of quote.lines) {
-		const rateBp = line.vat_rate_bp ?? null
-		const net = invoiceLineTotalCents({
-			clientId: line.id,
-			label: line.label,
-			quantity: line.quantity,
-			unitPrice: centsToEuros(line.unit_price_cents),
-			vatRateBp: '',
-		})
-		bases.set(rateBp, (bases.get(rateBp) ?? 0) + net)
-	}
-	return [...bases].map(([rateBp, netCents]) => ({ rateBp, netCents }))
-}
-
-function depositBase(netCents: number, percent: number): number {
-	return Math.round((netCents * percent) / 100)
-}
-
-export function depositLines(
-	quote: Pick<Quote, 'lines' | 'reference'>,
-	percent: number,
-): InvoiceLinePayload[] {
-	const bases = netByRate(quote)
-	const reference = quote.reference ? ` ${quote.reference}` : ''
-	return bases.map((base) => {
-		const rate =
-			bases.length > 1 && base.rateBp !== null
-				? ` (TVA ${formatVatRateBp(base.rateBp)})`
-				: ''
-		return {
-			label: `Acompte de ${percent} % sur devis${reference}${rate}`,
-			quantity: '1',
-			unit_price_cents: depositBase(base.netCents, percent),
-			vat_rate_basis_points: base.rateBp,
-		}
-	})
-}
-
-export function depositPreviewCents(
-	quote: Pick<Quote, 'lines'>,
-	percent: number,
-): number {
-	if (!(percent > 0)) return 0
-	return netByRate(quote).reduce((sum, base) => {
-		const net = depositBase(base.netCents, percent)
-		const vat = Math.round((net * (base.rateBp ?? 0)) / 10000)
-		return sum + net + vat
-	}, 0)
-}
-
-export function fullInvoiceLines(
-	quote: Pick<Quote, 'lines'>,
-): InvoiceLinePayload[] {
-	return quote.lines.map((line) => ({
-		label: line.label,
-		quantity: line.quantity,
-		unit_price_cents: line.unit_price_cents,
-		vat_rate_basis_points: line.vat_rate_bp ?? null,
-	}))
-}
-
 export function parseTerms(input: string): number | null {
 	const text = input.trim()
 	return /^\d+$/.test(text) ? Number(text) : null
@@ -177,14 +106,6 @@ export function newInvoiceTermsError(input: string): string | null {
 	return terms === null || terms > MAX_PAYMENT_TERMS_DAYS
 		? `Le délai de paiement doit être compris entre 0 et ${MAX_PAYMENT_TERMS_DAYS} jours.`
 		: null
-}
-
-export function paymentTermsDueDate(
-	today: string,
-	input: string,
-): string | null {
-	const terms = parseTerms(input)
-	return terms === null ? null : addDaysIso(today, terms)
 }
 
 export type QuoteInvoiceMode = 'deposit' | 'full'
@@ -212,26 +133,4 @@ export function readNewInvoiceSearch(search: string): NewInvoiceSearch {
 		clientId: params.get('client') || undefined,
 		mode: mode === 'acompte' || mode === 'complete' ? mode : undefined,
 	}
-}
-
-export function activeQuoteLinks(input: {
-	quoteId: string
-	links: Record<
-		string,
-		{ quoteId: string; kind: 'full' | 'deposit'; percent: number }
-	>
-	hiddenIds: readonly string[]
-	statusById: ReadonlyMap<string, InvoiceStatus>
-}): QuoteInvoiceLink[] {
-	return Object.entries(input.links)
-		.filter(
-			([invoiceId, link]) =>
-				link.quoteId === input.quoteId && !input.hiddenIds.includes(invoiceId),
-		)
-		.map(([invoiceId, link]) => ({
-			invoiceId,
-			kind: link.kind,
-			percent: link.percent,
-			status: input.statusById.get(invoiceId) ?? 'ISSUED',
-		}))
 }

@@ -5,7 +5,7 @@ import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
-import type { InvoiceStatus } from '#/hooks/use-invoices'
+import type { Invoice } from '#/hooks/use-invoices'
 import type { Quote } from '#/hooks/use-quotes'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
@@ -55,8 +55,7 @@ export interface LinkedInvoice {
 	id: string
 	label: string
 	kindLabel: string
-	status: InvoiceStatus
-	dueAt: string | null
+	displayState: Invoice['display_state']
 	grossCents: number
 }
 
@@ -379,8 +378,7 @@ export function QuoteEditUI({
 									<Money cents={invoice.grossCents} className="text-right" />
 									<InvoiceStateBadge
 										state={invoiceDisplayState({
-											status: invoice.status,
-											due_at: invoice.dueAt,
+											display_state: invoice.displayState,
 										})}
 									/>
 								</li>

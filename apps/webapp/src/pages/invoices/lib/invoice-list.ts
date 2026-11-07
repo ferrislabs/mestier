@@ -12,6 +12,7 @@ export type InvoiceStateFilter =
 	| 'paid'
 	| 'draft'
 	| 'cancelled'
+	| 'refund_due'
 
 export function matchesStateFilter(
 	state: InvoiceDisplayState,
@@ -24,11 +25,8 @@ export function matchesStateFilter(
 
 export function invoiceStateCounts(
 	invoices: readonly Invoice[],
-	now: Date = new Date(),
 ): Record<InvoiceStateFilter, number> {
-	const states = invoices.map((invoice) =>
-		invoiceDisplayState(invoice, null, now),
-	)
+	const states = invoices.map((invoice) => invoiceDisplayState(invoice))
 	const count = (filter: InvoiceStateFilter) =>
 		states.filter((state) => matchesStateFilter(state, filter)).length
 	return {
@@ -38,6 +36,7 @@ export function invoiceStateCounts(
 		paid: count('paid'),
 		draft: count('draft'),
 		cancelled: count('cancelled'),
+		refund_due: count('refund_due'),
 	}
 }
 
@@ -51,11 +50,10 @@ export interface InvoiceTiles {
 export function computeInvoiceTiles(
 	invoices: readonly Invoice[],
 	outstandingTotalCents: number | null,
-	now: Date = new Date(),
 ): InvoiceTiles {
 	const states = invoices.map((invoice) => ({
 		invoice,
-		state: invoiceDisplayState(invoice, null, now),
+		state: invoiceDisplayState(invoice),
 	}))
 	const drafts = states.filter(({ state }) => state === 'draft')
 	return {
@@ -89,13 +87,6 @@ export function invoiceMatchesSearch(
 			.includes(wanted) ||
 		customerName.includes(wanted)
 	)
-}
-
-export function excludeInvoices(
-	invoices: readonly Invoice[],
-	hiddenIds: readonly string[],
-): Invoice[] {
-	return invoices.filter((invoice) => !hiddenIds.includes(invoice.id))
 }
 
 export function invoiceMatchesAccount(

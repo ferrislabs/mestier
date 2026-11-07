@@ -10,12 +10,13 @@ function values(
 	overrides: Partial<NewInvoiceFormValues> = {},
 ): NewInvoiceFormValues {
 	return {
+		title: '',
+		legalNotice: '',
 		termsDays: '30',
 		kind: 'STANDARD',
 		projectId: '',
 		customerId: 'customer-1',
 		customerContextId: 'context-1',
-		dueAt: '',
 		notes: '',
 		operationNature: '',
 		lines: [{ ...emptyInvoiceLine(), label: 'Pose', unitPrice: '10' }],
@@ -43,7 +44,8 @@ describe('validateNewInvoice', () => {
 		expect(validateNewInvoice(values({ termsDays: '61' })).terms).toContain(
 			'entre 0 et 60 jours',
 		)
-		expect(validateNewInvoice(values({ termsDays: '' })).terms).toBeDefined()
+		expect(validateNewInvoice(values({ termsDays: 'abc' })).terms).toBeDefined()
+		expect(validateNewInvoice(values({ termsDays: '' }))).toEqual({})
 	})
 
 	it('needs at least one complete line', () => {
@@ -53,14 +55,14 @@ describe('validateNewInvoice', () => {
 		).toBeDefined()
 	})
 
-	it('refuses a negative price: the backend only takes positive unit prices', () => {
+	it('takes a negative price, a deduction line', () => {
 		expect(
 			validateNewInvoice(
 				values({
 					lines: [{ ...emptyInvoiceLine(), label: 'Remise', unitPrice: '-10' }],
 				}),
-			).lines,
-		).toBeDefined()
+			),
+		).toEqual({})
 	})
 })
 

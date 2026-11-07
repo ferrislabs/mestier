@@ -1,20 +1,21 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::{CoreError, UserId};
 use mestier_macros::repository;
 use sqlx::PgConnection;
 
 use crate::{
-    CustomerOutstandingBalance, DraftInvoice, GeneratedInvoiceDocument, Invoice, InvoiceId,
-    InvoiceLine, InvoiceNumberSeries, InvoicePayment, InvoicePaymentId, InvoiceStatus,
-    LegalIdentity, OrganizationId, ProjectId,
+    CustomerOutstandingBalance, DraftInvoice, GeneratedInvoiceDocument, Invoice, InvoiceCollection,
+    InvoiceEvent, InvoiceId, InvoiceLine, InvoiceNumberSeries, InvoicePayment, InvoicePaymentId,
+    InvoiceStatus, LegalIdentity, OrganizationId, ProjectId, QuoteId,
     domain::{
         invoice::ports::InvoiceRepository,
         organization::{billing_settings::NumberPadding, numbering::format_number},
     },
     infrastructure::{
         invoice::postgres::model::{
-            CustomerOutstandingBalanceRow, InvoiceLineRow, InvoicePaymentRow, InvoiceRow,
-            delivery_address_columns, legal_identity_to_json, vat_breakdown_to_json,
+            CustomerOutstandingBalanceRow, InvoiceCollectionRow, InvoiceEventRow, InvoiceLineRow,
+            InvoicePaymentRow, InvoiceRow, delivery_address_columns, legal_identity_to_json,
+            vat_breakdown_to_json,
         },
         postgres::{SharedTx, error::map_sqlx_error},
     },
@@ -195,7 +196,10 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
                 delivery_address_city, delivery_address_country,
                 net_cents, vat_breakdown, gross_cents,
-                issuer_identity, source_invoice_id, deleted_at, created_at, updated_at
+                issuer_identity, source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
+                deleted_at, created_at, updated_at
             )
             VALUES (
                 $1, $2, $3, CAST($4 AS text)::invoice_kind, $5, $6, $7,
@@ -203,7 +207,10 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 CAST($12 AS text)::invoice_operation_nature,
                 $13, $14, $15, $16, $17,
                 $18, $19, $20,
-                $21, $22, $23, $24, $25
+                $21, $22,
+                $23, $24, $25, $26, $27, $28,
+                $29, $30, $31,
+                $32, $33, $34
             )
             RETURNING
                 id, org_id, number, kind::text AS "kind!", project_id, customer_id,
@@ -214,6 +221,8 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             "#,
             invoice.id.0,
@@ -238,6 +247,15 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             invoice.gross_cents,
             issuer_identity,
             invoice.source_invoice_id.map(|id| id.0),
+            invoice.title,
+            invoice.payment_terms_days,
+            invoice.legal_notice,
+            invoice.internal_note,
+            invoice.sent_at,
+            invoice.quote_id.map(|id| id.0),
+            invoice.issued_on,
+            invoice.reason,
+            invoice.full_cancellation,
             invoice.deleted_at,
             invoice.created_at,
             invoice.updated_at,
@@ -264,6 +282,8 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             FROM invoices
             WHERE id = $1 AND deleted_at IS NULL
@@ -302,6 +322,8 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             FROM invoices
             WHERE org_id = $1 AND deleted_at IS NULL
@@ -347,6 +369,8 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             FROM invoices
             WHERE project_id = $1 AND deleted_at IS NULL
@@ -384,6 +408,8 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             FROM invoices
             WHERE source_invoice_id = $1 AND deleted_at IS NULL
@@ -418,18 +444,20 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             SET project_id = $2,
                 customer_id = $3,
                 customer_context_id = $4,
-                due_at = $5,
-                notes = $6,
-                operation_nature = CAST($7 AS text)::invoice_operation_nature,
-                delivery_address_line1 = $8,
-                delivery_address_line2 = $9,
-                delivery_address_postal_code = $10,
-                delivery_address_city = $11,
-                delivery_address_country = $12,
-                net_cents = $13,
-                vat_breakdown = $14,
-                gross_cents = $15,
-                updated_at = $16
+                notes = $5,
+                operation_nature = CAST($6 AS text)::invoice_operation_nature,
+                delivery_address_line1 = $7,
+                delivery_address_line2 = $8,
+                delivery_address_postal_code = $9,
+                delivery_address_city = $10,
+                delivery_address_country = $11,
+                net_cents = $12,
+                vat_breakdown = $13,
+                gross_cents = $14,
+                title = $15,
+                payment_terms_days = $16,
+                legal_notice = $17,
+                updated_at = $18
             WHERE id = $1 AND deleted_at IS NULL AND status = 'DRAFT'
             RETURNING
                 id, org_id, number, kind::text AS "kind!", project_id, customer_id,
@@ -440,13 +468,14 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             "#,
             invoice.id.0,
             invoice.project_id.map(|id| id.0),
             invoice.customer_id.0,
             invoice.customer_context_id.0,
-            invoice.due_at,
             invoice.notes,
             operation_nature,
             delivery_line1,
@@ -457,6 +486,9 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             invoice.net_cents,
             vat_breakdown,
             invoice.gross_cents,
+            invoice.title,
+            invoice.payment_terms_days,
+            invoice.legal_notice,
             invoice.updated_at,
         )
         .fetch_optional(&mut ***tx)
@@ -505,6 +537,8 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             "#,
             id.0,
@@ -520,11 +554,14 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
         row.into_invoice(lines)
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn issue(
         &mut self,
         id: InvoiceId,
         number: String,
         issued_at: DateTime<Utc>,
+        issued_on: NaiveDate,
+        due_at: Option<DateTime<Utc>>,
         issuer_identity: &LegalIdentity,
         updated_at: DateTime<Utc>,
     ) -> Result<Invoice, CoreError> {
@@ -537,8 +574,10 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             SET number = $2,
                 status = 'ISSUED'::invoice_status,
                 issued_at = $3,
-                issuer_identity = $4,
-                updated_at = $5
+                issued_on = $4,
+                due_at = $5,
+                issuer_identity = $6,
+                updated_at = $7
             WHERE id = $1 AND deleted_at IS NULL AND status = 'DRAFT'
             RETURNING
                 id, org_id, number, kind::text AS "kind!", project_id, customer_id,
@@ -549,11 +588,15 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             "#,
             id.0,
             number,
             issued_at,
+            issued_on,
+            due_at,
             issuer_identity_json,
             updated_at,
         )
@@ -564,6 +607,212 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
         let row = row.ok_or(CoreError::NotFound)?;
         let lines = fetch_lines(&mut tx, id).await?;
         row.into_invoice(lines)
+    }
+
+    async fn last_issued_on(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Option<NaiveDate>, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        sqlx::query_scalar!(
+            r#"
+            SELECT MAX(issued_on)
+            FROM invoices
+            WHERE org_id = $1 AND deleted_at IS NULL AND kind <> 'CREDIT_NOTE'
+            "#,
+            organization_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
+    }
+
+    async fn last_credit_note_on(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Option<NaiveDate>, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        sqlx::query_scalar!(
+            r#"
+            SELECT MAX(issued_on)
+            FROM invoices
+            WHERE org_id = $1 AND deleted_at IS NULL AND kind = 'CREDIT_NOTE'
+            "#,
+            organization_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
+    }
+
+    async fn list_by_quote(&mut self, quote_id: QuoteId) -> Result<Vec<Invoice>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            InvoiceRow,
+            r#"
+            SELECT
+                id, org_id, number, kind::text AS "kind!", project_id, customer_id,
+                customer_context_id, status::text AS "status!", issued_at, due_at, notes,
+                operation_nature::text,
+                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,
+                delivery_address_city, delivery_address_country,
+                net_cents, vat_breakdown, gross_cents, issuer_identity,
+                document_format, document_file_key, document_mime_type, document_generated_at,
+                source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
+                deleted_at, created_at, updated_at
+            FROM invoices
+            WHERE quote_id = $1 AND deleted_at IS NULL
+            ORDER BY created_at ASC, id ASC
+            "#,
+            quote_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let mut invoices = Vec::with_capacity(rows.len());
+        for row in rows {
+            let lines = fetch_lines(&mut tx, InvoiceId(row.id)).await?;
+            invoices.push(row.into_invoice(lines)?);
+        }
+
+        Ok(invoices)
+    }
+
+    async fn collections(
+        &mut self,
+        invoice_ids: &[InvoiceId],
+    ) -> Result<Vec<InvoiceCollection>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<uuid::Uuid> = invoice_ids.iter().map(|id| id.0).collect();
+        let rows = sqlx::query_as!(
+            InvoiceCollectionRow,
+            r#"
+            SELECT
+                i.id AS "invoice_id!",
+                COALESCE((
+                    SELECT SUM(p.amount_cents)
+                    FROM invoice_payments p
+                    WHERE p.invoice_id = i.id AND p.deleted_at IS NULL
+                ), 0)::BIGINT AS "paid_cents!",
+                COALESCE((
+                    SELECT SUM(c.gross_cents)
+                    FROM invoices c
+                    WHERE c.source_invoice_id = i.id AND c.deleted_at IS NULL
+                        AND c.status NOT IN ('DRAFT', 'CANCELLED')
+                ), 0)::BIGINT AS "credited_cents!"
+            FROM invoices i
+            WHERE i.id = ANY($1)
+            "#,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn list_events(&mut self, invoice_id: InvoiceId) -> Result<Vec<InvoiceEvent>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            InvoiceEventRow,
+            r#"
+            SELECT id, kind, detail, at, actor
+            FROM invoice_events
+            WHERE invoice_id = $1
+            ORDER BY at ASC, id ASC
+            "#,
+            invoice_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(TryInto::try_into).collect()
+    }
+
+    async fn insert_event(
+        &mut self,
+        organization_id: OrganizationId,
+        invoice_id: InvoiceId,
+        event: &InvoiceEvent,
+    ) -> Result<InvoiceEvent, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            InvoiceEventRow,
+            r#"
+            INSERT INTO invoice_events (id, org_id, invoice_id, kind, detail, at, actor)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id, kind, detail, at, actor
+            "#,
+            event.id.0,
+            organization_id.0,
+            invoice_id.0,
+            event.kind.as_str(),
+            event.detail,
+            event.at,
+            event.actor.map(|actor| actor.0),
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.try_into()
+    }
+
+    async fn mark_sent(&mut self, id: InvoiceId, sent_at: DateTime<Utc>) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        let result = sqlx::query!(
+            r#"
+            UPDATE invoices
+            SET sent_at = $2, updated_at = $2
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            id.0,
+            sent_at,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        if result.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+
+        Ok(())
+    }
+
+    async fn set_internal_note(
+        &mut self,
+        id: InvoiceId,
+        note: &str,
+        updated_at: DateTime<Utc>,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        let result = sqlx::query!(
+            r#"
+            UPDATE invoices
+            SET internal_note = NULLIF(btrim($2), ''), updated_at = $3
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            id.0,
+            note,
+            updated_at,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        if result.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+
+        Ok(())
     }
 
     async fn record_generated_document(
@@ -598,6 +847,8 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             "#,
             id.0,
@@ -681,7 +932,7 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
             payment.invoice_id.0,
             payment.amount_cents,
             payment.paid_on,
-            payment.method,
+            payment.method.as_str(),
             payment.reference,
             payment.note,
             payment.recorded_by.0,
@@ -851,6 +1102,8 @@ impl<'tx> InvoiceRepository for PgInvoiceRepository<'tx> {
                 net_cents, vat_breakdown, gross_cents, issuer_identity,
                 document_format, document_file_key, document_mime_type, document_generated_at,
                 source_invoice_id,
+                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,
+                issued_on, reason, full_cancellation,
                 deleted_at, created_at, updated_at
             FROM invoices i
             WHERE i.org_id = $1
@@ -906,7 +1159,9 @@ async fn fetch_lines(
     let rows = sqlx::query_as!(
         InvoiceLineRow,
         r#"
-        SELECT id, org_id, invoice_id, label, quantity, unit_price_cents, vat_rate_basis_points, position, deleted_at, created_at, updated_at
+        SELECT id, org_id, invoice_id, label, quantity, unit_price_cents, vat_rate_basis_points,
+               discount_percent, product_id, service_rate_id, source_line_id,
+               position, deleted_at, created_at, updated_at
         FROM invoice_lines
         WHERE invoice_id = $1 AND deleted_at IS NULL
         ORDER BY position ASC, id ASC
@@ -926,9 +1181,10 @@ async fn insert_lines(conn: &mut PgConnection, lines: &[InvoiceLine]) -> Result<
             r#"
             INSERT INTO invoice_lines (
                 id, org_id, invoice_id, label, quantity, unit_price_cents,
-                vat_rate_basis_points, position, deleted_at, created_at, updated_at
+                vat_rate_basis_points, discount_percent, product_id, service_rate_id,
+                source_line_id, position, deleted_at, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             "#,
             line.id.0,
             line.organization_id.0,
@@ -937,6 +1193,10 @@ async fn insert_lines(conn: &mut PgConnection, lines: &[InvoiceLine]) -> Result<
             line.quantity,
             line.unit_price_cents,
             line.vat_rate_basis_points,
+            line.discount_percent.get(),
+            line.product_id.map(|id| id.0),
+            line.service_rate_id.map(|id| id.0),
+            line.source_line_id.map(|id| id.0),
             line.position,
             line.deleted_at,
             line.created_at,
@@ -1295,6 +1555,10 @@ mod tests {
             quantity: Decimal::ONE,
             unit_price_cents: amount_cents,
             vat_rate_basis_points: None,
+            discount_percent: crate::DiscountPercent::ZERO,
+            product_id: None,
+            service_rate_id: None,
+            source_line_id: None,
             position: 0,
             deleted_at: None,
             created_at: now,
@@ -1321,6 +1585,16 @@ mod tests {
             generated_document: None,
             lines: vec![line],
             source_invoice_id,
+            title: String::new(),
+            payment_terms_days: 30,
+            legal_notice: String::new(),
+            internal_note: None,
+            sent_at: None,
+            quote_id: None,
+            issued_on: None,
+            reason: (kind == InvoiceKind::CreditNote).then(|| "Test".to_owned()),
+            full_cancellation: false,
+            derived: crate::InvoiceDerived::default(),
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -1334,6 +1608,8 @@ mod tests {
                 invoice_id,
                 number.to_owned(),
                 now,
+                now.date_naive(),
+                due_at,
                 &stub_legal_identity(),
                 now,
             )
@@ -1358,7 +1634,7 @@ mod tests {
             invoice_id,
             amount_cents,
             paid_on: Utc::now().date_naive(),
-            method: "Virement".to_owned(),
+            method: crate::PaymentMethod::Transfer,
             reference: None,
             note: None,
             recorded_by: UserId(recorded_by),
@@ -1545,6 +1821,217 @@ mod tests {
         );
         assert_eq!(balance.oldest_due_at, Some(due_at));
 
+        cleanup_with_customer(&pool, org_id, customer_id, owner_id).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn spec_crm_5_18_collections_sum_the_net_payments_and_the_credit_notes() {
+        let pool = dev_pool().await;
+        let org_id = seed_organization(&pool, "invoice-collections").await;
+        let customer_id = seed_customer(&pool, org_id, "invoice-collections").await;
+        let customer_context_id = seed_customer_context(&pool, customer_id).await;
+        let owner_id =
+            sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let seed = |kind, source, amount, number: &'static str| {
+            seed_issued_invoice(
+                &pool,
+                org_id,
+                customer_id,
+                customer_context_id,
+                kind,
+                source,
+                None,
+                amount,
+                number,
+            )
+        };
+        let invoice_id = seed(InvoiceKind::Standard, None, 10_000, "FAC-2026-9201").await;
+        let untouched_id = seed(InvoiceKind::Standard, None, 700, "FAC-2026-9202").await;
+        seed(
+            InvoiceKind::CreditNote,
+            Some(invoice_id),
+            1_000,
+            "AV-2026-9201",
+        )
+        .await;
+        seed_payment(&pool, org_id, invoice_id, 4_000, owner_id).await;
+        seed_payment(&pool, org_id, invoice_id, -1_000, owner_id).await;
+
+        let collections = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.collections(&[invoice_id, untouched_id]).await
+        })
+        .await
+        .unwrap();
+
+        let of = |id: InvoiceId| {
+            collections
+                .iter()
+                .find(|collection| collection.invoice_id == id)
+                .copied()
+                .expect("one row per requested invoice")
+        };
+        assert_eq!(of(invoice_id).paid_cents, 3_000);
+        assert_eq!(of(invoice_id).credited_cents, 1_000);
+        assert_eq!(of(untouched_id).paid_cents, 0);
+        assert_eq!(of(untouched_id).credited_cents, 0);
+
+        cleanup_with_customer(&pool, org_id, customer_id, owner_id).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn spec_crm_5_2_the_last_issue_dates_are_read_per_kind() {
+        let pool = dev_pool().await;
+        let org_id = seed_organization(&pool, "invoice-last-dates").await;
+        let customer_id = seed_customer(&pool, org_id, "invoice-last-dates").await;
+        let customer_context_id = seed_customer_context(&pool, customer_id).await;
+        let owner_id =
+            sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let read = |pool: &PgPool| {
+            let pool = pool.clone();
+            async move {
+                with_tx(&pool, async |tx| {
+                    let mut repo = PgInvoiceRepository::new(&tx);
+                    Ok((
+                        repo.last_issued_on(org_id).await?,
+                        repo.last_credit_note_on(org_id).await?,
+                    ))
+                })
+                .await
+                .unwrap()
+            }
+        };
+
+        assert_eq!(read(&pool).await, (None, None));
+
+        let invoice_id = seed_issued_invoice(
+            &pool,
+            org_id,
+            customer_id,
+            customer_context_id,
+            InvoiceKind::Standard,
+            None,
+            None,
+            1_000,
+            "FAC-2026-9301",
+        )
+        .await;
+        let today = Utc::now().date_naive();
+        assert_eq!(read(&pool).await, (Some(today), None));
+
+        seed_issued_invoice(
+            &pool,
+            org_id,
+            customer_id,
+            customer_context_id,
+            InvoiceKind::CreditNote,
+            Some(invoice_id),
+            None,
+            500,
+            "AV-2026-9301",
+        )
+        .await;
+        assert_eq!(read(&pool).await, (Some(today), Some(today)));
+
+        cleanup_with_customer(&pool, org_id, customer_id, owner_id).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn spec_crm_5_17_events_are_listed_in_order_and_sending_and_the_note_are_stored() {
+        let pool = dev_pool().await;
+        let org_id = seed_organization(&pool, "invoice-events").await;
+        let customer_id = seed_customer(&pool, org_id, "invoice-events").await;
+        let customer_context_id = seed_customer_context(&pool, customer_id).await;
+        let owner_id =
+            sqlx::query_scalar!("SELECT owner_id FROM organizations WHERE id = $1", org_id.0)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let invoice_id = seed_issued_invoice(
+            &pool,
+            org_id,
+            customer_id,
+            customer_context_id,
+            InvoiceKind::Standard,
+            None,
+            None,
+            1_000,
+            "FAC-2026-9401",
+        )
+        .await;
+        let sent_at = Utc::now().trunc_subsecs(6);
+        let event = |kind, detail: &str, at: DateTime<Utc>| InvoiceEvent {
+            id: crate::InvoiceEventId(generate_uuid_v7()),
+            kind,
+            detail: detail.to_owned(),
+            at,
+            actor: Some(UserId(owner_id)),
+        };
+
+        let (events, stored) = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.mark_sent(invoice_id, sent_at).await?;
+            repo.insert_event(
+                org_id,
+                invoice_id,
+                &event(
+                    crate::InvoiceEventKind::Reminder,
+                    "Rappel envoyé",
+                    sent_at + chrono::Duration::seconds(5),
+                ),
+            )
+            .await?;
+            repo.insert_event(
+                org_id,
+                invoice_id,
+                &event(crate::InvoiceEventKind::Sent, "Envoyée au client", sent_at),
+            )
+            .await?;
+            repo.set_internal_note(invoice_id, "  Rappeler mardi  ", sent_at)
+                .await?;
+            Ok((
+                repo.list_events(invoice_id).await?,
+                repo.find_by_id(invoice_id).await?.expect("the invoice"),
+            ))
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            events.iter().map(|event| event.kind).collect::<Vec<_>>(),
+            vec![
+                crate::InvoiceEventKind::Sent,
+                crate::InvoiceEventKind::Reminder
+            ]
+        );
+        assert_eq!(stored.sent_at, Some(sent_at));
+        assert_eq!(stored.internal_note.as_deref(), Some("Rappeler mardi"));
+
+        let cleared = with_tx(&pool, async |tx| {
+            let mut repo = PgInvoiceRepository::new(&tx);
+            repo.set_internal_note(invoice_id, "   ", sent_at).await?;
+            repo.find_by_id(invoice_id).await
+        })
+        .await
+        .unwrap()
+        .expect("the invoice");
+        assert_eq!(cleared.internal_note, None);
+
+        purge(
+            &pool,
+            "DELETE FROM invoice_events WHERE org_id = $1",
+            org_id.0,
+        )
+        .await;
         cleanup_with_customer(&pool, org_id, customer_id, owner_id).await;
     }
 

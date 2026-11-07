@@ -3,13 +3,11 @@ import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomers } from '#/hooks/use-customers'
 import { useInvoices, useOutstandingByCustomer } from '#/hooks/use-invoices'
-import { useInvoiceExtras } from '#/pages/invoices/feature/use-invoice-extras'
 import {
 	clearInvoiceClientParam,
 	getInvoiceListUrlState,
 	readInvoiceClientParam,
 } from '#/pages/invoices/invoice-list-url-state'
-import { excludeInvoices } from '#/pages/invoices/lib/invoice-list'
 import { InvoiceListUI } from '#/pages/invoices/ui/invoice-list-ui'
 
 export function InvoiceListFeature() {
@@ -55,7 +53,6 @@ function InvoiceListWorkspace({
 	const [customerFilterId, setCustomerFilterId] = useState(
 		readInvoiceClientParam,
 	)
-	const extras = useInvoiceExtras()
 	const customers = useCustomers(organizationId)
 	const invoices = useInvoices(organizationId, {
 		page: invoicePage,
@@ -78,7 +75,7 @@ function InvoiceListWorkspace({
 		<InvoiceListUI
 			organizationSlug={organizationSlug}
 			customers={customers.data?.data ?? []}
-			invoices={excludeInvoices(invoices.data?.data ?? [], extras.hiddenDrafts)}
+			invoices={invoices.data?.data ?? []}
 			customerFilterId={customerFilterId}
 			onClearCustomerFilter={() => {
 				clearInvoiceClientParam()

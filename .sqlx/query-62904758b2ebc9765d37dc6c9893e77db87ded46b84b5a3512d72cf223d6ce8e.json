@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT MAX(issued_on)\n            FROM invoices\n            WHERE org_id = $1 AND deleted_at IS NULL AND kind <> 'CREDIT_NOTE'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "62904758b2ebc9765d37dc6c9893e77db87ded46b84b5a3512d72cf223d6ce8e"
+}

@@ -223,17 +223,24 @@ export function InvoiceNewUI({
 									</SelectContent>
 								</Select>
 							</FormField>
+							<FormField id={`${baseId}-title`} label="Objet">
+								<Input
+									id={`${baseId}-title`}
+									value={values.title}
+									onChange={(event) => onChange({ title: event.target.value })}
+								/>
+							</FormField>
 							<FormField
 								id={NEW_INVOICE_FIELD_IDS.terms}
 								label="Délai de paiement (jours)"
-								required
 								error={errors.terms}
-								hint={`De 0 à ${MAX_PAYMENT_TERMS_DAYS} jours : 0 pour un paiement à réception.`}
+								hint={`De 0 à ${MAX_PAYMENT_TERMS_DAYS} jours : 0 pour un paiement à réception. Vide, le délai du client ou des réglages s’applique.`}
 							>
 								<Input
 									id={NEW_INVOICE_FIELD_IDS.terms}
 									inputMode="numeric"
 									autoComplete="off"
+									placeholder="Réglages"
 									value={values.termsDays}
 									aria-invalid={errors.terms !== undefined || undefined}
 									onChange={(event) =>

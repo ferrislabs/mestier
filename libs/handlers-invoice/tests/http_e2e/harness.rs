@@ -157,6 +157,88 @@ impl App {
         quote_id
     }
 
+    pub async fn seed_quote_with_lines(
+        &self,
+        status: &str,
+        lines: &[(&str, i32, Option<i32>, &str)],
+    ) -> Uuid {
+        let quote_id = Uuid::now_v7();
+        let net: i32 = lines
+            .iter()
+            .map(|(quantity, price, _, discount)| {
+                let quantity: f64 = quantity.parse().expect("a quantity");
+                let discount: f64 = discount.parse().expect("a discount");
+                (quantity * f64::from(*price) * (1.0 - discount / 100.0)).round() as i32
+            })
+            .sum();
+        sqlx::query(
+            "INSERT INTO quotes (id, org_id, customer_id, customer_context_id, status, \
+             net_cents, gross_cents, reference, title) \
+             VALUES ($1, $2, $3, $4, $5::quote_status, $6, $6, $7, $8)",
+        )
+        .bind(quote_id)
+        .bind(self.organization_id)
+        .bind(self.customer_id)
+        .bind(self.customer_context_id)
+        .bind(status)
+        .bind(net)
+        .bind(format!("DEV-TEST-{quote_id}"))
+        .bind("Salle de bain")
+        .execute(&self.pool)
+        .await
+        .expect("seed the quote");
+
+        for (quantity, price, rate, discount) in lines {
+            sqlx::query(
+                "INSERT INTO quote_lines (id, org_id, quote_id, label, quantity, unit, \
+                 unit_price_cents, vat_rate_bp, discount_percent) \
+                 VALUES ($1, $2, $3, $4, $5::numeric, 'unit', $6, $7, $8::numeric)",
+            )
+            .bind(Uuid::now_v7())
+            .bind(self.organization_id)
+            .bind(quote_id)
+            .bind("Pose de carrelage")
+            .bind(*quantity)
+            .bind(*price)
+            .bind(*rate)
+            .bind(*discount)
+            .execute(&self.pool)
+            .await
+            .expect("seed the quote line");
+        }
+
+        quote_id
+    }
+
+    pub async fn make_customer_an_individual(&self) {
+        sqlx::query(
+            "UPDATE customers SET kind = 'INDIVIDUAL', registration_number = NULL WHERE id = $1",
+        )
+        .bind(self.customer_id)
+        .execute(&self.pool)
+        .await
+        .expect("make the customer an individual");
+    }
+
+    pub async fn remove_customer_address(&self) {
+        sqlx::query("UPDATE customer_contexts SET address_line = NULL, city = NULL WHERE id = $1")
+            .bind(self.customer_context_id)
+            .execute(&self.pool)
+            .await
+            .expect("remove the address");
+    }
+
+    pub async fn make_organization_subject_to_vat(&self) {
+        sqlx::query(
+            "UPDATE organizations SET vat_status = 'subject', vat_number = 'FR12345678901', \
+             vat_exemption_basis = NULL WHERE id = $1",
+        )
+        .bind(self.organization_id)
+        .execute(&self.pool)
+        .await
+        .expect("make the organization subject to vat");
+    }
+
     /// A project for the seeded customer, optionally pointed at a quote —
     /// `issue_deposit`/`issue_final_invoice`/the billing summary all need
     /// one with a quote, `create_invoice`'s own `project_id` works with
@@ -324,22 +406,32 @@ async fn seed(pool: &PgPool, complete_legal_identity: bool) -> Fixture {
     .expect("seed the no-role membership");
 
     let customer_id = Uuid::now_v7();
-    sqlx::query("INSERT INTO customers (id, org_id, name) VALUES ($1, $2, $3)")
-        .bind(customer_id)
-        .bind(organization_id)
-        .bind("Duval Masonry")
-        .execute(pool)
-        .await
-        .expect("seed the customer");
+    sqlx::query(
+        "INSERT INTO customers (id, org_id, name, kind, registration_number) \
+         VALUES ($1, $2, $3, 'PROFESSIONAL', $4)",
+    )
+    .bind(customer_id)
+    .bind(organization_id)
+    .bind("Duval Masonry")
+    .bind("12345678901234")
+    .execute(pool)
+    .await
+    .expect("seed the customer");
 
     let customer_context_id = Uuid::now_v7();
-    sqlx::query("INSERT INTO customer_contexts (id, customer_id, label) VALUES ($1, $2, $3)")
-        .bind(customer_context_id)
-        .bind(customer_id)
-        .bind("Main site")
-        .execute(pool)
-        .await
-        .expect("seed the customer context");
+    sqlx::query(
+        "INSERT INTO customer_contexts (id, customer_id, label, address_line, postal_code, city) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(customer_context_id)
+    .bind(customer_id)
+    .bind("Main site")
+    .bind("12 rue des Lilas")
+    .bind("69003")
+    .bind("Lyon")
+    .execute(pool)
+    .await
+    .expect("seed the customer context");
 
     Fixture {
         sub,

@@ -4,31 +4,29 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    CustomerOutstandingBalance, GeneratedInvoiceDocument, Invoice, InvoiceId, InvoicePayment,
-    InvoicePaymentId, OrganizationId, ProjectBillingSummary, ProjectId,
+    CustomerOutstandingBalance, GeneratedInvoiceDocument, Invoice, InvoiceId, InvoiceOutcome,
+    InvoicePayment, InvoicePaymentId, OrganizationId, ProjectBillingSummary, ProjectId, QuoteId,
     application::MestierUseCase,
     domain::invoice::{
         commands::{
-            CancelInvoiceCommand, CreateInvoiceCommand, DeleteInvoicePaymentCommand,
-            IssueCreditNoteCommand, IssueDepositCommand, IssueFinalInvoiceCommand,
-            IssueInvoiceCommand, RecordInvoicePaymentCommand, UpdateInvoiceCommand,
+            CancelInvoiceCommand, CreateInvoiceCommand, CreateInvoiceFromQuoteCommand,
+            DeleteInvoicePaymentCommand, IssueCreditNoteCommand, IssueDepositCommand,
+            IssueFinalInvoiceCommand, IssueInvoiceCommand, NoteInvoiceCommand,
+            RecordInvoicePaymentCommand, RemindInvoiceCommand, SendInvoiceCommand,
+            UpdateInvoiceCommand,
         },
-        service::InvoiceService,
+        service::{InvoiceService, QuoteInvoicingView},
     },
 };
 
 impl MestierUseCase {
-    /// `organization` reads the organization's VAT status, same reason as
-    /// `create_quote`: totals depend on it, and only calls that can
-    /// recompute totals need to be aware of the organization aggregate.
-    /// `role`/`member`/`authz` (#395) let `InvoiceService` enforce
-    /// `MANAGE_INVOICES` before the write reaches the repository — the same
-    /// trio `create_customer` lists for `customer.manage`.
-    #[transactional(invoice, organization, role, member, authz, emitter)]
+    #[transactional(invoice, organization, customer, role, member, authz, emitter)]
     pub async fn create_invoice(
         &self,
         command: CreateInvoiceCommand,
-    ) -> Result<Invoice, CoreError> {
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut organization_repository = organization_repository;
+        let mut customer_repository = customer_repository;
         let mut service = InvoiceService::new(
             invoice_repository,
             emitter,
@@ -37,14 +35,15 @@ impl MestierUseCase {
             authz,
         );
         service
-            .create_invoice(command, organization_repository)
+            .create_invoice(
+                command,
+                &mut organization_repository,
+                &mut customer_repository,
+                Utc::now(),
+            )
             .await
     }
 
-    /// `role`/`member`/`authz` are listed even though this read never calls
-    /// `policy::require` (same reason `CustomerService::get_customer` lists
-    /// them): `InvoiceService` is generic over all three, so constructing it
-    /// needs concrete bindings regardless of which method runs.
     #[transactional(invoice, role, member, authz, emitter)]
     pub async fn get_invoice(&self, id: InvoiceId) -> Result<Invoice, CoreError> {
         let mut service = InvoiceService::new(
@@ -54,7 +53,7 @@ impl MestierUseCase {
             role_repository,
             authz,
         );
-        service.get_invoice(id).await
+        service.get_invoice(id, Utc::now().date_naive()).await
     }
 
     #[transactional(invoice, role, member, authz, emitter)]
@@ -71,7 +70,9 @@ impl MestierUseCase {
             role_repository,
             authz,
         );
-        service.list_invoices(organization_id, limit, offset).await
+        service
+            .list_invoices(organization_id, limit, offset, Utc::now().date_naive())
+            .await
     }
 
     #[transactional(invoice, role, member, authz, emitter)]
@@ -86,7 +87,9 @@ impl MestierUseCase {
             role_repository,
             authz,
         );
-        service.list_invoices_by_project(project_id).await
+        service
+            .list_invoices_by_project(project_id, Utc::now().date_naive())
+            .await
     }
 
     #[transactional(invoice, role, member, authz, emitter)]
@@ -101,14 +104,17 @@ impl MestierUseCase {
             role_repository,
             authz,
         );
-        service.get_invoice_credit_notes(source_invoice_id).await
+        service
+            .get_invoice_credit_notes(source_invoice_id, Utc::now().date_naive())
+            .await
     }
 
     #[transactional(invoice, organization, role, member, authz, emitter)]
     pub async fn update_invoice(
         &self,
         command: UpdateInvoiceCommand,
-    ) -> Result<Invoice, CoreError> {
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut organization_repository = organization_repository;
         let mut service = InvoiceService::new(
             invoice_repository,
             emitter,
@@ -117,7 +123,7 @@ impl MestierUseCase {
             authz,
         );
         service
-            .update_invoice(command, organization_repository)
+            .update_invoice(command, &mut organization_repository, Utc::now())
             .await
     }
 
@@ -141,7 +147,7 @@ impl MestierUseCase {
         &self,
         id: InvoiceId,
         actor: Subject,
-    ) -> Result<(), CoreError> {
+    ) -> Result<InvoiceOutcome<()>, CoreError> {
         let mut service = InvoiceService::new(
             invoice_repository,
             emitter,
@@ -149,17 +155,30 @@ impl MestierUseCase {
             role_repository,
             authz,
         );
-        service.soft_delete_invoice(id, actor).await
+        service.soft_delete_invoice(id, actor, Utc::now()).await
     }
 
-    /// `project` and `quote` resolve the invoice's project and that
-    /// project's quote, when it has one — the reads `issue_invoice` needs to
-    /// refuse an over-issuance, and `organization` resolves the issuer's
-    /// legal identity and invoice number prefix, same reason `create_invoice`
-    /// lists `organization`. `role`/`member`/`authz` (#395) same reason as
-    /// `create_invoice`.
-    #[transactional(invoice, organization, project, quote, role, member, authz, emitter)]
-    pub async fn issue_invoice(&self, command: IssueInvoiceCommand) -> Result<Invoice, CoreError> {
+    #[transactional(
+        invoice,
+        organization,
+        project,
+        quote,
+        customer,
+        customer_context,
+        role,
+        member,
+        authz,
+        emitter
+    )]
+    pub async fn issue_invoice(
+        &self,
+        command: IssueInvoiceCommand,
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut organization_repository = organization_repository;
+        let mut project_repository = project_repository;
+        let mut quote_repository = quote_repository;
+        let mut customer_repository = customer_repository;
+        let mut customer_context_repository = customer_context_repository;
         let mut service = InvoiceService::new(
             invoice_repository,
             emitter,
@@ -170,18 +189,37 @@ impl MestierUseCase {
         service
             .issue_invoice(
                 command,
-                organization_repository,
-                project_repository,
-                quote_repository,
+                &mut organization_repository,
+                &mut project_repository,
+                &mut quote_repository,
+                &mut customer_repository,
+                &mut customer_context_repository,
+                Utc::now(),
             )
             .await
     }
 
-    /// Builds a deposit draft and issues it, both inside this one
-    /// transaction — the draft's number is allocated in the same
-    /// transaction as its own creation, never in a second use-case call.
-    #[transactional(invoice, organization, project, quote, role, member, authz, emitter)]
-    pub async fn issue_deposit(&self, command: IssueDepositCommand) -> Result<Invoice, CoreError> {
+    #[transactional(
+        invoice,
+        organization,
+        project,
+        quote,
+        customer,
+        customer_context,
+        role,
+        member,
+        authz,
+        emitter
+    )]
+    pub async fn issue_deposit(
+        &self,
+        command: IssueDepositCommand,
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut organization_repository = organization_repository;
+        let mut project_repository = project_repository;
+        let mut quote_repository = quote_repository;
+        let mut customer_repository = customer_repository;
+        let mut customer_context_repository = customer_context_repository;
         let mut service = InvoiceService::new(
             invoice_repository,
             emitter,
@@ -192,20 +230,37 @@ impl MestierUseCase {
         service
             .issue_deposit(
                 command,
-                organization_repository,
-                project_repository,
-                quote_repository,
+                &mut organization_repository,
+                &mut project_repository,
+                &mut quote_repository,
+                &mut customer_repository,
+                &mut customer_context_repository,
+                Utc::now(),
             )
             .await
     }
 
-    /// Same one-transaction shape as `issue_deposit`, for the invoice that
-    /// bills exactly what remains on the project's quote.
-    #[transactional(invoice, organization, project, quote, role, member, authz, emitter)]
+    #[transactional(
+        invoice,
+        organization,
+        project,
+        quote,
+        customer,
+        customer_context,
+        role,
+        member,
+        authz,
+        emitter
+    )]
     pub async fn issue_final_invoice(
         &self,
         command: IssueFinalInvoiceCommand,
-    ) -> Result<Invoice, CoreError> {
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut organization_repository = organization_repository;
+        let mut project_repository = project_repository;
+        let mut quote_repository = quote_repository;
+        let mut customer_repository = customer_repository;
+        let mut customer_context_repository = customer_context_repository;
         let mut service = InvoiceService::new(
             invoice_repository,
             emitter,
@@ -216,24 +271,22 @@ impl MestierUseCase {
         service
             .issue_final_invoice(
                 command,
-                organization_repository,
-                project_repository,
-                quote_repository,
+                &mut organization_repository,
+                &mut project_repository,
+                &mut quote_repository,
+                &mut customer_repository,
+                &mut customer_context_repository,
+                Utc::now(),
             )
             .await
     }
 
-    /// `project`/`quote` are listed even though a credit note's own path
-    /// skips the quote-total check (see `InvoiceService::issue_credit_note`
-    /// and `refuse_if_project_exceeds_total`'s credit-note skip) — the
-    /// binding still needs to exist because `issue_now`, which this calls,
-    /// is generic over `P: ProjectRepository, Q: QuoteRepository`
-    /// regardless of which invoice kind is being issued.
-    #[transactional(invoice, organization, project, quote, role, member, authz, emitter)]
+    #[transactional(invoice, organization, role, member, authz, emitter)]
     pub async fn issue_credit_note(
         &self,
         command: IssueCreditNoteCommand,
-    ) -> Result<Invoice, CoreError> {
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut organization_repository = organization_repository;
         let mut service = InvoiceService::new(
             invoice_repository,
             emitter,
@@ -242,23 +295,18 @@ impl MestierUseCase {
             authz,
         );
         service
-            .issue_credit_note(
-                command,
-                organization_repository,
-                project_repository,
-                quote_repository,
-            )
+            .issue_credit_note(command, &mut organization_repository, Utc::now())
             .await
     }
 
-    /// #320: records a payment against an issued invoice. No other
-    /// bindings needed — this reads nothing from `organization`/`project`/
-    /// `quote`.
-    #[transactional(invoice, role, member, authz, emitter)]
-    pub async fn record_invoice_payment(
+    #[transactional(invoice, organization, quote, customer, role, member, authz, emitter)]
+    pub async fn create_invoice_from_quote(
         &self,
-        command: RecordInvoicePaymentCommand,
-    ) -> Result<InvoicePayment, CoreError> {
+        command: CreateInvoiceFromQuoteCommand,
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut organization_repository = organization_repository;
+        let mut quote_repository = quote_repository;
+        let mut customer_repository = customer_repository;
         let mut service = InvoiceService::new(
             invoice_repository,
             emitter,
@@ -266,7 +314,93 @@ impl MestierUseCase {
             role_repository,
             authz,
         );
-        service.record_payment(command).await
+        service
+            .create_invoice_from_quote(
+                command,
+                &mut organization_repository,
+                &mut quote_repository,
+                &mut customer_repository,
+                Utc::now(),
+            )
+            .await
+    }
+
+    #[transactional(invoice, quote, role, member, authz, emitter)]
+    pub async fn quote_invoicing(
+        &self,
+        quote_id: QuoteId,
+    ) -> Result<QuoteInvoicingView, CoreError> {
+        let mut quote_repository = quote_repository;
+        let mut service = InvoiceService::new(
+            invoice_repository,
+            emitter,
+            member_repository,
+            role_repository,
+            authz,
+        );
+        service
+            .quote_invoicing(quote_id, &mut quote_repository, Utc::now().date_naive())
+            .await
+    }
+
+    #[transactional(invoice, role, member, authz, emitter)]
+    pub async fn send_invoice(
+        &self,
+        command: SendInvoiceCommand,
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut service = InvoiceService::new(
+            invoice_repository,
+            emitter,
+            member_repository,
+            role_repository,
+            authz,
+        );
+        service.send_invoice(command, Utc::now()).await
+    }
+
+    #[transactional(invoice, role, member, authz, emitter)]
+    pub async fn remind_invoice(
+        &self,
+        command: RemindInvoiceCommand,
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut service = InvoiceService::new(
+            invoice_repository,
+            emitter,
+            member_repository,
+            role_repository,
+            authz,
+        );
+        service.remind_invoice(command, Utc::now()).await
+    }
+
+    #[transactional(invoice, role, member, authz, emitter)]
+    pub async fn note_invoice(
+        &self,
+        command: NoteInvoiceCommand,
+    ) -> Result<InvoiceOutcome<Invoice>, CoreError> {
+        let mut service = InvoiceService::new(
+            invoice_repository,
+            emitter,
+            member_repository,
+            role_repository,
+            authz,
+        );
+        service.note_invoice(command, Utc::now()).await
+    }
+
+    #[transactional(invoice, role, member, authz, emitter)]
+    pub async fn record_invoice_payment(
+        &self,
+        command: RecordInvoicePaymentCommand,
+    ) -> Result<InvoiceOutcome<InvoicePayment>, CoreError> {
+        let mut service = InvoiceService::new(
+            invoice_repository,
+            emitter,
+            member_repository,
+            role_repository,
+            authz,
+        );
+        service.record_payment(command, Utc::now()).await
     }
 
     #[transactional(invoice, role, member, authz, emitter)]
@@ -299,12 +433,6 @@ impl MestierUseCase {
         service.list_payments(invoice_id).await
     }
 
-    /// Not registered by #320: every one of its own use cases already holds
-    /// the invoice, or a payment id plus an actor. #319's delete-by-
-    /// payment-id HTTP route has only the payment id, and needs this to
-    /// resolve the payment's own organization for the membership check
-    /// before it can call `delete_invoice_payment` at all — the same
-    /// "unavoidable one more file" #317/#318/#320 each flagged.
     #[transactional(invoice, role, member, authz, emitter)]
     pub async fn find_payment_by_id(
         &self,
@@ -351,12 +479,6 @@ impl MestierUseCase {
         service.overdue_invoices(organization_id, as_of).await
     }
 
-    /// #342: persists the file a `DocumentFormat` adapter already generated
-    /// (in the handler, against the already-uploaded bytes — see
-    /// `InvoiceService::record_generated_document`'s own doc comment for
-    /// why generation itself never happens inside this transaction).
-    /// `role`/`member`/`authz` (#395): recording the generated document is a
-    /// write on the invoice, gated by `MANAGE_INVOICES` like every other one.
     #[transactional(invoice, role, member, authz, emitter)]
     pub async fn record_invoice_generated_document(
         &self,
@@ -374,12 +496,6 @@ impl MestierUseCase {
         service.record_generated_document(id, document, actor).await
     }
 
-    /// #319: "what was quoted, what has been billed, what remains" for one
-    /// project — nothing in this module exposed it before, even though
-    /// `InvoiceService`'s own `sum_already_issued_cents` did all the work
-    /// privately. `project`/`quote` resolve the same two reads
-    /// `issue_deposit`/`issue_final_invoice` already need for the same
-    /// reason.
     #[transactional(invoice, project, quote, role, member, authz, emitter)]
     pub async fn project_billing_summary(
         &self,

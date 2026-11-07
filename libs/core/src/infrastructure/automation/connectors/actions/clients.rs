@@ -80,16 +80,6 @@ pub(super) fn instant(raw: &str, name: &str) -> Result<DateTime<Utc>, String> {
         .map_err(|_| format!("`{name}` must be an RFC 3339 date and time"))
 }
 
-pub(super) fn optional_instant(
-    context: &ActionContext<'_>,
-    name: &str,
-) -> Result<Option<DateTime<Utc>>, String> {
-    context
-        .optional_text(name)?
-        .map(|raw| instant(raw, name))
-        .transpose()
-}
-
 fn whole_i32(value: &Value, name: &str) -> Result<i32, String> {
     let invalid = || format!("`{name}` must be a whole number");
     match value {

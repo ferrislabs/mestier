@@ -1,17 +1,18 @@
 use serde_json::{Value, json};
 
 use super::clients::{
-    Row, array, integer, not_found, optional_instant, optional_select, page, select, targets_of_run,
+    Row, array, integer, not_found, optional_array, optional_select, page, select, targets_of_run,
 };
 use super::{ActionContext, failure};
 use crate::domain::invoice::commands::{
-    CancelInvoiceCommand, CreateInvoiceCommand, DeleteInvoicePaymentCommand, InvoiceLineCommand,
-    IssueCreditNoteCommand, IssueDepositCommand, IssueFinalInvoiceCommand, IssueInvoiceCommand,
-    RecordInvoicePaymentCommand, UpdateInvoiceCommand,
+    CancelInvoiceCommand, CreateInvoiceCommand, CreditLineRequest, CreditRequest,
+    DeleteInvoicePaymentCommand, InvoiceLineCommand, IssueCreditNoteCommand, IssueDepositCommand,
+    IssueFinalInvoiceCommand, IssueInvoiceCommand, RecordInvoicePaymentCommand,
+    UpdateInvoiceCommand,
 };
 use crate::{
-    CustomerContextId, CustomerId, Invoice, InvoiceId, InvoiceKind, InvoicePayment,
-    InvoicePaymentId, InvoiceStatus, OperationNature, OrganizationAddress, ProjectId,
+    CustomerContextId, CustomerId, Invoice, InvoiceId, InvoiceKind, InvoiceLineId, InvoicePayment,
+    InvoicePaymentId, OperationNature, OrganizationAddress, PaymentMethod, ProjectId,
 };
 
 #[cfg(test)]
@@ -78,12 +79,29 @@ fn invoice_json(invoice: &Invoice) -> Value {
                 "quantity": line.quantity.normalize().to_string(),
                 "unit_price_cents": line.unit_price_cents,
                 "vat_rate_basis_points": line.vat_rate_basis_points,
+                "discount_percent": line.discount_percent.get().normalize().to_string(),
+                "product_id": line.product_id.map(|id| id.0),
+                "service_rate_id": line.service_rate_id.map(|id| id.0),
+                "source_line_id": line.source_line_id.map(|id| id.0),
                 "position": line.position,
                 "created_at": line.created_at,
                 "updated_at": line.updated_at,
             }))
             .collect::<Vec<_>>(),
         "source_invoice_id": invoice.source_invoice_id.map(|id| id.0),
+        "title": invoice.title,
+        "payment_terms_days": invoice.payment_terms_days,
+        "legal_notice": invoice.legal_notice,
+        "internal_note": invoice.internal_note,
+        "sent_at": invoice.sent_at,
+        "quote_id": invoice.quote_id.map(|id| id.0),
+        "issued_on": invoice.issued_on,
+        "reason": invoice.reason,
+        "full_cancellation": invoice.full_cancellation,
+        "paid_cents": invoice.derived.settlement.paid_cents,
+        "credited_cents": invoice.derived.settlement.credited_cents,
+        "balance_cents": invoice.derived.settlement.balance_cents,
+        "display_state": invoice.derived.display_state.as_str(),
         "created_at": invoice.created_at,
         "updated_at": invoice.updated_at,
     })
@@ -99,7 +117,7 @@ fn payment_json(payment: &InvoicePayment) -> Value {
         "invoice_id": payment.invoice_id.0,
         "amount_cents": payment.amount_cents,
         "paid_on": payment.paid_on,
-        "method": payment.method,
+        "method": payment.method.as_str(),
         "reference": payment.reference,
         "note": payment.note,
         "recorded_by": payment.recorded_by.0,
@@ -122,12 +140,12 @@ fn invoice_lines(context: &ActionContext<'_>) -> Result<Vec<InvoiceLineCommand>,
         .enumerate()
         .map(|(position, item)| {
             let row = Row::new(item, "lines", position)?;
-            Ok(InvoiceLineCommand {
-                label: row.text("label")?.to_owned(),
-                quantity: row.decimal("quantity")?,
-                unit_price_cents: row.integer("unit_price_cents")?,
-                vat_rate_basis_points: row.optional_integer("vat_rate_basis_points")?,
-            })
+            Ok(InvoiceLineCommand::plain(
+                row.text("label")?.to_owned(),
+                row.decimal("quantity")?,
+                row.integer("unit_price_cents")?,
+                row.optional_integer("vat_rate_basis_points")?,
+            ))
         })
         .collect()
 }
@@ -198,7 +216,6 @@ async fn create_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
     let project = context.optional_uuid("project_id")?.map(ProjectId);
     let customer_id = context.uuid("customer_id").map(CustomerId)?;
     let customer_context_id = context.uuid("customer_context_id").map(CustomerContextId)?;
-    let due_at = optional_instant(context, "due_at")?;
     let notes = context.optional_text("notes")?.map(str::to_owned);
     let operation_nature = optional_select::<OperationNature>(context, "operation_nature")?;
     let delivery_address = delivery_address(context)?;
@@ -217,15 +234,18 @@ async fn create_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
             project_id: project,
             customer_id,
             customer_context_id,
-            due_at,
+            title: String::new(),
+            payment_terms_days: None,
+            legal_notice: None,
             notes,
             operation_nature,
             delivery_address,
             lines,
         })
         .await
+        .map_err(failure)?
         .map(|invoice| invoice_json(&invoice))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn update_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
@@ -233,7 +253,6 @@ async fn update_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
     let project = context.optional_uuid("project_id")?.map(ProjectId);
     let customer_id = context.uuid("customer_id").map(CustomerId)?;
     let customer_context_id = context.uuid("customer_context_id").map(CustomerContextId)?;
-    let due_at = optional_instant(context, "due_at")?;
     let notes = context.optional_text("notes")?.map(str::to_owned);
     let operation_nature = optional_select::<OperationNature>(context, "operation_nature")?;
     let delivery_address = delivery_address(context)?;
@@ -252,15 +271,18 @@ async fn update_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
             project_id: project,
             customer_id,
             customer_context_id,
-            due_at,
+            title: None,
+            payment_terms_days: None,
+            legal_notice: None,
             notes,
             operation_nature,
             delivery_address,
             lines,
         })
         .await
+        .map_err(failure)?
         .map(|invoice| invoice_json(&invoice))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn issue_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
@@ -268,6 +290,13 @@ async fn issue_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
     let allow_exceeding_total = context
         .optional_bool("allow_exceeding_total")?
         .unwrap_or(false);
+    let issued_on = context
+        .optional_text("issued_on")?
+        .map(|day| {
+            chrono::NaiveDate::parse_from_str(day.trim(), "%Y-%m-%d")
+                .map_err(|_| "`issued_on` must be a date written YYYY-MM-DD".to_owned())
+        })
+        .transpose()?;
     invoice_of_run(context, id).await?;
 
     context
@@ -275,11 +304,13 @@ async fn issue_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
         .issue_invoice(IssueInvoiceCommand {
             id,
             actor: context.actor(),
+            issued_on,
             allow_exceeding_total,
         })
         .await
+        .map_err(failure)?
         .map(|invoice| invoice_json(&invoice))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn cancel_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
@@ -299,11 +330,9 @@ async fn cancel_invoice(context: &ActionContext<'_>) -> Result<Value, String> {
 
 async fn issue_credit_note(context: &ActionContext<'_>) -> Result<Value, String> {
     let id = invoice_id(context)?;
-    let lines = invoice_lines(context)?;
+    let reason = context.text("reason")?.to_owned();
+    let request = credit_request(context)?;
     let notes = context.optional_text("notes")?.map(str::to_owned);
-    let allow_exceeding_invoice_total = context
-        .optional_bool("allow_exceeding_invoice_total")?
-        .unwrap_or(false);
     invoice_of_run(context, id).await?;
 
     context
@@ -311,13 +340,38 @@ async fn issue_credit_note(context: &ActionContext<'_>) -> Result<Value, String>
         .issue_credit_note(IssueCreditNoteCommand {
             source_invoice_id: id,
             actor: context.actor(),
-            lines,
+            reason,
+            request,
             notes,
-            allow_exceeding_invoice_total,
         })
         .await
+        .map_err(failure)?
         .map(|invoice| invoice_json(&invoice))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
+}
+
+fn credit_request(context: &ActionContext<'_>) -> Result<CreditRequest, String> {
+    let items = optional_array(context, "lines")?;
+    if items.is_empty() {
+        return Ok(CreditRequest::Full);
+    }
+
+    items
+        .iter()
+        .enumerate()
+        .map(|(position, item)| {
+            let row = Row::new(item, "lines", position)?;
+            let source = row
+                .optional_uuid("source_line_id")?
+                .ok_or_else(|| "`lines` element: `source_line_id` is required".to_owned())?;
+
+            Ok(CreditLineRequest {
+                source_line_id: InvoiceLineId(source),
+                quantity: row.decimal("quantity")?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map(CreditRequest::Lines)
 }
 
 async fn list_credit_notes(context: &ActionContext<'_>) -> Result<Value, String> {
@@ -335,38 +389,14 @@ async fn list_credit_notes(context: &ActionContext<'_>) -> Result<Value, String>
 async fn balance(context: &ActionContext<'_>) -> Result<Value, String> {
     let id = invoice_id(context)?;
     let invoice = invoice_of_run(context, id).await?;
-    let credit_notes = context
-        .usecase
-        .get_invoice_credit_notes(id)
-        .await
-        .map_err(failure)?;
-    let payments = context
-        .usecase
-        .list_invoice_payments(id)
-        .await
-        .map_err(failure)?;
-
-    let credited_cents: i64 = credit_notes
-        .iter()
-        .filter(|credit_note| {
-            !matches!(
-                credit_note.status,
-                InvoiceStatus::Draft | InvoiceStatus::Cancelled
-            )
-        })
-        .map(|credit_note| i64::from(credit_note.gross_cents))
-        .sum();
-    let paid_cents: i64 = payments
-        .iter()
-        .map(|payment| i64::from(payment.amount_cents))
-        .sum();
+    let settlement = invoice.derived.settlement;
 
     Ok(json!({
         "invoice_id": id.0,
         "gross_cents": invoice.gross_cents,
-        "credited_cents": credited_cents,
-        "paid_cents": paid_cents,
-        "remaining_cents": i64::from(invoice.gross_cents) - credited_cents - paid_cents,
+        "credited_cents": settlement.credited_cents,
+        "paid_cents": settlement.paid_cents,
+        "remaining_cents": settlement.balance_cents,
     }))
 }
 
@@ -407,7 +437,6 @@ async fn outstanding(context: &ActionContext<'_>) -> Result<Value, String> {
 async fn issue_deposit(context: &ActionContext<'_>) -> Result<Value, String> {
     let id = project_id(context)?;
     let percentage_bp = integer(context, "percentage_bp")?;
-    let due_at = optional_instant(context, "due_at")?;
     let notes = context.optional_text("notes")?.map(str::to_owned);
     let allow_exceeding_total = context
         .optional_bool("allow_exceeding_total")?
@@ -420,18 +449,18 @@ async fn issue_deposit(context: &ActionContext<'_>) -> Result<Value, String> {
             project_id: id,
             actor: context.actor(),
             percentage_bp,
-            due_at,
+            payment_terms_days: None,
             notes,
             allow_exceeding_total,
         })
         .await
+        .map_err(failure)?
         .map(|invoice| invoice_json(&invoice))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn issue_final(context: &ActionContext<'_>) -> Result<Value, String> {
     let id = project_id(context)?;
-    let due_at = optional_instant(context, "due_at")?;
     let notes = context.optional_text("notes")?.map(str::to_owned);
     let allow_exceeding_total = context
         .optional_bool("allow_exceeding_total")?
@@ -443,13 +472,14 @@ async fn issue_final(context: &ActionContext<'_>) -> Result<Value, String> {
         .issue_final_invoice(IssueFinalInvoiceCommand {
             project_id: id,
             actor: context.actor(),
-            due_at,
+            payment_terms_days: None,
             notes,
             allow_exceeding_total,
         })
         .await
+        .map_err(failure)?
         .map(|invoice| invoice_json(&invoice))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn billing_summary(context: &ActionContext<'_>) -> Result<Value, String> {
@@ -476,12 +506,9 @@ async fn record_payment(context: &ActionContext<'_>) -> Result<Value, String> {
     let amount_cents = integer(context, "amount_cents")?;
     let paid_on = chrono::NaiveDate::parse_from_str(context.text("paid_on")?.trim(), "%Y-%m-%d")
         .map_err(|_| "`paid_on` must be a date written YYYY-MM-DD".to_owned())?;
-    let method = context.text("method")?.to_owned();
+    let method = select::<PaymentMethod>(context, "method")?;
     let reference = context.optional_text("reference")?.map(str::to_owned);
     let note = context.optional_text("note")?.map(str::to_owned);
-    let allow_exceeding_total = context
-        .optional_bool("allow_exceeding_total")?
-        .unwrap_or(false);
     invoice_of_run(context, id).await?;
     let recorded_by = context.system_user_id().await?;
 
@@ -496,11 +523,11 @@ async fn record_payment(context: &ActionContext<'_>) -> Result<Value, String> {
             reference,
             note,
             recorded_by,
-            allow_exceeding_total,
         })
         .await
+        .map_err(failure)?
         .map(|payment| payment_json(&payment))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn delete_payment(context: &ActionContext<'_>) -> Result<Value, String> {

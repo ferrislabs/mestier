@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-	effectiveRemainingCents,
 	initialPaymentValues,
 	paymentErrors,
 	paymentRequest,
-	refundRecord,
+	paymentsAndRefunds,
 	todayDate,
 } from './payment-form'
 
@@ -21,7 +20,7 @@ describe('initialPaymentValues', () => {
 		expect(initialPaymentValues(12050, TODAY)).toMatchObject({
 			date: TODAY,
 			amount: '120,50',
-			method: 'Virement',
+			method: 'TRANSFER',
 		})
 	})
 
@@ -35,7 +34,7 @@ describe('paymentErrors', () => {
 	const values = {
 		date: TODAY,
 		amount: '50',
-		method: 'Virement',
+		method: 'TRANSFER' as const,
 		reference: '',
 		note: '',
 	}
@@ -67,14 +66,14 @@ describe('paymentRequest', () => {
 			paymentRequest({
 				date: TODAY,
 				amount: '120,50',
-				method: ' Chèque ',
+				method: 'CHECK' as const,
 				reference: '',
 				note: ' ok ',
 			}),
 		).toEqual({
 			amount_cents: 12050,
 			paid_on: TODAY,
-			method: 'Chèque',
+			method: 'CHECK',
 			reference: null,
 			note: 'ok',
 		})
@@ -85,7 +84,7 @@ describe('refund mode', () => {
 	const values = {
 		date: TODAY,
 		amount: '30',
-		method: 'Virement',
+		method: 'TRANSFER' as const,
 		reference: '',
 		note: '',
 	}
@@ -105,28 +104,41 @@ describe('refund mode', () => {
 		])
 	})
 
-	it('builds the mock record in cents', () => {
-		expect(
-			refundRecord({ ...values, amount: '30,50', reference: ' R1 ', note: '' }),
-		).toEqual({
-			date: TODAY,
-			amountCents: 3050,
-			method: 'Virement',
-			reference: 'R1',
-			note: '',
+	it('sends a refund as a negative amount', () => {
+		expect(paymentRequest({ ...values, amount: '30,50' }, 'refund')).toEqual({
+			amount_cents: -3050,
+			paid_on: TODAY,
+			method: 'TRANSFER',
+			reference: null,
+			note: null,
 		})
 	})
 })
 
-describe('effectiveRemainingCents', () => {
-	it('moves an over-payment toward zero as refunds are recorded', () => {
-		expect(effectiveRemainingCents(-4500, 3000)).toBe(-1500)
-		expect(effectiveRemainingCents(-4500, 4500)).toBe(0)
-		expect(effectiveRemainingCents(-4500, 9000)).toBe(0)
-	})
+describe('paymentsAndRefunds', () => {
+	const payment = (id: string, amount: number) =>
+		({
+			id,
+			amount_cents: amount,
+			paid_on: TODAY,
+			method: 'CASH',
+			reference: null,
+			note: null,
+		}) as never
 
-	it('leaves a positive or unknown balance alone', () => {
-		expect(effectiveRemainingCents(12000, 3000)).toBe(12000)
-		expect(effectiveRemainingCents(null, 3000)).toBeNull()
+	it('splits the recorded payments from the refunds, a refund being a negative payment', () => {
+		const split = paymentsAndRefunds([payment('a', 5000), payment('b', -1200)])
+
+		expect(split.payments.map((item) => item.id)).toEqual(['a'])
+		expect(split.refunds).toEqual([
+			{
+				id: 'b',
+				date: TODAY,
+				amountCents: 1200,
+				method: 'CASH',
+				reference: null,
+				note: null,
+			},
+		])
 	})
 })

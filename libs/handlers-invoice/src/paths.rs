@@ -1,5 +1,5 @@
 use axum_extra::routing::TypedPath;
-use mestier_core::{InvoiceId, InvoicePaymentId, OrganizationId, ProjectId};
+use mestier_core::{InvoiceId, InvoicePaymentId, OrganizationId, ProjectId, QuoteId};
 use serde::Deserialize;
 
 #[derive(TypedPath, Deserialize)]
@@ -28,6 +28,36 @@ pub struct InvoicePath {
 #[typed_path("/api/v1/invoices/{invoice_id}/issue")]
 pub struct InvoiceIssuePath {
     pub invoice_id: InvoiceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/invoices/{invoice_id}/send")]
+pub struct InvoiceSendPath {
+    pub invoice_id: InvoiceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/invoices/{invoice_id}/remind")]
+pub struct InvoiceRemindPath {
+    pub invoice_id: InvoiceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/invoices/{invoice_id}/note")]
+pub struct InvoiceNotePath {
+    pub invoice_id: InvoiceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/quotes/{quote_id}/invoices")]
+pub struct QuoteInvoicesPath {
+    pub quote_id: QuoteId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/quotes/{quote_id}/invoicing")]
+pub struct QuoteInvoicingPath {
+    pub quote_id: QuoteId,
 }
 
 #[derive(TypedPath, Deserialize)]

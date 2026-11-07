@@ -166,8 +166,7 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 					id: invoice.id,
 					label: invoice.number ?? 'Brouillon',
 					kindLabel: invoiceKindLabel(invoice.kind),
-					status: invoice.status,
-					dueAt: invoice.due_at ?? null,
+					displayState: invoice.display_state,
 					grossCents: invoice.gross_cents,
 				}))
 		: []

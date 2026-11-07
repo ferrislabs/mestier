@@ -4,9 +4,7 @@ import type {
 	InvoiceLineFormValues,
 } from '#/pages/invoices/types'
 
-export interface NewInvoiceFormValues extends InvoiceFormValues {
-	termsDays: string
-}
+export type NewInvoiceFormValues = InvoiceFormValues
 
 export interface NewInvoiceErrors {
 	customerId?: string
@@ -30,15 +28,17 @@ export function isValidInvoiceLine(line: InvoiceLineFormValues): boolean {
 		Number.isFinite(quantity) &&
 		quantity > 0 &&
 		line.unitPrice.trim() !== '' &&
-		Number.isFinite(unitPrice) &&
-		unitPrice >= 0
+		Number.isFinite(unitPrice)
 	)
 }
 
 export function validateNewInvoice(
 	values: NewInvoiceFormValues,
 ): NewInvoiceErrors {
-	const terms = newInvoiceTermsError(values.termsDays)
+	const terms =
+		values.termsDays.trim() === ''
+			? null
+			: newInvoiceTermsError(values.termsDays)
 	return {
 		...(terms ? { terms } : {}),
 		...(values.customerId === '' ? { customerId: 'Choisis un client.' } : {}),

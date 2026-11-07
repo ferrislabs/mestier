@@ -11,6 +11,11 @@ const INVOICE_PAYMENTS_PATH = '/api/v1/invoices/{invoice_id}/payments'
 const INVOICE_PAYMENT_PATH = '/api/v1/invoice-payments/{invoice_payment_id}'
 const INVOICE_ISSUE_PATH = '/api/v1/invoices/{invoice_id}/issue'
 const INVOICE_CANCEL_PATH = '/api/v1/invoices/{invoice_id}/cancel'
+const INVOICE_SEND_PATH = '/api/v1/invoices/{invoice_id}/send'
+const INVOICE_REMIND_PATH = '/api/v1/invoices/{invoice_id}/remind'
+const INVOICE_NOTE_PATH = '/api/v1/invoices/{invoice_id}/note'
+const QUOTE_INVOICES_PATH = '/api/v1/quotes/{quote_id}/invoices'
+const QUOTE_INVOICING_PATH = '/api/v1/quotes/{quote_id}/invoicing'
 const PROJECT_INVOICE_DEPOSIT_PATH =
 	'/api/v1/projects/{project_id}/invoices/deposit'
 const PROJECT_INVOICE_FINAL_PATH =
@@ -277,6 +282,81 @@ export function useIssueInvoice() {
 	})
 }
 
+export function useDeleteInvoice() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('delete', INVOICE_PATH).mutationOptions,
+		onSuccess: async () => {
+			await invalidateInvoicesList(queryClient)
+		},
+	})
+}
+
+function useInvoiceActivityMutation(
+	method: 'post',
+	path:
+		| typeof INVOICE_SEND_PATH
+		| typeof INVOICE_REMIND_PATH
+		| typeof INVOICE_NOTE_PATH,
+) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation(method, path).mutationOptions,
+		onSuccess: async (invoice) => {
+			await Promise.all([
+				invalidateInvoicesList(queryClient, invoice.data.organization_id),
+				queryClient.invalidateQueries({
+					queryKey: invoiceKey(invoice.data.id),
+				}),
+			])
+		},
+	})
+}
+
+export function useSendInvoice() {
+	return useInvoiceActivityMutation('post', INVOICE_SEND_PATH)
+}
+
+export function useRemindInvoice() {
+	return useInvoiceActivityMutation('post', INVOICE_REMIND_PATH)
+}
+
+export function useNoteInvoice() {
+	return useInvoiceActivityMutation('post', INVOICE_NOTE_PATH)
+}
+
+export function useQuoteInvoicing(quoteId: string, enabled = true) {
+	return useQuery({
+		...window.tanstackApi.get(QUOTE_INVOICING_PATH, {
+			path: { quote_id: quoteId },
+		}).queryOptions,
+		enabled: enabled && Boolean(quoteId),
+	})
+}
+
+export function useCreateInvoiceFromQuote(organizationId: string) {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', QUOTE_INVOICES_PATH).mutationOptions,
+		onSuccess: async (invoice, variables) => {
+			await Promise.all([
+				invalidateInvoicesList(queryClient, organizationId),
+				queryClient.invalidateQueries({
+					queryKey: window.tanstackApi.get(QUOTE_INVOICING_PATH, {
+						path: { quote_id: variables.path.quote_id },
+					}).queryKey,
+				}),
+				queryClient.invalidateQueries({
+					queryKey: invoiceKey(invoice.data.id),
+				}),
+			])
+		},
+	})
+}
+
 export function useCancelInvoice() {
 	const queryClient = useQueryClient()
 
@@ -423,6 +503,11 @@ export type InvoiceBalance = Schemas.InvoiceBalanceResponse
 export type CustomerOutstandingBalance =
 	Schemas.CustomerOutstandingBalanceResponse
 export type InvoiceStatus = Schemas.InvoiceStatus
+export type InvoiceEvent = Schemas.InvoiceEventResponse
+export type PaymentMethod = Schemas.PaymentMethod
+export type QuoteInvoicingData = Schemas.QuoteInvoicingResponse
+export type CreateInvoiceFromQuotePayload =
+	Schemas.CreateInvoiceFromQuoteRequest
 export type InvoiceKind = Schemas.InvoiceKind
 export type OperationNature = Schemas.OperationNature
 export type InvoiceLinePayload = Schemas.InvoiceLineRequest

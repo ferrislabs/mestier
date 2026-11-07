@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use super::*;
-use crate::{InvoiceKind, OperationNature};
+use crate::{InvoiceKind, OperationNature, PaymentMethod};
 
 #[test]
 fn the_payment_writes_are_offered_as_writes() {
@@ -46,6 +46,10 @@ fn the_select_options_are_the_ones_the_domain_parses() {
     for option in NATURES {
         assert!(OperationNature::from_str(option.value).is_ok());
     }
+    for option in METHODS {
+        assert!(PaymentMethod::from_str(option.value).is_ok());
+    }
+    assert_eq!(METHODS.len(), PaymentMethod::ALL.len());
     assert_eq!(KINDS.len(), InvoiceKind::ALL.len());
     assert_eq!(NATURES.len(), OperationNature::ALL.len());
 }

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE invoices\n            SET internal_note = NULLIF(btrim($2), ''), updated_at = $3\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61c281b2182f990237091ac34d1bb05a9a065785c0a6c85cb128243402ec2987"
+}

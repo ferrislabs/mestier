@@ -3,6 +3,7 @@ import type { Invoice, InvoicePayment } from '#/hooks/use-invoices'
 import {
 	buildInvoiceHistory,
 	creditNoteKindLabel,
+	invoiceActivity,
 	invoiceHeading,
 	paymentTermsLine,
 	savedInvoiceTotals,
@@ -22,13 +23,24 @@ function invoice(overrides: Partial<Invoice> = {}): Invoice {
 		lines: [],
 		vat_breakdown: [{ rate_bp: 2000, vat_cents: 2000 }],
 		issued_at: '2026-06-02T09:00:00Z',
+		issued_on: '2026-06-02',
+		due_on: '2026-07-02',
+		title: 'Salle de bain',
+		payment_terms_days: 30,
+		legal_notice: 'Pénalités de retard : trois fois le taux légal.',
+		sent_at: null,
+		internal_note: null,
+		full_cancellation: false,
+		events: [],
+		paid_cents: 0,
+		credited_cents: 0,
+		balance_cents: 12000,
+		display_state: 'UNPAID',
 		created_at: '2026-06-01T09:00:00Z',
 		updated_at: '2026-06-02T09:00:00Z',
 		...overrides,
 	}
 }
-
-const EMPTY_ACTIVITY = { sentAt: null, reminders: [] }
 
 describe('invoiceHeading', () => {
 	it('names each kind of document', () => {
@@ -54,19 +66,30 @@ describe('buildInvoiceHistory', () => {
 		const payment = {
 			id: 'payment-1',
 			amount_cents: 5000,
-			method: 'Virement',
+			method: 'TRANSFER',
 			created_at: '2026-06-05T09:00:00Z',
 		} as InvoicePayment
 		const entries = buildInvoiceHistory({
-			invoice: invoice(),
+			invoice: invoice({
+				events: [
+					{
+						id: 'event-1',
+						kind: 'SENT',
+						detail: 'Envoyée au client',
+						at: '2026-06-03T09:00:00Z',
+					},
+					{
+						id: 'event-2',
+						kind: 'REMINDER',
+						detail: 'Rappel envoyé',
+						at: '2026-06-08T09:00:00Z',
+					},
+				],
+			}),
 			payments: [payment],
 			creditNotes: [
 				invoice({ id: 'credit-1', number: 'AV-001', kind: 'CREDIT_NOTE' }),
 			],
-			activity: {
-				sentAt: '2026-06-03T09:00:00Z',
-				reminders: ['2026-06-08T09:00:00Z'],
-			},
 		})
 
 		expect(entries.map((entry) => entry.kind).sort()).toEqual(
@@ -82,7 +105,6 @@ describe('buildInvoiceHistory', () => {
 			invoice: invoice({ status: 'CANCELLED' }),
 			payments: [],
 			creditNotes: [],
-			activity: EMPTY_ACTIVITY,
 		})
 
 		expect(entries.some((entry) => entry.detail === 'Facture annulée')).toBe(
@@ -95,7 +117,6 @@ describe('buildInvoiceHistory', () => {
 			invoice: invoice({ status: 'DRAFT', issued_at: null, number: null }),
 			payments: [],
 			creditNotes: [],
-			activity: EMPTY_ACTIVITY,
 		})
 
 		expect(entries.map((entry) => entry.kind)).toEqual(['created'])
@@ -127,39 +148,63 @@ describe('paymentTermsLine', () => {
 })
 
 describe('refund history', () => {
-	it('lists a mock refund among the payments', () => {
+	it('lists a refund, a negative payment, among the payments', () => {
 		const entries = buildInvoiceHistory({
 			invoice: invoice(),
-			payments: [],
-			creditNotes: [],
-			activity: EMPTY_ACTIVITY,
-			refunds: [
+			payments: [
 				{
 					id: 'refund-1',
-					date: '2026-06-09',
-					amountCents: 3000,
-					method: 'Virement',
-					reference: '',
-					note: '',
-				},
+					amount_cents: -3000,
+					method: 'TRANSFER',
+					created_at: '2026-06-09T09:00:00Z',
+				} as InvoicePayment,
 			],
+			creditNotes: [],
 		})
 
 		expect(
-			entries.find((entry) => entry.id === 'refund-refund-1')?.detail,
+			entries.find((entry) => entry.id === 'payment-refund-1')?.detail,
 		).toContain('Remboursement')
 	})
 })
 
+describe('invoiceActivity', () => {
+	it('reads the send date, the reminders and the internal note off the invoice', () => {
+		expect(
+			invoiceActivity(
+				invoice({
+					sent_at: '2026-06-03T09:00:00Z',
+					internal_note: 'Rappeler mardi',
+					events: [
+						{
+							id: 'event-1',
+							kind: 'REMINDER',
+							detail: 'Rappel envoyé',
+							at: '2026-06-08T09:00:00Z',
+						},
+						{
+							id: 'event-2',
+							kind: 'NOTE',
+							detail: 'Rappeler mardi',
+							at: '2026-06-09T09:00:00Z',
+						},
+					],
+				}),
+			),
+		).toEqual({
+			sentAt: '2026-06-03T09:00:00Z',
+			reminders: ['2026-06-08T09:00:00Z'],
+			internalNote: 'Rappeler mardi',
+		})
+	})
+})
+
 describe('creditNoteKindLabel', () => {
-	it('is a total cancellation when it credits the whole invoice', () => {
-		expect(
-			creditNoteKindLabel({ gross_cents: 12000 }, { gross_cents: 12000 }),
-		).toBe('Annulation totale')
-		expect(
-			creditNoteKindLabel({ gross_cents: 3000 }, { gross_cents: 12000 }),
-		).toBe('Correction partielle')
-		expect(creditNoteKindLabel({ gross_cents: 3000 }, undefined)).toBe(
+	it('is a total cancellation when the server flagged it so', () => {
+		expect(creditNoteKindLabel({ full_cancellation: true })).toBe(
+			'Annulation totale',
+		)
+		expect(creditNoteKindLabel({ full_cancellation: false })).toBe(
 			'Correction partielle',
 		)
 	})
