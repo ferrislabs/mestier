@@ -536,3 +536,20 @@ fn layout_no_decorations_leaves_the_document_unchanged() {
         .unwrap();
     assert_eq!(a, b);
 }
+
+#[test]
+#[ignore = "writes a PDF for a manual look: DOE_LAYOUT_OUT=/path/file.pdf"]
+fn layout_manual_look() {
+    let Ok(path) = std::env::var("DOE_LAYOUT_OUT") else {
+        return;
+    };
+    let decorations = r##"[
+        {"kind":"rectangle","fill":"#0f3d36","x":0,"y":0,"width":8,"height":297,"pages":"inner"},
+        {"kind":"rectangle","fill":"#f2b705","x":0,"y":0,"width":210,"height":6,"pages":"cover"},
+        {"kind":"image","key":"logo","x":150,"y":8,"width":45,"height":18,"pages":"inner","layer":"front"},
+        {"kind":"image","key":"logo","fit":"contain","opacity":0.12,"x":45,"y":100,"width":120,"height":90,"pages":"all","layer":"behind"},
+        {"kind":"rectangle","fill":"#0f3d36","x":10,"y":284,"width":190,"height":0.6,"pages":"all"}
+    ]"##;
+    let (document, bundle) = decorated(decorations);
+    std::fs::write(path, TypstDoeRenderer.render(&document, &bundle).unwrap()).unwrap();
+}

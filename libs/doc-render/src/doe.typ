@@ -97,7 +97,7 @@
         block(width: w, height: h, clip: true, {
           picture(d.key, width: w, height: h, fit: d.fit)
           if d.opacity < 1 and layer == "behind" {
-            place(top + left, rect(width: w, height: h, fill: white.transparentize((1 - d.opacity) * 100%), stroke: none))
+            place(top + left, rect(width: w, height: h, fill: white.transparentize(d.opacity * 100%), stroke: none))
           }
         })
       } else {
