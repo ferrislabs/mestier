@@ -9,7 +9,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
 import type {
 	ContractKey,
 	WebhookRule,
@@ -66,7 +65,6 @@ export function WebhookParameters({
 	credentials,
 	messages,
 	credentialHint,
-	credentialStatusOf,
 	onChange,
 	onCreateCredential,
 }: {
@@ -75,7 +73,6 @@ export function WebhookParameters({
 	credentials: Schemas.CredentialResponse[]
 	messages: WebhookMessages
 	credentialHint: string
-	credentialStatusOf: (credentialId: string) => CredentialStatus
 	onChange: (rule: WebhookRule) => void
 	onCreateCredential: () => void
 }) {
@@ -125,7 +122,6 @@ export function WebhookParameters({
 				optional
 				hint={credentialHint}
 				warning={credentialId === null ? NO_CREDENTIAL_WARNING : undefined}
-				statusOf={credentialStatusOf}
 				onChange={(credential_id) => onChange({ ...rule, credential_id })}
 				onCreateNew={onCreateCredential}
 			/>

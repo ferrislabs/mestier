@@ -1,4 +1,4 @@
-use aws_lc_rs::{constant_time, digest};
+use aws_lc_rs::{constant_time, digest, hmac};
 use base64::{Engine, engine::general_purpose::STANDARD};
 
 use crate::infrastructure::automation::connectors::http_client::HttpAuth;
@@ -31,6 +31,7 @@ fn holds_a_blank_secret(expected: &HttpAuth) -> bool {
         HttpAuth::Bearer { token } => blank(token),
         HttpAuth::Basic { username, password } => blank(username) || blank(password),
         HttpAuth::Header { name, value } => blank(name) || blank(value),
+        _ => true,
     }
 }
 
@@ -50,7 +51,111 @@ pub fn presents<'a>(expected: &HttpAuth, header: impl Fn(&str) -> Option<&'a str
             }),
         HttpAuth::Header { name, value } => header(name)
             .is_some_and(|presented| constant_time_equals(presented.as_bytes(), value.as_bytes())),
+        _ => false,
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignatureAlgorithm {
+    Sha1,
+    Sha256,
+    Sha512,
+}
+
+impl SignatureAlgorithm {
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "sha1" => Some(Self::Sha1),
+            "sha256" => Some(Self::Sha256),
+            "sha512" => Some(Self::Sha512),
+            _ => None,
+        }
+    }
+
+    fn prefix(self) -> &'static str {
+        match self {
+            Self::Sha1 => "sha1",
+            Self::Sha256 => "sha256",
+            Self::Sha512 => "sha512",
+        }
+    }
+
+    fn algorithm(self) -> hmac::Algorithm {
+        match self {
+            Self::Sha1 => hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY,
+            Self::Sha256 => hmac::HMAC_SHA256,
+            Self::Sha512 => hmac::HMAC_SHA512,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct SignatureSpec {
+    pub header_name: String,
+    pub algorithm: SignatureAlgorithm,
+    pub secret: String,
+}
+
+impl std::fmt::Debug for SignatureSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SignatureSpec")
+            .field("header_name", &self.header_name)
+            .field("algorithm", &self.algorithm)
+            .field("secret", &format_args!("[REDACTED]"))
+            .finish()
+    }
+}
+
+impl SignatureSpec {
+    pub fn is_presented<'a>(&self, header: impl Fn(&str) -> Option<&'a str>) -> bool {
+        !self.secret.trim().is_empty()
+            && !self.header_name.trim().is_empty()
+            && header(&self.header_name).is_some_and(|value| !value.trim().is_empty())
+    }
+
+    pub fn sign(&self, body: &[u8]) -> String {
+        let key = hmac::Key::new(self.algorithm.algorithm(), self.secret.as_bytes());
+        let tag = hmac::sign(&key, body);
+        let digest: String = tag
+            .as_ref()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        format!("{}={digest}", self.algorithm.prefix())
+    }
+
+    pub fn verify<'a>(&self, header: impl Fn(&str) -> Option<&'a str>, body: &[u8]) -> bool {
+        if !self.is_presented(&header) {
+            return false;
+        }
+        let Some(presented) = header(&self.header_name) else {
+            return false;
+        };
+        let presented = presented.trim();
+        let encoded = match presented.split_once('=') {
+            Some((prefix, rest)) if prefix.eq_ignore_ascii_case(self.algorithm.prefix()) => rest,
+            Some(_) => return false,
+            None => presented,
+        };
+        let Some(expected) = decode_hex(encoded) else {
+            return false;
+        };
+        let key = hmac::Key::new(self.algorithm.algorithm(), self.secret.as_bytes());
+        hmac::verify(&key, body, &expected).is_ok()
+    }
+}
+
+fn decode_hex(text: &str) -> Option<Vec<u8>> {
+    if text.is_empty() || !text.len().is_multiple_of(2) {
+        return None;
+    }
+    (0..text.len())
+        .step_by(2)
+        .map(|index| {
+            text.get(index..index + 2)
+                .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+        })
+        .collect()
 }
 
 fn after_scheme<'a>(value: &'a str, scheme: &str) -> Option<&'a str> {
@@ -63,6 +168,21 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+
+    #[test]
+    fn a_signature_spec_never_prints_its_secret() {
+        let spec = SignatureSpec {
+            header_name: "X-Signature".to_owned(),
+            algorithm: SignatureAlgorithm::Sha256,
+            secret: "SHARED-SECRET-VALUE".to_owned(),
+        };
+
+        for rendered in [format!("{spec:?}"), format!("{spec:#?}")] {
+            assert!(!rendered.contains("SHARED-SECRET-VALUE"), "{rendered}");
+            assert!(rendered.contains("[REDACTED]"), "{rendered}");
+            assert!(rendered.contains("X-Signature"), "{rendered}");
+        }
+    }
 
     fn headers(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<&'static str> {
         let map: HashMap<String, &'static str> = pairs
@@ -90,6 +210,172 @@ mod tests {
             name: "X-Api-Key".to_owned(),
             value: "k3y".to_owned(),
         }
+    }
+
+    fn spec(algorithm: SignatureAlgorithm) -> SignatureSpec {
+        SignatureSpec {
+            header_name: "X-Signature".to_owned(),
+            algorithm,
+            secret: "shared-secret".to_owned(),
+        }
+    }
+
+    fn signed(algorithm: hmac::Algorithm, body: &[u8]) -> String {
+        let tag = hmac::sign(&hmac::Key::new(algorithm, b"shared-secret"), body);
+        tag.as_ref()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
+    #[test]
+    fn a_body_signed_with_the_shared_secret_is_authenticated_for_each_algorithm() {
+        let body = br#"{"montant":12}"#;
+        for (algorithm, primitive) in [
+            (
+                SignatureAlgorithm::Sha1,
+                hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY,
+            ),
+            (SignatureAlgorithm::Sha256, hmac::HMAC_SHA256),
+            (SignatureAlgorithm::Sha512, hmac::HMAC_SHA512),
+        ] {
+            let signature = signed(primitive, body);
+
+            assert!(
+                spec(algorithm).verify(header_with("X-Signature", &signature), body),
+                "{algorithm:?}"
+            );
+        }
+    }
+
+    fn header_with(name: &str, value: &str) -> impl Fn(&str) -> Option<&'static str> {
+        headers_owned(vec![(name.to_owned(), value.to_owned())])
+    }
+
+    fn headers_owned(pairs: Vec<(String, String)>) -> impl Fn(&str) -> Option<&'static str> {
+        let leaked: Vec<(String, &'static str)> = pairs
+            .into_iter()
+            .map(|(name, value)| {
+                (
+                    name.to_ascii_lowercase(),
+                    &*Box::leak(value.into_boxed_str()),
+                )
+            })
+            .collect();
+        move |name| {
+            leaked
+                .iter()
+                .find(|(candidate, _)| *candidate == name.to_ascii_lowercase())
+                .map(|(_, value)| *value)
+        }
+    }
+
+    #[test]
+    fn the_signature_may_carry_the_algorithm_prefix_in_any_case_and_the_hex_in_any_case() {
+        let body = b"payload";
+        let signature = signed(hmac::HMAC_SHA256, body);
+
+        for presented in [
+            format!("sha256={signature}"),
+            format!("SHA256={signature}"),
+            signature.to_ascii_uppercase(),
+            format!("  {signature}  "),
+        ] {
+            assert!(
+                spec(SignatureAlgorithm::Sha256).verify(
+                    headers_owned(vec![("X-Signature".to_owned(), presented.clone())]),
+                    body
+                ),
+                "{presented}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_wrong_secret_body_algorithm_prefix_or_encoding_is_refused() {
+        let body = b"payload";
+        let signature = signed(hmac::HMAC_SHA256, body);
+        let other_secret = {
+            let tag = hmac::sign(&hmac::Key::new(hmac::HMAC_SHA256, b"another-secret"), body);
+            tag.as_ref()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        };
+
+        for (presented, sent_body) in [
+            (other_secret.clone(), body.to_vec()),
+            (signature.clone(), b"payloae".to_vec()),
+            (signature.clone(), Vec::new()),
+            (format!("sha1={signature}"), body.to_vec()),
+            (signature[..signature.len() - 2].to_owned(), body.to_vec()),
+            (format!("{signature}00"), body.to_vec()),
+            ("not-hex".to_owned(), body.to_vec()),
+            ("zz".repeat(32), body.to_vec()),
+            (String::new(), body.to_vec()),
+            ("sha256=".to_owned(), body.to_vec()),
+        ] {
+            assert!(
+                !spec(SignatureAlgorithm::Sha256).verify(
+                    headers_owned(vec![("X-Signature".to_owned(), presented.clone())]),
+                    &sent_body
+                ),
+                "{presented}"
+            );
+        }
+        assert!(!spec(SignatureAlgorithm::Sha512).verify(
+            headers_owned(vec![("X-Signature".to_owned(), signature)]),
+            body
+        ));
+    }
+
+    #[test]
+    fn a_missing_header_or_a_blank_secret_authenticates_nothing() {
+        let body = b"payload";
+        let signature = signed(hmac::HMAC_SHA256, body);
+        let blank_secret = SignatureSpec {
+            secret: "  ".to_owned(),
+            ..spec(SignatureAlgorithm::Sha256)
+        };
+        let blank_header = SignatureSpec {
+            header_name: " ".to_owned(),
+            ..spec(SignatureAlgorithm::Sha256)
+        };
+
+        assert!(!spec(SignatureAlgorithm::Sha256).verify(headers(&[]), body));
+        assert!(!spec(SignatureAlgorithm::Sha256).verify(header_with("X-Other", &signature), body));
+        assert!(!blank_secret.verify(header_with("X-Signature", &signature), body));
+        assert!(!blank_header.verify(header_with("X-Signature", &signature), body));
+        assert!(!spec(SignatureAlgorithm::Sha256).is_presented(headers(&[])));
+    }
+
+    #[test]
+    fn the_outbound_only_auth_kinds_are_never_presented_by_an_inbound_call() {
+        for expected in [
+            HttpAuth::Query {
+                name: "k".to_owned(),
+                value: "v".to_owned(),
+            },
+            HttpAuth::Digest {
+                username: "u".to_owned(),
+                password: "p".to_owned(),
+            },
+        ] {
+            assert!(!presents(
+                &expected,
+                headers(&[("authorization", "Bearer v")])
+            ));
+        }
+    }
+
+    #[test]
+    fn an_algorithm_name_outside_the_three_is_not_parsed() {
+        assert_eq!(
+            SignatureAlgorithm::parse("sha256"),
+            Some(SignatureAlgorithm::Sha256)
+        );
+        assert_eq!(SignatureAlgorithm::parse("md5"), None);
+        assert_eq!(SignatureAlgorithm::parse("SHA256"), None);
     }
 
     fn comparisons_during(work: impl FnOnce()) -> usize {

@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM automation.oauth_state\n               WHERE state_hash = $1 AND expires_at > $2\n               RETURNING org_id, credential_id, member_id, redirect_uri, return_to,\n                         payload_nonce, payload_cipher, created_at, expires_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "credential_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "redirect_uri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "return_to",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "payload_nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 6,
+        "name": "payload_cipher",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "99e16920eb82e67f86be4aef68515a4f707d9813591d389e1a6dd71316a1f707"
+}

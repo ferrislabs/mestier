@@ -9,9 +9,21 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
+import type { CredentialStatus } from '#/hooks/use-automation'
 
 const NONE_VALUE = '__none__'
+
+const STATUS_SUFFIX: Partial<Record<CredentialStatus, string>> = {
+	expired: ' (expirée)',
+	not_connected: ' (non connectée)',
+}
+
+const STATUS_ALERT: Partial<Record<CredentialStatus, string>> = {
+	expired:
+		'Cette identification est expirée. Renouvelez-la depuis Identifications.',
+	not_connected:
+		'Cette identification n’est pas connectée. Connectez le compte depuis Identifications.',
+}
 
 export interface CredentialPickerFieldProps {
 	label: string
@@ -22,7 +34,6 @@ export interface CredentialPickerFieldProps {
 	optional?: boolean
 	hint?: string
 	warning?: string
-	statusOf?: (credentialId: string) => CredentialStatus
 	onChange: (credentialId: string | null) => void
 	onCreateNew: () => void
 }
@@ -36,14 +47,12 @@ export function CredentialPickerField({
 	optional = false,
 	hint,
 	warning,
-	statusOf,
 	onChange,
 	onCreateNew,
 }: CredentialPickerFieldProps) {
 	const selected =
 		credentials.find((credential) => credential.id === value) ?? null
-	const isExpired = (credentialId: string) =>
-		statusOf?.(credentialId) === 'expired'
+	const selectedAlert = selected ? STATUS_ALERT[selected.status] : undefined
 
 	return (
 		<div className="grid gap-2">
@@ -73,16 +82,15 @@ export function CredentialPickerField({
 					{credentials.map((credential) => (
 						<SelectItem key={credential.id} value={credential.id}>
 							{credential.name}
-							{isExpired(credential.id) ? ' (expirée)' : ''}
+							{STATUS_SUFFIX[credential.status] ?? ''}
 						</SelectItem>
 					))}
 				</SelectContent>
 			</Select>
-			{selected && isExpired(selected.id) ? (
+			{selectedAlert ? (
 				<p className="flex items-start gap-1.5 text-sm text-state-alert">
 					<TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-					Cette identification est expirée. Renouvelez-la depuis
-					Identifications.
+					{selectedAlert}
 				</p>
 			) : null}
 			{warning ? (

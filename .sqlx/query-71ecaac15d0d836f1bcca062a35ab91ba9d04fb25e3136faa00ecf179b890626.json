@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.credential\n               SET status = $3,\n                   account = $4,\n                   expires_at = $5,\n                   secret_names = $6,\n                   data_nonce = $7,\n                   data_ciphertext = $8\n               WHERE org_id = $1 AND id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "TextArray",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "71ecaac15d0d836f1bcca062a35ab91ba9d04fb25e3136faa00ecf179b890626"
+}

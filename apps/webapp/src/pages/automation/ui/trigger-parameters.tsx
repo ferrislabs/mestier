@@ -3,7 +3,6 @@ import { useId } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import { Label } from '#/components/ui/label'
-import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
 import type { NodeIssue } from '#/pages/automation/lib/node-issues'
 import {
 	findEvent,
@@ -146,7 +145,6 @@ export interface TriggerParametersProps {
 	origin: string
 	credentials: Schemas.CredentialResponse[]
 	credentialHint: string
-	credentialStatusOf: (credentialId: string) => CredentialStatus
 	issues: readonly NodeIssue[]
 	errors: TriggerFieldErrors
 	onChooseEvent: (replacing: string | null) => void
@@ -161,7 +159,6 @@ export function TriggerParameters({
 	origin,
 	credentials,
 	credentialHint,
-	credentialStatusOf,
 	issues,
 	errors,
 	onChooseEvent,
@@ -180,7 +177,6 @@ export function TriggerParameters({
 				origin={origin}
 				credentials={credentials}
 				credentialHint={credentialHint}
-				credentialStatusOf={credentialStatusOf}
 				messages={{
 					path: messagesFor(issues, 'path', errors.path),
 					credential: errors.credential,

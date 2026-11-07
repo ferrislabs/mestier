@@ -1,6 +1,6 @@
 import { CircleCheck, PlugZap, TriangleAlert } from 'lucide-react'
+import type { CredentialStatus } from '#/hooks/use-automation'
 import { cn } from '#/lib/utils'
-import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
 import '#/pages/automation/ui/automation.css'
 
 const VIEWS = {
@@ -14,7 +14,7 @@ const VIEWS = {
 		icon: TriangleAlert,
 		className: 'text-state-alert',
 	},
-	'not-connected': {
+	not_connected: {
 		label: 'Compte non connecté',
 		icon: PlugZap,
 		className: 'text-state-today',

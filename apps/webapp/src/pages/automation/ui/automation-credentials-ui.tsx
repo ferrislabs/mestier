@@ -1,40 +1,36 @@
-import { Loader2, Plus } from 'lucide-react'
+import { CircleCheck, Loader2, Plus, TriangleAlert, X } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
+import type { CredentialKind } from '#/hooks/use-automation'
 import type { ExternalService } from '#/pages/automation/feature/mocks/external-services'
 import type { CredentialFieldErrors } from '#/pages/automation/lib/credential-form'
-import type { LocalizedScheme } from '#/pages/automation/lib/credential-meta'
+import type { CredentialRow } from '#/pages/automation/lib/credential-rows'
+import type { OauthNotice } from '#/pages/automation/lib/oauth-return'
 import {
 	CredentialDialog,
 	type CredentialFormBinding,
 } from '#/pages/automation/ui/credential-dialog'
-import {
-	type CredentialRow,
-	CredentialsTable,
-} from '#/pages/automation/ui/credentials-table'
-
-export type { CredentialRow } from '#/pages/automation/ui/credentials-table'
+import { CredentialsTable } from '#/pages/automation/ui/credentials-table'
 
 export interface AutomationCredentialsUIProps {
 	credentials: CredentialRow[]
-	authSchemes: LocalizedScheme[]
+	kinds: CredentialKind[]
 	services: readonly ExternalService[]
 	canManage: boolean
 	isLoading: boolean
-	schemesLoading: boolean
+	kindsLoading: boolean
 	error: string | null
+	notice: OauthNotice | null
+	onDismissNotice: () => void
 
 	dialogOpen: boolean
 	dialogMode: 'create' | 'edit'
 	editing: CredentialRow | null
 	form: CredentialFormBinding
 	fieldErrors: CredentialFieldErrors
+	serverErrors: CredentialFieldErrors
 	saveError: string | null
-	/** Base64, shown exactly once — right after a `generated` credential is
-	 * created or rotated. `null` the rest of the time, including every
-	 * later view of the same credential: the backend never returns it
-	 * again, so there is nothing to restore even on reopen. */
 	revealedSecret: string | null
 	onOpenCreate: () => void
 	onEdit: (row: CredentialRow) => void
@@ -43,24 +39,60 @@ export interface AutomationCredentialsUIProps {
 	onRotate: (row: CredentialRow) => void
 	rotatingId: string | null
 	isDeleting: boolean
+	isConnecting: boolean
 	onDelete: (row: CredentialRow) => void
 	onConnect: (row: CredentialRow) => void
 	onDisconnect: (row: CredentialRow) => void
 }
 
+function OauthNoticeBanner({
+	notice,
+	onDismiss,
+}: {
+	notice: OauthNotice
+	onDismiss: () => void
+}) {
+	const success = notice.tone === 'success'
+	const Icon = success ? CircleCheck : TriangleAlert
+	return (
+		<div
+			role={success ? 'status' : 'alert'}
+			className={
+				success
+					? 'mb-4 flex items-start gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm text-(color:--auto-success-text)'
+					: 'mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive'
+			}
+		>
+			<Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
+			<p className="flex-1">{notice.text}</p>
+			<button
+				type="button"
+				onClick={onDismiss}
+				aria-label="Fermer le message"
+				className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			>
+				<X className="size-4" aria-hidden />
+			</button>
+		</div>
+	)
+}
+
 export function AutomationCredentialsUI({
 	credentials,
-	authSchemes,
+	kinds,
 	services,
 	canManage,
 	isLoading,
-	schemesLoading,
+	kindsLoading,
 	error,
+	notice,
+	onDismissNotice,
 	dialogOpen,
 	dialogMode,
 	editing,
 	form,
 	fieldErrors,
+	serverErrors,
 	saveError,
 	revealedSecret,
 	onOpenCreate,
@@ -69,6 +101,7 @@ export function AutomationCredentialsUI({
 	onRotate,
 	rotatingId,
 	isDeleting,
+	isConnecting,
 	onDelete,
 	onConnect,
 	onDisconnect,
@@ -88,6 +121,9 @@ export function AutomationCredentialsUI({
 					</RequirePermission>
 				}
 			/>
+			{notice ? (
+				<OauthNoticeBanner notice={notice} onDismiss={onDismissNotice} />
+			) : null}
 			{error ? (
 				<div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
 					{error}
@@ -108,15 +144,17 @@ export function AutomationCredentialsUI({
 				open={dialogOpen}
 				mode={dialogMode}
 				editing={editing}
-				authSchemes={authSchemes}
+				kinds={kinds}
 				services={services}
 				form={form}
 				fieldErrors={fieldErrors}
+				serverErrors={serverErrors}
 				saveError={saveError}
 				revealedSecret={revealedSecret}
 				rotatingId={rotatingId}
 				isDeleting={isDeleting}
-				schemesLoading={schemesLoading}
+				isConnecting={isConnecting}
+				kindsLoading={kindsLoading}
 				onOpenChange={onOpenChange}
 				onRotate={onRotate}
 				onDelete={onDelete}

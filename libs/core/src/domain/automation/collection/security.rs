@@ -7,6 +7,8 @@ pub enum Offered {
     Bearer,
     Basic,
     Header,
+    Query,
+    Other,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,6 +16,7 @@ pub enum Identification {
     Anonymous,
     Credential,
     HeaderNamed(String),
+    QueryNamed(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -29,6 +32,7 @@ enum Declared<'a> {
     Bearer,
     Basic,
     HeaderKey(&'a str),
+    QueryKey(&'a str),
 }
 
 fn classify(scheme: &SecurityScheme) -> Result<Declared<'_>, String> {
@@ -44,6 +48,10 @@ fn classify(scheme: &SecurityScheme) -> Result<Declared<'_>, String> {
             location: ApiKeyLocation::Header,
             parameter_name,
         } => Ok(Declared::HeaderKey(parameter_name)),
+        SecurityKind::ApiKey {
+            location: ApiKeyLocation::Query,
+            parameter_name,
+        } => Ok(Declared::QueryKey(parameter_name)),
         SecurityKind::ApiKey { location, .. } => Err(format!(
             "api_key in {}",
             match location {
@@ -52,8 +60,7 @@ fn classify(scheme: &SecurityScheme) -> Result<Declared<'_>, String> {
                 ApiKeyLocation::Cookie => "cookie",
             }
         )),
-        SecurityKind::Oauth2 => Err("oauth2".to_owned()),
-        SecurityKind::OpenIdConnect => Err("openid_connect".to_owned()),
+        SecurityKind::Oauth2 | SecurityKind::OpenIdConnect => Ok(Declared::Bearer),
         SecurityKind::Other { declared_type } => Err(declared_type.clone()),
     }
 }
@@ -64,6 +71,8 @@ impl Offered {
             Self::Bearer => "bearer",
             Self::Basic => "basic",
             Self::Header => "a header key",
+            Self::Query => "a query key",
+            Self::Other => "another kind of credential",
         }
     }
 }
@@ -110,6 +119,9 @@ pub fn select_identification(
             }
             (Offered::Header, Declared::HeaderKey(name)) => {
                 Some(Identification::HeaderNamed((*name).to_owned()))
+            }
+            (Offered::Query, Declared::QueryKey(name)) => {
+                Some(Identification::QueryNamed((*name).to_owned()))
             }
             _ => None,
         })
@@ -160,7 +172,13 @@ mod tests {
             select_identification(&[], None),
             Ok(Identification::Anonymous)
         );
-        for offered in [Offered::Bearer, Offered::Basic, Offered::Header] {
+        for offered in [
+            Offered::Bearer,
+            Offered::Basic,
+            Offered::Header,
+            Offered::Query,
+            Offered::Other,
+        ] {
             assert_eq!(
                 select_identification(&[], Some(offered)),
                 Ok(Identification::Credential)
@@ -240,8 +258,43 @@ mod tests {
     }
 
     #[test]
-    fn oauth2_alone_is_refused_with_the_stable_code_and_the_scheme_named() {
-        let schemes = [scheme("petstore_auth", SecurityKind::Oauth2)];
+    fn oauth2_and_openid_connect_take_a_bearer_credential() {
+        for kind in [SecurityKind::Oauth2, SecurityKind::OpenIdConnect] {
+            let schemes = [scheme("petstore_auth", kind)];
+
+            assert_eq!(
+                select_identification(&schemes, Some(Offered::Bearer)),
+                Ok(Identification::Credential)
+            );
+            assert_eq!(
+                select_identification(&schemes, None),
+                Ok(Identification::Anonymous)
+            );
+            for offered in [
+                Offered::Basic,
+                Offered::Header,
+                Offered::Query,
+                Offered::Other,
+            ] {
+                let refusal = select_identification(&schemes, Some(offered)).unwrap_err();
+
+                assert!(
+                    matches!(refusal, SecurityRefusal::Mismatch { .. }),
+                    "{offered:?}: {refusal:?}"
+                );
+                assert!(refusal.to_string().contains("petstore_auth"));
+            }
+        }
+    }
+
+    #[test]
+    fn a_scheme_nobody_can_apply_is_refused_with_the_stable_code_and_the_scheme_named() {
+        let schemes = [scheme(
+            "session",
+            SecurityKind::Other {
+                declared_type: "mutualTLS".to_owned(),
+            },
+        )];
 
         for offered in [None, Some(Offered::Bearer)] {
             let refusal = select_identification(&schemes, offered).unwrap_err();
@@ -249,8 +302,8 @@ mod tests {
             assert_eq!(
                 refusal,
                 SecurityRefusal::Unsupported {
-                    name: "petstore_auth".to_owned(),
-                    kind: "oauth2".to_owned(),
+                    name: "session".to_owned(),
+                    kind: "mutualTLS".to_owned(),
                 }
             );
             let message = refusal.to_string();
@@ -258,29 +311,64 @@ mod tests {
                 message.starts_with("unsupported_security_scheme"),
                 "{message}"
             );
-            assert!(message.contains("petstore_auth"), "{message}");
+            assert!(message.contains("session"), "{message}");
         }
     }
 
     #[test]
-    fn an_api_key_in_the_query_or_a_cookie_is_refused() {
-        for location in [ApiKeyLocation::Query, ApiKeyLocation::Cookie] {
-            let schemes = [api_key("key", location, "api_key")];
+    fn an_api_key_in_the_query_takes_a_query_credential_under_the_declared_name() {
+        let schemes = [api_key("key", ApiKeyLocation::Query, "api_key")];
 
-            let refusal = select_identification(&schemes, Some(Offered::Header)).unwrap_err();
+        assert_eq!(
+            select_identification(&schemes, Some(Offered::Query)),
+            Ok(Identification::QueryNamed("api_key".to_owned()))
+        );
+        assert_eq!(
+            select_identification(&schemes, None),
+            Ok(Identification::Anonymous)
+        );
+    }
+
+    #[test]
+    fn an_api_key_in_the_query_refuses_a_credential_of_another_shape() {
+        let schemes = [api_key("key", ApiKeyLocation::Query, "api_key")];
+
+        for offered in [
+            Offered::Header,
+            Offered::Bearer,
+            Offered::Basic,
+            Offered::Other,
+        ] {
+            let refusal = select_identification(&schemes, Some(offered)).unwrap_err();
 
             assert!(
-                matches!(refusal, SecurityRefusal::Unsupported { .. }),
-                "{refusal:?}"
+                matches!(refusal, SecurityRefusal::Mismatch { .. }),
+                "{offered:?}: {refusal:?}"
             );
-            assert!(refusal.to_string().contains("api_key"));
         }
+        let header = [api_key("key", ApiKeyLocation::Header, "X-Key")];
+        assert!(matches!(
+            select_identification(&header, Some(Offered::Query)),
+            Err(SecurityRefusal::Mismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn an_api_key_in_a_cookie_is_still_refused() {
+        let schemes = [api_key("key", ApiKeyLocation::Cookie, "session")];
+
+        let refusal = select_identification(&schemes, Some(Offered::Header)).unwrap_err();
+
+        assert!(
+            matches!(refusal, SecurityRefusal::Unsupported { .. }),
+            "{refusal:?}"
+        );
+        assert!(refusal.to_string().contains("api_key"));
     }
 
     #[test]
     fn the_other_declared_kinds_are_refused_too() {
         for kind in [
-            SecurityKind::OpenIdConnect,
             SecurityKind::Other {
                 declared_type: "mutualTLS".to_owned(),
             },
@@ -300,7 +388,7 @@ mod tests {
     #[test]
     fn an_unsupported_scheme_beside_a_supported_one_does_not_block_the_call() {
         let schemes = [
-            scheme("oauth", SecurityKind::Oauth2),
+            api_key("session", ApiKeyLocation::Cookie, "sid"),
             http("auth", "bearer"),
         ];
 

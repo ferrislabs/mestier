@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
-import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
+import { credential as fixture } from '#/pages/automation/test/credential-fixtures'
 import { CredentialPickerField } from '#/pages/automation/ui/credential-picker-field'
 
 for (const method of [
@@ -20,16 +20,9 @@ function credential(
 	id: string,
 	name: string,
 	origin: 'supplied' | 'generated' = 'supplied',
+	status: Schemas.CredentialStatusResponse = 'valid',
 ): Schemas.CredentialResponse {
-	return {
-		id,
-		name,
-		kind: 'bearer_token',
-		origin,
-		organization_id: 'org-1',
-		created_at: '2026-01-01T00:00:00Z',
-		updated_at: '2026-01-01T00:00:00Z',
-	}
+	return fixture({ id, name, origin, status })
 }
 
 const EXPIRED_ALERT =
@@ -268,9 +261,10 @@ describe('CredentialPickerField — when a credential is optional', () => {
 	})
 })
 
-describe('CredentialPickerField — expired credentials', () => {
-	const statusOf = (id: string): CredentialStatus =>
-		id === 'c-old' ? 'expired' : 'valid'
+describe('CredentialPickerField — status of the credentials', () => {
+	const OLD = credential('c-old', 'Odoo prod', 'supplied', 'expired')
+	const NEW = credential('c-new', 'Odoo recette')
+	const OFFLINE = credential('c-off', 'Google', 'supplied', 'not_connected')
 
 	it('suffixes an expired credential with « (expirée) » in the list', async () => {
 		const user = userEvent.setup()
@@ -278,13 +272,9 @@ describe('CredentialPickerField — expired credentials', () => {
 			<CredentialPickerField
 				label="Identification"
 				htmlFor="credential-picker"
-				credentials={[
-					credential('c-old', 'Odoo prod'),
-					credential('c-new', 'Odoo recette'),
-				]}
+				credentials={[OLD, NEW]}
 				value={null}
 				error={null}
-				statusOf={statusOf}
 				onChange={vi.fn()}
 				onCreateNew={vi.fn()}
 			/>,
@@ -298,15 +288,35 @@ describe('CredentialPickerField — expired credentials', () => {
 		expect(screen.getByRole('option', { name: 'Odoo recette' })).toBeDefined()
 	})
 
+	it('suffixes a credential whose account is not connected', async () => {
+		const user = userEvent.setup()
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[OFFLINE, NEW]}
+				value={null}
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		await user.click(screen.getByRole('combobox', { name: 'Identification' }))
+
+		expect(
+			await screen.findByRole('option', { name: 'Google (non connectée)' }),
+		).toBeDefined()
+	})
+
 	it('warns under the field when the selected credential is expired', () => {
 		render(
 			<CredentialPickerField
 				label="Identification"
 				htmlFor="credential-picker"
-				credentials={[credential('c-old', 'Odoo prod')]}
+				credentials={[OLD]}
 				value="c-old"
 				error={null}
-				statusOf={statusOf}
 				onChange={vi.fn()}
 				onCreateNew={vi.fn()}
 			/>,
@@ -315,40 +325,41 @@ describe('CredentialPickerField — expired credentials', () => {
 		expect(screen.getByText(EXPIRED_ALERT)).toBeDefined()
 	})
 
+	it('warns under the field when the selected credential is not connected', () => {
+		render(
+			<CredentialPickerField
+				label="Identification"
+				htmlFor="credential-picker"
+				credentials={[OFFLINE]}
+				value="c-off"
+				error={null}
+				onChange={vi.fn()}
+				onCreateNew={vi.fn()}
+			/>,
+		)
+
+		expect(
+			screen.getByText(
+				'Cette identification n’est pas connectée. Connectez le compte depuis Identifications.',
+			),
+		).toBeDefined()
+	})
+
 	it('does not warn when the selected credential is valid', () => {
 		render(
 			<CredentialPickerField
 				label="Identification"
 				htmlFor="credential-picker"
-				credentials={[
-					credential('c-old', 'Odoo prod'),
-					credential('c-new', 'Odoo recette'),
-				]}
+				credentials={[OLD, NEW]}
 				value="c-new"
 				error={null}
-				statusOf={statusOf}
 				onChange={vi.fn()}
 				onCreateNew={vi.fn()}
 			/>,
 		)
 
 		expect(screen.queryByText(EXPIRED_ALERT)).toBeNull()
-	})
-
-	it('treats every credential as valid when no status is given', () => {
-		render(
-			<CredentialPickerField
-				label="Identification"
-				htmlFor="credential-picker"
-				credentials={[credential('c-old', 'Odoo prod')]}
-				value="c-old"
-				error={null}
-				onChange={vi.fn()}
-				onCreateNew={vi.fn()}
-			/>,
-		)
-
-		expect(screen.queryByText(EXPIRED_ALERT)).toBeNull()
+		expect(screen.queryByText(/n’est pas connectée/)).toBeNull()
 	})
 })
 

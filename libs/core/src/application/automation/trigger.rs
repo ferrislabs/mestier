@@ -14,12 +14,19 @@ use crate::{
         },
     },
     infrastructure::automation::{
-        connectors::http_client::{HttpAuth, open_http_auth},
-        webhook::inbound::presents,
+        connectors::http_client::{HttpAuth, InboundAuth, open_webhook_auth},
+        webhook::inbound::{SignatureSpec, presents},
     },
 };
 
 pub const SCHEDULES_PER_ORGANIZATION_PER_PASS: i64 = 10;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WebhookAuthentication {
+    Accepted,
+    Refused,
+    SignatureRequired(SignatureSpec),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ScheduleOutcome {
@@ -93,14 +100,27 @@ impl MestierUseCase {
         routes.resolve(path, method).await
     }
 
-    pub async fn verify_webhook_credential<'a>(
+    pub async fn authenticate_webhook<'a>(
         &self,
         org_id: OrganizationId,
         credential_id: Uuid,
         header: impl Fn(&str) -> Option<&'a str>,
-    ) -> bool {
-        match open_http_auth(self, org_id, credential_id).await {
-            Ok(expected) => presents(&expected, header),
+    ) -> WebhookAuthentication {
+        match open_webhook_auth(self, org_id, credential_id).await {
+            Ok(InboundAuth::Headers(expected)) => {
+                if presents(&expected, header) {
+                    WebhookAuthentication::Accepted
+                } else {
+                    WebhookAuthentication::Refused
+                }
+            }
+            Ok(InboundAuth::Signature(spec)) => {
+                if spec.is_presented(header) {
+                    WebhookAuthentication::SignatureRequired(spec)
+                } else {
+                    WebhookAuthentication::Refused
+                }
+            }
             Err(error) => {
                 tracing::debug!(
                     org_id = %org_id.0,
@@ -113,9 +133,20 @@ impl MestierUseCase {
                     value: String::new(),
                 };
                 let _ = presents(&unmatchable, header);
-                false
+                WebhookAuthentication::Refused
             }
         }
+    }
+
+    pub async fn verify_webhook_credential<'a>(
+        &self,
+        org_id: OrganizationId,
+        credential_id: Uuid,
+        header: impl Fn(&str) -> Option<&'a str>,
+    ) -> bool {
+        self.authenticate_webhook(org_id, credential_id, header)
+            .await
+            == WebhookAuthentication::Accepted
     }
 
     #[transactional(run, workflow)]
@@ -245,6 +276,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+    use crate::application::automation::trigger::WebhookAuthentication;
     use crate::application::automation::trigger_fixtures::{
         daily, graph_of, key, seed_organization, set_organization_timezone, webhook, webhook_with,
         weekly,
@@ -680,12 +712,15 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires live postgres"]
-    async fn a_credential_a_webhook_trigger_uses_cannot_be_deleted() {
+    async fn a_credential_a_webhook_trigger_uses_can_be_deleted_and_the_webhook_then_refuses_every_call()
+     {
         let pool = automation_pool().await;
         let org_id = seed_organization(&pool, "derive-credential").await;
         let usecase = use_case(pool.clone());
         let (credential, _) = usecase
             .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
                 org_id,
                 kind: "bearer_token".to_string(),
                 name: "Webhook secret".to_string(),
@@ -712,11 +747,17 @@ mod tests {
         .await
         .unwrap();
 
-        let refused = usecase.delete_credential(org_id, credential.id).await;
+        usecase
+            .delete_credential(org_id, credential.id)
+            .await
+            .unwrap();
 
+        let presented = |name: &str| (name == "authorization").then_some("Bearer s3cret");
         assert!(
-            matches!(&refused, Err(CoreError::Conflict(message)) if message.contains("Trigger workflow")),
-            "{refused:?}"
+            !usecase
+                .verify_webhook_credential(org_id, credential.id, presented)
+                .await,
+            "a webhook whose credential no longer exists refuses every call"
         );
     }
 
@@ -729,6 +770,8 @@ mod tests {
         let usecase = use_case(pool.clone());
         let (credential, _) = usecase
             .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
                 org_id: other_org,
                 kind: "bearer_token".to_string(),
                 name: "Not yours".to_string(),
@@ -1433,6 +1476,10 @@ mod tests {
         }
     }
 
+    fn header_of<'a>(name: &'static str, value: &'a str) -> impl Fn(&str) -> Option<&'a str> {
+        move |candidate| candidate.eq_ignore_ascii_case(name).then_some(value)
+    }
+
     async fn new_credential(
         usecase: &MestierUseCase,
         org_id: OrganizationId,
@@ -1441,6 +1488,8 @@ mod tests {
     ) -> Uuid {
         usecase
             .create_credential(CreateCredentialCommand {
+                description: None,
+                expires_at: None,
                 org_id,
                 kind: kind.to_string(),
                 name: "Inbound".to_string(),
@@ -1527,6 +1576,53 @@ mod tests {
             !usecase
                 .verify_webhook_credential(org_id, header, presented(&right_bearer))
                 .await
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_hmac_credential_asks_for_the_body_signature_instead_of_judging_the_headers() {
+        let pool = automation_pool().await;
+        let org_id = seed_organization(&pool, "verify-hmac").await;
+        let other_org = seed_organization(&pool, "verify-hmac-other").await;
+        let usecase = use_case(pool.clone());
+        let data =
+            json!({ "header_name": "X-Hub-Signature", "algorithm": "sha512", "secret": "shared" });
+        let hmac = new_credential(&usecase, org_id, "hmac", data.clone()).await;
+        let theirs = new_credential(&usecase, other_org, "hmac", data).await;
+
+        let outcome = usecase
+            .authenticate_webhook(org_id, hmac, header_of("x-hub-signature", "anything"))
+            .await;
+        let WebhookAuthentication::SignatureRequired(spec) = outcome else {
+            panic!("a signature credential waits for the body: {outcome:?}");
+        };
+
+        assert_eq!(spec.header_name, "X-Hub-Signature");
+        let body = br#"{"montant":12}"#;
+        let signature = spec.sign(body);
+        assert!(signature.starts_with("sha512="));
+        assert!(spec.verify(header_of("x-hub-signature", &signature), body));
+        assert!(!spec.verify(header_of("x-hub-signature", &signature), b"{}"));
+        assert_eq!(
+            usecase
+                .authenticate_webhook(org_id, hmac, presented(&[]))
+                .await,
+            WebhookAuthentication::Refused,
+            "no signature header, nothing to wait for"
+        );
+        assert_eq!(
+            usecase
+                .authenticate_webhook(org_id, theirs, header_of("x-hub-signature", "x"))
+                .await,
+            WebhookAuthentication::Refused,
+            "another organization's credential never authenticates"
+        );
+        assert!(
+            !usecase
+                .verify_webhook_credential(org_id, hmac, header_of("x-hub-signature", &signature))
+                .await,
+            "the header-only check never accepts a signature credential"
         );
     }
 

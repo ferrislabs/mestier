@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO automation.oauth_state\n                   (state_hash, org_id, credential_id, member_id, redirect_uri, return_to,\n                    payload_nonce, payload_cipher, created_at, expires_at)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Bytea",
+        "Bytea",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e0cad5f82e7d8af6a49b0d184c1f8b8729096dd0625571c38da14ebaf153ee78"
+}

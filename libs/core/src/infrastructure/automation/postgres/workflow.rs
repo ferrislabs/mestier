@@ -7,10 +7,7 @@ use crate::{
     domain::automation::{
         folder::FolderRefusal,
         ports::WorkflowRepository,
-        workflow::{
-            ArchiveScope, Graph, Workflow, WorkflowLayout, WorkflowReference, WorkflowTags,
-            WorkflowVersion,
-        },
+        workflow::{ArchiveScope, Graph, Workflow, WorkflowLayout, WorkflowTags, WorkflowVersion},
     },
     infrastructure::postgres::{SharedTx, error::map_sqlx_error},
 };
@@ -439,40 +436,6 @@ impl<'tx> WorkflowRepository for PgWorkflowRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         rows.into_iter().map(WorkflowVersion::try_from).collect()
-    }
-
-    async fn workflows_referencing_credential(
-        &mut self,
-        org_id: OrganizationId,
-        credential_id: Uuid,
-    ) -> Result<Vec<WorkflowReference>, CoreError> {
-        let mut tx = self.tx.lock().await;
-        let rows = sqlx::query_as!(
-            WorkflowReference,
-            r#"SELECT DISTINCT w.id, w.name
-               FROM automation.workflow w
-               JOIN automation.workflow_version wv ON wv.workflow_id = w.id
-               WHERE w.org_id = $1
-                 AND (
-                   wv.graph @> jsonb_build_object(
-                     'connectors',
-                     jsonb_build_array(jsonb_build_object('credential_id', $2::text))
-                   )
-                   OR EXISTS (
-                     SELECT 1
-                     FROM jsonb_array_elements(wv.graph -> 'triggers') AS trig(value)
-                     WHERE trig.value -> 'kind' -> 'Webhook' ->> 'credential_id' = $2::text
-                   )
-                 )
-               ORDER BY w.name"#,
-            org_id.0,
-            credential_id.to_string(),
-        )
-        .fetch_all(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        Ok(rows)
     }
 }
 
@@ -987,128 +950,6 @@ mod tests {
         .unwrap();
 
         assert_eq!(found, None);
-    }
-
-    #[tokio::test]
-    #[ignore = "requires live postgres"]
-    async fn workflows_referencing_credential_names_the_workflow_whose_graph_contains_it() {
-        let pool = make_pool().await;
-        let org_id = seed_organization(&pool, "ref-owner").await;
-        let credential_id = generate_uuid_v7();
-        let referencing = with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowRepository::new(&tx);
-            let workflow = repo.insert(&workflow(org_id, "References it")).await?;
-            repo.insert_version(
-                org_id,
-                workflow.id,
-                &graph_with_credential(Some(credential_id)),
-                None,
-            )
-            .await?;
-            Ok::<_, CoreError>(workflow)
-        })
-        .await
-        .unwrap();
-
-        // A second workflow, in the same organization, that does not
-        // reference the credential at all.
-        with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowRepository::new(&tx);
-            let workflow = repo
-                .insert(&workflow(org_id, "Does not reference it"))
-                .await?;
-            repo.insert_version(org_id, workflow.id, &graph_with_credential(None), None)
-                .await
-        })
-        .await
-        .unwrap();
-
-        let found = with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowRepository::new(&tx);
-            repo.workflows_referencing_credential(org_id, credential_id)
-                .await
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].id, referencing.id);
-        assert_eq!(found[0].name, "References it");
-    }
-
-    #[tokio::test]
-    #[ignore = "requires live postgres"]
-    async fn workflows_referencing_credential_names_the_workflow_whose_webhook_trigger_uses_it() {
-        use crate::application::automation::trigger_fixtures::{graph_of, webhook_with};
-        use crate::domain::automation::workflow::OnInvalid;
-
-        let pool = make_pool().await;
-        let org_id = seed_organization(&pool, "ref-trigger").await;
-        let credential_id = generate_uuid_v7();
-        let graph = graph_of(vec![(
-            "t1",
-            webhook_with(
-                "ref-trigger",
-                Some(credential_id),
-                Vec::new(),
-                OnInvalid::Reject,
-            ),
-        )]);
-        let referencing = with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowRepository::new(&tx);
-            let workflow = repo
-                .insert(&workflow(org_id, "Webhook with a credential"))
-                .await?;
-            repo.insert_version(org_id, workflow.id, &graph, None)
-                .await?;
-            Ok::<_, CoreError>(workflow)
-        })
-        .await
-        .unwrap();
-
-        let found = with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowRepository::new(&tx);
-            repo.workflows_referencing_credential(org_id, credential_id)
-                .await
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].id, referencing.id);
-    }
-
-    #[tokio::test]
-    #[ignore = "requires live postgres"]
-    async fn workflows_referencing_credential_ignores_another_organizations_workflow() {
-        let pool = make_pool().await;
-        let org_id = seed_organization(&pool, "ref-empty").await;
-        let other_org = seed_organization(&pool, "ref-other").await;
-        let credential_id = generate_uuid_v7();
-
-        with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowRepository::new(&tx);
-            let workflow = repo.insert(&workflow(other_org, "In another org")).await?;
-            repo.insert_version(
-                other_org,
-                workflow.id,
-                &graph_with_credential(Some(credential_id)),
-                None,
-            )
-            .await
-        })
-        .await
-        .unwrap();
-
-        let found = with_tx(&pool, async |tx| {
-            let mut repo = PgWorkflowRepository::new(&tx);
-            repo.workflows_referencing_credential(org_id, credential_id)
-                .await
-        })
-        .await
-        .unwrap();
-
-        assert!(found.is_empty());
     }
 
     /// The `Each`/`After`/`Then`/`Else` branches must round-trip through the

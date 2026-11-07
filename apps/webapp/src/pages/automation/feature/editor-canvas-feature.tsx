@@ -28,7 +28,10 @@ import {
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { useCollectionDetails } from '#/hooks/use-automation'
+import {
+	type CredentialKind,
+	useCollectionDetails,
+} from '#/hooks/use-automation'
 import { AutomationFlowNode } from '#/pages/automation/feature/automation-flow-node'
 import {
 	type EditorActions,
@@ -132,7 +135,7 @@ export interface WorkflowCanvasProps {
 		context: Schemas.EvaluateContextBody,
 	) => Promise<unknown>
 	credentials?: Schemas.CredentialResponse[]
-	authSchemes?: Schemas.AuthSchemeResponse[]
+	credentialKinds?: CredentialKind[]
 	onCreateCredential?: (
 		body: Schemas.CreateCredentialRequest,
 	) => Promise<CreatedCredential>
@@ -181,7 +184,7 @@ function EditorCanvas({
 	dryRunSteps,
 	onEvaluateExpression,
 	credentials = [],
-	authSchemes = [],
+	credentialKinds = [],
 	onCreateCredential = rejectCreateCredential,
 	testRun,
 	canTest = true,
@@ -660,7 +663,7 @@ function EditorCanvas({
 							organizationSlug={organizationSlug}
 							sources={sources}
 							collectionReads={collectionReads}
-							authSchemes={authSchemes}
+							credentialKinds={credentialKinds}
 							credentials={credentials}
 							issues={issuesByNode.get(detailsNode.id) ?? []}
 							dryRunSteps={dryRunSteps}

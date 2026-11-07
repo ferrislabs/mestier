@@ -10,6 +10,7 @@ mod collection;
 mod credential;
 pub mod dry_run;
 mod folder;
+pub mod oauth;
 pub mod retention;
 pub mod run;
 mod tests;

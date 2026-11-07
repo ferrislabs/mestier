@@ -7,6 +7,7 @@ import {
 	type TriggerFieldErrors,
 	triggerFieldErrors,
 } from '#/pages/automation/lib/validation'
+import { credential as fixture } from '#/pages/automation/test/credential-fixtures'
 import { TriggerParameters } from '#/pages/automation/ui/trigger-parameters'
 
 for (const method of [
@@ -62,7 +63,6 @@ function renderParameters(
 			origin="https://mestier.test"
 			credentials={handlers.credentials ?? []}
 			credentialHint="Types acceptés : Basic Auth, Bearer, Clé d’API dans un en-tête."
-			credentialStatusOf={() => 'valid'}
 			issues={handlers.issues ?? []}
 			errors={handlers.errors ?? NO_ERRORS}
 			onChooseEvent={handlers.onChooseEvent ?? vi.fn()}
@@ -357,15 +357,7 @@ function credential(
 	name: string,
 	kind = 'http_header',
 ): Schemas.CredentialResponse {
-	return {
-		id,
-		name,
-		kind,
-		origin: 'supplied',
-		organization_id: 'org-1',
-		created_at: '2026-01-01T00:00:00Z',
-		updated_at: '2026-01-01T00:00:00Z',
-	}
+	return fixture({ id, name, kind })
 }
 
 describe('TriggerParameters — a webhook', () => {

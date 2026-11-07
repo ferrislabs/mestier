@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.credential SET status = 'expired' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7998c2c4fbbbcf9daa4fb8ae03183dcae22e0dbfb1af16d5b22a7fd6e5c4dfb8"
+}

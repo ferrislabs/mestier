@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
+import type { CredentialKind } from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	ConnectorParametersFeature,
@@ -10,10 +11,6 @@ import {
 	useCredentialCreation,
 } from '#/pages/automation/feature/connector-parameters-feature'
 import { EventPickerFeature } from '#/pages/automation/feature/event-picker-feature'
-import {
-	useCredentialMeta,
-	useCredentialMetaActions,
-} from '#/pages/automation/feature/use-credential-meta'
 import {
 	collectionPath,
 	identificationsPath,
@@ -32,10 +29,10 @@ import {
 } from '#/pages/automation/lib/collection-node'
 import { collectionCredentialHint } from '#/pages/automation/lib/connector-field-copy'
 import {
-	type CredentialStatus,
-	usableInWebhook,
+	credentialAcceptsUsage,
+	kindsAccepting,
 	webhookCredentialHint,
-} from '#/pages/automation/lib/credential-meta'
+} from '#/pages/automation/lib/credential-kinds'
 import type {
 	EditorEdge,
 	EditorNode,
@@ -109,7 +106,7 @@ export interface NodeDetailsFeatureProps {
 	organizationSlug: string
 	sources: UpstreamSources
 	collectionReads: ReadonlyMap<string, CollectionRead>
-	authSchemes: Schemas.AuthSchemeResponse[]
+	credentialKinds: CredentialKind[]
 	credentials: Schemas.CredentialResponse[]
 	issues: readonly NodeIssue[]
 	dryRunSteps: DryRunPasses | null
@@ -143,7 +140,7 @@ export function NodeDetailsFeature({
 	organizationSlug,
 	sources,
 	collectionReads,
-	authSchemes,
+	credentialKinds,
 	credentials,
 	issues,
 	dryRunSteps,
@@ -258,7 +255,7 @@ export function NodeDetailsFeature({
 	const operationErrors = operationFieldErrors(textErrors.rest)
 	const fieldIssues = issues
 	const webhookCredentials = credentials.filter((credential) =>
-		usableInWebhook(credential.kind),
+		credentialAcceptsUsage(credentialKinds, credential, 'webhook'),
 	)
 	const credentialCreation = useCredentialCreation({
 		onCreateCredential,
@@ -269,13 +266,6 @@ export function NodeDetailsFeature({
 				})
 		},
 	})
-	const credentialMeta = useCredentialMeta().data
-	const { rememberKinds } = useCredentialMetaActions()
-	useEffect(() => {
-		rememberKinds(credentials)
-	}, [credentials, rememberKinds])
-	const credentialStatusOf = (credentialId: string): CredentialStatus =>
-		credentialMeta[credentialId]?.status ?? 'valid'
 	const acceptsExpressions =
 		descriptor?.fields.some((field) => field.expression) ?? false
 
@@ -397,7 +387,7 @@ export function NodeDetailsFeature({
 								}
 								credentialId={connector.credential_id ?? null}
 								credentials={credentials}
-								authSchemes={authSchemes}
+								credentialKinds={credentialKinds}
 								errors={form ? operationErrors.fields : textErrors.rest}
 								bindingIssues={fieldIssues}
 								credentialHint={
@@ -423,9 +413,7 @@ export function NodeDetailsFeature({
 						) : trigger && credentialCreation.state ? (
 							<CredentialCreationPanel
 								creation={credentialCreation}
-								authSchemes={authSchemes.filter((scheme) =>
-									usableInWebhook(scheme.kind),
-								)}
+								kinds={kindsAccepting(credentialKinds, 'webhook')}
 							/>
 						) : trigger ? (
 							<>
@@ -444,8 +432,7 @@ export function NodeDetailsFeature({
 									events={sources.events}
 									origin={window.location.origin}
 									credentials={webhookCredentials}
-									credentialHint={webhookCredentialHint()}
-									credentialStatusOf={credentialStatusOf}
+									credentialHint={webhookCredentialHint(credentialKinds)}
 									issues={fieldIssues}
 									errors={triggerErrors}
 									onChooseEvent={(replacing) => setPicking({ replacing })}

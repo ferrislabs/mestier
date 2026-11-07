@@ -2,11 +2,12 @@ use std::str::FromStr;
 
 use common::{CoreError, OrganizationId};
 use mestier_macros::repository;
+use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use crate::{
     domain::automation::{
-        credential::{Credential, CredentialOrigin},
+        credential::{Credential, CredentialOrigin, CredentialStatus},
         ports::CredentialRepository,
         secret::SealedSecret,
     },
@@ -29,7 +30,14 @@ struct CredentialRow {
     org_id: Uuid,
     kind: String,
     name: String,
+    description: String,
     origin: String,
+    status: String,
+    account: Option<String>,
+    expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    data: Value,
+    secret_names: Vec<String>,
+    fields_split: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -41,13 +49,27 @@ impl TryFrom<CredentialRow> for Credential {
         let origin = CredentialOrigin::from_str(&row.origin).map_err(|e| {
             CoreError::Internal(format!("invalid credential origin in database: {e}"))
         })?;
+        let status = CredentialStatus::from_str(&row.status).map_err(|e| {
+            CoreError::Internal(format!("invalid credential status in database: {e}"))
+        })?;
+        let data = match row.data {
+            Value::Object(data) => data,
+            _ => Map::new(),
+        };
 
         Ok(Self {
             id: row.id,
             org_id: OrganizationId(row.org_id),
             kind: row.kind,
             name: row.name,
+            description: row.description,
             origin,
+            status,
+            account: row.account,
+            expires_at: row.expires_at,
+            data,
+            secrets_set: row.secret_names,
+            fields_split: row.fields_split,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
@@ -64,14 +86,23 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
         let row = sqlx::query_as!(
             CredentialRow,
             r#"INSERT INTO automation.credential
-                   (id, org_id, kind, name, origin, data_nonce, data_ciphertext)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               RETURNING id, org_id, kind, name, origin, created_at, updated_at"#,
+                   (id, org_id, kind, name, description, origin, status, account, expires_at,
+                    data, secret_names, fields_split, data_nonce, data_ciphertext)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+               RETURNING id, org_id, kind, name, description, origin, status, account, expires_at,
+                         data, secret_names, fields_split, created_at, updated_at"#,
             credential.id,
             credential.org_id.0,
             credential.kind,
             credential.name,
+            credential.description,
             credential.origin.as_str(),
+            credential.status.as_str(),
+            credential.account,
+            credential.expires_at,
+            Value::Object(credential.data.clone()),
+            &credential.secrets_set,
+            credential.fields_split,
             sealed.nonce,
             sealed.ciphertext,
         )
@@ -89,7 +120,8 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             CredentialRow,
-            r#"SELECT id, org_id, kind, name, origin, created_at, updated_at
+            r#"SELECT id, org_id, kind, name, description, origin, status, account, expires_at,
+                      data, secret_names, fields_split, created_at, updated_at
                FROM automation.credential
                WHERE org_id = $1
                ORDER BY kind, name"#,
@@ -110,7 +142,8 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             CredentialRow,
-            r#"SELECT id, org_id, kind, name, origin, created_at, updated_at
+            r#"SELECT id, org_id, kind, name, description, origin, status, account, expires_at,
+                      data, secret_names, fields_split, created_at, updated_at
                FROM automation.credential WHERE org_id = $1 AND id = $2"#,
             org_id.0,
             id,
@@ -129,7 +162,8 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
     ) -> Result<Option<(Credential, SealedSecret)>, CoreError> {
         let mut tx = self.tx.lock().await;
         let row = sqlx::query!(
-            r#"SELECT id, org_id, kind, name, origin, created_at, updated_at,
+            r#"SELECT id, org_id, kind, name, description, origin, status, account, expires_at,
+                      data, secret_names, fields_split, created_at, updated_at,
                       data_nonce, data_ciphertext
                FROM automation.credential WHERE org_id = $1 AND id = $2"#,
             org_id.0,
@@ -148,7 +182,14 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
             org_id: row.org_id,
             kind: row.kind,
             name: row.name,
+            description: row.description,
             origin: row.origin,
+            status: row.status,
+            account: row.account,
+            expires_at: row.expires_at,
+            data: row.data,
+            secret_names: row.secret_names,
+            fields_split: row.fields_split,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })?;
@@ -160,9 +201,6 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
         Ok(Some((credential, sealed)))
     }
 
-    // The lifetime matches the trait's, which names it for `mockall`'s sake
-    // (see `CredentialRepository::update`); clippy's non-test build alone
-    // would elide it.
     #[allow(clippy::needless_lifetimes)]
     async fn update<'a>(
         &mut self,
@@ -175,14 +213,29 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
             CredentialRow,
             r#"UPDATE automation.credential
                SET name = $3,
-                   data_nonce = COALESCE($4, data_nonce),
-                   data_ciphertext = COALESCE($5, data_ciphertext),
+                   description = $4,
+                   status = $5,
+                   account = $6,
+                   expires_at = $7,
+                   data = $8,
+                   secret_names = $9,
+                   fields_split = $10,
+                   data_nonce = COALESCE($11, data_nonce),
+                   data_ciphertext = COALESCE($12, data_ciphertext),
                    updated_at = now()
                WHERE org_id = $1 AND id = $2
-               RETURNING id, org_id, kind, name, origin, created_at, updated_at"#,
+               RETURNING id, org_id, kind, name, description, origin, status, account, expires_at,
+                         data, secret_names, fields_split, created_at, updated_at"#,
             org_id.0,
             credential.id,
             credential.name,
+            credential.description,
+            credential.status.as_str(),
+            credential.account,
+            credential.expires_at,
+            Value::Object(credential.data.clone()),
+            &credential.secrets_set,
+            credential.fields_split,
             sealed.map(|s| s.nonce.as_slice()),
             sealed.map(|s| s.ciphertext.as_slice()),
         )
@@ -196,7 +249,14 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
     async fn delete(&mut self, org_id: OrganizationId, id: Uuid) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
         sqlx::query!(
-            "DELETE FROM automation.credential WHERE org_id = $1 AND id = $2",
+            r#"WITH removed AS (
+                   DELETE FROM automation.credential
+                   WHERE org_id = $1 AND id = $2
+                   RETURNING id, org_id, name
+               )
+               INSERT INTO automation.credential_tombstone (id, org_id, name)
+               SELECT id, org_id, name FROM removed
+               ON CONFLICT (id) DO NOTHING"#,
             org_id.0,
             id,
         )
@@ -205,6 +265,238 @@ impl<'tx> CredentialRepository for PgCredentialRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         Ok(())
+    }
+
+    async fn list_unsplit(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> Result<Vec<(Credential, SealedSecret)>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query!(
+            r#"SELECT id, org_id, kind, name, description, origin, status, account, expires_at,
+                      data, secret_names, fields_split, created_at, updated_at,
+                      data_nonce, data_ciphertext
+               FROM automation.credential
+               WHERE org_id = $1 AND NOT fields_split AND origin = 'supplied'
+               ORDER BY id
+               FOR UPDATE"#,
+            org_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter()
+            .map(|row| {
+                let credential = Credential::try_from(CredentialRow {
+                    id: row.id,
+                    org_id: row.org_id,
+                    kind: row.kind,
+                    name: row.name,
+                    description: row.description,
+                    origin: row.origin,
+                    status: row.status,
+                    account: row.account,
+                    expires_at: row.expires_at,
+                    data: row.data,
+                    secret_names: row.secret_names,
+                    fields_split: row.fields_split,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                })?;
+                let sealed = SealedSecret {
+                    nonce: row.data_nonce,
+                    ciphertext: row.data_ciphertext,
+                };
+                Ok((credential, sealed))
+            })
+            .collect()
+    }
+
+    async fn store_split(
+        &mut self,
+        org_id: OrganizationId,
+        credential: &Credential,
+        sealed: &SealedSecret,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query!(
+            r#"UPDATE automation.credential
+               SET data = $3,
+                   secret_names = $4,
+                   fields_split = TRUE,
+                   data_nonce = $5,
+                   data_ciphertext = $6
+               WHERE org_id = $1 AND id = $2"#,
+            org_id.0,
+            credential.id,
+            Value::Object(credential.data.clone()),
+            &credential.secrets_set,
+            sealed.nonce,
+            sealed.ciphertext,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+
+    async fn usage_counts(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> Result<Vec<(Uuid, i64)>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query!(
+            r#"SELECT c.id AS "id!", COUNT(DISTINCT wv.id)::bigint AS "used_by!"
+               FROM automation.credential c
+               LEFT JOIN automation.workflow w
+                      ON w.org_id = c.org_id AND w.current_version_id IS NOT NULL
+               LEFT JOIN automation.workflow_version wv
+                      ON wv.id = w.current_version_id
+                     AND (
+                         wv.graph @> jsonb_build_object(
+                             'connectors',
+                             jsonb_build_array(jsonb_build_object('credential_id', c.id::text))
+                         )
+                         OR EXISTS (
+                             SELECT 1
+                             FROM jsonb_array_elements(wv.graph -> 'triggers') AS trig(value)
+                             WHERE trig.value -> 'kind' -> 'Webhook' ->> 'credential_id' = c.id::text
+                         )
+                         OR EXISTS (
+                             SELECT 1
+                             FROM jsonb_array_elements(wv.graph -> 'connectors') AS node(value)
+                             WHERE node.value -> 'config' ->> 'signing_credential_id' = c.id::text
+                         )
+                     )
+               WHERE c.org_id = $1
+               GROUP BY c.id"#,
+            org_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(|row| (row.id, row.used_by)).collect())
+    }
+
+    async fn count_locking_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> Result<i64, CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(format!("credential-quota:{}", org_id.0))
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM automation.credential WHERE org_id = $1"#,
+            org_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
+    }
+
+    async fn find_sealed_for_update(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> Result<Option<(Credential, SealedSecret)>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query("SET LOCAL lock_timeout = '2s'")
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        let row = sqlx::query!(
+            r#"SELECT id, org_id, kind, name, description, origin, status, account, expires_at,
+                      data, secret_names, fields_split, created_at, updated_at,
+                      data_nonce, data_ciphertext
+               FROM automation.credential WHERE org_id = $1 AND id = $2
+               FOR UPDATE"#,
+            org_id.0,
+            id,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let credential = Credential::try_from(CredentialRow {
+            id: row.id,
+            org_id: row.org_id,
+            kind: row.kind,
+            name: row.name,
+            description: row.description,
+            origin: row.origin,
+            status: row.status,
+            account: row.account,
+            expires_at: row.expires_at,
+            data: row.data,
+            secret_names: row.secret_names,
+            fields_split: row.fields_split,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })?;
+        let sealed = SealedSecret {
+            nonce: row.data_nonce,
+            ciphertext: row.data_ciphertext,
+        };
+
+        Ok(Some((credential, sealed)))
+    }
+
+    async fn store_tokens(
+        &mut self,
+        org_id: OrganizationId,
+        credential: &Credential,
+        sealed: &SealedSecret,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query!(
+            r#"UPDATE automation.credential
+               SET status = $3,
+                   account = $4,
+                   expires_at = $5,
+                   secret_names = $6,
+                   data_nonce = $7,
+                   data_ciphertext = $8
+               WHERE org_id = $1 AND id = $2"#,
+            org_id.0,
+            credential.id,
+            credential.status.as_str(),
+            credential.account,
+            credential.expires_at,
+            &credential.secrets_set,
+            sealed.nonce,
+            sealed.ciphertext,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+
+    async fn deleted_name(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> Result<Option<String>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar!(
+            "SELECT name FROM automation.credential_tombstone WHERE org_id = $1 AND id = $2",
+            org_id.0,
+            id,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
     }
 }
 
@@ -259,15 +551,9 @@ mod tests {
     }
 
     fn credential(org_id: OrganizationId, kind: &str, name: &str) -> Credential {
-        let now = chrono::Utc::now();
         Credential {
-            id: generate_uuid_v7(),
-            org_id,
-            kind: kind.to_owned(),
-            name: name.to_owned(),
             origin: CredentialOrigin::Supplied,
-            created_at: now,
-            updated_at: now,
+            ..Credential::fixture(org_id, kind, name)
         }
     }
 

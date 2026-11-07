@@ -20,12 +20,18 @@ import { isTerminalRunStatus } from '#/pages/automation/lib/workflow-runs'
 const CONNECTORS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/connectors'
 const EVENTS_PATH = '/api/v1/organizations/{organization_id}/automation/events'
+const CREDENTIAL_KINDS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credential-kinds'
 const CREDENTIALS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/credentials'
 const CREDENTIAL_PATH =
 	'/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}'
 const CREDENTIAL_ROTATE_PATH =
 	'/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate'
+const CREDENTIAL_OAUTH_START_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/start'
+const CREDENTIAL_OAUTH_DISCONNECT_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/disconnect'
 const SETTINGS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/settings'
 const FOLDERS_PATH =
@@ -74,9 +80,6 @@ function invalidate(
 	})
 }
 
-/** Auth schemes and connector descriptors share one endpoint on the backend
- * (the connector catalogue) — this screen only ever needs
- * `data.auth_schemes`, to populate the credential kind picker. */
 export function useConnectorCatalogue(organizationId: string) {
 	return useQuery(
 		window.tanstackApi.get(CONNECTORS_PATH, {
@@ -90,6 +93,23 @@ export function useAutomationEvents(organizationId: string) {
 		window.tanstackApi.get(EVENTS_PATH, {
 			path: { organization_id: organizationId },
 		}).queryOptions,
+	)
+}
+
+export function useCredentialKinds(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(CREDENTIAL_KINDS_PATH, {
+			path: { organization_id: organizationId },
+		}).queryOptions,
+		staleTime: Number.POSITIVE_INFINITY,
+	})
+}
+
+export function useRefreshCredentials() {
+	const queryClient = useQueryClient()
+	return useCallback(
+		() => invalidate(queryClient, CREDENTIALS_PATH),
+		[queryClient],
 	)
 }
 
@@ -126,12 +146,26 @@ export function useDeleteCredential() {
 	})
 }
 
-/** Returns the freshly generated secret alongside the credential — see
- * `RotatedCredential`'s doc comment: shown once, same as at creation. */
 export function useRotateCredential() {
 	const queryClient = useQueryClient()
 	return useMutation({
 		...window.tanstackApi.mutation('post', CREDENTIAL_ROTATE_PATH)
+			.mutationOptions,
+		onSuccess: () => invalidate(queryClient, CREDENTIALS_PATH),
+	})
+}
+
+export function useStartCredentialOauth() {
+	return useMutation({
+		...window.tanstackApi.mutation('post', CREDENTIAL_OAUTH_START_PATH)
+			.mutationOptions,
+	})
+}
+
+export function useDisconnectCredentialOauth() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('post', CREDENTIAL_OAUTH_DISCONNECT_PATH)
 			.mutationOptions,
 		onSuccess: () => invalidate(queryClient, CREDENTIALS_PATH),
 	})
@@ -208,6 +242,7 @@ export function useUpdateWorkflow() {
 			Promise.all([
 				invalidate(queryClient, WORKFLOWS_PATH),
 				invalidate(queryClient, WORKFLOW_PATH),
+				invalidate(queryClient, CREDENTIALS_PATH),
 			]),
 	})
 }
@@ -216,7 +251,11 @@ export function useDeleteWorkflow() {
 	const queryClient = useQueryClient()
 	return useMutation({
 		...window.tanstackApi.mutation('delete', WORKFLOW_PATH).mutationOptions,
-		onSuccess: () => invalidate(queryClient, WORKFLOWS_PATH),
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, WORKFLOWS_PATH),
+				invalidate(queryClient, CREDENTIALS_PATH),
+			]),
 	})
 }
 
@@ -238,6 +277,7 @@ export function useSaveWorkflowVersion() {
 			Promise.all([
 				invalidate(queryClient, WORKFLOWS_PATH),
 				invalidate(queryClient, WORKFLOW_PATH),
+				invalidate(queryClient, CREDENTIALS_PATH),
 			]),
 	})
 }
@@ -481,11 +521,11 @@ export function useDeleteCollection(organizationId: string) {
 	})
 }
 
-export type AuthScheme = Schemas.AuthSchemeResponse
-export type AuthField = Schemas.FieldResponse
 export type EventDescriptor = Schemas.EventDescriptorResponse
+export type CredentialKind = Schemas.CredentialKindResponse
+export type CredentialField = Schemas.CredentialFieldResponse
+export type CredentialStatus = Schemas.CredentialStatusResponse
 export type Credential = Schemas.CredentialResponse
-/** Only present in the create/rotate response — never on list/update. */
 export type CreatedCredential = Credential & { secret: unknown }
 export type AutomationSettings = Schemas.AutomationSettingsBody
 export type Run = Schemas.RunResponse

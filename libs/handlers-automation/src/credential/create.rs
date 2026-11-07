@@ -1,5 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
+use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{CreateCredentialCommand, CredentialOrigin};
 use serde::Deserialize;
@@ -33,11 +34,14 @@ impl From<CredentialOriginRequest> for CredentialOrigin {
 pub struct CreateCredentialRequest {
     pub kind: String,
     pub name: String,
-    pub origin: CredentialOriginRequest,
-    /// Required for a `Supplied` credential (what the caller is entering),
-    /// ignored for a `Generated` one (Mestier fills it in itself).
     #[serde(default)]
+    pub description: Option<String>,
+    pub origin: CredentialOriginRequest,
+    #[serde(default)]
+    #[schema(value_type = Option<Object>)]
     pub data: Option<Value>,
+    #[serde(default)]
+    pub expires_at: Option<DateTime<Utc>>,
 }
 
 #[utoipa::path(
@@ -50,11 +54,11 @@ pub struct CreateCredentialRequest {
     ),
     request_body = CreateCredentialRequest,
     responses(
-        (status = 201, description = "Credential created — the secret is visible in this response and never again", body = inline(DataEnvelope<CredentialWithSecretResponse>)),
-        (status = 400, description = "Validation failed"),
+        (status = 201, description = "Credential created. Readable values and the names of the secrets set are returned, never a secret; only a generated credential reveals its secret, here and on rotation", body = inline(DataEnvelope<CredentialWithSecretResponse>)),
+        (status = 400, description = "Unknown kind or fields that do not match the kind's descriptor"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
-        (status = 409, description = "Unknown scheme, invalid data, or no automation secret key configured"),
+        (status = 409, description = "Name already used for this kind, or no automation secret key configured"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -67,21 +71,25 @@ pub async fn handler(
     require_manage_automation(&state, &identity, path.organization_id).await?;
 
     let origin: CredentialOrigin = payload.origin.into();
-    let (credential, plaintext) = state
+    let (credential, revealed) = state
         .usecase
         .create_credential(CreateCredentialCommand {
             org_id: path.organization_id,
             kind: payload.kind,
             name: payload.name,
+            description: payload.description,
             origin,
             data: payload.data,
+            expires_at: payload.expires_at,
         })
         .await
         .map_err(credential_failure)?;
 
-    let secret = secret_value(origin, &plaintext);
+    let secret = revealed
+        .map(|plaintext| secret_value(CredentialOrigin::Generated, &plaintext))
+        .unwrap_or(Value::Null);
     Ok(Response::Created(CredentialWithSecretResponse {
-        credential: CredentialResponse::from(credential),
+        credential: CredentialResponse::new(credential, 0, Utc::now()),
         secret,
     }))
 }

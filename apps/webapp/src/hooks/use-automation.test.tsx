@@ -4,22 +4,36 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import {
+	useAutomationCredentials,
 	useAutomationFolders,
 	useAutomationWorkflows,
 	useCollection,
 	useCollectionDetails,
 	useCollections,
+	useCreateCredential,
+	useCredentialKinds,
 	useDeleteCollection,
+	useDeleteCredential,
+	useDeleteWorkflow,
+	useDisconnectCredentialOauth,
 	useDryRunWorkflow,
 	useImportCollection,
+	useRefreshCredentials,
 	useReplaceCollection,
+	useRotateCredential,
 	useRunGraphs,
 	useRunPolling,
 	useSaveWorkflowVersion,
+	useStartCredentialOauth,
+	useUpdateCredential,
 	useUpdateWorkflow,
 	useWorkflow,
 } from '#/hooks/use-automation'
 import type { CollectionDraft } from '#/pages/automation/lib/collections'
+import {
+	BEARER_TOKEN,
+	credential,
+} from '#/pages/automation/test/credential-fixtures'
 import { installFakeTanstackApi } from '#/pages/automation/test/fake-tanstack-api'
 
 function installFakeApi(statusAtCall: (call: number) => string) {
@@ -929,5 +943,272 @@ describe('collection mutations — refreshing what the screens show', () => {
 
 		await waitFor(() => expect(result.current.isError).toBe(true))
 		expect(result.current.error).toMatchObject({ status: 413 })
+	})
+})
+
+const CREDENTIAL_KINDS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credential-kinds'
+const CREDENTIALS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credentials'
+const CREDENTIAL_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}'
+const CREDENTIAL_ROTATE_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate'
+const OAUTH_START_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/start'
+const OAUTH_DISCONNECT_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/disconnect'
+
+const CREDENTIAL_PARAMS = {
+	path: { organization_id: 'org-1', credential_id: 'cred-1' },
+}
+
+function installCredentialsApi() {
+	const api = installFakeTanstackApi()
+	api.mockGet(CREDENTIAL_KINDS_PATH, () => ({
+		data: [BEARER_TOKEN],
+		pagination: null,
+	}))
+	api.mockGet(CREDENTIALS_PATH, () => ({
+		data: [credential()],
+		pagination: null,
+	}))
+	api.mockMutation('post', CREDENTIALS_PATH, () => ({
+		data: { ...credential(), secret: null },
+	}))
+	api.mockMutation('patch', CREDENTIAL_PATH, () => ({ data: credential() }))
+	api.mockMutation('delete', CREDENTIAL_PATH, () => ({}))
+	api.mockMutation('post', CREDENTIAL_ROTATE_PATH, () => ({
+		data: { ...credential(), secret: 'c2VjcmV0' },
+	}))
+	api.mockMutation('post', OAUTH_START_PATH, () => ({
+		data: { authorization_url: 'https://auth.exemple.fr/authorize' },
+	}))
+	api.mockMutation('post', OAUTH_DISCONNECT_PATH, () => ({
+		data: credential({ status: 'not_connected' }),
+	}))
+	api.mockMutation('patch', WORKFLOW_PATH, () => ({ data: {} }))
+	api.mockMutation('delete', WORKFLOW_PATH, () => ({}))
+	api.mockMutation('put', VERSIONS_PATH, () => ({ data: {} }))
+	api.mockGet(WORKFLOWS_PATH, () => ({ data: [], pagination: null }))
+	const fetched = (path: string) =>
+		api.calls.filter((call) => call.method === 'get' && call.path === path)
+			.length
+	return { api, fetched }
+}
+
+describe('credential queries', () => {
+	it('lists the kinds the server describes for the organization', async () => {
+		const { api } = installCredentialsApi()
+		const { result } = renderHook(() => useCredentialKinds('org-1'), {
+			wrapper: stableWrapper(),
+		})
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+		expect(result.current.data?.data).toEqual([BEARER_TOKEN])
+		expect(api.calls[0]).toMatchObject({
+			method: 'get',
+			path: CREDENTIAL_KINDS_PATH,
+			params: { path: { organization_id: 'org-1' } },
+		})
+	})
+
+	it('never asks for the kinds again while they are on screen', async () => {
+		const { fetched } = installCredentialsApi()
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		})
+		function wrapper({ children }: { children: ReactNode }) {
+			return (
+				<QueryClientProvider client={client}>{children}</QueryClientProvider>
+			)
+		}
+		const first = renderHook(() => useCredentialKinds('org-1'), { wrapper })
+		await waitFor(() => expect(first.result.current.isSuccess).toBe(true))
+
+		renderHook(() => useCredentialKinds('org-1'), { wrapper })
+
+		expect(fetched(CREDENTIAL_KINDS_PATH)).toBe(1)
+	})
+})
+
+describe('credential mutations — refreshing the list', () => {
+	function mounted() {
+		const installed = installCredentialsApi()
+		const hook = renderHook(
+			() => ({
+				list: useAutomationCredentials('org-1'),
+				create: useCreateCredential('org-1'),
+				update: useUpdateCredential(),
+				remove: useDeleteCredential(),
+				rotate: useRotateCredential(),
+				disconnect: useDisconnectCredentialOauth(),
+				start: useStartCredentialOauth(),
+				refresh: useRefreshCredentials(),
+			}),
+			{ wrapper: stableWrapper() },
+		)
+		return { ...installed, ...hook }
+	}
+
+	it('refetches the list once a credential is created', async () => {
+		const { result, fetched } = mounted()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		await act(() =>
+			result.current.create.mutateAsync({
+				path: { organization_id: 'org-1' },
+				body: { kind: 'bearer_token', name: 'Jeton', origin: 'supplied' },
+			}),
+		)
+
+		await waitFor(() => expect(fetched(CREDENTIALS_PATH)).toBe(2))
+	})
+
+	it('refetches the list once a credential is updated', async () => {
+		const { result, fetched } = mounted()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		await act(() =>
+			result.current.update.mutateAsync({
+				...CREDENTIAL_PARAMS,
+				body: { name: 'Autre nom' },
+			}),
+		)
+
+		await waitFor(() => expect(fetched(CREDENTIALS_PATH)).toBe(2))
+	})
+
+	it('refetches the list once a credential is deleted, used or not', async () => {
+		const { result, fetched } = mounted()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		await act(() => result.current.remove.mutateAsync(CREDENTIAL_PARAMS))
+
+		await waitFor(() => expect(fetched(CREDENTIALS_PATH)).toBe(2))
+	})
+
+	it('refetches the list once a secret is rotated', async () => {
+		const { result, fetched } = mounted()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		await act(() => result.current.rotate.mutateAsync(CREDENTIAL_PARAMS))
+
+		await waitFor(() => expect(fetched(CREDENTIALS_PATH)).toBe(2))
+	})
+
+	it('refetches the list once an account is disconnected', async () => {
+		const { result, fetched } = mounted()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		await act(() => result.current.disconnect.mutateAsync(CREDENTIAL_PARAMS))
+
+		await waitFor(() => expect(fetched(CREDENTIALS_PATH)).toBe(2))
+	})
+
+	it('posts the addresses of the authorization and hands back the page of the provider, refetching nothing', async () => {
+		const { result, api, fetched } = mounted()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		let started: unknown
+		await act(async () => {
+			started = await result.current.start.mutateAsync({
+				...CREDENTIAL_PARAMS,
+				body: {
+					redirect_uri: 'https://api.mestier.fr/oauth/callback',
+					return_to: '/o/atelier/automatisation/identifications',
+				},
+			})
+		})
+
+		expect(started).toEqual({
+			data: { authorization_url: 'https://auth.exemple.fr/authorize' },
+		})
+		expect(
+			api.calls.find((call) => call.path === OAUTH_START_PATH)?.params,
+		).toEqual({
+			...CREDENTIAL_PARAMS,
+			body: {
+				redirect_uri: 'https://api.mestier.fr/oauth/callback',
+				return_to: '/o/atelier/automatisation/identifications',
+			},
+		})
+		expect(fetched(CREDENTIALS_PATH)).toBe(1)
+	})
+
+	it('refetches the list on demand, for the way back from a provider', async () => {
+		const { result, fetched } = mounted()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		await act(() => result.current.refresh())
+
+		await waitFor(() => expect(fetched(CREDENTIALS_PATH)).toBe(2))
+	})
+
+	it('keeps the same refresh from one render to the next', async () => {
+		const { result, rerender } = mounted()
+		const first = result.current.refresh
+
+		rerender()
+
+		expect(result.current.refresh).toBe(first)
+	})
+})
+
+describe('workflow mutations — refreshing the usage of the credentials', () => {
+	function mountedWorkflowHooks() {
+		const installed = installCredentialsApi()
+		const hook = renderHook(
+			() => ({
+				list: useAutomationCredentials('org-1'),
+				save: useSaveWorkflowVersion(),
+				update: useUpdateWorkflow(),
+				remove: useDeleteWorkflow(),
+			}),
+			{ wrapper: stableWrapper() },
+		)
+		return { ...installed, ...hook }
+	}
+
+	const WORKFLOW_PARAMS = {
+		path: { organization_id: 'org-1', workflow_id: 'wf-1' },
+	}
+
+	it('refetches the credentials once a version is saved', async () => {
+		const { result, fetched } = mountedWorkflowHooks()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		await act(() =>
+			result.current.save.mutateAsync({
+				...WORKFLOW_PARAMS,
+				body: { graph: { connectors: [], edges: [], triggers: [] } },
+			}),
+		)
+
+		await waitFor(() => expect(fetched(CREDENTIALS_PATH)).toBe(2))
+	})
+
+	it('refetches the credentials once a workflow is updated', async () => {
+		const { result, fetched } = mountedWorkflowHooks()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		await act(() =>
+			result.current.update.mutateAsync({
+				...WORKFLOW_PARAMS,
+				body: { tags: ['Ventes'] },
+			}),
+		)
+
+		await waitFor(() => expect(fetched(CREDENTIALS_PATH)).toBe(2))
+	})
+
+	it('refetches the credentials once a workflow is deleted', async () => {
+		const { result, fetched } = mountedWorkflowHooks()
+		await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
+
+		await act(() => result.current.remove.mutateAsync(WORKFLOW_PARAMS))
+
+		await waitFor(() => expect(fetched(CREDENTIALS_PATH)).toBe(2))
 	})
 })

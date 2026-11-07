@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.credential SET fields_split = FALSE, data = '{}'::jsonb WHERE id = ANY($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ef9d899ab6a0733775043e777d932fa04e8954b6d6a9bd645f0a7f8b0b10910"
+}

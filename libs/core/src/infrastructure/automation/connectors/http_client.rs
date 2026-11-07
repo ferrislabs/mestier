@@ -8,11 +8,12 @@
 use std::time::Duration;
 
 use common::OrganizationId;
-use reqwest::{Client, RequestBuilder, Response, Url, redirect::Policy};
+use reqwest::{Client, Response, Url, redirect::Policy};
 use serde_json::{Map, Value, json};
 use uuid::Uuid;
 
 use crate::application::MestierUseCase;
+use crate::domain::automation::credential::CredentialStatus;
 use crate::domain::automation::run::ConnectorOutcome;
 use crate::infrastructure::automation::webhook::{
     address_policy::{AddressVerdict, PrivateNetworkAccess, judge},
@@ -76,78 +77,15 @@ pub fn refuse_literal_private_address(
     }
 }
 
-/// One of the three schemes `http.request` accepts
-/// (`AuthRequirement::AnyOf(&["bearer_token", "http_basic", "http_header"])`),
-/// carrying exactly the fields its auth scheme declares (see
-/// `domain::automation::connector::scheme`).
+pub use super::http_auth::{
+    HttpAuth, PreparedRequest, auth_from_credential, client_for_auth, send,
+};
+use crate::infrastructure::automation::webhook::inbound::{SignatureAlgorithm, SignatureSpec};
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum HttpAuth {
-    Bearer { token: String },
-    Basic { username: String, password: String },
-    Header { name: String, value: String },
-}
-
-impl HttpAuth {
-    pub fn apply(&self, builder: RequestBuilder) -> RequestBuilder {
-        match self {
-            HttpAuth::Bearer { token } => builder.bearer_auth(token),
-            HttpAuth::Basic { username, password } => builder.basic_auth(username, Some(password)),
-            HttpAuth::Header { name, value } => builder.header(name, value),
-        }
-    }
-}
-
-#[derive(Debug, thiserror::Error, PartialEq)]
-pub enum AuthFromCredentialError {
-    #[error("unsupported auth credential kind `{kind}`")]
-    UnsupportedKind { kind: String },
-    #[error("credential is missing field `{field}`")]
-    MissingField { field: String },
-}
-
-impl AuthFromCredentialError {
-    #[cfg(test)]
-    fn missing(field: &str) -> Self {
-        Self::MissingField {
-            field: field.to_owned(),
-        }
-    }
-}
-
-/// Turns an opened credential's fields (a Supplied credential's plaintext,
-/// already validated against its scheme at creation time — see
-/// `domain::automation::credential::validate_credential_data`) into the auth
-/// this request applies.
-pub fn auth_from_credential(
-    kind: &str,
-    fields: &Map<String, Value>,
-) -> Result<HttpAuth, AuthFromCredentialError> {
-    let field = |name: &'static str| -> Result<String, AuthFromCredentialError> {
-        fields
-            .get(name)
-            .and_then(Value::as_str)
-            .map(str::to_owned)
-            .ok_or(AuthFromCredentialError::MissingField {
-                field: name.to_owned(),
-            })
-    };
-
-    match kind {
-        "bearer_token" => Ok(HttpAuth::Bearer {
-            token: field("token")?,
-        }),
-        "http_basic" => Ok(HttpAuth::Basic {
-            username: field("username")?,
-            password: field("password")?,
-        }),
-        "http_header" => Ok(HttpAuth::Header {
-            name: field("header_name")?,
-            value: field("header_value")?,
-        }),
-        other => Err(AuthFromCredentialError::UnsupportedKind {
-            kind: other.to_owned(),
-        }),
-    }
+pub enum InboundAuth {
+    Headers(HttpAuth),
+    Signature(SignatureSpec),
 }
 
 pub async fn open_http_auth(
@@ -156,14 +94,57 @@ pub async fn open_http_auth(
     credential_id: Uuid,
 ) -> Result<HttpAuth, String> {
     let (credential, plaintext) = usecase
-        .open_credential(org_id, credential_id)
-        .await
-        .map_err(|error| format!("the auth credential is unusable: {error}"))?;
+        .open_credential_for_run(org_id, credential_id)
+        .await?;
+
+    if credential.status == CredentialStatus::NotConnected {
+        return Err(format!("credential `{}` is not connected", credential.name));
+    }
+
+    if matches!(
+        credential.kind.as_str(),
+        "oauth2_client_credentials" | "oauth2_authorization_code"
+    ) {
+        let token = usecase.oauth_access_token(org_id, credential_id).await?;
+        return Ok(HttpAuth::Bearer { token });
+    }
 
     let fields = parse_credential_fields(&plaintext)
         .ok_or_else(|| "the auth credential's data is not usable".to_owned())?;
 
     auth_from_credential(&credential.kind, &fields).map_err(|error| error.to_string())
+}
+
+pub async fn open_webhook_auth(
+    usecase: &MestierUseCase,
+    org_id: OrganizationId,
+    credential_id: Uuid,
+) -> Result<InboundAuth, String> {
+    let (credential, plaintext) = usecase
+        .open_credential_for_run(org_id, credential_id)
+        .await?;
+
+    let fields = parse_credential_fields(&plaintext)
+        .ok_or_else(|| "the auth credential's data is not usable".to_owned())?;
+
+    if credential.kind == "hmac" {
+        let text = |name: &str| fields.get(name).and_then(Value::as_str).map(str::to_owned);
+        let algorithm = text("algorithm")
+            .as_deref()
+            .and_then(SignatureAlgorithm::parse)
+            .ok_or_else(|| "the signature algorithm is not usable".to_owned())?;
+        return Ok(InboundAuth::Signature(SignatureSpec {
+            header_name: text("header_name")
+                .ok_or_else(|| "the credential is missing field `header_name`".to_owned())?,
+            algorithm,
+            secret: text("secret")
+                .ok_or_else(|| "the credential is missing field `secret`".to_owned())?,
+        }));
+    }
+
+    auth_from_credential(&credential.kind, &fields)
+        .map(InboundAuth::Headers)
+        .map_err(|error| error.to_string())
 }
 
 fn parse_credential_fields(plaintext: &[u8]) -> Option<Map<String, Value>> {
@@ -218,10 +199,12 @@ pub async fn read_response(mut response: Response) -> Result<CapturedResponse, S
     let ceiling = MAX_RESPONSE_BODY_BYTES + 1;
     let mut collected: Vec<u8> = Vec::new();
     while collected.len() < ceiling {
-        let chunk = response
-            .chunk()
-            .await
-            .map_err(|error| format!("reading the response body failed: {error}"))?;
+        let chunk = response.chunk().await.map_err(|error| {
+            format!(
+                "reading the response body failed: {}",
+                describe_reqwest_error(error)
+            )
+        })?;
         let Some(chunk) = chunk else {
             break;
         };
@@ -257,9 +240,10 @@ fn headers_to_value(headers: &reqwest::header::HeaderMap) -> Value {
 /// reading a run, see why a call never left the process. Shared by
 /// `http.request` and the `odoo.*` connectors: both send through a guarded
 /// client and both want the same depth of explanation for the same reason.
-pub fn describe_reqwest_error(error: &reqwest::Error) -> String {
+pub fn describe_reqwest_error(error: reqwest::Error) -> String {
     use std::error::Error;
 
+    let error = error.without_url();
     let mut message = error.to_string();
     let mut source = error.source();
     while let Some(err) = source {
@@ -315,7 +299,30 @@ mod tests {
     use base64::{Engine, engine::general_purpose::STANDARD};
     use serde_json::json;
 
+    use super::super::http_auth::AuthFromCredentialError;
     use super::*;
+
+    #[tokio::test]
+    async fn a_failed_call_is_described_without_the_url_it_carried() {
+        let client = Client::builder().no_proxy().build().unwrap();
+
+        let error = client
+            .get("http://127.0.0.1:1/items?api_key=QUERY-SECRET-VALUE&sig=OTHER-SECRET")
+            .send()
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("QUERY-SECRET-VALUE"),
+            "the raw error does carry the url: that is the leak"
+        );
+
+        let described = describe_reqwest_error(error);
+
+        assert!(!described.contains("QUERY-SECRET-VALUE"), "{described}");
+        assert!(!described.contains("OTHER-SECRET"), "{described}");
+        assert!(!described.contains("api_key"), "{described}");
+        assert!(!described.is_empty());
+    }
 
     fn fields(pairs: &[(&str, &str)]) -> Map<String, Value> {
         pairs
@@ -488,21 +495,32 @@ mod tests {
         assert!(refuse_literal_private_address(&url, PrivateNetworkAccess::Allowed).is_ok());
     }
 
+    fn prepared() -> PreparedRequest {
+        PreparedRequest::new(
+            reqwest::Method::GET,
+            Url::parse("http://example.invalid/path").unwrap(),
+            Vec::new(),
+            None,
+        )
+    }
+
+    fn header_of<'a>(request: &'a PreparedRequest, name: &str) -> Option<&'a str> {
+        request
+            .headers
+            .iter()
+            .find(|(existing, _)| existing.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+    }
+
     #[test]
     fn bearer_token_produces_an_authorization_bearer_header() {
         let auth = auth_from_credential("bearer_token", &fields(&[("token", "abc123")]))
             .expect("bearer_token has everything it needs");
-        let client = Client::new();
+        let mut request = prepared();
 
-        let request = auth
-            .apply(client.get("http://example.invalid"))
-            .build()
-            .unwrap();
+        auth.prepare(&mut request).unwrap();
 
-        assert_eq!(
-            request.headers().get("authorization").unwrap(),
-            "Bearer abc123"
-        );
+        assert_eq!(header_of(&request, "authorization"), Some("Bearer abc123"));
     }
 
     #[test]
@@ -512,15 +530,15 @@ mod tests {
             &fields(&[("username", "bot"), ("password", "secret")]),
         )
         .expect("http_basic has everything it needs");
-        let client = Client::new();
+        let mut request = prepared();
 
-        let request = auth
-            .apply(client.get("http://example.invalid"))
-            .build()
-            .unwrap();
+        auth.prepare(&mut request).unwrap();
 
         let expected = format!("Basic {}", STANDARD.encode("bot:secret"));
-        assert_eq!(request.headers().get("authorization").unwrap(), &expected);
+        assert_eq!(
+            header_of(&request, "authorization"),
+            Some(expected.as_str())
+        );
     }
 
     #[test]
@@ -530,14 +548,11 @@ mod tests {
             &fields(&[("header_name", "x-api-key"), ("header_value", "shh")]),
         )
         .expect("http_header has everything it needs");
-        let client = Client::new();
+        let mut request = prepared();
 
-        let request = auth
-            .apply(client.get("http://example.invalid"))
-            .build()
-            .unwrap();
+        auth.prepare(&mut request).unwrap();
 
-        assert_eq!(request.headers().get("x-api-key").unwrap(), "shh");
+        assert_eq!(header_of(&request, "x-api-key"), Some("shh"));
     }
 
     #[test]

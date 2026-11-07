@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, org_id, kind, name, description, origin, status, account, expires_at,\n                      data, secret_names, fields_split, created_at, updated_at,\n                      data_nonce, data_ciphertext\n               FROM automation.credential\n               WHERE org_id = $1 AND NOT fields_split AND origin = 'supplied'\n               ORDER BY id\n               FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "account",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "data",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "secret_names",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "fields_split",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "data_nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 15,
+        "name": "data_ciphertext",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "366780e69d8908d96f8fb78ae861cbff46997a2d920c51e10c28d48821ae3f9b"
+}

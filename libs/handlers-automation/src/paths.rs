@@ -21,6 +21,12 @@ pub struct EventsPath {
 }
 
 #[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/automation/credential-kinds")]
+pub struct CredentialKindsPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/automation/credentials")]
 pub struct CredentialsPath {
     pub organization_id: OrganizationId,
@@ -38,6 +44,24 @@ pub struct CredentialPath {
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate"
 )]
 pub struct CredentialRotatePath {
+    pub organization_id: OrganizationId,
+    pub credential_id: Uuid,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/start"
+)]
+pub struct CredentialOauthStartPath {
+    pub organization_id: OrganizationId,
+    pub credential_id: Uuid,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/disconnect"
+)]
+pub struct CredentialOauthDisconnectPath {
     pub organization_id: OrganizationId,
     pub credential_id: Uuid,
 }

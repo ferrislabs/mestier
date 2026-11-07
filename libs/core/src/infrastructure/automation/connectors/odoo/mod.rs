@@ -140,9 +140,8 @@ impl OdooClient {
     ) -> Result<Value, String> {
         let (metadata, plaintext) = self
             .usecase
-            .open_credential(org_id, credential_id)
-            .await
-            .map_err(|error| format!("the Odoo credential is unusable: {error}"))?;
+            .open_credential_for_run(org_id, credential_id)
+            .await?;
 
         let fields = match serde_json::from_slice(&plaintext) {
             Ok(Value::Object(map)) => map,
@@ -186,7 +185,7 @@ async fn json_rpc_call(
         .json(&payload)
         .send()
         .await
-        .map_err(|error| OdooError::Network(describe_reqwest_error(&error)))?;
+        .map_err(|error| OdooError::Network(describe_reqwest_error(error)))?;
 
     let status = response.status();
     if !status.is_success() {
@@ -198,7 +197,10 @@ async fn json_rpc_call(
     }
 
     let body: Value = response.json().await.map_err(|error| {
-        OdooError::Network(format!("Odoo's response was not valid JSON: {error}"))
+        OdooError::Network(format!(
+            "Odoo's response was not valid JSON: {}",
+            describe_reqwest_error(error)
+        ))
     })?;
 
     if let Some(error) = body.get("error") {

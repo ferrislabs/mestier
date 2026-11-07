@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO automation.oauth_state\n                           (state_hash, org_id, credential_id, member_id, redirect_uri, return_to, created_at, expires_at)\n                       VALUES ($1, $2, $3, $4, 'https://a/oauth/callback', '/', now(), now() + interval '5 minutes')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fd04c07e78374f2e21f32f4c1f200d8753a75e5adf7a68b643ebbe3e3a7f6cbb"
+}

@@ -17,8 +17,8 @@ use http::{
     header::{CONTENT_LENGTH, CONTENT_TYPE, RETRY_AFTER},
 };
 use mestier_core::{
-    MAX_WEBHOOK_BODY_BYTES, OnInvalid, WebhookMethod, check_webhook_path, contract_violations,
-    holds_nul, is_json_content_type, path_fingerprint,
+    MAX_WEBHOOK_BODY_BYTES, OnInvalid, SignatureSpec, WebhookAuthentication, WebhookMethod,
+    check_webhook_path, contract_violations, holds_nul, is_json_content_type, path_fingerprint,
 };
 use rate_limit::{Quota, RateLimitDecision, RateLimitKey};
 use serde::Serialize;
@@ -162,7 +162,7 @@ async fn read_limited(mut body: Body, limit: usize) -> Result<Vec<u8>, BodyFault
     path = "/webhooks/{path}",
     operation_id = "receiveWebhook",
     tag = super::TAG,
-    description = "Starts the workflow whose webhook trigger holds this path. Public: it is not under /api/v1 and takes no bearer token of its own; the credential chosen on the trigger, when there is one, is what authenticates the call. The route answers to the method chosen on the trigger (GET, POST, PUT, PATCH or DELETE), not only to POST. The body is JSON, at most 1 MiB, and must arrive within 10 seconds; an empty body is read as {}. A path answers at most 60 calls a minute and a workflow at most 120. A path that does not exist, a method the trigger does not accept and a disabled or archived workflow all answer the same 404.",
+    description = "Starts the workflow whose webhook trigger holds this path. Public: it is not under /api/v1 and takes no bearer token of its own; the credential chosen on the trigger, when there is one, is what authenticates the call: a token, a basic login or a header is checked before the body is read, a signature credential (HMAC) is checked on the raw body, still before the body is parsed or any run starts. The route answers to the method chosen on the trigger (GET, POST, PUT, PATCH or DELETE), not only to POST. The body is JSON, at most 1 MiB, and must arrive within 10 seconds; an empty body is read as {}. A path answers at most 60 calls a minute and a workflow at most 120. A path that does not exist, a method the trigger does not accept and a disabled or archived workflow all answer the same 404.",
     params(
         ("path" = String, Path, description = "The path chosen on the trigger, without the /webhooks/ prefix"),
     ),
@@ -215,16 +215,19 @@ pub async fn receive(
 
     let (parts, body) = request.into_parts();
 
+    let mut signature: Option<SignatureSpec> = None;
     if let Some(credential_id) = route.credential_id {
         let headers = &parts.headers;
-        let allowed = state
+        match state
             .usecase
-            .verify_webhook_credential(route.org_id, credential_id, |name| {
+            .authenticate_webhook(route.org_id, credential_id, |name| {
                 single_header(headers, name)
             })
-            .await;
-        if !allowed {
-            return ApiError::Unauthorized.into_response();
+            .await
+        {
+            WebhookAuthentication::Accepted => {}
+            WebhookAuthentication::Refused => return ApiError::Unauthorized.into_response(),
+            WebhookAuthentication::SignatureRequired(spec) => signature = Some(spec),
         }
     }
 
@@ -232,7 +235,8 @@ pub async fn receive(
         .headers
         .get(CONTENT_TYPE)
         .and_then(|v| v.to_str().ok());
-    if content_type.is_some_and(|value| !is_json_content_type(value)) {
+    let unsupported_content_type = content_type.is_some_and(|value| !is_json_content_type(value));
+    if unsupported_content_type && signature.is_none() {
         return unsupported_media_type();
     }
     let declared = parts
@@ -256,6 +260,16 @@ pub async fn receive(
             return body_invalid(Vec::new(), "the body could not be read");
         }
     };
+
+    if let Some(spec) = &signature {
+        let headers = &parts.headers;
+        if !spec.verify(|name| single_header(headers, name), &bytes) {
+            return ApiError::Unauthorized.into_response();
+        }
+        if unsupported_content_type {
+            return unsupported_media_type();
+        }
+    }
 
     let payload = if bytes.is_empty() {
         json!({})

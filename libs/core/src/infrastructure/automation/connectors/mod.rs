@@ -7,11 +7,15 @@
 
 mod collection_operation;
 mod customer_create;
+mod digest_auth;
 mod flow_condition;
 mod flow_config;
 mod flow_loop;
+pub(crate) mod http_auth;
 pub(crate) mod http_client;
 mod http_request;
+mod jwt_auth;
+pub(crate) mod oauth1;
 mod odoo;
 mod registry;
 mod support_add_badge;

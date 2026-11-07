@@ -1,26 +1,23 @@
 import { Search } from 'lucide-react'
 import { type CSSProperties, useRef, useState } from 'react'
 import { Input } from '#/components/ui/input'
-import type { AuthScheme } from '#/hooks/use-automation'
+import type { CredentialKind } from '#/hooks/use-automation'
 import type { ExternalService } from '#/pages/automation/feature/mocks/external-services'
 import { credentialAppearance } from '#/pages/automation/lib/credential-appearance'
-import {
-	schemeDescription,
-	searchSchemeGroups,
-} from '#/pages/automation/lib/credential-meta'
+import { searchKindGroups } from '#/pages/automation/lib/credential-kinds'
 import { normalizeText } from '#/pages/automation/lib/text'
 import { kindTransitionStyle } from '#/pages/automation/ui/credential-kind-names'
 import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
 import '#/pages/automation/ui/automation.css'
 
 function KindCard({
-	scheme,
+	kind,
 	onPick,
 }: {
-	scheme: AuthScheme
+	kind: CredentialKind
 	onPick: () => void
 }) {
-	const appearance = credentialAppearance(scheme.kind)
+	const appearance = credentialAppearance(kind.kind)
 	const iconRef = useRef<HTMLSpanElement>(null)
 	const labelRef = useRef<HTMLSpanElement>(null)
 	return (
@@ -33,7 +30,7 @@ function KindCard({
 				] as const)
 					if (element)
 						element.style.viewTransitionName =
-							kindTransitionStyle(part, scheme.kind).viewTransitionName ?? ''
+							kindTransitionStyle(part, kind.kind).viewTransitionName ?? ''
 				onPick()
 			}}
 			className="flex items-start gap-3 rounded-md border border-border bg-card p-3 text-left outline-none transition-colors hover:border-ring hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
@@ -43,10 +40,10 @@ function KindCard({
 			</span>
 			<span className="min-w-0">
 				<span ref={labelRef} className="block w-fit font-medium text-sm">
-					{scheme.label}
+					{kind.label}
 				</span>
 				<span className="mt-0.5 block text-muted-foreground text-xs leading-snug">
-					{schemeDescription(scheme)}
+					{kind.description}
 				</span>
 			</span>
 		</button>
@@ -80,16 +77,16 @@ function ServiceCard({ service }: { service: ExternalService }) {
 }
 
 export function CredentialKindPicker({
-	schemes,
+	kinds,
 	services,
 	onPick,
 }: {
-	schemes: readonly AuthScheme[]
+	kinds: readonly CredentialKind[]
 	services: readonly ExternalService[]
 	onPick: (kind: string) => void
 }) {
 	const [query, setQuery] = useState('')
-	const groups = searchSchemeGroups(schemes, query)
+	const groups = searchKindGroups(kinds, query)
 	const needle = normalizeText(query)
 	const matchingServices = services.filter(
 		(service) =>
@@ -125,11 +122,11 @@ export function CredentialKindPicker({
 						{group.label}
 					</h3>
 					<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-						{group.schemes.map((scheme) => (
+						{group.kinds.map((kind) => (
 							<KindCard
-								key={scheme.kind}
-								scheme={scheme}
-								onPick={() => onPick(scheme.kind)}
+								key={kind.kind}
+								kind={kind}
+								onPick={() => onPick(kind.kind)}
 							/>
 						))}
 					</div>

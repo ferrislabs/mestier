@@ -1,5 +1,6 @@
 pub mod connectors;
 mod emitter;
+pub mod oauth;
 pub mod postgres;
 pub mod retention;
 pub mod webhook;

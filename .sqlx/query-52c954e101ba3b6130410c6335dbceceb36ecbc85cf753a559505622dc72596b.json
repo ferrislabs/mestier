@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT state_hash, org_id, credential_id, member_id, expires_at - created_at AS \"window!\"\n             FROM automation.oauth_state WHERE credential_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state_hash",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "credential_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "window!",
+        "type_info": "Interval"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "52c954e101ba3b6130410c6335dbceceb36ecbc85cf753a559505622dc72596b"
+}

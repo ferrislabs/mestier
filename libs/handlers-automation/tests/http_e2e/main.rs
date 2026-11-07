@@ -13,11 +13,13 @@
 //! ```
 
 mod collections;
+mod credentials;
 mod dry_run;
 mod folders;
 mod graph_nodes;
 mod harness;
 mod issuer;
+mod oauth;
 mod runs;
 mod triggers;
 mod webhooks;

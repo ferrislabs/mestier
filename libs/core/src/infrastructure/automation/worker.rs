@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{future::Future, sync::Arc, time::Duration};
 
 use chrono::Utc;
 use tracing::{error, info, warn};
@@ -56,7 +56,9 @@ impl Default for WorkerSchedule {
 /// Nothing here propagates an error: a failing pass must not take the process
 /// down, because the events and runs it could not process are still in the
 /// database and the next pass will find them. What it must do is say so
-/// loudly.
+/// loudly. A pass runs in a task of its own for the same reason: a panic in
+/// one pass is read back as a `JoinError`, logged, and the next tick starts a
+/// fresh pass instead of the loop dying with it.
 pub async fn run_automation_worker(
     usecase: MestierUseCase,
     worker: String,
@@ -64,70 +66,119 @@ pub async fn run_automation_worker(
     private_network: PrivateNetworkAccess,
 ) {
     info!(%worker, "automation worker started");
-    let mut ticker = tokio::time::interval(schedule.interval);
     // Built once, not per tick: its only state is a clone of `usecase`, the
     // same handle the run-engine pass already carries.
-    let connectors =
-        ConnectorRegistry::with_private_network_access(usecase.clone(), private_network);
+    let connectors = Arc::new(ConnectorRegistry::with_private_network_access(
+        usecase.clone(),
+        private_network,
+    ));
 
+    run_supervised(schedule.interval, move || {
+        pass(
+            usecase.clone(),
+            Arc::clone(&connectors),
+            worker.clone(),
+            schedule,
+        )
+    })
+    .await;
+}
+
+async fn run_supervised<F, Fut>(interval: Duration, mut next_pass: F)
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = ()> + Send + 'static,
+{
+    let mut ticker = tokio::time::interval(interval);
     loop {
         ticker.tick().await;
+        supervised(next_pass()).await;
+    }
+}
 
-        match usecase
-            .recover_lost_runs(Utc::now() - chrono_from(schedule.claim_timeout))
-            .await
-        {
-            Ok(released) if released > 0 => {
-                warn!(released, "recovered runs from a worker that was lost");
-            }
-            Ok(_) => {}
-            Err(error) => error!(%error, "recovering lost runs failed"),
+async fn supervised<Fut>(pass: Fut) -> bool
+where
+    Fut: Future<Output = ()> + Send + 'static,
+{
+    match tokio::spawn(pass).await {
+        Ok(()) => true,
+        Err(error) if error.is_panic() => {
+            let payload = error.into_panic();
+            let message = payload
+                .downcast_ref::<&str>()
+                .map(|message| (*message).to_owned())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "no message".to_owned());
+            error!(%message, "an automation pass panicked; the next pass starts on schedule");
+            false
         }
+        Err(error) => {
+            error!(%error, "an automation pass was cancelled; the next pass starts on schedule");
+            false
+        }
+    }
+}
 
-        if let Err(error) = usecase.dispatch_pending_events(schedule.batch).await {
-            error!(%error, "fanning events out failed");
+async fn pass(
+    usecase: MestierUseCase,
+    connectors: Arc<ConnectorRegistry>,
+    worker: String,
+    schedule: WorkerSchedule,
+) {
+    match usecase
+        .recover_lost_runs(Utc::now() - chrono_from(schedule.claim_timeout))
+        .await
+    {
+        Ok(released) if released > 0 => {
+            warn!(released, "recovered runs from a worker that was lost");
         }
+        Ok(_) => {}
+        Err(error) => error!(%error, "recovering lost runs failed"),
+    }
 
-        // Same shape as the event fan-out just above: turns state that
-        // needs attention (a recurrence whose horizon is getting close to
-        // today) into `automation.run` rows, on the same tick, through the
-        // same queue `run_engine_pass` already claims from below — never a
-        // second scheduler.
-        match usecase.ensure_recurrence_horizon_runs().await {
-            Ok(created) if created > 0 => {
-                info!(created, "queued recurrence horizon extension runs");
-            }
-            Ok(_) => {}
-            Err(error) => error!(%error, "scheduling recurrence horizon extension runs failed"),
-        }
+    if let Err(error) = usecase.dispatch_pending_events(schedule.batch).await {
+        error!(%error, "fanning events out failed");
+    }
 
-        match usecase.fire_due_schedules(Utc::now(), schedule.batch).await {
-            Ok(ScheduleOutcome {
-                fired,
-                unreadable,
-                failed,
-            }) if fired > 0 || unreadable > 0 || failed > 0 => {
-                info!(fired, unreadable, failed, "started scheduled runs");
-            }
-            Ok(_) => {}
-            Err(error) => error!(%error, "starting scheduled runs failed"),
+    // Same shape as the event fan-out just above: turns state that
+    // needs attention (a recurrence whose horizon is getting close to
+    // today) into `automation.run` rows, on the same tick, through the
+    // same queue `run_engine_pass` already claims from below — never a
+    // second scheduler.
+    match usecase.ensure_recurrence_horizon_runs().await {
+        Ok(created) if created > 0 => {
+            info!(created, "queued recurrence horizon extension runs");
         }
+        Ok(_) => {}
+        Err(error) => error!(%error, "scheduling recurrence horizon extension runs failed"),
+    }
 
-        match usecase
-            .run_engine_pass(&connectors, &worker, schedule)
-            .await
-        {
-            Ok(EnginePassOutcome {
-                claimed,
-                succeeded,
-                rescheduled,
-                failed,
-            }) if claimed > 0 => {
-                info!(claimed, succeeded, rescheduled, failed, "run engine pass");
-            }
-            Ok(_) => {}
-            Err(error) => error!(%error, "the run engine pass failed"),
+    match usecase.fire_due_schedules(Utc::now(), schedule.batch).await {
+        Ok(ScheduleOutcome {
+            fired,
+            unreadable,
+            failed,
+        }) if fired > 0 || unreadable > 0 || failed > 0 => {
+            info!(fired, unreadable, failed, "started scheduled runs");
         }
+        Ok(_) => {}
+        Err(error) => error!(%error, "starting scheduled runs failed"),
+    }
+
+    match usecase
+        .run_engine_pass(&connectors, &worker, schedule)
+        .await
+    {
+        Ok(EnginePassOutcome {
+            claimed,
+            succeeded,
+            rescheduled,
+            failed,
+        }) if claimed > 0 => {
+            info!(claimed, succeeded, rescheduled, failed, "run engine pass");
+        }
+        Ok(_) => {}
+        Err(error) => error!(%error, "the run engine pass failed"),
     }
 }
 
@@ -152,6 +203,46 @@ mod tests {
         assert!(
             schedule.claim_timeout > schedule.interval,
             "a claim must outlive a pass, or a working delivery is stolen from itself"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_pass_that_panics_is_reported_as_failed_and_does_not_stop_the_next_one() {
+        let ran = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+        let survived = supervised(async { panic!("a pass blew up") }).await;
+        let counter = Arc::clone(&ran);
+        let next = supervised(async move {
+            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        })
+        .await;
+
+        assert!(!survived);
+        assert!(next);
+        assert_eq!(ran.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn the_loop_keeps_starting_passes_after_one_panicked() {
+        let started = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = Arc::clone(&started);
+
+        let _ = tokio::time::timeout(
+            Duration::from_millis(300),
+            run_supervised(Duration::from_millis(10), move || {
+                let call = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                async move {
+                    if call == 0 {
+                        panic!("the first pass blows up");
+                    }
+                }
+            }),
+        )
+        .await;
+
+        assert!(
+            started.load(std::sync::atomic::Ordering::SeqCst) >= 3,
+            "passes kept coming after the panic"
         );
     }
 

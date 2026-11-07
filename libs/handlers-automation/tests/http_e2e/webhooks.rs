@@ -914,24 +914,29 @@ async fn a_credential_cannot_be_created_or_updated_blank_or_on_a_header_the_tran
         async move { request.send().await.expect("the api answers") }
     };
 
-    let blank = mestier_core::CredentialError::BlankField.to_string();
+    let missing = |label: &str| {
+        mestier_core::CredentialError::MissingField {
+            label: label.to_owned(),
+        }
+        .to_string()
+    };
     let reserved = mestier_core::CredentialError::ReservedHeaderName.to_string();
     let header = |name: &str, value: &str| json!({ "header_name": name, "header_value": value });
     for (kind, data, expected) in [
-        ("bearer_token", json!({ "token": "" }), &blank),
-        ("bearer_token", json!({ "token": "   " }), &blank),
+        ("bearer_token", json!({ "token": "" }), &missing("Jeton")),
+        ("bearer_token", json!({ "token": "   " }), &missing("Jeton")),
         (
             "http_basic",
             json!({ "username": "alice", "password": "" }),
-            &blank,
+            &missing("Mot de passe"),
         ),
         (
             "http_basic",
             json!({ "username": "", "password": "p4ss" }),
-            &blank,
+            &missing("Utilisateur"),
         ),
-        ("http_header", header("X-Signature", ""), &blank),
-        ("http_header", header("", "v"), &blank),
+        ("http_header", header("X-Signature", ""), &missing("Valeur")),
+        ("http_header", header("", "v"), &missing("Nom de l’en-tête")),
         ("http_header", header("Host", "v"), &reserved),
         ("http_header", header("content-type", "v"), &reserved),
         ("http_header", header("Cookie", "v"), &reserved),
@@ -970,5 +975,208 @@ async fn a_credential_cannot_be_created_or_updated_blank_or_on_a_header_the_tran
     assert_eq!(blank.json::<Value>().await.unwrap()["code"], "E_VALIDATION");
     assert_eq!(update(json!({ "token": "fresh" })).await.status(), 200);
 
+    app.cleanup().await;
+}
+
+fn hmac_spec(secret: &str) -> mestier_core::SignatureSpec {
+    mestier_core::SignatureSpec {
+        header_name: "X-Hub-Signature".to_owned(),
+        algorithm: mestier_core::SignatureAlgorithm::Sha256,
+        secret: secret.to_owned(),
+    }
+}
+
+async fn post_signed(
+    app: &harness::App,
+    path: &str,
+    body: &[u8],
+    signature: Option<&str>,
+    content_type: &str,
+) -> reqwest::Response {
+    let mut request = client()
+        .post(app.webhook_url(path))
+        .header("content-type", content_type)
+        .body(body.to_vec());
+    if let Some(signature) = signature {
+        request = request.header("x-hub-signature", signature);
+    }
+    request
+        .send()
+        .await
+        .expect("the api answers the webhook call")
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn an_hmac_credential_authenticates_a_webhook_by_the_signature_of_its_body() {
+    let app = harness::start().await;
+    let credential_id = credential(
+        &app,
+        "hmac",
+        json!({ "header_name": "X-Hub-Signature", "algorithm": "sha256", "secret": "shared-secret" }),
+    )
+    .await;
+    let path = unique_path("hmac");
+    let workflow_id = published(
+        &app,
+        webhook_kind(
+            &path,
+            Some(credential_id),
+            json!([{ "name": "montant", "kind": "Number", "required": true, "example": "1" }]),
+            "Reject",
+        ),
+    )
+    .await;
+    let spec = hmac_spec("shared-secret");
+    let body = br#"{"montant":12}"#;
+
+    let accepted = post_signed(
+        &app,
+        &path,
+        body,
+        Some(&spec.sign(body)),
+        "application/json",
+    )
+    .await;
+    assert_eq!(accepted.status(), 202, "{}", accepted.text().await.unwrap());
+    assert_eq!(run_count(&app, &workflow_id).await, 1);
+
+    let bare = spec.sign(body);
+    let bare = bare.strip_prefix("sha256=").unwrap();
+    let without_prefix = post_signed(&app, &path, body, Some(bare), "application/json").await;
+    assert_eq!(without_prefix.status(), 202);
+
+    let wrong_secret = hmac_spec("another-secret").sign(body);
+    let other_body = br#"{"montant":13}"#;
+    for (label, signature) in [
+        ("wrong secret", Some(wrong_secret.clone())),
+        ("signature of another body", Some(spec.sign(other_body))),
+        ("no signature", None),
+        ("not hex", Some("sha256=zzzz".to_owned())),
+        ("empty", Some(String::new())),
+    ] {
+        let refused =
+            post_signed(&app, &path, body, signature.as_deref(), "application/json").await;
+        assert_eq!(refused.status(), 401, "{label}");
+    }
+    assert_eq!(
+        run_count(&app, &workflow_id).await,
+        2,
+        "a refusal starts nothing"
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn an_hmac_webhook_authenticates_before_it_parses_or_validates_the_body() {
+    let app = harness::start().await;
+    let credential_id = credential(
+        &app,
+        "hmac",
+        json!({ "header_name": "X-Hub-Signature", "algorithm": "sha256", "secret": "shared-secret" }),
+    )
+    .await;
+    let path = unique_path("hmac-order");
+    let workflow_id = published(
+        &app,
+        webhook_kind(
+            &path,
+            Some(credential_id),
+            json!([{ "name": "montant", "kind": "Number", "required": true, "example": "1" }]),
+            "Reject",
+        ),
+    )
+    .await;
+    let spec = hmac_spec("shared-secret");
+    let broken_contract = br#"{"autre":1}"#;
+    let not_json = b"not json at all";
+
+    let unauthenticated_invalid =
+        post_signed(&app, &path, not_json, Some("sha256=00"), "application/json").await;
+    assert_eq!(
+        unauthenticated_invalid.status(),
+        401,
+        "a bad signature hides the body errors"
+    );
+    let unauthenticated_media =
+        post_signed(&app, &path, not_json, Some("sha256=00"), "text/plain").await;
+    assert_eq!(unauthenticated_media.status(), 401);
+    let unauthenticated_contract =
+        post_signed(&app, &path, broken_contract, None, "application/json").await;
+    assert_eq!(unauthenticated_contract.status(), 401);
+
+    let authenticated_contract = post_signed(
+        &app,
+        &path,
+        broken_contract,
+        Some(&spec.sign(broken_contract)),
+        "application/json",
+    )
+    .await;
+    assert_eq!(authenticated_contract.status(), 400);
+    assert_eq!(
+        authenticated_contract.json::<Value>().await.unwrap()["code"],
+        "E_WEBHOOK_BODY_INVALID"
+    );
+    let authenticated_media = post_signed(
+        &app,
+        &path,
+        not_json,
+        Some(&spec.sign(not_json)),
+        "text/plain",
+    )
+    .await;
+    assert_eq!(authenticated_media.status(), 415);
+    assert_eq!(run_count(&app, &workflow_id).await, 0);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn an_hmac_credential_of_another_organization_never_authenticates() {
+    let app = harness::start().await;
+    let foreign: Value = client()
+        .post(app.other_organization_credentials_url())
+        .bearer_auth(&app.outsider_token)
+        .json(&json!({
+            "kind": "hmac", "name": "Chez l’autre", "origin": "supplied",
+            "data": { "header_name": "X-Hub-Signature", "secret": "shared-secret" }
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let foreign_id: Uuid = foreign["data"]["id"]
+        .as_str()
+        .expect("an id")
+        .parse()
+        .unwrap();
+    let path = unique_path("hmac-foreign");
+    let workflow_id = new_workflow(&app).await;
+    let saved = save(
+        &app,
+        &workflow_id,
+        graph_of(vec![(
+            "t1",
+            webhook_kind(&path, Some(foreign_id), json!([]), "Reject"),
+        )]),
+    )
+    .await;
+    assert_eq!(
+        saved.status(),
+        422,
+        "a graph naming another organization's credential is refused"
+    );
+
+    sqlx::query("DELETE FROM automation.credential WHERE org_id = $1")
+        .bind(app.other_organization_id())
+        .execute(&app.pool)
+        .await
+        .unwrap();
     app.cleanup().await;
 }

@@ -1,0 +1,111 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.credential\n               SET name = $3,\n                   description = $4,\n                   status = $5,\n                   account = $6,\n                   expires_at = $7,\n                   data = $8,\n                   secret_names = $9,\n                   fields_split = $10,\n                   data_nonce = COALESCE($11, data_nonce),\n                   data_ciphertext = COALESCE($12, data_ciphertext),\n                   updated_at = now()\n               WHERE org_id = $1 AND id = $2\n               RETURNING id, org_id, kind, name, description, origin, status, account, expires_at,\n                         data, secret_names, fields_split, created_at, updated_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "account",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "data",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "secret_names",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "fields_split",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Jsonb",
+        "TextArray",
+        "Bool",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b98e3c892c508afc0b9d3440896b6d8746bc17165734a3136092e9c0fe918716"
+}

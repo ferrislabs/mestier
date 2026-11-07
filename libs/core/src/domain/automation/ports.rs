@@ -8,12 +8,13 @@ use crate::domain::automation::collection::{
 };
 use crate::domain::automation::credential::Credential;
 use crate::domain::automation::folder::{FolderName, WorkflowFolder};
+use crate::domain::automation::oauth::OauthState;
 use crate::domain::automation::run::{DueRun, Run, RunOverview, RunSettlement, RunStep};
 use crate::domain::automation::secret::SealedSecret;
 use crate::domain::automation::settings::AutomationSettings;
 use crate::domain::automation::workflow::{
     ArchiveScope, DueSchedule, Graph, PlacedTrigger, ResolvedWebhook, ScheduleSeed, WebhookMethod,
-    Workflow, WorkflowLayout, WorkflowReference, WorkflowVersion,
+    Workflow, WorkflowLayout, WorkflowVersion,
 };
 
 /// Appends events to the durable log.
@@ -192,6 +193,72 @@ pub trait CredentialRepository: Send {
         org_id: OrganizationId,
         id: Uuid,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn list_unsplit(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<(Credential, SealedSecret)>, CoreError>> + Send;
+
+    fn store_split(
+        &mut self,
+        org_id: OrganizationId,
+        credential: &Credential,
+        sealed: &SealedSecret,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn usage_counts(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<(Uuid, i64)>, CoreError>> + Send;
+
+    fn count_locking_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<i64, CoreError>> + Send;
+
+    fn deleted_name(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, CoreError>> + Send;
+
+    fn find_sealed_for_update(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<(Credential, SealedSecret)>, CoreError>> + Send;
+
+    fn store_tokens(
+        &mut self,
+        org_id: OrganizationId,
+        credential: &Credential,
+        sealed: &SealedSecret,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait OauthStateRepository: Send {
+    fn insert(
+        &mut self,
+        state_hash: &[u8],
+        state: &OauthState,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn consume(
+        &mut self,
+        state_hash: &[u8],
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<OauthState>, CoreError>> + Send;
+
+    fn purge_expired(
+        &mut self,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u64, CoreError>> + Send;
+
+    fn count_for_credential(
+        &mut self,
+        credential_id: Uuid,
+    ) -> impl Future<Output = Result<i64, CoreError>> + Send;
 }
 
 /// Workflows and their immutable versions. `org_id` is a parameter of every
@@ -276,17 +343,6 @@ pub trait WorkflowRepository: Send {
         org_id: OrganizationId,
         workflow_id: Uuid,
     ) -> impl Future<Output = Result<Vec<WorkflowVersion>, CoreError>> + Send;
-
-    /// Workflows in this organization with a version — any version, not only
-    /// the current one, since an older one can still be executing a run
-    /// (#200) — whose graph references `credential_id`. What guards
-    /// `application::automation::credential::delete_credential`: `.len()`
-    /// counts, `.name` on each entry names.
-    fn workflows_referencing_credential(
-        &mut self,
-        org_id: OrganizationId,
-        credential_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<WorkflowReference>, CoreError>> + Send;
 }
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]

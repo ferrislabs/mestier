@@ -160,6 +160,13 @@ export namespace Schemas {
     | { every_days: number; kind: "ROLLING" }
     | { kind: "WINDOWS"; windows: Array<WindowRequest> }
     | { kind: "ON_DEMAND" };
+  export type CallbackQuery = Partial<{
+    code: string | null;
+    error: string | null;
+    oauth_token: string | null;
+    oauth_verifier: string | null;
+    state: string | null;
+  }>;
   export type CategoryId = string;
   export type CategoryResponse = {
     created_at: string;
@@ -341,7 +348,9 @@ export namespace Schemas {
   };
   export type CredentialOriginRequest = "supplied" | "generated";
   export type CreateCredentialRequest = {
-    data?: unknown | undefined;
+    data?: (Record<string, unknown> | null) | undefined;
+    description?: (string | null) | undefined;
+    expires_at?: (string | null) | undefined;
     kind: string;
     name: string;
     origin: CredentialOriginRequest;
@@ -615,14 +624,50 @@ export namespace Schemas {
     name: string;
     prefix: string;
   };
+  export type CredentialOptionResponse = { label: string; value: string };
+  export type CredentialShowWhenResponse = { field: string; one_of: Array<string> };
+  export type CredentialFieldResponse = {
+    default?: (string | null) | undefined;
+    hint?: (string | null) | undefined;
+    kind: string;
+    label: string;
+    name: string;
+    options: Array<CredentialOptionResponse>;
+    placeholder?: (string | null) | undefined;
+    required: boolean;
+    secret: boolean;
+    show_when?: (null | CredentialShowWhenResponse) | undefined;
+  };
+  export type CredentialUsageResponse = { has_node: boolean; label: string; usage: string };
+  export type CredentialKindResponse = {
+    category: string;
+    category_label: string;
+    connectable: boolean;
+    description: string;
+    executable: boolean;
+    fields: Array<CredentialFieldResponse>;
+    kind: string;
+    label: string;
+    origin_choices: Array<string>;
+    supported: boolean;
+    usages: Array<CredentialUsageResponse>;
+  };
+  export type CredentialStatusResponse = "valid" | "expired" | "not_connected";
   export type CredentialResponse = {
+    account?: (string | null) | undefined;
     created_at: string;
+    data: Record<string, unknown>;
+    description: string;
+    expires_at?: (string | null) | undefined;
     id: string;
     kind: string;
     name: string;
     organization_id: OrganizationId;
     origin: string;
+    secrets_set: Array<string>;
+    status: CredentialStatusResponse;
     updated_at: string;
+    used_by_workflows: number;
   };
   export type CredentialWithSecretResponse = CredentialResponse & { secret: unknown };
   export type CustomUnitId = string;
@@ -1628,6 +1673,8 @@ export namespace Schemas {
     weekly_contract_minutes: number;
   };
   export type SetPresenceRequest = { status: PresenceStatus };
+  export type StartOauthRequest = { redirect_uri: string; return_to: string };
+  export type StartOauthResponse = { authorization_url: string };
   export type StartRunRequest = Partial<{ trigger_payload: unknown }>;
   export type StartTimeEntryRequest = { task_id: TaskId };
   export type StartedRunResponse = { run_id: string };
@@ -1751,7 +1798,12 @@ export namespace Schemas {
     position: number;
     topic?: (string | null) | undefined;
   };
-  export type UpdateCredentialRequest = Partial<{ data: unknown; name: string | null }>;
+  export type UpdateCredentialRequest = Partial<{
+    data: Record<string, unknown> | null;
+    description: string | null;
+    expires_at: string | null;
+    name: string | null;
+  }>;
   export type UpdateCustomerContactRequest = {
     email?: (string | null) | undefined;
     first_name: string;
@@ -4531,6 +4583,34 @@ export namespace Endpoints {
       403: unknown;
     };
   };
+  export type get_ListCredentialKinds = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/credential-kinds";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          category: string;
+          category_label: string;
+          connectable: boolean;
+          description: string;
+          executable: boolean;
+          fields: Array<Schemas.CredentialFieldResponse>;
+          kind: string;
+          label: string;
+          origin_choices: Array<string>;
+          supported: boolean;
+          usages: Array<Schemas.CredentialUsageResponse>;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
   export type get_ListAutomationCredentials = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/automation/credentials";
@@ -4541,13 +4621,20 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          account?: (string | null) | undefined;
           created_at: string;
+          data: Record<string, unknown>;
+          description: string;
+          expires_at?: (string | null) | undefined;
           id: string;
           kind: string;
           name: string;
           organization_id: Schemas.OrganizationId;
           origin: string;
+          secrets_set: Array<string>;
+          status: Schemas.CredentialStatusResponse;
           updated_at: string;
+          used_by_workflows: number;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -4582,7 +4669,7 @@ export namespace Endpoints {
     parameters: {
       path: { organization_id: string; credential_id: string };
     };
-    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
   export type patch_UpdateAutomationCredential = {
     method: "PATCH";
@@ -4596,16 +4683,74 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          account?: (string | null) | undefined;
           created_at: string;
+          data: Record<string, unknown>;
+          description: string;
+          expires_at?: (string | null) | undefined;
           id: string;
           kind: string;
           name: string;
           organization_id: Schemas.OrganizationId;
           origin: string;
+          secrets_set: Array<string>;
+          status: Schemas.CredentialStatusResponse;
           updated_at: string;
+          used_by_workflows: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_DisconnectAutomationCredentialOauth = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/disconnect";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; credential_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          account?: (string | null) | undefined;
+          created_at: string;
+          data: Record<string, unknown>;
+          description: string;
+          expires_at?: (string | null) | undefined;
+          id: string;
+          kind: string;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          origin: string;
+          secrets_set: Array<string>;
+          status: Schemas.CredentialStatusResponse;
+          updated_at: string;
+          used_by_workflows: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_StartAutomationCredentialOauth = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/start";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; credential_id: string };
+
+      body: Schemas.StartOauthRequest;
+    };
+    responses: {
+      200: { data: { authorization_url: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
       400: unknown;
       401: unknown;
       403: unknown;
@@ -9364,6 +9509,15 @@ export namespace Endpoints {
       401: unknown;
     };
   };
+  export type get_CompleteAutomationCredentialOauth = {
+    method: "GET";
+    path: "/oauth/callback";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ state: string; code: string; error: string; oauth_token: string; oauth_verifier: string }>;
+    };
+    responses: { 303: unknown; 400: unknown; 429: unknown };
+  };
   export type post_ReceiveWebhook = {
     method: "POST";
     path: "/webhooks/{path}";
@@ -9499,6 +9653,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/collections": Endpoints.get_ListCollections;
     "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}": Endpoints.get_GetCollection;
     "/api/v1/organizations/{organization_id}/automation/connectors": Endpoints.get_ListConnectors;
+    "/api/v1/organizations/{organization_id}/automation/credential-kinds": Endpoints.get_ListCredentialKinds;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.get_ListAutomationCredentials;
     "/api/v1/organizations/{organization_id}/automation/events": Endpoints.get_ListAutomationEvents;
     "/api/v1/organizations/{organization_id}/automation/folders": Endpoints.get_ListWorkflowFolders;
@@ -9573,6 +9728,7 @@ export type EndpointByMethod = {
     "/api/v1/support/intake/tickets/{ticket_id}": Endpoints.get_GetIntakeTicket;
     "/api/v1/support/intake/tickets/{ticket_id}/attachments/{attachment_id}/url": Endpoints.get_GetIntakeAttachmentUrl;
     "/api/v1/users/@me/organizations": Endpoints.get_ListMyOrganizations;
+    "/oauth/callback": Endpoints.get_CompleteAutomationCredentialOauth;
   };
   post: {
     "/api/v1/chat/channels/{channel_id}/messages": Endpoints.post_CreateMessage;
@@ -9599,6 +9755,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
     "/api/v1/organizations/{organization_id}/automation/collections": Endpoints.post_ImportCollection;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.post_CreateAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/disconnect": Endpoints.post_DisconnectAutomationCredentialOauth;
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/start": Endpoints.post_StartAutomationCredentialOauth;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate": Endpoints.post_RotateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/expressions/evaluate": Endpoints.post_EvaluateExpression;
     "/api/v1/organizations/{organization_id}/automation/folders": Endpoints.post_CreateWorkflowFolder;

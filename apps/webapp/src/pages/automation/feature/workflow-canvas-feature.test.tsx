@@ -14,6 +14,11 @@ import type { Organization } from '#/hooks/use-organizations'
 import { WorkflowPageFeature } from '#/pages/automation/feature/workflow-page-feature'
 import { computeFallbackLayout } from '#/pages/automation/lib/layout'
 import {
+	BEARER_TOKEN,
+	credential as fixture,
+	HTTP_HEADER,
+} from '#/pages/automation/test/credential-fixtures'
+import {
 	dragNodeBy,
 	installFlowTestEnvironment,
 } from '#/pages/automation/test/flow-test-env'
@@ -57,6 +62,8 @@ const CONNECTORS_PATH =
 const CREDENTIALS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/credentials'
 const EVENTS_PATH = '/api/v1/organizations/{organization_id}/automation/events'
+const CREDENTIAL_KINDS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/credential-kinds'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
 const RUN_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}'
@@ -109,15 +116,7 @@ function credential(
 	kind: string,
 	name: string,
 ): Schemas.CredentialResponse {
-	return {
-		id,
-		kind,
-		name,
-		origin: 'supplied',
-		organization_id: 'org-1',
-		created_at: '2026-01-01T00:00:00Z',
-		updated_at: '2026-01-01T00:00:00Z',
-	}
+	return fixture({ id, kind, name })
 }
 
 function event(
@@ -258,6 +257,10 @@ function renderPage(
 		pagination: null,
 	}))
 	api.mockGet(CREDENTIALS_PATH, () => ({
+		data: [],
+		pagination: null,
+	}))
+	api.mockGet(CREDENTIAL_KINDS_PATH, () => ({
 		data: [],
 		pagination: null,
 	}))
@@ -753,11 +756,13 @@ describe('WorkflowPageFeature (editor) — the credential picker', () => {
 	it('offers the credentials fetched for real, filtered by the connector auth', async () => {
 		const user = userEvent.setup()
 		renderFeature((api) => {
+			api.mockGet(CREDENTIAL_KINDS_PATH, () => ({
+				data: [BEARER_TOKEN],
+				pagination: null,
+			}))
 			api.mockGet(CONNECTORS_PATH, () => ({
 				data: {
-					auth_schemes: [
-						{ kind: 'bearer_token', label: 'Bearer token', fields: [] },
-					],
+					auth_schemes: [],
 					connectors: [
 						descriptor(SIMPLE_KIND, 'Étape simple', {
 							Exactly: 'bearer_token',
@@ -794,25 +799,13 @@ describe('WorkflowPageFeature (editor) — inline credential creation', () => {
 	it('creates the credential through the real mutation and saves the connector pointing at it', async () => {
 		const user = userEvent.setup()
 		const api = renderFeature((fakeApi) => {
+			fakeApi.mockGet(CREDENTIAL_KINDS_PATH, () => ({
+				data: [BEARER_TOKEN],
+				pagination: null,
+			}))
 			fakeApi.mockGet(CONNECTORS_PATH, () => ({
 				data: {
-					auth_schemes: [
-						{
-							kind: 'bearer_token',
-							label: 'Bearer token',
-							fields: [
-								{
-									name: 'token',
-									label: 'Token',
-									kind: 'Text',
-									required: true,
-									secret: true,
-									expression: false,
-									visible_when: null,
-								},
-							],
-						},
-					],
+					auth_schemes: [],
 					connectors: [
 						descriptor(SIMPLE_KIND, 'Étape simple', {
 							Exactly: 'bearer_token',
@@ -2606,6 +2599,10 @@ describe('WorkflowPageFeature (editor) — the scheduler and the webhook', () =>
 			}))
 			fakeApi.mockGet(CREDENTIALS_PATH, () => ({
 				data: credentials,
+				pagination: null,
+			}))
+			fakeApi.mockGet(CREDENTIAL_KINDS_PATH, () => ({
+				data: [HTTP_HEADER],
 				pagination: null,
 			}))
 			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, (params) => ({

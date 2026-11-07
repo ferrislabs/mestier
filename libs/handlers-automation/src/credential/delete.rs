@@ -17,11 +17,10 @@ pub struct EmptyResponse;
         ("credential_id" = uuid::Uuid, Path, description = "Credential identifier"),
     ),
     responses(
-        (status = 204, description = "Credential deleted"),
+        (status = 204, description = "Credential deleted, even when workflows use it: their nodes then fail at run naming it"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Credential not found"),
-        (status = 409, description = "Still referenced by a workflow"),
     ),
     security(("bearer_auth" = []))
 )]

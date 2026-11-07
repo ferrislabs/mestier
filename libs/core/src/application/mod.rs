@@ -9,6 +9,8 @@ use sqlx::postgres::PgPoolOptions;
 
 use crate::domain::file_storage::service::FileStorageService;
 use crate::domain::role::Permissions;
+use crate::infrastructure::automation::connectors::http_client::build_guarded_client;
+use crate::infrastructure::automation::oauth::OauthCoordinator;
 use crate::infrastructure::automation::retention::{RetentionWorkerSchedule, run_retention_worker};
 use crate::infrastructure::automation::webhook::{
     address_policy::PrivateNetworkAccess, secret::SecretCipher,
@@ -148,6 +150,9 @@ pub struct MestierUseCase {
     /// instead of silently storing plaintext — the same choice the
     /// automation worker makes at startup.
     pub(crate) cipher: Option<Arc<SecretCipher>>,
+    pub(crate) oauth_http: reqwest::Client,
+    pub(crate) oauth_access: Option<PrivateNetworkAccess>,
+    pub(crate) oauth: Arc<OauthCoordinator>,
 }
 
 impl MestierUseCase {
@@ -158,6 +163,10 @@ impl MestierUseCase {
             hub,
             actor: Actor::System,
             cipher: None,
+            oauth_http: build_guarded_client(PrivateNetworkAccess::Denied)
+                .expect("building the guarded HTTP client failed"),
+            oauth_access: Some(PrivateNetworkAccess::Denied),
+            oauth: Arc::default(),
         }
     }
 
@@ -203,6 +212,20 @@ impl MestierUseCase {
     /// mutating one from another module.
     pub fn with_cipher(mut self, cipher: Option<Arc<SecretCipher>>) -> Self {
         self.cipher = cipher;
+        self
+    }
+
+    pub fn with_private_network(mut self, access: PrivateNetworkAccess) -> Self {
+        self.oauth_http =
+            build_guarded_client(access).expect("building the guarded HTTP client failed");
+        self.oauth_access = Some(access);
+        self
+    }
+
+    #[cfg(any(test, feature = "mock"))]
+    pub fn with_oauth_http_client(mut self, client: reqwest::Client) -> Self {
+        self.oauth_http = client;
+        self.oauth_access = None;
         self
     }
 }
@@ -275,8 +298,14 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
         Some(encoded) => Some(Arc::new(SecretCipher::from_base64(encoded)?)),
         None => None,
     };
-    let usecase =
-        MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone()).with_cipher(cipher);
+    let private_network = if config.automation.allow_private_network {
+        PrivateNetworkAccess::Allowed
+    } else {
+        PrivateNetworkAccess::Denied
+    };
+    let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone())
+        .with_cipher(cipher)
+        .with_private_network(private_network);
 
     spawn_automation_worker(usecase.clone(), &config.automation);
 
