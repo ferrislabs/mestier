@@ -165,20 +165,45 @@ where
             }
         }
 
-        if cmd.content.trim().is_empty() {
+        self.save_edit(existing, cmd.content, cmd.components).await
+    }
+
+    pub async fn edit_system_message(
+        &mut self,
+        id: MessageId,
+        content: String,
+    ) -> Result<Message, CoreError> {
+        let existing = self.get_message(id).await?;
+
+        if existing.author_type != AuthorType::System {
+            return Err(CoreError::Conflict(
+                "only a system message may be edited by an automation".to_owned(),
+            ));
+        }
+
+        self.save_edit(existing, content, None).await
+    }
+
+    async fn save_edit(
+        &mut self,
+        existing: Message,
+        content: String,
+        components: Option<Vec<components::Component>>,
+    ) -> Result<Message, CoreError> {
+        if content.trim().is_empty() {
             return Err(CoreError::Conflict(
                 "message content cannot be blank".to_owned(),
             ));
         }
 
-        if let Some(ref comps) = cmd.components {
+        if let Some(ref comps) = components {
             components::validate(comps)?;
         }
 
-        let parsed = parse_mentions(&cmd.content);
+        let parsed = parse_mentions(&content);
         let updated = Message {
-            content: cmd.content,
-            components: cmd.components,
+            content,
+            components,
             mention_user_ids: parsed.user_ids,
             mention_role_ids: parsed.role_ids,
             mention_channel_ids: parsed.channel_ids,
@@ -480,6 +505,87 @@ mod tests {
                 components: None,
             })
             .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn edit_system_message_rejects_a_user_message() {
+        let org = OrganizationId(Uuid::new_v4());
+        let channel_id = ChannelId(Uuid::new_v4());
+        let id = MessageId(Uuid::new_v4());
+
+        let mut repo = MockMessageRepository::new();
+        repo.expect_find_by_id().returning(move |_| {
+            Box::pin(async move {
+                Ok(Some(make_message(
+                    id,
+                    org,
+                    channel_id,
+                    Some(UserId(Uuid::new_v4())),
+                )))
+            })
+        });
+        repo.expect_update().times(0);
+
+        let mut svc = MessageService::new(repo, MockEventPublisher::new());
+        let result = svc.edit_system_message(id, "edited".to_owned()).await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn edit_system_message_rewrites_content_and_republishes() {
+        let org = OrganizationId(Uuid::new_v4());
+        let channel_id = ChannelId(Uuid::new_v4());
+        let id = MessageId(Uuid::new_v4());
+
+        let mut repo = MockMessageRepository::new();
+        repo.expect_find_by_id().returning(move |_| {
+            Box::pin(async move {
+                let mut message = make_message(id, org, channel_id, None);
+                message.author_type = AuthorType::System;
+                Ok(Some(message))
+            })
+        });
+        repo.expect_update().times(1).returning(|m| {
+            let m = m.clone();
+            Box::pin(async move { Ok(m) })
+        });
+        let mut events = MockEventPublisher::new();
+        events
+            .expect_publish()
+            .withf(|e| matches!(e, DomainEvent::MessageUpdated(_)))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(()) }));
+
+        let mut svc = MessageService::new(repo, events);
+        let result = svc
+            .edit_system_message(id, "edited".to_owned())
+            .await
+            .unwrap();
+
+        assert_eq!(result.content, "edited");
+        assert!(result.edited_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn edit_system_message_rejects_blank_content() {
+        let org = OrganizationId(Uuid::new_v4());
+        let channel_id = ChannelId(Uuid::new_v4());
+        let id = MessageId(Uuid::new_v4());
+
+        let mut repo = MockMessageRepository::new();
+        repo.expect_find_by_id().returning(move |_| {
+            Box::pin(async move {
+                let mut message = make_message(id, org, channel_id, None);
+                message.author_type = AuthorType::System;
+                Ok(Some(message))
+            })
+        });
+
+        let mut svc = MessageService::new(repo, MockEventPublisher::new());
+        let result = svc.edit_system_message(id, "  ".to_owned()).await;
 
         assert!(matches!(result, Err(CoreError::Conflict(_))));
     }

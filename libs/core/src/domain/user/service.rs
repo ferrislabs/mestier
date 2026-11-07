@@ -5,6 +5,7 @@ use crate::{
     User, UserId,
     domain::user::commands::{CreateUserCommand, UpsertUserBySubCommand},
     domain::user::ports::UserRepository,
+    domain::user::system::{is_reserved_email, is_reserved_sub, is_system_user, refuse_reserved},
 };
 
 pub struct UserService<U>
@@ -24,6 +25,7 @@ where
 
     #[tracing::instrument(skip(self), fields(user.email = %command.email, user.username = %command.username), err)]
     pub async fn create_user(&mut self, command: CreateUserCommand) -> Result<User, CoreError> {
+        refuse_reserved(&command.sub, &command.email)?;
         let now = Utc::now();
         let user = User {
             id: UserId(generate_uuid_v7()),
@@ -40,10 +42,16 @@ where
     }
 
     pub async fn find_by_email(&mut self, email: &str) -> Result<Option<User>, CoreError> {
+        if is_reserved_email(email) {
+            return Ok(None);
+        }
         self.repo.find_by_email(email).await
     }
 
     pub async fn find_by_sub(&mut self, sub: &str) -> Result<Option<User>, CoreError> {
+        if is_reserved_sub(sub) {
+            return Ok(None);
+        }
         self.repo.find_by_sub(sub).await
     }
 
@@ -66,16 +74,22 @@ where
         &mut self,
         command: UpsertUserBySubCommand,
     ) -> Result<User, CoreError> {
+        refuse_reserved(&command.sub, &command.email)?;
         self.repo.upsert_by_sub(command).await
     }
 
     #[tracing::instrument(skip(self), fields(user.sub = %sub), err)]
     pub async fn reconcile_deletion(&mut self, sub: &str) -> Result<(), CoreError> {
+        refuse_reserved(sub, "")?;
         self.repo.soft_delete_by_sub(sub).await
     }
 
     pub async fn list(&mut self) -> Result<Vec<User>, CoreError> {
-        self.repo.list_active().await
+        let users = self.repo.list_active().await?;
+        Ok(users
+            .into_iter()
+            .filter(|user| !is_system_user(user))
+            .collect())
     }
 }
 
@@ -116,6 +130,69 @@ mod tests {
             username: "alice".into(),
             name: Some("Alice".into()),
         }
+    }
+
+    fn reserved_cmd() -> CreateUserCommand {
+        CreateUserCommand {
+            sub: crate::domain::user::system::SYSTEM_USER_SUB.into(),
+            ..cmd()
+        }
+    }
+
+    #[tokio::test]
+    async fn the_reserved_identity_can_neither_be_created_nor_resolved_nor_reconciled() {
+        let mut service = UserService::new(MockUserRepository::new());
+        let by_email = CreateUserCommand {
+            email: crate::domain::user::system::SYSTEM_USER_EMAIL.into(),
+            ..cmd()
+        };
+
+        assert!(service.create_user(reserved_cmd()).await.is_err());
+        assert!(service.create_user(by_email).await.is_err());
+        assert!(
+            service
+                .find_by_sub(crate::domain::user::system::SYSTEM_USER_SUB)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            service
+                .find_by_email(crate::domain::user::system::SYSTEM_USER_EMAIL)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            service
+                .reconcile_upsert(UpsertUserBySubCommand {
+                    sub: crate::domain::user::system::SYSTEM_USER_SUB.into(),
+                    ..upsert_cmd()
+                })
+                .await
+                .is_err()
+        );
+        assert!(
+            service
+                .reconcile_deletion(crate::domain::user::system::SYSTEM_USER_SUB)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn list_hides_the_system_user() {
+        let mut repo = MockUserRepository::new();
+        repo.expect_list_active().returning(|| {
+            let mut system = make_user();
+            system.sub = crate::domain::user::system::SYSTEM_USER_SUB.into();
+            Box::pin(async move { Ok(vec![make_user(), system]) })
+        });
+
+        let users = UserService::new(repo).list().await.unwrap();
+
+        assert_eq!(users.len(), 1);
+        assert_eq!(users[0].sub, "sub-1");
     }
 
     #[tokio::test]

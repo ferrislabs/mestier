@@ -173,6 +173,15 @@ impl MestierUseCase {
     /// The profile attached to a member, or `CoreError::NotFound` when there
     /// is none — a member without a contract is normal, not an error the
     /// caller should treat as a failure.
+    #[transactional(employee_cost_basis)]
+    pub async fn get_employee_cost_basis(
+        &self,
+        id: EmployeeCostBasisId,
+    ) -> Result<EmployeeCostBasis, CoreError> {
+        let mut service = EmployeeCostBasisService::new(employee_cost_basis_repository);
+        service.get_cost_basis(id).await
+    }
+
     #[transactional(employee)]
     pub async fn get_employee_by_member(&self, member_id: MemberId) -> Result<Employee, CoreError> {
         let mut service = EmployeeService::new(employee_repository);

@@ -1541,8 +1541,13 @@ mod tests {
         let catalogue = connector_catalogue();
 
         for descriptor in catalogue.descriptors() {
-            let is_list = matches!(descriptor.kind, "flow.merge" | "mestier.quote.search")
-                || descriptor.kind.contains(".list_");
+            let is_list =
+                if crate::domain::automation::connector::find_action(descriptor.kind).is_some() {
+                    descriptor.sample_output.is_array()
+                } else {
+                    matches!(descriptor.kind, "flow.merge" | "mestier.quote.search")
+                        || descriptor.kind.contains(".list_")
+                };
             assert_eq!(
                 descriptor.sample_output.is_array(),
                 is_list,

@@ -31,6 +31,10 @@ impl ActionContext<'_> {
         authz::Subject::system()
     }
 
+    pub(super) async fn system_user_id(&self) -> Result<common::UserId, String> {
+        self.usecase.system_user_id().await.map_err(failure)
+    }
+
     pub(super) fn uuid(&self, name: &str) -> Result<Uuid, String> {
         fields::uuid(self.config, name)
     }

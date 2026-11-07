@@ -55,6 +55,27 @@ where
         })
 }
 
+async fn require_manage<M, R>(
+    authorizer: &MestierAuthorizer,
+    actor: Subject,
+    organization_id: OrganizationId,
+    members: &mut M,
+    roles: &mut R,
+) -> Result<(), CoreError>
+where
+    M: MemberRepository,
+    R: RoleRepository,
+{
+    let actor = policy::enrich_for_organization(actor, organization_id, members, roles).await?;
+    policy::require(
+        authorizer,
+        &actor,
+        "planning.manage",
+        Resource::new("organization", organization_id.0.to_string()),
+    )
+    .await
+}
+
 async fn today_in(
     organizations: &mut impl OrganizationRepository,
     organization_id: OrganizationId,
@@ -245,11 +266,10 @@ impl MestierUseCase {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
 
-        authorize(
+        require_manage(
             authz,
             actor,
             organization_id,
-            true,
             &mut member_repository,
             &mut role_repository,
         )
