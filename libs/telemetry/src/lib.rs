@@ -1,15 +1,20 @@
 use args::{log::LogArgs, observability::ObservabilityArgs};
-use opentelemetry::trace::TracerProvider;
+use opentelemetry::{
+    global,
+    propagation::{Extractor, Injector},
+    trace::TracerProvider,
+};
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::{LogExporter, MetricExporter, Protocol, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
     Resource,
     logs::SdkLoggerProvider,
     metrics::SdkMeterProvider,
+    propagation::TraceContextPropagator,
     trace::{RandomIdGenerator, SdkTracerProvider},
 };
-use tracing::info;
-use tracing_opentelemetry::MetricsLayer;
+use tracing::{Span, info, info_span};
+use tracing_opentelemetry::{MetricsLayer, OpenTelemetrySpanExt};
 use tracing_subscriber::{
     EnvFilter, Layer, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt,
 };
@@ -121,6 +126,8 @@ pub fn init(
         .with(filter)
         .init();
 
+    global::set_text_map_propagator(TraceContextPropagator::new());
+
     // The bridge only borrows the provider; dropping it would stop the log export.
     std::mem::forget(logger_provider);
 
@@ -133,4 +140,103 @@ pub fn init(
         "observability enabled: exporting traces, metrics and logs via OTLP/gRPC"
     );
     Ok(())
+}
+
+struct HeaderReader<'a>(&'a http::HeaderMap);
+
+impl Extractor for HeaderReader<'_> {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).and_then(|value| value.to_str().ok())
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.0.keys().map(http::HeaderName::as_str).collect()
+    }
+}
+
+struct HeaderWriter<'a>(&'a mut http::HeaderMap);
+
+impl Injector for HeaderWriter<'_> {
+    fn set(&mut self, key: &str, value: String) {
+        if let (Ok(name), Ok(value)) = (
+            http::HeaderName::from_bytes(key.as_bytes()),
+            http::HeaderValue::from_str(&value),
+        ) {
+            self.0.insert(name, value);
+        }
+    }
+}
+
+/// Makes `span` a child of the trace carried by the request's `traceparent`
+/// header, if any. A no-op while observability is off.
+pub fn set_remote_parent(span: &Span, headers: &http::HeaderMap) {
+    let parent =
+        global::get_text_map_propagator(|propagator| propagator.extract(&HeaderReader(headers)));
+    let _ = span.set_parent(parent);
+}
+
+/// Writes the current span's `traceparent` into outgoing request headers.
+pub fn inject_current_context(headers: &mut http::HeaderMap) {
+    let context = Span::current().context();
+    global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&context, &mut HeaderWriter(headers));
+    });
+}
+
+/// The span of an incoming HTTP request, for `TraceLayer::make_span_with`.
+pub fn server_span<B>(request: &http::Request<B>) -> Span {
+    let method = request.method();
+    let path = request.uri().path();
+    let span = info_span!(
+        "http_request",
+        otel.name = %format!("{method} {path}"),
+        otel.kind = "server",
+        http.request.method = %method,
+        url.path = %path,
+        http.response.status_code = tracing::field::Empty,
+    );
+    set_remote_parent(&span, request.headers());
+    span
+}
+
+/// Records the status on the span of `server_span`, for `TraceLayer::on_response`.
+pub fn record_status<B>(response: &http::Response<B>, _latency: std::time::Duration, span: &Span) {
+    span.record("http.response.status_code", response.status().as_u16());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_traceparent_header_survives_extract_and_inject() {
+        global::set_text_map_propagator(TraceContextPropagator::new());
+        let mut incoming = http::HeaderMap::new();
+        incoming.insert(
+            "traceparent",
+            "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+                .parse()
+                .unwrap(),
+        );
+        let context = global::get_text_map_propagator(|p| p.extract(&HeaderReader(&incoming)));
+
+        let mut outgoing = http::HeaderMap::new();
+        global::get_text_map_propagator(|p| {
+            p.inject_context(&context, &mut HeaderWriter(&mut outgoing))
+        });
+
+        let sent = outgoing.get("traceparent").unwrap().to_str().unwrap();
+        assert!(
+            sent.starts_with("00-0af7651916cd43dd8448eb211c80319c-"),
+            "{sent}"
+        );
+    }
+
+    #[test]
+    fn nothing_is_injected_without_an_active_span() {
+        global::set_text_map_propagator(TraceContextPropagator::new());
+        let mut headers = http::HeaderMap::new();
+        inject_current_context(&mut headers);
+        assert!(headers.is_empty());
+    }
 }

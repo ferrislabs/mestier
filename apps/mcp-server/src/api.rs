@@ -2,6 +2,7 @@ use std::fmt;
 
 use reqwest::StatusCode;
 use serde_json::Value;
+use tracing::Instrument;
 
 pub const MAX_PDF_BYTES: usize = 10 * 1024 * 1024;
 
@@ -102,10 +103,7 @@ impl ApiClient {
         limit: usize,
     ) -> Result<Option<Vec<u8>>, Fault> {
         let response = self
-            .http
-            .get(self.url(path))
-            .bearer_auth(token)
-            .send()
+            .send(self.http.get(self.url(path)), token)
             .await
             .map_err(unreachable_api)?;
         let response = check(response).await?;
@@ -126,12 +124,23 @@ impl ApiClient {
         Ok(Some(bytes))
     }
 
+    async fn send(
+        &self,
+        request: reqwest::RequestBuilder,
+        token: &str,
+    ) -> reqwest::Result<reqwest::Response> {
+        let span = tracing::info_span!("mestier_api.request", otel.kind = "client");
+        async {
+            let mut headers = reqwest::header::HeaderMap::new();
+            telemetry::inject_current_context(&mut headers);
+            request.headers(headers).bearer_auth(token).send().await
+        }
+        .instrument(span)
+        .await
+    }
+
     async fn json(&self, request: reqwest::RequestBuilder, token: &str) -> Result<Value, Fault> {
-        let response = request
-            .bearer_auth(token)
-            .send()
-            .await
-            .map_err(unreachable_api)?;
+        let response = self.send(request, token).await.map_err(unreachable_api)?;
         let response = check(response).await?;
         response
             .json()

@@ -121,6 +121,7 @@ struct Recorded {
     authorization: Option<String>,
     client: Option<String>,
     session: Option<String>,
+    traceparent: Option<String>,
 }
 
 async fn upstream(
@@ -143,6 +144,7 @@ async fn upstream(
         authorization: header("authorization"),
         client: header("x-mestier-mcp-client"),
         session: header("mcp-session-id"),
+        traceparent: header("traceparent"),
     });
     if method == Method::GET {
         let events = stream::unfold((state, 0u8), |(state, step)| async move {
@@ -277,6 +279,19 @@ impl Harness {
             request = request.bearer_auth(token);
         }
         request.send().await.unwrap()
+    }
+
+    async fn rpc_with_traceparent(&self, token: &str, traceparent: &str, body: Value) {
+        self.http
+            .post(format!("{}/mcp", self.gateway))
+            .header("content-type", "application/json")
+            .header("accept", "application/json, text/event-stream")
+            .header("traceparent", traceparent)
+            .bearer_auth(token)
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
     }
 
     fn set_pdp(&self, mode: PdpMode) {
@@ -665,4 +680,40 @@ async fn a_body_over_eight_mebibytes_is_refused_before_the_server() {
     let response = h.rpc(Some(&token), file_call(9 * 1024 * 1024)).await;
     assert_eq!(response.status(), 413);
     assert!(h.upstream_calls().is_empty());
+}
+
+/// The exporter connects lazily, so a collector that is not there only costs
+/// a background warning; the propagation is what is under test.
+#[tokio::test]
+async fn the_trace_of_a_call_continues_to_the_server() {
+    let endpoint = Some("http://127.0.0.1:1".to_owned());
+    telemetry::init(
+        &args::log::LogArgs::default(),
+        "mcp-gateway-test",
+        &args::observability::ObservabilityArgs {
+            active_observability: true,
+            otlp_endpoint: endpoint.clone(),
+            metrics_endpoint: endpoint,
+        },
+    )
+    .unwrap();
+    let h = Harness::start().await;
+    let token = h.token(json!({}));
+    let trace_id = "0af7651916cd43dd8448eb211c80319c";
+
+    h.rpc_with_traceparent(
+        &token,
+        &format!("00-{trace_id}-b7ad6b7169203331-01"),
+        call("get_doe", Some("acme")),
+    )
+    .await;
+
+    let calls = h.upstream_calls();
+    assert_eq!(calls.len(), 1);
+    let sent = calls[0].traceparent.as_deref().unwrap_or_default();
+    assert!(sent.starts_with(&format!("00-{trace_id}-")), "{sent}");
+    assert!(
+        !sent.contains("b7ad6b7169203331"),
+        "the span must be a new one: {sent}"
+    );
 }

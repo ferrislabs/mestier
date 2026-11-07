@@ -9,6 +9,7 @@ use axum::{
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::never::NeverSessionManager,
 };
+use tower_http::trace::TraceLayer;
 
 use crate::{
     api::ApiClient,
@@ -41,6 +42,11 @@ pub fn router_with(api: ApiClient, files: FilePolicy) -> Router {
     Router::new()
         .nest_service("/mcp", service)
         .layer(middleware::from_fn(require_bearer))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(telemetry::server_span)
+                .on_response(telemetry::record_status),
+        )
         .route("/healthz", get(|| async { StatusCode::OK }))
 }
 

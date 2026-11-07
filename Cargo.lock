@@ -4633,6 +4633,7 @@ dependencies = [
  "telemetry",
  "thiserror 2.0.18",
  "tokio",
+ "tower-http",
  "tracing",
  "url",
 ]
@@ -4653,6 +4654,7 @@ dependencies = [
  "serde_json",
  "telemetry",
  "tokio",
+ "tower-http",
  "tracing",
  "uuid",
 ]
@@ -7544,6 +7546,7 @@ name = "telemetry"
 version = "0.1.0"
 dependencies = [
  "args",
+ "http 1.4.0",
  "opentelemetry",
  "opentelemetry-appender-tracing",
  "opentelemetry-otlp",

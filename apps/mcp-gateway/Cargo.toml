@@ -26,6 +26,7 @@ reqwest = { workspace = true, features = ["stream"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tower-http = { workspace = true }
 tokio = { workspace = true, features = ["net", "time", "sync", "signal"] }
 tracing = { workspace = true }
 url = { workspace = true }

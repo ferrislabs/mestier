@@ -16,6 +16,7 @@ path = "src/main.rs"
 args = { workspace = true }
 mcp-tools = { workspace = true }
 telemetry = { workspace = true }
+tower-http = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 serde = { workspace = true }
@@ -30,3 +31,5 @@ rmcp = { version = "=3.5.1", features = ["server", "macros", "transport-streamab
 
 [dev-dependencies]
 reqwest = { workspace = true }
+args = { workspace = true }
+telemetry = { workspace = true }

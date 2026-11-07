@@ -11,7 +11,8 @@ use axum::{
 use mcp_tools::{CLIENT_HEADER, SCOPES_SUPPORTED};
 use reqwest::Client;
 use serde_json::json;
-use tracing::{info, warn};
+use tower_http::trace::TraceLayer;
+use tracing::{Instrument, info, info_span, warn};
 use url::Url;
 
 use crate::{
@@ -90,6 +91,11 @@ where
         )
         .route("/mcp", axum::routing::any(mcp::<V, P, X>))
         .with_state(state)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(telemetry::server_span)
+                .on_response(telemetry::record_status),
+        )
 }
 
 async fn metadata<V, P, X>(State(state): State<AppState<V, P, X>>) -> Response {
@@ -145,7 +151,13 @@ where
     let Some(token) = bearer(&parts.headers) else {
         return unauthorized(&metadata_url, false);
     };
-    let principal = match state.0.verifier.verify(token).await {
+    let principal = match state
+        .0
+        .verifier
+        .verify(token)
+        .instrument(info_span!("token.verify"))
+        .await
+    {
         Ok(principal) => principal,
         Err(VerifyError::Invalid) => return unauthorized(&metadata_url, true),
         Err(VerifyError::Unavailable) => {
@@ -174,6 +186,7 @@ where
             .0
             .pdp
             .decide(&principal, call.tool, call.organization.as_deref())
+            .instrument(info_span!("pdp.decide", tool = %call.tool))
             .await;
         let decision = match allowed {
             Ok(true) => "allow",
@@ -192,7 +205,13 @@ where
         }
     }
 
-    let delegated = match state.0.exchanger.exchange(&principal, token).await {
+    let delegated = match state
+        .0
+        .exchanger
+        .exchange(&principal, token)
+        .instrument(info_span!("token.exchange"))
+        .await
+    {
         Ok(delegated) => delegated,
         Err(_) => return generic(StatusCode::BAD_GATEWAY, "upstream unavailable"),
     };
@@ -205,6 +224,7 @@ where
         &principal,
         &delegated.access_token,
     )
+    .instrument(info_span!("upstream.forward", otel.kind = "client"))
     .await
     {
         Ok(response) => {
@@ -238,6 +258,7 @@ async fn forward<V, P, X>(
     let mut bearer = HeaderValue::from_str(&format!("Bearer {delegated}")).map_err(|_| ())?;
     bearer.set_sensitive(true);
     outgoing.insert(header::AUTHORIZATION, bearer);
+    telemetry::inject_current_context(&mut outgoing);
     outgoing.insert(
         HeaderName::from_static(CLIENT_HEADER),
         HeaderValue::from_str(&principal.client_id).map_err(|_| ())?,
