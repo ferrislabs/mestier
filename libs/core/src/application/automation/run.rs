@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -15,10 +15,10 @@ use crate::{
         expression::ExpressionContext,
         ports::{AutomationSettingsRepository, RunRepository, WorkflowRepository},
         run::{
-            ConnectorInput, ConnectorOutcome, DueRun, LoopStackEntry, Next, Run, RunOverview,
-            RunSettlement, RunStatus, RunStep, StepStatus, connectors_by_id, descendants_via,
-            disabled_outcome, format_iteration_path, next_after, pass_through_output,
-            resolve_config, resolve_config_nested, roots,
+            ConnectorInput, ConnectorOutcome, DueRun, LoopStackEntry, MERGE_KIND, Next, Run,
+            RunOverview, RunSettlement, RunStatus, RunStep, StepStatus, connectors_by_id,
+            descendants_via, disabled_outcome, format_iteration_path, merge_blockers, merge_inputs,
+            next_after, pass_through_output, resolve_config, resolve_config_nested, roots,
         },
         settings::with_jitter,
         workflow::{Branch, Graph, PlacedConnector},
@@ -87,6 +87,9 @@ impl Frame {
 /// What one slice of one run did, before it is settled.
 enum SliceResult {
     Completed,
+    Parked {
+        resume_at: DateTime<Utc>,
+    },
     BudgetExhausted,
     StepFailed {
         error: String,
@@ -106,6 +109,53 @@ fn succeeded_output_in_scope(
     (step.status == StepStatus::Succeeded).then(|| step.output.clone().unwrap_or(Value::Null))
 }
 
+enum MergeGate {
+    Ready,
+    Parked,
+    Deferred,
+}
+
+fn merge_gate(
+    graph: &Graph,
+    index: &HashMap<(String, String), RunStep>,
+    frame: &Frame,
+) -> MergeGate {
+    let scope_paths = frame.scope_paths();
+    let mut gate = MergeGate::Ready;
+    for blocker in merge_blockers(graph, &frame.connector_id) {
+        let step = scope_paths
+            .iter()
+            .find_map(|path| index.get(&(blocker.to_owned(), path.clone())));
+        match step.map(|step| step.status) {
+            Some(StepStatus::Waiting) => return MergeGate::Parked,
+            Some(status) if status.is_settled() => {}
+            _ => gate = MergeGate::Deferred,
+        }
+    }
+    gate
+}
+
+fn release_deferred(
+    deferred: &mut Vec<Frame>,
+    index: &HashMap<(String, String), RunStep>,
+    forced: &mut HashSet<(String, String)>,
+) -> Option<Frame> {
+    while !deferred.is_empty() {
+        let frame = deferred.remove(0);
+        let key = (frame.connector_id.clone(), frame.iteration_path());
+        if index.get(&key).is_some_and(|step| step.status.is_settled()) {
+            continue;
+        }
+        forced.insert(key);
+        return Some(frame);
+    }
+    None
+}
+
+fn earliest(current: Option<DateTime<Utc>>, candidate: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    Some(current.map_or(candidate, |current| current.min(candidate)))
+}
+
 fn pass_through_step(
     run_id: Uuid,
     connector_id: &str,
@@ -123,6 +173,7 @@ fn pass_through_step(
         input: None,
         output: Some(output.clone()),
         error: None,
+        resume_at: None,
         started_at: Some(now),
         finished_at: Some(now),
         created_at: now,
@@ -418,7 +469,9 @@ impl MestierUseCase {
         for due in &claimed {
             match self.process_run(due, connectors, &schedule).await {
                 Ok(SliceResult::Completed) => outcome.succeeded += 1,
-                Ok(SliceResult::BudgetExhausted) => outcome.rescheduled += 1,
+                Ok(SliceResult::BudgetExhausted | SliceResult::Parked { .. }) => {
+                    outcome.rescheduled += 1
+                }
                 Ok(SliceResult::StepFailed { dead: true, .. }) => outcome.failed += 1,
                 Ok(SliceResult::StepFailed { dead: false, .. }) => outcome.rescheduled += 1,
                 Err(error) => {
@@ -469,13 +522,27 @@ impl MestierUseCase {
 
         let start = Instant::now();
         let mut steps_executed = 0usize;
+        let mut parked_until: Option<DateTime<Utc>> = None;
+        let mut deferred: Vec<Frame> = Vec::new();
+        let mut forced: HashSet<(String, String)> = HashSet::new();
         // Set the moment the walk must stop early; `None` once it drains the
         // whole stack means the run is done. Settling happens once, after
         // the loop, so every exit path — including the two `break`s below —
         // goes through the same place instead of each carrying its own call.
         let mut early_result: Option<SliceResult> = None;
 
-        while let Some(frame) = stack.pop() {
+        loop {
+            let frame = match stack.pop() {
+                Some(frame) => frame,
+                None => match parked_until
+                    .is_none()
+                    .then(|| release_deferred(&mut deferred, &index, &mut forced))
+                    .flatten()
+                {
+                    Some(frame) => frame,
+                    None => break,
+                },
+            };
             let iteration_path = frame.iteration_path();
             let key = (frame.connector_id.clone(), iteration_path.clone());
 
@@ -521,10 +588,22 @@ impl MestierUseCase {
                         });
                         break;
                     }
-                    StepStatus::Pending | StepStatus::InFlight | StepStatus::Failed => {
+                    StepStatus::Pending
+                    | StepStatus::InFlight
+                    | StepStatus::Failed
+                    | StepStatus::Waiting => {
                         unreachable!("is_settled() already excludes these statuses")
                     }
                 }
+            }
+
+            if let Some(existing) = index.get(&key)
+                && existing.status == StepStatus::Waiting
+                && let Some(resume_at) = existing.resume_at
+                && resume_at > Utc::now()
+            {
+                parked_until = earliest(parked_until, resume_at);
+                continue;
             }
 
             if steps_executed >= schedule.max_steps_per_slice
@@ -573,6 +652,41 @@ impl MestierUseCase {
                 continue;
             }
 
+            if let Some(existing) = index.get(&key).cloned()
+                && existing.status == StepStatus::Waiting
+            {
+                let output = existing.output.clone().unwrap_or(Value::Null);
+                let resumed = self
+                    .write_step(&RunStep {
+                        status: StepStatus::Succeeded,
+                        resume_at: None,
+                        finished_at: Some(Utc::now()),
+                        ..existing
+                    })
+                    .await?;
+                steps_executed += 1;
+                connector_outputs.insert(
+                    frame.connector_id.clone(),
+                    json!({ "output": output.clone() }),
+                );
+                index.insert(key, resumed);
+                let outcome = ConnectorOutcome::Produced(output);
+                self.advance(due.id, &graph, &frame, &outcome, &mut stack, &mut index)
+                    .await?;
+                continue;
+            }
+
+            if placed.kind == MERGE_KIND && !forced.contains(&key) {
+                match merge_gate(&graph, &index, &frame) {
+                    MergeGate::Ready => {}
+                    MergeGate::Parked => continue,
+                    MergeGate::Deferred => {
+                        deferred.push(frame);
+                        continue;
+                    }
+                }
+            }
+
             let loop_frame =
                 frame
                     .path
@@ -593,6 +707,19 @@ impl MestierUseCase {
             } else {
                 resolve_config(&placed.config, &ctx)
             };
+            let resolved = resolved.map(|mut config| {
+                if placed.kind == MERGE_KIND {
+                    let scope_paths = frame.scope_paths();
+                    let inputs = merge_inputs(
+                        &graph,
+                        &frame.connector_id,
+                        |source| succeeded_output_in_scope(&index, source, &scope_paths),
+                        due.trigger_payload.as_ref(),
+                    );
+                    config.insert("inputs".to_owned(), Value::Array(inputs));
+                }
+                config
+            });
 
             let in_flight = RunStep {
                 id: generate_uuid_v7(),
@@ -607,6 +734,7 @@ impl MestierUseCase {
                     .map(|config| Value::Object(config.clone())),
                 output: None,
                 error: None,
+                resume_at: None,
                 started_at: Some(now),
                 finished_at: None,
                 created_at: now,
@@ -667,12 +795,25 @@ impl MestierUseCase {
                     });
                     break;
                 }
+                ConnectorOutcome::Wait { resume_at, output } => {
+                    let parked = RunStep {
+                        status: StepStatus::Waiting,
+                        output: Some(output.clone()),
+                        resume_at: Some(*resume_at),
+                        ..written
+                    };
+                    let parked = self.write_step(&parked).await?;
+                    index.insert(key, parked);
+                    parked_until = earliest(parked_until, *resume_at);
+                }
                 _ => {
                     let output = match &outcome {
                         ConnectorOutcome::Produced(output) => output.clone(),
                         ConnectorOutcome::Branch { output, .. } => output.clone(),
                         ConnectorOutcome::Iterate { items } => json!({ "items": items }),
-                        ConnectorOutcome::Failed { .. } => unreachable!("handled above"),
+                        ConnectorOutcome::Failed { .. } | ConnectorOutcome::Wait { .. } => {
+                            unreachable!("handled above")
+                        }
                     };
                     let settled = RunStep {
                         status: StepStatus::Succeeded,
@@ -691,9 +832,15 @@ impl MestierUseCase {
             }
         }
 
-        let result = early_result.unwrap_or(SliceResult::Completed);
+        let result = early_result.unwrap_or(match parked_until {
+            Some(resume_at) => SliceResult::Parked { resume_at },
+            None => SliceResult::Completed,
+        });
         let settlement = match &result {
             SliceResult::Completed => RunSettlement::Succeeded,
+            SliceResult::Parked { resume_at } => RunSettlement::Parked {
+                resume_at: *resume_at,
+            },
             SliceResult::BudgetExhausted => RunSettlement::Rescheduled {
                 // Immediately due: a run that only ran out of budget, not
                 // out of luck, is picked back up on the very next pass.
@@ -752,6 +899,7 @@ impl MestierUseCase {
                             input: None,
                             output: None,
                             error: None,
+                            resume_at: None,
                             started_at: Some(now),
                             finished_at: Some(now),
                             created_at: now,
@@ -3135,6 +3283,517 @@ mod tests {
                 error.contains("10.255.255.1") && error.contains("private"),
                 "{error}"
             );
+        }
+    }
+
+    mod parked_runs {
+        use chrono::Duration as ChronoDuration;
+
+        use super::*;
+
+        fn wait(id: &str, duration: i64, unit: &str) -> PlacedConnector {
+            let mut config = serde_json::Map::new();
+            config.insert("duration".to_string(), json!(duration));
+            config.insert("unit".to_string(), json!(unit));
+            PlacedConnector {
+                id: id.to_string(),
+                kind: "flow.wait".to_string(),
+                version: 1,
+                credential_id: None,
+                config,
+                name: None,
+                description: None,
+                disabled: false,
+                operation: None,
+            }
+        }
+
+        fn merge(id: &str, mode: &str, field: Option<&str>) -> PlacedConnector {
+            let mut config = serde_json::Map::new();
+            config.insert("mode".to_string(), json!(mode));
+            if let Some(field) = field {
+                config.insert("field".to_string(), json!(field));
+            }
+            PlacedConnector {
+                id: id.to_string(),
+                kind: "flow.merge".to_string(),
+                version: 1,
+                credential_id: None,
+                config,
+                name: None,
+                description: None,
+                disabled: false,
+                operation: None,
+            }
+        }
+
+        struct StepState {
+            status: String,
+            resume_at: Option<DateTime<Utc>>,
+            attempts: i32,
+        }
+
+        async fn step_state(pool: &PgPool, run_id: Uuid, connector_id: &str) -> Option<StepState> {
+            sqlx::query!(
+                r#"SELECT status, resume_at, attempts FROM automation.run_step
+                   WHERE run_id = $1 AND connector_id = $2"#,
+                run_id,
+                connector_id,
+            )
+            .fetch_optional(pool)
+            .await
+            .unwrap()
+            .map(|row| StepState {
+                status: row.status,
+                resume_at: row.resume_at,
+                attempts: row.attempts,
+            })
+        }
+
+        struct RunState {
+            status: String,
+            locked_by: Option<String>,
+            locked_at: Option<DateTime<Utc>>,
+            next_attempt_at: Option<DateTime<Utc>>,
+        }
+
+        async fn run_state(pool: &PgPool, run_id: Uuid) -> RunState {
+            let row = sqlx::query!(
+                "SELECT status, locked_by, locked_at, next_attempt_at FROM automation.run WHERE id = $1",
+                run_id,
+            )
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            RunState {
+                status: row.status,
+                locked_by: row.locked_by,
+                locked_at: row.locked_at,
+                next_attempt_at: row.next_attempt_at,
+            }
+        }
+
+        async fn resume_time_has_come(pool: &PgPool, run_id: Uuid, connector_id: &str) {
+            sqlx::query!(
+                "UPDATE automation.run_step SET resume_at = now() - interval '1 second'
+                 WHERE run_id = $1 AND connector_id = $2 AND status = 'waiting'",
+                run_id,
+                connector_id,
+            )
+            .execute(pool)
+            .await
+            .unwrap();
+            make_run_due_now(pool, run_id).await;
+        }
+
+        async fn pass(usecase: &MestierUseCase) {
+            usecase
+                .run_engine_pass(
+                    &ConnectorRegistry::new(usecase.clone()),
+                    "worker-1",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+        }
+
+        async fn start(usecase: &MestierUseCase, org_id: OrganizationId, graph: Graph) -> Uuid {
+            let workflow_id = start_workflow(usecase, org_id, graph).await;
+            usecase
+                .start_run(org_id, workflow_id, json!({}))
+                .await
+                .unwrap()
+        }
+
+        fn wait_graph() -> Graph {
+            Graph {
+                connectors: vec![
+                    flow_config("c1", json!({ "before": true })),
+                    wait("w1", 2, "days"),
+                    flow_config("c3", json!({ "after": true })),
+                ],
+                edges: vec![edge("c1", "w1", None), edge("w1", "c3", None)],
+                triggers: Vec::new(),
+            }
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_wait_parks_its_step_holds_no_worker_and_the_run_continues_after_it() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "wait-park").await;
+            let usecase = use_case(pool.clone());
+            let run_id = start(&usecase, org_id, wait_graph()).await;
+
+            pass(&usecase).await;
+
+            let parked = step_state(&pool, run_id, "w1").await.unwrap();
+            assert_eq!(parked.status, "waiting");
+            let resume_at = parked.resume_at.expect("a parked step has a resume time");
+            let expected = Utc::now() + ChronoDuration::days(2);
+            assert!(
+                (resume_at - expected).num_seconds().abs() < 300,
+                "{resume_at}"
+            );
+            assert_eq!(parked.attempts, 1);
+            assert_eq!(
+                step_state(&pool, run_id, "c1").await.unwrap().status,
+                "succeeded"
+            );
+            assert!(step_state(&pool, run_id, "c3").await.is_none());
+            let output = step_output(&pool, run_id, "w1").await.unwrap();
+            assert_eq!(output["unit"], "days");
+            assert_eq!(output["duration"], 2);
+
+            let run = run_state(&pool, run_id).await;
+            assert_eq!(run.status, "running");
+            assert_eq!(run.locked_by, None);
+            assert_eq!(run.locked_at, None);
+            assert_eq!(run.next_attempt_at, Some(resume_at));
+
+            pass(&usecase).await;
+            assert_eq!(
+                step_state(&pool, run_id, "w1").await.unwrap().status,
+                "waiting",
+                "a pass before the resume time leaves the step parked"
+            );
+
+            resume_time_has_come(&pool, run_id, "w1").await;
+            pass(&usecase).await;
+
+            let resumed = step_state(&pool, run_id, "w1").await.unwrap();
+            assert_eq!(resumed.status, "succeeded");
+            assert_eq!(resumed.resume_at, None);
+            assert_eq!(
+                resumed.attempts, 1,
+                "resuming never executes the wait again"
+            );
+            assert_eq!(
+                step_output(&pool, run_id, "w1").await.unwrap()["unit"],
+                "days"
+            );
+            assert_eq!(
+                step_state(&pool, run_id, "c3").await.unwrap().status,
+                "succeeded"
+            );
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            assert_eq!(run_steps(&pool, run_id).await.len(), 3);
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_run_claimed_before_its_parked_step_is_due_goes_back_to_sleep_until_that_step() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "wait-early").await;
+            let usecase = use_case(pool.clone());
+            let run_id = start(&usecase, org_id, wait_graph()).await;
+            pass(&usecase).await;
+            let resume_at = step_state(&pool, run_id, "w1").await.unwrap().resume_at;
+
+            make_run_due_now(&pool, run_id).await;
+            pass(&usecase).await;
+
+            assert_eq!(
+                step_state(&pool, run_id, "w1").await.unwrap().status,
+                "waiting"
+            );
+            assert!(step_state(&pool, run_id, "c3").await.is_none());
+            let run = run_state(&pool, run_id).await;
+            assert_eq!(run.status, "running");
+            assert_eq!(run.locked_by, None);
+            assert_eq!(run.next_attempt_at, resume_at);
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn another_branch_runs_on_while_a_step_is_parked() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "wait-branch").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    flow_config("a", json!({ "a": 1 })),
+                    wait("w", 1, "hours"),
+                    flow_config("x", json!({ "x": 1 })),
+                    flow_config("b", json!({ "b": 1 })),
+                    flow_config("y", json!({ "y": 1 })),
+                ],
+                edges: vec![
+                    edge("a", "w", None),
+                    edge("w", "x", None),
+                    edge("b", "y", None),
+                ],
+                triggers: Vec::new(),
+            };
+            let run_id = start(&usecase, org_id, graph).await;
+
+            pass(&usecase).await;
+
+            let steps = run_steps(&pool, run_id).await;
+            assert_eq!(status_of(&steps, "w"), Some("waiting"));
+            assert_eq!(status_of(&steps, "y"), Some("succeeded"));
+            assert_eq!(status_of(&steps, "x"), None);
+            assert_eq!(run_status(&pool, run_id).await, "running");
+
+            resume_time_has_come(&pool, run_id, "w").await;
+            pass(&usecase).await;
+
+            let steps = run_steps(&pool, run_id).await;
+            assert_eq!(status_of(&steps, "x"), Some("succeeded"));
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_worker_lost_after_parking_leaves_the_step_parked_and_it_resumes_once() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "wait-lost-worker").await;
+            let usecase = use_case(pool.clone());
+            let run_id = start(&usecase, org_id, wait_graph()).await;
+            pass(&usecase).await;
+            let before = step_state(&pool, run_id, "w1").await.unwrap();
+
+            sqlx::query!(
+                "UPDATE automation.run
+                 SET locked_by = 'worker-doomed', locked_at = now() - interval '1 hour'
+                 WHERE id = $1",
+                run_id,
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let released = usecase
+                .recover_lost_runs(Utc::now() - ChronoDuration::minutes(5))
+                .await
+                .unwrap();
+            assert!(released >= 1);
+            assert_eq!(run_status(&pool, run_id).await, "pending");
+            pass(&usecase).await;
+
+            let after = step_state(&pool, run_id, "w1").await.unwrap();
+            assert_eq!(after.status, "waiting");
+            assert_eq!(after.resume_at, before.resume_at);
+            assert_eq!(after.attempts, 1);
+            assert_eq!(run_state(&pool, run_id).await.status, "running");
+
+            resume_time_has_come(&pool, run_id, "w1").await;
+            pass(&usecase).await;
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            assert_eq!(step_state(&pool, run_id, "w1").await.unwrap().attempts, 1);
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_run_in_progress_is_not_replayed_and_a_finished_one_parks_again_from_the_wait() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "wait-replay").await;
+            let usecase = use_case(pool.clone());
+            let run_id = start(&usecase, org_id, wait_graph()).await;
+            pass(&usecase).await;
+
+            let refused = usecase
+                .replay_run_from_step(org_id, run_id, "w1".to_string())
+                .await
+                .unwrap_err();
+            assert!(matches!(refused, CoreError::Conflict(_)), "{refused:?}");
+            assert_eq!(
+                step_state(&pool, run_id, "w1").await.unwrap().status,
+                "waiting"
+            );
+
+            resume_time_has_come(&pool, run_id, "w1").await;
+            pass(&usecase).await;
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+
+            usecase
+                .replay_run_from_step(org_id, run_id, "w1".to_string())
+                .await
+                .unwrap();
+            assert!(step_state(&pool, run_id, "w1").await.is_none());
+            assert!(step_state(&pool, run_id, "c3").await.is_none());
+            pass(&usecase).await;
+
+            let parked = step_state(&pool, run_id, "w1").await.unwrap();
+            assert_eq!(parked.status, "waiting");
+            assert!(parked.resume_at.unwrap() > Utc::now() + ChronoDuration::days(1));
+            assert_eq!(step_state(&pool, run_id, "c1").await.unwrap().attempts, 1);
+            assert_eq!(run_state(&pool, run_id).await.status, "running");
+        }
+
+        fn two_sources(mode: &str, field: Option<&str>) -> Graph {
+            Graph {
+                connectors: vec![
+                    flow_config("a", json!({ "id": 1, "name": "A" })),
+                    flow_config("b", json!({ "id": 1, "total": 10 })),
+                    merge("m", mode, field),
+                ],
+                edges: vec![edge("a", "m", None), edge("b", "m", None)],
+                triggers: Vec::new(),
+            }
+        }
+
+        async fn merged_items(
+            usecase: &MestierUseCase,
+            pool: &PgPool,
+            org_id: OrganizationId,
+            graph: Graph,
+        ) -> Value {
+            let run_id = start(usecase, org_id, graph).await;
+            pass(usecase).await;
+            assert_eq!(run_status(pool, run_id).await, "succeeded");
+            step_output(pool, run_id, "m").await.unwrap()["items"].clone()
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_merge_appends_combines_by_position_and_combines_by_field_its_incoming_branches()
+        {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "merge-modes").await;
+            let usecase = use_case(pool.clone());
+
+            let appended = merged_items(&usecase, &pool, org_id, two_sources("append", None)).await;
+            let by_position = merged_items(
+                &usecase,
+                &pool,
+                org_id,
+                two_sources("combine_by_position", None),
+            )
+            .await;
+            let by_field = merged_items(
+                &usecase,
+                &pool,
+                org_id,
+                two_sources("combine_by_field", Some("id")),
+            )
+            .await;
+
+            assert_eq!(
+                appended,
+                json!([{ "id": 1, "name": "A" }, { "id": 1, "total": 10 }])
+            );
+            assert_eq!(by_position, json!([{ "id": 1, "name": "A", "total": 10 }]));
+            assert_eq!(by_field, json!([{ "id": 1, "name": "A", "total": 10 }]));
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_merge_ignores_a_skipped_predecessor() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "merge-skipped").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    condition("cond", "{{ true }}"),
+                    flow_config("a", json!({ "side": "then" })),
+                    flow_config("b", json!({ "side": "else" })),
+                    merge("m", "append", None),
+                ],
+                edges: vec![
+                    edge("cond", "a", Some(Branch::Then)),
+                    edge("cond", "b", Some(Branch::Else)),
+                    edge("a", "m", None),
+                    edge("b", "m", None),
+                ],
+                triggers: Vec::new(),
+            };
+
+            let items = merged_items(&usecase, &pool, org_id, graph).await;
+
+            assert_eq!(items, json!([{ "side": "then" }]));
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_merge_does_not_run_early_while_a_predecessor_sits_behind_a_parked_step() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "merge-behind-parked").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    flow_config("a", json!({ "from": "a" })),
+                    wait("w", 1, "hours"),
+                    flow_config("b", json!({ "from": "b" })),
+                    merge("m", "append", None),
+                ],
+                edges: vec![
+                    edge("a", "m", None),
+                    edge("w", "b", None),
+                    edge("b", "m", None),
+                ],
+                triggers: Vec::new(),
+            };
+            let run_id = start(&usecase, org_id, graph).await;
+
+            pass(&usecase).await;
+
+            assert_eq!(
+                step_state(&pool, run_id, "a").await.unwrap().status,
+                "succeeded"
+            );
+            assert!(step_state(&pool, run_id, "m").await.is_none());
+            assert_eq!(run_status(&pool, run_id).await, "running");
+
+            resume_time_has_come(&pool, run_id, "w").await;
+            pass(&usecase).await;
+
+            let items = step_output(&pool, run_id, "m").await.unwrap()["items"].clone();
+            assert_eq!(items, json!([{ "from": "a" }, { "from": "b" }]));
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_merge_waits_for_a_parked_predecessor_then_merges_in_edge_order() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "merge-parked").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    flow_config("a", json!({ "from": "a" })),
+                    wait("w", 1, "minutes"),
+                    flow_config("b", json!({ "from": "b" })),
+                    merge("m", "append", None),
+                ],
+                edges: vec![
+                    edge("a", "w", None),
+                    edge("b", "m", None),
+                    edge("w", "m", None),
+                ],
+                triggers: Vec::new(),
+            };
+            let run_id = start(&usecase, org_id, graph).await;
+
+            pass(&usecase).await;
+
+            assert_eq!(
+                step_state(&pool, run_id, "b").await.unwrap().status,
+                "succeeded"
+            );
+            assert_eq!(
+                step_state(&pool, run_id, "w").await.unwrap().status,
+                "waiting"
+            );
+            assert!(step_state(&pool, run_id, "m").await.is_none());
+            assert_eq!(run_status(&pool, run_id).await, "running");
+
+            resume_time_has_come(&pool, run_id, "w").await;
+            pass(&usecase).await;
+
+            let items = step_output(&pool, run_id, "m").await.unwrap()["items"].clone();
+            assert_eq!(items[0], json!({ "from": "b" }));
+            assert_eq!(items[1]["unit"], "minutes");
+            assert_eq!(items.as_array().unwrap().len(), 2);
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
         }
     }
 }

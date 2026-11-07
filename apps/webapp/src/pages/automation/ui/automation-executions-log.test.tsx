@@ -25,6 +25,7 @@ function row(overrides: Partial<ExecutionRow> = {}): ExecutionRow {
 		stepsTotal: 5,
 		status: 'error',
 		durationMs: 2000,
+		resumeNote: null,
 		failure: { nodeLabel: 'Envoyer l’e-mail', message: 'SMTP expiré' },
 		version: 'Version du 31 oct. 2026 à 18:20',
 		...overrides,
@@ -180,6 +181,24 @@ describe('AutomationExecutionsLog', () => {
 		const table = within(screen.getByRole('table'))
 		expect(table.getByText('En attente')).toBeDefined()
 		expect(table.getAllByText('—').length).toBeGreaterThan(0)
+	})
+
+	it('writes when a paused run resumes in the place of the failure, with no duration', async () => {
+		await render({
+			rows: [
+				row({
+					status: 'paused',
+					durationMs: null,
+					failure: null,
+					resumeNote: 'Reprise le 8 nov. 2026 à 09:30',
+				}),
+			],
+		}).rendered
+
+		const table = within(screen.getByRole('table'))
+		expect(table.getByText('En pause')).toBeDefined()
+		expect(table.getByText('Reprise le 8 nov. 2026 à 09:30')).toBeDefined()
+		expect(table.getAllByText('—')).toHaveLength(1)
 	})
 
 	it('surfaces a load error', async () => {

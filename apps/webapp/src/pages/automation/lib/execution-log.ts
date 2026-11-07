@@ -1,9 +1,12 @@
 import type { Run } from '#/hooks/use-automation'
 import {
 	type ExecutionStatus,
-	toExecutionStatus,
+	filterStatusOf,
+	runResumeAt,
+	toRunDisplayStatus,
 } from '#/pages/automation/lib/execution-status'
 import {
+	formatResumeNote,
 	formatStartedAt,
 	formatVersionLabel,
 } from '#/pages/automation/lib/format'
@@ -34,6 +37,7 @@ export interface ExecutionRow {
 	trigger: string
 	status: ExecutionStatus
 	durationMs: number | null
+	resumeNote: string | null
 	stepsDone: number
 	stepsTotal: number
 	failure: ExecutionFailure | null
@@ -73,11 +77,12 @@ export const PERIOD_LABELS: Record<PeriodFilter, string> = {
 
 const STATUS_ORDER: Record<ExecutionStatus, number> = {
 	running: 0,
-	waiting: 1,
-	error: 2,
-	success: 3,
-	cancelled: 4,
-	skipped: 5,
+	paused: 1,
+	waiting: 2,
+	error: 3,
+	success: 4,
+	cancelled: 5,
+	skipped: 6,
 }
 
 export interface RowLabels {
@@ -101,7 +106,8 @@ export function buildRow(
 	labels: RowLabels = {},
 ): ExecutionRow {
 	const startedIso = run.started_at ?? run.created_at
-	const status = toExecutionStatus(run.status)
+	const status = toRunDisplayStatus(run, now)
+	const resumeAt = runResumeAt(run, now)
 	return {
 		key: run.id,
 		runId: run.id,
@@ -114,7 +120,8 @@ export function buildRow(
 		stepsDone: run.steps_done,
 		stepsTotal: run.steps_total,
 		status,
-		durationMs: runElapsedMs(run, now),
+		durationMs: resumeAt === null ? runElapsedMs(run, now) : null,
+		resumeNote: formatResumeNote(resumeAt),
 		failure: failureOf(run, status, labels.failedNode ?? null),
 		version: formatVersionLabel(run.workflow_version_created_at),
 	}
@@ -143,7 +150,7 @@ export function filterRows(
 		if (
 			ignore !== 'status' &&
 			filters.status !== ALL &&
-			row.status !== filters.status
+			filterStatusOf(row.status) !== filters.status
 		)
 			return false
 		if (filters.workflow !== ALL && row.workflowId !== filters.workflow)
@@ -189,7 +196,7 @@ export function statusCounts(
 		error: 0,
 	}
 	for (const row of rows) {
-		if (row.status === 'running') counts.running += 1
+		if (filterStatusOf(row.status) === 'running') counts.running += 1
 		else if (row.status === 'success') counts.success += 1
 		else if (row.status === 'error') counts.error += 1
 	}
@@ -216,7 +223,7 @@ export function summarize(rows: readonly ExecutionRow[]): ExecutionSummary {
 	const counts = statusCounts(rows)
 	const finished = counts.success + counts.error
 	const durations = rows
-		.filter((row) => row.status !== 'running')
+		.filter((row) => filterStatusOf(row.status) !== 'running')
 		.flatMap((row) => (row.durationMs === null ? [] : [row.durationMs]))
 	return {
 		total: rows.length,

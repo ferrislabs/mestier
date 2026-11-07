@@ -191,6 +191,7 @@ struct RunStepRow {
     input: Option<Value>,
     output: Option<Value>,
     error: Option<String>,
+    resume_at: Option<DateTime<Utc>>,
     started_at: Option<DateTime<Utc>>,
     finished_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
@@ -211,6 +212,7 @@ impl TryFrom<RunStepRow> for RunStep {
             input: row.input,
             output: row.output,
             error: row.error,
+            resume_at: row.resume_at,
             started_at: row.started_at,
             finished_at: row.finished_at,
             created_at: row.created_at,
@@ -282,14 +284,15 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
                 SELECT id,
                        row_number() OVER (PARTITION BY org_id ORDER BY next_attempt_at) AS rank
                 FROM automation.run
-                WHERE status = 'pending' AND next_attempt_at <= now()
+                WHERE (status = 'pending' OR (status = 'running' AND locked_by IS NULL))
+                  AND next_attempt_at <= now()
             ),
             due AS (
                 SELECT r.id
                 FROM automation.run r
                 JOIN ranked rk ON rk.id = r.id
                 WHERE rk.rank <= $3
-                  AND r.status = 'pending'
+                  AND (r.status = 'pending' OR (r.status = 'running' AND r.locked_by IS NULL))
                   AND r.next_attempt_at <= now()
                 ORDER BY r.next_attempt_at
                 LIMIT $2
@@ -332,7 +335,7 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
         let rows = sqlx::query_as!(
             RunStepRow,
             r#"SELECT id, run_id, connector_id, iteration_path, attempts, status, input, output,
-                      error, started_at, finished_at, created_at
+                      error, resume_at, started_at, finished_at, created_at
                FROM automation.run_step
                WHERE run_id = $1"#,
             run_id,
@@ -354,8 +357,8 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
         let rows = sqlx::query_as!(
             RunStepRow,
             r#"SELECT rs.id, rs.run_id, rs.connector_id, rs.iteration_path, rs.attempts,
-                      rs.status, rs.input, rs.output, rs.error, rs.started_at, rs.finished_at,
-                      rs.created_at
+                      rs.status, rs.input, rs.output, rs.error, rs.resume_at, rs.started_at,
+                      rs.finished_at, rs.created_at
                FROM automation.run_step rs
                JOIN automation.run r ON r.id = rs.run_id
                WHERE r.org_id = $1 AND rs.run_id = $2"#,
@@ -514,18 +517,19 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
             RunStepRow,
             r#"INSERT INTO automation.run_step
                    (id, run_id, connector_id, iteration_path, attempts, status, input, output,
-                    error, started_at, finished_at, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+                    error, resume_at, started_at, finished_at, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
                ON CONFLICT (run_id, connector_id, iteration_path) DO UPDATE
                SET attempts = EXCLUDED.attempts,
                    status = EXCLUDED.status,
                    input = COALESCE(EXCLUDED.input, automation.run_step.input),
                    output = EXCLUDED.output,
                    error = EXCLUDED.error,
+                   resume_at = EXCLUDED.resume_at,
                    started_at = COALESCE(automation.run_step.started_at, EXCLUDED.started_at),
                    finished_at = EXCLUDED.finished_at
                RETURNING id, run_id, connector_id, iteration_path, attempts, status, input, output,
-                         error, started_at, finished_at, created_at"#,
+                         error, resume_at, started_at, finished_at, created_at"#,
             step.id,
             step.run_id,
             step.connector_id,
@@ -536,6 +540,7 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
             step.input,
             step.output,
             step.error,
+            step.resume_at,
             step.started_at,
             step.finished_at,
         )
@@ -576,6 +581,20 @@ impl<'tx> RunRepository for PgRunRepository<'tx> {
                     run_id,
                     RunStatus::Failed.as_str(),
                     error,
+                )
+                .execute(&mut ***tx)
+                .await
+                .map_err(map_sqlx_error)?;
+            }
+            RunSettlement::Parked { resume_at } => {
+                sqlx::query!(
+                    r#"UPDATE automation.run
+                       SET status = $2, error = NULL, next_attempt_at = $3,
+                           locked_at = NULL, locked_by = NULL
+                       WHERE id = $1"#,
+                    run_id,
+                    RunStatus::Running.as_str(),
+                    resume_at,
                 )
                 .execute(&mut ***tx)
                 .await
@@ -1435,6 +1454,7 @@ mod tests {
             input: Some(json!({ "name": "brioche" })),
             output: None,
             error: None,
+            resume_at: None,
             started_at: Some(now),
             finished_at: None,
             created_at: now,
@@ -1923,6 +1943,252 @@ mod tests {
         .await
         .unwrap();
         assert!(claimable.iter().any(|r| r.id == run.id));
+    }
+
+    fn waiting_step(run_id: Uuid, connector_id: &str, resume_at: DateTime<Utc>) -> RunStep {
+        RunStep {
+            status: StepStatus::Waiting,
+            resume_at: Some(resume_at),
+            ..in_flight_step(run_id, connector_id, "")
+        }
+    }
+
+    async fn settle(pool: &PgPool, run_id: Uuid, settlement: RunSettlement) {
+        with_tx(pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.settle_run(run_id, settlement).await
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn claim(pool: &PgPool, worker: &str) -> Vec<DueRun> {
+        with_tx(pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.claim_due(worker, 100, 100).await
+        })
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_parked_run_is_claimed_once_its_resume_time_has_come_and_never_taken_for_a_lost_claim()
+     {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "parked-claim").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = create(&pool, &pending_run(org_id, workflow_id, version_id)).await;
+        claim(&pool, "worker-1").await;
+        let resume_at = now_storable() + ChronoDuration::hours(1);
+
+        settle(&pool, run.id, RunSettlement::Parked { resume_at }).await;
+
+        let row = sqlx::query!(
+            "SELECT status, locked_by, locked_at, next_attempt_at FROM automation.run WHERE id = $1",
+            run.id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(row.status, "running");
+        assert_eq!(row.locked_by, None);
+        assert_eq!(row.locked_at, None);
+        assert_eq!(row.next_attempt_at, Some(resume_at));
+        assert!(
+            claim(&pool, "worker-2")
+                .await
+                .iter()
+                .all(|r| r.id != run.id)
+        );
+
+        let released = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.release_stale_claims(Utc::now() + ChronoDuration::days(1))
+                .await
+        })
+        .await
+        .unwrap();
+        assert_eq!(released, 0);
+        assert_eq!(
+            sqlx::query_scalar!("SELECT status FROM automation.run WHERE id = $1", run.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            "running"
+        );
+
+        sqlx::query!(
+            "UPDATE automation.run SET next_attempt_at = now() - interval '1 second' WHERE id = $1",
+            run.id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let claimed = claim(&pool, "worker-3").await;
+        assert!(claimed.iter().any(|r| r.id == run.id));
+        let locked_by =
+            sqlx::query_scalar!("SELECT locked_by FROM automation.run WHERE id = $1", run.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(locked_by.as_deref(), Some("worker-3"));
+        assert!(
+            claim(&pool, "worker-4")
+                .await
+                .iter()
+                .all(|r| r.id != run.id)
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_waiting_step_keeps_its_resume_time_until_it_settles() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "waiting-step").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = create(&pool, &pending_run(org_id, workflow_id, version_id)).await;
+        let resume_at = now_storable() + ChronoDuration::days(2);
+        let parked = waiting_step(run.id, "c1", resume_at);
+        write_steps(&pool, std::slice::from_ref(&parked)).await;
+
+        let read = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.steps_for_run_scoped(org_id, run.id).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].status, StepStatus::Waiting);
+        assert_eq!(read[0].resume_at, Some(resume_at));
+
+        let settled = RunStep {
+            status: StepStatus::Succeeded,
+            resume_at: None,
+            output: Some(json!({ "ok": true })),
+            finished_at: Some(now_storable()),
+            ..parked
+        };
+        write_steps(&pool, std::slice::from_ref(&settled)).await;
+
+        let read = with_tx(&pool, async |tx| {
+            let mut repo = PgRunRepository::new(&tx);
+            repo.steps_for_run(run.id).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].status, StepStatus::Succeeded);
+        assert_eq!(read[0].resume_at, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_database_ties_a_resume_time_to_the_waiting_status() {
+        let _guard = RUN_CLAIM_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "waiting-constraint").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = create(&pool, &pending_run(org_id, workflow_id, version_id)).await;
+        let resume_at = now_storable() + ChronoDuration::hours(1);
+        let without_time = RunStep {
+            resume_at: None,
+            ..waiting_step(run.id, "c1", resume_at)
+        };
+        let with_time_while_running = RunStep {
+            resume_at: Some(resume_at),
+            ..in_flight_step(run.id, "c2", "")
+        };
+
+        for step in [without_time, with_time_while_running] {
+            let refused = with_tx(&pool, async |tx| {
+                let mut repo = PgRunRepository::new(&tx);
+                repo.upsert_step(&step).await
+            })
+            .await;
+
+            assert!(refused.is_err(), "{:?} {:?}", step.status, step.resume_at);
+        }
+    }
+
+    static PARK_MIGRATION_SCRATCH: tokio::sync::OnceCell<String> =
+        tokio::sync::OnceCell::const_new();
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_parking_migration_reverts_only_while_no_step_is_waiting_and_applies_again() {
+        use crate::application::test_support::scratch_pool;
+
+        const DOWN: &str = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../migrations/20261107000003_park_automation_steps.down.sql"
+        ));
+        const UP: &str = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../migrations/20261107000003_park_automation_steps.up.sql"
+        ));
+        let pool = scratch_pool("mestier_parkmig_test_", &PARK_MIGRATION_SCRATCH).await;
+        let has_column = || async {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT count(*) FROM information_schema.columns
+                 WHERE table_schema = 'automation' AND table_name = 'run_step'
+                   AND column_name = 'resume_at'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        };
+        let org_id = seed_organization(&pool, "park-migration").await;
+        let (workflow_id, version_id) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let run = create(&pool, &pending_run(org_id, workflow_id, version_id)).await;
+        write_steps(
+            &pool,
+            &[waiting_step(
+                run.id,
+                "c1",
+                now_storable() + ChronoDuration::hours(1),
+            )],
+        )
+        .await;
+
+        let refusal = sqlx::raw_sql(DOWN).execute(&pool).await.unwrap_err();
+
+        let message = refusal.to_string();
+        assert!(
+            message.contains("cannot revert 20261107000003") && message.contains("1 step(s)"),
+            "{message}"
+        );
+        assert_eq!(has_column().await, 1, "a refused revert changes nothing");
+
+        sqlx::query("DELETE FROM automation.run_step WHERE run_id = $1")
+            .bind(run.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::raw_sql(DOWN).execute(&pool).await.unwrap();
+        assert_eq!(has_column().await, 0);
+        let waiting_is_unknown = sqlx::query(
+            "INSERT INTO automation.run_step (id, run_id, connector_id, status)
+             VALUES (gen_random_uuid(), $1, 'c9', 'waiting')",
+        )
+        .bind(run.id)
+        .execute(&pool)
+        .await;
+        assert!(waiting_is_unknown.is_err());
+
+        sqlx::raw_sql(UP).execute(&pool).await.unwrap();
+        assert_eq!(has_column().await, 1);
+        write_steps(
+            &pool,
+            &[waiting_step(
+                run.id,
+                "c1",
+                now_storable() + ChronoDuration::hours(1),
+            )],
+        )
+        .await;
     }
 
     // --- purge_succeeded --------------------------------------------------

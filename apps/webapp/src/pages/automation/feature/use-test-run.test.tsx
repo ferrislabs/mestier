@@ -180,6 +180,32 @@ describe('useTestRun — the animation', () => {
 		expect(result.current.steps?.size).toBe(3)
 	})
 
+	it('shows a wait like any other step: it answers at once with its example, and the test goes on behind it', async () => {
+		const example = {
+			duration: 2,
+			unit: 'days',
+			resume_at: '2026-01-01T00:00:00Z',
+		}
+		const { result } = setup(
+			answering(
+				step('w1', { output: example }),
+				step('c2', { output: { n: 2 } }),
+			),
+			graphOf('w1', 'c2'),
+		)
+
+		await startAndAnswer(result)
+		await elapse(STEP_MS)
+		expect(result.current.steps?.get('w1')?.[0]).toMatchObject({
+			status: 'succeeded',
+			output: example,
+		})
+
+		await elapse(STEP_MS)
+		expect(keysOf(result)).toEqual(['w1', 'c2'])
+		expect(result.current.error).toBeNull()
+	})
+
 	it('spends no beat on a node that did not run: it shows along with the step before it', async () => {
 		const { result } = setup(
 			answering(

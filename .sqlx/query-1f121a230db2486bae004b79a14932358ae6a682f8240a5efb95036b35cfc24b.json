@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, reference, title, customer_id, status::text AS \"status!\", net_cents,\n                   gross_cents, created_at, updated_at\n            FROM quotes\n            WHERE org_id = $1\n              AND deleted_at IS NULL\n              AND ($2::text IS NULL OR status = CAST($2 AS text)::quote_status)\n              AND ($3::timestamptz IS NULL OR updated_at <= $3)\n            ORDER BY created_at DESC, id DESC\n            LIMIT $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "reference",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "net_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "gross_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1f121a230db2486bae004b79a14932358ae6a682f8240a5efb95036b35cfc24b"
+}

@@ -15,6 +15,7 @@ use crate::domain::automation::collection::{
     COLLECTION_OPERATION_KIND, Collection, ConfigStage, NESTED_EXPRESSION_FIELDS, ParameterIssue,
     check_config,
 };
+use crate::domain::automation::connector::smtp::{SMTP_SEND_KIND, SmtpFault, literal_faults};
 use crate::domain::automation::connector::{ConnectorCatalogue, FieldKind};
 use crate::domain::automation::credential::Credential;
 use crate::domain::automation::expression::parse_template;
@@ -134,6 +135,12 @@ pub enum GraphError {
 
     #[error("connector `{connector_id}` requires a credential but none is set")]
     MissingCredential { connector_id: String },
+
+    #[error("connector `{connector_id}` field `{field}` contains a line break")]
+    HeaderInjection { connector_id: String, field: String },
+
+    #[error("connector `{connector_id}` sends to more recipients than an e-mail allows")]
+    TooManyRecipients { connector_id: String },
 
     #[error(
         "connector `{connector_id}` field `{field}` references unknown connector `{referenced_id}`"
@@ -493,6 +500,21 @@ fn validate_operation_node(
                 expected: "object",
                 got,
             },
+        });
+    }
+}
+
+fn validate_smtp_node(connector: &PlacedConnector, errors: &mut Vec<GraphError>) {
+    for fault in literal_faults(&connector.config) {
+        errors.push(match fault {
+            SmtpFault::TooManyRecipients => GraphError::TooManyRecipients {
+                connector_id: connector.id.clone(),
+            },
+            SmtpFault::LineBreak(field) => GraphError::HeaderInjection {
+                connector_id: connector.id.clone(),
+                field: field.to_owned(),
+            },
+            _ => continue,
         });
     }
 }
@@ -919,6 +941,10 @@ pub fn validate_graph(
                     field: field.name.to_string(),
                 });
             }
+        }
+
+        if connector.kind == SMTP_SEND_KIND {
+            validate_smtp_node(connector, &mut errors);
         }
 
         if connector.kind == COLLECTION_OPERATION_KIND {
@@ -3698,6 +3724,156 @@ mod tests {
             let graph = graph_of_node(node("c1", json!({ "path": { "id": "1" } })));
 
             assert_eq!(errors_with(&graph, &[other, collection()]), Vec::new());
+        }
+    }
+
+    mod smtp_nodes {
+        use serde_json::Value;
+
+        use super::*;
+        use crate::domain::automation::connector::connector_catalogue;
+
+        fn smtp_node(
+            config: Value,
+            credential_id: Option<Uuid>,
+        ) -> super::super::super::graph::PlacedConnector {
+            let Value::Object(config) = config else {
+                panic!("a config is an object");
+            };
+            super::super::super::graph::PlacedConnector {
+                id: "c1".to_string(),
+                kind: "smtp.send".to_string(),
+                version: 1,
+                credential_id,
+                config,
+                name: None,
+                description: None,
+                disabled: false,
+                operation: None,
+            }
+        }
+
+        fn mail() -> Value {
+            json!({
+                "to": "claire@fontaine-immo.fr",
+                "subject": "Votre dossier",
+                "body": "Bonjour",
+            })
+        }
+
+        fn errors_of(
+            node: super::super::super::graph::PlacedConnector,
+            saved: &[Credential],
+        ) -> Vec<GraphError> {
+            let graph = with_trigger(graph_of(vec![node]), "c1");
+            match validate_graph(
+                &graph,
+                &connector_catalogue(),
+                saved,
+                &EventCatalogue::new(),
+                &[],
+            ) {
+                Ok(()) => Vec::new(),
+                Err(errors) => errors,
+            }
+        }
+
+        fn merged(base: Value, extra: Value) -> Value {
+            let (Value::Object(mut base), Value::Object(extra)) = (base, extra) else {
+                panic!("objects");
+            };
+            base.extend(extra);
+            Value::Object(base)
+        }
+
+        #[test]
+        fn a_mail_with_an_smtp_credential_is_valid() {
+            let id = Uuid::from_u128(7);
+
+            let errors = errors_of(smtp_node(mail(), Some(id)), &[credential(id, "smtp")]);
+
+            assert_eq!(errors, Vec::new());
+        }
+
+        #[test]
+        fn only_an_smtp_credential_is_accepted_and_one_is_required() {
+            let id = Uuid::from_u128(7);
+
+            let wrong = errors_of(
+                smtp_node(mail(), Some(id)),
+                &[credential(id, "bearer_token")],
+            );
+            let missing = errors_of(smtp_node(mail(), None), &[]);
+
+            assert_eq!(
+                wrong,
+                vec![GraphError::CredentialSchemeNotAccepted {
+                    connector_id: "c1".to_string(),
+                    credential_id: id,
+                    scheme: "bearer_token".to_string(),
+                }]
+            );
+            assert_eq!(
+                missing,
+                vec![GraphError::MissingCredential {
+                    connector_id: "c1".to_string()
+                }]
+            );
+        }
+
+        #[test]
+        fn a_line_break_in_a_literal_address_or_subject_is_refused_at_save() {
+            let id = Uuid::from_u128(7);
+            let saved = [credential(id, "smtp")];
+            for field in ["to", "cc", "subject"] {
+                let config = merged(mail(), json!({ field: "x\r\nBcc: spy@evil.fr" }));
+
+                let errors = errors_of(smtp_node(config, Some(id)), &saved);
+
+                assert_eq!(
+                    errors,
+                    vec![GraphError::HeaderInjection {
+                        connector_id: "c1".to_string(),
+                        field: field.to_string(),
+                    }],
+                    "{field}"
+                );
+            }
+        }
+
+        #[test]
+        fn more_than_fifty_literal_recipients_are_refused_at_save() {
+            let id = Uuid::from_u128(7);
+            let saved = [credential(id, "smtp")];
+            let list = |prefix: &str, count: usize| {
+                (0..count)
+                    .map(|n| format!("{prefix}{n}@x.fr"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            let within = merged(mail(), json!({ "to": list("a", 30), "cc": list("b", 20) }));
+            let over = merged(mail(), json!({ "to": list("a", 30), "cc": list("b", 21) }));
+
+            assert_eq!(errors_of(smtp_node(within, Some(id)), &saved), Vec::new());
+            assert_eq!(
+                errors_of(smtp_node(over, Some(id)), &saved),
+                vec![GraphError::TooManyRecipients {
+                    connector_id: "c1".to_string()
+                }]
+            );
+        }
+
+        #[test]
+        fn a_value_built_by_an_expression_is_left_to_the_run() {
+            let id = Uuid::from_u128(7);
+            let config = merged(
+                mail(),
+                json!({ "to": "{{ trigger.email }}", "subject": "{{ trigger.title }}" }),
+            );
+
+            let errors = errors_of(smtp_node(config, Some(id)), &[credential(id, "smtp")]);
+
+            assert_eq!(errors, Vec::new());
         }
     }
 }

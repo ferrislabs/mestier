@@ -69,7 +69,7 @@ impl CredentialUsage {
     }
 
     pub const fn has_node(self) -> bool {
-        matches!(self, Self::Http | Self::Webhook | Self::Odoo)
+        matches!(self, Self::Http | Self::Webhook | Self::Odoo | Self::Smtp)
     }
 }
 
@@ -1036,7 +1036,7 @@ mod tests {
     fn the_usages_say_which_nodes_exist() {
         assert!(CredentialUsage::Http.has_node());
         assert!(CredentialUsage::Webhook.has_node());
-        assert!(!CredentialUsage::Smtp.has_node());
+        assert!(CredentialUsage::Smtp.has_node());
         assert!(!CredentialUsage::Imap.has_node());
         assert_eq!(CredentialUsage::Smtp.label(), "E-mail SMTP");
         assert_eq!(CredentialUsage::Imap.label(), "Lecture d’e-mails");

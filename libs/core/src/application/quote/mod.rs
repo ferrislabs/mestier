@@ -9,6 +9,7 @@ use crate::{
     domain::quote::{
         commands::{CreateQuoteCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand},
         ports::QuoteRepository,
+        search::{QuoteSearch, QuoteSearchResults},
         service::{QuoteService, propose_tasks_from_quote, require_quote_accepted},
     },
 };
@@ -61,6 +62,16 @@ impl MestierUseCase {
     pub async fn get_quote(&self, id: QuoteId) -> Result<Quote, CoreError> {
         let mut service = QuoteService::new(quote_repository, emitter);
         service.get_quote(id).await
+    }
+
+    #[transactional(quote)]
+    pub async fn search_quotes(
+        &self,
+        search: QuoteSearch,
+    ) -> Result<QuoteSearchResults, CoreError> {
+        let mut quote_repository = quote_repository;
+        let found = quote_repository.search(&search).await?;
+        Ok(QuoteSearchResults::bounded(found, search.limit))
     }
 
     #[transactional(quote, emitter)]

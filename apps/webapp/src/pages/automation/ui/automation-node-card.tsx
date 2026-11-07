@@ -34,6 +34,7 @@ const EXECUTION_FRAME: Record<ExecutionStatus, string> = {
 	error: 'border-2 border-state-alert',
 	running:
 		'border-2 border-state-today shadow-[0_0_0_4px] shadow-state-today/20',
+	paused: 'border-dashed border-muted-foreground/50',
 	waiting: 'border-dashed border-muted-foreground/50',
 	skipped: 'border-border bg-muted shadow-none',
 	cancelled: 'border-border bg-muted shadow-none',
@@ -43,6 +44,7 @@ const EXECUTION_NOTE: Record<ExecutionStatus, string> = {
 	success: 'text-(color:--auto-success-text)',
 	error: 'text-state-alert',
 	running: 'text-state-today',
+	paused: 'text-muted-foreground',
 	waiting: 'text-muted-foreground',
 	skipped: 'text-muted-foreground',
 	cancelled: 'text-muted-foreground',
@@ -214,7 +216,9 @@ export function AutomationNodeCard({
 					className={cn(
 						'size-[42px] text-(color:--tone-fg)',
 						disabled && 'opacity-40 grayscale',
-						execution?.status === 'waiting' && 'opacity-60',
+						(execution?.status === 'waiting' ||
+							execution?.status === 'paused') &&
+							'opacity-60',
 					)}
 					strokeWidth={1.5}
 					aria-hidden

@@ -11,6 +11,7 @@ use crate::{CustomerContextId, CustomerId, OrganizationId, ServiceRateId};
 
 pub mod commands;
 pub mod ports;
+pub mod search;
 pub mod service;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]

@@ -414,6 +414,36 @@ describe('aggregateConnectorStatuses', () => {
 		expect(statuses.get('c1')).toBe('in_flight')
 	})
 
+	it('surfaces a waiting step over a pending or succeeded one, under a running one', () => {
+		const waiting = step({
+			connector_id: 'c1',
+			iteration_path: 'c2[1]',
+			status: 'waiting',
+		})
+		const others = [
+			step({
+				connector_id: 'c1',
+				iteration_path: 'c2[0]',
+				status: 'succeeded',
+			}),
+			step({ connector_id: 'c1', iteration_path: 'c2[2]', status: 'pending' }),
+		]
+
+		expect(aggregateConnectorStatuses([...others, waiting]).get('c1')).toBe(
+			'waiting',
+		)
+		expect(
+			aggregateConnectorStatuses([
+				waiting,
+				step({
+					connector_id: 'c1',
+					iteration_path: 'c2[3]',
+					status: 'in_flight',
+				}),
+			]).get('c1'),
+		).toBe('in_flight')
+	})
+
 	it('surfaces a dead step over every other status', () => {
 		const statuses = aggregateConnectorStatuses([
 			step({ connector_id: 'c1', iteration_path: 'c2[0]', status: 'failed' }),

@@ -3,6 +3,7 @@
 //! the editor shows before any run exists (#197); this is what the engine
 //! calls once one does (#200).
 
+use chrono::{DateTime, Utc};
 use common::OrganizationId;
 use serde_json::{Map, Value};
 use uuid::Uuid;
@@ -44,6 +45,10 @@ pub enum ConnectorOutcome {
     },
     Iterate {
         items: Vec<Value>,
+    },
+    Wait {
+        resume_at: DateTime<Utc>,
+        output: Value,
     },
 }
 
@@ -100,11 +105,17 @@ mod tests {
             output: Value::Null,
         };
         let iterate = ConnectorOutcome::Iterate { items: Vec::new() };
+        let wait = ConnectorOutcome::Wait {
+            resume_at: Utc::now(),
+            output: Value::Null,
+        };
 
         assert_ne!(produced, failed);
         assert_ne!(produced, branch);
         assert_ne!(produced, iterate);
         assert_ne!(branch, iterate);
+        assert_ne!(wait, produced);
+        assert_ne!(wait, iterate);
     }
 
     #[test]

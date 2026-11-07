@@ -2,6 +2,7 @@ import {
 	CircleCheck,
 	CircleDashed,
 	CircleMinus,
+	CirclePause,
 	CircleX,
 	LoaderCircle,
 	type LucideIcon,
@@ -24,6 +25,11 @@ const STATUS_VIEWS: Record<
 		label: 'En cours',
 		icon: LoaderCircle,
 		className: 'text-state-today [&>svg]:animate-spin',
+	},
+	paused: {
+		label: 'En pause',
+		icon: CirclePause,
+		className: 'text-muted-foreground',
 	},
 	waiting: {
 		label: 'En attente',

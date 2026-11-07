@@ -83,6 +83,32 @@ impl MestierUseCase {
     }
 
     #[transactional(support_ticket, support_ticket_entry, member, role, authz, emitter)]
+    pub async fn add_support_automation_note(
+        &self,
+        command: AddEntryCommand,
+    ) -> Result<TicketEntry, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        crate::application::support_ticket::authorize(
+            authz,
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        ThreadService::new(
+            support_ticket_repository,
+            support_ticket_entry_repository,
+            emitter,
+        )
+        .add_automation_note(command.organization_id, command.ticket_id, &command.body)
+        .await
+    }
+
+    #[transactional(support_ticket, support_ticket_entry, member, role, authz, emitter)]
     pub async fn save_support_draft(
         &self,
         command: AddEntryCommand,

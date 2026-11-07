@@ -182,9 +182,10 @@ export function runTriggerLabel(
 }
 
 const STATUS_PRIORITY: Record<string, number> = {
-	dead: 5,
-	failed: 4,
-	in_flight: 3,
+	dead: 6,
+	failed: 5,
+	in_flight: 4,
+	waiting: 3,
 	pending: 2,
 	succeeded: 1,
 	skipped: 0,

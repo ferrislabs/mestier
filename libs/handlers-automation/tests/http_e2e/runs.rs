@@ -292,3 +292,39 @@ async fn replaying_a_run_of_an_archived_workflow_answers_its_own_conflict() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_parked_step_is_read_back_as_waiting_with_its_resume_time() {
+    let app = harness::start().await;
+    let workflow_id = main_workflow(&app).await;
+    let run_id = start(&app, &workflow_id).await;
+    sqlx::query(
+        "INSERT INTO automation.run_step
+             (id, run_id, connector_id, iteration_path, attempts, status, resume_at)
+         VALUES ($1, $2, 'c1', '', 1, 'waiting', '2030-01-02T03:04:05Z')",
+    )
+    .bind(Uuid::now_v7())
+    .bind(run_id.parse::<Uuid>().expect("a uuid"))
+    .execute(&app.pool)
+    .await
+    .expect("park the step");
+    insert_step(&app, &run_id, "c2", "succeeded").await;
+
+    let read = get_run(&app, &run_id).await;
+
+    let steps = read["steps"].as_array().expect("steps");
+    let parked = steps
+        .iter()
+        .find(|step| step["connector_id"] == "c1")
+        .expect("the parked step");
+    assert_eq!(parked["status"], "waiting");
+    assert_eq!(parked["resume_at"], "2030-01-02T03:04:05Z");
+    let done = steps
+        .iter()
+        .find(|step| step["connector_id"] == "c2")
+        .expect("the settled step");
+    assert!(done["resume_at"].is_null());
+
+    app.cleanup().await;
+}

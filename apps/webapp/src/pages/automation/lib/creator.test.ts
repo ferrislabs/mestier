@@ -61,6 +61,36 @@ const ODOO_INVOICE = descriptor(
 	'Créer une facture Odoo',
 )
 
+const WAIT = descriptor('flow.wait', 'flow', 'Attendre')
+const MERGE = descriptor('flow.merge', 'flow', 'Fusionner')
+const NOTE = descriptor('mestier.note.add', 'mestier', 'Ajouter une note')
+const QUOTES = descriptor(
+	'mestier.quote.search',
+	'mestier',
+	'Rechercher des devis',
+)
+const PROJECT = descriptor(
+	'mestier.project.create',
+	'mestier',
+	'Créer un projet',
+)
+const CHANNEL = descriptor(
+	'mestier.chat.post_message',
+	'mestier',
+	'Publier dans un canal Discussions',
+)
+const SMTP = descriptor('smtp.send', 'smtp', 'E-mail SMTP')
+const ODOO_UPDATE = descriptor(
+	'odoo.update_partner',
+	'odoo',
+	'Mettre à jour un partenaire Odoo',
+)
+const COLLECTION = descriptor(
+	'collection.operation',
+	'http',
+	'Opération d’une collection',
+)
+
 const descriptors = [
 	ODOO_INVOICE,
 	HTTP,
@@ -133,9 +163,9 @@ describe('creatorCategories', () => {
 		const actions = creatorCategories(descriptors)[0]
 
 		expect(actions.kinds.map((kind) => kind.description)).toEqual([
-			'Crée un client dans Mestier',
 			'Assigne un ticket à un membre de l’équipe',
 			'Ajoute un badge de couleur à un ticket',
+			'Crée un client dans Mestier',
 		])
 	})
 
@@ -145,7 +175,7 @@ describe('creatorCategories', () => {
 
 		expect(forward.map((item) => item.kinds.map((kind) => kind.label))).toEqual(
 			[
-				['Créer un client', 'Assigner un ticket', 'Ajouter un badge au ticket'],
+				['Assigner un ticket', 'Ajouter un badge au ticket', 'Créer un client'],
 				['Si', 'Pour chaque', 'Configuration'],
 				['Requête HTTP', 'Créer un partenaire Odoo', 'Créer une facture Odoo'],
 			],
@@ -166,6 +196,104 @@ describe('creatorCategories', () => {
 		const actions = creatorCategories(descriptors)[0]
 
 		expect(new Set(actions.kinds.map((kind) => kind.hue)).size).toBe(3)
+	})
+})
+
+describe('creatorCategories — the whole server catalogue', () => {
+	const catalogue = [
+		SMTP,
+		ODOO_UPDATE,
+		COLLECTION,
+		NOTE,
+		MERGE,
+		CHANNEL,
+		QUOTES,
+		WAIT,
+		PROJECT,
+		...descriptors,
+	]
+
+	it('lists every category the catalogue fills, Collections included, and never the human validation', () => {
+		const categories = creatorCategories(catalogue, { collections: true })
+
+		expect(categories.map((item) => item.label)).toEqual([
+			'Actions Mestier',
+			'Collections',
+			'Logique',
+			'Outils',
+		])
+		expect(categories.map((item) => item.id)).not.toContain('human')
+	})
+
+	it('files each node in its category, in the order of the prototype and the extras of the real app last', () => {
+		const categories = creatorCategories(catalogue, { collections: true })
+
+		expect(
+			categories.map((item) => item.kinds.map((kind) => kind.label)),
+		).toEqual([
+			[
+				'Créer un projet',
+				'Assigner un ticket',
+				'Publier dans un canal Discussions',
+				'Ajouter un badge au ticket',
+				'Rechercher des devis',
+				'Ajouter une note',
+				'Créer un client',
+			],
+			['Opération de collection'],
+			['Si', 'Attendre', 'Fusionner', 'Pour chaque', 'Configuration'],
+			[
+				'E-mail SMTP',
+				'Requête HTTP',
+				'Créer un partenaire Odoo',
+				'Mettre à jour un partenaire Odoo',
+				'Créer une facture Odoo',
+			],
+		])
+	})
+
+	it('gives each new node the description of the prototype, the note speaking of a ticket', () => {
+		const descriptions = Object.fromEntries(
+			creatorCategories(catalogue).flatMap((category) =>
+				category.kinds.map((kind) => [kind.label, kind.description]),
+			),
+		)
+
+		expect(descriptions).toMatchObject({
+			Attendre: 'Met le workflow en pause pendant une durée',
+			Fusionner: 'Réunit les données de plusieurs branches',
+			'Ajouter une note': 'Ajoute une note interne sur un ticket',
+			'Rechercher des devis':
+				'Recherche des devis selon leur statut et leur ancienneté',
+			'Créer un projet': 'Crée un projet de chantier à partir d’un devis',
+			'Publier dans un canal Discussions':
+				'Envoie un message dans un canal Discussions',
+			'E-mail SMTP': 'Envoie un e-mail avec votre serveur SMTP',
+		})
+	})
+
+	it('finds the new nodes by what they do', () => {
+		const labels = (query: string) =>
+			searchCreatorKinds(allCategories(catalogue), query).flatMap((category) =>
+				category.kinds.map((kind) => kind.label),
+			)
+
+		expect(labels('pause')).toEqual(['Attendre'])
+		expect(labels('smtp')).toEqual(['E-mail SMTP'])
+		expect(labels('ticket')).toEqual([
+			'Assigner un ticket',
+			'Ajouter un badge au ticket',
+			'Ajouter une note',
+		])
+	})
+
+	it('creates the node with the kind and the descriptor the server gave', () => {
+		const smtp = creatorCategories(catalogue)
+			.flatMap((category) => category.kinds)
+			.find((kind) => kind.label === 'E-mail SMTP')
+
+		expect(smtp?.id).toBe('connector:smtp.send')
+		expect(smtp?.source).toEqual({ type: 'connector', descriptor: SMTP })
 	})
 })
 

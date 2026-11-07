@@ -172,6 +172,88 @@ async fn an_unsaved_draft_answers_one_step_per_reachable_node_and_writes_no_row(
 
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
+async fn the_wait_merge_note_search_project_and_channel_nodes_answer_their_sample_and_write_nothing()
+ {
+    let app = harness::start().await;
+    let before = rows(&app).await;
+    let uuid = "018f3b2a-0000-7000-8000-000000000012";
+    let graph = draft(
+        vec![
+            node(
+                "wait",
+                "flow.wait",
+                json!({ "duration": 365, "unit": "days" }),
+            ),
+            node(
+                "search",
+                "mestier.quote.search",
+                json!({ "status": "SENT", "since_days": 7 }),
+            ),
+            node("merge", "flow.merge", json!({ "mode": "append" })),
+            node(
+                "note",
+                "mestier.note.add",
+                json!({ "ticket_id": uuid, "body": "Relance" }),
+            ),
+            node(
+                "project",
+                "mestier.project.create",
+                json!({ "quote_id": uuid }),
+            ),
+            node(
+                "post",
+                "mestier.chat.post_message",
+                json!({ "channel": "general", "message": "Bonjour" }),
+            ),
+        ],
+        vec![
+            edge("t1", "wait", Value::Null),
+            edge("t1", "search", Value::Null),
+            edge("wait", "merge", Value::Null),
+            edge("search", "merge", Value::Null),
+            edge("merge", "note", Value::Null),
+            edge("note", "project", Value::Null),
+            edge("project", "post", Value::Null),
+        ],
+    );
+    let started = std::time::Instant::now();
+
+    let steps = steps_of(dry_run(&app, &app.token, &json!({ "graph": graph })).await).await;
+
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    assert_eq!(steps.len(), 6);
+    for each in &steps {
+        assert_eq!(each["status"], "succeeded", "{each}");
+    }
+    assert_eq!(step(&steps, "wait")["output"]["unit"], "days");
+    assert_eq!(
+        step(&steps, "search")["output"]["count"],
+        step(&steps, "search")["output"]["items"]
+            .as_array()
+            .expect("items")
+            .len()
+    );
+    assert!(step(&steps, "merge")["output"]["items"].is_array());
+    assert!(step(&steps, "note")["output"]["note_id"].is_string());
+    assert!(step(&steps, "project")["output"]["project_id"].is_string());
+    assert!(step(&steps, "post")["output"]["message_id"].is_string());
+    assert_eq!(rows(&app).await, before, "no run, no step, no customer");
+    let written: i64 = sqlx::query_scalar(
+        "SELECT (SELECT COUNT(*) FROM projects WHERE org_id = $1)
+              + (SELECT COUNT(*) FROM chat.messages WHERE org_id = $1)
+              + (SELECT COUNT(*) FROM support_ticket_entries WHERE org_id = $1)",
+    )
+    .bind(app.organization_id)
+    .fetch_one(&app.pool)
+    .await
+    .expect("count rows");
+    assert_eq!(written, 0);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
 async fn an_invalid_node_answers_422_naming_the_node_and_the_field() {
     let app = harness::start().await;
     let graph = draft(
@@ -196,6 +278,64 @@ async fn an_invalid_node_answers_422_naming_the_node_and_the_field() {
             .expect("a message")
             .contains("predicate")
     );
+    assert_eq!(rows(&app).await, (0, 0, 0));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn an_smtp_node_with_an_injected_header_or_too_many_recipients_answers_422_naming_the_field()
+{
+    let app = harness::start().await;
+    let many = (0..51)
+        .map(|n| format!("u{n}@x.fr"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let graph = draft(
+        vec![
+            node(
+                "injected",
+                "smtp.send",
+                json!({ "to": "a@x.fr", "subject": "Hi\r\nBcc: spy@evil.fr", "body": "Bonjour" }),
+            ),
+            node(
+                "crowded",
+                "smtp.send",
+                json!({ "to": many, "subject": "Hi", "body": "Bonjour" }),
+            ),
+        ],
+        vec![
+            edge("t1", "injected", Value::Null),
+            edge("t1", "crowded", Value::Null),
+        ],
+    );
+
+    let response = dry_run(&app, &app.token, &json!({ "graph": graph })).await;
+
+    assert_eq!(response.status(), 422);
+    let body: Value = response.json().await.expect("json");
+    assert_eq!(body["code"], "E_GRAPH_INVALID");
+    let errors = body["details"]["errors"].as_array().expect("errors");
+    let on = |id: &str, field: &str| {
+        errors
+            .iter()
+            .find(|error| error["connector_id"] == id && error["field"] == field)
+            .unwrap_or_else(|| panic!("no error on {id}.{field}: {errors:?}"))
+    };
+    assert!(
+        on("injected", "subject")["message"]
+            .as_str()
+            .expect("a message")
+            .contains("line break")
+    );
+    assert!(
+        on("crowded", "to")["message"]
+            .as_str()
+            .expect("a message")
+            .contains("more recipients")
+    );
+    assert!(!body.to_string().contains("evil.fr"));
     assert_eq!(rows(&app).await, (0, 0, 0));
 
     app.cleanup().await;

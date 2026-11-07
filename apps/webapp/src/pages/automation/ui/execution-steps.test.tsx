@@ -107,6 +107,37 @@ describe('ExecutionSteps', () => {
 		expect(screen.getByText('2')).toBeDefined()
 	})
 
+	it('numbers a paused step among the steps that ran and writes when it resumes', async () => {
+		await renderWithRouter(
+			<ExecutionSteps
+				steps={[
+					{ kind: 'step', step: entry('a') },
+					{
+						kind: 'step',
+						step: entry('b', {
+							status: 'paused',
+							detail: 'En pause · Reprise le 8 nov. 2026 à 09:30',
+						}),
+					},
+				]}
+				pending={[
+					entry('p', { status: 'waiting', detail: 'Pas encore atteint' }),
+				]}
+				pendingTitle="En attente"
+				onOpen={vi.fn()}
+			/>,
+		)
+
+		const paused = screen.getByRole('button', { name: /Étape b/ })
+		expect(paused.textContent).toContain(
+			'En pause · Reprise le 8 nov. 2026 à 09:30',
+		)
+		expect(paused.textContent).toContain('2')
+		expect(paused.querySelector('.opacity-50')).toBeNull()
+		expect(screen.getByRole('img', { name: 'En attente' })).toBeDefined()
+		expect(screen.getByText('2 / 3 nœuds')).toBeDefined()
+	})
+
 	it('opens the node of a step, inside or outside a loop', async () => {
 		const user = userEvent.setup()
 		const onOpen = vi.fn()

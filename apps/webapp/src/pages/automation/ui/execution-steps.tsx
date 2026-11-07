@@ -39,6 +39,7 @@ const ORDER_TONES: Partial<Record<ExecutionStatus, string>> = {
 		'border-(--auto-success) bg-(--auto-success)/12 text-(color:--auto-success-text)',
 	error: 'border-state-alert bg-state-alert/12 text-state-alert',
 	running: 'border-state-today bg-state-today/12 text-state-today',
+	paused: 'border-dashed border-muted-foreground/60 text-muted-foreground',
 }
 
 const DETAIL_TONES: Partial<Record<ExecutionStatus, string>> = {

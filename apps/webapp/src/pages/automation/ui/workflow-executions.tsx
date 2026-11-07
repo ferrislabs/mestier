@@ -139,7 +139,9 @@ function ExecutionDetail({
 					steps={detail.steps}
 					pending={detail.pending}
 					pendingTitle={
-						header.status === 'running' || header.status === 'waiting'
+						header.status === 'running' ||
+						header.status === 'paused' ||
+						header.status === 'waiting'
 							? 'En attente'
 							: 'Non appelés'
 					}

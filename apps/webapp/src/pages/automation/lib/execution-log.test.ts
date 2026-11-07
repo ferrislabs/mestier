@@ -11,6 +11,7 @@ import {
 	statusCounts,
 	summarize,
 } from '#/pages/automation/lib/execution-log'
+import { formatResumeNote } from '#/pages/automation/lib/format'
 
 const NOW = new Date(2026, 10, 5, 12, 0, 0).getTime()
 
@@ -264,6 +265,83 @@ describe('execution log', () => {
 		expect(summarize([...ROWS.slice(0, 2), running]).medianDurationMs).toBe(
 			3000,
 		)
+	})
+})
+
+describe('execution log — a run that waits', () => {
+	const RESUME = new Date(2026, 10, 7, 9, 30, 0).toISOString()
+
+	function parked(overrides: Partial<Run> = {}) {
+		return buildRow(
+			run({
+				id: 'p4',
+				number: 1288,
+				status: 'running',
+				started_at: new Date(2026, 10, 5, 9, 0, 0).toISOString(),
+				finished_at: null,
+				next_attempt_at: RESUME,
+				...overrides,
+			}),
+			'Relance des devis',
+			NOW,
+		)
+	}
+
+	it('reads a run that stays running but resumes later as paused, with no duration', () => {
+		const row = parked()
+
+		expect(row.status).toBe('paused')
+		expect(row.durationMs).toBeNull()
+		expect(row.resumeNote).toBe(formatResumeNote(RESUME))
+		expect(row.failure).toBeNull()
+	})
+
+	it('keeps a running run running once its resume time has passed', () => {
+		const row = parked({ next_attempt_at: new Date(NOW - 1000).toISOString() })
+
+		expect(row.status).toBe('running')
+		expect(row.resumeNote).toBeNull()
+		expect(row.durationMs).not.toBeNull()
+	})
+
+	it('has no resume note for the other runs', () => {
+		expect(ROWS.map((row) => row.resumeNote)).toEqual([null, null, null])
+	})
+
+	it('files a paused run under the running ones in the filter, the counts and the summary', () => {
+		const rows = [...ROWS, parked()]
+
+		expect(
+			filterRows(rows, { ...DEFAULT_FILTERS, status: 'running' }, NOW).map(
+				(row) => row.number,
+			),
+		).toEqual([1287, 1288])
+		expect(statusCounts(rows)).toEqual({
+			all: 4,
+			running: 2,
+			success: 1,
+			error: 1,
+		})
+		expect(summarize(rows)).toMatchObject({ total: 4, running: 2 })
+	})
+
+	it('leaves a paused run out of the median duration', () => {
+		expect(summarize([...ROWS.slice(0, 2), parked()]).medianDurationMs).toBe(
+			3000,
+		)
+	})
+
+	it('sorts a paused run right after the running ones when sorting by status', () => {
+		const rows = [ROWS[0], parked(), ROWS[2], ROWS[1]].filter(
+			(row) => row !== undefined,
+		)
+
+		expect(sortRows(rows, 'status', 'asc').map((row) => row.status)).toEqual([
+			'running',
+			'paused',
+			'error',
+			'success',
+		])
 	})
 })
 

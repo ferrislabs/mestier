@@ -2,6 +2,7 @@ export type ExecutionStatus =
 	| 'success'
 	| 'error'
 	| 'running'
+	| 'paused'
 	| 'waiting'
 	| 'skipped'
 	| 'cancelled'
@@ -21,6 +22,7 @@ const FROM_STEP_STATUS: Record<string, ExecutionStatus> = {
 	failed: 'error',
 	dead: 'error',
 	skipped: 'skipped',
+	waiting: 'paused',
 }
 
 export function toExecutionStatus(runStatus: string): ExecutionStatus {
@@ -42,4 +44,28 @@ export function executionFromRunStatus(
 	if (runStatus === 'failed' || runStatus === 'dead') return 'error'
 	if (runStatus === 'running' || runStatus === 'in_flight') return 'running'
 	return null
+}
+
+export interface ParkableRun {
+	status: string
+	next_attempt_at?: string | null
+}
+
+export function runResumeAt(run: ParkableRun, now: number): string | null {
+	if (run.status !== 'running' || !run.next_attempt_at) return null
+	const resume = new Date(run.next_attempt_at).getTime()
+	return Number.isFinite(resume) && resume > now ? run.next_attempt_at : null
+}
+
+export function toRunDisplayStatus(
+	run: ParkableRun,
+	now: number,
+): ExecutionStatus {
+	return runResumeAt(run, now) === null
+		? toExecutionStatus(run.status)
+		: 'paused'
+}
+
+export function filterStatusOf(status: ExecutionStatus): ExecutionStatus {
+	return status === 'paused' ? 'running' : status
 }

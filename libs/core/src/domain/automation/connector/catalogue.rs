@@ -5,7 +5,7 @@ use serde_json::json;
 use thiserror::Error;
 
 use super::descriptor::{AuthRequirement, ConnectorDescriptor};
-use super::field::{Field, FieldKind, SelectOption};
+use super::field::{Field, FieldKind, SelectOption, VisibleWhen};
 use crate::domain::automation::credential_kind::HTTP_CREDENTIAL_KINDS;
 use crate::domain::automation::workflow::Branch;
 
@@ -91,6 +91,81 @@ const CONFIG_FIELDS: &[Field] = &[Field {
     secret: false,
     visible_when: None,
 }];
+
+const WAIT_FIELDS: &[Field] = &[
+    Field {
+        name: "duration",
+        label: "Durée",
+        required: true,
+        kind: FieldKind::Number,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "unit",
+        label: "Unité",
+        required: true,
+        kind: FieldKind::Select {
+            options: &[
+                SelectOption {
+                    value: "minutes",
+                    label: "Minutes",
+                },
+                SelectOption {
+                    value: "hours",
+                    label: "Heures",
+                },
+                SelectOption {
+                    value: "days",
+                    label: "Jours",
+                },
+            ],
+        },
+        expression: false,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const MERGE_FIELDS: &[Field] = &[
+    Field {
+        name: "mode",
+        label: "Mode",
+        required: true,
+        kind: FieldKind::Select {
+            options: &[
+                SelectOption {
+                    value: "append",
+                    label: "Ajouter les éléments à la suite",
+                },
+                SelectOption {
+                    value: "combine_by_position",
+                    label: "Combiner par position",
+                },
+                SelectOption {
+                    value: "combine_by_field",
+                    label: "Combiner par champ",
+                },
+            ],
+        },
+        expression: false,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "field",
+        label: "Champ de jointure",
+        required: false,
+        kind: FieldKind::Text,
+        expression: false,
+        secret: false,
+        visible_when: Some(VisibleWhen {
+            field: "mode",
+            any_of: &["combine_by_field"],
+        }),
+    },
+];
 
 const CUSTOMER_CREATE_FIELDS: &[Field] = &[
     Field {
@@ -187,6 +262,181 @@ const SUPPORT_ADD_BADGE_FIELDS: &[Field] = &[
                 SelectOption {
                     value: "error",
                     label: "Erreur",
+                },
+            ],
+        },
+        expression: false,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const NOTE_ADD_FIELDS: &[Field] = &[
+    Field {
+        name: "ticket_id",
+        label: "Ticket",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "body",
+        label: "Note",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const QUOTE_SEARCH_FIELDS: &[Field] = &[
+    Field {
+        name: "status",
+        label: "Statut",
+        required: false,
+        kind: FieldKind::Select {
+            options: &[
+                SelectOption {
+                    value: "DRAFT",
+                    label: "Brouillon",
+                },
+                SelectOption {
+                    value: "SENT",
+                    label: "Envoyé",
+                },
+                SelectOption {
+                    value: "ACCEPTED",
+                    label: "Accepté",
+                },
+                SelectOption {
+                    value: "DECLINED",
+                    label: "Refusé",
+                },
+                SelectOption {
+                    value: "CANCELLED",
+                    label: "Annulé",
+                },
+            ],
+        },
+        expression: false,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "since_days",
+        label: "Envoyés depuis (jours)",
+        required: false,
+        kind: FieldKind::Number,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "limit",
+        label: "Nombre maximum",
+        required: false,
+        kind: FieldKind::Number,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const PROJECT_CREATE_FIELDS: &[Field] = &[
+    Field {
+        name: "quote_id",
+        label: "Devis",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "name",
+        label: "Nom du projet",
+        required: false,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const CHAT_POST_MESSAGE_FIELDS: &[Field] = &[
+    Field {
+        name: "channel",
+        label: "Canal",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "message",
+        label: "Message",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
+const SMTP_SEND_FIELDS: &[Field] = &[
+    Field {
+        name: "to",
+        label: "Destinataire",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "cc",
+        label: "Copie",
+        required: false,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "subject",
+        label: "Objet",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "body",
+        label: "Corps",
+        required: true,
+        kind: FieldKind::Text,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "format",
+        label: "Format",
+        required: false,
+        kind: FieldKind::Select {
+            options: &[
+                SelectOption {
+                    value: "text",
+                    label: "Texte",
+                },
+                SelectOption {
+                    value: "html",
+                    label: "HTML",
                 },
             ],
         },
@@ -432,6 +682,8 @@ fn descriptors() -> Vec<ConnectorDescriptor> {
     let mut all = flow_descriptors();
     all.extend(customer_descriptors());
     all.extend(support_descriptors());
+    all.extend(workspace_descriptors());
+    all.extend(smtp_descriptors());
     all.extend(http_descriptors());
     all.extend(collection_descriptors());
     all.extend(odoo_descriptors());
@@ -479,6 +731,38 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             output_example: json!({ "customer_id": "…", "retry_limit": 3 }),
             output_mirrors_field: Some("variables"),
             sample_output: json!({ "customer_id": "…", "retry_limit": 3 }),
+        },
+        ConnectorDescriptor {
+            kind: "flow.wait",
+            version: 1,
+            family: "flow",
+            label: "Attendre",
+            auth: AuthRequirement::None,
+            fields: WAIT_FIELDS,
+            branches: &[],
+            output_example: json!({
+                "duration": 2,
+                "unit": "days",
+                "resume_at": "2026-01-01T00:00:00Z",
+            }),
+            output_mirrors_field: None,
+            sample_output: json!({
+                "duration": 2,
+                "unit": "days",
+                "resume_at": "2026-01-01T00:00:00Z",
+            }),
+        },
+        ConnectorDescriptor {
+            kind: "flow.merge",
+            version: 1,
+            family: "flow",
+            label: "Fusionner",
+            auth: AuthRequirement::None,
+            fields: MERGE_FIELDS,
+            branches: &[],
+            output_example: json!({ "items": [{ "id": "…" }] }),
+            output_mirrors_field: None,
+            sample_output: json!({ "items": [{ "id": "…" }] }),
         },
     ]
 }
@@ -535,6 +819,116 @@ fn support_descriptors() -> Vec<ConnectorDescriptor> {
             }),
         },
     ]
+}
+
+fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
+    vec![
+        ConnectorDescriptor {
+            kind: "mestier.note.add",
+            version: 1,
+            family: "mestier",
+            label: "Ajouter une note",
+            auth: AuthRequirement::None,
+            fields: NOTE_ADD_FIELDS,
+            branches: &[],
+            output_example: json!({ "ticket_id": "…", "note_id": "…" }),
+            output_mirrors_field: None,
+            sample_output: json!({
+                "ticket_id": "00000000-0000-0000-0000-000000000000",
+                "note_id": "00000000-0000-0000-0000-000000000000",
+            }),
+        },
+        ConnectorDescriptor {
+            kind: "mestier.quote.search",
+            version: 1,
+            family: "mestier",
+            label: "Rechercher des devis",
+            auth: AuthRequirement::None,
+            fields: QUOTE_SEARCH_FIELDS,
+            branches: &[],
+            output_example: json!({
+                "items": [{
+                    "id": "…",
+                    "reference": "DV-2026-0001",
+                    "title": "…",
+                    "status": "SENT",
+                    "customer_id": "…",
+                    "net_cents": 0,
+                    "gross_cents": 0,
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "updated_at": "2026-01-01T00:00:00Z",
+                }],
+                "count": 1,
+            }),
+            output_mirrors_field: None,
+            sample_output: json!({
+                "items": [{
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "reference": "DV-2026-0001",
+                    "title": "Rénovation de la salle de bain",
+                    "status": "SENT",
+                    "customer_id": "00000000-0000-0000-0000-000000000000",
+                    "net_cents": 100000,
+                    "gross_cents": 120000,
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "updated_at": "2026-01-01T00:00:00Z",
+                }],
+                "count": 1,
+            }),
+        },
+        ConnectorDescriptor {
+            kind: "mestier.project.create",
+            version: 1,
+            family: "mestier",
+            label: "Créer un projet",
+            auth: AuthRequirement::None,
+            fields: PROJECT_CREATE_FIELDS,
+            branches: &[],
+            output_example: json!({ "project_id": "…", "name": "…", "quote_id": "…" }),
+            output_mirrors_field: None,
+            sample_output: json!({
+                "project_id": "00000000-0000-0000-0000-000000000000",
+                "name": "Rénovation de la salle de bain",
+                "quote_id": "00000000-0000-0000-0000-000000000000",
+            }),
+        },
+        ConnectorDescriptor {
+            kind: "mestier.chat.post_message",
+            version: 1,
+            family: "mestier",
+            label: "Publier dans un canal Discussions",
+            auth: AuthRequirement::None,
+            fields: CHAT_POST_MESSAGE_FIELDS,
+            branches: &[],
+            output_example: json!({ "message_id": "…", "channel_id": "…" }),
+            output_mirrors_field: None,
+            sample_output: json!({
+                "message_id": "00000000-0000-0000-0000-000000000000",
+                "channel_id": "00000000-0000-0000-0000-000000000000",
+            }),
+        },
+    ]
+}
+
+fn smtp_descriptors() -> Vec<ConnectorDescriptor> {
+    vec![ConnectorDescriptor {
+        kind: "smtp.send",
+        version: 1,
+        family: "smtp",
+        label: "E-mail SMTP",
+        auth: AuthRequirement::Exactly("smtp"),
+        fields: SMTP_SEND_FIELDS,
+        branches: &[],
+        output_example: json!({
+            "message_id": "<8f2c1d@duval.fr>",
+            "accepted": ["claire.fontaine@fontaine-immo.fr"],
+        }),
+        output_mirrors_field: None,
+        sample_output: json!({
+            "message_id": "<8f2c1d@duval.fr>",
+            "accepted": ["claire.fontaine@fontaine-immo.fr"],
+        }),
+    }]
 }
 
 /// The one network connector proved by #202: an outbound call to wherever

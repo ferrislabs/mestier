@@ -227,6 +227,10 @@ export function ExecutionsTable({
 											</span>
 										</span>
 									)
+								) : row.resumeNote ? (
+									<span className="block truncate text-muted-foreground text-sm">
+										{row.resumeNote}
+									</span>
 								) : (
 									<span className="text-muted-foreground">—</span>
 								)}

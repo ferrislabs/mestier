@@ -18,9 +18,14 @@ import { RunNowFeature } from '#/pages/automation/feature/run-now-feature'
 import { WorkflowTopBarFeature } from '#/pages/automation/feature/workflow-top-bar-feature'
 import { workflowExecutionsLocation } from '#/pages/automation/lib/automation-paths'
 import { typographicEventLabels } from '#/pages/automation/lib/event-search'
-import { toExecutionStatus } from '#/pages/automation/lib/execution-status'
+import {
+	filterStatusOf,
+	runResumeAt,
+	toRunDisplayStatus,
+} from '#/pages/automation/lib/execution-status'
 import {
 	formatMilliseconds,
+	formatResumeNote,
 	formatStartedAt,
 	formatVersionLabel,
 } from '#/pages/automation/lib/format'
@@ -242,16 +247,18 @@ function WorkflowExecutionsWorkspace({
 	const entries = runs
 		.filter((item) => {
 			if (filter === 'all') return true
-			return toExecutionStatus(item.status) === filter
+			return filterStatusOf(toRunDisplayStatus(item, now)) === filter
 		})
 		.map((item) => {
-			const duration = runElapsedMs(item, now)
+			const resumeAt = runResumeAt(item, now)
+			const duration = resumeAt === null ? runElapsedMs(item, now) : null
 			return {
 				number: item.number,
-				status: toExecutionStatus(item.status),
+				status: toRunDisplayStatus(item, now),
 				startedAt: formatStartedAt(item.started_at ?? item.created_at),
 				trigger: triggerOf(item),
 				duration: duration === null ? null : formatMilliseconds(duration),
+				resumeNote: formatResumeNote(resumeAt),
 			}
 		})
 
@@ -280,9 +287,11 @@ function WorkflowExecutionsWorkspace({
 						trigger: triggerOf(run),
 						status: view.status,
 						duration:
-							view.durationMs === null
-								? undefined
-								: formatMilliseconds(view.durationMs),
+							view.status === 'paused'
+								? (formatResumeNote(view.resumeAt) ?? undefined)
+								: view.durationMs === null
+									? undefined
+									: formatMilliseconds(view.durationMs),
 						versionLabel: formatVersionLabel(run.workflow_version_created_at),
 						isCurrentVersion: run.workflow_version_id === currentVersion?.id,
 					},

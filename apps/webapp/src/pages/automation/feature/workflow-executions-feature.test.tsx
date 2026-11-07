@@ -11,6 +11,7 @@ import {
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { WorkflowExecutionsFeature } from '#/pages/automation/feature/workflow-executions-feature'
+import { formatResumeNote } from '#/pages/automation/lib/format'
 import {
 	type FakeApi,
 	installFakeTanstackApi,
@@ -1995,5 +1996,178 @@ describe('WorkflowExecutionsFeature — a node is named as in the editor', () =>
 		expect(
 			within(dialog).getByText(/^Si · Condition · Exécution #/),
 		).toBeDefined()
+	})
+})
+
+describe('WorkflowExecutionsFeature — a run that waits', () => {
+	const RESUME = new Date(Date.now() + 2 * 86_400_000).toISOString()
+	const RESUME_NOTE = formatResumeNote(RESUME) ?? ''
+	const PAUSE_NOTE = `En pause · ${RESUME_NOTE}`
+	const WAIT_GRAPH: Schemas.GraphDto = {
+		triggers: [{ id: 't1', kind: 'Manual' }],
+		connectors: [
+			{
+				id: 'w1',
+				kind: 'flow.wait',
+				version: 1,
+				config: { duration: 2, unit: 'days' },
+			},
+			{ id: 'c2', kind: 'test.second', version: 1, config: {} },
+		],
+		edges: [
+			{ from: 't1', to: 'w1' },
+			{ from: 'w1', to: 'c2' },
+		],
+	}
+
+	function parkedRun(overrides: Record<string, unknown> = {}) {
+		return run({
+			status: 'running',
+			finished_at: null,
+			next_attempt_at: RESUME,
+			...overrides,
+		})
+	}
+
+	function withParkedRun(api: FakeApi) {
+		api.mockGet(CONNECTORS_PATH, () => ({
+			data: {
+				auth_schemes: [],
+				connectors: [
+					{ ...descriptor('flow.wait', 'Attendre'), family: 'flow' },
+					descriptor('test.second', 'Seconde étape'),
+				],
+			},
+			pagination: null,
+		}))
+		api.mockGet(RUNS_PATH, () => ({ data: [parkedRun()], pagination: null }))
+		api.mockGet(RUN_PATH, () => ({
+			data: runDetail({
+				...parkedRun(),
+				graph: WAIT_GRAPH,
+				steps: [
+					{
+						id: 's1',
+						connector_id: 'w1',
+						iteration_path: '',
+						attempts: 1,
+						status: 'waiting',
+						resume_at: RESUME,
+						created_at: '2026-08-05T00:00:01Z',
+						started_at: '2026-08-05T00:00:01Z',
+						input: { facture: 'FA-2026-0217' },
+					},
+				],
+			}),
+			pagination: null,
+		}))
+	}
+
+	it('says in the list that the run is paused, and when it resumes', async () => {
+		render(withParkedRun)
+
+		const list = await screen.findByRole('complementary', {
+			name: 'Liste des exécutions',
+		})
+		const item = within(list).getByRole('button', { name: /#7/ })
+		expect(within(item).getByText(/^En pause/)).toBeDefined()
+		expect(within(item).getByText(RESUME_NOTE)).toBeDefined()
+		expect(within(list).queryByText(/En cours/)).toBeNull()
+	})
+
+	it('says in the header that the run is paused, until when', async () => {
+		render(withParkedRun)
+
+		const title = await screen.findByRole('heading', { name: /^Exécution #7$/ })
+		const header = title.closest('header') as HTMLElement
+		expect(within(header).getByText('En pause')).toBeDefined()
+		expect(within(header).getByText(`· ${RESUME_NOTE}`)).toBeDefined()
+	})
+
+	it('shows the waiting step in the Déroulé with its resume time, the next node not reached yet', async () => {
+		render(withParkedRun)
+
+		const steps = await screen.findByRole('complementary', {
+			name: 'Déroulé de l’exécution',
+		})
+		const waiting = within(steps).getByRole('button', { name: /Attendre/ })
+		expect(within(waiting).getByText(PAUSE_NOTE)).toBeDefined()
+		const pending = within(steps).getByRole('region', { name: 'En attente' })
+		expect(within(pending).getByText('Pas encore atteint')).toBeDefined()
+		expect(within(pending).getByText('Seconde étape')).toBeDefined()
+	})
+
+	it('draws the waiting node on the canvas with the dashed frame of a node that waits', async () => {
+		render(withParkedRun)
+
+		await screen.findByRole('complementary', { name: 'Déroulé de l’exécution' })
+		const canvas = document.querySelector('.react-flow') as HTMLElement
+		const note = await within(canvas).findByText(PAUSE_NOTE)
+
+		expect(note.className).toContain('text-muted-foreground')
+		const node = canvas.querySelector('[data-id="w1"]') as HTMLElement
+		expect(node.querySelector('button')?.className).toContain('border-dashed')
+		expect(within(canvas).getByText('En attente')).toBeDefined()
+		expect(
+			within(screen.getByRole('list', { name: 'Légende' })).getByText(
+				'En pause',
+			),
+		).toBeDefined()
+	})
+
+	it('opens the waiting node with its status, its resume time and what the pause does', async () => {
+		render(withParkedRun)
+
+		await openStep('Attendre')
+		const dialog = await screen.findByRole('dialog')
+
+		expect(within(dialog).getAllByText('En pause').length).toBeGreaterThan(1)
+		expect(
+			within(dialog).getByText(
+				'Le workflow reprendra à la fin de la pause, puis transmettra les éléments reçus.',
+			),
+		).toBeDefined()
+		expect(within(dialog).getByText(RESUME_NOTE)).toBeDefined()
+		expect(within(dialog).queryByText('Exécution en cours')).toBeNull()
+	})
+
+	it('keeps saying a node behind the pause was not reached', async () => {
+		render(withParkedRun)
+
+		await openStep('Seconde étape')
+		const dialog = await screen.findByRole('dialog')
+
+		expect(
+			within(dialog).getByText(
+				'Pas encore atteint : l’exécution n’est pas encore arrivée à ce nœud.',
+			),
+		).toBeDefined()
+		expect(within(dialog).getByText('En attente')).toBeDefined()
+	})
+
+	it('keeps the paused run in the list when filtering the runs in progress', async () => {
+		for (const method of [
+			'hasPointerCapture',
+			'setPointerCapture',
+			'releasePointerCapture',
+			'scrollIntoView',
+		] as const) {
+			if (typeof Element.prototype[method] !== 'function') {
+				Element.prototype[method] = (() => false) as never
+			}
+		}
+		render(withParkedRun)
+		const list = await screen.findByRole('complementary', {
+			name: 'Liste des exécutions',
+		})
+
+		await userEvent.click(
+			within(list).getByRole('combobox', { name: 'Filtrer par statut' }),
+		)
+		await userEvent.click(
+			await screen.findByRole('option', { name: 'En cours' }),
+		)
+
+		expect(within(list).getByRole('button', { name: /#7/ })).toBeDefined()
 	})
 })

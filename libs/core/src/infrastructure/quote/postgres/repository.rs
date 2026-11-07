@@ -1,11 +1,16 @@
 use chrono::{DateTime, Utc};
+use std::str::FromStr;
+
 use common::CoreError;
 use mestier_macros::repository;
 use sqlx::PgConnection;
 
 use crate::{
-    OrganizationId, Quote, QuoteId, QuoteLine, QuoteStatus,
-    domain::quote::ports::QuoteRepository,
+    CustomerId, OrganizationId, Quote, QuoteId, QuoteLine, QuoteStatus,
+    domain::quote::{
+        ports::QuoteRepository,
+        search::{QuoteSearch, QuoteSummary},
+    },
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
         quote::postgres::model::{QuoteLineRow, QuoteRow, vat_breakdown_to_json},
@@ -154,6 +159,48 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         }
 
         Ok((quotes, total as u64))
+    }
+
+    async fn search(&mut self, search: &QuoteSearch) -> Result<Vec<QuoteSummary>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, reference, title, customer_id, status::text AS "status!", net_cents,
+                   gross_cents, created_at, updated_at
+            FROM quotes
+            WHERE org_id = $1
+              AND deleted_at IS NULL
+              AND ($2::text IS NULL OR status = CAST($2 AS text)::quote_status)
+              AND ($3::timestamptz IS NULL OR updated_at <= $3)
+            ORDER BY created_at DESC, id DESC
+            LIMIT $4
+            "#,
+            search.organization_id.0,
+            search.status.map(QuoteStatus::as_str),
+            search.updated_before,
+            search.limit.as_i64(),
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok(QuoteSummary {
+                    id: QuoteId(row.id),
+                    reference: row.reference,
+                    title: row.title,
+                    customer_id: CustomerId(row.customer_id),
+                    status: QuoteStatus::from_str(&row.status).map_err(|error| {
+                        CoreError::Internal(format!("invalid quote status in database: {error}"))
+                    })?,
+                    net_cents: row.net_cents,
+                    gross_cents: row.gross_cents,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                })
+            })
+            .collect()
     }
 
     async fn update(&mut self, quote: &Quote) -> Result<Quote, CoreError> {

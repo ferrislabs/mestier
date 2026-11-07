@@ -9,6 +9,7 @@ import {
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { ExecutionsLogFeature } from '#/pages/automation/feature/executions-log-feature'
+import { formatResumeNote } from '#/pages/automation/lib/format'
 import {
 	type FakeApi,
 	installFakeTanstackApi,
@@ -535,5 +536,51 @@ describe('ExecutionsLogFeature', () => {
 
 		expect(await screen.findByText('Ancienne relance')).toBeDefined()
 		expect(screen.queryByText('Workflow supprimé')).toBeNull()
+	})
+
+	it('shows a run that waits as paused, with no duration and the time it resumes', async () => {
+		const resume = new Date(Date.now() + 2 * 86_400_000).toISOString()
+		render(vi.fn(), {
+			runs: [
+				run({
+					id: 'parked-1',
+					number: 31,
+					status: 'running',
+					started_at: '2026-08-01T00:00:00Z',
+					finished_at: null,
+					next_attempt_at: resume,
+				}),
+			],
+		})
+
+		const row = (
+			await screen.findByRole('link', { name: /exécution 31/ })
+		).closest('tr') as HTMLElement
+		expect(within(row).getByText('En pause')).toBeDefined()
+		expect(within(row).queryByText('En cours')).toBeNull()
+		expect(within(row).getByText(formatResumeNote(resume) ?? '')).toBeDefined()
+		expect(within(row).getByText('—')).toBeDefined()
+	})
+
+	it('still counts a run that waits among the runs in progress', async () => {
+		const resume = new Date(Date.now() + 2 * 86_400_000).toISOString()
+		render(vi.fn(), {
+			runs: [
+				run({
+					id: 'parked-1',
+					number: 31,
+					status: 'running',
+					finished_at: null,
+					next_attempt_at: resume,
+				}),
+				run({ id: 'done-1', number: 30 }),
+			],
+		})
+
+		await screen.findByRole('link', { name: /exécution 31/ })
+
+		expect(
+			screen.getByRole('radio', { name: /En cours/ }).textContent,
+		).toContain('1')
 	})
 })
