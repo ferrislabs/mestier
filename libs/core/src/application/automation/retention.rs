@@ -382,6 +382,7 @@ mod tests {
                             name: None,
                             description: None,
                             disabled: false,
+                            operation: None,
                         }],
                         edges: vec![Edge {
                             from: "t1".to_string(),
@@ -509,6 +510,7 @@ mod tests {
                                 name: None,
                                 description: None,
                                 disabled: false,
+                                operation: None,
                             }],
                             edges: vec![Edge {
                                 from: "t1".to_string(),

@@ -7,7 +7,6 @@ import {
 	toEditorEdges,
 	toEditorNodes,
 	toGraph,
-	toMeta,
 	triggerNode,
 	withDetails,
 	withDisabled,
@@ -115,14 +114,7 @@ describe('editor nodes', () => {
 	})
 
 	it('names a connector after its descriptor and a trigger after its kind', () => {
-		const nodes = toEditorNodes(
-			graph,
-			new Map(),
-			lookup,
-			{},
-			new Map(),
-			new Map(),
-		)
+		const nodes = toEditorNodes(graph, new Map(), lookup, new Map(), new Map())
 		expect(nodes.map((node) => node.data.label)).toEqual(['Clic', 'Condition'])
 		expect(nodes[1].data.branches).toEqual(['Then', 'Else'])
 	})
@@ -168,33 +160,59 @@ describe('editor nodes', () => {
 	})
 
 	it('round-trips the graph through nodes and edges', () => {
-		const nodes = toEditorNodes(
-			graph,
-			new Map(),
-			lookup,
-			{},
-			new Map(),
-			new Map(),
-		)
+		const nodes = toEditorNodes(graph, new Map(), lookup, new Map(), new Map())
 		expect(toGraph(nodes, toEditorEdges(graph))).toEqual(graph)
 	})
 
-	it('keeps only the collection operation of a node in the local meta', () => {
-		const plain = triggerNode(graph.triggers[0], { x: 0, y: 0 }, lookup)
-		const named = connectorNode(
-			{ ...graph.connectors[0], name: 'Départ', disabled: true },
+	it('carries the operation a node calls in the graph, with no copy of it on the side', () => {
+		const operation = {
+			collection_id: '6f1f6a9e-5f0c-4a43-9d77-1d9d0a3b1c11',
+			operation_id: 'list',
+		}
+		const withOperation: Schemas.GraphDto = {
+			...graph,
+			connectors: [
+				{
+					id: 'c1',
+					kind: 'collection.operation',
+					version: 1,
+					config: { query: { limit: 5 } },
+					operation,
+				},
+			],
+			edges: [],
+		}
+
+		const nodes = toEditorNodes(
+			withOperation,
+			new Map(),
+			lookup,
+			new Map(),
+			new Map(),
+		)
+
+		expect(nodes[1]?.data.connector?.operation).toEqual(operation)
+		expect(toGraph(nodes, []).connectors).toEqual(withOperation.connectors)
+	})
+
+	it('names and describes a collection operation after its copy, until its own name is set', () => {
+		const node = connectorNode(
+			{
+				id: 'c1',
+				kind: 'collection.operation',
+				version: 1,
+				config: {},
+				operation: { collection_id: 'x', operation_id: 'y' },
+			},
 			{ x: 0, y: 0 },
 			lookup,
 		)
-		const operation = { collectionId: 'petstore', operationId: 'list' }
-		const fromCollection = connectorNode(
-			{ ...graph.connectors[0], id: 'c2' },
-			{ x: 0, y: 0 },
-			lookup,
-			{ operation },
-		)
-		expect(toMeta([plain, named])).toEqual({})
-		expect(toMeta([fromCollection])).toEqual({ c2: { operation } })
+
+		expect(node.data).toMatchObject({
+			label: 'Opération de collection',
+			subtitle: 'Collection',
+			typeLabel: 'Opération de collection',
+		})
 	})
 
 	it('writes a new name and description on the connector or trigger itself', () => {

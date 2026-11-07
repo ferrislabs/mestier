@@ -34,6 +34,6 @@ mod model;
 pub use connector::{Connector, ConnectorInput, ConnectorOutcome};
 pub use graph::{
     LoopStackEntry, branch_targets, connectors_by_id, descendants_via, disabled_outcome,
-    format_iteration_path, pass_through_output, resolve_config, roots,
+    format_iteration_path, pass_through_output, resolve_config, resolve_config_nested, roots,
 };
 pub use model::{DueRun, Run, RunOverview, RunSettlement, RunStatus, RunStep, StepStatus};

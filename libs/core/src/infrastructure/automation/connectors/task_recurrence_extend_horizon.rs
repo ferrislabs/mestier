@@ -74,6 +74,7 @@ mod tests {
             run_id: Uuid::from_u128(2),
             config: &config,
             credential_id: None,
+            operation: None,
         };
 
         let outcome = connector().execute(input).await;

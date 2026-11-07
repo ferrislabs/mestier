@@ -8,9 +8,22 @@ import {
 	type ConnectorParametersFeatureProps,
 } from '#/pages/automation/feature/connector-parameters-feature'
 import { EventPickerFeature } from '#/pages/automation/feature/event-picker-feature'
-import { useCollections } from '#/pages/automation/feature/use-collections'
-import { identificationsPath } from '#/pages/automation/lib/automation-paths'
+import {
+	collectionPath,
+	identificationsPath,
+} from '#/pages/automation/lib/automation-paths'
 import { branchLabel } from '#/pages/automation/lib/branch-labels'
+import { describeSecurity } from '#/pages/automation/lib/collection-format'
+import {
+	COLLECTION_OPERATION_KIND,
+	type CollectionRead,
+	flattenOperationConfig,
+	lookupOperation,
+	nestOperationConfig,
+	operationFieldErrors,
+	operationForm,
+	operationOutput,
+} from '#/pages/automation/lib/collection-node'
 import { collectionCredentialHint } from '#/pages/automation/lib/connector-field-copy'
 import type {
 	EditorEdge,
@@ -26,11 +39,11 @@ import {
 	outputViewFromPayload,
 	outputViewFromStep,
 } from '#/pages/automation/lib/node-view'
-import {
-	operationSuccessExample,
-	resolveOperation,
-} from '#/pages/automation/lib/operation-search'
 import { labelConflict } from '#/pages/automation/lib/references'
+import {
+	exampleOf,
+	operationContractSource,
+} from '#/pages/automation/lib/schema-typescript'
 import {
 	findEvent,
 	triggerEventNames,
@@ -51,6 +64,7 @@ import {
 	NodeParametersPanel,
 	OperationField,
 } from '#/pages/automation/ui/node-parameters-panel'
+import { OperationContractTabs } from '#/pages/automation/ui/operation-contract-tabs'
 import { OperationOutputPanel } from '#/pages/automation/ui/operation-output-panel'
 import { RunStatusLabel } from '#/pages/automation/ui/run-status-label'
 import { TriggerParameters } from '#/pages/automation/ui/trigger-parameters'
@@ -62,6 +76,7 @@ export interface NodeDetailsFeatureProps {
 	edges: readonly EditorEdge[]
 	organizationSlug: string
 	sources: UpstreamSources
+	collectionReads: ReadonlyMap<string, CollectionRead>
 	authSchemes: Schemas.AuthSchemeResponse[]
 	credentials: Schemas.CredentialResponse[]
 	issues: readonly NodeIssue[]
@@ -92,6 +107,7 @@ export function NodeDetailsFeature({
 	edges,
 	organizationSlug,
 	sources,
+	collectionReads,
 	authSchemes,
 	credentials,
 	issues,
@@ -108,12 +124,15 @@ export function NodeDetailsFeature({
 		null,
 	)
 	const { connector, trigger } = node.data
-	const collections = useCollections().data
-	const operationRef = node.data.meta.operation
-	const operation = operationRef
-		? resolveOperation(operationRef, collections)
-		: null
-	const successExample = operation ? operationSuccessExample(operation) : null
+	const isOperationNode = connector?.kind === COLLECTION_OPERATION_KIND
+	const lookup =
+		isOperationNode && connector?.operation
+			? lookupOperation(connector.operation, collectionReads)
+			: null
+	const operation = lookup?.status === 'found' ? lookup.resolved : null
+	const form =
+		operation && connector ? operationForm(operation, connector.config) : null
+	const output = operation ? operationOutput(operation) : null
 	const descriptor = connector
 		? sources.descriptors.get(connector.kind)
 		: undefined
@@ -170,6 +189,7 @@ export function NodeDetailsFeature({
 		node.data.errors,
 		new Set(descriptor?.fields.map((field) => field.name)),
 	)
+	const operationErrors = operationFieldErrors(textErrors.rest)
 	const fieldIssues = issues
 	const acceptsExpressions =
 		descriptor?.fields.some((field) => field.expression) ?? false
@@ -238,37 +258,63 @@ export function NodeDetailsFeature({
 				}
 				parameters={
 					<NodeParametersPanel acceptsExpressions={acceptsExpressions}>
-						{operationRef && (
+						{isOperationNode && (
 							<OperationField
 								operation={
 									operation
 										? {
 												method: operation.operation.method,
 												path: operation.operation.path,
+												summary: operation.operation.summary,
 												collectionTitle: operation.collection.title,
+												collectionHref: buildOrgPath(
+													organizationSlug,
+													collectionPath(operation.collection.id),
+												),
 												baseUrl: operation.collection.baseUrl,
 											}
 										: null
 								}
+								unavailable={
+									lookup?.status === 'loading'
+										? 'loading'
+										: lookup?.status === 'unreadable'
+											? 'unreadable'
+											: 'missing'
+								}
+								errors={operationErrors.operation}
 							/>
 						)}
-						{connector && descriptor ? (
+						{connector && descriptor && (!isOperationNode || form) ? (
 							<ConnectorParametersFeature
 								key={node.id}
-								descriptor={descriptor}
-								config={connector.config}
+								descriptor={
+									form ? { ...descriptor, fields: form.fields } : descriptor
+								}
+								config={
+									form
+										? flattenOperationConfig(connector.config, form)
+										: connector.config
+								}
 								credentialId={connector.credential_id ?? null}
 								credentials={credentials}
 								authSchemes={authSchemes}
-								errors={textErrors.rest}
+								errors={form ? operationErrors.fields : textErrors.rest}
 								bindingIssues={fieldIssues}
 								credentialHint={
 									operation
-										? collectionCredentialHint(operation.collection.security)
+										? collectionCredentialHint(
+												operation.collection.security.map(describeSecurity),
+											)
 										: undefined
 								}
+								fieldAddOns={form?.copy}
 								evaluateContext={evaluateContext}
-								onConfigChange={(config) => onUpdateConnector({ config })}
+								onConfigChange={(config) =>
+									onUpdateConnector({
+										config: form ? nestOperationConfig(config) : config,
+									})
+								}
 								onCredentialChange={(credentialId) =>
 									onUpdateConnector({ credential_id: credentialId })
 								}
@@ -301,6 +347,25 @@ export function NodeDetailsFeature({
 								/>
 							</>
 						) : null}
+						{operation && (
+							<div className="grid gap-2">
+								<p className="font-medium text-sm">Contrat de l’opération</p>
+								<OperationContractTabs
+									source={operationContractSource(
+										operation.collection,
+										operation.operation,
+									)}
+									example={
+										operation.operation.response
+											? exampleOf(
+													operation.operation.response,
+													operation.collection.schemas,
+												)
+											: null
+									}
+								/>
+							</div>
+						)}
 					</NodeParametersPanel>
 				}
 				previous={neighbours.previous
@@ -311,11 +376,11 @@ export function NodeDetailsFeature({
 					.flatMap(toNavItem(true))}
 				onNavigate={onNavigate}
 				output={
-					successExample && !step ? (
+					output && !step ? (
 						<OperationOutputPanel
-							summary={successExample.summary}
-							status={successExample.status}
-							example={successExample.example}
+							summary={output.summary}
+							status={output.status}
+							output={output.output}
 						/>
 					) : (
 						<NodeOutputPanel

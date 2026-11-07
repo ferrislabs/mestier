@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, org_id, slug, title, version, base_url,\n                      source_kind, source_value, imported_at, security,\n                      jsonb_array_length(operations) AS \"operation_count!\"\n               FROM automation.collection\n               WHERE org_id = $1\n               ORDER BY lower(title), id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "base_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "source_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "source_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "imported_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "security",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "operation_count!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8c9e5de7ffd5b8c75fda81cd90ae078488d69200cfda6357da44ee8cc1ff2726"
+}

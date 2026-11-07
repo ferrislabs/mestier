@@ -3,6 +3,9 @@ use common::{CoreError, OrganizationId};
 use events::EventEnvelope;
 use uuid::Uuid;
 
+use crate::domain::automation::collection::{
+    Collection, CollectionDetail, CollectionSummary, CollectionVersion,
+};
 use crate::domain::automation::credential::Credential;
 use crate::domain::automation::folder::{FolderName, WorkflowFolder};
 use crate::domain::automation::run::{DueRun, Run, RunOverview, RunSettlement, RunStep};
@@ -317,6 +320,70 @@ pub trait WorkflowFolderRepository: Send {
         name: Option<&'a FolderName>,
         parent_id: Option<Option<Uuid>>,
     ) -> impl Future<Output = Result<WorkflowFolder, CoreError>> + Send;
+
+    fn delete(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait CollectionRepository: Send {
+    fn lock_slugs(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn slugs_matching(
+        &mut self,
+        org_id: OrganizationId,
+        base: &str,
+    ) -> impl Future<Output = Result<Vec<String>, CoreError>> + Send;
+
+    fn insert(
+        &mut self,
+        collection: &Collection,
+    ) -> impl Future<Output = Result<Collection, CoreError>> + Send;
+
+    fn find_by_id(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<Collection>, CoreError>> + Send;
+
+    fn find_many(
+        &mut self,
+        org_id: OrganizationId,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Collection>, CoreError>> + Send;
+
+    fn find_detail(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<CollectionDetail>, CoreError>> + Send;
+
+    fn count_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<i64, CoreError>> + Send;
+
+    fn list_by_organization(
+        &mut self,
+        org_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<CollectionSummary>, CoreError>> + Send;
+
+    fn history(
+        &mut self,
+        org_id: OrganizationId,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Vec<CollectionVersion>, CoreError>> + Send;
+
+    fn replace(
+        &mut self,
+        collection: &Collection,
+    ) -> impl Future<Output = Result<Collection, CoreError>> + Send;
 
     fn delete(
         &mut self,

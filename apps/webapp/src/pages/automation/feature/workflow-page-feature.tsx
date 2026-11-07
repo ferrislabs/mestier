@@ -10,10 +10,6 @@ import {
 	type WorkflowDetail,
 } from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
-import {
-	readNodeMeta,
-	writeNodeMeta,
-} from '#/pages/automation/feature/mocks/node-meta'
 import type { GraphChange } from '#/pages/automation/feature/use-workflow-graph'
 import { WorkflowCanvasFeature } from '#/pages/automation/feature/workflow-canvas-feature'
 import { WorkflowExecutionsFeature } from '#/pages/automation/feature/workflow-executions-feature'
@@ -27,7 +23,6 @@ import {
 	workflowExecutionsSearch,
 	workflowPath,
 } from '#/pages/automation/lib/automation-paths'
-import type { NodeMetaMap } from '#/pages/automation/lib/editor-nodes'
 import type { NodePosition } from '#/pages/automation/lib/graph'
 import { readLayout } from '#/pages/automation/lib/graph'
 import { mergedLayout } from '#/pages/automation/lib/layout'
@@ -60,7 +55,6 @@ interface EditorSource {
 	enabled: boolean
 	graph: Schemas.GraphDto
 	layout: Map<string, NodePosition>
-	meta: NodeMetaMap
 }
 
 function draftSource(): EditorSource {
@@ -69,7 +63,6 @@ function draftSource(): EditorSource {
 		enabled: false,
 		graph: { connectors: [], edges: [], triggers: [] },
 		layout: new Map(),
-		meta: {},
 	}
 }
 
@@ -84,7 +77,6 @@ function persistedSource(workflow: WorkflowDetail): EditorSource {
 		enabled: workflow.enabled,
 		graph,
 		layout: mergedLayout(graph, readLayout(workflow.layout)),
-		meta: readNodeMeta(workflow.id),
 	}
 }
 
@@ -132,7 +124,6 @@ function useEditorSession({
 	const latest = useRef<GraphChange>({
 		graph: source.graph,
 		layout: source.layout,
-		meta: source.meta,
 	})
 	const [graphDirty, setGraphDirty] = useState(false)
 	const [name, setName] = useState(source.name)
@@ -152,7 +143,6 @@ function useEditorSession({
 			pruneCorrectedErrors(current, latest.current.graph, change.graph),
 		)
 		latest.current = change
-		if (workflowIdRef.current) writeNodeMeta(workflowIdRef.current, change.meta)
 		setGraphDirty(true)
 	}, [])
 
@@ -226,7 +216,6 @@ function useEditorSession({
 		}
 		if (persistedId === null && !readyNotified.current) {
 			readyNotified.current = true
-			writeNodeMeta(id, latest.current.meta)
 			onReady(id)
 		}
 	}

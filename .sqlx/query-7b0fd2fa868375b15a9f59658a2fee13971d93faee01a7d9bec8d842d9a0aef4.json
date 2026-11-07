@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, org_id, slug, title, version, description, base_url,\n                      source_kind, source_value, imported_at, security, operations, schemas\n               FROM automation.collection\n               WHERE org_id = $1 AND id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "base_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "source_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "source_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "imported_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "security",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "operations",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "schemas",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7b0fd2fa868375b15a9f59658a2fee13971d93faee01a7d9bec8d842d9a0aef4"
+}

@@ -27,6 +27,8 @@ import {
 } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useCollectionDetails } from '#/hooks/use-automation'
 import { AutomationFlowNode } from '#/pages/automation/feature/automation-flow-node'
 import {
 	type EditorActions,
@@ -43,11 +45,11 @@ import {
 	type GraphChange,
 	useWorkflowGraph,
 } from '#/pages/automation/feature/use-workflow-graph'
+import { referencedCollectionIds } from '#/pages/automation/lib/collection-node'
 import {
 	type EditorLookup,
 	type EditorNode,
 	findOpenOutput,
-	type NodeMetaMap,
 	outputHandles,
 	toGraph,
 } from '#/pages/automation/lib/editor-nodes'
@@ -116,7 +118,6 @@ export type { LastRunData }
 export interface WorkflowCanvasProps {
 	graph: Schemas.GraphDto
 	layout: Map<string, NodePosition>
-	meta: NodeMetaMap
 	organizationSlug: string
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
 	connectorErrors: Map<string, ConnectorValidationError[]>
@@ -168,7 +169,6 @@ export function WorkflowCanvas(props: WorkflowCanvasProps) {
 function EditorCanvas({
 	graph: initialGraph,
 	layout,
-	meta,
 	organizationSlug,
 	descriptors,
 	connectorErrors,
@@ -184,6 +184,7 @@ function EditorCanvas({
 	canTest = true,
 	onChange,
 }: WorkflowCanvasProps) {
+	const { activeOrganization } = useActiveOrganization()
 	const { screenToFlowPosition, deleteElements, fitView } = useReactFlow()
 	const containerRef = useRef<HTMLDivElement>(null)
 	const lookup = useMemo<EditorLookup>(
@@ -194,7 +195,6 @@ function EditorCanvas({
 		graph: initialGraph,
 		layout,
 		lookup,
-		meta,
 		errors: connectorErrors,
 		runStatuses,
 		onChange,
@@ -439,15 +439,34 @@ function EditorCanvas({
 		return () => window.removeEventListener('keydown', onKeyDown)
 	}, [])
 
+	const referencedIds = useMemo(
+		() =>
+			referencedCollectionIds(
+				graph.nodes.flatMap((node) =>
+					node.data.connector ? [node.data.connector] : [],
+				),
+			),
+		[graph.nodes],
+	)
+	const { reads: collectionReads } = useCollectionDetails(
+		activeOrganization.id,
+		referencedIds,
+	)
+
 	const issuesByNode = useMemo(
 		() =>
-			nodeIssuesByNode(graph.nodes, graph.edges, (connectorId) => {
-				const node = graph.nodes.find(
-					(candidate) => candidate.id === connectorId,
-				)
-				return node ? connectorOutput(node, sources) : undefined
-			}),
-		[graph.nodes, graph.edges, sources],
+			nodeIssuesByNode(
+				graph.nodes,
+				graph.edges,
+				(connectorId) => {
+					const node = graph.nodes.find(
+						(candidate) => candidate.id === connectorId,
+					)
+					return node ? connectorOutput(node, sources) : undefined
+				},
+				collectionReads,
+			),
+		[graph.nodes, graph.edges, sources, collectionReads],
 	)
 
 	const hasTrigger = graph.nodes.some((node) => node.data.kind === 'trigger')
@@ -640,6 +659,7 @@ function EditorCanvas({
 							edges={graph.edges}
 							organizationSlug={organizationSlug}
 							sources={sources}
+							collectionReads={collectionReads}
 							authSchemes={authSchemes}
 							credentials={credentials}
 							issues={issuesByNode.get(detailsNode.id) ?? []}

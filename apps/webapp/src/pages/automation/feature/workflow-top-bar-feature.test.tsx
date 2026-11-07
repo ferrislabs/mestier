@@ -48,7 +48,6 @@ function sessionStub(overrides: Partial<EditorSession> = {}): EditorSession {
 		snapshot: () => ({
 			graph: { connectors: [], edges: [], triggers: [] },
 			layout: new Map(),
-			meta: {},
 		}),
 		onNameChange: vi.fn(),
 		onNameBlur: vi.fn(),

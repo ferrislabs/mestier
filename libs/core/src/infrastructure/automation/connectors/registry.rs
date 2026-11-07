@@ -4,6 +4,7 @@ use crate::application::MestierUseCase;
 use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
 use crate::infrastructure::automation::webhook::address_policy::PrivateNetworkAccess;
 
+use super::collection_operation::CollectionOperationConnector;
 use super::customer_create::CustomerCreateConnector;
 use super::flow_condition::FlowConditionConnector;
 use super::flow_config::FlowConfigConnector;
@@ -41,6 +42,7 @@ pub struct ConnectorRegistry {
     support_assign_ticket: SupportAssignTicketConnector,
     support_add_badge: SupportAddBadgeConnector,
     http_request: HttpRequestConnector,
+    collection_operation: CollectionOperationConnector,
     odoo_create_partner: OdooCreatePartnerConnector,
     odoo_update_partner: OdooUpdatePartnerConnector,
     odoo_create_invoice: OdooCreateInvoiceConnector,
@@ -72,11 +74,22 @@ impl ConnectorRegistry {
             support_assign_ticket: SupportAssignTicketConnector::new(usecase.clone()),
             support_add_badge: SupportAddBadgeConnector::new(usecase.clone()),
             http_request: HttpRequestConnector::new(usecase.clone(), access),
+            collection_operation: CollectionOperationConnector::new(usecase.clone(), access),
             odoo_create_partner: OdooCreatePartnerConnector::new(usecase.clone(), access),
             odoo_update_partner: OdooUpdatePartnerConnector::new(usecase.clone(), access),
             odoo_create_invoice: OdooCreateInvoiceConnector::new(usecase.clone(), access),
             task_recurrence_extend_horizon: TaskRecurrenceExtendHorizonConnector::new(usecase),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_collection_client(
+        mut self,
+        usecase: MestierUseCase,
+        client: reqwest::Client,
+    ) -> Self {
+        self.collection_operation = CollectionOperationConnector::with_client(usecase, client);
+        self
     }
 
     /// Every `(kind, version)` this registry can dispatch to.
@@ -89,6 +102,7 @@ impl ConnectorRegistry {
             ("mestier.support.assign_ticket", 1),
             ("mestier.support.add_badge", 1),
             ("http.request", 1),
+            ("collection.operation", 1),
             ("odoo.create_partner", 1),
             ("odoo.update_partner", 1),
             ("odoo.create_invoice", 1),
@@ -112,6 +126,7 @@ impl ConnectorRegistry {
             }
             ("mestier.support.add_badge", 1) => Ok(self.support_add_badge.execute(input).await),
             ("http.request", 1) => Ok(self.http_request.execute(input).await),
+            ("collection.operation", 1) => Ok(self.collection_operation.execute(input).await),
             ("odoo.create_partner", 1) => Ok(self.odoo_create_partner.execute(input).await),
             ("odoo.update_partner", 1) => Ok(self.odoo_update_partner.execute(input).await),
             ("odoo.create_invoice", 1) => Ok(self.odoo_create_invoice.execute(input).await),
@@ -181,6 +196,7 @@ mod tests {
             run_id: Uuid::from_u128(2),
             config: &config,
             credential_id: None,
+            operation: None,
         };
 
         let outcome = registry().execute("flow.loop", 1, input).await.unwrap();
@@ -202,6 +218,7 @@ mod tests {
             run_id: Uuid::from_u128(2),
             config: &config,
             credential_id: None,
+            operation: None,
         };
 
         let outcome = registry()
@@ -221,6 +238,7 @@ mod tests {
             run_id: Uuid::from_u128(2),
             config: &config,
             credential_id: None,
+            operation: None,
         };
 
         let outcome = registry().execute("flow.config", 1, input).await.unwrap();
@@ -239,6 +257,7 @@ mod tests {
             run_id: Uuid::from_u128(2),
             config: &config,
             credential_id: None,
+            operation: None,
         };
 
         let error = registry()

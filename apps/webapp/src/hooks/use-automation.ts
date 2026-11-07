@@ -4,7 +4,17 @@ import {
 	useQuery,
 	useQueryClient,
 } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import type { Schemas } from '#/api/api.client'
+import { isCollectionMissing } from '#/pages/automation/lib/collection-format'
+import type { CollectionRead } from '#/pages/automation/lib/collection-node'
+import {
+	type Collection,
+	type CollectionDraft,
+	fromCollectionResponse,
+	fromCollectionSummary,
+	toCollectionRequest,
+} from '#/pages/automation/lib/collections'
 import { isTerminalRunStatus } from '#/pages/automation/lib/workflow-runs'
 
 const CONNECTORS_PATH =
@@ -33,7 +43,12 @@ const RUN_REPLAY_PATH =
 	'/api/v1/organizations/{organization_id}/automation/runs/{run_id}/replay'
 const WORKFLOW_RUNS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs'
+const COLLECTIONS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/collections'
+const COLLECTION_PATH =
+	'/api/v1/organizations/{organization_id}/automation/collections/{collection_id}'
 const RUN_POLL_INTERVAL_MS = 2000
+const QUERY_RETRIES = 3
 const EXPRESSIONS_EVALUATE_PATH =
 	'/api/v1/organizations/{organization_id}/automation/expressions/evaluate'
 
@@ -288,6 +303,172 @@ export function useEvaluateExpression() {
 	return useMutation({
 		...window.tanstackApi.mutation('post', EXPRESSIONS_EVALUATE_PATH)
 			.mutationOptions,
+	})
+}
+
+function summariesOf(response: {
+	data: readonly Schemas.CollectionSummaryResponse[]
+}) {
+	return response.data.map(fromCollectionSummary)
+}
+
+function collectionOf(response: { data: Schemas.CollectionResponse }) {
+	return fromCollectionResponse(response.data)
+}
+
+interface CollectionResult {
+	data?: Collection
+	error: unknown
+	isError: boolean
+}
+
+function readOf(result: CollectionResult): CollectionRead {
+	if (result.data) return { status: 'found', collection: result.data }
+	if (!result.isError) return { status: 'loading' }
+	return isCollectionMissing(result.error)
+		? { status: 'notFound' }
+		: { status: 'error' }
+}
+
+function collectionsOf(
+	ids: readonly string[],
+	results: readonly CollectionResult[],
+) {
+	const reads = new Map<string, CollectionRead>(
+		ids.map((id, index) => [
+			id,
+			results[index] ? readOf(results[index]) : { status: 'loading' },
+		]),
+	)
+	return {
+		collections: [...reads.values()].flatMap((read) =>
+			read.status === 'found' ? [read.collection] : [],
+		),
+		reads,
+		isLoading: [...reads.values()].some((read) => read.status === 'loading'),
+	}
+}
+
+function retryUnlessMissing(failureCount: number, error: unknown): boolean {
+	return !isCollectionMissing(error) && failureCount < QUERY_RETRIES
+}
+
+export function useCollections(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(COLLECTIONS_PATH, {
+			path: { organization_id: organizationId },
+		}).queryOptions,
+		select: summariesOf,
+	})
+}
+
+export function useCollection(
+	organizationId: string,
+	collectionId: string,
+	{ enabled = true }: { enabled?: boolean } = {},
+) {
+	return useQuery({
+		...window.tanstackApi.get(COLLECTION_PATH, {
+			path: { organization_id: organizationId, collection_id: collectionId },
+		}).queryOptions,
+		select: collectionOf,
+		retry: retryUnlessMissing,
+		enabled,
+	})
+}
+
+export function useCollectionDetails(
+	organizationId: string,
+	collectionIds: readonly string[],
+) {
+	const idsKey = collectionIds.join(',')
+	const combine = useCallback(
+		(results: readonly CollectionResult[]) =>
+			collectionsOf(idsKey === '' ? [] : idsKey.split(','), results),
+		[idsKey],
+	)
+	return useQueries({
+		queries: collectionIds.map((collectionId) => ({
+			...window.tanstackApi.get(COLLECTION_PATH, {
+				path: { organization_id: organizationId, collection_id: collectionId },
+			}).queryOptions,
+			select: collectionOf,
+			retry: retryUnlessMissing,
+		})),
+		combine,
+	})
+}
+
+export function useImportCollection(organizationId: string) {
+	const queryClient = useQueryClient()
+	const { mutationOptions } = window.tanstackApi.mutation(
+		'post',
+		COLLECTIONS_PATH,
+	)
+	return useMutation({
+		mutationKey: mutationOptions.mutationKey,
+		mutationFn: async (draft: CollectionDraft) =>
+			collectionOf(
+				await mutationOptions.mutationFn({
+					path: { organization_id: organizationId },
+					body: toCollectionRequest(draft),
+				}),
+			),
+		onSuccess: () => invalidate(queryClient, COLLECTIONS_PATH),
+		meta: { organizationId },
+	})
+}
+
+export function useReplaceCollection(organizationId: string) {
+	const queryClient = useQueryClient()
+	const { mutationOptions } = window.tanstackApi.mutation(
+		'put',
+		COLLECTION_PATH,
+	)
+	return useMutation({
+		mutationKey: mutationOptions.mutationKey,
+		mutationFn: async (input: {
+			collectionId: string
+			draft: CollectionDraft
+		}) =>
+			collectionOf(
+				await mutationOptions.mutationFn({
+					path: {
+						organization_id: organizationId,
+						collection_id: input.collectionId,
+					},
+					body: toCollectionRequest(input.draft),
+				}),
+			),
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, COLLECTIONS_PATH),
+				invalidate(queryClient, COLLECTION_PATH),
+			]),
+	})
+}
+
+export function useDeleteCollection(organizationId: string) {
+	const queryClient = useQueryClient()
+	const { mutationOptions } = window.tanstackApi.mutation(
+		'delete',
+		COLLECTION_PATH,
+	)
+	return useMutation({
+		mutationKey: mutationOptions.mutationKey,
+		mutationFn: async (collectionId: string) => {
+			await mutationOptions.mutationFn({
+				path: {
+					organization_id: organizationId,
+					collection_id: collectionId,
+				},
+			})
+		},
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, COLLECTIONS_PATH),
+				invalidate(queryClient, COLLECTION_PATH),
+			]),
 	})
 }
 

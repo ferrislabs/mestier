@@ -7,7 +7,7 @@ use common::OrganizationId;
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
-use crate::domain::automation::workflow::Branch;
+use crate::domain::automation::workflow::{Branch, OperationRef};
 
 /// What a connector receives: its config already **resolved** — every
 /// `{{ ... }}` expression evaluated against the run's current context — and
@@ -18,6 +18,7 @@ pub struct ConnectorInput<'a> {
     pub run_id: Uuid,
     pub config: &'a Map<String, Value>,
     pub credential_id: Option<Uuid>,
+    pub operation: Option<&'a OperationRef>,
 }
 
 /// What running a connector produced.

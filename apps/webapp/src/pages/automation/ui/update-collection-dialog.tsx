@@ -8,7 +8,10 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '#/components/ui/dialog'
-import type { Collection } from '#/pages/automation/lib/collections'
+import type {
+	Collection,
+	CollectionDraft,
+} from '#/pages/automation/lib/collections'
 import {
 	type CollectionDiff,
 	versionWarning,
@@ -17,7 +20,7 @@ import { CollectionDiffView } from '#/pages/automation/ui/collection-diff-view'
 import { SpecSourcePicker } from '#/pages/automation/ui/spec-source-picker'
 
 export interface UpdateCandidate {
-	collection: Collection
+	draft: CollectionDraft
 	diff: CollectionDiff
 }
 
@@ -25,6 +28,7 @@ export function UpdateCollectionDialog({
 	collection,
 	sourceUrl,
 	loading,
+	saving,
 	error,
 	candidate,
 	onLoadUrl,
@@ -37,6 +41,7 @@ export function UpdateCollectionDialog({
 	collection: Collection
 	sourceUrl: string
 	loading: boolean
+	saving: boolean
 	error: string | null
 	candidate: UpdateCandidate | null
 	onLoadUrl: (url: string) => void
@@ -110,17 +115,19 @@ export function UpdateCollectionDialog({
 						<Button
 							variant="ghost"
 							className="sm:mr-auto"
+							disabled={saving}
 							onClick={onResetCandidate}
 						>
 							Comparer une autre source
 						</Button>
 					)}
-					<Button variant="outline" onClick={onClose}>
+					<Button variant="outline" disabled={saving} onClick={onClose}>
 						{upToDate ? 'Fermer' : 'Annuler'}
 					</Button>
 					{candidate && !upToDate && (
-						<Button onClick={onConfirm}>
-							Mettre à jour vers {candidate.collection.version}
+						<Button disabled={saving} onClick={onConfirm}>
+							{saving && <LoaderCircle className="animate-spin" />}
+							Mettre à jour vers {candidate.draft.version}
 						</Button>
 					)}
 				</DialogFooter>

@@ -1,11 +1,16 @@
 import { useState } from 'react'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useImportCollection } from '#/hooks/use-automation'
 import {
 	loadErrorMessage,
 	loadSpecFromFile,
 	loadSpecFromUrl,
 } from '#/pages/automation/feature/spec-loader'
-import { useAddCollection } from '#/pages/automation/feature/use-collections'
-import type { Collection } from '#/pages/automation/lib/collections'
+import { collectionErrorMessage } from '#/pages/automation/lib/collection-format'
+import type {
+	Collection,
+	CollectionDraft,
+} from '#/pages/automation/lib/collections'
 import { ImportCollectionDialog } from '#/pages/automation/ui/import-collection-dialog'
 
 export function ImportCollectionFeature({
@@ -15,18 +20,19 @@ export function ImportCollectionFeature({
 	onCancel: () => void
 	onImported: (collection: Collection) => void
 }) {
-	const addCollection = useAddCollection()
+	const { activeOrganization } = useActiveOrganization()
+	const importCollection = useImportCollection(activeOrganization.id)
 	const [loading, setLoading] = useState(false)
-	const [error, setError] = useState<string | null>(null)
-	const [preview, setPreview] = useState<Collection | null>(null)
+	const [loadError, setLoadError] = useState<string | null>(null)
+	const [preview, setPreview] = useState<CollectionDraft | null>(null)
 
-	const load = async (loader: () => Promise<Collection>) => {
+	const load = async (loader: () => Promise<CollectionDraft>) => {
 		setLoading(true)
-		setError(null)
+		setLoadError(null)
 		try {
 			setPreview(await loader())
 		} catch (caught) {
-			setError(loadErrorMessage(caught))
+			setLoadError(loadErrorMessage(caught))
 		} finally {
 			setLoading(false)
 		}
@@ -35,15 +41,22 @@ export function ImportCollectionFeature({
 	return (
 		<ImportCollectionDialog
 			loading={loading}
-			error={error}
+			saving={importCollection.isPending}
+			error={loadError ?? collectionErrorMessage(importCollection.error)}
 			preview={preview}
 			onLoadUrl={(url) => void load(() => loadSpecFromUrl(url))}
 			onLoadFile={(file) => void load(() => loadSpecFromFile(file))}
-			onSourceChange={() => setError(null)}
-			onBack={() => setPreview(null)}
+			onSourceChange={() => {
+				setLoadError(null)
+				importCollection.reset()
+			}}
+			onBack={() => {
+				setPreview(null)
+				importCollection.reset()
+			}}
 			onCancel={onCancel}
 			onConfirm={() => {
-				if (preview) void addCollection.mutateAsync(preview).then(onImported)
+				if (preview) importCollection.mutate(preview, { onSuccess: onImported })
 			}}
 		/>
 	)

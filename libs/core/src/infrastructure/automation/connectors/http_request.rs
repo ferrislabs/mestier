@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use reqwest::{Client, Method, Url};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use crate::application::MestierUseCase;
@@ -19,8 +19,8 @@ use crate::infrastructure::automation::webhook::{
 };
 
 use super::http_client::{
-    CapturedResponse, DEFAULT_TIMEOUT, auth_from_credential, build_guarded_client,
-    describe_reqwest_error, read_response, refuse_literal_private_address,
+    DEFAULT_TIMEOUT, build_guarded_client, describe_reqwest_error, open_http_auth, outcome_for,
+    read_response, refuse_literal_private_address,
 };
 
 pub struct HttpRequestConnector {
@@ -174,16 +174,7 @@ impl HttpRequestConnector {
         org_id: common::OrganizationId,
         credential_id: Uuid,
     ) -> Result<super::http_client::HttpAuth, String> {
-        let (credential, plaintext) = self
-            .usecase
-            .open_credential(org_id, credential_id)
-            .await
-            .map_err(|error| format!("the auth credential is unusable: {error}"))?;
-
-        let fields = parse_credential_fields(&plaintext)
-            .ok_or_else(|| "the auth credential's data is not usable".to_owned())?;
-
-        auth_from_credential(&credential.kind, &fields).map_err(|error| error.to_string())
+        open_http_auth(&self.usecase, org_id, credential_id).await
     }
 
     async fn sign_headers(
@@ -204,13 +195,6 @@ impl HttpRequestConnector {
         let timestamp = Utc::now().timestamp();
         let signature = sign(&secret, timestamp, body);
         Ok((timestamp, signature))
-    }
-}
-
-fn parse_credential_fields(plaintext: &[u8]) -> Option<Map<String, Value>> {
-    match serde_json::from_slice(plaintext).ok()? {
-        Value::Object(map) => Some(map),
-        _ => None,
     }
 }
 
@@ -243,26 +227,6 @@ fn read_headers(config: &Map<String, Value>) -> Result<Vec<(String, String)>, St
         .collect()
 }
 
-/// Only `2xx` is a success — a redirect (never followed, `Policy::none()`)
-/// and every other status go back into the retry schedule, the body kept in
-/// the message so the run inspector shows *why* rather than just the code.
-fn outcome_for(captured: CapturedResponse) -> ConnectorOutcome {
-    if (200..300).contains(&captured.status) {
-        ConnectorOutcome::Produced(json!({
-            "status": captured.status,
-            "headers": captured.headers,
-            "body": captured.body,
-        }))
-    } else {
-        ConnectorOutcome::Failed {
-            error: format!(
-                "the endpoint answered {} with body: {}",
-                captured.status, captured.body
-            ),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
@@ -270,6 +234,9 @@ mod tests {
     use common::OrganizationId;
     use sqlx::PgPool;
 
+    use serde_json::json;
+
+    use super::super::http_client::CapturedResponse;
     use super::*;
     use crate::application::default_authorizer;
     use crate::infrastructure::automation::connectors::test_support::{StubResponse, TestServer};
@@ -312,6 +279,7 @@ mod tests {
             run_id: Uuid::from_u128(2),
             config,
             credential_id: None,
+            operation: None,
         }
     }
 
@@ -503,6 +471,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_literal_ipv6_target_is_refused_before_any_connection() {
+        for target in [
+            "http://[::1]:9/probe",
+            "http://[::ffff:a9fe:a9fe]/probe",
+            "http://[fd00:ec2::254]/probe",
+        ] {
+            let cfg = config(&[
+                ("method", json!("GET")),
+                ("url", json!(target)),
+                ("timeout_seconds", json!(1)),
+            ]);
+            let connector = HttpRequestConnector::new(lazy_usecase(), PrivateNetworkAccess::Denied);
+
+            let outcome = connector.execute(input(&cfg)).await;
+
+            let ConnectorOutcome::Failed { error } = outcome else {
+                panic!("expected Failed, got {outcome:?}");
+            };
+            assert!(
+                error.contains("loopback") || error.contains("metadata"),
+                "{target}: {error}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn a_private_target_reaches_the_network_when_allowed() {
         let cfg = config(&[
             ("method", json!("GET")),
@@ -617,6 +611,7 @@ mod tests {
                 run_id: Uuid::from_u128(2),
                 config: &cfg,
                 credential_id: Some(credential.id),
+                operation: None,
             })
             .await;
 
@@ -659,6 +654,7 @@ mod tests {
                 run_id: Uuid::from_u128(2),
                 config: &cfg,
                 credential_id: Some(credential.id),
+                operation: None,
             })
             .await;
 
@@ -703,6 +699,7 @@ mod tests {
                 run_id: Uuid::from_u128(2),
                 config: &cfg,
                 credential_id: Some(credential.id),
+                operation: None,
             })
             .await;
 
@@ -755,6 +752,7 @@ mod tests {
                 run_id: Uuid::from_u128(2),
                 config: &cfg,
                 credential_id: None,
+                operation: None,
             })
             .await;
 

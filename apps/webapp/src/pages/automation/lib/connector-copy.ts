@@ -163,6 +163,16 @@ const CONNECTORS: Record<string, ConnectorCopy> = {
 		order: 99,
 		internal: true,
 	},
+	'collection.operation': {
+		label: 'Opération de collection',
+		subtitle: 'Collection',
+		description: 'Appelle une opération d’une spec OpenAPI importée',
+		icon: Library,
+		hue: 200,
+		category: 'collections',
+		order: 1,
+		internal: false,
+	},
 	'flow.condition': {
 		label: 'Si',
 		subtitle: 'Condition',

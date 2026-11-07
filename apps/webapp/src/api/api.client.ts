@@ -19,6 +19,7 @@ export namespace Schemas {
   export type AddTicketBadgeRequest = { label: string; tone?: (string | null) | undefined };
   export type AddTicketEntryRequest = { body: string; kind: string };
   export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
+  export type ApiKeyLocationDto = "header" | "query" | "cookie";
   export type RoleId = string;
   export type AssignRoleRequest = { role_id: RoleId };
   export type AssignTicketRequest = Partial<{ member_id: null | MemberId }>;
@@ -185,6 +186,79 @@ export namespace Schemas {
     project_id?: (null | ProjectId) | undefined;
     topic?: (string | null) | undefined;
     updated_at: string;
+  };
+  export type HttpMethodDto = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  export type ParameterLocationDto = "path" | "query" | "header";
+  export type ParameterDto = {
+    description?: string | undefined;
+    location: ParameterLocationDto;
+    name: string;
+    required: boolean;
+    schema?: unknown | undefined;
+  };
+  export type RequestBodyDto = { schema: unknown };
+  export type OperationDto = {
+    id: string;
+    method: HttpMethodDto;
+    parameters?: Array<ParameterDto> | undefined;
+    path: string;
+    request_body?: (null | RequestBodyDto) | undefined;
+    response?: unknown | undefined;
+    response_status?: (string | null) | undefined;
+    summary?: string | undefined;
+    tag?: string | undefined;
+  };
+  export type SecurityKindDto =
+    | { scheme: string; type: "http" }
+    | { location: ApiKeyLocationDto; parameter_name: string; type: "api_key" }
+    | { type: "oauth2" }
+    | { type: "open_id_connect" }
+    | { declared_type: string; type: "other" };
+  export type SecuritySchemeDto = { kind: SecurityKindDto; name: string };
+  export type CollectionSourceDto = { kind: "url"; url: string } | { file_name: string; kind: "file" };
+  export type CollectionRequest = {
+    base_url: string;
+    description?: string | undefined;
+    operations: Array<OperationDto>;
+    schemas?: Record<string, unknown> | undefined;
+    security?: Array<SecuritySchemeDto> | undefined;
+    source: CollectionSourceDto;
+    title: string;
+    version: string;
+  };
+  export type HistoryEntryResponse = {
+    base_url: string;
+    imported_at: string;
+    security: Array<SecuritySchemeDto>;
+    source: CollectionSourceDto;
+    version: string;
+  };
+  export type CollectionResponse = {
+    base_url: string;
+    description: string;
+    history: Array<HistoryEntryResponse>;
+    id: string;
+    imported_at: string;
+    operations: Array<OperationDto>;
+    organization_id: OrganizationId;
+    schemas: Record<string, unknown>;
+    security: Array<SecuritySchemeDto>;
+    slug: string;
+    source: CollectionSourceDto;
+    title: string;
+    version: string;
+  };
+  export type CollectionSummaryResponse = {
+    base_url: string;
+    id: string;
+    imported_at: string;
+    operation_count: number;
+    organization_id: OrganizationId;
+    security: Array<SecuritySchemeDto>;
+    slug: string;
+    source: CollectionSourceDto;
+    title: string;
+    version: string;
   };
   export type MediaItem = { description?: (string | null) | undefined; url: string };
   export type SeparatorSpacing = "Small" | "Large";
@@ -786,6 +860,7 @@ export namespace Schemas {
     name: string;
     parent_id?: (string | null) | undefined;
   };
+  export type OperationRefDto = { collection_id: string; operation_id: string };
   export type PlacedConnectorDto = {
     config: Record<string, unknown>;
     credential_id?: (string | null) | undefined;
@@ -794,6 +869,7 @@ export namespace Schemas {
     id: string;
     kind: string;
     name?: (string | null) | undefined;
+    operation?: (null | OperationRefDto) | undefined;
     version: number;
   };
   export type TriggerKindDto = "Manual" | { Events: Array<string> };
@@ -4255,6 +4331,144 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
     };
+  };
+  export type get_ListCollections = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/collections";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          base_url: string;
+          id: string;
+          imported_at: string;
+          operation_count: number;
+          organization_id: Schemas.OrganizationId;
+          security: Array<Schemas.SecuritySchemeDto>;
+          slug: string;
+          source: Schemas.CollectionSourceDto;
+          title: string;
+          version: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_ImportCollection = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/automation/collections";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CollectionRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          base_url: string;
+          description: string;
+          history: Array<Schemas.HistoryEntryResponse>;
+          id: string;
+          imported_at: string;
+          operations: Array<Schemas.OperationDto>;
+          organization_id: Schemas.OrganizationId;
+          schemas: Record<string, unknown>;
+          security: Array<Schemas.SecuritySchemeDto>;
+          slug: string;
+          source: Schemas.CollectionSourceDto;
+          title: string;
+          version: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      413: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetCollection = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; collection_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          base_url: string;
+          description: string;
+          history: Array<Schemas.HistoryEntryResponse>;
+          id: string;
+          imported_at: string;
+          operations: Array<Schemas.OperationDto>;
+          organization_id: Schemas.OrganizationId;
+          schemas: Record<string, unknown>;
+          security: Array<Schemas.SecuritySchemeDto>;
+          slug: string;
+          source: Schemas.CollectionSourceDto;
+          title: string;
+          version: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_ReplaceCollection = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; collection_id: string };
+
+      body: Schemas.CollectionRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          base_url: string;
+          description: string;
+          history: Array<Schemas.HistoryEntryResponse>;
+          id: string;
+          imported_at: string;
+          operations: Array<Schemas.OperationDto>;
+          organization_id: Schemas.OrganizationId;
+          schemas: Record<string, unknown>;
+          security: Array<Schemas.SecuritySchemeDto>;
+          slug: string;
+          source: Schemas.CollectionSourceDto;
+          title: string;
+          version: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      413: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_DeleteCollection = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; collection_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
   export type get_ListConnectors = {
     method: "GET";
@@ -9151,6 +9365,7 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}/roles/{role_id}": Endpoints.delete_UnassignRole;
     "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
     "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
+    "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}": Endpoints.delete_DeleteCollection;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.delete_DeleteWorkflowFolder;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
@@ -9201,6 +9416,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}": Endpoints.get_GetOrganization;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.get_ListAbsences;
     "/api/v1/organizations/{organization_id}/assignment-reports": Endpoints.get_ListAssignmentReports;
+    "/api/v1/organizations/{organization_id}/automation/collections": Endpoints.get_ListCollections;
+    "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}": Endpoints.get_GetCollection;
     "/api/v1/organizations/{organization_id}/automation/connectors": Endpoints.get_ListConnectors;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.get_ListAutomationCredentials;
     "/api/v1/organizations/{organization_id}/automation/events": Endpoints.get_ListAutomationEvents;
@@ -9300,6 +9517,7 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}/roles": Endpoints.post_AssignRole;
     "/api/v1/organizations": Endpoints.post_CreateOrganization;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
+    "/api/v1/organizations/{organization_id}/automation/collections": Endpoints.post_ImportCollection;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.post_CreateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/rotate": Endpoints.post_RotateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/expressions/evaluate": Endpoints.post_EvaluateExpression;
@@ -9374,6 +9592,7 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}/employee-profile": Endpoints.put_UpsertEmployeeProfile;
     "/api/v1/members/{member_id}/rhythm": Endpoints.put_PutRhythm;
     "/api/v1/members/{member_id}/work-slots": Endpoints.put_PutWorkSlots;
+    "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}": Endpoints.put_ReplaceCollection;
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;

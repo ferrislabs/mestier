@@ -11,21 +11,10 @@ import {
 } from '#/pages/automation/lib/trigger-events'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
 
-export interface NodeOperationRef {
-	collectionId: string
-	operationId: string
-}
-
-export interface NodeMeta {
-	operation?: NodeOperationRef
-}
-
 export interface NodeDetailsPatch {
 	name?: string
 	description?: string
 }
-
-export type NodeMetaMap = Record<string, NodeMeta>
 
 export interface EditorLookup {
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>
@@ -37,7 +26,6 @@ export interface EditorNodeData extends Record<string, unknown> {
 	label: string
 	subtitle: string
 	disabled: boolean
-	meta: NodeMeta
 	family?: string
 	typeLabel: string
 	branches: Schemas.BranchDto[]
@@ -154,7 +142,6 @@ export function connectorNode(
 	connector: Schemas.PlacedConnectorDto,
 	position: NodePosition,
 	lookup: EditorLookup,
-	meta: NodeMeta = {},
 	errors: ConnectorValidationError[] = [],
 	runStatus: string | null = null,
 ): EditorNode {
@@ -168,7 +155,6 @@ export function connectorNode(
 				label: '',
 				subtitle: '',
 				disabled: false,
-				meta,
 				typeLabel: '',
 				branches: branchesOf(connector, lookup),
 				errors,
@@ -184,7 +170,6 @@ export function triggerNode(
 	trigger: Schemas.PlacedTriggerDto,
 	position: NodePosition,
 	lookup: EditorLookup,
-	meta: NodeMeta = {},
 	errors: ConnectorValidationError[] = [],
 ): EditorNode {
 	return withPresentation(
@@ -197,7 +182,6 @@ export function triggerNode(
 				label: '',
 				subtitle: '',
 				disabled: false,
-				meta,
 				typeLabel: '',
 				branches: [],
 				errors,
@@ -216,7 +200,6 @@ export function toEditorNodes(
 	graph: Schemas.GraphDto,
 	layout: Map<string, NodePosition>,
 	lookup: EditorLookup,
-	meta: NodeMetaMap,
 	errors: Map<string, ConnectorValidationError[]>,
 	runStatuses: Map<string, string>,
 ): EditorNode[] {
@@ -228,7 +211,6 @@ export function toEditorNodes(
 				y: index * TRIGGER_Y_SPACING,
 			},
 			lookup,
-			meta[trigger.id],
 			errors.get(trigger.id),
 		),
 	)
@@ -237,7 +219,6 @@ export function toEditorNodes(
 			connector,
 			layout.get(connector.id) ?? { x: 0, y: 0 },
 			lookup,
-			meta[connector.id],
 			errors.get(connector.id),
 			runStatuses.get(connector.id) ?? null,
 		),
@@ -282,16 +263,6 @@ export function toLayout(
 	return new Map(
 		nodes.map((node) => [node.id, { x: node.position.x, y: node.position.y }]),
 	)
-}
-
-export function toMeta(nodes: readonly EditorNode[]): NodeMetaMap {
-	const meta: NodeMetaMap = {}
-	for (const node of nodes) {
-		if (node.data.meta.operation !== undefined) {
-			meta[node.id] = node.data.meta
-		}
-	}
-	return meta
 }
 
 export function outputHandles(data: EditorNodeData): (string | null)[] {

@@ -514,6 +514,42 @@ describe('ConnectorConfigField — Json — rows', () => {
 		).toBe('true ou false')
 	})
 
+	it('types a key after the spec when the field declares the kinds of its keys', () => {
+		const onChange = vi.fn()
+		render(
+			<ConnectorConfigField
+				field={{
+					...jsonField(),
+					name: 'body',
+					label: 'Corps de la requête',
+					entryKinds: { name: 'string', age: 'number', vaccinated: 'boolean' },
+				}}
+				value={{ name: '', age: null, vaccinated: null }}
+				issues={[]}
+				onChange={onChange}
+			/>,
+		)
+
+		expect(screen.getByLabelText('Type de name').textContent).toBe('Texte')
+		expect(screen.getByLabelText('Type de age').textContent).toBe('Nombre')
+		expect(screen.getByLabelText('Type de vaccinated').textContent).toBe(
+			'Booléen',
+		)
+		expect(
+			(screen.getByLabelText('Valeur de age') as HTMLInputElement).value,
+		).toBe('')
+
+		fireEvent.change(screen.getByLabelText('Valeur de age'), {
+			target: { value: '4' },
+		})
+
+		expect(onChange).toHaveBeenLastCalledWith({
+			name: '',
+			age: 4,
+			vaccinated: null,
+		})
+	})
+
 	it('keeps a text "5" a string instead of turning it into a number', () => {
 		const onChange = vi.fn()
 		render(

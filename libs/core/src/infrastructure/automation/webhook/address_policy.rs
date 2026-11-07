@@ -44,12 +44,21 @@ pub fn judge(address: IpAddr, access: PrivateNetworkAccess) -> AddressVerdict {
     }
 }
 
+const CLOUD_METADATA_V4: [Ipv4Addr; 4] = [
+    Ipv4Addr::new(169, 254, 169, 254),
+    Ipv4Addr::new(169, 254, 170, 2),
+    Ipv4Addr::new(100, 100, 100, 200),
+    Ipv4Addr::new(168, 63, 129, 16),
+];
+
+const CLOUD_METADATA_V6: Ipv6Addr = Ipv6Addr::new(0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x0254);
+
 /// Refused whatever the instance allows: these are never a legitimate webhook
 /// target, and the cloud metadata endpoint is the whole point of the guard.
 fn always_refused(address: IpAddr) -> Option<&'static str> {
     match address {
         IpAddr::V4(v4) => {
-            if v4 == Ipv4Addr::new(169, 254, 169, 254) {
+            if CLOUD_METADATA_V4.contains(&v4) {
                 return Some("the cloud metadata endpoint");
             }
             if v4.is_loopback() {
@@ -67,6 +76,9 @@ fn always_refused(address: IpAddr) -> Option<&'static str> {
             if let Some(mapped) = v6.to_ipv4_mapped() {
                 // `::ffff:169.254.169.254` reaches the same metadata service.
                 return always_refused(IpAddr::V4(mapped));
+            }
+            if v6 == CLOUD_METADATA_V6 {
+                return Some("the cloud metadata endpoint");
             }
             if v6.is_loopback() {
                 return Some("a loopback address");
@@ -183,6 +195,47 @@ mod tests {
             judge(v4("169.254.169.254"), PrivateNetworkAccess::Allowed),
             AddressVerdict::Refused("the cloud metadata endpoint")
         );
+    }
+
+    #[test]
+    fn every_known_cloud_metadata_endpoint_is_refused_even_when_private_access_is_allowed() {
+        for address in [
+            "169.254.170.2",
+            "100.100.100.200",
+            "168.63.129.16",
+            "fd00:ec2::254",
+            "::ffff:169.254.170.2",
+            "::ffff:100.100.100.200",
+            "::ffff:168.63.129.16",
+        ] {
+            let parsed: IpAddr = address.parse().unwrap();
+
+            assert_eq!(
+                judge(parsed, PrivateNetworkAccess::Allowed),
+                AddressVerdict::Refused("the cloud metadata endpoint"),
+                "{address}"
+            );
+            assert!(
+                matches!(
+                    judge(parsed, PrivateNetworkAccess::Denied),
+                    AddressVerdict::Refused(_)
+                ),
+                "{address}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_neighbours_of_the_metadata_endpoints_are_not_swept_up() {
+        for address in ["168.63.129.17", "100.100.100.201", "169.254.170.3"] {
+            let parsed: IpAddr = address.parse().unwrap();
+
+            assert_ne!(
+                judge(parsed, PrivateNetworkAccess::Allowed),
+                AddressVerdict::Refused("the cloud metadata endpoint"),
+                "{address}"
+            );
+        }
     }
 
     /// An IPv4-mapped IPv6 address reaches exactly the same host. Judging the

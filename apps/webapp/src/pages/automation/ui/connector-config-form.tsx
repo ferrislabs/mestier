@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Schemas } from '#/api/api.client'
 import {
+	type FieldAddOns,
 	isSigningCredentialField,
 	visibleFields,
 	withField,
@@ -35,6 +36,7 @@ export interface ConnectorConfigFormProps {
 	errors: ConnectorValidationError[]
 	bindingIssues?: readonly NodeIssue[]
 	credentialHint?: string
+	fieldAddOns?: Readonly<Record<string, FieldAddOns>>
 	credentialStatusOf?: (credentialId: string) => CredentialStatus
 	renderPreview?: (field: Schemas.FieldResponse) => ReactNode
 	onConfigChange: (config: Record<string, unknown>) => void
@@ -50,6 +52,7 @@ export function ConnectorConfigForm({
 	errors,
 	bindingIssues = [],
 	credentialHint,
+	fieldAddOns,
 	credentialStatusOf,
 	renderPreview,
 	onConfigChange,
@@ -101,7 +104,10 @@ export function ConnectorConfigForm({
 			{slotFollowsAField ? null : credentialSlot}
 
 			{fields.flatMap((field) => {
-				const shown = displayField(descriptor.kind, field)
+				const shown = {
+					...displayField(descriptor.kind, field),
+					...fieldAddOns?.[field.name],
+				}
 				const current = config[field.name]
 				const control = isSigningCredentialField(field) ? (
 					<CredentialPickerField

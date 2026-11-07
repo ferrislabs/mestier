@@ -1,4 +1,7 @@
-import type { Collection } from '#/pages/automation/lib/collections'
+import type {
+	CollectionDraft,
+	CollectionSource,
+} from '#/pages/automation/lib/collections'
 import {
 	OpenApiError,
 	parseOpenApi,
@@ -7,9 +10,9 @@ import {
 
 export class SpecLoadError extends Error {}
 
-function parse(text: string, source: Collection['source']): Collection {
+function parse(text: string, source: CollectionSource): CollectionDraft {
 	try {
-		return parseOpenApi(readSpecText(text), source, new Date().toISOString())
+		return parseOpenApi(readSpecText(text), source)
 	} catch (caught) {
 		throw new SpecLoadError(
 			caught instanceof OpenApiError
@@ -19,7 +22,7 @@ function parse(text: string, source: Collection['source']): Collection {
 	}
 }
 
-export async function loadSpecFromUrl(url: string): Promise<Collection> {
+export async function loadSpecFromUrl(url: string): Promise<CollectionDraft> {
 	let response: Response
 	try {
 		response = await fetch(url)
@@ -35,7 +38,7 @@ export async function loadSpecFromUrl(url: string): Promise<Collection> {
 	return parse(await response.text(), { kind: 'url', url })
 }
 
-export async function loadSpecFromFile(file: File): Promise<Collection> {
+export async function loadSpecFromFile(file: File): Promise<CollectionDraft> {
 	return parse(await file.text(), { kind: 'file', fileName: file.name })
 }
 

@@ -11,6 +11,10 @@ use events::EventCatalogue;
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::domain::automation::collection::{
+    COLLECTION_OPERATION_KIND, Collection, ConfigStage, NESTED_EXPRESSION_FIELDS, ParameterIssue,
+    check_config,
+};
 use crate::domain::automation::connector::{ConnectorCatalogue, FieldKind};
 use crate::domain::automation::credential::Credential;
 use crate::domain::automation::expression::parse_template;
@@ -82,6 +86,33 @@ pub enum GraphError {
         field: String,
         message: String,
     },
+
+    #[error("connector `{connector_id}` references unknown collection `{collection_id}`")]
+    UnknownCollection {
+        connector_id: String,
+        collection_id: Uuid,
+    },
+
+    #[error(
+        "connector `{connector_id}` calls unknown operation `{operation_id}` of collection `{collection_id}`"
+    )]
+    UnknownOperation {
+        connector_id: String,
+        collection_id: Uuid,
+        operation_id: String,
+    },
+
+    #[error("connector `{connector_id}` is missing required parameter `{field}`")]
+    MissingParameter { connector_id: String, field: String },
+
+    #[error("connector `{connector_id}` sets unknown parameter `{field}`")]
+    UnknownParameter { connector_id: String, field: String },
+
+    #[error("connector `{connector_id}` sets parameter `{field}` to a value the call cannot carry")]
+    InvalidParameter { connector_id: String, field: String },
+
+    #[error("connector `{connector_id}` sets parameter `{field}` twice, whatever its case")]
+    DuplicateParameter { connector_id: String, field: String },
 
     #[error("connector `{connector_id}` references unknown credential `{credential_id}`")]
     UnknownCredential {
@@ -262,12 +293,139 @@ fn ancestors_of<'a>(predecessors: &HashMap<&'a str, Vec<&'a str>>, of: &str) -> 
     visited
 }
 
+fn validate_operation_node(
+    connector: &PlacedConnector,
+    collections: &[Collection],
+    errors: &mut Vec<GraphError>,
+) {
+    let Some(reference) = &connector.operation else {
+        errors.push(GraphError::MissingRequiredField {
+            connector_id: connector.id.clone(),
+            field: "operation".to_owned(),
+        });
+        return;
+    };
+    let Some(collection) = collections
+        .iter()
+        .find(|collection| collection.id == reference.collection_id)
+    else {
+        errors.push(GraphError::UnknownCollection {
+            connector_id: connector.id.clone(),
+            collection_id: reference.collection_id,
+        });
+        return;
+    };
+    let Some(operation) = collection.find_operation(&reference.operation_id) else {
+        errors.push(GraphError::UnknownOperation {
+            connector_id: connector.id.clone(),
+            collection_id: reference.collection_id,
+            operation_id: reference.operation_id.clone(),
+        });
+        return;
+    };
+
+    for issue in check_config(operation, &connector.config, ConfigStage::Saved) {
+        errors.push(match issue {
+            ParameterIssue::Missing { field } => GraphError::MissingParameter {
+                connector_id: connector.id.clone(),
+                field,
+            },
+            ParameterIssue::Unknown { field } => GraphError::UnknownParameter {
+                connector_id: connector.id.clone(),
+                field,
+            },
+            ParameterIssue::InvalidValue { field } => GraphError::InvalidParameter {
+                connector_id: connector.id.clone(),
+                field,
+            },
+            ParameterIssue::Duplicate { field } => GraphError::DuplicateParameter {
+                connector_id: connector.id.clone(),
+                field,
+            },
+            ParameterIssue::NotAnObject { field, got } => GraphError::FieldTypeMismatch {
+                connector_id: connector.id.clone(),
+                field: field.to_owned(),
+                expected: "object",
+                got,
+            },
+        });
+    }
+}
+
+fn nested_strings<'a>(value: &'a Value, label: &str, found: &mut Vec<(String, &'a Value)>) {
+    match value {
+        Value::String(_) => found.push((label.to_owned(), value)),
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                nested_strings(item, &format!("{label}.{index}"), found);
+            }
+        }
+        Value::Object(map) => {
+            for (key, item) in map {
+                nested_strings(item, &format!("{label}.{key}"), found);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn validate_nested_expressions(
+    connector: &PlacedConnector,
+    connector_ids: &HashSet<&str>,
+    ancestors: &HashSet<&str>,
+    loop_body: &HashSet<&str>,
+    errors: &mut Vec<GraphError>,
+) {
+    let mut found: Vec<(String, &Value)> = Vec::new();
+    for field in NESTED_EXPRESSION_FIELDS {
+        if let Some(raw @ (Value::Object(_) | Value::Array(_))) = connector.config.get(field) {
+            nested_strings(raw, field, &mut found);
+        }
+    }
+
+    for (label, raw) in found {
+        let template = match parse_template(raw) {
+            Ok(template) => template,
+            Err(error) => {
+                errors.push(GraphError::InvalidExpression {
+                    connector_id: connector.id.clone(),
+                    field: label,
+                    message: error.to_string(),
+                });
+                continue;
+            }
+        };
+        for referenced_id in template.referenced_connectors() {
+            if !connector_ids.contains(referenced_id.as_str()) {
+                errors.push(GraphError::UnknownConnectorReference {
+                    connector_id: connector.id.clone(),
+                    field: label.clone(),
+                    referenced_id,
+                });
+            } else if !ancestors.contains(referenced_id.as_str()) {
+                errors.push(GraphError::DownstreamConnectorReference {
+                    connector_id: connector.id.clone(),
+                    field: label.clone(),
+                    referenced_id,
+                });
+            }
+        }
+        if template.uses_loop() && !loop_body.contains(connector.id.as_str()) {
+            errors.push(GraphError::LoopUsedOutsideLoop {
+                connector_id: connector.id.clone(),
+                field: label,
+            });
+        }
+    }
+}
+
 /// Rends **toutes** les erreurs, pas la première.
 pub fn validate_graph(
     graph: &Graph,
     catalogue: &ConnectorCatalogue,
     credentials: &[Credential],
     events: &EventCatalogue,
+    collections: &[Collection],
 ) -> Result<(), Vec<GraphError>> {
     let mut errors = Vec::new();
 
@@ -593,6 +751,17 @@ pub fn validate_graph(
             }
         }
 
+        if connector.kind == COLLECTION_OPERATION_KIND {
+            validate_nested_expressions(
+                connector,
+                &connector_ids,
+                &ancestors,
+                &loop_body,
+                &mut errors,
+            );
+            validate_operation_node(connector, collections, &mut errors);
+        }
+
         match connector.credential_id {
             None => {
                 if !descriptor.auth.is_satisfied_without_a_credential() {
@@ -653,6 +822,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }
     }
 
@@ -691,7 +861,7 @@ mod tests {
 
     fn node_errors(graph: &Graph) -> Vec<GraphError> {
         let catalogue = connector_catalogue();
-        match validate_graph(graph, &catalogue, &[], &EventCatalogue::new()) {
+        match validate_graph(graph, &catalogue, &[], &EventCatalogue::new(), &[]) {
             Ok(()) => Vec::new(),
             Err(errors) => errors,
         }
@@ -953,7 +1123,13 @@ mod tests {
     fn an_empty_graph_is_valid() {
         let catalogue = connector_catalogue();
         assert_eq!(
-            validate_graph(&Graph::default(), &catalogue, &[], &EventCatalogue::new()),
+            validate_graph(
+                &Graph::default(),
+                &catalogue,
+                &[],
+                &EventCatalogue::new(),
+                &[]
+            ),
             Ok(())
         );
     }
@@ -966,7 +1142,7 @@ mod tests {
             condition("c1", "{{ false }}"),
         ]);
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("duplicate id refused");
 
         assert!(
@@ -990,11 +1166,12 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }]),
             "c1",
         );
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("unknown kind refused");
 
         assert_eq!(
@@ -1020,11 +1197,12 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }]),
             "c1",
         );
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("unknown version refused");
 
         assert_eq!(
@@ -1052,9 +1230,10 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }]);
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("unknown field refused");
 
         assert!(
@@ -1079,11 +1258,12 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }]),
             "c1",
         );
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("missing required field refused");
 
         assert_eq!(
@@ -1113,11 +1293,12 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }]),
             "c1",
         );
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("type mismatch refused");
 
         assert_eq!(
@@ -1140,7 +1321,7 @@ mod tests {
         );
 
         assert_eq!(
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()),
+            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]),
             Ok(())
         );
     }
@@ -1152,7 +1333,7 @@ mod tests {
         // runtime is not knowable here, so this must not be flagged.
         let graph = graph_of(vec![condition("c1", "{{ connectors.c2.output.flag }}")]);
 
-        let result = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new());
+        let result = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]);
 
         // c2 does not exist, so this fails for an unrelated reason (a later
         // rule); the point of this test is that no `FieldTypeMismatch` is
@@ -1172,7 +1353,7 @@ mod tests {
         let catalogue = connector_catalogue();
         let graph = graph_of(vec![condition("c1", "{{ 1 + ")]);
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("syntax error refused");
 
         let error = errors
@@ -1239,11 +1420,12 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }]),
             "c1",
         );
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("an expression here is refused");
 
         assert_eq!(
@@ -1270,12 +1452,13 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }]),
             "c1",
         );
 
         assert_eq!(
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()),
+            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]),
             Ok(())
         );
     }
@@ -1335,6 +1518,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }
     }
 
@@ -1368,6 +1552,7 @@ mod tests {
                     name: None,
                     description: None,
                     disabled: false,
+                    operation: None,
                 }],
                 edges: vec![],
                 triggers: vec![],
@@ -1375,7 +1560,7 @@ mod tests {
             "c1",
         );
 
-        assert!(validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).is_ok());
+        assert!(validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]).is_ok());
     }
 
     #[test]
@@ -1409,6 +1594,7 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }],
             edges: vec![],
             triggers: vec![],
@@ -1419,6 +1605,7 @@ mod tests {
             &catalogue,
             &[credential(id, "odoo_api")],
             &EventCatalogue::new(),
+            &[],
         )
         .expect_err("refused");
 
@@ -1437,7 +1624,7 @@ mod tests {
         let catalogue = catalogue_requiring_bearer_token();
         let graph = with_trigger(graph_of(vec![http_connector("c1", None)]), "c1");
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("missing credential refused");
 
         assert_eq!(
@@ -1454,7 +1641,7 @@ mod tests {
         let missing_id = Uuid::from_u128(42);
         let graph = with_trigger(graph_of(vec![http_connector("c1", Some(missing_id))]), "c1");
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("unknown credential refused");
 
         assert_eq!(
@@ -1481,8 +1668,8 @@ mod tests {
 
         // `credentials` simulates the list already scoped to the caller's
         // organization: the stranger's credential is simply not in it.
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert_eq!(
             errors,
@@ -1503,8 +1690,14 @@ mod tests {
             "c1",
         );
 
-        let errors = validate_graph(&graph, &catalogue, &credentials, &EventCatalogue::new())
-            .expect_err("wrong scheme refused");
+        let errors = validate_graph(
+            &graph,
+            &catalogue,
+            &credentials,
+            &EventCatalogue::new(),
+            &[],
+        )
+        .expect_err("wrong scheme refused");
 
         assert_eq!(
             errors,
@@ -1527,7 +1720,13 @@ mod tests {
         );
 
         assert_eq!(
-            validate_graph(&graph, &catalogue, &credentials, &EventCatalogue::new()),
+            validate_graph(
+                &graph,
+                &catalogue,
+                &credentials,
+                &EventCatalogue::new(),
+                &[]
+            ),
             Ok(())
         );
     }
@@ -1555,12 +1754,19 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }]),
             "c1",
         );
 
-        let errors = validate_graph(&graph, &catalogue, &credentials, &EventCatalogue::new())
-            .expect_err("refused");
+        let errors = validate_graph(
+            &graph,
+            &catalogue,
+            &credentials,
+            &EventCatalogue::new(),
+            &[],
+        )
+        .expect_err("refused");
 
         assert_eq!(
             errors,
@@ -1584,7 +1790,7 @@ mod tests {
             branch: None,
         });
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("dangling edge refused");
 
         assert!(
@@ -1611,7 +1817,7 @@ mod tests {
         let graph = with_trigger(graph, "c1");
 
         assert_eq!(
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()),
+            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]),
             Ok(())
         );
     }
@@ -1629,7 +1835,7 @@ mod tests {
             branch: None,
         });
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("a condition needs a branch");
 
         assert!(
@@ -1655,6 +1861,7 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             },
             condition("c2", "{{ true }}"),
         ]);
@@ -1664,7 +1871,7 @@ mod tests {
             branch: Some(Branch::Then),
         });
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("a connector declaring no branch refuses a branched edge");
 
         assert!(
@@ -1695,7 +1902,7 @@ mod tests {
             branch: Some(Branch::Then),
         });
 
-        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new())
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
             .expect_err("cycle refused");
 
         assert!(
@@ -1723,7 +1930,7 @@ mod tests {
         let graph = with_trigger(graph, "c1");
 
         assert_eq!(
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()),
+            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]),
             Ok(())
         );
     }
@@ -1750,8 +1957,8 @@ mod tests {
         });
         let graph = with_trigger(graph, "c1");
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::UnreachableConnector {
@@ -1783,8 +1990,8 @@ mod tests {
             "c1",
         );
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert_eq!(
             errors,
@@ -1809,8 +2016,8 @@ mod tests {
             branch: Some(Branch::Then),
         });
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::DownstreamConnectorReference {
@@ -1837,7 +2044,7 @@ mod tests {
         let graph = with_trigger(graph, "c1");
 
         assert_eq!(
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()),
+            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]),
             Ok(())
         );
     }
@@ -1847,8 +2054,8 @@ mod tests {
         let catalogue = connector_catalogue();
         let graph = with_trigger(graph_of(vec![condition("c1", "{{ loop.item }}")]), "c1");
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert_eq!(
             errors,
@@ -1871,6 +2078,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }
     }
 
@@ -1889,7 +2097,7 @@ mod tests {
         let graph = with_trigger(graph, "loop1");
 
         assert_eq!(
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()),
+            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]),
             Ok(())
         );
     }
@@ -1907,8 +2115,8 @@ mod tests {
             branch: Some(Branch::After),
         });
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::LoopUsedOutsideLoop {
@@ -1962,6 +2170,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         };
 
         Graph {
@@ -1981,7 +2190,7 @@ mod tests {
 
         let graph = with_trigger(fork_graph(Some(Branch::Then)), "fork");
 
-        assert!(validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).is_ok());
+        assert!(validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]).is_ok());
     }
 
     #[test]
@@ -1990,8 +2199,8 @@ mod tests {
 
         let graph = fork_graph(Some(Branch::Each));
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::InvalidBranch {
@@ -2007,8 +2216,8 @@ mod tests {
 
         let graph = fork_graph(None);
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::InvalidBranch {
@@ -2076,6 +2285,7 @@ mod tests {
                         name: None,
                         description: None,
                         disabled: false,
+                        operation: None,
                     },
                     super::super::graph::PlacedConnector {
                         id: "body".to_string(),
@@ -2086,6 +2296,7 @@ mod tests {
                         name: None,
                         description: None,
                         disabled: false,
+                        operation: None,
                     },
                 ],
                 edges: vec![Edge {
@@ -2098,7 +2309,7 @@ mod tests {
             "each",
         );
 
-        assert!(validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).is_ok());
+        assert!(validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]).is_ok());
     }
 
     fn manual_trigger(id: &str) -> PlacedTrigger {
@@ -2154,7 +2365,7 @@ mod tests {
         });
 
         assert_eq!(
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()),
+            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[]),
             Ok(())
         );
     }
@@ -2164,8 +2375,8 @@ mod tests {
         let catalogue = connector_catalogue();
         let graph = graph_of(vec![condition("c1", "{{ true }}")]);
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert_eq!(
             errors,
@@ -2181,8 +2392,8 @@ mod tests {
         let mut graph = graph_of(vec![condition("c1", "{{ true }}")]);
         graph.triggers.push(manual_trigger("t1"));
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::InertTrigger {
@@ -2208,8 +2419,8 @@ mod tests {
             branch: None,
         });
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::EdgeIntoTrigger {
@@ -2232,8 +2443,8 @@ mod tests {
             branch: None,
         });
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::EdgeIntoTrigger {
@@ -2255,8 +2466,8 @@ mod tests {
             branch: Some(Branch::Then),
         });
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::BranchedTriggerEdge {
@@ -2278,8 +2489,8 @@ mod tests {
             branch: None,
         });
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::DanglingEdge {
@@ -2296,8 +2507,8 @@ mod tests {
         let mut graph = graph_of(vec![condition("c1", "{{ true }}")]);
         graph.triggers.push(manual_trigger("c1"));
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::TriggerIdCollidesWithConnectorId {
@@ -2316,8 +2527,8 @@ mod tests {
             .triggers
             .push(events_trigger("t1", vec!["quote.accepted"]));
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::DuplicateTriggerId {
@@ -2338,8 +2549,8 @@ mod tests {
             branch: None,
         });
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::EmptyEventTrigger {
@@ -2362,8 +2573,8 @@ mod tests {
             branch: None,
         });
 
-        let errors =
-            validate_graph(&graph, &catalogue, &[], &EventCatalogue::new()).expect_err("refused");
+        let errors = validate_graph(&graph, &catalogue, &[], &EventCatalogue::new(), &[])
+            .expect_err("refused");
 
         assert!(
             errors.contains(&GraphError::UnknownEventName {
@@ -2392,9 +2603,525 @@ mod tests {
                 &graph,
                 &catalogue,
                 &[],
-                &event_catalogue_with("quote.accepted")
+                &event_catalogue_with("quote.accepted"),
+                &[]
             ),
             Ok(())
         );
+    }
+
+    mod operation_nodes {
+        use chrono::Utc;
+        use common::OrganizationId;
+        use uuid::Uuid;
+
+        use super::super::super::graph::OperationRef;
+        use super::*;
+        use crate::domain::automation::collection::{
+            Collection, CollectionDraft, CollectionDraftInput, CollectionSource, HttpMethod,
+            Operation, Parameter, ParameterLocation, RequestBody,
+        };
+
+        const COLLECTION_ID: u128 = 900;
+
+        fn operation() -> Operation {
+            Operation {
+                id: "getAddress".to_owned(),
+                method: HttpMethod::Get,
+                path: "/addresses/{id}".to_owned(),
+                summary: String::new(),
+                tag: String::new(),
+                parameters: vec![
+                    Parameter {
+                        name: "id".to_owned(),
+                        location: ParameterLocation::Path,
+                        required: true,
+                        description: String::new(),
+                        schema: json!({ "type": "string" }),
+                    },
+                    Parameter {
+                        name: "limit".to_owned(),
+                        location: ParameterLocation::Query,
+                        required: false,
+                        description: String::new(),
+                        schema: json!({ "type": "integer" }),
+                    },
+                ],
+                request_body: Some(RequestBody {
+                    schema: json!({ "type": "object" }),
+                }),
+                response: None,
+                response_status: None,
+            }
+        }
+
+        fn collection() -> Collection {
+            let draft = CollectionDraft::new(CollectionDraftInput {
+                title: "Addresses".to_owned(),
+                version: "1".to_owned(),
+                description: String::new(),
+                base_url: "https://api.example.com".to_owned(),
+                source: CollectionSource::Url {
+                    url: "https://api.example.com/openapi.json".to_owned(),
+                },
+                security: Vec::new(),
+                operations: vec![operation()],
+                schemas: serde_json::Map::new(),
+            })
+            .unwrap();
+            Collection::from_draft(
+                draft,
+                Uuid::from_u128(COLLECTION_ID),
+                OrganizationId(Uuid::from_u128(1)),
+                "addresses".to_owned(),
+                Utc::now(),
+            )
+        }
+
+        fn node(id: &str, config: Value) -> super::super::super::graph::PlacedConnector {
+            super::super::super::graph::PlacedConnector {
+                id: id.to_string(),
+                kind: "collection.operation".to_string(),
+                version: 1,
+                credential_id: None,
+                config: config.as_object().cloned().expect("a config is an object"),
+                name: None,
+                description: None,
+                disabled: false,
+                operation: Some(OperationRef {
+                    collection_id: Uuid::from_u128(COLLECTION_ID),
+                    operation_id: "getAddress".to_owned(),
+                }),
+            }
+        }
+
+        fn errors_with(graph: &Graph, collections: &[Collection]) -> Vec<GraphError> {
+            let catalogue = connector_catalogue();
+            match validate_graph(graph, &catalogue, &[], &EventCatalogue::new(), collections) {
+                Ok(()) => Vec::new(),
+                Err(errors) => errors,
+            }
+        }
+
+        fn graph_of_node(node: super::super::super::graph::PlacedConnector) -> Graph {
+            with_trigger(graph_of(vec![node]), "c1")
+        }
+
+        #[test]
+        fn a_node_naming_a_stored_operation_with_its_parameters_is_valid() {
+            let graph = graph_of_node(node(
+                "c1",
+                json!({ "path": { "id": "42" }, "query": { "limit": 5 }, "body": { "a": 1 } }),
+            ));
+
+            assert_eq!(errors_with(&graph, &[collection()]), Vec::new());
+        }
+
+        #[test]
+        fn parameters_given_as_whole_expressions_are_accepted() {
+            let graph = graph_of_node(node(
+                "c1",
+                json!({ "path": "{{ trigger.path }}", "query": "{{ trigger.query }}" }),
+            ));
+
+            assert_eq!(errors_with(&graph, &[collection()]), Vec::new());
+        }
+
+        #[test]
+        fn a_collection_that_is_gone_is_refused_and_named() {
+            let graph = graph_of_node(node("c1", json!({ "path": { "id": "1" } })));
+
+            let errors = errors_with(&graph, &[]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::UnknownCollection {
+                    connector_id: "c1".to_owned(),
+                    collection_id: Uuid::from_u128(COLLECTION_ID),
+                }]
+            );
+            let message = errors[0].to_string();
+            assert!(
+                message.contains("c1")
+                    && message.contains(&Uuid::from_u128(COLLECTION_ID).to_string()),
+                "{message}"
+            );
+        }
+
+        #[test]
+        fn an_operation_that_is_gone_is_refused_and_named() {
+            let mut gone = node("c1", json!({}));
+            gone.operation = Some(OperationRef {
+                collection_id: Uuid::from_u128(COLLECTION_ID),
+                operation_id: "deleteAddress".to_owned(),
+            });
+
+            let errors = errors_with(&graph_of_node(gone), &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::UnknownOperation {
+                    connector_id: "c1".to_owned(),
+                    collection_id: Uuid::from_u128(COLLECTION_ID),
+                    operation_id: "deleteAddress".to_owned(),
+                }]
+            );
+            assert!(errors[0].to_string().contains("deleteAddress"));
+        }
+
+        #[test]
+        fn a_node_with_no_operation_reference_misses_its_operation() {
+            let mut bare = node("c1", json!({}));
+            bare.operation = None;
+
+            let errors = errors_with(&graph_of_node(bare), &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::MissingRequiredField {
+                    connector_id: "c1".to_owned(),
+                    field: "operation".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_missing_required_parameter_is_refused_naming_the_node_and_the_field() {
+            let graph = graph_of_node(node("c1", json!({ "query": { "limit": 5 } })));
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::MissingParameter {
+                    connector_id: "c1".to_owned(),
+                    field: "path.id".to_owned(),
+                }]
+            );
+            let message = errors[0].to_string();
+            assert!(
+                message.contains("c1") && message.contains("path.id"),
+                "{message}"
+            );
+        }
+
+        #[test]
+        fn an_unknown_parameter_is_refused_naming_the_node_and_the_field() {
+            let graph = graph_of_node(node(
+                "c1",
+                json!({ "path": { "id": "1" }, "query": { "sort": "asc" } }),
+            ));
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::UnknownParameter {
+                    connector_id: "c1".to_owned(),
+                    field: "query.sort".to_owned(),
+                }]
+            );
+            let message = errors[0].to_string();
+            assert!(
+                message.contains("c1") && message.contains("query.sort"),
+                "{message}"
+            );
+        }
+
+        #[test]
+        fn the_url_the_method_and_the_security_never_live_in_the_node() {
+            for forbidden in ["url", "method", "base_url", "security", "headers_security"] {
+                let graph = graph_of_node(node(
+                    "c1",
+                    json!({ "path": { "id": "1" }, forbidden: "copied" }),
+                ));
+
+                let errors = errors_with(&graph, &[collection()]);
+
+                assert_eq!(
+                    errors,
+                    vec![GraphError::UnknownConfigField {
+                        connector_id: "c1".to_owned(),
+                        field: forbidden.to_owned(),
+                    }],
+                    "{forbidden}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_group_that_is_a_literal_non_object_is_a_type_mismatch() {
+            let graph = graph_of_node(node("c1", json!({ "path": 5 })));
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::FieldTypeMismatch {
+                    connector_id: "c1".to_owned(),
+                    field: "path".to_owned(),
+                    expected: "object",
+                    got: "number",
+                }]
+            );
+        }
+
+        #[test]
+        fn every_mistake_of_a_node_is_reported_at_once() {
+            let graph = graph_of_node(node(
+                "c1",
+                json!({ "query": { "sort": "asc" }, "headers": { "X-Nope": "1" } }),
+            ));
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![
+                    GraphError::MissingParameter {
+                        connector_id: "c1".to_owned(),
+                        field: "path.id".to_owned(),
+                    },
+                    GraphError::UnknownParameter {
+                        connector_id: "c1".to_owned(),
+                        field: "query.sort".to_owned(),
+                    },
+                    GraphError::UnknownParameter {
+                        connector_id: "c1".to_owned(),
+                        field: "headers.X-Nope".to_owned(),
+                    },
+                ]
+            );
+        }
+
+        fn upstream(id: &str) -> super::super::super::graph::PlacedConnector {
+            super::super::super::graph::PlacedConnector {
+                id: id.to_string(),
+                kind: "flow.config".to_string(),
+                version: 1,
+                credential_id: None,
+                config: json!({ "variables": { "id": "x" } })
+                    .as_object()
+                    .cloned()
+                    .unwrap(),
+                name: None,
+                description: None,
+                disabled: false,
+                operation: None,
+            }
+        }
+
+        fn chain(connectors: Vec<super::super::super::graph::PlacedConnector>) -> Graph {
+            let mut graph = with_trigger(graph_of(connectors), "c0");
+            let ids: Vec<String> = graph.connectors.iter().map(|c| c.id.clone()).collect();
+            for pair in ids.windows(2) {
+                graph.edges.push(Edge {
+                    from: pair[0].clone(),
+                    to: pair[1].clone(),
+                    branch: None,
+                });
+            }
+            graph
+        }
+
+        #[test]
+        fn a_nested_reference_to_an_upstream_node_is_accepted() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({
+                        "path": { "id": "{{ connectors.c0.output.id }}" },
+                        "body": { "items": [{ "name": "{{ trigger.name }}" }] }
+                    }),
+                ),
+            ]);
+
+            assert_eq!(errors_with(&graph, &[collection()]), Vec::new());
+        }
+
+        #[test]
+        fn a_nested_reference_to_an_unknown_node_is_refused_naming_the_nested_field() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({ "path": { "id": "{{ connectors.ghost.output.id }}" } }),
+                ),
+            ]);
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::UnknownConnectorReference {
+                    connector_id: "c1".to_owned(),
+                    field: "path.id".to_owned(),
+                    referenced_id: "ghost".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_nested_reference_to_a_downstream_node_is_refused() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({
+                        "path": { "id": "1" },
+                        "body": { "items": [{ "name": "{{ connectors.c2.output.id }}" }] }
+                    }),
+                ),
+                upstream("c2"),
+            ]);
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::DownstreamConnectorReference {
+                    connector_id: "c1".to_owned(),
+                    field: "body.items.0.name".to_owned(),
+                    referenced_id: "c2".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_nested_loop_reference_outside_a_loop_is_refused() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({
+                        "path": { "id": "1" },
+                        "query": { "limit": ["a", "{{ loop.item }}"] }
+                    }),
+                ),
+            ]);
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::LoopUsedOutsideLoop {
+                    connector_id: "c1".to_owned(),
+                    field: "query.limit.1".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_nested_expression_that_does_not_parse_is_refused_with_its_field() {
+            let graph = chain(vec![
+                upstream("c0"),
+                node(
+                    "c1",
+                    json!({
+                        "path": { "id": "1" },
+                        "headers": { "X-Trace": "{{ trigger.a + }}" }
+                    }),
+                ),
+            ]);
+
+            let errors = errors_with(&graph, &[collection()]);
+
+            assert!(
+                errors.iter().any(|error| matches!(
+                    error,
+                    GraphError::InvalidExpression { connector_id, field, .. }
+                        if connector_id == "c1" && field == "headers.X-Trace"
+                )),
+                "{errors:?}"
+            );
+        }
+
+        #[test]
+        fn another_kind_keeps_not_validating_what_is_nested_in_its_fields() {
+            let mut other = upstream("c0");
+            other.config = json!({ "variables": { "a": "{{ connectors.ghost.output.id }}" } })
+                .as_object()
+                .cloned()
+                .unwrap();
+
+            assert_eq!(errors_with(&chain(vec![other]), &[]), Vec::new());
+        }
+
+        #[test]
+        fn a_dot_segment_literal_is_refused_when_saving_and_an_empty_one_is_missing() {
+            for dots in [".", ".."] {
+                let graph = graph_of_node(node("c1", json!({ "path": { "id": dots } })));
+
+                assert_eq!(
+                    errors_with(&graph, &[collection()]),
+                    vec![GraphError::InvalidParameter {
+                        connector_id: "c1".to_owned(),
+                        field: "path.id".to_owned(),
+                    }],
+                    "{dots}"
+                );
+            }
+
+            let empty = graph_of_node(node("c1", json!({ "path": { "id": "" } })));
+            assert_eq!(
+                errors_with(&empty, &[collection()]),
+                vec![GraphError::MissingParameter {
+                    connector_id: "c1".to_owned(),
+                    field: "path.id".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_header_repeated_under_another_case_is_refused_when_saving() {
+            let mut op = operation();
+            op.parameters.push(Parameter {
+                name: "X-Trace".to_owned(),
+                location: ParameterLocation::Header,
+                required: false,
+                description: String::new(),
+                schema: json!({ "type": "string" }),
+            });
+            let mut col = collection();
+            col.operations = vec![op];
+            let graph = graph_of_node(node(
+                "c1",
+                json!({
+                    "path": { "id": "1" },
+                    "headers": { "X-Trace": "a", "x-trace": "b" }
+                }),
+            ));
+
+            let errors = errors_with(&graph, &[col]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::DuplicateParameter {
+                    connector_id: "c1".to_owned(),
+                    field: "headers.x-trace".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn another_kind_is_never_checked_against_the_collections() {
+            let mut http = condition("c1", "{{ true }}");
+            http.operation = Some(OperationRef {
+                collection_id: Uuid::from_u128(404),
+                operation_id: "ghost".to_owned(),
+            });
+
+            assert_eq!(errors_with(&graph_of_node(http), &[]), Vec::new());
+        }
+
+        #[test]
+        fn the_collection_is_looked_up_by_id_not_by_position() {
+            let mut other = collection();
+            other.id = Uuid::from_u128(1);
+            let graph = graph_of_node(node("c1", json!({ "path": { "id": "1" } })));
+
+            assert_eq!(errors_with(&graph, &[other, collection()]), Vec::new());
+        }
     }
 }

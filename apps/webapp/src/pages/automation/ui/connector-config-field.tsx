@@ -14,6 +14,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import { cn } from '#/lib/utils'
 import {
+	type FieldAddOns,
 	isJsonMapRepresentable,
 	isSelectKind,
 	JSON_ENTRY_KINDS,
@@ -32,7 +33,7 @@ import { isExpression } from '#/pages/automation/lib/parameters'
 import { TextArea } from '#/pages/automation/ui/text-area'
 
 export interface ConnectorConfigFieldProps {
-	field: DisplayField
+	field: DisplayField & FieldAddOns
 	value: unknown
 	issues: readonly string[]
 	preview?: ReactNode
@@ -97,7 +98,7 @@ function renderControl({
 	onChange,
 }: {
 	id: string
-	field: DisplayField
+	field: DisplayField & FieldAddOns
 	value: unknown
 	invalid: boolean
 	onChange: (value: unknown) => void
@@ -212,7 +213,7 @@ function NumberExpressionField({
 	onChange,
 }: {
 	id: string
-	field: DisplayField
+	field: DisplayField & FieldAddOns
 	value: unknown
 	invalid: boolean
 	onChange: (value: unknown) => void
@@ -281,7 +282,7 @@ function JsonField({
 	onChange,
 }: {
 	id: string
-	field: DisplayField
+	field: DisplayField & FieldAddOns
 	value: unknown
 	invalid: boolean
 	onChange: (value: unknown) => void
@@ -298,7 +299,7 @@ function JsonField({
 		isJsonMapRepresentable(value) ? 'rows' : 'raw',
 	)
 	const [rows, setRows] = useState<JsonRow[]>(() =>
-		toRows(jsonEntriesFromValue(value)),
+		toRows(jsonEntriesFromValue(value, field.entryKinds)),
 	)
 	const [rawText, setRawText] = useState(() => stringifyJsonValue(value))
 	const [rawInvalid, setRawInvalid] = useState(false)
@@ -308,7 +309,7 @@ function JsonField({
 	useEffect(() => {
 		if (value === lastEmitted.current) return
 		lastEmitted.current = value
-		setRows(toRows(jsonEntriesFromValue(value)))
+		setRows(toRows(jsonEntriesFromValue(value, field.entryKinds)))
 		setRawText(stringifyJsonValue(value))
 		setRawInvalid(false)
 		setMode(isJsonMapRepresentable(value) ? 'rows' : 'raw')
@@ -359,7 +360,9 @@ function JsonField({
 			setRawInvalid(false)
 		} else {
 			if (!canUseRows) return
-			setRows(toRows(jsonEntriesFromValue(lastEmitted.current)))
+			setRows(
+				toRows(jsonEntriesFromValue(lastEmitted.current, field.entryKinds)),
+			)
 		}
 		setMode(next)
 	}

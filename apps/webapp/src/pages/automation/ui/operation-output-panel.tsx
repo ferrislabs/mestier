@@ -1,24 +1,25 @@
+import type { OperationOutput } from '#/pages/automation/lib/collection-node'
 import { JsonView } from '#/pages/automation/ui/json-view'
 import { NdvPanel } from '#/pages/automation/ui/ndv-panel'
 
-function isEmptyExample(example: unknown): boolean {
+function isEmptyBody(body: unknown): boolean {
 	return (
-		example === null ||
-		example === undefined ||
-		(typeof example === 'object' &&
-			!Array.isArray(example) &&
-			Object.keys(example).length === 0)
+		body === null ||
+		body === undefined ||
+		(typeof body === 'object' &&
+			!Array.isArray(body) &&
+			Object.keys(body).length === 0)
 	)
 }
 
 export function OperationOutputPanel({
 	summary,
 	status,
-	example,
+	output,
 }: {
 	summary: string
 	status: string
-	example: unknown
+	output: OperationOutput['output']
 }) {
 	return (
 		<NdvPanel title="Sortie" tone="side">
@@ -28,15 +29,14 @@ export function OperationOutputPanel({
 					<span className="font-medium text-foreground">{summary}</span>,
 					d’après la spec importée.
 				</p>
-				{isEmptyExample(example) ? (
+				<JsonView value={output} />
+				{isEmptyBody(output.body) && (
 					<p className="rounded-md border border-border border-dashed px-3 py-4 text-muted-foreground text-sm">
 						La spec ne décrit pas le contenu de cette réponse : le corps attendu
 						est vide (
-						<code className="font-mono">{JSON.stringify(example)}</code>
+						<code className="font-mono">{JSON.stringify(output.body)}</code>
 						).
 					</p>
-				) : (
-					<JsonView value={example} />
 				)}
 			</div>
 		</NdvPanel>

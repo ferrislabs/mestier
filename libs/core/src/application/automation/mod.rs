@@ -6,6 +6,7 @@ use crate::{
     domain::automation::ports::{DispatchOutcome, EventDispatchRepository},
 };
 
+mod collection;
 mod credential;
 mod folder;
 pub mod retention;

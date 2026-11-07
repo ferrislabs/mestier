@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { Ellipsis, Library, Trash2, Upload } from 'lucide-react'
+import { Ellipsis, Library, Loader2, Trash2, Upload } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import {
@@ -16,18 +17,31 @@ import {
 	formatImportDate,
 	operationCount,
 } from '#/pages/automation/lib/collection-format'
-import type { Collection } from '#/pages/automation/lib/collections'
+import type { CollectionSummary } from '#/pages/automation/lib/collections'
+
+function CollectionsLoading() {
+	return (
+		<div className="flex min-h-40 items-center justify-center gap-3 rounded-lg border border-border bg-card p-8 text-muted-foreground text-sm">
+			<Loader2 className="size-5 animate-spin" />
+			Chargement des collections…
+		</div>
+	)
+}
 
 export function CollectionsList({
 	organizationSlug,
 	collections,
+	isLoading,
+	error,
 	onImport,
 	onRemove,
 }: {
 	organizationSlug: string
-	collections: readonly Collection[]
+	collections: readonly CollectionSummary[]
+	isLoading: boolean
+	error: string | null
 	onImport: () => void
-	onRemove: (collection: Collection) => void
+	onRemove: (collection: CollectionSummary) => void
 }) {
 	return (
 		<PageShell className="gap-0">
@@ -36,20 +50,31 @@ export function CollectionsList({
 				title="Collections"
 				description="Les specs OpenAPI importées. Leurs opérations sont disponibles comme nœuds dans tous les workflows."
 				actions={
-					<Button onClick={onImport}>
-						<Upload />
-						Importer une collection
-					</Button>
+					<RequirePermission permission="MANAGE_AUTOMATION">
+						<Button onClick={onImport}>
+							<Upload />
+							Importer une collection
+						</Button>
+					</RequirePermission>
 				}
 			/>
-			{collections.length === 0 ? (
-				<div className="rounded-lg border border-border border-dashed bg-card px-6 py-12 text-center">
-					<p className="font-medium">Aucune collection pour le moment.</p>
-					<p className="mt-1 text-muted-foreground text-sm">
-						Importez la spec OpenAPI d’un service externe pour l’appeler depuis
-						vos workflows sans écrire les requêtes à la main.
-					</p>
+			{error ? (
+				<div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-destructive text-sm">
+					{error}
 				</div>
+			) : null}
+			{isLoading ? (
+				<CollectionsLoading />
+			) : collections.length === 0 ? (
+				error ? null : (
+					<div className="rounded-lg border border-border border-dashed bg-card px-6 py-12 text-center">
+						<p className="font-medium">Aucune collection pour le moment.</p>
+						<p className="mt-1 text-muted-foreground text-sm">
+							Importez la spec OpenAPI d’un service externe pour l’appeler
+							depuis vos workflows sans écrire les requêtes à la main.
+						</p>
+					</div>
+				)
 			) : (
 				<ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
 					{collections.map((collection) => (
@@ -87,30 +112,32 @@ export function CollectionsList({
 									{collection.baseUrl}
 								</p>
 								<p className="mt-0.5 text-sm">
-									{operationCount(collection.operations.length)}
+									{operationCount(collection.operationCount)}
 								</p>
 							</div>
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										className="relative z-10"
-										aria-label={`Actions sur ${collection.title}`}
-									>
-										<Ellipsis />
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="end">
-									<DropdownMenuItem
-										variant="destructive"
-										onSelect={() => onRemove(collection)}
-									>
-										<Trash2 />
-										Supprimer la collection
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
+							<RequirePermission permission="MANAGE_AUTOMATION">
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											className="relative z-10"
+											aria-label={`Actions sur ${collection.title}`}
+										>
+											<Ellipsis />
+										</Button>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end">
+										<DropdownMenuItem
+											variant="destructive"
+											onSelect={() => onRemove(collection)}
+										>
+											<Trash2 />
+											Supprimer la collection
+										</DropdownMenuItem>
+									</DropdownMenuContent>
+								</DropdownMenu>
+							</RequirePermission>
 						</li>
 					))}
 				</ul>

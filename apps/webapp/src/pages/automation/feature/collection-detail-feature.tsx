@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useCollection } from '#/hooks/use-automation'
 import {
 	UpdateCollectionFeature,
 	type UpdateOutcome,
 } from '#/pages/automation/feature/update-collection-feature'
-import { useCollections } from '#/pages/automation/feature/use-collections'
+import {
+	collectionLoadErrorMessage,
+	isCollectionMissing,
+} from '#/pages/automation/lib/collection-format'
 import { CollectionDetail } from '#/pages/automation/ui/collection-detail'
 
 export function CollectionDetailFeature({
@@ -13,9 +17,7 @@ export function CollectionDetailFeature({
 	collectionId: string
 }) {
 	const { activeOrganization } = useActiveOrganization()
-	const collection = useCollections().data.find(
-		(item) => item.id === collectionId,
-	)
+	const collection = useCollection(activeOrganization.id, collectionId)
 	const [updating, setUpdating] = useState<{ autoCheck: boolean } | null>(null)
 	const [outcome, setOutcome] = useState<UpdateOutcome | null>(null)
 
@@ -23,13 +25,19 @@ export function CollectionDetailFeature({
 		<>
 			<CollectionDetail
 				organizationSlug={activeOrganization.slug}
-				collection={collection}
+				collection={collection.data}
+				isLoading={collection.isPending}
+				error={
+					isCollectionMissing(collection.error)
+						? null
+						: collectionLoadErrorMessage(collection.error)
+				}
 				outcome={outcome}
 				onUpdate={(autoCheck) => setUpdating({ autoCheck })}
 			/>
-			{collection && updating && (
+			{collection.data && updating && (
 				<UpdateCollectionFeature
-					collection={collection}
+					collection={collection.data}
 					autoCheck={updating.autoCheck}
 					onClose={() => setUpdating(null)}
 					onUpdated={(result) => {

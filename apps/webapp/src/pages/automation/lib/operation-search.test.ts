@@ -5,9 +5,6 @@ import type {
 } from '#/pages/automation/lib/collections'
 import {
 	collectionOperations,
-	operationPreset,
-	operationSuccessExample,
-	resolveOperation,
 	searchOperations,
 } from '#/pages/automation/lib/operation-search'
 
@@ -24,22 +21,28 @@ const operation: CollectionOperation = {
 }
 
 const collection: Collection = {
-	id: 'petstore',
+	id: '6f1f6a9e-5f0c-4a43-9d77-1d9d0a3b1c11',
+	slug: 'petstore',
 	title: 'Petstore',
 	version: '1',
 	description: '',
 	baseUrl: 'https://pets.test/',
 	source: { kind: 'url', url: 'https://pets.test/spec.json' },
-	importedAt: '2026-01-01',
+	importedAt: '2026-11-06T09:30:00Z',
 	security: [],
 	operations: [operation],
 	schemas: {},
+	history: [],
 }
 
 describe('operation search', () => {
 	it('lists the operations of a collection with their owner', () => {
 		expect(collectionOperations(collection)).toEqual([
-			{ collectionId: 'petstore', collectionTitle: 'Petstore', operation },
+			{
+				collectionId: collection.id,
+				collectionTitle: 'Petstore',
+				operation,
+			},
 		])
 	})
 
@@ -49,66 +52,8 @@ describe('operation search', () => {
 		expect(searchOperations([collection], ' ')).toEqual([])
 	})
 
-	it('turns an operation into an http connector preset', () => {
-		expect(operationPreset(collection, operation)).toEqual({
-			config: { method: 'GET', url: 'https://pets.test/pets' },
-			meta: {
-				label: 'Lister les animaux',
-				subtitle: 'GET /pets',
-				operation: { collectionId: 'petstore', operationId: 'list' },
-			},
-		})
-	})
-})
-
-describe('resolveOperation', () => {
-	it('finds the operation a node was made from, and nothing once it is gone', () => {
-		expect(
-			resolveOperation({ collectionId: 'petstore', operationId: 'list' }, [
-				collection,
-			])?.operation.summary,
-		).toBe('Lister les animaux')
-		expect(
-			resolveOperation({ collectionId: 'petstore', operationId: 'gone' }, [
-				collection,
-			]),
-		).toBeNull()
-		expect(
-			resolveOperation({ collectionId: 'gone', operationId: 'list' }, [
-				collection,
-			]),
-		).toBeNull()
-	})
-})
-
-describe('operationSuccessExample', () => {
-	it('builds the example of a documented success response', () => {
-		const documented = {
-			collection,
-			operation: {
-				...operation,
-				responseStatus: '200',
-				response: { type: 'object', example: { id: 1 } },
-			},
-		}
-		expect(operationSuccessExample(documented)).toEqual({
-			summary: 'Lister les animaux',
-			status: '200',
-			example: { id: 1 },
-		})
-	})
-
-	it('has none for an undocumented or failing response', () => {
-		expect(operationSuccessExample({ collection, operation })).toBeNull()
-		expect(
-			operationSuccessExample({
-				collection,
-				operation: {
-					...operation,
-					responseStatus: '404',
-					response: { type: 'object' },
-				},
-			}),
-		).toBeNull()
+	it('finds an operation by its path, its tag or its collection', () => {
+		expect(searchOperations([collection], '/pets')).toHaveLength(1)
+		expect(searchOperations([collection], 'petstore')).toHaveLength(1)
 	})
 })

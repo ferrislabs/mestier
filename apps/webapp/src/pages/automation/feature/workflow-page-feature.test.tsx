@@ -33,7 +33,6 @@ vi.mock('#/pages/automation/feature/workflow-canvas-feature', () => ({
 								triggers: [{ id: 't1', kind: 'Manual' }],
 							},
 							layout: new Map(),
-							meta: {},
 						})
 					}
 				>

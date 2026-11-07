@@ -30,10 +30,19 @@ pub struct CapturedRequest {
     /// Header names lower-cased, the same normalization a receiver would
     /// apply — case must never be what an assertion depends on.
     pub headers: HashMap<String, String>,
+    pub header_lines: Vec<(String, String)>,
     pub body: Vec<u8>,
 }
 
 impl CapturedRequest {
+    pub fn header_values(&self, name: &str) -> Vec<&str> {
+        self.header_lines
+            .iter()
+            .filter(|(line_name, _)| line_name == &name.to_lowercase())
+            .map(|(_, value)| value.as_str())
+            .collect()
+    }
+
     pub fn body_json(&self) -> Value {
         serde_json::from_slice(&self.body).expect("captured body is valid JSON")
     }
@@ -246,10 +255,11 @@ async fn read_one_request(
     let method = parts.next().unwrap_or_default().to_owned();
     let path = parts.next().unwrap_or_default().to_owned();
 
-    let headers: HashMap<String, String> = lines
+    let header_lines: Vec<(String, String)> = lines
         .filter_map(|line| line.split_once(':'))
         .map(|(name, value)| (name.trim().to_lowercase(), value.trim().to_owned()))
         .collect();
+    let headers: HashMap<String, String> = header_lines.iter().cloned().collect();
 
     let content_length: usize = headers
         .get("content-length")
@@ -272,6 +282,7 @@ async fn read_one_request(
         method,
         path,
         headers,
+        header_lines,
         body,
     })
 }

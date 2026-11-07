@@ -195,6 +195,45 @@ const SUPPORT_ADD_BADGE_FIELDS: &[Field] = &[
     },
 ];
 
+const COLLECTION_OPERATION_FIELDS: &[Field] = &[
+    Field {
+        name: "path",
+        label: "Paramètres de chemin",
+        required: false,
+        kind: FieldKind::Json,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "query",
+        label: "Paramètres de requête",
+        required: false,
+        kind: FieldKind::Json,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "headers",
+        label: "En-têtes",
+        required: false,
+        kind: FieldKind::Json,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+    Field {
+        name: "body",
+        label: "Corps",
+        required: false,
+        kind: FieldKind::Json,
+        expression: true,
+        secret: false,
+        visible_when: None,
+    },
+];
+
 const HTTP_REQUEST_FIELDS: &[Field] = &[
     Field {
         name: "method",
@@ -393,6 +432,7 @@ fn descriptors() -> Vec<ConnectorDescriptor> {
     all.extend(customer_descriptors());
     all.extend(support_descriptors());
     all.extend(http_descriptors());
+    all.extend(collection_descriptors());
     all.extend(odoo_descriptors());
     all.extend(task_recurrence_descriptors());
     all
@@ -496,6 +536,24 @@ fn http_descriptors() -> Vec<ConnectorDescriptor> {
         label: "Requête HTTP",
         auth: AuthRequirement::Optional(&["bearer_token", "http_basic", "http_header"]),
         fields: HTTP_REQUEST_FIELDS,
+        branches: &[],
+        output_example: json!({
+            "status": 200,
+            "headers": { "content-type": "application/json" },
+            "body": {},
+        }),
+        output_mirrors_field: None,
+    }]
+}
+
+fn collection_descriptors() -> Vec<ConnectorDescriptor> {
+    vec![ConnectorDescriptor {
+        kind: "collection.operation",
+        version: 1,
+        family: "http",
+        label: "Opération d'une collection",
+        auth: AuthRequirement::Optional(&["bearer_token", "http_basic", "http_header"]),
+        fields: COLLECTION_OPERATION_FIELDS,
         branches: &[],
         output_example: json!({
             "status": 200,
@@ -865,6 +923,43 @@ mod tests {
                 .iter()
                 .any(|f| f.name == "signing_credential_id" && !f.required),
             "signing is a second, distinct credential slot from `credential_id`"
+        );
+    }
+
+    #[test]
+    fn the_catalogue_contains_the_collection_operation_connector() {
+        let catalogue = connector_catalogue();
+
+        let descriptor = catalogue
+            .get("collection.operation", 1)
+            .expect("collection.operation is described");
+
+        assert_eq!(descriptor.family, "http");
+        assert_eq!(
+            descriptor.auth,
+            AuthRequirement::Optional(&["bearer_token", "http_basic", "http_header"])
+        );
+        assert!(descriptor.auth.is_satisfied_without_a_credential());
+        let names: Vec<&str> = descriptor.fields.iter().map(|field| field.name).collect();
+        assert_eq!(names, ["path", "query", "headers", "body"]);
+        for field in descriptor.fields {
+            assert!(
+                !field.required,
+                "{} is checked against the operation",
+                field.name
+            );
+            assert!(field.expression, "{}", field.name);
+            assert_eq!(field.kind, FieldKind::Json, "{}", field.name);
+        }
+        for copied in ["url", "method", "base_url", "security"] {
+            assert!(
+                !names.contains(&copied),
+                "`{copied}` must come from the stored collection, never from the node"
+            );
+        }
+        assert_eq!(
+            descriptor.output_example,
+            catalogue.get("http.request", 1).unwrap().output_example
         );
     }
 

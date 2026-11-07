@@ -296,6 +296,8 @@ function renderPage(
 		initialPath,
 	)
 
+	rendered.catch(() => undefined)
+
 	return { api, rendered }
 }
 
@@ -1066,7 +1068,148 @@ describe('WorkflowPageFeature (editor) — the node fields', () => {
 		])
 		expect(
 			window.localStorage.getItem('mestier:automation:node-meta:workflow-1'),
-		).not.toContain('Facturer le client')
+		).toBeNull()
+	})
+})
+
+describe('WorkflowPageFeature (editor) — a node made from a collection operation', () => {
+	const COLLECTION_PATH =
+		'/api/v1/organizations/{organization_id}/automation/collections/{collection_id}'
+	const PETS_ID = '6f1f6a9e-5f0c-4a43-9d77-1d9d0a3b1c11'
+
+	const OPERATION_DESCRIPTOR: Schemas.ConnectorDescriptorResponse = {
+		...descriptor('collection.operation', "Opération d'une collection", {
+			Optional: ['bearer_token'],
+		}),
+		family: 'http',
+	}
+
+	const PETS: Schemas.CollectionResponse = {
+		id: PETS_ID,
+		organization_id: 'org-1',
+		slug: 'petstore',
+		title: 'Petstore',
+		version: '2.0',
+		description: '',
+		base_url: 'https://pets.test',
+		source: { kind: 'url', url: 'https://pets.test/openapi.json' },
+		imported_at: '2026-11-06T09:30:00Z',
+		security: [],
+		operations: [
+			{
+				id: 'getPet',
+				method: 'GET',
+				path: '/pets/{id}',
+				summary: 'Lire un animal',
+				tag: 'pets',
+				parameters: [
+					{
+						name: 'id',
+						location: 'path',
+						required: true,
+						description: '',
+						schema: { type: 'string' },
+					},
+				],
+				request_body: null,
+				response: null,
+				response_status: '200',
+			},
+		],
+		schemas: {},
+		history: [],
+	}
+
+	const OPERATION_NODE: Schemas.PlacedConnectorDto = {
+		id: 'c1',
+		kind: 'collection.operation',
+		version: 1,
+		name: 'Lire un animal',
+		description: 'GET /pets/{id}',
+		config: { path: { id: '5' } },
+		operation: { collection_id: PETS_ID, operation_id: 'getPet' },
+	}
+
+	function renderOperationWorkflow(collection: (params: unknown) => unknown) {
+		return renderFeature((fakeApi) => {
+			fakeApi.mockGet(CONNECTORS_PATH, () => ({
+				data: { auth_schemes: [], connectors: [OPERATION_DESCRIPTOR] },
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({
+					graph: { connectors: [OPERATION_NODE], edges: [], triggers: [] },
+					layout: { c1: { x: 0, y: 0 } },
+				}),
+				pagination: null,
+			}))
+			fakeApi.mockGet(COLLECTION_PATH, collection)
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, (params) => ({
+				data: {
+					id: 'version-2',
+					workflow_id: 'workflow-1',
+					version: 2,
+					graph: (params as { body: { graph: Schemas.GraphDto } }).body.graph,
+					created_at: '2026-08-02T00:00:00Z',
+					created_by: null,
+				},
+			}))
+		})
+	}
+
+	it('reads the collection it calls from the API and sends the reference back untouched', async () => {
+		const user = userEvent.setup()
+		const api = renderOperationWorkflow(() => ({
+			data: PETS,
+			pagination: null,
+		}))
+		const node = await screen.findByTestId('rf__node-c1')
+
+		fireEvent.contextMenu(node, { clientX: 200, clientY: 150 })
+		await user.click(await screen.findByRole('menuitem', { name: /Renommer/ }))
+		const input = await screen.findByLabelText('Nom du nœud')
+		await user.clear(input)
+		await user.type(input, 'Lire la fiche')
+		await user.click(screen.getByRole('button', { name: 'Renommer' }))
+		await clickSave()
+
+		await waitFor(() => {
+			expect(
+				api.calls.some(
+					(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
+				),
+			).toBe(true)
+		})
+		const call = api.calls.find(
+			(c) => c.method === 'put' && c.path === WORKFLOW_VERSIONS_PATH,
+		)
+		const body = (call?.params as { body: Schemas.SaveWorkflowVersionRequest })
+			.body
+		expect(body.graph.connectors).toEqual([
+			{ ...OPERATION_NODE, name: 'Lire la fiche' },
+		])
+		expect(
+			api.calls.filter((c) => c.path === COLLECTION_PATH).map((c) => c.params),
+		).toEqual([{ path: { organization_id: 'org-1', collection_id: PETS_ID } }])
+		expect(
+			Object.keys(window.localStorage).filter((key) =>
+				/node-meta|collections/.test(key),
+			),
+		).toEqual([])
+	})
+
+	it('badges the node once the API says the collection is gone', async () => {
+		renderOperationWorkflow(() => {
+			throw Object.assign(new Error('Resource not found'), { status: 404 })
+		})
+
+		const node = await screen.findByTestId('rf__node-c1')
+
+		expect(
+			await within(node).findByRole('img', {
+				name: 'À corriger : La collection de cette opération a été supprimée.',
+			}),
+		).toBeDefined()
 	})
 })
 

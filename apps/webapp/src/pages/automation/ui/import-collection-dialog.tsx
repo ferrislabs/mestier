@@ -1,3 +1,4 @@
+import { LoaderCircle } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -8,10 +9,10 @@ import {
 	DialogTitle,
 } from '#/components/ui/dialog'
 import { operationCount } from '#/pages/automation/lib/collection-format'
-import type { Collection } from '#/pages/automation/lib/collections'
+import type { CollectionDraft } from '#/pages/automation/lib/collections'
 import { SpecSourcePicker } from '#/pages/automation/ui/spec-source-picker'
 
-function CollectionPreview({ collection }: { collection: Collection }) {
+function CollectionPreview({ collection }: { collection: CollectionDraft }) {
 	const tags = [
 		...new Set(collection.operations.map((operation) => operation.tag)),
 	]
@@ -36,6 +37,7 @@ function CollectionPreview({ collection }: { collection: Collection }) {
 
 export function ImportCollectionDialog({
 	loading,
+	saving,
 	error,
 	preview,
 	onLoadUrl,
@@ -46,8 +48,9 @@ export function ImportCollectionDialog({
 	onConfirm,
 }: {
 	loading: boolean
+	saving: boolean
 	error: string | null
-	preview: Collection | null
+	preview: CollectionDraft | null
 	onLoadUrl: (url: string) => void
 	onLoadFile: (file: File) => void
 	onSourceChange: () => void
@@ -87,11 +90,18 @@ export function ImportCollectionDialog({
 					</p>
 				)}
 				<DialogFooter>
-					<Button variant="outline" onClick={preview ? onBack : onCancel}>
+					<Button
+						variant="outline"
+						disabled={saving}
+						onClick={preview ? onBack : onCancel}
+					>
 						{preview ? 'Retour' : 'Annuler'}
 					</Button>
 					{preview && (
-						<Button onClick={onConfirm}>Ajouter la collection</Button>
+						<Button disabled={saving} onClick={onConfirm}>
+							{saving && <LoaderCircle className="animate-spin" />}
+							Ajouter la collection
+						</Button>
 					)}
 				</DialogFooter>
 			</DialogContent>

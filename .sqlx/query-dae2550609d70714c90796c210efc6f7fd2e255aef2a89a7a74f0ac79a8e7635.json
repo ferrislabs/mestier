@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, org_id, slug, title, version, description, base_url,\n                      source_kind, source_value, imported_at, security, operations, schemas\n               FROM automation.collection\n               WHERE org_id = $1 AND id = ANY($2)\n               ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "base_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "source_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "source_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "imported_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "security",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "operations",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "schemas",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "dae2550609d70714c90796c210efc6f7fd2e255aef2a89a7a74f0ac79a8e7635"
+}

@@ -7,9 +7,13 @@
 
 use std::time::Duration;
 
+use common::OrganizationId;
 use reqwest::{Client, RequestBuilder, Response, Url, redirect::Policy};
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
+use uuid::Uuid;
 
+use crate::application::MestierUseCase;
+use crate::domain::automation::run::ConnectorOutcome;
 use crate::infrastructure::automation::webhook::{
     address_policy::{AddressVerdict, PrivateNetworkAccess, judge},
     resolver::GuardedResolver,
@@ -37,6 +41,7 @@ pub const TRUNCATION_MARKER: &str = "…[truncated]";
 /// that could answer differently.
 pub fn build_guarded_client(access: PrivateNetworkAccess) -> Result<Client, String> {
     Client::builder()
+        .no_proxy()
         .redirect(Policy::none())
         .dns_resolver(GuardedResolver::new(access))
         .build()
@@ -57,7 +62,11 @@ pub fn refuse_literal_private_address(
     let Some(host) = url.host_str() else {
         return Ok(());
     };
-    let Ok(address) = host.parse::<std::net::IpAddr>() else {
+    let literal = host
+        .strip_prefix('[')
+        .and_then(|inner| inner.strip_suffix(']'))
+        .unwrap_or(host);
+    let Ok(address) = literal.parse::<std::net::IpAddr>() else {
         return Ok(());
     };
 
@@ -141,6 +150,49 @@ pub fn auth_from_credential(
     }
 }
 
+pub async fn open_http_auth(
+    usecase: &MestierUseCase,
+    org_id: OrganizationId,
+    credential_id: Uuid,
+) -> Result<HttpAuth, String> {
+    let (credential, plaintext) = usecase
+        .open_credential(org_id, credential_id)
+        .await
+        .map_err(|error| format!("the auth credential is unusable: {error}"))?;
+
+    let fields = parse_credential_fields(&plaintext)
+        .ok_or_else(|| "the auth credential's data is not usable".to_owned())?;
+
+    auth_from_credential(&credential.kind, &fields).map_err(|error| error.to_string())
+}
+
+fn parse_credential_fields(plaintext: &[u8]) -> Option<Map<String, Value>> {
+    match serde_json::from_slice(plaintext).ok()? {
+        Value::Object(map) => Some(map),
+        _ => None,
+    }
+}
+
+/// Only `2xx` is a success — a redirect (never followed, `Policy::none()`)
+/// and every other status go back into the retry schedule, the body kept in
+/// the message so the run inspector shows *why* rather than just the code.
+pub fn outcome_for(captured: CapturedResponse) -> ConnectorOutcome {
+    if (200..300).contains(&captured.status) {
+        ConnectorOutcome::Produced(json!({
+            "status": captured.status,
+            "headers": captured.headers,
+            "body": captured.body,
+        }))
+    } else {
+        ConnectorOutcome::Failed {
+            error: format!(
+                "the endpoint answered {} with body: {}",
+                captured.status, captured.body
+            ),
+        }
+    }
+}
+
 /// What a connector reads back once a response arrived: status, headers and
 /// a body already turned into what the engine stores.
 pub struct CapturedResponse {
@@ -150,10 +202,8 @@ pub struct CapturedResponse {
 }
 
 /// Reads a response into what the connector produces, applying the size cap
-/// on the way. The body is buffered whole before truncation — this crate's
-/// `reqwest` has no `stream` feature enabled, so there is no cheaper way to
-/// cap it without adding one.
-pub async fn read_response(response: Response) -> Result<CapturedResponse, String> {
+/// on the way.
+pub async fn read_response(mut response: Response) -> Result<CapturedResponse, String> {
     let status = response.status().as_u16();
     let content_type = response
         .headers()
@@ -161,12 +211,27 @@ pub async fn read_response(response: Response) -> Result<CapturedResponse, Strin
         .and_then(|value| value.to_str().ok())
         .map(str::to_owned);
     let headers = headers_to_value(response.headers());
+    let declared_over_the_limit = response
+        .content_length()
+        .is_some_and(|length| length > MAX_RESPONSE_BODY_BYTES as u64);
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|error| format!("reading the response body failed: {error}"))?;
-    let (capped, truncated) = cap_body(&bytes);
+    let ceiling = MAX_RESPONSE_BODY_BYTES + 1;
+    let mut collected: Vec<u8> = Vec::new();
+    while collected.len() < ceiling {
+        let chunk = response
+            .chunk()
+            .await
+            .map_err(|error| format!("reading the response body failed: {error}"))?;
+        let Some(chunk) = chunk else {
+            break;
+        };
+        let room = ceiling - collected.len();
+        collected.extend_from_slice(&chunk[..chunk.len().min(room)]);
+    }
+    drop(response);
+
+    let (capped, cut) = cap_body(&collected);
+    let truncated = cut || declared_over_the_limit;
     let body = interpret_body(content_type.as_deref(), &capped, truncated);
 
     Ok(CapturedResponse {
@@ -260,6 +325,62 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "re-run by the proxy test in a child process"]
+    fn proxy_probe_child() {
+        let Ok(probe) = std::env::var("MESTIER_PROXY_PROBE_TARGET") else {
+            return;
+        };
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let client = build_guarded_client(PrivateNetworkAccess::Allowed).unwrap();
+            let _ = client
+                .get(probe)
+                .timeout(std::time::Duration::from_secs(2))
+                .send()
+                .await;
+        });
+    }
+
+    #[tokio::test]
+    async fn the_guarded_client_never_goes_through_a_proxy_from_the_environment() {
+        use crate::infrastructure::automation::connectors::test_support::{
+            StubResponse, TestServer,
+        };
+
+        let proxy = TestServer::respond_always(StubResponse::text(200, "proxied")).await;
+        let test_name = format!(
+            "{}::proxy_probe_child",
+            module_path!().trim_start_matches("mestier_core::")
+        );
+        let executable = std::env::current_exe().unwrap();
+        let proxy_url = proxy.url.clone();
+
+        let status = tokio::task::spawn_blocking(move || {
+            std::process::Command::new(executable)
+                .args(["--exact", &test_name, "--ignored", "--nocapture"])
+                .env("HTTP_PROXY", &proxy_url)
+                .env("http_proxy", &proxy_url)
+                .env("ALL_PROXY", &proxy_url)
+                .env("MESTIER_PROXY_PROBE_TARGET", "http://203.0.113.7:9/probe")
+                .output()
+                .unwrap()
+                .status
+        })
+        .await
+        .unwrap();
+
+        assert!(status.success());
+        assert!(
+            proxy.requests().is_empty(),
+            "the call went through the proxy: {:?}",
+            proxy.requests()
+        );
+    }
+
+    #[test]
     fn a_literal_private_address_is_refused_when_denied() {
         let url = Url::parse("http://10.255.255.1:9/probe").unwrap();
 
@@ -288,6 +409,70 @@ mod tests {
 
     /// A hostname has nothing for this check to judge — it is left to the
     /// guarded resolver, which judges the address it actually resolves to.
+    #[test]
+    fn a_literal_ipv6_loopback_is_refused_whatever_the_policy() {
+        let url = Url::parse("http://[::1]:9/probe").unwrap();
+
+        for access in [PrivateNetworkAccess::Denied, PrivateNetworkAccess::Allowed] {
+            let error = refuse_literal_private_address(&url, access)
+                .expect_err("an IPv6 loopback must be refused");
+            assert!(error.contains("loopback"), "{error}");
+        }
+    }
+
+    #[test]
+    fn a_mapped_ipv6_metadata_address_is_refused_whatever_the_policy() {
+        let url = Url::parse("http://[::ffff:a9fe:a9fe]/latest/meta-data").unwrap();
+
+        for access in [PrivateNetworkAccess::Denied, PrivateNetworkAccess::Allowed] {
+            let error = refuse_literal_private_address(&url, access)
+                .expect_err("the mapped metadata endpoint must be refused");
+            assert!(error.contains("metadata"), "{error}");
+        }
+    }
+
+    #[test]
+    fn a_literal_ipv6_unique_local_address_is_refused_when_denied() {
+        let url = Url::parse("http://[fd12:3456:789a::1]/").unwrap();
+
+        assert!(refuse_literal_private_address(&url, PrivateNetworkAccess::Denied).is_err());
+        assert!(refuse_literal_private_address(&url, PrivateNetworkAccess::Allowed).is_ok());
+    }
+
+    #[test]
+    fn the_aws_ipv6_metadata_address_is_refused_whatever_the_policy() {
+        let url = Url::parse("http://[fd00:ec2::254]/latest/meta-data").unwrap();
+
+        for access in [PrivateNetworkAccess::Denied, PrivateNetworkAccess::Allowed] {
+            let error = refuse_literal_private_address(&url, access)
+                .expect_err("the AWS IPv6 metadata endpoint must be refused");
+            assert!(error.contains("metadata"), "{error}");
+        }
+    }
+
+    #[test]
+    fn a_public_literal_ipv6_address_is_allowed() {
+        let url = Url::parse("http://[2606:4700:4700::1111]/").unwrap();
+
+        assert!(refuse_literal_private_address(&url, PrivateNetworkAccess::Denied).is_ok());
+    }
+
+    #[test]
+    fn an_obfuscated_ipv4_literal_is_judged_on_the_address_it_means() {
+        for spelled in [
+            "http://2130706433/",
+            "http://0x7f.1/",
+            "http://017700000001/",
+        ] {
+            let url = Url::parse(spelled).unwrap();
+
+            let error = refuse_literal_private_address(&url, PrivateNetworkAccess::Allowed)
+                .expect_err(spelled);
+
+            assert!(error.contains("loopback"), "{spelled}: {error}");
+        }
+    }
+
     #[test]
     fn a_hostname_is_left_untouched_by_the_preflight_check() {
         let url = Url::parse("http://example.internal/probe").unwrap();
@@ -372,6 +557,100 @@ mod tests {
         let error = auth_from_credential("bearer_token", &Map::new()).unwrap_err();
 
         assert_eq!(error, AuthFromCredentialError::missing("token"));
+    }
+
+    async fn endless_server(declared_length: Option<u64>) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            let mut request = [0u8; 4096];
+            let _ = socket.read(&mut request).await;
+            let head = match declared_length {
+                Some(length) => format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: {length}\r\n\r\n"
+                ),
+                None => "HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ntransfer-encoding: chunked\r\n\r\n"
+                    .to_owned(),
+            };
+            if socket.write_all(head.as_bytes()).await.is_err() {
+                return;
+            }
+            let block = vec![b'a'; 64 * 1024];
+            loop {
+                let written = if declared_length.is_some() {
+                    socket.write_all(&block).await
+                } else {
+                    let mut framed = format!("{:x}\r\n", block.len()).into_bytes();
+                    framed.extend_from_slice(&block);
+                    framed.extend_from_slice(b"\r\n");
+                    socket.write_all(&framed).await
+                };
+                if written.is_err() {
+                    return;
+                }
+            }
+        });
+        format!("http://{address}/")
+    }
+
+    async fn read_capped(url: String) -> Result<CapturedResponse, String> {
+        let client = Client::builder().no_proxy().build().unwrap();
+        let response = client.get(url).send().await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(3), read_response(response))
+            .await
+            .map_err(|_| "reading the body never stopped".to_owned())?
+    }
+
+    #[tokio::test]
+    async fn a_body_declared_far_over_the_limit_is_cut_without_waiting_for_the_rest() {
+        let url = endless_server(Some(50 * 1024 * 1024 * 1024)).await;
+
+        let captured = read_capped(url).await.expect("the read stops at the limit");
+
+        let body = captured.body.as_str().expect("a text body");
+        assert!(body.ends_with(TRUNCATION_MARKER));
+        assert_eq!(
+            body.len(),
+            MAX_RESPONSE_BODY_BYTES + TRUNCATION_MARKER.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_body_of_unknown_length_that_never_ends_is_cut_at_the_limit() {
+        let url = endless_server(None).await;
+
+        let captured = read_capped(url).await.expect("the read stops at the limit");
+
+        let body = captured.body.as_str().expect("a text body");
+        assert!(body.ends_with(TRUNCATION_MARKER));
+        assert_eq!(
+            body.len(),
+            MAX_RESPONSE_BODY_BYTES + TRUNCATION_MARKER.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_body_exactly_at_the_limit_is_kept_whole() {
+        use crate::infrastructure::automation::connectors::test_support::{
+            StubResponse, TestServer,
+        };
+
+        let server = TestServer::respond_always(StubResponse::text(
+            200,
+            vec![b'b'; MAX_RESPONSE_BODY_BYTES],
+        ))
+        .await;
+
+        let captured = read_capped(server.url.clone()).await.unwrap();
+
+        let body = captured.body.as_str().unwrap();
+        assert_eq!(body.len(), MAX_RESPONSE_BODY_BYTES);
+        assert!(!body.ends_with(TRUNCATION_MARKER));
     }
 
     #[test]

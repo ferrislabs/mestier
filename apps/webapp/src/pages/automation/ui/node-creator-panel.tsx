@@ -17,12 +17,22 @@ export type NodeCreatorView =
 			triggerEntry: CreatorCategory
 	  }
 	| { type: 'kinds'; kinds: readonly CreatorKind[] }
-	| { type: 'collections'; collections: readonly CollectionEntry[] }
-	| { type: 'operations'; operations: readonly OperationEntry[] }
+	| {
+			type: 'collections'
+			collections: readonly CollectionEntry[]
+			status: 'loading' | 'ready' | 'failed'
+			failure: string | null
+	  }
+	| {
+			type: 'operations'
+			operations: readonly OperationEntry[]
+			status: 'loading' | 'ready' | 'unavailable' | 'unreadable'
+	  }
 	| {
 			type: 'results'
 			groups: readonly CreatorCategory[]
 			operations: readonly OperationEntry[]
+			loadingOperations: boolean
 	  }
 
 export type CollectionEntry = {
@@ -35,6 +45,27 @@ export type OperationEntry = {
 	collectionId: string
 	collectionTitle: string
 	operation: CollectionOperation
+}
+
+function Notice({
+	children,
+	alert = false,
+}: {
+	children: ReactNode
+	alert?: boolean
+}) {
+	return (
+		<p
+			role={alert ? 'alert' : undefined}
+			className={
+				alert
+					? 'px-3 py-8 text-center text-sm text-state-alert'
+					: 'px-3 py-8 text-center text-muted-foreground text-sm'
+			}
+		>
+			{children}
+		</p>
+	)
 }
 
 const ROW =
@@ -219,7 +250,11 @@ export function NodeCreatorPanel({
 				)}
 				{view.type === 'kinds' && <ul>{view.kinds.map(renderKind)}</ul>}
 				{view.type === 'collections' &&
-					(view.collections.length === 0 ? (
+					(view.status === 'loading' ? (
+						<Notice>Chargement des collections…</Notice>
+					) : view.status === 'failed' ? (
+						<Notice alert>{view.failure}</Notice>
+					) : view.collections.length === 0 ? (
 						<div className="grid justify-items-center gap-3 px-3 py-8 text-center text-muted-foreground text-sm">
 							<p>Aucune collection importée pour le moment.</p>
 							{emptyCollectionsAction}
@@ -256,16 +291,29 @@ export function NodeCreatorPanel({
 							))}
 						</ul>
 					))}
-				{view.type === 'operations' && (
-					<ul>
-						{view.operations.map((entry) => renderOperation(entry, false))}
-					</ul>
-				)}
+				{view.type === 'operations' &&
+					(view.status === 'loading' ? (
+						<Notice>Chargement des opérations…</Notice>
+					) : view.status === 'unavailable' ? (
+						<Notice alert>Cette collection n’est plus disponible.</Notice>
+					) : view.status === 'unreadable' ? (
+						<Notice alert>Impossible de lire cette collection.</Notice>
+					) : view.operations.length === 0 ? (
+						<Notice>Cette collection ne déclare aucune opération.</Notice>
+					) : (
+						<ul>
+							{view.operations.map((entry) => renderOperation(entry, false))}
+						</ul>
+					))}
 				{view.type === 'results' &&
 					(view.groups.length === 0 && view.operations.length === 0 ? (
-						<p className="px-2 py-8 text-center text-muted-foreground text-sm">
-							Aucun nœud ne correspond à « {query.trim()} ».
-						</p>
+						view.loadingOperations ? (
+							<Notice>Recherche dans les collections…</Notice>
+						) : (
+							<p className="px-2 py-8 text-center text-muted-foreground text-sm">
+								Aucun nœud ne correspond à « {query.trim()} ».
+							</p>
+						)
 					) : (
 						<>
 							{view.groups.map((group) => (

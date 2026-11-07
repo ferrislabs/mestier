@@ -10,13 +10,14 @@ use uuid::Uuid;
 use crate::{
     application::MestierUseCase,
     domain::automation::{
+        collection::{COLLECTION_OPERATION_KIND, NESTED_EXPRESSION_FIELDS},
         expression::ExpressionContext,
         ports::{AutomationSettingsRepository, RunRepository, WorkflowRepository},
         run::{
             ConnectorInput, ConnectorOutcome, DueRun, LoopStackEntry, Run, RunOverview,
             RunSettlement, RunStatus, RunStep, StepStatus, branch_targets, connectors_by_id,
             descendants_via, disabled_outcome, format_iteration_path, pass_through_output,
-            resolve_config, roots,
+            resolve_config, resolve_config_nested, roots,
         },
         settings::with_jitter,
         workflow::{Branch, Graph, PlacedConnector},
@@ -586,7 +587,11 @@ impl MestierUseCase {
                 loop_frame,
                 now,
             };
-            let resolved = resolve_config(&placed.config, &ctx);
+            let resolved = if placed.kind == COLLECTION_OPERATION_KIND {
+                resolve_config_nested(&placed.config, &ctx, &NESTED_EXPRESSION_FIELDS)
+            } else {
+                resolve_config(&placed.config, &ctx)
+            };
 
             let in_flight = RunStep {
                 id: generate_uuid_v7(),
@@ -618,6 +623,7 @@ impl MestierUseCase {
                         run_id: due.id,
                         config: &config,
                         credential_id: placed.credential_id,
+                        operation: placed.operation.as_ref(),
                     };
                     match connectors
                         .execute(&placed.kind, placed.version, input)
@@ -987,6 +993,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }
     }
 
@@ -1002,6 +1009,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }
     }
 
@@ -1017,6 +1025,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }
     }
 
@@ -1032,6 +1041,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }
     }
 
@@ -1048,6 +1058,7 @@ mod tests {
             name: None,
             description: None,
             disabled: false,
+            operation: None,
         }
     }
 
@@ -2832,5 +2843,322 @@ mod tests {
             json!("http://127.0.0.1:1/todos/2"),
             "the resumed pass must resolve c2's output the same way the first pass would"
         );
+    }
+
+    mod collection_operation_runs {
+        use serde_json::Map;
+
+        use super::*;
+        use crate::domain::automation::collection::{
+            CollectionDraft, CollectionDraftInput, CollectionSource, HttpMethod,
+            ImportCollectionCommand, Operation, Parameter, ParameterLocation,
+            ReplaceCollectionCommand,
+        };
+        use crate::domain::automation::workflow::OperationRef;
+        use crate::infrastructure::automation::connectors::test_support::{
+            StubResponse, TestServer,
+        };
+
+        fn draft(base_url: &str, path: &str) -> CollectionDraft {
+            CollectionDraft::new(CollectionDraftInput {
+                title: "Addresses".to_owned(),
+                version: "1.0.0".to_owned(),
+                description: String::new(),
+                base_url: base_url.to_owned(),
+                source: CollectionSource::Url {
+                    url: "https://api.example.com/openapi.json".to_owned(),
+                },
+                security: Vec::new(),
+                operations: vec![Operation {
+                    id: "getAddress".to_owned(),
+                    method: HttpMethod::Get,
+                    path: path.to_owned(),
+                    summary: String::new(),
+                    tag: String::new(),
+                    parameters: vec![Parameter {
+                        name: "id".to_owned(),
+                        location: ParameterLocation::Path,
+                        required: true,
+                        description: String::new(),
+                        schema: json!({ "type": "string" }),
+                    }],
+                    request_body: None,
+                    response: None,
+                    response_status: None,
+                }],
+                schemas: Map::new(),
+            })
+            .unwrap()
+        }
+
+        fn operation_node(collection_id: Uuid) -> PlacedConnector {
+            PlacedConnector {
+                id: "c1".to_string(),
+                kind: "collection.operation".to_string(),
+                version: 1,
+                credential_id: None,
+                config: json!({ "path": { "id": "7" } })
+                    .as_object()
+                    .cloned()
+                    .unwrap(),
+                name: None,
+                description: None,
+                disabled: false,
+                operation: Some(OperationRef {
+                    collection_id,
+                    operation_id: "getAddress".to_owned(),
+                }),
+            }
+        }
+
+        fn registry_reaching(usecase: &MestierUseCase) -> ConnectorRegistry {
+            ConnectorRegistry::new(usecase.clone()).with_collection_client(
+                usecase.clone(),
+                reqwest::Client::builder()
+                    .redirect(reqwest::redirect::Policy::none())
+                    .build()
+                    .unwrap(),
+            )
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn the_engine_runs_the_stored_operation_and_follows_an_update_with_no_new_version() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "engine-collection").await;
+            let usecase = use_case(pool.clone());
+            let server =
+                TestServer::respond_always(StubResponse::json(200, &json!({ "street": "x" })))
+                    .await;
+            let stored = usecase
+                .import_collection(ImportCollectionCommand {
+                    org_id,
+                    draft: draft(&server.url, "/addresses/{id}"),
+                })
+                .await
+                .unwrap();
+            let graph = Graph {
+                connectors: vec![operation_node(stored.id)],
+                edges: Vec::new(),
+                triggers: Vec::new(),
+            };
+            let workflow_id = start_workflow(&usecase, org_id, graph).await;
+            let connectors = registry_reaching(&usecase);
+
+            let first = usecase
+                .start_run(org_id, workflow_id, json!({}))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, first).await;
+            usecase
+                .run_engine_pass(&connectors, "worker-1", generous_schedule())
+                .await
+                .unwrap();
+            usecase
+                .replace_collection(ReplaceCollectionCommand {
+                    org_id,
+                    id: stored.id,
+                    draft: draft(&server.url, "/v2/places/{id}"),
+                })
+                .await
+                .unwrap();
+            let second = usecase
+                .start_run(org_id, workflow_id, json!({}))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, second).await;
+            usecase
+                .run_engine_pass(&connectors, "worker-1", generous_schedule())
+                .await
+                .unwrap();
+
+            assert_eq!(run_status(&pool, first).await, "succeeded");
+            assert_eq!(run_status(&pool, second).await, "succeeded");
+            let output = step_output(&pool, first, "c1").await.unwrap();
+            assert_eq!(output["status"], 200);
+            assert_eq!(output["body"], json!({ "street": "x" }));
+            let paths: Vec<String> = server.requests().into_iter().map(|r| r.path).collect();
+            assert_eq!(paths, ["/addresses/7", "/v2/places/7"]);
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn expressions_nested_in_the_node_are_resolved_for_the_call() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "engine-collection-nested").await;
+            let usecase = use_case(pool.clone());
+            let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+            let stored = usecase
+                .import_collection(ImportCollectionCommand {
+                    org_id,
+                    draft: draft(&server.url, "/addresses/{id}"),
+                })
+                .await
+                .unwrap();
+            let mut node = operation_node(stored.id);
+            node.config = json!({ "path": { "id": "{{ trigger.id }}" } })
+                .as_object()
+                .cloned()
+                .unwrap();
+            let graph = Graph {
+                connectors: vec![node],
+                edges: Vec::new(),
+                triggers: Vec::new(),
+            };
+            let workflow_id = start_workflow(&usecase, org_id, graph).await;
+            let run_id = usecase
+                .start_run(org_id, workflow_id, json!({ "id": "from-the-trigger" }))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, run_id).await;
+
+            usecase
+                .run_engine_pass(
+                    &registry_reaching(&usecase),
+                    "worker-1",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            assert_eq!(server.last_request().path, "/addresses/from-the-trigger");
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn another_connector_keeps_its_nested_text_literal() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "engine-http-literal").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![PlacedConnector {
+                    id: "c1".to_string(),
+                    kind: "flow.config".to_string(),
+                    version: 1,
+                    credential_id: None,
+                    config: json!({ "variables": { "name": "{{ trigger.id }}" } })
+                        .as_object()
+                        .cloned()
+                        .unwrap(),
+                    name: None,
+                    description: None,
+                    disabled: false,
+                    operation: None,
+                }],
+                edges: Vec::new(),
+                triggers: Vec::new(),
+            };
+            let workflow_id = start_workflow(&usecase, org_id, graph).await;
+            let run_id = usecase
+                .start_run(org_id, workflow_id, json!({ "id": "42" }))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, run_id).await;
+
+            usecase
+                .run_engine_pass(
+                    &ConnectorRegistry::new(usecase.clone()),
+                    "worker-1",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+
+            let output = step_output(&pool, run_id, "c1").await.unwrap();
+            assert_eq!(output, json!({ "name": "{{ trigger.id }}" }));
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_run_whose_collection_was_deleted_fails_its_step_naming_the_collection() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "engine-collection-gone").await;
+            let usecase = use_case(pool.clone());
+            let server = TestServer::respond_always(StubResponse::text(200, "ok")).await;
+            let stored = usecase
+                .import_collection(ImportCollectionCommand {
+                    org_id,
+                    draft: draft(&server.url, "/addresses/{id}"),
+                })
+                .await
+                .unwrap();
+            let graph = Graph {
+                connectors: vec![operation_node(stored.id)],
+                edges: Vec::new(),
+                triggers: Vec::new(),
+            };
+            let workflow_id = start_workflow(&usecase, org_id, graph).await;
+            usecase.delete_collection(org_id, stored.id).await.unwrap();
+            let run_id = usecase
+                .start_run(org_id, workflow_id, json!({}))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, run_id).await;
+
+            usecase
+                .run_engine_pass(
+                    &registry_reaching(&usecase),
+                    "worker-1",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+
+            let steps = run_steps(&pool, run_id).await;
+            assert_eq!(steps.len(), 1);
+            assert_eq!(steps[0].status, "failed");
+            let error = steps[0].error.clone().unwrap();
+            assert!(error.contains(&stored.id.to_string()), "{error}");
+            assert!(server.requests().is_empty());
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_base_url_on_a_refused_address_fails_the_run_at_run_time_with_a_named_error() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "engine-collection-private").await;
+            let usecase = use_case(pool.clone());
+            let stored = usecase
+                .import_collection(ImportCollectionCommand {
+                    org_id,
+                    draft: draft("http://10.255.255.1:9", "/addresses/{id}"),
+                })
+                .await
+                .unwrap();
+            let graph = Graph {
+                connectors: vec![operation_node(stored.id)],
+                edges: Vec::new(),
+                triggers: Vec::new(),
+            };
+            let workflow_id = start_workflow(&usecase, org_id, graph).await;
+            let run_id = usecase
+                .start_run(org_id, workflow_id, json!({}))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, run_id).await;
+
+            usecase
+                .run_engine_pass(
+                    &ConnectorRegistry::new(usecase.clone()),
+                    "worker-1",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+
+            let steps = run_steps(&pool, run_id).await;
+            assert_eq!(steps[0].status, "failed");
+            let error = steps[0].error.clone().unwrap();
+            assert!(
+                error.contains("10.255.255.1") && error.contains("private"),
+                "{error}"
+            );
+        }
     }
 }

@@ -2,10 +2,23 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import {
+	useCollection,
+	useCollectionDetails,
+	useCollections,
+} from '#/hooks/use-automation'
 import { buildOrgPath } from '#/modules/org-path'
-import { useCollections } from '#/pages/automation/feature/use-collections'
 import type { ConnectorPreset } from '#/pages/automation/feature/use-workflow-graph'
 import { collectionsPath } from '#/pages/automation/lib/automation-paths'
+import {
+	collectionLoadErrorMessage,
+	isCollectionMissing,
+} from '#/pages/automation/lib/collection-format'
+import {
+	COLLECTION_OPERATION_KIND,
+	operationPreset,
+} from '#/pages/automation/lib/collection-node'
 import {
 	allCategories,
 	COLLECTIONS_CATEGORY_ID,
@@ -17,7 +30,6 @@ import {
 } from '#/pages/automation/lib/creator'
 import {
 	collectionOperations,
-	operationPreset,
 	searchOperations,
 } from '#/pages/automation/lib/operation-search'
 import {
@@ -33,17 +45,6 @@ export type CreatorChoice =
 	  }
 	| { type: 'trigger'; kind: Schemas.TriggerKindDto }
 
-function httpDescriptor(
-	descriptors: readonly Schemas.ConnectorDescriptorResponse[],
-) {
-	return descriptors.find(
-		(descriptor) =>
-			descriptor.family === 'http' &&
-			descriptor.fields.some((field) => field.name === 'method') &&
-			descriptor.fields.some((field) => field.name === 'url'),
-	)
-}
-
 export function NodeCreatorFeature({
 	organizationSlug,
 	descriptors,
@@ -57,7 +58,7 @@ export function NodeCreatorFeature({
 	onCreate: (choice: CreatorChoice) => void
 	onClose: () => void
 }) {
-	const collections = useCollections().data
+	const { activeOrganization } = useActiveOrganization()
 	const startsOnTriggers = !hasTrigger
 	const [query, setQuery] = useState('')
 	const [categoryId, setCategoryId] = useState<string | null>(
@@ -65,33 +66,72 @@ export function NodeCreatorFeature({
 	)
 	const [collectionId, setCollectionId] = useState<string | null>(null)
 
-	const http = httpDescriptor(descriptors)
-	const categories = creatorCategories(descriptors, {
-		collections: http !== undefined,
+	const operationDescriptor = descriptors.find(
+		(descriptor) => descriptor.kind === COLLECTION_OPERATION_KIND,
+	)
+	const simpleDescriptors = descriptors.filter(
+		(descriptor) => descriptor.kind !== COLLECTION_OPERATION_KIND,
+	)
+	const summaries = useCollections(activeOrganization.id)
+	const summaryList = summaries.data ?? []
+	const searching = query.trim() !== ''
+	const selected = useCollection(activeOrganization.id, collectionId ?? '', {
+		enabled: collectionId !== null,
+	})
+	const details = useCollectionDetails(
+		activeOrganization.id,
+		searching && operationDescriptor
+			? summaryList.map((summary) => summary.id)
+			: [],
+	)
+	const known = selected.data
+		? [selected.data, ...details.collections]
+		: details.collections
+
+	const categories = creatorCategories(simpleDescriptors, {
+		collections: operationDescriptor !== undefined,
 	})
 	const category =
 		categoryId === TRIGGERS_CATEGORY_ID
 			? triggersCategory()
 			: (categories.find((item) => item.id === categoryId) ?? null)
-	const collection = collections.find((item) => item.id === collectionId)
+	const summary = summaryList.find((item) => item.id === collectionId)
+	const collection = known.find((item) => item.id === collectionId)
 	const atTriggerRoot = startsOnTriggers && categoryId === TRIGGERS_CATEGORY_ID
 
-	const view: NodeCreatorView = query.trim()
+	const view: NodeCreatorView = searching
 		? {
 				type: 'results',
-				groups: searchCreatorKinds(allCategories(descriptors), query),
-				operations: http ? searchOperations(collections, query) : [],
+				groups: searchCreatorKinds(allCategories(simpleDescriptors), query),
+				operations: operationDescriptor ? searchOperations(known, query) : [],
+				loadingOperations: details.isLoading,
 			}
-		: collection
-			? { type: 'operations', operations: collectionOperations(collection) }
+		: collectionId
+			? {
+					type: 'operations',
+					operations: collection ? collectionOperations(collection) : [],
+					status: collection
+						? 'ready'
+						: selected.isError
+							? isCollectionMissing(selected.error)
+								? 'unavailable'
+								: 'unreadable'
+							: 'loading',
+				}
 			: categoryId === COLLECTIONS_CATEGORY_ID
 				? {
 						type: 'collections',
-						collections: collections.map((item) => ({
+						collections: summaryList.map((item) => ({
 							id: item.id,
 							title: item.title,
-							operationCount: item.operations.length,
+							operationCount: item.operationCount,
 						})),
+						status: summaries.isPending
+							? 'loading'
+							: summaries.isError
+								? 'failed'
+								: 'ready',
+						failure: collectionLoadErrorMessage(summaries.error),
 					}
 				: category
 					? { type: 'kinds', kinds: category.kinds }
@@ -103,17 +143,17 @@ export function NodeCreatorFeature({
 
 	const title = atTriggerRoot
 		? 'Qu’est-ce qui déclenche ce workflow ?'
-		: (collection?.title ??
-			category?.label ??
-			'Que doit-il se passer ensuite ?')
+		: collectionId
+			? (collection?.title ?? summary?.title ?? 'Collection')
+			: (category?.label ?? 'Que doit-il se passer ensuite ?')
 
 	const description = atTriggerRoot
 		? 'Un déclencheur démarre le workflow. Vous pourrez en ajouter d’autres.'
-		: collection
-			? collection.baseUrl
+		: collectionId
+			? (collection?.baseUrl ?? summary?.baseUrl)
 			: category?.description
 
-	const goBack = collection
+	const goBack = collectionId
 		? () => setCollectionId(null)
 		: category && !atTriggerRoot
 			? () => setCategoryId(null)
@@ -145,11 +185,11 @@ export function NodeCreatorFeature({
 				setCollectionId(id)
 			}}
 			onPickOperation={(entry) => {
-				const owner = collections.find((item) => item.id === entry.collectionId)
-				if (owner && http) {
+				const owner = known.find((item) => item.id === entry.collectionId)
+				if (owner && operationDescriptor) {
 					onCreate({
 						type: 'connector',
-						descriptor: http,
+						descriptor: operationDescriptor,
 						preset: operationPreset(owner, entry.operation),
 					})
 				}

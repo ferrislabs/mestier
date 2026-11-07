@@ -56,6 +56,19 @@ pub struct FolderPath {
 }
 
 #[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/automation/collections")]
+pub struct CollectionsPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/automation/collections/{collection_id}")]
+pub struct CollectionPath {
+    pub organization_id: OrganizationId,
+    pub collection_id: Uuid,
+}
+
+#[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/automation/workflows")]
 pub struct WorkflowsPath {
     pub organization_id: OrganizationId,

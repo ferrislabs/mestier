@@ -1,9 +1,11 @@
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import { TooltipProvider } from '#/components/ui/tooltip'
-import { readCollections } from '#/pages/automation/feature/mocks/collections-store'
 import { NodeDetailsFeature } from '#/pages/automation/feature/node-details-feature'
+import type { CollectionRead } from '#/pages/automation/lib/collection-node'
+import type { Collection } from '#/pages/automation/lib/collections'
 import {
 	connectorNode,
 	type EditorEdge,
@@ -11,8 +13,20 @@ import {
 	type EditorNode,
 	triggerNode,
 } from '#/pages/automation/lib/editor-nodes'
+import type { NodeIssue } from '#/pages/automation/lib/node-issues'
 import type { UpstreamSources } from '#/pages/automation/lib/upstream-entries'
 import { renderWithRouter } from '#/test/render-with-router'
+
+for (const method of [
+	'hasPointerCapture',
+	'setPointerCapture',
+	'releasePointerCapture',
+	'scrollIntoView',
+] as const) {
+	if (typeof Element.prototype[method] !== 'function') {
+		Element.prototype[method] = (() => false) as never
+	}
+}
 
 const NODE: EditorNode = {
 	id: 'c1',
@@ -23,7 +37,6 @@ const NODE: EditorNode = {
 		label: 'Envoyer l’e-mail',
 		subtitle: '',
 		disabled: false,
-		meta: {},
 		typeLabel: 'Envoyer un e-mail',
 		branches: [],
 		errors: [],
@@ -56,6 +69,7 @@ describe('NodeDetailsFeature', () => {
 					lastRun: null,
 					runSteps: new Map([['c1', FAILED_STEP]]),
 				}}
+				collectionReads={new Map()}
 				authSchemes={[]}
 				credentials={[]}
 				issues={[]}
@@ -96,6 +110,34 @@ function descriptor(
 		...overrides,
 	}
 }
+
+function jsonField(name: string, label: string): Schemas.FieldResponse {
+	return {
+		expression: true,
+		kind: 'Json',
+		label,
+		name,
+		required: false,
+		secret: false,
+		visible_when: null,
+	}
+}
+
+const OPERATION_DESCRIPTOR = descriptor('collection.operation', 'http', {
+	auth: { Optional: ['bearer_token', 'http_basic', 'http_header'] },
+	label: "Opération d'une collection",
+	fields: [
+		jsonField('path', 'Paramètres de chemin'),
+		jsonField('query', 'Paramètres de requête'),
+		jsonField('headers', 'En-têtes'),
+		jsonField('body', 'Corps'),
+	],
+	output_example: {
+		status: 200,
+		headers: { 'content-type': 'application/json' },
+		body: {},
+	},
+})
 
 const LOOKUP: EditorLookup = {
 	descriptors: new Map([
@@ -142,6 +184,7 @@ const LOOKUP: EditorLookup = {
 				],
 			}),
 		],
+		['collection.operation', OPERATION_DESCRIPTOR],
 	]),
 	events: [],
 }
@@ -164,11 +207,18 @@ function edge(source: string, target: string, handle?: string): EditorEdge {
 	}
 }
 
+interface OpenOptions {
+	onUpdateConnector?: (patch: unknown) => void
+	reads?: ReadonlyMap<string, CollectionRead>
+	issues?: readonly NodeIssue[]
+	runSteps?: Map<string, Schemas.RunStepResponse>
+}
+
 async function openNode(
 	nodeId: string,
 	nodes: EditorNode[],
 	edges: EditorEdge[],
-	handlers: { onUpdateConnector?: (patch: unknown) => void } = {},
+	handlers: OpenOptions = {},
 ) {
 	const node = nodes.find((candidate) => candidate.id === nodeId)
 	if (!node) throw new Error(`no node ${nodeId}`)
@@ -179,10 +229,15 @@ async function openNode(
 				nodes={nodes}
 				edges={edges}
 				organizationSlug="atelier-bois"
-				sources={SOURCES}
+				sources={
+					handlers.runSteps
+						? { ...SOURCES, runSteps: handlers.runSteps }
+						: SOURCES
+				}
+				collectionReads={handlers.reads ?? new Map()}
 				authSchemes={[]}
 				credentials={[]}
-				issues={[]}
+				issues={handlers.issues ?? []}
 				testRun={{ running: false, start: vi.fn() }}
 				onUpdateConnector={handlers.onUpdateConnector ?? vi.fn()}
 				onUpdateTriggerKind={vi.fn()}
@@ -313,39 +368,6 @@ describe('NodeDetailsFeature — the parameters', () => {
 			config: { method: 'GET' },
 		})
 	})
-
-	it('tells what the spec of a collection declares under the identification', async () => {
-		const collection = readCollections().find(
-			(candidate) => candidate.operations.length > 0,
-		)
-		if (!collection) throw new Error('no preset collection')
-		const operation = collection.operations[0]
-		const base = chain()
-		const nodes = base.nodes.map((node) =>
-			node.id === 'c2'
-				? {
-						...node,
-						data: {
-							...node.data,
-							meta: {
-								operation: {
-									collectionId: collection.id,
-									operationId: operation.id,
-								},
-							},
-						},
-					}
-				: node,
-		)
-
-		const dialog = await openNode('c2', nodes, base.edges)
-
-		const declared =
-			collection.security.length > 0
-				? `La spec déclare : ${collection.security.join(', ')}.`
-				: 'La spec ne déclare pas d’authentification.'
-		expect(within(dialog).getByText(new RegExp(declared))).toBeDefined()
-	})
 })
 
 describe('NodeDetailsFeature — what the server says of the name', () => {
@@ -450,5 +472,493 @@ describe('NodeDetailsFeature — what the server says of the name', () => {
 		expect(
 			within(dialog).queryByText('Un autre nœud porte déjà ce nom.'),
 		).toBeNull()
+	})
+})
+
+const COLLECTION_ID = '6f1f6a9e-5f0c-4a43-9d77-1d9d0a3b1c11'
+
+const PETS: Collection = {
+	id: COLLECTION_ID,
+	slug: 'petstore',
+	title: 'Petstore',
+	version: '2.0',
+	description: '',
+	baseUrl: 'https://pets.test',
+	source: { kind: 'url', url: 'https://pets.test/spec.json' },
+	importedAt: '2026-11-06T09:30:00Z',
+	security: [{ name: 'bearerAuth', kind: { type: 'http', scheme: 'bearer' } }],
+	operations: [
+		{
+			id: 'updatePet',
+			method: 'PUT',
+			path: '/pets/{id}',
+			summary: 'Modifier un animal',
+			tag: 'pets',
+			parameters: [
+				{
+					name: 'id',
+					location: 'path',
+					required: true,
+					description: 'Identifiant',
+					schema: { type: 'string' },
+				},
+				{
+					name: 'limit',
+					location: 'query',
+					required: false,
+					description: '',
+					schema: { type: 'integer' },
+				},
+				{
+					name: 'sort',
+					location: 'query',
+					required: true,
+					description: '',
+					schema: { type: 'string', enum: ['name', 'age'] },
+				},
+				{
+					name: 'state',
+					location: 'query',
+					required: false,
+					description: '',
+					schema: { type: 'string', enum: ['open', 'closed'] },
+				},
+				{
+					name: 'X-Tenant',
+					location: 'header',
+					required: true,
+					description: '',
+					schema: { type: 'string' },
+				},
+			],
+			requestBody: {
+				schema: {
+					type: 'object',
+					required: ['name'],
+					properties: {
+						name: { type: 'string' },
+						age: { type: 'integer' },
+					},
+				},
+			},
+			response: { type: 'object', example: { id: 7, name: 'Rex' } },
+			responseStatus: '200',
+		},
+	],
+	schemas: {},
+	history: [],
+}
+
+function foundReads(...collections: Collection[]) {
+	return new Map<string, CollectionRead>(
+		collections.map((item) => [item.id, { status: 'found', collection: item }]),
+	)
+}
+
+function readsAs(status: 'loading' | 'notFound' | 'error') {
+	return new Map<string, CollectionRead>([[COLLECTION_ID, { status }]])
+}
+
+function operationChain(
+	config: Record<string, unknown>,
+	extra: Partial<Schemas.PlacedConnectorDto> = {},
+	errors: { field: string | null; message: string }[] = [],
+) {
+	const base = chain()
+	const operationNode = connectorNode(
+		{
+			id: 'c2',
+			kind: 'collection.operation',
+			version: 1,
+			config,
+			name: 'Modifier un animal',
+			description: 'PUT /pets/{id}',
+			operation: { collection_id: COLLECTION_ID, operation_id: 'updatePet' },
+			...extra,
+		},
+		{ x: 300, y: 0 },
+		LOOKUP,
+		errors,
+	)
+	return {
+		edges: base.edges,
+		nodes: base.nodes.map((node) => (node.id === 'c2' ? operationNode : node)),
+	}
+}
+
+const SAVED = {
+	path: { id: '5' },
+	query: { sort: 'name' },
+	headers: { 'X-Tenant': 'acme' },
+	body: { name: 'Rex', age: null },
+}
+
+async function openOperation(
+	config: Record<string, unknown> = SAVED,
+	options: OpenOptions = {},
+	extra: Partial<Schemas.PlacedConnectorDto> = {},
+	errors: { field: string | null; message: string }[] = [],
+) {
+	const { nodes, edges } = operationChain(config, extra, errors)
+	const dialog = await openNode('c2', nodes, edges, {
+		reads: foundReads(PETS),
+		...options,
+	})
+	return within(dialog)
+}
+
+function lastConfig(onUpdateConnector: ReturnType<typeof vi.fn>) {
+	return (
+		onUpdateConnector.mock.calls.at(-1)?.[0] as {
+			config: Record<string, unknown>
+		}
+	).config
+}
+
+describe('NodeDetailsFeature — a node made from a collection operation', () => {
+	it('heads the parameters with the operation, its summary and a link to its collection', async () => {
+		const dialog = await openOperation()
+
+		const parameters = dialog.getByRole('region', { name: 'Paramètres' })
+		expect(within(parameters).getByText('PUT')).toBeDefined()
+		expect(within(parameters).getByText('/pets/{id}')).toBeDefined()
+		expect(within(parameters).getByText('Modifier un animal')).toBeDefined()
+		expect(
+			within(parameters)
+				.getByRole('link', { name: 'Petstore' })
+				.getAttribute('href'),
+		).toBe(`/o/atelier-bois/automatisation/collections/${COLLECTION_ID}`)
+		expect(within(parameters).getByText(/https:\/\/pets\.test/)).toBeDefined()
+	})
+
+	it('names it after the type in the badge, not as a generic http request', async () => {
+		const dialog = await openOperation()
+
+		expect(dialog.getByText('Opération de collection')).toBeDefined()
+		expect(dialog.queryByText('Requête HTTP')).toBeNull()
+	})
+
+	it('offers one field per parameter of the spec, and none of the generic ones', async () => {
+		const dialog = await openOperation()
+
+		for (const label of ['id', 'limit', 'sort', 'state', 'X-Tenant']) {
+			expect(dialog.getByLabelText(label), label).toBeDefined()
+		}
+		expect(dialog.getByLabelText('id').getAttribute('placeholder')).toBe(
+			'Obligatoire',
+		)
+		expect(dialog.getByText('Chemin · obligatoire · Identifiant')).toBeDefined()
+		expect(dialog.queryByText('Paramètres de chemin')).toBeNull()
+		expect(dialog.queryByText('Paramètres de requête')).toBeNull()
+		expect(dialog.queryByLabelText('Corps')).toBeNull()
+		expect(dialog.getByText('Corps de la requête')).toBeDefined()
+	})
+
+	it('shows the value saved for a parameter in its field', async () => {
+		const dialog = await openOperation()
+
+		expect((dialog.getByLabelText('id') as HTMLInputElement).value).toBe('5')
+		expect((dialog.getByLabelText('X-Tenant') as HTMLInputElement).value).toBe(
+			'acme',
+		)
+		expect(dialog.getByLabelText('sort').textContent).toBe('name')
+		expect(dialog.getByLabelText('state').textContent).toBe('Non renseigné')
+	})
+
+	it('tells what the spec declares under the identification', async () => {
+		const dialog = await openOperation()
+
+		expect(
+			dialog.getByText(
+				'La spec déclare : bearerAuth (http bearer). Aucune identification n’est appliquée automatiquement : choisissez celle à utiliser.',
+			),
+		).toBeDefined()
+	})
+
+	it('says the spec declares no authentication when it declares none', async () => {
+		const dialog = await openOperation(SAVED, {
+			reads: foundReads({ ...PETS, security: [] }),
+		})
+
+		expect(
+			dialog.getByText(
+				'La spec ne déclare pas d’authentification. Aucune identification n’est appliquée automatiquement : choisissez celle à utiliser.',
+			),
+		).toBeDefined()
+	})
+
+	it('writes a typed value under its place in the config, keeping the rest', async () => {
+		const user = userEvent.setup()
+		const onUpdateConnector = vi.fn()
+		const dialog = await openOperation(SAVED, { onUpdateConnector })
+
+		await user.type(dialog.getByLabelText('id'), '7')
+
+		expect(lastConfig(onUpdateConnector)).toEqual({
+			...SAVED,
+			path: { id: '57' },
+		})
+	})
+
+	it('writes a number as a number, and lets an expression through', async () => {
+		const user = userEvent.setup()
+		const onUpdateConnector = vi.fn()
+		const dialog = await openOperation(SAVED, { onUpdateConnector })
+
+		await user.type(dialog.getByLabelText('limit'), '25')
+		expect(lastConfig(onUpdateConnector).query).toEqual({
+			sort: 'name',
+			limit: 25,
+		})
+
+		await user.clear(dialog.getByLabelText('limit'))
+		await user.type(dialog.getByLabelText('limit'), '{{{{ trigger.n }}')
+		expect(lastConfig(onUpdateConnector).query).toEqual({
+			sort: 'name',
+			limit: '{{ trigger.n }}',
+		})
+	})
+
+	it('drops the entry of a parameter once its field is emptied, and the group when nothing is left', async () => {
+		const user = userEvent.setup()
+		const onUpdateConnector = vi.fn()
+		const dialog = await openOperation(SAVED, { onUpdateConnector })
+
+		await user.clear(dialog.getByLabelText('id'))
+
+		expect(lastConfig(onUpdateConnector)).toEqual({
+			query: SAVED.query,
+			headers: SAVED.headers,
+			body: SAVED.body,
+		})
+	})
+
+	it('picks a value of a choice, and leaves an optional one unset again', async () => {
+		const user = userEvent.setup()
+		const onUpdateConnector = vi.fn()
+		const dialog = await openOperation(SAVED, { onUpdateConnector })
+
+		await user.click(dialog.getByLabelText('state'))
+		await user.click(await screen.findByRole('option', { name: 'open' }))
+		expect(lastConfig(onUpdateConnector).query).toEqual({
+			sort: 'name',
+			state: 'open',
+		})
+	})
+
+	it('leaves an optional choice out of the config when set back to not filled in', async () => {
+		const user = userEvent.setup()
+		const onUpdateConnector = vi.fn()
+		const dialog = await openOperation(
+			{ ...SAVED, query: { sort: 'name', state: 'open' } },
+			{ onUpdateConnector },
+		)
+
+		await user.click(dialog.getByLabelText('state'))
+		await user.click(
+			await screen.findByRole('option', { name: 'Non renseigné' }),
+		)
+
+		expect(lastConfig(onUpdateConnector).query).toEqual({ sort: 'name' })
+	})
+
+	it('derives the body fields from the schema, one typed row per key', async () => {
+		const dialog = await openOperation()
+
+		expect(
+			(dialog.getByLabelText('Clé du name') as HTMLInputElement).value,
+		).toBe('name')
+		expect(
+			(dialog.getByLabelText('Valeur de name') as HTMLInputElement).value,
+		).toBe('Rex')
+		expect(dialog.getByLabelText('Type de age').textContent).toBe('Nombre')
+		expect(
+			(dialog.getByLabelText('Valeur de age') as HTMLInputElement).value,
+		).toBe('')
+	})
+
+	it('writes the body into the config next to the parameters', async () => {
+		const user = userEvent.setup()
+		const onUpdateConnector = vi.fn()
+		const dialog = await openOperation(SAVED, { onUpdateConnector })
+
+		await user.type(dialog.getByLabelText('Valeur de age'), '4')
+
+		expect(lastConfig(onUpdateConnector)).toEqual({
+			...SAVED,
+			body: { name: 'Rex', age: 4 },
+		})
+	})
+
+	it('shows the contract of the operation, request and response', async () => {
+		const user = userEvent.setup()
+		const dialog = await openOperation()
+
+		expect(dialog.getByText('Contrat de l’opération')).toBeDefined()
+		const contract = document.querySelector('[role="tabpanel"]')
+		expect(contract?.textContent).toContain('export interface UpdatePetRequest')
+		expect(contract?.textContent).toContain('export type UpdatePetResponse')
+
+		await user.click(dialog.getByRole('tab', { name: 'Exemple de réponse' }))
+		expect(document.body.textContent).toContain('"name": "Rex"')
+	})
+
+	it('shows the example of the response in the shape the node outputs, before any run', async () => {
+		const dialog = await openOperation()
+
+		const output = dialog.getByRole('region', { name: 'Sortie' })
+		expect(output.textContent).toContain('Exemple de réponse 200 de')
+		expect(output.textContent).toContain('"status": 200')
+		expect(output.textContent).toContain('"content-type": "application/json"')
+		expect(output.textContent).toContain('"body"')
+		expect(output.textContent).toContain('"name": "Rex"')
+	})
+
+	it('shows what the node really output once it ran', async () => {
+		const dialog = await openOperation(SAVED, {
+			runSteps: new Map([
+				[
+					'c2',
+					{
+						...FAILED_STEP,
+						connector_id: 'c2',
+						status: 'succeeded',
+						error: null,
+						output: { status: 200, headers: {}, body: { id: 9 } },
+					},
+				],
+			]),
+		})
+
+		const output = dialog.getByRole('region', { name: 'Sortie' })
+		expect(output.textContent).not.toContain('Exemple de réponse')
+		expect(output.textContent).toContain('1 élément')
+		expect(output.textContent).toContain('body.id')
+	})
+
+	it('puts what the server said under the field it names', async () => {
+		const dialog = await openOperation(SAVED, {}, {}, [
+			{
+				field: 'path.id',
+				message: 'connector `c2` is missing required parameter `path.id`',
+			},
+			{
+				field: 'body.name',
+				message: 'connector `c2` sets parameter `body.name` to a bad value',
+			},
+			{
+				field: 'operation',
+				message: 'connector `c2` references unknown collection `x`',
+			},
+		])
+
+		const alerts = dialog
+			.getAllByRole('alert')
+			.map((alert) => alert.textContent)
+		expect(alerts).toEqual(
+			expect.arrayContaining([
+				'connector `c2` is missing required parameter `path.id`',
+				'connector `c2` sets parameter `body.name` to a bad value',
+				'connector `c2` references unknown collection `x`',
+			]),
+		)
+		const underId = dialog
+			.getByText('connector `c2` is missing required parameter `path.id`')
+			.closest('.grid')
+		expect(within(underId as HTMLElement).getByLabelText('id')).toBeDefined()
+		const underBody = dialog
+			.getByText('connector `c2` sets parameter `body.name` to a bad value')
+			.closest('.grid')
+		expect(
+			within(underBody as HTMLElement).getByText('Corps de la requête'),
+		).toBeDefined()
+	})
+
+	it('puts the issues of the node under the field they concern', async () => {
+		const dialog = await openOperation(
+			{ ...SAVED, query: { sort: 'name', legacy: '1' } },
+			{
+				issues: [
+					{
+						parameter: 'query.legacy',
+						message:
+							'Paramètre « legacy » inconnu de la spec 2.0 : il a peut-être été retiré.',
+					},
+					{
+						parameter: 'body',
+						message: 'Champ requis « name » absent du corps (spec 2.0).',
+					},
+				],
+			},
+		)
+
+		const stale = dialog
+			.getByText(
+				'Paramètre « legacy » inconnu de la spec 2.0 : il a peut-être été retiré.',
+			)
+			.closest('.grid')
+		expect(
+			(
+				within(stale as HTMLElement).getByLabelText(
+					'legacy',
+				) as HTMLInputElement
+			).value,
+		).toBe('1')
+		expect(dialog.getByText('Absent de la spec')).toBeDefined()
+		expect(
+			dialog.getByText('Champ requis « name » absent du corps (spec 2.0).'),
+		).toBeDefined()
+	})
+
+	it('says the operation cannot be found once the collection is known to be gone, without any field', async () => {
+		const dialog = await openOperation(SAVED, {
+			reads: readsAs('notFound'),
+		})
+
+		expect(
+			dialog.getByText(
+				'Opération introuvable : la collection a été supprimée ou modifiée.',
+			),
+		).toBeDefined()
+		expect(dialog.queryByLabelText('id')).toBeNull()
+		expect(dialog.queryByText('Contrat de l’opération')).toBeNull()
+	})
+
+	it('says the operation is gone when the collection no longer has it', async () => {
+		const dialog = await openOperation(SAVED, {
+			reads: foundReads({ ...PETS, operations: [] }),
+		})
+
+		expect(
+			dialog.getByText(
+				'Opération introuvable : la collection a été supprimée ou modifiée.',
+			),
+		).toBeDefined()
+		expect(dialog.queryByLabelText('id')).toBeNull()
+	})
+
+	it('says the collection could not be read, not that it was deleted, on any other failure', async () => {
+		const dialog = await openOperation(SAVED, { reads: readsAs('error') })
+
+		expect(
+			dialog.getByText('Impossible de lire la collection de cette opération.'),
+		).toBeDefined()
+		expect(dialog.queryByText(/introuvable/)).toBeNull()
+		expect(dialog.queryByText(/supprimée/)).toBeNull()
+		expect(dialog.queryByLabelText('id')).toBeNull()
+		expect(dialog.queryByText('Contrat de l’opération')).toBeNull()
+	})
+
+	it('says it is loading rather than gone while the collection loads', async () => {
+		const dialog = await openOperation(SAVED, { reads: readsAs('loading') })
+
+		expect(dialog.getByText('Chargement de l’opération…')).toBeDefined()
+		expect(dialog.queryByText(/introuvable/)).toBeNull()
+	})
+
+	it('waits too while the collection has not been asked for yet', async () => {
+		const dialog = await openOperation(SAVED, { reads: new Map() })
+
+		expect(dialog.getByText('Chargement de l’opération…')).toBeDefined()
 	})
 })

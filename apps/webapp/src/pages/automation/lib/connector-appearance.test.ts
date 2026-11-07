@@ -1,3 +1,4 @@
+import { Library } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import {
 	connectorAppearance,
@@ -40,6 +41,16 @@ describe('connectorAppearance', () => {
 		expect(
 			connectorAppearance('mestier', 'mestier.support.assign_ticket'),
 		).not.toEqual(connectorAppearance('mestier', 'mestier.support.add_badge'))
+	})
+
+	it('draws a collection operation as a library at hue 200, not as a generic http call', () => {
+		expect(connectorAppearance('http', 'collection.operation')).toEqual({
+			icon: Library,
+			hue: 200,
+		})
+		expect(connectorAppearance('http', 'collection.operation')).not.toEqual(
+			connectorAppearance('http', 'http.request'),
+		)
 	})
 
 	it('keeps the family look for a kind it does not know', () => {

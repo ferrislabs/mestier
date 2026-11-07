@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT version, imported_at, source_kind, source_value, base_url, security\n               FROM automation.collection\n               WHERE org_id = $1 AND id = $2\n               FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "imported_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "source_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "source_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "base_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "security",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "776571dee725f9041c51382a1079da77a44050bc7c075184a8d3b9b765bc09cd"
+}

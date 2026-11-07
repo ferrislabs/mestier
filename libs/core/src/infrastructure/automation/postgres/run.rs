@@ -768,6 +768,7 @@ mod tests {
                 name: None,
                 description: None,
                 disabled: false,
+                operation: None,
             }],
             edges: Vec::new(),
             triggers: Vec::new(),
