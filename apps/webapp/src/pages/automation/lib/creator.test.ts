@@ -170,18 +170,66 @@ describe('creatorCategories', () => {
 })
 
 describe('triggersCategory', () => {
-	it('offers the event trigger then the click, each with its own description', () => {
+	it('offers the four triggers in the order of the prototype, each with its own description', () => {
 		const category = triggersCategory()
 
 		expect(category.id).toBe(TRIGGERS_CATEGORY_ID)
 		expect(category.kinds.map((kind) => kind.label)).toEqual([
+			'Planificateur',
 			'Event Mestier',
+			'Webhook',
 			'Clic',
 		])
 		expect(category.kinds.map((kind) => kind.description)).toEqual([
+			'Se déclenche à intervalle régulier',
 			'Se déclenche quand un événement se produit dans Mestier',
+			'Se déclenche quand un service externe appelle une URL',
 			'Se déclenche quand vous cliquez sur « Tester le workflow »',
 		])
+	})
+
+	it('creates each trigger with the kind the API expects', () => {
+		const sources = Object.fromEntries(
+			triggersCategory().kinds.map((kind) => [kind.label, kind.source]),
+		)
+
+		expect(sources.Clic).toEqual({ type: 'trigger', kind: 'Manual' })
+		expect(sources['Event Mestier']).toEqual({
+			type: 'trigger',
+			kind: { Events: [] },
+		})
+		expect(sources.Webhook).toEqual({
+			type: 'trigger',
+			kind: {
+				Webhook: {
+					method: 'POST',
+					path: '',
+					credential_id: null,
+					contract: [],
+					on_invalid: 'Reject',
+				},
+			},
+		})
+		expect(sources.Planificateur).toEqual({
+			type: 'trigger',
+			kind: {
+				Schedule: {
+					frequency: 'Daily',
+					time: '09:00',
+					timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+				},
+			},
+		})
+	})
+
+	it('finds the scheduler and the webhook by what they do', () => {
+		const labels = (query: string) =>
+			searchCreatorKinds(allCategories(descriptors), query).flatMap(
+				(category) => category.kinds.map((kind) => kind.label),
+			)
+
+		expect(labels('intervalle')).toEqual(['Planificateur'])
+		expect(labels('url')).toEqual(['Webhook'])
 	})
 })
 

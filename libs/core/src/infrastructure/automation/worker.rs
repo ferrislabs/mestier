@@ -4,7 +4,10 @@ use chrono::Utc;
 use tracing::{error, info, warn};
 
 use crate::{
-    application::{MestierUseCase, automation::run::EnginePassOutcome},
+    application::{
+        MestierUseCase,
+        automation::{run::EnginePassOutcome, trigger::ScheduleOutcome},
+    },
     infrastructure::automation::{
         connectors::ConnectorRegistry, webhook::address_policy::PrivateNetworkAccess,
     },
@@ -98,6 +101,18 @@ pub async fn run_automation_worker(
             Err(error) => error!(%error, "scheduling recurrence horizon extension runs failed"),
         }
 
+        match usecase.fire_due_schedules(Utc::now(), schedule.batch).await {
+            Ok(ScheduleOutcome {
+                fired,
+                unreadable,
+                failed,
+            }) if fired > 0 || unreadable > 0 || failed > 0 => {
+                info!(fired, unreadable, failed, "started scheduled runs");
+            }
+            Ok(_) => {}
+            Err(error) => error!(%error, "starting scheduled runs failed"),
+        }
+
         match usecase
             .run_engine_pass(&connectors, &worker, schedule)
             .await
@@ -145,6 +160,96 @@ mod tests {
         assert_eq!(
             chrono_from(Duration::from_secs(u64::MAX)),
             chrono::Duration::minutes(5)
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_worker_loop_starts_the_schedules_that_are_due() {
+        use chrono::Utc;
+        use common::OrganizationId;
+        use uuid::Uuid;
+
+        use crate::application::automation::trigger_fixtures::{
+            daily, graph_of, seed_organization,
+        };
+        use crate::application::default_authorizer;
+        use crate::application::test_support::automation_pool;
+        use crate::domain::automation::workflow::{
+            CreateWorkflowCommand, SaveWorkflowVersionCommand,
+        };
+        use crate::infrastructure::realtime::EventHub;
+
+        let pool = automation_pool().await;
+        let org_id: OrganizationId = seed_organization(&pool, "worker-schedule").await;
+        let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), EventHub::new());
+        let workflow_id: Uuid = usecase
+            .create_workflow(CreateWorkflowCommand {
+                org_id,
+                name: "Worker schedule".to_string(),
+                description: None,
+            })
+            .await
+            .unwrap()
+            .id;
+        usecase
+            .save_workflow_version(SaveWorkflowVersionCommand {
+                org_id,
+                workflow_id,
+                graph: graph_of(vec![("t1", daily("09:00", Some("UTC")))]),
+                layout: None,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+        let overdue = Utc::now() - chrono::Duration::seconds(1);
+        sqlx::query!(
+            "UPDATE automation.schedule_state SET next_run_at = $2 WHERE workflow_id = $1",
+            workflow_id,
+            overdue,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let schedule = WorkerSchedule {
+            interval: Duration::from_millis(50),
+            ..WorkerSchedule::default()
+        };
+        let worker = tokio::spawn(run_automation_worker(
+            usecase,
+            "test-worker".to_owned(),
+            schedule,
+            PrivateNetworkAccess::Denied,
+        ));
+        let mut started = 0;
+        for _ in 0..100 {
+            started = sqlx::query_scalar!(
+                r#"SELECT count(*) AS "count!" FROM automation.run WHERE workflow_id = $1"#,
+                workflow_id,
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            if started > 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        let after = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM automation.run WHERE workflow_id = $1"#,
+            workflow_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        worker.abort();
+
+        assert_eq!(started, 1);
+        assert_eq!(
+            after, 1,
+            "a due schedule fires once, whatever the ticks that follow"
         );
     }
 }

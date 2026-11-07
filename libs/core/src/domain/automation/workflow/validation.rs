@@ -19,10 +19,13 @@ use crate::domain::automation::connector::{ConnectorCatalogue, FieldKind};
 use crate::domain::automation::credential::Credential;
 use crate::domain::automation::expression::parse_template;
 
-use super::graph::{Branch, Edge, Graph, PlacedConnector, TriggerKind};
+use super::graph::{Branch, ContractKey, Edge, Graph, PlacedConnector, TriggerKind};
+use super::schedule::{parse_time, parse_timezone};
+use super::webhook::{WEBHOOK_CREDENTIAL_KINDS, WebhookPathIssue, check_webhook_path};
 
 pub const MAX_NODE_NAME_LENGTH: usize = 120;
 pub const MAX_NODE_DESCRIPTION_LENGTH: usize = 500;
+pub const MAX_TRIGGERS_PER_GRAPH: usize = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeRef {
@@ -192,6 +195,53 @@ pub enum GraphError {
     #[error("trigger `{trigger_id}` subscribes to unknown event `{name}`")]
     UnknownEventName { trigger_id: String, name: String },
 
+    #[error("trigger `{trigger_id}` has an invalid webhook path: {issue}")]
+    InvalidWebhookPath {
+        trigger_id: String,
+        issue: WebhookPathIssue,
+    },
+
+    #[error("trigger `{trigger_id}` reuses the webhook path `{path}` of another trigger")]
+    DuplicateWebhookPath { trigger_id: String, path: String },
+
+    #[error("trigger `{trigger_id}` references unknown credential `{credential_id}`")]
+    UnknownWebhookCredential {
+        trigger_id: String,
+        credential_id: Uuid,
+    },
+
+    #[error(
+        "trigger `{trigger_id}` credential `{credential_id}` has scheme `{scheme}`, which a webhook does not accept"
+    )]
+    WebhookCredentialSchemeNotAccepted {
+        trigger_id: String,
+        credential_id: Uuid,
+        scheme: String,
+    },
+
+    #[error("trigger `{trigger_id}` has a contract key with no name")]
+    EmptyContractKeyName { trigger_id: String },
+
+    #[error("trigger `{trigger_id}` names the contract key `{name}` more than once")]
+    DuplicateContractKey { trigger_id: String, name: String },
+
+    #[error("trigger `{trigger_id}` has the time `{time}`, which is not HH:MM")]
+    InvalidScheduleTime { trigger_id: String, time: String },
+
+    #[error(
+        "trigger `{trigger_id}` names the contract key `{name}`, which is not a valid key name"
+    )]
+    InvalidContractKeyName { trigger_id: String, name: String },
+
+    #[error("a graph holds at most {MAX_TRIGGERS_PER_GRAPH} triggers")]
+    TooManyTriggers,
+
+    #[error("trigger `{trigger_id}` has the unknown timezone `{timezone}`")]
+    UnknownScheduleTimezone {
+        trigger_id: String,
+        timezone: String,
+    },
+
     #[error("{node} has an empty name")]
     EmptyNodeName { node: NodeRef },
 
@@ -203,6 +253,101 @@ pub enum GraphError {
 
     #[error("{node} reuses the name `{name}`, already given to another node")]
     DuplicateNodeName { node: NodeRef, name: String },
+}
+
+fn validate_webhook_trigger<'a>(
+    trigger_id: &str,
+    path: &'a str,
+    credential_id: Option<Uuid>,
+    contract: &'a [ContractKey],
+    credentials: &[Credential],
+    seen_paths: &mut HashSet<&'a str>,
+    errors: &mut Vec<GraphError>,
+) {
+    match check_webhook_path(path) {
+        Err(issue) => errors.push(GraphError::InvalidWebhookPath {
+            trigger_id: trigger_id.to_owned(),
+            issue,
+        }),
+        Ok(()) => {
+            if !seen_paths.insert(path) {
+                errors.push(GraphError::DuplicateWebhookPath {
+                    trigger_id: trigger_id.to_owned(),
+                    path: path.to_owned(),
+                });
+            }
+        }
+    }
+
+    if let Some(credential_id) = credential_id {
+        match credentials
+            .iter()
+            .find(|credential| credential.id == credential_id)
+        {
+            None => errors.push(GraphError::UnknownWebhookCredential {
+                trigger_id: trigger_id.to_owned(),
+                credential_id,
+            }),
+            Some(credential) => {
+                if !WEBHOOK_CREDENTIAL_KINDS.contains(&credential.kind.as_str()) {
+                    errors.push(GraphError::WebhookCredentialSchemeNotAccepted {
+                        trigger_id: trigger_id.to_owned(),
+                        credential_id,
+                        scheme: credential.kind.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    let mut seen_names: HashSet<&str> = HashSet::new();
+    for key in contract {
+        if key.name.trim().is_empty() {
+            errors.push(GraphError::EmptyContractKeyName {
+                trigger_id: trigger_id.to_owned(),
+            });
+        } else if !is_contract_key_name(&key.name) {
+            errors.push(GraphError::InvalidContractKeyName {
+                trigger_id: trigger_id.to_owned(),
+                name: key.name.clone(),
+            });
+        } else if !seen_names.insert(key.name.as_str()) {
+            errors.push(GraphError::DuplicateContractKey {
+                trigger_id: trigger_id.to_owned(),
+                name: key.name.clone(),
+            });
+        }
+    }
+}
+
+fn is_contract_key_name(name: &str) -> bool {
+    let mut characters = name.chars();
+    characters
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && characters.all(|next| next.is_ascii_alphanumeric() || matches!(next, '_' | '-'))
+}
+
+fn validate_schedule_trigger(
+    trigger_id: &str,
+    time: &str,
+    timezone: Option<&str>,
+    errors: &mut Vec<GraphError>,
+) {
+    if parse_time(time).is_none() {
+        errors.push(GraphError::InvalidScheduleTime {
+            trigger_id: trigger_id.to_owned(),
+            time: time.to_owned(),
+        });
+    }
+    if let Some(timezone) = timezone
+        && parse_timezone(timezone).is_none()
+    {
+        errors.push(GraphError::UnknownScheduleTimezone {
+            trigger_id: trigger_id.to_owned(),
+            timezone: timezone.to_owned(),
+        });
+    }
 }
 
 fn validate_node_labels(graph: &Graph, errors: &mut Vec<GraphError>) {
@@ -448,6 +593,10 @@ pub fn validate_graph(
         .collect();
     let connector_ids: HashSet<&str> = connectors_by_id.keys().copied().collect();
 
+    if graph.triggers.len() > MAX_TRIGGERS_PER_GRAPH {
+        errors.push(GraphError::TooManyTriggers);
+    }
+
     let mut seen_trigger_ids: HashSet<&str> = HashSet::new();
     for trigger in &graph.triggers {
         if !seen_trigger_ids.insert(trigger.id.as_str()) {
@@ -468,6 +617,7 @@ pub fn validate_graph(
 
     let triggers_with_an_outgoing_edge: HashSet<&str> =
         graph.edges.iter().map(|e| e.from.as_str()).collect();
+    let mut seen_webhook_paths: HashSet<&str> = HashSet::new();
     for trigger in &graph.triggers {
         if !triggers_with_an_outgoing_edge.contains(trigger.id.as_str()) {
             errors.push(GraphError::InertTrigger {
@@ -475,22 +625,42 @@ pub fn validate_graph(
             });
         }
 
-        if let TriggerKind::Events(names) = &trigger.kind {
-            if names.is_empty() {
-                errors.push(GraphError::EmptyEventTrigger {
-                    trigger_id: trigger.id.clone(),
-                });
-            }
-            for name in names {
-                if !events
-                    .descriptors()
-                    .any(|descriptor| descriptor.name == name)
-                {
-                    errors.push(GraphError::UnknownEventName {
+        match &trigger.kind {
+            TriggerKind::Manual => {}
+            TriggerKind::Events(names) => {
+                if names.is_empty() {
+                    errors.push(GraphError::EmptyEventTrigger {
                         trigger_id: trigger.id.clone(),
-                        name: name.clone(),
                     });
                 }
+                for name in names {
+                    if !events
+                        .descriptors()
+                        .any(|descriptor| descriptor.name == name)
+                    {
+                        errors.push(GraphError::UnknownEventName {
+                            trigger_id: trigger.id.clone(),
+                            name: name.clone(),
+                        });
+                    }
+                }
+            }
+            TriggerKind::Webhook {
+                path,
+                credential_id,
+                contract,
+                ..
+            } => validate_webhook_trigger(
+                &trigger.id,
+                path,
+                *credential_id,
+                contract,
+                credentials,
+                &mut seen_webhook_paths,
+                &mut errors,
+            ),
+            TriggerKind::Schedule { time, timezone, .. } => {
+                validate_schedule_trigger(&trigger.id, time, timezone.as_deref(), &mut errors)
             }
         }
     }
@@ -2616,6 +2786,402 @@ mod tests {
             ),
             Ok(())
         );
+    }
+
+    mod new_triggers {
+        use uuid::Uuid;
+
+        use super::super::super::graph::{
+            ContractKey, ContractKind, Frequency, OnInvalid, WebhookMethod, Weekday,
+        };
+        use super::*;
+
+        fn graph_with(kind: TriggerKind) -> Graph {
+            let mut graph = graph_of(vec![condition("c1", "{{ true }}")]);
+            graph.triggers.push(PlacedTrigger {
+                id: "t1".to_string(),
+                kind,
+                name: None,
+                description: None,
+            });
+            graph.edges.push(Edge {
+                from: "t1".to_string(),
+                to: "c1".to_string(),
+                branch: None,
+            });
+            graph
+        }
+
+        fn webhook(path: &str) -> TriggerKind {
+            TriggerKind::Webhook {
+                method: WebhookMethod::Post,
+                path: path.to_string(),
+                credential_id: None,
+                contract: Vec::new(),
+                on_invalid: OnInvalid::Reject,
+            }
+        }
+
+        fn webhook_with_credential(credential_id: Uuid) -> TriggerKind {
+            TriggerKind::Webhook {
+                method: WebhookMethod::Post,
+                path: "paiement-recu".to_string(),
+                credential_id: Some(credential_id),
+                contract: Vec::new(),
+                on_invalid: OnInvalid::Reject,
+            }
+        }
+
+        fn webhook_with_contract(names: &[&str]) -> TriggerKind {
+            TriggerKind::Webhook {
+                method: WebhookMethod::Post,
+                path: "paiement-recu".to_string(),
+                credential_id: None,
+                contract: names
+                    .iter()
+                    .map(|name| ContractKey {
+                        name: (*name).to_string(),
+                        kind: ContractKind::Text,
+                        required: true,
+                        example: String::new(),
+                    })
+                    .collect(),
+                on_invalid: OnInvalid::Reject,
+            }
+        }
+
+        fn schedule(frequency: Frequency, time: &str) -> TriggerKind {
+            TriggerKind::Schedule {
+                frequency,
+                time: time.to_string(),
+                weekday: None,
+                timezone: None,
+            }
+        }
+
+        fn errors_with(graph: &Graph, credentials: &[Credential]) -> Vec<GraphError> {
+            let catalogue = connector_catalogue();
+            match validate_graph(graph, &catalogue, credentials, &EventCatalogue::new(), &[]) {
+                Ok(()) => Vec::new(),
+                Err(errors) => errors,
+            }
+        }
+
+        #[test]
+        fn a_complete_webhook_and_a_complete_schedule_validate() {
+            let credential_id = Uuid::from_u128(5);
+            let mut graph = graph_with(webhook_with_credential(credential_id));
+            graph.triggers.push(PlacedTrigger {
+                id: "t2".to_string(),
+                kind: TriggerKind::Schedule {
+                    frequency: Frequency::Weekly,
+                    time: "09:00".to_string(),
+                    weekday: Some(Weekday::Monday),
+                    timezone: Some("Europe/Paris".to_string()),
+                },
+                name: None,
+                description: None,
+            });
+            graph.edges.push(Edge {
+                from: "t2".to_string(),
+                to: "c1".to_string(),
+                branch: None,
+            });
+
+            let errors = errors_with(&graph, &[credential(credential_id, "bearer_token")]);
+
+            assert_eq!(errors, Vec::new());
+        }
+
+        #[test]
+        fn a_webhook_path_breaking_a_rule_is_refused_and_names_the_trigger() {
+            let cases = [
+                ("", WebhookPathIssue::Empty),
+                ("webhooks/x", WebhookPathIssue::Prefixed),
+                ("/x", WebhookPathIssue::EmptySegment),
+                ("a/../b", WebhookPathIssue::ParentSegment),
+                ("a//b", WebhookPathIssue::EmptySegment),
+                ("Paiement Reçu", WebhookPathIssue::InvalidCharacters),
+                (&"a".repeat(201), WebhookPathIssue::TooLong),
+            ];
+
+            for (path, issue) in cases {
+                let errors = errors_with(&graph_with(webhook(path)), &[]);
+
+                assert_eq!(
+                    errors,
+                    vec![GraphError::InvalidWebhookPath {
+                        trigger_id: "t1".to_string(),
+                        issue
+                    }],
+                    "`{path}`"
+                );
+            }
+        }
+
+        #[test]
+        fn two_webhooks_of_one_graph_cannot_share_a_path() {
+            let mut graph = graph_with(webhook("paiement-recu"));
+            graph.triggers.push(PlacedTrigger {
+                id: "t2".to_string(),
+                kind: webhook("paiement-recu"),
+                name: None,
+                description: None,
+            });
+            graph.edges.push(Edge {
+                from: "t2".to_string(),
+                to: "c1".to_string(),
+                branch: None,
+            });
+
+            let errors = errors_with(&graph, &[]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::DuplicateWebhookPath {
+                    trigger_id: "t2".to_string(),
+                    path: "paiement-recu".to_string(),
+                }]
+            );
+        }
+
+        #[test]
+        fn a_webhook_credential_that_does_not_exist_is_refused() {
+            let missing = Uuid::from_u128(404);
+
+            let errors = errors_with(&graph_with(webhook_with_credential(missing)), &[]);
+
+            assert_eq!(
+                errors,
+                vec![GraphError::UnknownWebhookCredential {
+                    trigger_id: "t1".to_string(),
+                    credential_id: missing,
+                }]
+            );
+        }
+
+        #[test]
+        fn a_webhook_accepts_header_basic_and_bearer_credentials_only() {
+            let id = Uuid::from_u128(5);
+
+            for scheme in ["http_header", "http_basic", "bearer_token"] {
+                let errors = errors_with(
+                    &graph_with(webhook_with_credential(id)),
+                    &[credential(id, scheme)],
+                );
+                assert_eq!(errors, Vec::new(), "{scheme}");
+            }
+
+            for scheme in ["odoo_api", "anything_else"] {
+                let errors = errors_with(
+                    &graph_with(webhook_with_credential(id)),
+                    &[credential(id, scheme)],
+                );
+                assert_eq!(
+                    errors,
+                    vec![GraphError::WebhookCredentialSchemeNotAccepted {
+                        trigger_id: "t1".to_string(),
+                        credential_id: id,
+                        scheme: scheme.to_string(),
+                    }],
+                    "{scheme}"
+                );
+            }
+        }
+
+        #[test]
+        fn contract_key_names_must_be_unique_and_not_blank() {
+            let errors = errors_with(
+                &graph_with(webhook_with_contract(&["a", "b", "a", "", "  ", "b"])),
+                &[],
+            );
+
+            assert_eq!(
+                errors,
+                vec![
+                    GraphError::DuplicateContractKey {
+                        trigger_id: "t1".to_string(),
+                        name: "a".to_string(),
+                    },
+                    GraphError::EmptyContractKeyName {
+                        trigger_id: "t1".to_string(),
+                    },
+                    GraphError::EmptyContractKeyName {
+                        trigger_id: "t1".to_string(),
+                    },
+                    GraphError::DuplicateContractKey {
+                        trigger_id: "t1".to_string(),
+                        name: "b".to_string(),
+                    },
+                ]
+            );
+        }
+
+        #[test]
+        fn contract_key_names_that_differ_only_by_case_are_distinct() {
+            let errors = errors_with(&graph_with(webhook_with_contract(&["a", "A"])), &[]);
+
+            assert_eq!(errors, Vec::new());
+        }
+
+        #[test]
+        fn a_contract_key_name_follows_the_rule_of_the_prototype() {
+            for name in ["a", "_a", "A", "montant_ht", "client-nom", "a1", "_"] {
+                let errors = errors_with(&graph_with(webhook_with_contract(&[name])), &[]);
+
+                assert_eq!(errors, Vec::new(), "`{name}`");
+            }
+            for name in [
+                "1a", "-a", "a b", "a.b", "é", "a/b", " a", "a ", "a\u{0}b", "{{x}}", "a$",
+            ] {
+                let errors = errors_with(&graph_with(webhook_with_contract(&[name])), &[]);
+
+                assert_eq!(
+                    errors,
+                    vec![GraphError::InvalidContractKeyName {
+                        trigger_id: "t1".to_string(),
+                        name: name.to_string(),
+                    }],
+                    "`{name}`"
+                );
+            }
+        }
+
+        #[test]
+        fn a_graph_holds_at_most_twenty_triggers() {
+            let many = |count: usize| {
+                let mut graph = graph_of(vec![condition("c1", "{{ true }}")]);
+                for index in 0..count {
+                    let id = format!("t{index}");
+                    graph.triggers.push(PlacedTrigger {
+                        id: id.clone(),
+                        kind: TriggerKind::Manual,
+                        name: None,
+                        description: None,
+                    });
+                    graph.edges.push(Edge {
+                        from: id,
+                        to: "c1".to_string(),
+                        branch: None,
+                    });
+                }
+                graph
+            };
+
+            assert_eq!(errors_with(&many(20), &[]), Vec::new());
+            assert_eq!(
+                errors_with(&many(21), &[]),
+                vec![GraphError::TooManyTriggers]
+            );
+        }
+
+        #[test]
+        fn a_schedule_time_must_be_hh_mm() {
+            for time in ["", "9:00", "24:00", "09:60", "09h00", "09:00:00"] {
+                let errors = errors_with(&graph_with(schedule(Frequency::Daily, time)), &[]);
+
+                assert_eq!(
+                    errors,
+                    vec![GraphError::InvalidScheduleTime {
+                        trigger_id: "t1".to_string(),
+                        time: time.to_string(),
+                    }],
+                    "`{time}`"
+                );
+            }
+        }
+
+        #[test]
+        fn a_schedule_time_is_checked_for_every_frequency() {
+            for frequency in [Frequency::Hourly, Frequency::Daily, Frequency::Weekly] {
+                let mut kind = schedule(frequency, "99:99");
+                if let TriggerKind::Schedule { weekday, .. } = &mut kind {
+                    *weekday = Some(Weekday::Monday);
+                }
+
+                let errors = errors_with(&graph_with(kind), &[]);
+
+                assert_eq!(errors.len(), 1, "{frequency:?}: {errors:?}");
+            }
+        }
+
+        #[test]
+        fn a_weekly_schedule_may_leave_its_weekday_out() {
+            for frequency in [Frequency::Hourly, Frequency::Daily, Frequency::Weekly] {
+                assert_eq!(
+                    errors_with(&graph_with(schedule(frequency, "09:00")), &[]),
+                    Vec::new(),
+                    "{frequency:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn a_schedule_timezone_must_be_a_known_iana_zone_when_given() {
+            let with_zone = |zone: &str| TriggerKind::Schedule {
+                frequency: Frequency::Daily,
+                time: "09:00".to_string(),
+                weekday: None,
+                timezone: Some(zone.to_string()),
+            };
+
+            assert_eq!(
+                errors_with(&graph_with(with_zone("Europe/Paris")), &[]),
+                Vec::new()
+            );
+            for zone in ["", "Mars/Olympus", "paris", " Europe/Paris"] {
+                assert_eq!(
+                    errors_with(&graph_with(with_zone(zone)), &[]),
+                    vec![GraphError::UnknownScheduleTimezone {
+                        trigger_id: "t1".to_string(),
+                        timezone: zone.to_string(),
+                    }],
+                    "`{zone}`"
+                );
+            }
+        }
+
+        #[test]
+        fn every_fault_of_a_trigger_is_reported_together() {
+            let kind = TriggerKind::Schedule {
+                frequency: Frequency::Weekly,
+                time: "nope".to_string(),
+                weekday: None,
+                timezone: Some("Mars/Olympus".to_string()),
+            };
+
+            let errors = errors_with(&graph_with(kind), &[]);
+
+            assert_eq!(
+                errors,
+                vec![
+                    GraphError::InvalidScheduleTime {
+                        trigger_id: "t1".to_string(),
+                        time: "nope".to_string(),
+                    },
+                    GraphError::UnknownScheduleTimezone {
+                        trigger_id: "t1".to_string(),
+                        timezone: "Mars/Olympus".to_string(),
+                    },
+                ]
+            );
+        }
+
+        #[test]
+        fn a_webhook_or_schedule_without_an_outgoing_edge_is_inert() {
+            for kind in [webhook("ping"), schedule(Frequency::Daily, "09:00")] {
+                let mut graph = graph_with(kind);
+                graph.edges.clear();
+                graph.connectors.clear();
+
+                assert_eq!(
+                    errors_with(&graph, &[]),
+                    vec![GraphError::InertTrigger {
+                        trigger_id: "t1".to_string()
+                    }]
+                );
+            }
+        }
     }
 
     mod operation_nodes {

@@ -101,6 +101,100 @@ pub struct PlacedTrigger {
 pub enum TriggerKind {
     Manual,
     Events(Vec<String>),
+    Webhook {
+        method: WebhookMethod,
+        path: String,
+        #[serde(default)]
+        credential_id: Option<Uuid>,
+        #[serde(default)]
+        contract: Vec<ContractKey>,
+        #[serde(default)]
+        on_invalid: OnInvalid,
+    },
+    Schedule {
+        frequency: Frequency,
+        time: String,
+        #[serde(default)]
+        weekday: Option<Weekday>,
+        #[serde(default)]
+        timezone: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum WebhookMethod {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+}
+
+impl WebhookMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::Post => "POST",
+            Self::Put => "PUT",
+            Self::Patch => "PATCH",
+            Self::Delete => "DELETE",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "GET" => Some(Self::Get),
+            "POST" => Some(Self::Post),
+            "PUT" => Some(Self::Put),
+            "PATCH" => Some(Self::Patch),
+            "DELETE" => Some(Self::Delete),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContractKind {
+    Text,
+    Number,
+    Boolean,
+    Object,
+    List,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContractKey {
+    pub name: String,
+    pub kind: ContractKind,
+    pub required: bool,
+    #[serde(default)]
+    pub example: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OnInvalid {
+    #[default]
+    Reject,
+    Accept,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Frequency {
+    Hourly,
+    Daily,
+    Weekly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Weekday {
+    Monday,
+    Tuesday,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+    Sunday,
 }
 
 #[cfg(test)]
@@ -383,6 +477,175 @@ mod tests {
 
         assert_eq!(decoded, graph);
         assert!(decoded.connectors[0].disabled);
+    }
+
+    fn webhook_trigger() -> TriggerKind {
+        TriggerKind::Webhook {
+            method: WebhookMethod::Post,
+            path: "paiement-recu".to_string(),
+            credential_id: Some(Uuid::from_u128(7)),
+            contract: vec![
+                ContractKey {
+                    name: "montant".to_string(),
+                    kind: ContractKind::Number,
+                    required: true,
+                    example: "2340".to_string(),
+                },
+                ContractKey {
+                    name: "client".to_string(),
+                    kind: ContractKind::Object,
+                    required: false,
+                    example: String::new(),
+                },
+            ],
+            on_invalid: OnInvalid::Accept,
+        }
+    }
+
+    fn schedule_trigger() -> TriggerKind {
+        TriggerKind::Schedule {
+            frequency: Frequency::Weekly,
+            time: "09:00".to_string(),
+            weekday: Some(Weekday::Monday),
+            timezone: Some("Europe/Paris".to_string()),
+        }
+    }
+
+    #[test]
+    fn a_webhook_trigger_serializes_to_a_stable_wire_shape() {
+        let json = to_value(webhook_trigger()).expect("trigger serializes");
+
+        assert_eq!(
+            json,
+            json!({
+                "Webhook": {
+                    "method": "POST",
+                    "path": "paiement-recu",
+                    "credential_id": "00000000-0000-0000-0000-000000000007",
+                    "contract": [
+                        { "name": "montant", "kind": "Number", "required": true, "example": "2340" },
+                        { "name": "client", "kind": "Object", "required": false, "example": "" }
+                    ],
+                    "on_invalid": "Accept"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn a_schedule_trigger_serializes_to_a_stable_wire_shape() {
+        let json = to_value(schedule_trigger()).expect("trigger serializes");
+
+        assert_eq!(
+            json,
+            json!({
+                "Schedule": {
+                    "frequency": "Weekly",
+                    "time": "09:00",
+                    "weekday": "Monday",
+                    "timezone": "Europe/Paris"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn the_new_trigger_kinds_round_trip_through_serde() {
+        for kind in [webhook_trigger(), schedule_trigger()] {
+            let encoded = serde_json::to_string(&kind).expect("trigger serializes");
+            let decoded: TriggerKind = serde_json::from_str(&encoded).expect("trigger reads back");
+
+            assert_eq!(decoded, kind);
+        }
+    }
+
+    #[test]
+    fn a_webhook_with_only_its_required_fields_reads_back_with_the_defaults() {
+        let stored = json!({ "Webhook": { "method": "GET", "path": "ping" } });
+
+        let kind: TriggerKind = serde_json::from_value(stored).expect("defaults apply");
+
+        assert_eq!(
+            kind,
+            TriggerKind::Webhook {
+                method: WebhookMethod::Get,
+                path: "ping".to_string(),
+                credential_id: None,
+                contract: Vec::new(),
+                on_invalid: OnInvalid::Reject,
+            }
+        );
+    }
+
+    #[test]
+    fn a_daily_schedule_without_weekday_or_timezone_reads_back_with_none() {
+        let stored = json!({ "Schedule": { "frequency": "Daily", "time": "09:00" } });
+
+        let kind: TriggerKind = serde_json::from_value(stored).expect("defaults apply");
+
+        assert_eq!(
+            kind,
+            TriggerKind::Schedule {
+                frequency: Frequency::Daily,
+                time: "09:00".to_string(),
+                weekday: None,
+                timezone: None,
+            }
+        );
+    }
+
+    #[test]
+    fn a_contract_key_without_an_example_reads_back_with_an_empty_one() {
+        let stored = json!({ "name": "a", "kind": "Text", "required": true });
+
+        let key: ContractKey = serde_json::from_value(stored).expect("example defaults");
+
+        assert_eq!(key.example, "");
+    }
+
+    #[test]
+    fn an_unknown_method_is_refused() {
+        let stored = json!({ "Webhook": { "method": "TRACE", "path": "ping" } });
+
+        assert!(serde_json::from_value::<TriggerKind>(stored).is_err());
+    }
+
+    #[test]
+    fn a_graph_holding_every_trigger_kind_round_trips() {
+        let mut graph = sample_graph();
+        graph.triggers.push(PlacedTrigger {
+            id: "t3".to_string(),
+            kind: webhook_trigger(),
+            name: None,
+            description: None,
+        });
+        graph.triggers.push(PlacedTrigger {
+            id: "t4".to_string(),
+            kind: schedule_trigger(),
+            name: None,
+            description: None,
+        });
+
+        let encoded = serde_json::to_string(&graph).expect("graph serializes");
+        let decoded: Graph = serde_json::from_str(&encoded).expect("graph deserializes");
+
+        assert_eq!(decoded, graph);
+    }
+
+    #[test]
+    fn the_methods_spell_themselves_the_way_the_wire_does() {
+        for method in [
+            WebhookMethod::Get,
+            WebhookMethod::Post,
+            WebhookMethod::Put,
+            WebhookMethod::Patch,
+            WebhookMethod::Delete,
+        ] {
+            assert_eq!(to_value(method).unwrap(), json!(method.as_str()));
+            assert_eq!(WebhookMethod::parse(method.as_str()), Some(method));
+        }
+        assert_eq!(WebhookMethod::parse("post"), None);
+        assert_eq!(WebhookMethod::parse("TRACE"), None);
     }
 
     #[test]

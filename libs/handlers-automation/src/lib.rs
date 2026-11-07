@@ -23,6 +23,7 @@ mod request;
 pub mod response;
 pub mod run;
 pub mod settings;
+pub mod webhook;
 pub mod workflow;
 
 pub const TAG: &str = "automation";
@@ -102,7 +103,7 @@ async fn require_manage_automation(
 }
 
 pub fn router(state: &AppState) -> Router<AppState> {
-    Router::new()
+    let members = Router::new()
         .merge(catalogue::router(state))
         .merge(collection::router(state))
         .merge(credential::router(state))
@@ -112,5 +113,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(settings::router(state))
         .merge(expression::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
-        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(from_fn_with_state(state.clone(), auth_middleware));
+
+    Router::new().merge(members).merge(webhook::router(state))
 }

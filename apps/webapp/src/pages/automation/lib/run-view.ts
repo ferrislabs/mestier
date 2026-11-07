@@ -8,7 +8,9 @@ import {
 import { formatMilliseconds } from '#/pages/automation/lib/format'
 import { toItems } from '#/pages/automation/lib/items'
 import {
+	isEventsTrigger,
 	isManualTrigger,
+	triggerEventNames,
 	triggerPresentation,
 } from '#/pages/automation/lib/trigger-events'
 import {
@@ -86,8 +88,9 @@ function stepDuration(step: Schemas.RunStepResponse): number | null {
 function triggerSubtitle(trigger: Schemas.PlacedTriggerDto): string {
 	if (trigger.description !== undefined && trigger.description !== null)
 		return trigger.description
-	if (trigger.kind === 'Manual') return 'Déclenchement manuel'
-	const names = trigger.kind.Events
+	if (!isEventsTrigger(trigger))
+		return triggerPresentation(trigger, []).subtitle
+	const names = triggerEventNames(trigger)
 	if (names.length === 0) return 'Aucun événement configuré'
 	return names.length === 1 ? (names[0] ?? '') : `${names.length} événements`
 }

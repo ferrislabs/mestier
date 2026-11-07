@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.workflow SET current_version_id = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a33d07f92a2d4fa6ec53f9f709347874cd61baf374d6d4fd70cbb01b55c9ef59"
+}

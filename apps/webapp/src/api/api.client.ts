@@ -305,6 +305,8 @@ export namespace Schemas {
     season: SeasonRequest;
     status?: (null | ContractStatus) | undefined;
   };
+  export type ContractKindDto = "Text" | "Number" | "Boolean" | "Object" | "List";
+  export type ContractKeyDto = { example?: string | undefined; kind: ContractKindDto; name: string; required: boolean };
   export type SiteContact = { email?: (string | null) | undefined; name: string; phone?: (string | null) | undefined };
   export type ContractSite = {
     address_line?: (string | null) | undefined;
@@ -785,7 +787,30 @@ export namespace Schemas {
     version: number;
   };
   export type EdgeDto = { branch?: (null | BranchDto) | undefined; from: string; to: string };
-  export type TriggerKindDto = "Manual" | { Events: Array<string> };
+  export type WebhookMethodDto = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  export type OnInvalidDto = "Reject" | "Accept";
+  export type FrequencyDto = "Hourly" | "Daily" | "Weekly";
+  export type WeekdayDto = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
+  export type TriggerKindDto =
+    | "Manual"
+    | { Events: Array<string> }
+    | {
+        Webhook: {
+          contract?: Array<ContractKeyDto> | undefined;
+          credential_id?: (string | null) | undefined;
+          method: WebhookMethodDto;
+          on_invalid?: OnInvalidDto | undefined;
+          path: string;
+        };
+      }
+    | {
+        Schedule: {
+          frequency: FrequencyDto;
+          time: string;
+          timezone?: (string | null) | undefined;
+          weekday?: (null | WeekdayDto) | undefined;
+        };
+      };
   export type PlacedTriggerDto = {
     description?: (string | null) | undefined;
     id: string;
@@ -1900,6 +1925,8 @@ export namespace Schemas {
     weekly_contract_minutes: number;
   };
   export type UpsertOverwriteRequest = { allow: number; deny: number };
+  export type WebhookAccepted = { run_id: string };
+  export type WebhookBodyInvalid = { code: string; keys: Array<string>; message: string; status: number };
   export type WebhookCreatedResponse = {
     avatar_url?: (string | null) | undefined;
     channel_id: ChannelId;
@@ -5037,7 +5064,7 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       404: unknown;
-      409: unknown;
+      409: { code: string; details: Schemas.GraphInvalidDetails; message: string; status: number };
       422: { code: string; details: Schemas.GraphInvalidDetails; message: string; status: number };
     };
   };
@@ -9337,6 +9364,24 @@ export namespace Endpoints {
       401: unknown;
     };
   };
+  export type post_ReceiveWebhook = {
+    method: "POST";
+    path: "/webhooks/{path}";
+    requestFormat: "json";
+    parameters: {
+      path: { path: string };
+    };
+    responses: {
+      202: Schemas.WebhookAccepted;
+      400: Schemas.WebhookBodyInvalid;
+      401: unknown;
+      404: unknown;
+      408: unknown;
+      413: unknown;
+      415: unknown;
+      429: unknown;
+    };
+  };
 
   // </Endpoints>
 }
@@ -9616,6 +9661,7 @@ export type EndpointByMethod = {
     "/api/v1/support/intake/tickets": Endpoints.post_CreateIntakeTicket;
     "/api/v1/support/intake/tickets/{ticket_id}/attachments": Endpoints.post_AttachIntakeFile;
     "/api/v1/support/intake/tickets/{ticket_id}/messages": Endpoints.post_PostIntakeMessage;
+    "/webhooks/{path}": Endpoints.post_ReceiveWebhook;
   };
   put: {
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;

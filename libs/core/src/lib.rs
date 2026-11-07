@@ -39,19 +39,22 @@ pub use domain::automation::run::{
 pub use domain::automation::secret::SealedSecret;
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
 pub use domain::automation::workflow::{
-    ArchiveScope, Branch, CreateWorkflowCommand, Edge, Graph, GraphError, MAX_LAYOUT_ENTRIES,
-    MAX_NODE_DESCRIPTION_LENGTH, MAX_NODE_NAME_LENGTH, MAX_RAW_TAGS, MAX_TAG_LENGTH, MAX_TAGS,
-    MAX_WORKFLOW_DESCRIPTION_LENGTH, MAX_WORKFLOW_NAME_LENGTH, NodePosition, NodeRef, OperationRef,
-    PlacedConnector, PlacedTrigger, SaveWorkflowVersionCommand, TriggerKind, UpdateWorkflowCommand,
+    ArchiveScope, Branch, ContractKey, ContractKind, CreateWorkflowCommand, Edge, Frequency, Graph,
+    GraphError, MAX_LAYOUT_ENTRIES, MAX_NODE_DESCRIPTION_LENGTH, MAX_NODE_NAME_LENGTH,
+    MAX_RAW_TAGS, MAX_TAG_LENGTH, MAX_TAGS, MAX_WEBHOOK_BODY_BYTES, MAX_WEBHOOK_PATH_LENGTH,
+    MAX_WORKFLOW_DESCRIPTION_LENGTH, MAX_WORKFLOW_NAME_LENGTH, NodePosition, NodeRef, OnInvalid,
+    OperationRef, PlacedConnector, PlacedTrigger, ResolvedWebhook, SaveWorkflowVersionCommand,
+    TriggerKind, UpdateWorkflowCommand, WEBHOOK_PREFIX, WebhookMethod, WebhookPathIssue, Weekday,
     Workflow, WorkflowDescription, WorkflowDescriptionError, WorkflowInitialState, WorkflowLayout,
     WorkflowName, WorkflowNameError, WorkflowReference, WorkflowRefusal, WorkflowTags,
-    WorkflowTagsError, WorkflowVersion, validate_graph,
+    WorkflowTagsError, WorkflowVersion, check_webhook_path, contract_violations, holds_nul,
+    is_json_content_type, validate_graph,
 };
 pub use infrastructure::automation::connectors::{
     ConnectorDryRun, ConnectorRegistry, UnknownConnectorKind,
 };
 pub use infrastructure::automation::webhook::{
-    address_policy::PrivateNetworkAccess, secret::SecretCipher,
+    address_policy::PrivateNetworkAccess, inbound::path_fingerprint, secret::SecretCipher,
 };
 pub use infrastructure::automation::worker::{WorkerSchedule, run_automation_worker};
 pub use infrastructure::invoice::facturx::FacturXDocumentFormat;

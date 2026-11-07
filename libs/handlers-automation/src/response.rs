@@ -468,6 +468,213 @@ impl From<EdgeDto> for mestier_core::Edge {
 pub enum TriggerKindDto {
     Manual,
     Events(Vec<String>),
+    Webhook {
+        method: WebhookMethodDto,
+        path: String,
+        #[serde(default)]
+        credential_id: Option<Uuid>,
+        #[serde(default)]
+        contract: Vec<ContractKeyDto>,
+        #[serde(default)]
+        on_invalid: OnInvalidDto,
+    },
+    Schedule {
+        frequency: FrequencyDto,
+        time: String,
+        #[serde(default)]
+        weekday: Option<WeekdayDto>,
+        #[serde(default)]
+        timezone: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum WebhookMethodDto {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub enum ContractKindDto {
+    Text,
+    Number,
+    Boolean,
+    Object,
+    List,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct ContractKeyDto {
+    pub name: String,
+    pub kind: ContractKindDto,
+    pub required: bool,
+    #[serde(default)]
+    pub example: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub enum OnInvalidDto {
+    #[default]
+    Reject,
+    Accept,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub enum FrequencyDto {
+    Hourly,
+    Daily,
+    Weekly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub enum WeekdayDto {
+    Monday,
+    Tuesday,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+    Sunday,
+}
+
+impl From<mestier_core::WebhookMethod> for WebhookMethodDto {
+    fn from(value: mestier_core::WebhookMethod) -> Self {
+        match value {
+            mestier_core::WebhookMethod::Get => Self::Get,
+            mestier_core::WebhookMethod::Post => Self::Post,
+            mestier_core::WebhookMethod::Put => Self::Put,
+            mestier_core::WebhookMethod::Patch => Self::Patch,
+            mestier_core::WebhookMethod::Delete => Self::Delete,
+        }
+    }
+}
+
+impl From<WebhookMethodDto> for mestier_core::WebhookMethod {
+    fn from(value: WebhookMethodDto) -> Self {
+        match value {
+            WebhookMethodDto::Get => Self::Get,
+            WebhookMethodDto::Post => Self::Post,
+            WebhookMethodDto::Put => Self::Put,
+            WebhookMethodDto::Patch => Self::Patch,
+            WebhookMethodDto::Delete => Self::Delete,
+        }
+    }
+}
+
+impl From<mestier_core::ContractKind> for ContractKindDto {
+    fn from(value: mestier_core::ContractKind) -> Self {
+        match value {
+            mestier_core::ContractKind::Text => Self::Text,
+            mestier_core::ContractKind::Number => Self::Number,
+            mestier_core::ContractKind::Boolean => Self::Boolean,
+            mestier_core::ContractKind::Object => Self::Object,
+            mestier_core::ContractKind::List => Self::List,
+        }
+    }
+}
+
+impl From<ContractKindDto> for mestier_core::ContractKind {
+    fn from(value: ContractKindDto) -> Self {
+        match value {
+            ContractKindDto::Text => Self::Text,
+            ContractKindDto::Number => Self::Number,
+            ContractKindDto::Boolean => Self::Boolean,
+            ContractKindDto::Object => Self::Object,
+            ContractKindDto::List => Self::List,
+        }
+    }
+}
+
+impl From<mestier_core::ContractKey> for ContractKeyDto {
+    fn from(value: mestier_core::ContractKey) -> Self {
+        Self {
+            name: value.name,
+            kind: value.kind.into(),
+            required: value.required,
+            example: value.example,
+        }
+    }
+}
+
+impl From<ContractKeyDto> for mestier_core::ContractKey {
+    fn from(value: ContractKeyDto) -> Self {
+        Self {
+            name: value.name,
+            kind: value.kind.into(),
+            required: value.required,
+            example: value.example,
+        }
+    }
+}
+
+impl From<mestier_core::OnInvalid> for OnInvalidDto {
+    fn from(value: mestier_core::OnInvalid) -> Self {
+        match value {
+            mestier_core::OnInvalid::Reject => Self::Reject,
+            mestier_core::OnInvalid::Accept => Self::Accept,
+        }
+    }
+}
+
+impl From<OnInvalidDto> for mestier_core::OnInvalid {
+    fn from(value: OnInvalidDto) -> Self {
+        match value {
+            OnInvalidDto::Reject => Self::Reject,
+            OnInvalidDto::Accept => Self::Accept,
+        }
+    }
+}
+
+impl From<mestier_core::Frequency> for FrequencyDto {
+    fn from(value: mestier_core::Frequency) -> Self {
+        match value {
+            mestier_core::Frequency::Hourly => Self::Hourly,
+            mestier_core::Frequency::Daily => Self::Daily,
+            mestier_core::Frequency::Weekly => Self::Weekly,
+        }
+    }
+}
+
+impl From<FrequencyDto> for mestier_core::Frequency {
+    fn from(value: FrequencyDto) -> Self {
+        match value {
+            FrequencyDto::Hourly => Self::Hourly,
+            FrequencyDto::Daily => Self::Daily,
+            FrequencyDto::Weekly => Self::Weekly,
+        }
+    }
+}
+
+impl From<mestier_core::Weekday> for WeekdayDto {
+    fn from(value: mestier_core::Weekday) -> Self {
+        match value {
+            mestier_core::Weekday::Monday => Self::Monday,
+            mestier_core::Weekday::Tuesday => Self::Tuesday,
+            mestier_core::Weekday::Wednesday => Self::Wednesday,
+            mestier_core::Weekday::Thursday => Self::Thursday,
+            mestier_core::Weekday::Friday => Self::Friday,
+            mestier_core::Weekday::Saturday => Self::Saturday,
+            mestier_core::Weekday::Sunday => Self::Sunday,
+        }
+    }
+}
+
+impl From<WeekdayDto> for mestier_core::Weekday {
+    fn from(value: WeekdayDto) -> Self {
+        match value {
+            WeekdayDto::Monday => Self::Monday,
+            WeekdayDto::Tuesday => Self::Tuesday,
+            WeekdayDto::Wednesday => Self::Wednesday,
+            WeekdayDto::Thursday => Self::Thursday,
+            WeekdayDto::Friday => Self::Friday,
+            WeekdayDto::Saturday => Self::Saturday,
+            WeekdayDto::Sunday => Self::Sunday,
+        }
+    }
 }
 
 impl From<mestier_core::TriggerKind> for TriggerKindDto {
@@ -475,6 +682,30 @@ impl From<mestier_core::TriggerKind> for TriggerKindDto {
         match value {
             mestier_core::TriggerKind::Manual => Self::Manual,
             mestier_core::TriggerKind::Events(names) => Self::Events(names),
+            mestier_core::TriggerKind::Webhook {
+                method,
+                path,
+                credential_id,
+                contract,
+                on_invalid,
+            } => Self::Webhook {
+                method: method.into(),
+                path,
+                credential_id,
+                contract: contract.into_iter().map(Into::into).collect(),
+                on_invalid: on_invalid.into(),
+            },
+            mestier_core::TriggerKind::Schedule {
+                frequency,
+                time,
+                weekday,
+                timezone,
+            } => Self::Schedule {
+                frequency: frequency.into(),
+                time,
+                weekday: weekday.map(Into::into),
+                timezone,
+            },
         }
     }
 }
@@ -484,6 +715,30 @@ impl From<TriggerKindDto> for mestier_core::TriggerKind {
         match value {
             TriggerKindDto::Manual => Self::Manual,
             TriggerKindDto::Events(names) => Self::Events(names),
+            TriggerKindDto::Webhook {
+                method,
+                path,
+                credential_id,
+                contract,
+                on_invalid,
+            } => Self::Webhook {
+                method: method.into(),
+                path,
+                credential_id,
+                contract: contract.into_iter().map(Into::into).collect(),
+                on_invalid: on_invalid.into(),
+            },
+            TriggerKindDto::Schedule {
+                frequency,
+                time,
+                weekday,
+                timezone,
+            } => Self::Schedule {
+                frequency: frequency.into(),
+                time,
+                weekday: weekday.map(Into::into),
+                timezone,
+            },
         }
     }
 }
@@ -690,6 +945,28 @@ pub struct GraphErrorResponse {
     pub message: String,
 }
 
+impl GraphErrorResponse {
+    pub fn quota(message: &str) -> Self {
+        Self {
+            connector_id: None,
+            trigger_id: None,
+            field: None,
+            message: message.to_owned(),
+        }
+    }
+
+    pub fn webhook_path_taken(trigger_id: String) -> Self {
+        Self {
+            connector_id: None,
+            message: format!(
+                "trigger `{trigger_id}` uses a webhook path another workflow already holds"
+            ),
+            trigger_id: Some(trigger_id),
+            field: Some("path".to_owned()),
+        }
+    }
+}
+
 fn node_fault(
     node: &mestier_core::NodeRef,
     field: &str,
@@ -785,6 +1062,35 @@ impl From<&mestier_core::GraphError> for GraphErrorResponse {
                 node_fault(node, "name")
             }
             NodeDescriptionTooLong { node } => node_fault(node, "description"),
+            InvalidWebhookPath { trigger_id, .. } | DuplicateWebhookPath { trigger_id, .. } => {
+                (None, Some(trigger_id.clone()), Some("path".to_owned()))
+            }
+            UnknownWebhookCredential { trigger_id, .. }
+            | WebhookCredentialSchemeNotAccepted { trigger_id, .. } => (
+                None,
+                Some(trigger_id.clone()),
+                Some("credential".to_owned()),
+            ),
+            EmptyContractKeyName { trigger_id } => {
+                (None, Some(trigger_id.clone()), Some("contract".to_owned()))
+            }
+            DuplicateContractKey { trigger_id, name } => (
+                None,
+                Some(trigger_id.clone()),
+                Some(format!("contract.{name}")),
+            ),
+            InvalidScheduleTime { trigger_id, .. } => {
+                (None, Some(trigger_id.clone()), Some("time".to_owned()))
+            }
+            InvalidContractKeyName { trigger_id, name } => (
+                None,
+                Some(trigger_id.clone()),
+                Some(format!("contract.{name}")),
+            ),
+            TooManyTriggers => (None, None, Some("triggers".to_owned())),
+            UnknownScheduleTimezone { trigger_id, .. } => {
+                (None, Some(trigger_id.clone()), Some("timezone".to_owned()))
+            }
         };
 
         Self {
@@ -1559,5 +1865,212 @@ mod tests {
             assert!(json.get(field).is_some(), "{field} missing: {json}");
         }
         assert_eq!(json["steps"], json!([]));
+    }
+
+    fn webhook_dto() -> TriggerKindDto {
+        TriggerKindDto::Webhook {
+            method: WebhookMethodDto::Post,
+            path: "paiement-recu".to_string(),
+            credential_id: Some(Uuid::from_u128(7)),
+            contract: vec![ContractKeyDto {
+                name: "montant".to_string(),
+                kind: ContractKindDto::Number,
+                required: true,
+                example: "2340".to_string(),
+            }],
+            on_invalid: OnInvalidDto::Accept,
+        }
+    }
+
+    fn schedule_dto() -> TriggerKindDto {
+        TriggerKindDto::Schedule {
+            frequency: FrequencyDto::Weekly,
+            time: "09:00".to_string(),
+            weekday: Some(WeekdayDto::Monday),
+            timezone: Some("Europe/Paris".to_string()),
+        }
+    }
+
+    #[test]
+    fn the_webhook_and_schedule_dtos_have_the_wire_shape_of_the_domain() {
+        for dto in [webhook_dto(), schedule_dto()] {
+            let core: mestier_core::TriggerKind = dto.clone().into();
+
+            assert_eq!(
+                serde_json::to_value(&dto).unwrap(),
+                serde_json::to_value(&core).unwrap()
+            );
+            assert_eq!(TriggerKindDto::from(core), dto);
+        }
+    }
+
+    #[test]
+    fn a_webhook_dto_spells_its_fields_the_way_the_editor_sends_them() {
+        assert_eq!(
+            serde_json::to_value(webhook_dto()).unwrap(),
+            json!({
+                "Webhook": {
+                    "method": "POST",
+                    "path": "paiement-recu",
+                    "credential_id": "00000000-0000-0000-0000-000000000007",
+                    "contract": [
+                        { "name": "montant", "kind": "Number", "required": true, "example": "2340" }
+                    ],
+                    "on_invalid": "Accept"
+                }
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(schedule_dto()).unwrap(),
+            json!({
+                "Schedule": {
+                    "frequency": "Weekly",
+                    "time": "09:00",
+                    "weekday": "Monday",
+                    "timezone": "Europe/Paris"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn optional_fields_of_the_new_triggers_may_be_left_out() {
+        let webhook: TriggerKindDto =
+            serde_json::from_value(json!({ "Webhook": { "method": "GET", "path": "ping" } }))
+                .expect("a bare webhook reads");
+        let schedule: TriggerKindDto = serde_json::from_value(
+            json!({ "Schedule": { "frequency": "Daily", "time": "09:00" } }),
+        )
+        .expect("a bare schedule reads");
+
+        assert_eq!(
+            webhook,
+            TriggerKindDto::Webhook {
+                method: WebhookMethodDto::Get,
+                path: "ping".to_string(),
+                credential_id: None,
+                contract: Vec::new(),
+                on_invalid: OnInvalidDto::Reject,
+            }
+        );
+        assert_eq!(
+            schedule,
+            TriggerKindDto::Schedule {
+                frequency: FrequencyDto::Daily,
+                time: "09:00".to_string(),
+                weekday: None,
+                timezone: None,
+            }
+        );
+    }
+
+    #[test]
+    fn a_graph_without_the_new_triggers_still_reads_and_writes_as_before() {
+        let stored = json!({
+            "connectors": [],
+            "edges": [],
+            "triggers": [
+                { "id": "t1", "kind": "Manual" },
+                { "id": "t2", "kind": { "Events": ["quote.accepted"] } }
+            ]
+        });
+
+        let graph: GraphDto = serde_json::from_value(stored).expect("an older graph still reads");
+
+        assert_eq!(graph.triggers[0].kind, TriggerKindDto::Manual);
+        assert_eq!(
+            graph.triggers[1].kind,
+            TriggerKindDto::Events(vec!["quote.accepted".to_string()])
+        );
+    }
+
+    #[test]
+    fn trigger_errors_name_the_trigger_and_the_field_at_fault() {
+        use mestier_core::WebhookPathIssue;
+
+        let cases = [
+            (
+                GraphError::InvalidWebhookPath {
+                    trigger_id: "t1".to_string(),
+                    issue: WebhookPathIssue::Empty,
+                },
+                "path",
+            ),
+            (
+                GraphError::DuplicateWebhookPath {
+                    trigger_id: "t1".to_string(),
+                    path: "x".to_string(),
+                },
+                "path",
+            ),
+            (
+                GraphError::UnknownWebhookCredential {
+                    trigger_id: "t1".to_string(),
+                    credential_id: Uuid::from_u128(1),
+                },
+                "credential",
+            ),
+            (
+                GraphError::WebhookCredentialSchemeNotAccepted {
+                    trigger_id: "t1".to_string(),
+                    credential_id: Uuid::from_u128(1),
+                    scheme: "odoo_api".to_string(),
+                },
+                "credential",
+            ),
+            (
+                GraphError::DuplicateContractKey {
+                    trigger_id: "t1".to_string(),
+                    name: "montant".to_string(),
+                },
+                "contract.montant",
+            ),
+            (
+                GraphError::EmptyContractKeyName {
+                    trigger_id: "t1".to_string(),
+                },
+                "contract",
+            ),
+            (
+                GraphError::InvalidScheduleTime {
+                    trigger_id: "t1".to_string(),
+                    time: "25:00".to_string(),
+                },
+                "time",
+            ),
+            (
+                GraphError::InvalidContractKeyName {
+                    trigger_id: "t1".to_string(),
+                    name: "1 montant".to_string(),
+                },
+                "contract.1 montant",
+            ),
+            (
+                GraphError::UnknownScheduleTimezone {
+                    trigger_id: "t1".to_string(),
+                    timezone: "Mars/Olympus".to_string(),
+                },
+                "timezone",
+            ),
+        ];
+
+        for (error, field) in cases {
+            let response = GraphErrorResponse::from(&error);
+
+            assert_eq!(response.trigger_id.as_deref(), Some("t1"), "{error}");
+            assert_eq!(response.connector_id, None, "{error}");
+            assert_eq!(response.field.as_deref(), Some(field), "{error}");
+            assert!(response.message.contains("t1"), "{}", response.message);
+        }
+    }
+
+    #[test]
+    fn a_graph_holding_too_many_triggers_is_a_graph_level_error() {
+        let response = GraphErrorResponse::from(&GraphError::TooManyTriggers);
+
+        assert_eq!(response.connector_id, None);
+        assert_eq!(response.trigger_id, None);
+        assert_eq!(response.field.as_deref(), Some("triggers"));
+        assert!(response.message.contains("20"), "{}", response.message);
     }
 }

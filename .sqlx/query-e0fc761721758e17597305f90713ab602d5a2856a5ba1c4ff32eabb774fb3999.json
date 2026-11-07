@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT trigger_id, next_run_at, last_run_at FROM automation.schedule_state\n               WHERE workflow_id = $1 ORDER BY trigger_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "trigger_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_run_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "e0fc761721758e17597305f90713ab602d5a2856a5ba1c4ff32eabb774fb3999"
+}

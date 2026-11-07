@@ -21,6 +21,7 @@ export interface CredentialPickerFieldProps {
 	error: string | null
 	optional?: boolean
 	hint?: string
+	warning?: string
 	statusOf?: (credentialId: string) => CredentialStatus
 	onChange: (credentialId: string | null) => void
 	onCreateNew: () => void
@@ -34,6 +35,7 @@ export function CredentialPickerField({
 	error,
 	optional = false,
 	hint,
+	warning,
 	statusOf,
 	onChange,
 	onCreateNew,
@@ -81,6 +83,12 @@ export function CredentialPickerField({
 					<TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
 					Cette identification est expirée. Renouvelez-la depuis
 					Identifications.
+				</p>
+			) : null}
+			{warning ? (
+				<p className="flex items-start gap-1.5 text-sm text-state-today">
+					<TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+					{warning}
 				</p>
 			) : null}
 			<Button

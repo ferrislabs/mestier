@@ -1,4 +1,4 @@
-import { Library } from 'lucide-react'
+import { CalendarClock, Library, Webhook } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import {
 	CATEGORY_IDS,
@@ -6,6 +6,7 @@ import {
 	connectorCopy,
 	describeConnector,
 	isInternalConnector,
+	TRIGGER_COPY_KINDS,
 	triggerCopy,
 } from '#/pages/automation/lib/connector-copy'
 import { runNodeAppearance } from '#/pages/automation/lib/run-appearance'
@@ -118,6 +119,50 @@ describe('connectorCopy', () => {
 
 	it('is undefined for a kind it has never heard of', () => {
 		expect(connectorCopy('nope.nothing')).toBeUndefined()
+	})
+})
+
+describe('triggerCopy', () => {
+	it('copies the scheduler from the prototype', () => {
+		expect(triggerCopy('schedule')).toMatchObject({
+			label: 'Planificateur',
+			subtitle: 'Déclencheur planifié',
+			description: 'Se déclenche à intervalle régulier',
+			icon: CalendarClock,
+			hue: 255,
+		})
+	})
+
+	it('copies the webhook from the prototype', () => {
+		expect(triggerCopy('webhook')).toMatchObject({
+			label: 'Webhook',
+			subtitle: 'Déclencheur HTTP',
+			description: 'Se déclenche quand un service externe appelle une URL',
+			icon: Webhook,
+			hue: 335,
+		})
+	})
+
+	it('keeps the click and the Mestier event as they were', () => {
+		expect(triggerCopy('manual')).toMatchObject({
+			label: 'Clic',
+			subtitle: 'Déclenchement manuel',
+			hue: 220,
+		})
+		expect(triggerCopy('events')).toMatchObject({
+			label: 'Event Mestier',
+			subtitle: 'Déclencheur Mestier',
+			hue: 165,
+		})
+	})
+
+	it('lists the four triggers in the order of the prototype', () => {
+		expect(TRIGGER_COPY_KINDS.map((kind) => triggerCopy(kind).label)).toEqual([
+			'Planificateur',
+			'Event Mestier',
+			'Webhook',
+			'Clic',
+		])
 	})
 })
 

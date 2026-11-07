@@ -304,16 +304,89 @@ describe('NodeCreatorFeature — the catalogue it offers', () => {
 		])
 	})
 
-	it('starts on the triggers when the workflow has none, event first', async () => {
+	it('starts on the triggers when the workflow has none, in the order of the prototype', async () => {
 		const { panel } = await renderCreator({ hasTrigger: false })
 
 		expect(
 			within(panel).getByText('Qu’est-ce qui déclenche ce workflow ?'),
 		).toBeDefined()
 		expect(rowsOf(panel)).toEqual([
+			'PlanificateurSe déclenche à intervalle régulier',
 			'Event MestierSe déclenche quand un événement se produit dans Mestier',
+			'WebhookSe déclenche quand un service externe appelle une URL',
 			'ClicSe déclenche quand vous cliquez sur « Tester le workflow »',
 		])
+	})
+
+	it('creates a scheduler daily at 09:00 in the zone of the browser', async () => {
+		const user = userEvent.setup()
+		const { panel, onCreate } = await renderCreator({ hasTrigger: false })
+
+		await user.click(
+			within(panel).getByRole('button', { name: /Planificateur/ }),
+		)
+
+		expect(onCreate).toHaveBeenCalledWith({
+			type: 'trigger',
+			kind: {
+				Schedule: {
+					frequency: 'Daily',
+					time: '09:00',
+					timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+				},
+			},
+		})
+	})
+
+	it('creates a webhook that is a POST with no path yet, refusing a broken body', async () => {
+		const user = userEvent.setup()
+		const { panel, onCreate } = await renderCreator({ hasTrigger: false })
+
+		await user.click(within(panel).getByRole('button', { name: /Webhook/ }))
+
+		expect(onCreate).toHaveBeenCalledWith({
+			type: 'trigger',
+			kind: {
+				Webhook: {
+					method: 'POST',
+					path: '',
+					credential_id: null,
+					contract: [],
+					on_invalid: 'Reject',
+				},
+			},
+		})
+	})
+
+	it('still creates the click and the Mestier event as before', async () => {
+		const user = userEvent.setup()
+		const { panel, onCreate } = await renderCreator({ hasTrigger: false })
+
+		await user.click(within(panel).getByRole('button', { name: /Clic/ }))
+		await user.click(
+			within(panel).getByRole('button', { name: /Event Mestier/ }),
+		)
+
+		expect(onCreate.mock.calls).toEqual([
+			[{ type: 'trigger', kind: 'Manual' }],
+			[{ type: 'trigger', kind: { Events: [] } }],
+		])
+	})
+
+	it('finds the scheduler and the webhook from the search box', async () => {
+		const user = userEvent.setup()
+		const { panel } = await renderCreator()
+
+		await user.type(
+			within(panel).getByRole('searchbox', { name: 'Rechercher un nœud' }),
+			'planif',
+		)
+
+		await waitFor(() => {
+			expect(rowsOf(panel)).toEqual([
+				'PlanificateurSe déclenche à intervalle régulier',
+			])
+		})
 	})
 
 	it('searches the description as well as the label, grouped by category', async () => {

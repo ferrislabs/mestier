@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation.schedule_state SET next_run_at = $2 WHERE workflow_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cd80ce57389a4ceee936650e57b85fdc2dddd49ad52e680f5bedf1078a6256d0"
+}

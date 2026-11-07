@@ -10,7 +10,9 @@ import {
 	schemeUsageText,
 	searchSchemeGroups,
 	seededCredentialMeta,
+	usableInWebhook,
 	usageSentence,
+	webhookCredentialHint,
 } from '#/pages/automation/lib/credential-meta'
 
 function field(
@@ -74,16 +76,12 @@ describe('credential meta', () => {
 		expect(schemeDescription(UNKNOWN)).toBe('Champ A')
 	})
 
-	it('states where a kind can be used, leaving out the usages no node serves yet', () => {
-		expect(schemeUsageText('http_basic')).toBe(
-			'Utilisable dans : Requête HTTP et opérations de collection.',
-		)
-		expect(schemeUsageText('http_header')).toBe(
-			'Utilisable dans : Requête HTTP et opérations de collection.',
-		)
-		expect(schemeUsageText('bearer_token')).toBe(
-			'Utilisable dans : Requête HTTP et opérations de collection.',
-		)
+	it('states where a kind can be used, the webhook trigger included', () => {
+		for (const kind of ['http_basic', 'http_header', 'bearer_token']) {
+			expect(schemeUsageText(kind), kind).toBe(
+				'Utilisable dans : Requête HTTP et opérations de collection, Webhook.',
+			)
+		}
 	})
 
 	it('announces only the Odoo actions for an Odoo key, not the HTTP request node', () => {
@@ -93,14 +91,14 @@ describe('credential meta', () => {
 	})
 
 	it('says a kind is planned when no node uses it yet', () => {
-		expect(usageSentence(['webhook'])).toBe(
-			'Prévue pour : Webhook. Aucun nœud ne l’utilise encore.',
+		expect(usageSentence(['smtp'])).toBe(
+			'Prévue pour : E-mail SMTP. Aucun nœud ne l’utilise encore.',
 		)
 		expect(usageSentence(['smtp', 'webhook'])).toBe(
-			'Prévue pour : E-mail SMTP, Webhook. Aucun nœud ne l’utilise encore.',
+			'Utilisable dans : Webhook.',
 		)
 		expect(usageSentence(['http', 'webhook'])).toBe(
-			'Utilisable dans : Requête HTTP et opérations de collection.',
+			'Utilisable dans : Requête HTTP et opérations de collection, Webhook.',
 		)
 	})
 
@@ -255,5 +253,21 @@ describe('newestFirst', () => {
 		]
 		newestFirst(given)
 		expect(given.map((entry) => entry.id)).toEqual(['a', 'b'])
+	})
+})
+
+describe('credential meta — the webhook trigger', () => {
+	it('accepts the three header based types and nothing else', () => {
+		expect(usableInWebhook('http_header')).toBe(true)
+		expect(usableInWebhook('http_basic')).toBe(true)
+		expect(usableInWebhook('bearer_token')).toBe(true)
+		expect(usableInWebhook('odoo_api')).toBe(false)
+		expect(usableInWebhook('unknown')).toBe(false)
+	})
+
+	it('hints at the three types the picker of a webhook shows', () => {
+		expect(webhookCredentialHint()).toBe(
+			'Types acceptés : Basic Auth, Bearer, Clé d’API dans un en-tête.',
+		)
 	})
 })

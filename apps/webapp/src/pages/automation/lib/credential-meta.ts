@@ -33,6 +33,7 @@ export const USAGE_LABELS: Record<CredentialUsage, string> = {
 
 export const USAGES_WITH_NODES: ReadonlySet<CredentialUsage> = new Set([
 	'http',
+	'webhook',
 	'odoo',
 ])
 
@@ -67,7 +68,7 @@ const KIND_META: Readonly<Record<string, KindMeta>> = {
 		label: 'Bearer',
 		description: 'Un jeton envoyé sous la forme « Authorization: Bearer … ».',
 		category: 'http',
-		usages: ['http'],
+		usages: ['http', 'webhook'],
 		fields: {
 			token: { label: 'Jeton' },
 		},
@@ -152,6 +153,17 @@ export function usageSentence(usages: readonly CredentialUsage[]): string {
 	return usable.length > 0
 		? `Utilisable dans : ${names(usable)}.`
 		: `Prévue pour : ${names(usages)}. Aucun nœud ne l’utilise encore.`
+}
+
+export function usableInWebhook(kind: string): boolean {
+	return KIND_META[kind]?.usages.includes('webhook') ?? false
+}
+
+export function webhookCredentialHint(): string {
+	const labels = Object.keys(KIND_META)
+		.filter(usableInWebhook)
+		.map((kind) => kindLabel(kind))
+	return `Types acceptés : ${labels.join(', ')}.`
 }
 
 export function schemeUsageText(kind: string): string {

@@ -3,11 +3,18 @@ import { useId } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { Button } from '#/components/ui/button'
 import { Label } from '#/components/ui/label'
+import type { CredentialStatus } from '#/pages/automation/lib/credential-meta'
+import type { NodeIssue } from '#/pages/automation/lib/node-issues'
 import {
 	findEvent,
-	isManualTrigger,
+	scheduleOf,
 	triggerEventNames,
+	triggerKindOf,
+	webhookOf,
 } from '#/pages/automation/lib/trigger-events'
+import type { TriggerFieldErrors } from '#/pages/automation/lib/validation'
+import { ScheduleParameters } from '#/pages/automation/ui/schedule-parameters'
+import { WebhookParameters } from '#/pages/automation/ui/webhook-parameters'
 
 const EVENT_HINT = 'Le workflow reçoit le payload contractuel de cet événement.'
 
@@ -60,7 +67,7 @@ function EventCard({
 	)
 }
 
-export function TriggerParameters({
+function EventParameters({
 	trigger,
 	events,
 	onChooseEvent,
@@ -72,8 +79,6 @@ export function TriggerParameters({
 	onRemoveEvent: (name: string) => void
 }) {
 	const controlId = useId()
-	if (isManualTrigger(trigger)) return null
-
 	const names = triggerEventNames(trigger)
 	return (
 		<div className="grid gap-2">
@@ -121,5 +126,92 @@ export function TriggerParameters({
 			</div>
 			<p className="text-muted-foreground text-xs">{EVENT_HINT}</p>
 		</div>
+	)
+}
+
+function messagesFor(
+	issues: readonly NodeIssue[],
+	parameter: string,
+	server: string | null,
+): string[] {
+	const own = issues
+		.filter((issue) => issue.parameter === parameter)
+		.map((issue) => issue.message)
+	return [...new Set(server ? [...own, server] : own)]
+}
+
+export interface TriggerParametersProps {
+	trigger: Schemas.PlacedTriggerDto
+	events: readonly Schemas.EventDescriptorResponse[]
+	origin: string
+	credentials: Schemas.CredentialResponse[]
+	credentialHint: string
+	credentialStatusOf: (credentialId: string) => CredentialStatus
+	issues: readonly NodeIssue[]
+	errors: TriggerFieldErrors
+	onChooseEvent: (replacing: string | null) => void
+	onRemoveEvent: (name: string) => void
+	onChange: (kind: Schemas.TriggerKindDto) => void
+	onCreateCredential: () => void
+}
+
+export function TriggerParameters({
+	trigger,
+	events,
+	origin,
+	credentials,
+	credentialHint,
+	credentialStatusOf,
+	issues,
+	errors,
+	onChooseEvent,
+	onRemoveEvent,
+	onChange,
+	onCreateCredential,
+}: TriggerParametersProps) {
+	const kind = triggerKindOf(trigger.kind)
+	const webhook = webhookOf(trigger)
+	const schedule = scheduleOf(trigger)
+
+	if (webhook) {
+		return (
+			<WebhookParameters
+				rule={webhook}
+				origin={origin}
+				credentials={credentials}
+				credentialHint={credentialHint}
+				credentialStatusOf={credentialStatusOf}
+				messages={{
+					path: messagesFor(issues, 'path', errors.path),
+					credential: errors.credential,
+					contract: errors.contract ? [errors.contract] : [],
+					keys: errors.keys,
+				}}
+				onChange={(rule) => onChange({ Webhook: rule })}
+				onCreateCredential={onCreateCredential}
+			/>
+		)
+	}
+	if (schedule) {
+		return (
+			<ScheduleParameters
+				rule={schedule}
+				messages={{
+					time: messagesFor(issues, 'time', errors.time),
+					weekday: errors.weekday ? [errors.weekday] : [],
+					timezone: errors.timezone ? [errors.timezone] : [],
+				}}
+				onChange={(rule) => onChange({ Schedule: rule })}
+			/>
+		)
+	}
+	if (kind !== 'events') return null
+	return (
+		<EventParameters
+			trigger={trigger}
+			events={events}
+			onChooseEvent={onChooseEvent}
+			onRemoveEvent={onRemoveEvent}
+		/>
 	)
 }

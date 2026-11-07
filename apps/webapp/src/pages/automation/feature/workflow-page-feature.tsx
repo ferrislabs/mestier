@@ -28,6 +28,7 @@ import { readLayout } from '#/pages/automation/lib/graph'
 import { mergedLayout } from '#/pages/automation/lib/layout'
 import {
 	type GraphValidation,
+	graphErrorsOf,
 	projectGraphErrors,
 	pruneCorrectedErrors,
 } from '#/pages/automation/lib/validation'
@@ -78,18 +79,6 @@ function persistedSource(workflow: WorkflowDetail): EditorSource {
 		graph,
 		layout: mergedLayout(graph, readLayout(workflow.layout)),
 	}
-}
-
-function extractGraphErrors(
-	error: unknown,
-): Schemas.GraphErrorResponse[] | null {
-	if (!(error instanceof Error)) return null
-	const status = (error as { status?: number }).status
-	if (status !== 422) return null
-
-	const data = (error as { data?: { details?: { errors?: unknown } } }).data
-	const errors = data?.details?.errors
-	return Array.isArray(errors) ? (errors as Schemas.GraphErrorResponse[]) : null
 }
 
 function failure(summary: string, error: unknown): string {
@@ -163,7 +152,7 @@ function useEditorSession({
 			setGraphDirty(false)
 			return true
 		} catch (error) {
-			const errors = extractGraphErrors(error)
+			const errors = graphErrorsOf(error)
 			if (errors) setValidation(projectGraphErrors(errors))
 			else setSaveError(failure(SAVE_FAILED, error))
 			return false

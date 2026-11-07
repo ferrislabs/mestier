@@ -801,6 +801,69 @@ describe('WorkflowExecutionsFeature — the header and the list labels', () => {
 		})
 	})
 
+	it('names the runs a webhook and a scheduler started after their node, even in another version', async () => {
+		const hookGraph: Schemas.GraphDto = {
+			...GRAPH,
+			triggers: [
+				{
+					id: 't1',
+					kind: { Webhook: { method: 'POST', path: 'paiement-recu' } },
+				},
+			],
+		}
+		const cronGraph: Schemas.GraphDto = {
+			...GRAPH,
+			triggers: [
+				{
+					id: 't2',
+					name: 'Chaque matin',
+					kind: { Schedule: { frequency: 'Daily', time: '09:00' } },
+				},
+				{ id: 't3', kind: { Schedule: { frequency: 'Daily', time: '10:00' } } },
+			],
+		}
+		render((api) => {
+			api.mockGet(RUNS_PATH, () => ({
+				data: [
+					run({ id: 'run-hook', number: 9, trigger_id: 't1' }),
+					run({
+						id: 'run-cron',
+						number: 8,
+						workflow_version_id: 'v0',
+						trigger_id: 't2',
+					}),
+					run({
+						id: 'run-cron-2',
+						number: 7,
+						workflow_version_id: 'v0',
+						trigger_id: 't3',
+					}),
+				],
+				pagination: null,
+			}))
+			api.mockGet(RUN_PATH, (params) => {
+				const id = (params as { path: { run_id: string } }).path.run_id
+				return {
+					data: runDetail({
+						id,
+						workflow_version_id: id === 'run-hook' ? 'v1' : 'v0',
+						graph: id === 'run-hook' ? hookGraph : cronGraph,
+					}),
+					pagination: null,
+				}
+			})
+		})
+
+		const list = await screen.findByRole('complementary', {
+			name: 'Liste des exécutions',
+		})
+		await waitFor(() => {
+			expect(within(list).getByText(/Chaque matin/)).toBeDefined()
+		})
+		expect(within(list).getByText(/Webhook/)).toBeDefined()
+		expect(within(list).queryByText(/Déclencheur/)).toBeNull()
+	})
+
 	it('names a run without trigger event a manual test', async () => {
 		render()
 

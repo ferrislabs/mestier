@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT w.id, w.name\n               FROM automation.workflow w\n               JOIN automation.workflow_version wv ON wv.workflow_id = w.id\n               WHERE w.org_id = $1\n                 AND (\n                   wv.graph @> jsonb_build_object(\n                     'connectors',\n                     jsonb_build_array(jsonb_build_object('credential_id', $2::text))\n                   )\n                   OR EXISTS (\n                     SELECT 1\n                     FROM jsonb_array_elements(wv.graph -> 'triggers') AS trig(value)\n                     WHERE trig.value -> 'kind' -> 'Webhook' ->> 'credential_id' = $2::text\n                   )\n                 )\n               ORDER BY w.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "303a839a3a0deac7d5326a86c1db422f5191fc04c618b038dd4989b226b9c452"
+}

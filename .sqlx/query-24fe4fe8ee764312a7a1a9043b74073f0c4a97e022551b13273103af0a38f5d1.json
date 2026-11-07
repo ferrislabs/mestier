@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT path, trigger_id, method FROM automation.webhook_route\n               WHERE workflow_id = $1 ORDER BY trigger_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "path",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "trigger_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "method",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "24fe4fe8ee764312a7a1a9043b74073f0c4a97e022551b13273103af0a38f5d1"
+}

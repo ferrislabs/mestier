@@ -10,6 +10,7 @@ import {
 	dryRunStatuses,
 	elapsedMsSince,
 	failedRunProbes,
+	graphProbes,
 	groupRunSteps,
 	isTerminalRunStatus,
 	latestRunByWorkflow,
@@ -18,6 +19,7 @@ import {
 	runDurationMs,
 	runElapsedMs,
 	runTriggerLabel,
+	triggerRunProbes,
 } from '#/pages/automation/lib/workflow-runs'
 
 function run(overrides: Partial<Run> = {}): Run {
@@ -733,5 +735,76 @@ describe('dryRunReveals', () => {
 				dryStep({ status: 'skipped' }),
 			]),
 		).toEqual({ lead: 2, beats: [] })
+	})
+})
+
+describe('triggerRunProbes', () => {
+	it('picks one run per version among those a trigger node started, leaving out events and manual runs', () => {
+		const runs = [
+			run({ id: 'hook-v2', workflow_version_id: 'v2', trigger_id: 't1' }),
+			run({ id: 'hook-v1', workflow_version_id: 'v1', trigger_id: 't1' }),
+			run({ id: 'cron-v1', workflow_version_id: 'v1', trigger_id: 't2' }),
+			run({
+				id: 'event-v3',
+				workflow_version_id: 'v3',
+				trigger_id: 't3',
+				trigger_event_name: 'quote.accepted',
+			}),
+			run({ id: 'manual-v4', workflow_version_id: 'v4' }),
+		]
+
+		expect(triggerRunProbes(runs)).toEqual(['hook-v2', 'cron-v1'])
+	})
+})
+
+describe('graphProbes', () => {
+	it('adds a run of a webhook or a scheduler to the failed runs, one per version', () => {
+		const runs = [
+			run({ id: 'hook-v2', workflow_version_id: 'v2', trigger_id: 't1' }),
+			run({
+				id: 'failed-v1',
+				workflow_version_id: 'v1',
+				failed_connector_id: 'c1',
+				trigger_id: 't1',
+			}),
+			run({ id: 'cron-v1', workflow_version_id: 'v1', trigger_id: 't2' }),
+			run({ id: 'manual-v3', workflow_version_id: 'v3' }),
+		]
+
+		expect(graphProbes(runs).sort()).toEqual(['failed-v1', 'hook-v2'])
+	})
+
+	it('probes nothing for runs whose label does not depend on the graph', () => {
+		expect(
+			graphProbes([
+				run({ workflow_version_id: 'v1' }),
+				run({
+					id: 'event',
+					workflow_version_id: 'v2',
+					trigger_id: 't1',
+					trigger_event_name: 'quote.accepted',
+				}),
+			]),
+		).toEqual([])
+	})
+})
+
+describe('runTriggerLabel — webhook and scheduler', () => {
+	it('names a run after the node that started it, « Webhook » or « Planificateur » by default', () => {
+		const nodeNames = new Map([
+			['t1', 'Webhook'],
+			['t2', 'Planificateur'],
+			['t3', 'Paiement Stripe'],
+		])
+
+		expect(runTriggerLabel(run({ trigger_id: 't1' }), { nodeNames })).toBe(
+			'Webhook',
+		)
+		expect(runTriggerLabel(run({ trigger_id: 't2' }), { nodeNames })).toBe(
+			'Planificateur',
+		)
+		expect(runTriggerLabel(run({ trigger_id: 't3' }), { nodeNames })).toBe(
+			'Paiement Stripe',
+		)
 	})
 })

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT path\n            FROM automation.webhook_route\n            WHERE path = ANY($1) AND workflow_id <> $2\n            ORDER BY path\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "path",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "135fec926a520c789e46c4d6fdc693ef9421291b3ae428f3c6c4ba564f651b47"
+}

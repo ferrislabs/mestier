@@ -6,7 +6,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use utoipa::ToSchema;
 
-use crate::{credential::require_credential, paths::CredentialPath, response::CredentialResponse};
+use crate::{
+    credential::{credential_failure, require_credential},
+    paths::CredentialPath,
+    response::CredentialResponse,
+};
 
 /// Both fields optional and applied only when present. `data: None` renames
 /// without touching the sealed bytes; `Some` replaces them after
@@ -59,7 +63,8 @@ pub async fn handler(
             name: payload.name,
             data: payload.data,
         })
-        .await?;
+        .await
+        .map_err(credential_failure)?;
 
     Ok(Response::OK(CredentialResponse::from(updated)))
 }

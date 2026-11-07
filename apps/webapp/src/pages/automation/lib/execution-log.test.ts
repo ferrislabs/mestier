@@ -266,3 +266,53 @@ describe('execution log', () => {
 		)
 	})
 })
+
+describe('execution log — the webhook and the scheduler', () => {
+	const nodeNames = new Map([
+		['t1', 'Webhook'],
+		['t2', 'Planificateur'],
+		['t3', 'Paiement Stripe'],
+	])
+	const fired = (id: string, triggerId: string) =>
+		buildRow(run({ id, trigger_id: triggerId }), 'Paiements', NOW, {
+			trigger: { nodeNames },
+		})
+
+	it('names the trigger of a run after the node that started it', () => {
+		expect(fired('r1', 't1').trigger).toBe('Webhook')
+		expect(fired('r2', 't2').trigger).toBe('Planificateur')
+		expect(fired('r3', 't3').trigger).toBe('Paiement Stripe')
+	})
+
+	it('derives the filter of the triggers from those names and filters on them', () => {
+		const rows = [
+			fired('r1', 't1'),
+			fired('r2', 't2'),
+			fired('r3', 't3'),
+			fired('r4', 't1'),
+			ROWS[0] as ReturnType<typeof buildRow>,
+		]
+
+		expect(distinctTriggers(rows)).toEqual([
+			'Paiement Stripe',
+			'Planificateur',
+			'Test manuel',
+			'Webhook',
+		])
+		expect(
+			filterRows(rows, { ...DEFAULT_FILTERS, trigger: 'Webhook' }, NOW).map(
+				(row) => row.runId,
+			),
+		).toEqual(['r1', 'r4'])
+	})
+
+	it('finds a run by the name of its trigger in the search', () => {
+		const rows = [fired('r1', 't1'), fired('r2', 't2')]
+
+		expect(
+			filterRows(rows, { ...DEFAULT_FILTERS, query: 'planif' }, NOW).map(
+				(row) => row.runId,
+			),
+		).toEqual(['r2'])
+	})
+})

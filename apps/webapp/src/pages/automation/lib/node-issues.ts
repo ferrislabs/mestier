@@ -9,11 +9,22 @@ import type {
 	EditorNode,
 } from '#/pages/automation/lib/editor-nodes'
 import { upstreamOf } from '#/pages/automation/lib/graph'
+import { scheduleTimeIssue } from '#/pages/automation/lib/schedule'
+import { scheduleOf, webhookOf } from '#/pages/automation/lib/trigger-events'
 import {
 	displayPath,
 	findConnectorReferences,
 	readPath,
 } from '#/pages/automation/lib/variables'
+import {
+	type ContractKey,
+	contractIssues,
+} from '#/pages/automation/lib/webhook-contract'
+import {
+	duplicatePathIssue,
+	type PathHolder,
+	webhookPathIssue,
+} from '#/pages/automation/lib/webhook-path'
 
 export interface NodeIssue {
 	parameter: string
@@ -38,6 +49,59 @@ function configEntries(
 	)
 }
 
+function pathHolders(nodes: readonly EditorNode[]): PathHolder[] {
+	return nodes.flatMap((candidate) => {
+		const webhook = candidate.data.trigger
+			? webhookOf(candidate.data.trigger)
+			: null
+		return webhook
+			? [
+					{
+						id: candidate.id,
+						label: candidate.data.label,
+						path: webhook.path,
+					},
+				]
+			: []
+	})
+}
+
+function keyLabel(key: ContractKey | undefined, index: number): string {
+	const name = key?.name.trim()
+	return name ? `Clé « ${name} »` : `Clé n° ${index + 1}`
+}
+
+function triggerIssues(
+	node: EditorNode,
+	nodes: readonly EditorNode[],
+): NodeIssue[] {
+	const trigger = node.data.trigger
+	if (!trigger) return []
+	const webhook = webhookOf(trigger)
+	if (webhook) {
+		const pathMessage =
+			webhookPathIssue(webhook.path) ??
+			duplicatePathIssue(node.id, webhook.path, pathHolders(nodes))
+		const contract = webhook.contract ?? []
+		return [
+			...(pathMessage ? [{ parameter: 'path', message: pathMessage }] : []),
+			...contractIssues(contract).flatMap((message, index) =>
+				message
+					? [
+							{
+								parameter: 'contract',
+								message: `${keyLabel(contract[index], index)} : ${message}`,
+							},
+						]
+					: [],
+			),
+		]
+	}
+	const schedule = scheduleOf(trigger)
+	const timeMessage = schedule ? scheduleTimeIssue(schedule.time) : null
+	return timeMessage ? [{ parameter: 'time', message: timeMessage }] : []
+}
+
 export function nodeIssues(
 	node: EditorNode,
 	nodes: readonly EditorNode[],
@@ -46,7 +110,7 @@ export function nodeIssues(
 	reads: ReadonlyMap<string, CollectionRead> = NO_READS,
 ): NodeIssue[] {
 	const connector = node.data.connector
-	if (!connector) return []
+	if (!connector) return triggerIssues(node, nodes)
 	const known = new Set(nodes.map((candidate) => candidate.id))
 	const upstream = new Set(upstreamOf(node.id, edges).map((link) => link.id))
 	const issues: NodeIssue[] = []

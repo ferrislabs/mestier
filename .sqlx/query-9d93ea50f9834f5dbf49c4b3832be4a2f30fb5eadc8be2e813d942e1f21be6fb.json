@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM automation.schedule_state\n            WHERE org_id = $1 AND workflow_id = $2 AND trigger_id <> ALL($3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9d93ea50f9834f5dbf49c4b3832be4a2f30fb5eadc8be2e813d942e1f21be6fb"
+}

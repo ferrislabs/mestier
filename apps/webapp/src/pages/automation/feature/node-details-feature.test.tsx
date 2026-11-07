@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Schemas } from '#/api/api.client'
@@ -215,6 +215,13 @@ function edge(source: string, target: string, handle?: string): EditorEdge {
 
 interface OpenOptions {
 	onUpdateConnector?: (patch: unknown) => void
+	onUpdateTriggerKind?: (kind: Schemas.TriggerKindDto) => void
+	onCreateCredential?: (
+		body: Schemas.CreateCredentialRequest,
+	) => Promise<Schemas.CredentialResponse & { secret: unknown }>
+	credentials?: Schemas.CredentialResponse[]
+	authSchemes?: Schemas.AuthSchemeResponse[]
+	events?: Schemas.EventDescriptorResponse[]
 	reads?: ReadonlyMap<string, CollectionRead>
 	issues?: readonly NodeIssue[]
 	runSteps?: Map<string, Schemas.RunStepResponse>
@@ -240,12 +247,13 @@ async function openNode(
 				organizationSlug="atelier-bois"
 				sources={{
 					...SOURCES,
+					...(handlers.events ? { events: handlers.events } : {}),
 					...(handlers.runSteps ? { runSteps: handlers.runSteps } : {}),
 					...(handlers.lastRun ? { lastRun: handlers.lastRun } : {}),
 				}}
 				collectionReads={handlers.reads ?? new Map()}
-				authSchemes={[]}
-				credentials={[]}
+				authSchemes={handlers.authSchemes ?? []}
+				credentials={handlers.credentials ?? []}
 				issues={handlers.issues ?? []}
 				dryRunSteps={handlers.dryRunSteps ?? null}
 				testRun={
@@ -254,9 +262,9 @@ async function openNode(
 						: handlers.testRun
 				}
 				onUpdateConnector={handlers.onUpdateConnector ?? vi.fn()}
-				onUpdateTriggerKind={vi.fn()}
+				onUpdateTriggerKind={handlers.onUpdateTriggerKind ?? vi.fn()}
 				onUpdateDetails={vi.fn()}
-				onCreateCredential={vi.fn()}
+				onCreateCredential={handlers.onCreateCredential ?? vi.fn()}
 				onEvaluateExpression={vi.fn()}
 				onClose={vi.fn()}
 				onNavigate={vi.fn()}
@@ -1343,3 +1351,448 @@ describe('NodeDetailsFeature — the dry run', () => {
 		})
 	})
 })
+
+function placedCredential(
+	id: string,
+	name: string,
+	kind: string,
+): Schemas.CredentialResponse {
+	return {
+		id,
+		name,
+		kind,
+		origin: 'supplied',
+		organization_id: 'org-1',
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+	}
+}
+
+const SCHEDULE_NODE = triggerNode(
+	{
+		id: 't1',
+		kind: {
+			Schedule: { frequency: 'Daily', time: '09:00', timezone: 'Europe/Paris' },
+		},
+	},
+	AT,
+	LOOKUP,
+)
+
+function webhookNode(
+	rule: Partial<
+		Extract<Schemas.TriggerKindDto, { Webhook: unknown }>['Webhook']
+	> = {},
+	errors: EditorNode['data']['errors'] = [],
+): EditorNode {
+	const node = triggerNode(
+		{
+			id: 't1',
+			kind: {
+				Webhook: {
+					method: 'POST',
+					path: 'paiement-recu',
+					credential_id: null,
+					contract: [
+						{ name: 'facture', kind: 'Text', required: true, example: 'FA-1' },
+						{
+							name: 'montant',
+							kind: 'Number',
+							required: false,
+							example: '2340',
+						},
+					],
+					on_invalid: 'Reject',
+					...rule,
+				},
+			},
+		},
+		AT,
+		LOOKUP,
+	)
+	return { ...node, data: { ...node.data, errors } }
+}
+
+describe('NodeDetailsFeature — a scheduler', () => {
+	it('reads the rule in the header, under the type badge', async () => {
+		const dialog = await openNode('t1', [SCHEDULE_NODE], [])
+
+		expect(within(dialog).getAllByText('Planificateur').length).toBeGreaterThan(
+			0,
+		)
+		const described = dialog.getAttribute('aria-describedby')
+		expect(document.getElementById(described ?? '')?.textContent).toBe(
+			'tous les jours à 9:00',
+		)
+	})
+
+	it('shows the fields of the schedule in the parameters column', async () => {
+		const dialog = await openNode('t1', [SCHEDULE_NODE], [])
+
+		const parameters = within(dialog).getByRole('region', {
+			name: 'Paramètres',
+		})
+		expect(
+			within(parameters).getByRole('combobox', { name: 'Fréquence' }),
+		).toBeDefined()
+		expect(
+			within(parameters).getByLabelText('Heure de déclenchement'),
+		).toBeDefined()
+		expect(
+			within(parameters).getByRole('combobox', { name: 'Fuseau horaire' }),
+		).toBeDefined()
+		expect(
+			within(parameters).queryByRole('combobox', { name: 'Jour' }),
+		).toBeNull()
+	})
+
+	it('explains in the input column what the workflow receives, key by key', async () => {
+		const dialog = await openNode('t1', [SCHEDULE_NODE], [])
+
+		const input = within(dialog).getByRole('region', { name: 'Entrée' })
+		for (const key of ['scheduled_for', 'horodatage', 'jour', 'fuseau'])
+			expect(within(input).getAllByText(key)).toHaveLength(2)
+		expect(
+			within(input).getByRole('tab', { name: 'Exemple de payload' }),
+		).toBeDefined()
+	})
+
+	it('sends the new rule to the graph, and the weekday along with a weekly frequency', async () => {
+		const user = userEvent.setup()
+		const onUpdateTriggerKind = vi.fn()
+		const dialog = await openNode('t1', [SCHEDULE_NODE], [], {
+			onUpdateTriggerKind,
+		})
+
+		await user.click(
+			within(dialog).getByRole('combobox', { name: 'Fréquence' }),
+		)
+		await user.click(
+			await screen.findByRole('option', { name: 'Toutes les semaines' }),
+		)
+
+		expect(onUpdateTriggerKind).toHaveBeenCalledWith({
+			Schedule: {
+				frequency: 'Weekly',
+				time: '09:00',
+				timezone: 'Europe/Paris',
+				weekday: 'Monday',
+			},
+		})
+	})
+
+	it('shows the issue of the client and the error of the server on the field they name', async () => {
+		const node: EditorNode = {
+			...SCHEDULE_NODE,
+			data: {
+				...SCHEDULE_NODE.data,
+				errors: [
+					{
+						field: 'timezone',
+						message: 'trigger `t1` has the unknown timezone `Mars/Olympus`',
+					},
+				],
+			},
+		}
+
+		const dialog = await openNode('t1', [node], [], {
+			issues: [
+				{
+					parameter: 'time',
+					message: 'Indiquez une heure au format HH:MM, par exemple 09:00.',
+				},
+			],
+		})
+
+		const parameters = within(dialog).getByRole('region', {
+			name: 'Paramètres',
+		})
+		expect(
+			within(parameters)
+				.getAllByRole('alert')
+				.map((alert) => alert.textContent),
+		).toEqual([
+			'Indiquez une heure au format HH:MM, par exemple 09:00.',
+			'Ce fuseau horaire n’existe pas.',
+		])
+	})
+})
+
+describe('NodeDetailsFeature — a webhook', () => {
+	it('shows the request it expects: the method and the URL, the contract and an example', async () => {
+		const user = userEvent.setup()
+		const dialog = await openNode('t1', [webhookNode()], [])
+
+		const input = within(dialog).getByRole('region', { name: 'Entrée' })
+		expect(within(input).getByText('Requête attendue')).toBeDefined()
+		expect(
+			within(input).getByText(
+				(_, element) =>
+					element?.tagName === 'P' &&
+					element.textContent ===
+						`POST ${window.location.origin}/webhooks/paiement-recu`,
+			),
+		).toBeDefined()
+		expect(within(input).getByText(/PaiementRecuBody/)).toBeDefined()
+		expect(within(input).getByText(/montant\?/)).toBeDefined()
+
+		await user.click(
+			within(input).getByRole('tab', { name: 'Exemple de requête' }),
+		)
+		expect(within(input).getByText(/FA-1/)).toBeDefined()
+		expect(within(input).getByText(/2340/)).toBeDefined()
+	})
+
+	it('follows the method, the path and the contract that are edited', async () => {
+		const dialog = await openNode(
+			't1',
+			[
+				webhookNode({
+					method: 'PUT',
+					path: 'stripe/retour',
+					contract: [
+						{ name: 'ref', kind: 'Boolean', required: true, example: '' },
+					],
+				}),
+			],
+			[],
+		)
+
+		const input = within(dialog).getByRole('region', { name: 'Entrée' })
+		expect(
+			within(input).getByText(
+				(_, element) =>
+					element?.tagName === 'P' &&
+					element.textContent ===
+						`PUT ${window.location.origin}/webhooks/stripe/retour`,
+			),
+		).toBeDefined()
+		expect(within(input).getByText(/StripeRetourBody/)).toBeDefined()
+		expect(input.textContent).toContain('ref: boolean')
+	})
+
+	it('shows the fields of the webhook in the parameters column', async () => {
+		const dialog = await openNode('t1', [webhookNode()], [])
+
+		const parameters = within(dialog).getByRole('region', {
+			name: 'Paramètres',
+		})
+		expect(
+			within(parameters).getByRole('combobox', { name: 'Méthode' }),
+		).toBeDefined()
+		expect(
+			(
+				within(parameters).getByPlaceholderText(
+					'stripe/paiement-recu',
+				) as HTMLInputElement
+			).value,
+		).toBe('paiement-recu')
+		expect(
+			within(parameters).getByRole('combobox', { name: 'Identification' }),
+		).toBeDefined()
+		expect(within(parameters).getByLabelText('Clé facture')).toBeDefined()
+		expect(
+			within(parameters).getByRole('combobox', {
+				name: 'Requête non conforme au contrat',
+			}),
+		).toBeDefined()
+	})
+
+	it('offers only the identifications a webhook can use', async () => {
+		const user = userEvent.setup()
+		const dialog = await openNode('t1', [webhookNode()], [], {
+			credentials: [
+				placedCredential('c1', 'Clé Stripe', 'http_header'),
+				placedCredential('c2', 'Compte basic', 'http_basic'),
+				placedCredential('jeton', 'Jeton', 'bearer_token'),
+				placedCredential('c4', 'Odoo prod', 'odoo_api'),
+			],
+		})
+
+		await user.click(
+			within(dialog).getByRole('combobox', { name: 'Identification' }),
+		)
+
+		expect(
+			screen.getAllByRole('option').map((option) => option.textContent),
+		).toEqual(['Aucune identification', 'Clé Stripe', 'Compte basic', 'Jeton'])
+		expect(
+			within(dialog).getByText(
+				'Types acceptés : Basic Auth, Bearer, Clé d’API dans un en-tête.',
+			),
+		).toBeDefined()
+	})
+
+	it('saves the chosen identification on the trigger', async () => {
+		const user = userEvent.setup()
+		const onUpdateTriggerKind = vi.fn()
+		const dialog = await openNode('t1', [webhookNode()], [], {
+			onUpdateTriggerKind,
+			credentials: [placedCredential('c1', 'Clé Stripe', 'http_header')],
+		})
+
+		await user.click(
+			within(dialog).getByRole('combobox', { name: 'Identification' }),
+		)
+		await user.click(await screen.findByRole('option', { name: 'Clé Stripe' }))
+
+		expect(onUpdateTriggerKind).toHaveBeenCalledWith({
+			Webhook: expect.objectContaining({
+				credential_id: 'c1',
+				path: 'paiement-recu',
+			}),
+		})
+	})
+
+	it('warns under the selector while no identification is chosen, and no longer once there is one', async () => {
+		const warning =
+			'Sans identification, toute personne qui connaît cette URL peut déclencher ce workflow.'
+		const credentials = [placedCredential('c1', 'Clé Stripe', 'http_header')]
+		const { unmount } = await renderOpened(webhookNode(), { credentials })
+		expect(screen.getByText(warning)).toBeDefined()
+		unmount()
+
+		await renderOpened(webhookNode({ credential_id: 'c1' }), { credentials })
+		expect(screen.queryByText(warning)).toBeNull()
+	})
+
+	it('shows the issues of the path next to the URL', async () => {
+		const dialog = await openNode('t1', [webhookNode({ path: '' })], [], {
+			issues: [
+				{
+					parameter: 'path',
+					message: 'Indiquez la fin de l’URL après /webhooks/.',
+				},
+			],
+		})
+
+		const parameters = within(dialog).getByRole('region', {
+			name: 'Paramètres',
+		})
+		expect(within(parameters).getByRole('alert').textContent).toBe(
+			'Indiquez la fin de l’URL après /webhooks/.',
+		)
+	})
+
+	it('puts what the server says on the field it names: the path, the identification, a key', async () => {
+		const node = webhookNode({ credential_id: 'c9' }, [
+			{
+				field: 'path',
+				message:
+					'trigger `t1` uses a webhook path another workflow already holds',
+			},
+			{
+				field: 'credential',
+				message: 'trigger `t1` references unknown credential `c9`',
+			},
+			{
+				field: 'contract.facture',
+				message: 'trigger `t1` names the contract key `facture` more than once',
+			},
+			{ field: 'priority', message: 'quelque chose d’autre' },
+		])
+
+		const dialog = await openNode('t1', [node], [])
+
+		const parameters = within(dialog).getByRole('region', {
+			name: 'Paramètres',
+		})
+		const alerts = within(parameters)
+			.getAllByRole('alert')
+			.map((alert) => alert.textContent)
+		expect(alerts).toContain('quelque chose d’autre')
+		expect(alerts).toContain('Ce chemin est déjà utilisé.')
+		expect(alerts).toContain('Cette identification n’existe plus.')
+		expect(alerts).toContain('Clé en double à ce niveau.')
+	})
+
+	it('creates an identification of a type a webhook accepts, and selects it', async () => {
+		const user = userEvent.setup()
+		const onUpdateTriggerKind = vi.fn()
+		const onCreateCredential = vi.fn().mockResolvedValue({
+			...placedCredential('neuve', 'Clé du webhook', 'http_header'),
+			secret: null,
+		})
+		const dialog = await openNode('t1', [webhookNode()], [], {
+			onUpdateTriggerKind,
+			onCreateCredential,
+			authSchemes: [
+				{
+					kind: 'http_header',
+					label: 'HTTP header',
+					fields: [
+						{
+							expression: false,
+							kind: 'Text',
+							label: 'header_name',
+							name: 'header_name',
+							required: true,
+							secret: false,
+							visible_when: null,
+						},
+						{
+							expression: false,
+							kind: 'Text',
+							label: 'header_value',
+							name: 'header_value',
+							required: true,
+							secret: true,
+							visible_when: null,
+						},
+					],
+				},
+				{ kind: 'odoo_api', label: 'Odoo', fields: [] },
+			],
+		})
+
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Créer une identification' }),
+		)
+		await user.click(within(dialog).getByRole('combobox', { name: 'Type' }))
+		expect(
+			screen.getAllByRole('option').map((option) => option.textContent),
+		).toEqual(['Clé d’API dans un en-tête'])
+		await user.click(screen.getByRole('option'))
+		await user.type(within(dialog).getByLabelText('Nom'), 'Clé du webhook')
+		await user.type(within(dialog).getByLabelText(/Valeur/), 'secret')
+		await user.click(within(dialog).getByRole('button', { name: 'Créer' }))
+
+		await waitFor(() => {
+			expect(onUpdateTriggerKind).toHaveBeenCalledWith({
+				Webhook: expect.objectContaining({ credential_id: 'neuve' }),
+			})
+		})
+		expect(onCreateCredential).toHaveBeenCalledWith(
+			expect.objectContaining({ kind: 'http_header', name: 'Clé du webhook' }),
+		)
+	})
+})
+
+async function renderOpened(node: EditorNode, handlers: OpenOptions = {}) {
+	const view = await renderWithRouter(
+		<TooltipProvider>
+			<NodeDetailsFeature
+				node={node}
+				nodes={[node]}
+				edges={[]}
+				organizationSlug="atelier-bois"
+				sources={SOURCES}
+				collectionReads={new Map()}
+				authSchemes={handlers.authSchemes ?? []}
+				credentials={handlers.credentials ?? []}
+				issues={handlers.issues ?? []}
+				dryRunSteps={null}
+				testRun={{ running: false, start: vi.fn() }}
+				onUpdateConnector={vi.fn()}
+				onUpdateTriggerKind={handlers.onUpdateTriggerKind ?? vi.fn()}
+				onUpdateDetails={vi.fn()}
+				onCreateCredential={handlers.onCreateCredential ?? vi.fn()}
+				onEvaluateExpression={vi.fn()}
+				onClose={vi.fn()}
+				onNavigate={vi.fn()}
+			/>
+		</TooltipProvider>,
+	)
+	await screen.findByRole('dialog')
+	return view
+}

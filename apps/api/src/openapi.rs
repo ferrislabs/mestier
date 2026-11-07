@@ -73,6 +73,7 @@ impl Modify for SecurityAddon {
         automation::workflow::delete::handler,
         automation::workflow::save_version::handler,
         automation::workflow::dry_run::handler,
+        automation::webhook::receive,
         automation::run::list::handler,
         automation::run::get_one::handler,
         automation::run::replay::handler,
@@ -413,6 +414,14 @@ impl Modify for SecurityAddon {
         automation::response::BranchDto,
         automation::response::PlacedTriggerDto,
         automation::response::TriggerKindDto,
+        automation::webhook::WebhookAccepted,
+        automation::webhook::WebhookBodyInvalid,
+        automation::response::WebhookMethodDto,
+        automation::response::ContractKeyDto,
+        automation::response::ContractKindDto,
+        automation::response::OnInvalidDto,
+        automation::response::FrequencyDto,
+        automation::response::WeekdayDto,
         automation::response::GraphErrorResponse,
         automation::response::RunResponse,
         automation::response::RunDetailResponse,
@@ -757,6 +766,85 @@ mod tests {
             .collect();
         properties.sort_unstable();
         assert_eq!(properties, ["collection_id", "operation_id"]);
+    }
+
+    #[test]
+    fn trigger_kinds_describe_the_webhook_and_the_schedule_in_the_document() {
+        let document = serde_json::to_value(ApiDoc::openapi()).expect("the document serializes");
+        let schemas = &document["components"]["schemas"];
+
+        let kind = serde_json::to_string(&schemas["TriggerKindDto"]).unwrap();
+        for variant in ["Manual", "Events", "Webhook", "Schedule"] {
+            assert!(
+                kind.contains(&format!("\"{variant}\"")),
+                "{variant}: {kind}"
+            );
+        }
+
+        let webhook = &schemas["TriggerKindDto"]["oneOf"]
+            .as_array()
+            .expect("a tagged enum is a oneOf")
+            .iter()
+            .find_map(|variant| variant["properties"].get("Webhook"))
+            .expect("the webhook variant is described")["properties"];
+        for field in ["method", "path", "credential_id", "contract", "on_invalid"] {
+            assert!(webhook[field].is_object(), "webhook.{field}: {webhook}");
+        }
+        let schedule = &schemas["TriggerKindDto"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find_map(|variant| variant["properties"].get("Schedule"))
+            .expect("the schedule variant is described")["properties"];
+        for field in ["frequency", "time", "weekday", "timezone"] {
+            assert!(schedule[field].is_object(), "schedule.{field}: {schedule}");
+        }
+
+        let methods: Vec<&str> = schemas["WebhookMethodDto"]["enum"]
+            .as_array()
+            .expect("the methods are an enum")
+            .iter()
+            .map(|method| method.as_str().unwrap())
+            .collect();
+        assert_eq!(methods, ["GET", "POST", "PUT", "PATCH", "DELETE"]);
+        for schema in [
+            "ContractKeyDto",
+            "ContractKindDto",
+            "OnInvalidDto",
+            "FrequencyDto",
+            "WeekdayDto",
+        ] {
+            assert!(schemas[schema].is_object(), "{schema} is missing");
+        }
+        let required: Vec<&str> = schemas["ContractKeyDto"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|name| name.as_str().unwrap())
+            .collect();
+        assert!(required.contains(&"name") && required.contains(&"kind"));
+        assert!(!required.contains(&"example"));
+    }
+
+    #[test]
+    fn the_public_webhook_route_reaches_the_document_outside_the_authenticated_prefix() {
+        let document = serde_json::to_value(ApiDoc::openapi()).expect("the document serializes");
+
+        let operation = &document["paths"]["/webhooks/{path}"]["post"];
+
+        assert_eq!(operation["operationId"], "receiveWebhook");
+        assert!(
+            operation.get("security").is_none()
+                || operation["security"] == serde_json::json!([])
+                || operation["security"] == serde_json::json!([{}]),
+            "{operation}"
+        );
+        for status in ["202", "400", "401", "404", "408", "413", "415", "429"] {
+            assert!(operation["responses"][status].is_object(), "{status}");
+        }
+        let schemas = &document["components"]["schemas"];
+        assert!(schemas["WebhookAccepted"]["properties"]["run_id"].is_object());
+        assert!(schemas["WebhookBodyInvalid"]["properties"]["keys"].is_object());
     }
 
     #[test]

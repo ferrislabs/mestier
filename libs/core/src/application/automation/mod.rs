@@ -13,6 +13,9 @@ mod folder;
 pub mod retention;
 pub mod run;
 mod tests;
+pub mod trigger;
+#[cfg(test)]
+pub(crate) mod trigger_fixtures;
 mod workflow;
 
 impl MestierUseCase {

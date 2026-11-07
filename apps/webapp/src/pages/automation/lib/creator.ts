@@ -5,9 +5,13 @@ import {
 	type CategoryId,
 	categoryCopy,
 	describeConnector,
+	TRIGGER_COPY_KINDS,
+	type TriggerCopyKind,
 	triggerCopy,
 } from '#/pages/automation/lib/connector-copy'
+import { defaultSchedule } from '#/pages/automation/lib/schedule'
 import { normalizeText } from '#/pages/automation/lib/text'
+import { defaultWebhook } from '#/pages/automation/lib/webhook-contract'
 
 export type CreatorSource =
 	| { type: 'connector'; descriptor: Schemas.ConnectorDescriptorResponse }
@@ -66,27 +70,26 @@ function byOrderThenLabel(a: RankedKind, b: RankedKind): number {
 	)
 }
 
+const NEW_TRIGGER_KINDS: Record<TriggerCopyKind, () => Schemas.TriggerKindDto> =
+	{
+		schedule: () => ({ Schedule: defaultSchedule() }),
+		events: () => ({ Events: [] }),
+		webhook: () => ({ Webhook: defaultWebhook() }),
+		manual: () => 'Manual',
+	}
+
 function triggerKinds(): CreatorKind[] {
-	const events = triggerCopy('events')
-	const manual = triggerCopy('manual')
-	return [
-		{
-			id: 'trigger:events',
-			label: events.label,
-			description: events.description,
-			icon: events.icon,
-			hue: events.hue,
-			source: { type: 'trigger', kind: { Events: [] } },
-		},
-		{
-			id: 'trigger:manual',
-			label: manual.label,
-			description: manual.description,
-			icon: manual.icon,
-			hue: manual.hue,
-			source: { type: 'trigger', kind: 'Manual' },
-		},
-	]
+	return TRIGGER_COPY_KINDS.map((kind) => {
+		const copy = triggerCopy(kind)
+		return {
+			id: `trigger:${kind}`,
+			label: copy.label,
+			description: copy.description,
+			icon: copy.icon,
+			hue: copy.hue,
+			source: { type: 'trigger', kind: NEW_TRIGGER_KINDS[kind]() },
+		}
+	})
 }
 
 export function triggersCategory(): CreatorCategory {

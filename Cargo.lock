@@ -2977,6 +2977,7 @@ dependencies = [
  "http 1.4.0",
  "jsonwebtoken",
  "mestier-core",
+ "rate-limit",
  "reqwest",
  "serde",
  "serde_json",

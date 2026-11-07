@@ -36,6 +36,104 @@ interface CreateState {
 	result: CreatedCredential | null
 }
 
+export interface CredentialCreation {
+	state: CreateState | null
+	pending: boolean
+	error: string | null
+	start: (purpose: CredentialCreationPurpose) => void
+	submit: (body: Schemas.CreateCredentialRequest, description?: string) => void
+	done: () => void
+	cancel: () => void
+}
+
+export function useCredentialCreation({
+	onCreateCredential,
+	onSelect,
+}: {
+	onCreateCredential: (
+		body: Schemas.CreateCredentialRequest,
+	) => Promise<CreatedCredential>
+	onSelect: (purpose: CredentialCreationPurpose, id: string) => void
+}): CredentialCreation {
+	const [state, setState] = useState<CreateState | null>(null)
+	const [pending, setPending] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const { patch } = useCredentialMetaActions()
+
+	async function submitAsync(
+		body: Schemas.CreateCredentialRequest,
+		description?: string,
+	) {
+		if (!state) return
+		setPending(true)
+		setError(null)
+		try {
+			const created = await onCreateCredential(body)
+			const note = description?.trim()
+			if (note) patch(created.id, { description: note })
+			if (created.origin === 'generated') {
+				setState({ purpose: state.purpose, result: created })
+			} else {
+				onSelect(state.purpose, created.id)
+				setState(null)
+			}
+		} catch (failure) {
+			setError(
+				failure instanceof Error ? failure.message : 'La création a échoué.',
+			)
+		} finally {
+			setPending(false)
+		}
+	}
+
+	return {
+		state,
+		pending,
+		error,
+		start: (purpose) => {
+			setError(null)
+			setState({ purpose, result: null })
+		},
+		submit: (body, description) => void submitAsync(body, description),
+		done: () => {
+			if (state?.result) onSelect(state.purpose, state.result.id)
+			setState(null)
+		},
+		cancel: () => {
+			setState(null)
+			setError(null)
+		},
+	}
+}
+
+export function CredentialCreationPanel({
+	creation,
+	authSchemes,
+}: {
+	creation: CredentialCreation
+	authSchemes: Schemas.AuthSchemeResponse[]
+}) {
+	const { state } = creation
+	if (!state) return null
+	return state.result ? (
+		<CredentialSecretReveal
+			secret={String(state.result.secret)}
+			onDone={creation.done}
+		/>
+	) : (
+		<InlineCredentialForm
+			authSchemes={authSchemes}
+			lockOrigin={state.purpose === 'signing' ? 'generated' : undefined}
+			isPending={creation.pending}
+			error={creation.error}
+			onSubmit={(body, description?: string) =>
+				creation.submit(body, description)
+			}
+			onCancel={creation.cancel}
+		/>
+	)
+}
+
 export interface ConnectorParametersFeatureProps {
 	descriptor: Schemas.ConnectorDescriptorResponse
 	config: Record<string, unknown>
@@ -120,16 +218,12 @@ export function ConnectorParametersFeature({
 	onCreateCredential,
 	onEvaluateExpression,
 }: ConnectorParametersFeatureProps) {
-	const [createState, setCreateState] = useState<CreateState | null>(null)
-	const [createPending, setCreatePending] = useState(false)
-	const [createError, setCreateError] = useState<string | null>(null)
 	const configRef = useRef(config)
 	configRef.current = config
 	const changeRef = useRef(onConfigChange)
 	changeRef.current = onConfigChange
 	const credentialMeta = useCredentialMeta().data
-	const credentialMetaActions = useCredentialMetaActions()
-	const { rememberKinds } = credentialMetaActions
+	const { rememberKinds } = useCredentialMetaActions()
 
 	useEffect(() => {
 		rememberKinds(credentials)
@@ -143,69 +237,20 @@ export function ConnectorParametersFeature({
 	const statusOf = (credentialId: string): CredentialStatus =>
 		credentialMeta[credentialId]?.status ?? 'valid'
 
-	function applySelection(purpose: CredentialCreationPurpose, id: string) {
-		if (purpose === 'typed') {
-			onCredentialChange(id)
-			return
-		}
-		onConfigChange(withField(config, 'signing_credential_id', id))
-	}
-
-	async function handleCreateSubmit(
-		body: Schemas.CreateCredentialRequest,
-		description?: string,
-	) {
-		if (!createState) return
-		setCreatePending(true)
-		setCreateError(null)
-		try {
-			const created = await onCreateCredential(body)
-			const note = description?.trim()
-			if (note) credentialMetaActions.patch(created.id, { description: note })
-			if (created.origin === 'generated') {
-				setCreateState({ purpose: createState.purpose, result: created })
-			} else {
-				applySelection(createState.purpose, created.id)
-				setCreateState(null)
+	const creation = useCredentialCreation({
+		onCreateCredential,
+		onSelect: (purpose, id) => {
+			if (purpose === 'typed') {
+				onCredentialChange(id)
+				return
 			}
-		} catch (error) {
-			setCreateError(
-				error instanceof Error ? error.message : 'La création a échoué.',
-			)
-		} finally {
-			setCreatePending(false)
-		}
-	}
+			onConfigChange(withField(config, 'signing_credential_id', id))
+		},
+	})
 
-	function handleCreateDone() {
-		if (createState?.result) {
-			applySelection(createState.purpose, createState.result.id)
-		}
-		setCreateState(null)
-	}
-
-	function handleCreateCancel() {
-		setCreateState(null)
-		setCreateError(null)
-	}
-
-	if (createState) {
-		return createState.result ? (
-			<CredentialSecretReveal
-				secret={String(createState.result.secret)}
-				onDone={handleCreateDone}
-			/>
-		) : (
-			<InlineCredentialForm
-				authSchemes={authSchemes}
-				lockOrigin={createState.purpose === 'signing' ? 'generated' : undefined}
-				isPending={createPending}
-				error={createError}
-				onSubmit={(body, description?: string) =>
-					void handleCreateSubmit(body, description)
-				}
-				onCancel={handleCreateCancel}
-			/>
+	if (creation.state) {
+		return (
+			<CredentialCreationPanel creation={creation} authSchemes={authSchemes} />
 		)
 	}
 
@@ -247,10 +292,7 @@ export function ConnectorParametersFeature({
 				}}
 				onConfigChange={onConfigChange}
 				onCredentialChange={onCredentialChange}
-				onRequestCreateCredential={(purpose) => {
-					setCreateError(null)
-					setCreateState({ purpose, result: null })
-				}}
+				onRequestCreateCredential={creation.start}
 			/>
 		</>
 	)

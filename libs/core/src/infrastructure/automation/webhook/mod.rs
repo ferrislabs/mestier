@@ -5,6 +5,7 @@
 // are generic building blocks #202's `http.request` connector reuses as-is,
 // unrelated to the delivery pipeline that owned this directory before.
 pub mod address_policy;
+pub mod inbound;
 pub mod resolver;
 pub mod secret;
 pub mod signature;

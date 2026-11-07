@@ -330,6 +330,95 @@ describe('ExecutionsLogFeature', () => {
 		])
 	})
 
+	describe('the webhook and the scheduler', () => {
+		const GRAPH = {
+			triggers: [
+				{
+					id: 't1',
+					kind: { Webhook: { method: 'POST', path: 'paiement-recu' } },
+				},
+				{
+					id: 't2',
+					kind: { Schedule: { frequency: 'Daily', time: '09:00' } },
+				},
+				{
+					id: 't3',
+					name: 'Paiement Stripe',
+					kind: { Webhook: { method: 'POST', path: 'stripe' } },
+				},
+			],
+			connectors: [],
+			edges: [],
+		}
+		const RUNS = [
+			run({ id: 'hook-run', number: 9, trigger_id: 't1' }),
+			run({ id: 'cron-run', number: 8, trigger_id: 't2' }),
+			run({ id: 'stripe-run', number: 7, trigger_id: 't3' }),
+			run({ id: 'manual-run', number: 6 }),
+		]
+
+		function configureGraph(api: FakeApi) {
+			api.mockGet(RUN_PATH, () => ({
+				data: {
+					...run({ workflow_version_id: 'v1v1v1v1' }),
+					graph: GRAPH,
+					steps: [],
+				},
+			}))
+		}
+
+		it('names a run after the trigger node that started it, with the default names of the two types', async () => {
+			render(vi.fn(), { runs: RUNS, configure: configureGraph })
+
+			expect(await screen.findByText('Webhook')).toBeDefined()
+			expect(screen.getByText('Planificateur')).toBeDefined()
+			expect(screen.getByText('Paiement Stripe')).toBeDefined()
+			expect(screen.getByText('Test manuel')).toBeDefined()
+			expect(screen.queryByRole('cell', { name: 'Déclencheur' })).toBeNull()
+		})
+
+		it('asks for the graph of a version once, and not for the runs a label does not need it for', async () => {
+			const { api } = render(vi.fn(), { runs: RUNS, configure: configureGraph })
+			await screen.findByText('Webhook')
+
+			expect(api.calls.filter((call) => call.path === RUN_PATH)).toHaveLength(1)
+		})
+
+		it('derives the trigger filter from these names', async () => {
+			const user = userEvent.setup()
+			render(vi.fn(), { runs: RUNS, configure: configureGraph })
+			await screen.findByText('Webhook')
+
+			await user.click(
+				screen.getByRole('combobox', { name: 'Filtrer par déclencheur' }),
+			)
+
+			const listbox = await screen.findByRole('listbox')
+			expect(
+				within(listbox)
+					.getAllByRole('option')
+					.map((option) => option.textContent),
+			).toEqual([
+				'Tous les déclencheurs',
+				'Paiement Stripe',
+				'Planificateur',
+				'Test manuel',
+				'Webhook',
+			])
+		})
+
+		it('says « Déclencheur » until the graph of the version is known', async () => {
+			render(vi.fn(), {
+				runs: [run({ id: 'hook-run', number: 9, trigger_id: 't1' })],
+				configure: (api) => api.mockGet(RUN_PATH, () => new Promise(() => {})),
+			})
+
+			expect(
+				await screen.findByRole('cell', { name: 'Déclencheur' }),
+			).toBeDefined()
+		})
+	})
+
 	describe('the node that failed', () => {
 		const GRAPH = {
 			triggers: [],

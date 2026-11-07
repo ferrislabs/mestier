@@ -75,4 +75,41 @@ describe('runNodeAppearance', () => {
 			}),
 		).toEqual(triggerAppearance(false))
 	})
+
+	it('draws the webhook and the scheduler with the icon and hue of their own, not those of the event', () => {
+		const webhook = runNodeAppearance({
+			kind: 'trigger',
+			trigger: {
+				id: 't1',
+				kind: { Webhook: { method: 'POST', path: 'paiement-recu' } },
+			},
+			family: undefined,
+			connector: null,
+		})
+		const schedule = runNodeAppearance({
+			kind: 'trigger',
+			trigger: {
+				id: 't2',
+				kind: { Schedule: { frequency: 'Daily', time: '09:00' } },
+			},
+			family: undefined,
+			connector: null,
+		})
+
+		expect(webhook).toEqual(triggerAppearance('webhook'))
+		expect(webhook.hue).toBe(335)
+		expect(schedule).toEqual(triggerAppearance('schedule'))
+		expect(schedule.hue).toBe(255)
+	})
+
+	it('falls back on the event look for a trigger node whose trigger is gone', () => {
+		expect(
+			runNodeAppearance({
+				kind: 'trigger',
+				trigger: null,
+				family: undefined,
+				connector: null,
+			}),
+		).toEqual(triggerAppearance(false))
+	})
 })

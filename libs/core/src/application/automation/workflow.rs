@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use common::{CoreError, OrganizationId, generate_uuid_v7};
 use mestier_macros::transactional;
 use uuid::Uuid;
@@ -6,18 +6,22 @@ use uuid::Uuid;
 use crate::{
     application::MestierUseCase,
     application::automation::folder::ensure_folder_exists,
+    application::organization::resolve_timezone,
     domain::automation::{
         catalogue::event_catalogue,
         connector::connector_catalogue,
         ports::{
-            CollectionRepository, CredentialRepository, SubscriptionRepository, WorkflowRepository,
+            CollectionRepository, CredentialRepository, ScheduleRepository, SubscriptionRepository,
+            WebhookRouteRepository, WorkflowRepository,
         },
         workflow::{
-            ArchiveScope, CreateWorkflowCommand, GraphError, SaveWorkflowVersionCommand,
+            ArchiveScope, CreateWorkflowCommand, Graph, GraphError, MAX_SCHEDULES_PER_ORGANIZATION,
+            MAX_WEBHOOK_ROUTES_PER_ORGANIZATION, SaveWorkflowVersionCommand, TriggerKind,
             UpdateWorkflowCommand, Workflow, WorkflowDescription, WorkflowInitialState,
-            WorkflowName, WorkflowVersion, validate_graph,
+            WorkflowName, WorkflowRefusal, WorkflowVersion, schedule_seeds, validate_graph,
         },
     },
+    domain::organization::ports::OrganizationRepository,
 };
 
 /// One line per [`GraphError`], joined for [`CoreError::Conflict`]. The
@@ -31,6 +35,63 @@ fn format_graph_errors(errors: &[GraphError]) -> String {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+async fn derive_triggers(
+    routes: &mut impl WebhookRouteRepository,
+    schedules: &mut impl ScheduleRepository,
+    organizations: &mut impl OrganizationRepository,
+    org_id: OrganizationId,
+    workflow_id: Uuid,
+    graph: &Graph,
+    now: DateTime<Utc>,
+) -> Result<(), CoreError> {
+    let webhooks = graph
+        .triggers
+        .iter()
+        .filter(|trigger| matches!(trigger.kind, TriggerKind::Webhook { .. }))
+        .count();
+    if webhooks > 0 {
+        let held_elsewhere = routes.count_other_routes(org_id, workflow_id).await?;
+        if usize::try_from(held_elsewhere).unwrap_or(usize::MAX) + webhooks
+            > MAX_WEBHOOK_ROUTES_PER_ORGANIZATION
+        {
+            return Err(WorkflowRefusal::TooManyWebhookRoutes.into());
+        }
+    }
+    routes
+        .replace_workflow_routes(org_id, workflow_id, &graph.triggers)
+        .await?;
+
+    let zone = organization_zone_for(organizations, org_id, graph).await?;
+    let seeds = schedule_seeds(&graph.triggers, zone, now);
+    if !seeds.is_empty() {
+        let held_elsewhere = schedules.count_other_schedules(org_id, workflow_id).await?;
+        if usize::try_from(held_elsewhere).unwrap_or(usize::MAX) + seeds.len()
+            > MAX_SCHEDULES_PER_ORGANIZATION
+        {
+            return Err(WorkflowRefusal::TooManySchedules.into());
+        }
+    }
+    schedules
+        .replace_workflow_schedules(org_id, workflow_id, &seeds)
+        .await
+}
+
+async fn organization_zone_for(
+    organizations: &mut impl OrganizationRepository,
+    org_id: OrganizationId,
+    graph: &Graph,
+) -> Result<chrono_tz::Tz, CoreError> {
+    let schedules_something = graph
+        .triggers
+        .iter()
+        .any(|trigger| matches!(trigger.kind, TriggerKind::Schedule { .. }));
+    if schedules_something {
+        resolve_timezone(organizations, org_id).await
+    } else {
+        Ok(chrono_tz::UTC)
+    }
 }
 
 impl MestierUseCase {
@@ -108,13 +169,16 @@ impl MestierUseCase {
         repository.list_by_organization(org_id, scope).await
     }
 
-    #[transactional(workflow, workflow_folder)]
+    #[transactional(workflow, workflow_folder, webhook_route, schedule, organization)]
     pub async fn update_workflow(
         &self,
         command: UpdateWorkflowCommand,
     ) -> Result<Workflow, CoreError> {
         let mut repository = workflow_repository;
         let mut folders = workflow_folder_repository;
+        let mut routes = webhook_route_repository;
+        let mut schedules = schedule_repository;
+        let mut organizations = organization_repository;
         let existing = repository
             .find_by_id_for_update(command.org_id, command.id)
             .await?
@@ -124,9 +188,37 @@ impl MestierUseCase {
         }
 
         let org_id = command.org_id;
-        let updated = existing.apply(command, Utc::now())?;
+        let was_enabled = existing.enabled;
+        let was_archived = existing.is_archived();
+        let now = Utc::now();
+        let updated = existing.apply(command, now)?;
+        let saved = repository.update(org_id, &updated).await?;
 
-        repository.update(org_id, &updated).await
+        if !was_archived && saved.is_archived() {
+            routes
+                .replace_workflow_routes(org_id, saved.id, &[])
+                .await?;
+            schedules
+                .replace_workflow_schedules(org_id, saved.id, &[])
+                .await?;
+        } else if !was_enabled
+            && saved.enabled
+            && let Some(version_id) = saved.current_version_id
+            && let Some(version) = repository.find_version_by_id(org_id, version_id).await?
+        {
+            derive_triggers(
+                &mut routes,
+                &mut schedules,
+                &mut organizations,
+                org_id,
+                saved.id,
+                &version.graph,
+                now,
+            )
+            .await?;
+        }
+
+        Ok(saved)
     }
 
     #[transactional(workflow)]
@@ -146,7 +238,15 @@ impl MestierUseCase {
     /// `current_version_id` to it, all inside one transaction (#199). A run
     /// (#200) reading the previous version therefore never observes a
     /// half-written one.
-    #[transactional(workflow, credential, subscription, collection)]
+    #[transactional(
+        workflow,
+        credential,
+        subscription,
+        collection,
+        webhook_route,
+        schedule,
+        organization
+    )]
     pub async fn save_workflow_version(
         &self,
         command: SaveWorkflowVersionCommand,
@@ -155,6 +255,9 @@ impl MestierUseCase {
         let mut credentials = credential_repository;
         let mut subscriptions = subscription_repository;
         let mut collections = collection_repository;
+        let mut routes = webhook_route_repository;
+        let mut schedules = schedule_repository;
+        let mut organizations = organization_repository;
 
         workflows
             .find_by_id(command.org_id, command.workflow_id)
@@ -194,6 +297,17 @@ impl MestierUseCase {
                 &command.graph.triggers,
             )
             .await?;
+
+        derive_triggers(
+            &mut routes,
+            &mut schedules,
+            &mut organizations,
+            command.org_id,
+            command.workflow_id,
+            &command.graph,
+            Utc::now(),
+        )
+        .await?;
 
         if let Some(layout) = command.layout.as_ref() {
             workflows

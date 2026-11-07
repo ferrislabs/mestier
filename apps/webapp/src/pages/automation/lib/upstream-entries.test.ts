@@ -1,4 +1,10 @@
-import { GitBranch, Globe, MousePointerClick } from 'lucide-react'
+import {
+	CalendarClock,
+	GitBranch,
+	Globe,
+	MousePointerClick,
+	Webhook,
+} from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
 import {
@@ -179,6 +185,82 @@ describe('upstreamEntries — the trigger entry', () => {
 		const context = evaluateContextFor('c1', nodes, [edge('t1', 'c1')], SOURCES)
 
 		expect(context.trigger).toEqual({ invoice: 'i1' })
+	})
+})
+
+describe('upstreamEntries — the webhook and the scheduler', () => {
+	const hook: Schemas.TriggerKindDto = {
+		Webhook: {
+			method: 'POST',
+			path: 'paiement-recu',
+			contract: [
+				{ name: 'facture', kind: 'Text', required: true, example: 'FA-1' },
+				{ name: 'montant', kind: 'Number', required: true, example: '2340' },
+			],
+		},
+	}
+	const cron: Schemas.TriggerKindDto = {
+		Schedule: { frequency: 'Daily', time: '09:00', timezone: 'Europe/Paris' },
+	}
+
+	it('looks like a webhook and offers the keys of its contract as variables', () => {
+		const nodes = [trigger('t1', hook), connector('c1', 'http.request')]
+
+		const [entry] = upstreamEntries('c1', nodes, [edge('t1', 'c1')], SOURCES)
+
+		expect(entry?.label).toBe('Webhook')
+		expect(entry?.icon).toBe(Webhook)
+		expect(entry?.hue).toBe(335)
+		expect(entry?.items).toEqual([{ facture: 'FA-1', montant: 2340 }])
+	})
+
+	it('looks like a scheduler and offers the four keys of its payload', () => {
+		const nodes = [trigger('t1', cron), connector('c1', 'http.request')]
+
+		const [entry] = upstreamEntries('c1', nodes, [edge('t1', 'c1')], SOURCES)
+
+		expect(entry?.label).toBe('Planificateur')
+		expect(entry?.icon).toBe(CalendarClock)
+		expect(entry?.hue).toBe(255)
+		expect(Object.keys(entry?.items[0] as object)).toEqual([
+			'scheduled_for',
+			'horodatage',
+			'jour',
+			'fuseau',
+		])
+	})
+
+	it('hands the contract example to the expression preview', () => {
+		const nodes = [trigger('t1', hook), connector('c1', 'http.request')]
+
+		const context = evaluateContextFor('c1', nodes, [edge('t1', 'c1')], SOURCES)
+
+		expect(context.trigger).toEqual({ facture: 'FA-1', montant: 2340 })
+	})
+
+	it('prefers the payload of the last run to the example', () => {
+		const nodes = [trigger('t1', hook), connector('c1', 'http.request')]
+		const sources: UpstreamSources = {
+			...SOURCES,
+			lastRun: { triggerPayload: { facture: 'FA-9' }, connectorOutputs: {} },
+		}
+
+		const [entry] = upstreamEntries('c1', nodes, [edge('t1', 'c1')], sources)
+
+		expect(entry?.items).toEqual([{ facture: 'FA-9' }])
+	})
+
+	it('shows the example of the trigger that is linked to the node, not the first one', () => {
+		const nodes = [
+			trigger('t1', { Events: ['quote.accepted'] }),
+			trigger('t2', hook),
+			connector('c1', 'http.request'),
+		]
+
+		const [entry] = upstreamEntries('c1', nodes, [edge('t2', 'c1')], SOURCES)
+
+		expect(entry?.label).toBe('Webhook')
+		expect(entry?.items).toEqual([{ facture: 'FA-1', montant: 2340 }])
 	})
 })
 

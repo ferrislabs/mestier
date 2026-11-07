@@ -514,10 +514,7 @@ export function useWorkflowGraph({
 							{
 								...source.data.trigger,
 								id: nextTriggerId(current),
-								kind:
-									source.data.trigger.kind === 'Manual'
-										? 'Manual'
-										: { Events: [...source.data.trigger.kind.Events] },
+								kind: structuredClone(source.data.trigger.kind),
 								name,
 							},
 							slot,

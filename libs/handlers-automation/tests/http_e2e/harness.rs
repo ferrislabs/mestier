@@ -49,6 +49,10 @@ pub struct App {
 /// Panics rather than skipping when the stack is down: the test is `#[ignore]`d,
 /// so reaching this function is already a statement that the stack is up.
 pub async fn start() -> App {
+    start_with_rate_limit(100_000).await
+}
+
+pub async fn start_with_rate_limit(per_minute: u32) -> App {
     let issuer_url = issuer::spawn();
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set to run the http end-to-end tests");
@@ -64,6 +68,7 @@ pub async fn start() -> App {
         &database_url,
         &redis_url,
         &issuer_url,
+        per_minute,
     )));
     let state = handlers::state(args)
         .await
@@ -173,6 +178,21 @@ impl App {
             "{}/api/v1/organizations/{}/automation/workflows",
             self.base_url, self.other_organization_id
         )
+    }
+
+    pub fn credentials_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/credentials",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn webhook_base(&self) -> String {
+        format!("{}/webhooks", self.base_url)
+    }
+
+    pub fn webhook_url(&self, path: &str) -> String {
+        format!("{}/{path}", self.webhook_base())
     }
 
     pub fn settings_url(&self) -> String {
@@ -374,7 +394,7 @@ async fn assign_role(pool: &PgPool, member_id: Uuid, role_id: Uuid) {
 
 /// Only the three endpoints the test controls are overridden. Everything else
 /// keeps its production default and is expected to be the compose stack.
-fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String> {
+fn args_for(database_url: &str, redis_url: &str, issuer_url: &str, per_minute: u32) -> Vec<String> {
     let db = url::Url::parse(database_url).expect("DATABASE_URL is a url");
 
     vec![
@@ -394,7 +414,9 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         // The limiter keys on client IP, so the whole suite shares one window
         // across runs. The production default fails a second consecutive run.
         "--rate-limit-per-minute".to_owned(),
-        "100000".to_owned(),
+        per_minute.to_string(),
+        "--automation-secret-key".to_owned(),
+        "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
         "--file-storage-auto-create-bucket".to_owned(),
