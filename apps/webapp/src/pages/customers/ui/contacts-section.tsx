@@ -1,4 +1,13 @@
-import { Mail, Pencil, Phone, Plus, Star, Trash2 } from 'lucide-react'
+import {
+	Mail,
+	Pencil,
+	Phone,
+	Plus,
+	Smartphone,
+	Star,
+	Trash2,
+	UserRoundCheck,
+} from 'lucide-react'
 import { useState } from 'react'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import { EmptyState } from '#/components/empty-state'
@@ -16,12 +25,16 @@ import { RecordCard, RecordField } from '#/pages/customers/ui/record-card'
 const LINK =
 	'inline-flex max-w-full items-center gap-1.5 rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring'
 
-export function contactFormOf(contact?: CustomerContact): ContactForm {
+export function contactFormOf(
+	contact?: CustomerContact,
+	mobile = '',
+): ContactForm {
 	return {
 		firstName: contact?.first_name ?? '',
 		lastName: contact?.last_name ?? '',
 		role: contact?.role ?? '',
 		email: contact?.email ?? '',
+		mobile,
 		phone: contact?.phone ?? '',
 	}
 }
@@ -38,14 +51,19 @@ interface ContactActions {
 	error: string | null
 	onSave: (contact: CustomerContact | null, form: ContactForm) => Promise<void>
 	onMakePrimary: (contact: CustomerContact) => void
+	onMakeBilling: (contact: CustomerContact) => void
 	onDelete: (contact: CustomerContact) => void
 }
 
 function ContactCard({
 	contact,
+	mobile,
+	isBilling,
 	actions,
 }: {
 	contact: CustomerContact
+	mobile: string
+	isBilling: boolean
 	actions: ContactActions
 }) {
 	const [editing, setEditing] = useState(false)
@@ -56,12 +74,17 @@ function ContactCard({
 			title={name}
 			subtitle={contact.role || undefined}
 			badges={
-				contact.is_primary && (
-					<StatusBadge tone="info">
-						<Star className="size-3" aria-hidden />
-						Contact principal
-					</StatusBadge>
-				)
+				<>
+					{contact.is_primary && (
+						<StatusBadge tone="info">
+							<Star className="size-3" aria-hidden />
+							Contact principal
+						</StatusBadge>
+					)}
+					{isBilling && (
+						<StatusBadge tone="info">Contact de facturation</StatusBadge>
+					)}
+				</>
 			}
 			actions={
 				<RequirePermission permission="MANAGE_CUSTOMERS">
@@ -69,7 +92,7 @@ function ContactCard({
 						open={editing}
 						onOpenChange={setEditing}
 						title={`Modifier ${name}`}
-						initial={contactFormOf(contact)}
+						initial={contactFormOf(contact, mobile)}
 						isEditing
 						isPending={actions.isSaving}
 						error={actions.error}
@@ -91,6 +114,17 @@ function ContactCard({
 							onClick={() => actions.onMakePrimary(contact)}
 						>
 							<Star aria-hidden /> Définir comme contact principal
+							<span className="sr-only"> : {name}</span>
+						</Button>
+					)}
+					{!isBilling && (
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => actions.onMakeBilling(contact)}
+						>
+							<UserRoundCheck aria-hidden /> Définir comme contact de
+							facturation
 							<span className="sr-only"> : {name}</span>
 						</Button>
 					)}
@@ -119,7 +153,7 @@ function ContactCard({
 				</RequirePermission>
 			}
 		>
-			<dl className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+			<dl className="grid gap-x-4 gap-y-2 sm:grid-cols-3">
 				<RecordField label="E-mail">
 					{contact.email ? (
 						<a
@@ -133,7 +167,23 @@ function ContactCard({
 						<Dash />
 					)}
 				</RecordField>
-				<RecordField label="Téléphone">
+				<RecordField label="Mobile">
+					{mobile ? (
+						<a
+							href={`tel:${mobile.replace(/[\s.-]/g, '')}`}
+							className={`${LINK} tabular`}
+						>
+							<Smartphone
+								className="size-3.5 shrink-0 text-muted-foreground"
+								aria-hidden
+							/>
+							{mobile}
+						</a>
+					) : (
+						<Dash />
+					)}
+				</RecordField>
+				<RecordField label="Fixe">
 					{contact.phone ? (
 						<a
 							href={`tel:${contact.phone.replace(/[\s.-]/g, '')}`}
@@ -156,12 +206,16 @@ function ContactCard({
 
 export function ContactsSection({
 	contacts,
+	mobiles,
+	billingContactId,
 	isLoading,
 	loadError,
 	onRetry,
 	actions,
 }: {
 	contacts: readonly CustomerContact[]
+	mobiles: Readonly<Record<string, string>>
+	billingContactId: string | undefined
 	isLoading: boolean
 	loadError: string | null
 	onRetry: () => void
@@ -215,7 +269,12 @@ export function ContactsSection({
 				<ul className="grid gap-3">
 					{contacts.map((contact) => (
 						<li key={contact.id}>
-							<ContactCard contact={contact} actions={actions} />
+							<ContactCard
+								contact={contact}
+								mobile={mobiles[contact.id] ?? ''}
+								isBilling={contact.id === billingContactId}
+								actions={actions}
+							/>
 						</li>
 					))}
 				</ul>

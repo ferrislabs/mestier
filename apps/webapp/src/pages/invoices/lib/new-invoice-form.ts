@@ -1,17 +1,24 @@
+import { newInvoiceTermsError } from '#/pages/invoices/lib/invoice-new'
 import type {
 	InvoiceFormValues,
 	InvoiceLineFormValues,
 } from '#/pages/invoices/types'
 
+export interface NewInvoiceFormValues extends InvoiceFormValues {
+	termsDays: string
+}
+
 export interface NewInvoiceErrors {
 	customerId?: string
 	customerContextId?: string
+	terms?: string
 	lines?: string
 }
 
 export const NEW_INVOICE_FIELD_IDS: Record<keyof NewInvoiceErrors, string> = {
 	customerId: 'new-invoice-client',
 	customerContextId: 'new-invoice-address',
+	terms: 'new-invoice-terms',
 	lines: 'new-invoice-lines',
 }
 
@@ -29,9 +36,11 @@ export function isValidInvoiceLine(line: InvoiceLineFormValues): boolean {
 }
 
 export function validateNewInvoice(
-	values: InvoiceFormValues,
+	values: NewInvoiceFormValues,
 ): NewInvoiceErrors {
+	const terms = newInvoiceTermsError(values.termsDays)
 	return {
+		...(terms ? { terms } : {}),
 		...(values.customerId === '' ? { customerId: 'Choisis un client.' } : {}),
 		...(values.customerId !== '' && values.customerContextId === ''
 			? { customerContextId: 'Choisis une adresse de facturation.' }

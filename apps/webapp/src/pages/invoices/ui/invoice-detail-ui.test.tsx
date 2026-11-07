@@ -8,6 +8,7 @@ import type {
 	InvoicePayment,
 } from '#/hooks/use-invoices'
 import type { Organization } from '#/hooks/use-organizations'
+import type { RefundRecord } from '#/pages/invoices/feature/mocks/invoice-extras'
 import { invoiceActions } from '#/pages/invoices/lib/invoice-actions'
 import {
 	emptyInvoiceLine,
@@ -173,6 +174,10 @@ function baseProps(overrides: Partial<Invoice> = {}) {
 			sentAt: null,
 		}),
 		balance: BALANCE as InvoiceBalance | undefined,
+		remainingCents: BALANCE.remaining_cents as number | null,
+		refunds: [] as RefundRecord[],
+		quote: null as { id: string; reference: string | null } | null,
+		issueBounds: { min: null as string | null, max: '2026-06-10' },
 		payments: [] as InvoicePayment[],
 		paymentsLoading: false,
 		creditNotes: [] as Invoice[],
@@ -210,6 +215,8 @@ function baseProps(overrides: Partial<Invoice> = {}) {
 		onSave: vi.fn(),
 		onIssue: vi.fn(async () => true),
 		onCancel: vi.fn(async () => true),
+		onDeleteDraft: vi.fn(),
+		onRefund: vi.fn(async () => true),
 		onRecordPayment: vi.fn(async () => true),
 		onDeletePayment: vi.fn(),
 		onIssueCreditNote: vi.fn(async () => true),
@@ -507,7 +514,60 @@ describe('InvoiceDetailUI — draft', () => {
 			within(dialog).getByRole('button', { name: 'Émettre la facture' }),
 		)
 
-		expect(props.onIssue).toHaveBeenCalled()
+		expect(props.onIssue).toHaveBeenCalledWith('2026-06-10')
+	})
+
+	it('issues on the chosen day, within the bounds', async () => {
+		const user = userEvent.setup()
+		const props = draftProps()
+		props.issueBounds = { min: '2026-06-01', max: '2026-06-10' }
+		await renderUi(props)
+
+		await user.click(screen.getByRole('button', { name: 'Émettre la facture' }))
+		const dialog = await screen.findByRole('dialog')
+		const day = within(dialog).getByLabelText(/Date d’émission/)
+		await user.clear(day)
+		await user.type(day, '2026-06-05')
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Émettre la facture' }),
+		)
+
+		expect(props.onIssue).toHaveBeenCalledWith('2026-06-05')
+	})
+
+	it('blocks an issue day before the last issued invoice', async () => {
+		const user = userEvent.setup()
+		const props = draftProps()
+		props.issueBounds = { min: '2026-06-01', max: '2026-06-10' }
+		await renderUi(props)
+
+		await user.click(screen.getByRole('button', { name: 'Émettre la facture' }))
+		const dialog = await screen.findByRole('dialog')
+		const day = within(dialog).getByLabelText(/Date d’émission/)
+		await user.clear(day)
+		await user.type(day, '2026-05-01')
+
+		expect(within(dialog).getByText(/ne peut pas précéder/)).toBeDefined()
+		expect(
+			within(dialog).getByRole('button', { name: 'Émettre la facture' }),
+		).toHaveProperty('disabled', true)
+	})
+
+	it('deletes a draft after a confirmation', async () => {
+		const user = userEvent.setup()
+		const props = draftProps()
+		await renderUi(props)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Supprimer le brouillon' }),
+		)
+		expect(props.onDeleteDraft).not.toHaveBeenCalled()
+		const dialog = await screen.findByRole('dialog')
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Supprimer le brouillon' }),
+		)
+
+		expect(props.onDeleteDraft).toHaveBeenCalled()
 	})
 
 	it('does not issue a draft with unsaved changes', async () => {
@@ -537,5 +597,110 @@ describe('InvoiceDetailUI — draft', () => {
 		expect(
 			within(dialog).getByText('Adresse de facturation manquante'),
 		).toBeDefined()
+	})
+})
+
+describe('InvoiceDetailUI — refund and cancellation by credit note', () => {
+	function overpaid() {
+		const props = baseProps()
+		props.remainingCents = -3000
+		props.displayState = 'refund_due'
+		props.actions = invoiceActions({
+			status: 'PAID',
+			grossCents: 12000,
+			creditedCents: 2000,
+			remainingCents: -3000,
+			sentAt: null,
+		})
+		return props
+	}
+
+	it('refunds the over-payment instead of recording a new payment', async () => {
+		const user = userEvent.setup()
+		const props = overpaid()
+		await renderUi(props)
+
+		expect(
+			screen
+				.getByRole('button', { name: 'Enregistrer un paiement' })
+				.hasAttribute('disabled'),
+		).toBe(true)
+		await user.click(
+			screen.getByRole('button', { name: 'Rembourser le client' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+		await user.click(
+			within(dialog).getByRole('button', {
+				name: 'Enregistrer le remboursement',
+			}),
+		)
+
+		expect(props.onRefund).toHaveBeenCalledWith(
+			expect.objectContaining({ amount: '30,00' }),
+		)
+	})
+
+	it('lists the recorded refunds and what is still owed', async () => {
+		const props = overpaid()
+		props.refunds = [
+			{
+				id: 'refund-1',
+				date: '2026-06-09',
+				amountCents: 1000,
+				method: 'Virement',
+				reference: '',
+				note: '',
+			},
+		]
+		await renderUi(props)
+
+		const side = screen.getByRole('complementary', {
+			name: 'Détails de la facture',
+		})
+		expect(within(side).getByText('Remboursé')).toBeDefined()
+		expect(within(side).getByText(/Remboursement · Virement/)).toBeDefined()
+		expect(within(side).getAllByText('À rembourser').length).toBeGreaterThan(0)
+	})
+
+	it('links the quote the invoice was created from', async () => {
+		const props = baseProps()
+		props.quote = { id: 'quote-1', reference: 'D-2026-001' }
+		await renderUi(props)
+
+		const side = screen.getByRole('complementary', {
+			name: 'Détails de la facture',
+		})
+		expect(within(side).getByRole('link', { name: 'D-2026-001' })).toBeDefined()
+	})
+
+	it('cancels a part-paid invoice with a credit note, and says what follows', async () => {
+		const user = userEvent.setup()
+		const props = baseProps({ status: 'PARTIALLY_PAID' })
+		props.actions = invoiceActions({
+			status: 'PARTIALLY_PAID',
+			grossCents: 12000,
+			creditedCents: 0,
+			remainingCents: 6000,
+			sentAt: null,
+		})
+		await renderUi(props)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Annuler la facture par un avoir' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+		await user.type(
+			within(dialog).getByLabelText(/Motif de l’avoir/),
+			'Chantier annulé',
+		)
+		await user.click(
+			within(dialog).getByRole('button', {
+				name: 'Annuler la facture par un avoir',
+			}),
+		)
+
+		expect(props.onIssueCreditNote).toHaveBeenCalledWith(
+			expect.objectContaining({ reason: 'Chantier annulé' }),
+		)
 	})
 })

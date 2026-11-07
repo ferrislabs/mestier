@@ -21,25 +21,25 @@ describe('quote routes', () => {
 	 * the wrong page renders and reports a missing quote.
 	 */
 	it('composing a quote resolves to its own page, not to a quote named "new"', () => {
-		expect(routeIdFor('/o/acme/crm/quotes/new')).toBe(
-			'/_app/o/$organizationSlug/crm/quotes/new',
+		expect(routeIdFor('/o/acme/crm/devis/nouveau')).toBe(
+			'/_app/o/$organizationSlug/crm/devis/nouveau',
 		)
 	})
 
 	it('a quote id still resolves to the quote page', () => {
 		expect(
-			routeIdFor('/o/acme/crm/quotes/01a00bfc-4d73-7930-818d-7af9fb1cb50f'),
-		).toBe('/_app/o/$organizationSlug/crm/quotes/$quoteId')
+			routeIdFor('/o/acme/crm/devis/01a00bfc-4d73-7930-818d-7af9fb1cb50f'),
+		).toBe('/_app/o/$organizationSlug/crm/devis/$quoteId')
 	})
 
 	it('the quote list keeps its own route', () => {
-		expect(routeIdFor('/o/acme/crm/quotes')).toBe(
-			'/_app/o/$organizationSlug/crm/quotes/',
+		expect(routeIdFor('/o/acme/crm/devis')).toBe(
+			'/_app/o/$organizationSlug/crm/devis/',
 		)
 	})
 
 	/**
-	 * `/quotes/$quoteId/handover` is a static segment living beside
+	 * `/devis/$quoteId/passation` is a static segment living beside
 	 * `/quotes/$quoteId`, the same trap `/quotes/new` already guards against
 	 * above. It is a bare `.tsx` (a genuine leaf, no children today), which
 	 * is only safe as long as it stays that way — see the routing trap
@@ -48,8 +48,8 @@ describe('quote routes', () => {
 	it('the handover screen resolves to its own route, not to the quote page', () => {
 		expect(
 			routeIdFor(
-				'/o/acme/crm/quotes/01a00bfc-4d73-7930-818d-7af9fb1cb50f/handover',
+				'/o/acme/crm/devis/01a00bfc-4d73-7930-818d-7af9fb1cb50f/passation',
 			),
-		).toBe('/_app/o/$organizationSlug/crm/quotes/$quoteId/handover')
+		).toBe('/_app/o/$organizationSlug/crm/devis/$quoteId/passation')
 	})
 })

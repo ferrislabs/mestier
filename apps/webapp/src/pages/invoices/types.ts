@@ -88,6 +88,15 @@ export function invoiceKindLabel(kind: string): string {
 	return kind
 }
 
+export function quoteStatusText(status: string): string {
+	if (status === 'DRAFT') return 'Brouillon'
+	if (status === 'SENT') return 'Envoyé'
+	if (status === 'ACCEPTED') return 'Accepté'
+	if (status === 'DECLINED') return 'Refusé'
+	if (status === 'CANCELLED') return 'Annulé'
+	return status
+}
+
 export function operationNatureLabel(nature: string): string {
 	if (nature === 'GOODS') return 'Livraison de biens'
 	if (nature === 'SERVICES') return 'Prestation de services'

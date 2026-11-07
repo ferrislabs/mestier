@@ -4,9 +4,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Customer } from '#/hooks/use-customers'
 import type { Organization } from '#/hooks/use-organizations'
 import type { Quote } from '#/hooks/use-quotes'
+import {
+	EMPTY_QUOTE_EXTRAS,
+	type QuoteExtras,
+} from '#/pages/quotes/lib/quote-extras'
 import { renderWithRouter } from '#/test/render-with-router'
 import { wrapWithPermissions } from '#/test/with-permissions'
 import { QuoteListUI } from './quote-list-ui'
+import type { QuoteOwner } from './quote-terms-fields'
+
+class ResizeObserverStub {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+}
+globalThis.ResizeObserver ??= ResizeObserverStub
+Element.prototype.scrollIntoView ??= () => {}
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.releasePointerCapture ??= () => {}
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -65,6 +80,9 @@ function baseProps() {
 				title: 'Terrasse',
 			}),
 		],
+		owners: [] as QuoteOwner[],
+		extrasOf: (_quoteId: string): QuoteExtras => EMPTY_QUOTE_EXTRAS,
+		today: '2026-11-07',
 		quotesPagination: null,
 		quotePage: 1,
 		quotePageSize: 10,
@@ -185,5 +203,64 @@ describe('QuoteListUI', () => {
 		await renderUi(baseProps(), [])
 
 		expect(screen.queryByRole('link', { name: /Nouveau devis/ })).toBeNull()
+	})
+
+	it('shows the validity date and flags an expired quote', async () => {
+		const props = baseProps()
+		props.extrasOf = (id) => ({
+			...EMPTY_QUOTE_EXTRAS,
+			validUntil: id === 'quote-1' ? '2026-11-01' : '2026-12-01',
+		})
+		await renderUi(props)
+
+		expect(screen.getByRole('columnheader', { name: 'Validité' })).toBeDefined()
+		expect(screen.getByText('1 nov. 2026 (expiré)')).toBeDefined()
+		expect(screen.getAllByText('1 déc. 2026').length).toBe(2)
+	})
+
+	it('shows the display status, expired and replaced included', async () => {
+		const props = baseProps()
+		props.extrasOf = (id) =>
+			id === 'quote-1'
+				? { ...EMPTY_QUOTE_EXTRAS, validUntil: '2026-11-01' }
+				: EMPTY_QUOTE_EXTRAS
+		await renderUi(props)
+
+		expect(screen.getAllByText('Expiré').length).toBeGreaterThan(0)
+		expect(screen.getByRole('radio', { name: 'Remplacé' })).toBeDefined()
+	})
+
+	it('filters on the responsible', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		props.owners = [{ id: 'm1', name: 'Julien Roche' }]
+		props.extrasOf = (id) => ({
+			...EMPTY_QUOTE_EXTRAS,
+			ownerId: id === 'quote-2' ? 'm1' : null,
+		})
+		await renderUi(props)
+
+		await user.click(
+			screen.getByRole('combobox', { name: 'Filtrer par responsable' }),
+		)
+		await user.click(screen.getByRole('option', { name: 'Julien Roche' }))
+
+		expect(screen.getByRole('link', { name: 'DEV-002' })).toBeDefined()
+		expect(screen.queryByRole('link', { name: 'DEV-001' })).toBeNull()
+	})
+
+	it('keeps the quotes of one client when asked to', async () => {
+		const props = baseProps()
+		props.quotes = [
+			quote(),
+			quote({ id: 'quote-9', reference: 'DEV-009', customer_id: 'other' }),
+		]
+		await renderUi({ ...props, clientFilter: 'customer-1' } as typeof props)
+
+		expect(screen.getByRole('link', { name: 'DEV-001' })).toBeDefined()
+		expect(screen.queryByRole('link', { name: 'DEV-009' })).toBeNull()
+		expect(
+			screen.getByRole('button', { name: 'Retirer le filtre client' }),
+		).toBeDefined()
 	})
 })

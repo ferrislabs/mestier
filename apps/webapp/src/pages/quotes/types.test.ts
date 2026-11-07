@@ -22,6 +22,8 @@ function line(quantity: string, unitPrice: string): QuoteLineFormValues {
 		vatRateBp: '',
 		notes: '',
 		photoKeys: [],
+		discountPercent: '',
+		frequency: 'one_shot',
 	}
 }
 

@@ -15,15 +15,23 @@ import { useCreateQuote } from '#/hooks/use-quotes'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
+import { saveQuoteExtras } from '#/pages/quotes/feature/mocks/quote-extras'
 import {
 	duplicateItem,
 	moveItem,
 	newLineId,
 } from '#/pages/quotes/lib/doc-lines'
+import { defaultValidUntil } from '#/pages/quotes/lib/quote-draft'
+import { extrasPatchFromForm } from '#/pages/quotes/lib/quote-form-extras'
 import {
 	copyQuoteLine,
 	lineFromCatalogItem,
 } from '#/pages/quotes/lib/quote-lines'
+import { toIsoDate } from '#/pages/quotes/lib/quote-status'
+import {
+	readQuoteClientParam,
+	readQuoteDealParam,
+} from '#/pages/quotes/quote-list-url-state'
 import {
 	emptyQuoteLine,
 	eurosToCents,
@@ -31,6 +39,7 @@ import {
 	type QuoteLineFormValues,
 } from '#/pages/quotes/types'
 import { QuoteNewUI } from '#/pages/quotes/ui/quote-new-ui'
+import type { QuoteOwner } from '#/pages/quotes/ui/quote-terms-fields'
 
 export function QuoteNewFeature() {
 	const { activeOrganization } = useActiveOrganization()
@@ -75,7 +84,7 @@ function QuoteNewWorkspace({
 }) {
 	const navigate = useNavigate()
 	const catalog = useReferenceCatalog(organizationId, {
-		members: false,
+		members: true,
 		employeeProfiles: false,
 		equipment: false,
 	})
@@ -86,14 +95,22 @@ function QuoteNewWorkspace({
 	)
 	const createQuote = useCreateQuote(organizationId)
 	const uploadFile = useUploadFile()
+	const owners = (catalog.members.data?.data ?? []).map((member) => ({
+		id: member.id,
+		name: member.display_name,
+	}))
 
 	const form = useForm({
 		defaultValues: {
 			title: '',
-			customerId: '',
+			customerId: readQuoteClientParam() ?? '',
 			customerContextId: '',
 			lines: [emptyQuoteLine()],
-		} satisfies QuoteFormValues,
+			ownerId: null,
+			validUntil: defaultValidUntil(toIsoDate(new Date())),
+			depositPercent: '',
+			notes: '',
+		} as QuoteFormValues,
 		onSubmit: async ({ value }) => {
 			const quote = await createQuote.mutateAsync({
 				path: { organization_id: organizationId },
@@ -114,12 +131,18 @@ function QuoteNewWorkspace({
 				},
 			})
 
+			const dealId = readQuoteDealParam()
+			saveQuoteExtras(quote.data.id, {
+				...extrasPatchFromForm(value),
+				...(dealId ? { dealId } : {}),
+			})
+
 			// Straight to the quote that was just written, not back to the list.
 			// The next thing an artisan does is send it or export it, and both
 			// live on that page. The modal used to reset the form in place and
 			// show a success banner underneath itself, where nobody saw it.
 			await navigate({
-				to: buildOrgPath(organizationSlug, '/crm/quotes/$quoteId'),
+				to: buildOrgPath(organizationSlug, '/crm/devis/$quoteId'),
 				params: { quoteId: quote.data.id },
 			})
 		},
@@ -139,6 +162,7 @@ function QuoteNewWorkspace({
 						(customUnit) => customUnit.code,
 					)}
 					vatEnabled={vatEnabled}
+					owners={owners}
 					isCreating={createQuote.isPending}
 					isUploading={uploadFile.isPending}
 					error={
@@ -182,6 +206,7 @@ interface QuoteNewFormProps {
 	catalogItems: CatalogItem[]
 	customUnits: string[]
 	vatEnabled: boolean
+	owners: readonly QuoteOwner[]
 	isCreating: boolean
 	isUploading: boolean
 	error: string | null
@@ -201,6 +226,7 @@ function QuoteNewForm({
 	catalogItems,
 	customUnits,
 	vatEnabled,
+	owners,
 	isCreating,
 	isUploading,
 	error,
@@ -232,6 +258,15 @@ function QuoteNewForm({
 			form.setFieldValue('customerContextId', patch.customerContextId)
 		}
 		if (patch.lines !== undefined) form.setFieldValue('lines', patch.lines)
+		if (patch.ownerId !== undefined)
+			form.setFieldValue('ownerId', patch.ownerId)
+		if (patch.validUntil !== undefined) {
+			form.setFieldValue('validUntil', patch.validUntil)
+		}
+		if (patch.depositPercent !== undefined) {
+			form.setFieldValue('depositPercent', patch.depositPercent)
+		}
+		if (patch.notes !== undefined) form.setFieldValue('notes', patch.notes)
 	}
 
 	const updateLine = (index: number, patch: Partial<QuoteLineFormValues>) => {
@@ -256,6 +291,7 @@ function QuoteNewForm({
 			customerContexts={customerContexts.data?.data ?? []}
 			catalogItems={catalogItems}
 			customUnits={customUnits}
+			owners={owners}
 			photoUrls={photoUrls}
 			error={error}
 			isCreating={isCreating}

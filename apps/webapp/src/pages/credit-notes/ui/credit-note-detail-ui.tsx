@@ -65,7 +65,7 @@ export function CreditNoteDetailUI({
 	const main = (
 		<>
 			<header className="grid gap-3">
-				<BackLink to="/crm/credit-notes" label="Avoirs" />
+				<BackLink to="/crm/avoirs" label="Avoirs" />
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
 					<Lock
 						className="size-5 text-muted-foreground"

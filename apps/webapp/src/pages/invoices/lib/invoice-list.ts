@@ -90,3 +90,17 @@ export function invoiceMatchesSearch(
 		customerName.includes(wanted)
 	)
 }
+
+export function excludeInvoices(
+	invoices: readonly Invoice[],
+	hiddenIds: readonly string[],
+): Invoice[] {
+	return invoices.filter((invoice) => !hiddenIds.includes(invoice.id))
+}
+
+export function invoiceMatchesAccount(
+	invoice: Pick<Invoice, 'customer_id'>,
+	customerId: string | null,
+): boolean {
+	return customerId === null || invoice.customer_id === customerId
+}

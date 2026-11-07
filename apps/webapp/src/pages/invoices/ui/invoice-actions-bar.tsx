@@ -9,6 +9,8 @@ import {
 	Loader2,
 	Save,
 	Send,
+	Trash2,
+	Undo2,
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { ConfirmDialog } from '#/components/confirm-dialog'
@@ -27,12 +29,20 @@ import { CreditNoteDialog } from '#/pages/invoices/ui/credit-note-dialog'
 import { IssueDialog } from '#/pages/invoices/ui/issue-dialog'
 import { PaymentDialog } from '#/pages/invoices/ui/payment-dialog'
 
-type DialogKind = 'issue' | 'payment' | 'credit' | 'cancel'
+type DialogKind =
+	| 'issue'
+	| 'delete'
+	| 'payment'
+	| 'refund'
+	| 'credit'
+	| 'creditCancel'
+	| 'cancel'
 
 interface InvoiceActionsBarProps {
 	invoice: Invoice
 	actions: InvoiceActions
 	remainingCents: number | null
+	issueBounds: { min: string | null; max: string }
 	isDirty: boolean
 	canSave: boolean
 	isSaving: boolean
@@ -47,8 +57,10 @@ interface InvoiceActionsBarProps {
 	paymentError: string | null
 	creditNoteError: string | null
 	onSave: () => void
-	onIssue: () => Promise<boolean>
+	onIssue: (issueDate: string) => Promise<boolean>
 	onCancel: () => Promise<boolean>
+	onDeleteDraft: () => void
+	onRefund: (values: PaymentValues) => Promise<boolean>
 	onRecordPayment: (values: PaymentValues) => Promise<boolean>
 	onIssueCreditNote: (request: {
 		reason: string
@@ -63,6 +75,7 @@ export function InvoiceActionsBar({
 	invoice,
 	actions,
 	remainingCents,
+	issueBounds,
 	isDirty,
 	canSave,
 	isSaving,
@@ -79,6 +92,8 @@ export function InvoiceActionsBar({
 	onSave,
 	onIssue,
 	onCancel,
+	onDeleteDraft,
+	onRefund,
 	onRecordPayment,
 	onIssueCreditNote,
 	onSend,
@@ -139,6 +154,14 @@ export function InvoiceActionsBar({
 						</Button>
 					)}
 					{button(
+						actions.deleteDraft,
+						() => setDialog('delete'),
+						<Trash2 aria-hidden />,
+						ACTION_LABELS.deleteDraft,
+						'outline',
+						'text-destructive hover:text-destructive',
+					)}
+					{button(
 						actions.issue,
 						() => setDialog('issue'),
 						<FileCheck aria-hidden />,
@@ -146,11 +169,20 @@ export function InvoiceActionsBar({
 						'default',
 					)}
 					{button(
+						actions.refund,
+						() => setDialog('refund'),
+						<Undo2 aria-hidden />,
+						ACTION_LABELS.refund,
+						'default',
+					)}
+					{button(
 						actions.recordPayment,
 						() => setDialog('payment'),
 						<Banknote aria-hidden />,
 						ACTION_LABELS.recordPayment,
-						actions.recordPayment.enabled ? 'default' : 'outline',
+						actions.recordPayment.enabled && !actions.refund.visible
+							? 'default'
+							: 'outline',
 					)}
 					{button(
 						actions.send,
@@ -184,6 +216,17 @@ export function InvoiceActionsBar({
 						<FileMinus aria-hidden />,
 						ACTION_LABELS.creditNote,
 					)}
+					{actions.creditNote.enabled &&
+						(invoice.status === 'PAID' ||
+							invoice.status === 'PARTIALLY_PAID') &&
+						button(
+							actions.creditNote,
+							() => setDialog('creditCancel'),
+							<Ban aria-hidden />,
+							'Annuler la facture par un avoir',
+							'outline',
+							'text-destructive hover:text-destructive',
+						)}
 					{button(
 						actions.cancel,
 						() => setDialog('cancel'),
@@ -235,7 +278,22 @@ export function InvoiceActionsBar({
 					isDirty={isDirty}
 					isPending={isIssuing}
 					error={issueError}
+					bounds={issueBounds}
 					onIssue={onIssue}
+				/>
+			)}
+			{draft && (
+				<ConfirmDialog
+					open={dialog === 'delete'}
+					onOpenChange={close('delete')}
+					title="Supprimer ce brouillon ?"
+					description="Le brouillon disparaît de la liste. Il n’a pas de numéro : la série des factures n’est pas touchée."
+					confirmLabel="Supprimer le brouillon"
+					destructive
+					onConfirm={() => {
+						setDialog(null)
+						onDeleteDraft()
+					}}
 				/>
 			)}
 			{invoice.status !== 'DRAFT' && invoice.status !== 'CANCELLED' && (
@@ -243,15 +301,37 @@ export function InvoiceActionsBar({
 					<PaymentDialog
 						open={dialog === 'payment'}
 						onOpenChange={close('payment')}
+						mode="payment"
 						remainingCents={remainingCents}
 						isPending={isRecordingPayment}
 						error={paymentError}
 						onSubmit={onRecordPayment}
 					/>
+					<PaymentDialog
+						open={dialog === 'refund'}
+						onOpenChange={close('refund')}
+						mode="refund"
+						remainingCents={remainingCents}
+						isPending={false}
+						error={null}
+						onSubmit={onRefund}
+					/>
 					<CreditNoteDialog
 						open={dialog === 'credit'}
 						onOpenChange={close('credit')}
 						invoice={invoice}
+						intent="credit"
+						remainingCents={remainingCents}
+						isPending={isIssuingCreditNote}
+						error={creditNoteError}
+						onSubmit={onIssueCreditNote}
+					/>
+					<CreditNoteDialog
+						open={dialog === 'creditCancel'}
+						onOpenChange={close('creditCancel')}
+						invoice={invoice}
+						intent="cancel"
+						remainingCents={remainingCents}
 						isPending={isIssuingCreditNote}
 						error={creditNoteError}
 						onSubmit={onIssueCreditNote}

@@ -8,8 +8,8 @@ describe('resolveModule', () => {
 
 	it('returns the module whose basePath matches', () => {
 		expect(resolveModule('/crm').id).toBe('crm')
-		expect(resolveModule('/crm/customers').id).toBe('crm')
-		expect(resolveModule('/crm/customers/abc-123').id).toBe('crm')
+		expect(resolveModule('/crm/clients').id).toBe('crm')
+		expect(resolveModule('/crm/clients/abc-123').id).toBe('crm')
 	})
 
 	it('matches on a segment boundary only', () => {
@@ -25,8 +25,8 @@ describe('resolveModule', () => {
 	})
 
 	it('resolves customer pages to the crm module', () => {
-		expect(resolveModule('/crm/customers').id).toBe('crm')
-		expect(resolveModule('/crm/customers/pipeline').id).toBe('crm')
+		expect(resolveModule('/crm/clients').id).toBe('crm')
+		expect(resolveModule('/crm/pipeline').id).toBe('crm')
 	})
 
 	it('resolves an announced module like any other', () => {

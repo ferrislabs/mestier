@@ -1,4 +1,6 @@
-import { useMemo } from 'react'
+import { Plus } from 'lucide-react'
+import { useState } from 'react'
+import { Button } from '#/components/ui/button'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useCreateCustomerContact,
@@ -13,7 +15,7 @@ import {
 	useUpdateCustomerContext,
 	useUploadFile,
 } from '#/hooks/use-customers'
-import { useInvoices, useOutstandingByCustomer } from '#/hooks/use-invoices'
+import { useOutstandingByCustomer } from '#/hooks/use-invoices'
 import { useQuotes } from '#/hooks/use-quotes'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { useCrmSettings } from '#/pages/crm-settings/feature/mocks/settings'
@@ -21,13 +23,28 @@ import {
 	useAccountExtras,
 	useSaveAccountExtras,
 } from '#/pages/customers/feature/mocks/account-extras'
+import { CURRENT_PERSON_ID } from '#/pages/customers/feature/mocks/people'
+import { useAllInvoices } from '#/pages/customers/feature/use-all-invoices'
 import { addressLineOf } from '#/pages/customers/feature/use-create-customer-account'
+import { useCustomerPayments } from '#/pages/customers/feature/use-customer-payments'
 import {
 	type AccountForm,
 	accountFormOf,
 	type ContactForm,
+	registrationNumberOf,
 } from '#/pages/customers/lib/account-form'
-import { invoiceRowsOf, quoteRowsOf } from '#/pages/customers/lib/activity'
+import {
+	billingContactOf,
+	billingContextOf,
+	withEntry,
+} from '#/pages/customers/lib/accounts'
+import {
+	creditNoteRowsOf,
+	invoiceRowsOf,
+	paymentRowsOf,
+	quoteRowsOf,
+} from '#/pages/customers/lib/activity'
+import { todayIso } from '#/pages/customers/lib/format'
 import {
 	activitySummary,
 	addressesSummary,
@@ -35,6 +52,7 @@ import {
 	contactsSummary,
 	identitySummary,
 } from '#/pages/customers/lib/rubriques'
+import { customerStats } from '#/pages/customers/lib/stats'
 import {
 	ACCOUNT_KIND_LABELS,
 	accountStatusOf,
@@ -49,6 +67,10 @@ import { ContactsSection } from '#/pages/customers/ui/contacts-section'
 import { CustomerEditUI } from '#/pages/customers/ui/customer-edit-ui'
 import { CustomerSidebar } from '#/pages/customers/ui/customer-sidebar'
 import { IdentitySection } from '#/pages/customers/ui/identity-section'
+import { OpportunitiesCard } from '#/pages/customers/ui/opportunities-card'
+import { useDealsByCustomer } from '#/pages/deals/feature/use-deals'
+import { isOpenStage } from '#/pages/deals/lib/pipeline'
+import { DealCreateDialog } from '#/pages/deals/ui/deal-create-dialog'
 
 interface CustomerEditFeatureProps {
 	customerId: string
@@ -67,7 +89,7 @@ export function CustomerEditFeature({
 	const contexts = useCustomerContexts(customerId)
 	const outstanding = useOutstandingByCustomer(organizationId)
 	const quotes = useQuotes(organizationId)
-	const invoices = useInvoices(organizationId)
+	const invoices = useAllInvoices(organizationId)
 	const extras = useAccountExtras(customerId)
 	const settings = useCrmSettings()
 	const saveExtras = useSaveAccountExtras()
@@ -79,17 +101,17 @@ export function CustomerEditFeature({
 	const updateContext = useUpdateCustomerContext()
 	const deleteContext = useDeleteCustomerContext(customerId)
 	const uploadFile = useUploadFile()
+	const customerDeals = useDealsByCustomer(customerId)
+	const [creatingDeal, setCreatingDeal] = useState(false)
 
-	const quoteData = quotes.data?.data
-	const invoiceData = invoices.data?.data
-	const quoteRows = useMemo(
-		() => quoteRowsOf(quoteData ?? [], customerId),
-		[quoteData, customerId],
+	const invoiceData = invoices.invoices
+	const payments = useCustomerPayments(
+		invoiceData.filter((invoice) => invoice.customer_id === customerId),
 	)
-	const invoiceRows = useMemo(
-		() => invoiceRowsOf(invoiceData ?? [], customerId),
-		[invoiceData, customerId],
-	)
+	const quoteRows = quoteRowsOf(quotes.data?.data ?? [], customerId)
+	const invoiceRows = invoiceRowsOf(invoiceData, customerId)
+	const creditNoteRows = creditNoteRowsOf(invoiceData, customerId)
+	const paymentRows = paymentRowsOf(payments.entries)
 
 	if (customerQuery.isLoading)
 		return <CustomerEditUI.Loading organizationSlug={organizationSlug} />
@@ -111,25 +133,28 @@ export function CustomerEditFeature({
 		(row) => row.customer_id === customer.id,
 	)
 	const outstandingCents = balance?.outstanding_cents ?? 0
-	const oldestDueAt = balance?.oldest_due_at ?? null
+	const stats = customerStats({
+		customerId,
+		invoices: invoiceData,
+		quotes: quotes.data?.data ?? [],
+		outstandingCents,
+		now: Date.now(),
+	})
+	const openDeals = customerDeals.deals.filter((deal) =>
+		isOpenStage(deal.stage),
+	).length
 	const kind = kindOf(customer, extras)
 	const status = accountStatusOf(customer.status)
 	const defaultTerms = settings.data.settings.paymentTermsDays
 
 	const save = async (form: AccountForm) => {
-		const stage = form.pipelineStage
 		await updateCustomer.mutateAsync({
 			path: { customer_id: customer.id },
 			body: customerBody(customer, {
 				name: form.name.trim(),
-				registration_number:
-					form.kind === 'professionnel'
-						? form.registrationNumber.trim() || null
-						: null,
+				registration_number: registrationNumberOf(form),
 				email: form.email.trim() || null,
 				phone: form.phone.trim() || null,
-				pipeline_stage: stage,
-				...(stage === 'WON' ? { status: 'CLIENT' as const } : {}),
 			}),
 		})
 		const stripe = form.stripeCustomerId.trim()
@@ -158,17 +183,49 @@ export function CustomerEditFeature({
 			phone: form.phone.trim() || null,
 			is_primary: contact?.is_primary ?? contactList.length === 0,
 		}
-		if (contact)
-			await updateContact.mutateAsync({
-				path: { customer_contact_id: contact.id },
-				body,
-			})
-		else
-			await createContact.mutateAsync({
-				path: { customer_id: customer.id },
-				body,
-			})
+		const contactId = contact
+			? (
+					await updateContact.mutateAsync({
+						path: { customer_contact_id: contact.id },
+						body,
+					})
+				).data.id
+			: (
+					await createContact.mutateAsync({
+						path: { customer_id: customer.id },
+						body,
+					})
+				).data.id
+		await saveExtras.mutateAsync(customer.id, {
+			mobiles: withEntry(extras.mobiles, contactId, form.mobile.trim()),
+		})
 	}
+
+	const convert = async () => {
+		await updateCustomer.mutateAsync({
+			path: { customer_id: customer.id },
+			body: customerBody(customer, { status: 'CLIENT', pipeline_stage: 'WON' }),
+		})
+		await saveExtras.mutateAsync(customer.id, { convertedAt: todayIso() })
+	}
+
+	const archive = async () => {
+		await updateCustomer.mutateAsync({
+			path: { customer_id: customer.id },
+			body: customerBody(customer, { status: 'ARCHIVED' }),
+		})
+		await saveExtras.mutateAsync(customer.id, { archivedAt: todayIso() })
+	}
+
+	const restore = async () => {
+		await updateCustomer.mutateAsync({
+			path: { customer_id: customer.id },
+			body: customerBody(customer, reactivatedStatus(customer)),
+		})
+		await saveExtras.mutateAsync(customer.id, { archivedAt: null })
+	}
+
+	const ignore = () => undefined
 
 	const contactError =
 		mutationErrorMessage(createContact.error) ??
@@ -211,32 +268,17 @@ export function CustomerEditFeature({
 					isSaving={updateCustomer.isPending || saveExtras.isPending}
 					saveError={mutationErrorMessage(updateCustomer.error)}
 					onSave={save}
-					onConvert={() =>
-						updateCustomer.mutate({
-							path: { customer_id: customer.id },
-							body: customerBody(customer, {
-								status: 'CLIENT',
-								pipeline_stage: 'WON',
-							}),
-						})
-					}
-					onArchive={() =>
-						updateCustomer.mutate({
-							path: { customer_id: customer.id },
-							body: customerBody(customer, { status: 'ARCHIVED' }),
-						})
-					}
-					onRestore={() =>
-						updateCustomer.mutate({
-							path: { customer_id: customer.id },
-							body: customerBody(customer, reactivatedStatus(customer)),
-						})
-					}
+					onConvert={() => void convert().catch(ignore)}
+					onArchive={() => void archive().catch(ignore)}
+					onRestore={() => void restore().catch(ignore)}
+					openDeals={openDeals}
 				/>
 			)}
 			{tab === 'contacts' && (
 				<ContactsSection
 					contacts={contactList}
+					mobiles={extras.mobiles}
+					billingContactId={billingContactOf(contactList, extras)?.id}
 					isLoading={contacts.isLoading}
 					loadError={mutationErrorMessage(contacts.error)}
 					onRetry={() => void contacts.refetch()}
@@ -259,16 +301,32 @@ export function CustomerEditFeature({
 									is_primary: true,
 								},
 							}),
-						onDelete: (contact) =>
-							deleteContact.mutate({
-								path: { customer_contact_id: contact.id },
+						onMakeBilling: (contact) =>
+							void saveExtras.mutateAsync(customer.id, {
+								billingContactId: contact.id,
 							}),
+						onDelete: (contact) =>
+							deleteContact.mutate(
+								{ path: { customer_contact_id: contact.id } },
+								{
+									onSuccess: () =>
+										void saveExtras.mutateAsync(customer.id, {
+											mobiles: withEntry(extras.mobiles, contact.id, ''),
+											billingContactId:
+												extras.billingContactId === contact.id
+													? null
+													: extras.billingContactId,
+										}),
+								},
+							),
 					}}
 				/>
 			)}
 			{tab === 'adresses' && (
 				<AddressesSection
 					contexts={contextList}
+					extras={extras}
+					billingContextId={billingContextOf(contextList, extras)?.id}
 					isLoading={contexts.isLoading}
 					loadError={mutationErrorMessage(contexts.error)}
 					onRetry={() => void contexts.refetch()}
@@ -295,35 +353,103 @@ export function CustomerEditFeature({
 								city: draft.address.city.trim() || null,
 								photo_key: draft.photoKey.trim() || null,
 							}
-							if (context)
-								await updateContext.mutateAsync({
-									path: { customer_context_id: context.id },
-									body,
-								})
-							else
-								await createContext.mutateAsync({
-									path: { customer_id: customer.id },
-									body,
-								})
+							const contextId = context
+								? (
+										await updateContext.mutateAsync({
+											path: { customer_context_id: context.id },
+											body,
+										})
+									).data.id
+								: (
+										await createContext.mutateAsync({
+											path: { customer_id: customer.id },
+											body,
+										})
+									).data.id
+							await saveExtras.mutateAsync(customer.id, {
+								addressKinds: {
+									...extras.addressKinds,
+									[contextId]: draft.kind,
+								},
+								addressCountries: withEntry(
+									extras.addressCountries,
+									contextId,
+									draft.address.country.trim(),
+								),
+							})
 						},
-						onDelete: (context) =>
-							deleteContext.mutate({
-								path: { customer_context_id: context.id },
+						onMakeBilling: (context) =>
+							void saveExtras.mutateAsync(customer.id, {
+								billingContextId: context.id,
 							}),
+						onDelete: (context) =>
+							deleteContext.mutate(
+								{ path: { customer_context_id: context.id } },
+								{
+									onSuccess: () =>
+										void saveExtras.mutateAsync(customer.id, {
+											addressKinds: withEntry(
+												extras.addressKinds,
+												context.id,
+												'',
+											),
+											addressCountries: withEntry(
+												extras.addressCountries,
+												context.id,
+												'',
+											),
+											billingContextId:
+												extras.billingContextId === context.id
+													? null
+													: extras.billingContextId,
+										}),
+								},
+							),
 					}}
 				/>
 			)}
 			{tab === 'activite' && (
 				<ActivitySection
 					organizationSlug={organizationSlug}
+					revenue12m={stats.revenue12m}
 					outstanding={outstandingCents}
-					oldestDueAt={oldestDueAt}
-					late={
-						oldestDueAt !== null && new Date(oldestDueAt).getTime() < Date.now()
+					overdue={stats.overdue}
+					openDeals={openDeals}
+					opportunities={
+						<OpportunitiesCard
+							organizationSlug={organizationSlug}
+							rows={customerDeals.deals.map((deal) => ({
+								id: deal.id,
+								title: deal.title,
+								stage: deal.stage,
+								amount: deal.amount,
+								date: deal.createdAt,
+							}))}
+							action={
+								status === 'archived' ? undefined : (
+									<DealCreateDialog
+										open={creatingDeal}
+										onOpenChange={setCreatingDeal}
+										customers={[customer]}
+										defaultOwnerId={CURRENT_PERSON_ID}
+										organizationSlug={organizationSlug}
+										onCreate={customerDeals.create}
+										trigger={
+											<Button variant="outline" size="sm">
+												<Plus aria-hidden /> Nouvelle opportunité
+											</Button>
+										}
+									/>
+								)
+							}
+						/>
 					}
 					quotes={quoteRows}
 					invoices={invoiceRows}
+					creditNotes={creditNoteRows}
+					payments={paymentRows}
 					isLoading={quotes.isLoading || invoices.isLoading}
+					isLoadingPayments={payments.isLoading}
 				/>
 			)}
 		</CustomerEditUI>

@@ -267,7 +267,7 @@ export function ProjectBilling({
 								<Link
 									to={buildOrgPath(
 										organizationSlug,
-										'/crm/invoices/$invoiceId',
+										'/crm/factures/$invoiceId',
 									)}
 									params={{ invoiceId: invoice.id }}
 									className="flex items-center justify-between gap-4 px-5 py-3 text-sm transition hover:bg-muted/40"

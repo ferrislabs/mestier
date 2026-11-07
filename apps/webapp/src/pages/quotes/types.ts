@@ -1,6 +1,7 @@
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { ServiceRate } from '#/hooks/use-reference-catalog'
 import { formatUnit } from '#/lib/units'
+import type { BillingFrequency } from '#/pages/quotes/lib/billing-frequency'
 
 export { formatUnit, UNIT_GROUPS } from '#/lib/units'
 
@@ -22,6 +23,10 @@ export interface QuoteLineFormValues {
 	vatRateBp: string
 	notes: string
 	photoKeys: string[]
+	/** Percent as typed, `''` when none. No API field yet: lives in the quote
+	 * extras mock and never changes the totals the backend computes. */
+	discountPercent: string
+	frequency: BillingFrequency
 }
 
 /** The rates offered as one-click choices before an artisan types a custom
@@ -46,6 +51,10 @@ export interface QuoteFormValues {
 	customerId: string
 	customerContextId: string
 	lines: QuoteLineFormValues[]
+	ownerId: string | null
+	validUntil: string
+	depositPercent: string
+	notes: string
 }
 
 export function emptyQuoteLine(clientId = 'line-1'): QuoteLineFormValues {
@@ -61,6 +70,8 @@ export function emptyQuoteLine(clientId = 'line-1'): QuoteLineFormValues {
 		vatRateBp: '',
 		notes: '',
 		photoKeys: [],
+		discountPercent: '',
+		frequency: 'one_shot',
 	}
 }
 

@@ -20,7 +20,7 @@ describe('projectIdOf', () => {
 		expect(projectIdOf('/projet/new')).toBeNull()
 		expect(projectIdOf('/projet/doe-models')).toBeNull()
 		expect(projectIdOf('/projet/doe-models/m1')).toBeNull()
-		expect(projectIdOf('/crm/customers')).toBeNull()
+		expect(projectIdOf('/crm/clients')).toBeNull()
 	})
 
 	it('decodes the id', () => {

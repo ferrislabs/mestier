@@ -83,6 +83,21 @@ describe('filterCustomers', () => {
 		).toEqual(['b'])
 	})
 
+	it('matches on the city, contacts and phones of the directory', () => {
+		const terms = (id: string) =>
+			id === 'a'
+				? { text: ['Rezé', 'Léa Duval'], phones: ['06 12 34 56 78'] }
+				: { text: [], phones: [] }
+		const ids = (query: string) =>
+			filterCustomers(list, none, { ...DEFAULT_FILTERS, query }, terms).map(
+				(item) => item.id,
+			)
+		expect(ids('reze')).toEqual(['a'])
+		expect(ids('lea duval')).toEqual(['a'])
+		expect(ids('0612345678')).toEqual(['a'])
+		expect(ids('nantes')).toEqual([])
+	})
+
 	it('filters on the owner kept in the extras', () => {
 		const extras = (id: string): AccountExtras => ({
 			...EMPTY_EXTRAS,

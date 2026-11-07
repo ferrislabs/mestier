@@ -7,7 +7,10 @@ import {
 	paperRecipient,
 	vatNoticeOf,
 } from '#/pages/quotes/lib/paper-parties'
+import { parsePercent } from '#/pages/quotes/lib/quote-draft'
+import type { QuoteExtras } from '#/pages/quotes/lib/quote-extras'
 import {
+	billingAddressLines,
 	eurosToCents,
 	type QuoteFormValues,
 	quoteLinesGrossCents,
@@ -62,6 +65,8 @@ export function buildQuotePaper(input: {
 		title: values.title,
 		issueDate: quote.created_at,
 		dueDate: null,
+		validUntil: values.validUntil === '' ? null : values.validUntil,
+		siteAddressLines: siteAddressLines(input.context),
 		issuer: paperIssuer(organization),
 		recipient: paperRecipient(input.customer, input.context),
 		lines: values.lines.map((line) =>
@@ -74,26 +79,56 @@ export function buildQuotePaper(input: {
 				unitPriceCents: eurosToCents(line.unitPrice),
 				vatRateBp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
 				totalCents: quoteLineTotalCents(line),
+				discountPercent: parsePercent(line.discountPercent) ?? 0,
+				frequency: line.frequency,
 			}),
 		),
 		totals: input.totals,
 		showVat: organization.vat_status?.type === 'subject',
 		vatNotice: vatNoticeOf(organization),
-		notes: '',
+		notes: values.notes.trim(),
 		reference: null,
 		reason: '',
 	}
 }
 
-const STATUS_EVENTS: Partial<
-	Record<Quote['status'], { kind: HistoryEntry['kind']; detail: string }>
-> = {
-	SENT: { kind: 'sent', detail: 'Devis envoyé au client' },
-	ACCEPTED: { kind: 'accepted', detail: 'Devis accepté par le client' },
-	DECLINED: { kind: 'declined', detail: 'Devis refusé par le client' },
+function siteAddressLines(context: CustomerContext | undefined): string[] {
+	if (!context) return []
+	return [context.label.trim(), ...billingAddressLines(context)].filter(
+		(line) => line !== '',
+	)
 }
 
-export function buildQuoteHistory(quote: Quote): HistoryEntry[] {
+function statusEvent(
+	quote: Quote,
+	extras: QuoteExtras,
+): { kind: HistoryEntry['kind']; detail: string } | undefined {
+	switch (quote.status) {
+		case 'SENT':
+			return { kind: 'sent', detail: 'Devis envoyé au client' }
+		case 'ACCEPTED':
+			return {
+				kind: 'accepted',
+				detail: extras.signer
+					? `Devis accepté par ${extras.signer}`
+					: 'Devis accepté par le client',
+			}
+		case 'DECLINED':
+			return {
+				kind: 'declined',
+				detail: extras.declineReason
+					? `Devis refusé : ${extras.declineReason}`
+					: 'Devis refusé par le client',
+			}
+		default:
+			return undefined
+	}
+}
+
+export function buildQuoteHistory(
+	quote: Quote,
+	extras: QuoteExtras,
+): HistoryEntry[] {
 	const entries: HistoryEntry[] = [
 		{
 			id: 'created',
@@ -102,8 +137,16 @@ export function buildQuoteHistory(quote: Quote): HistoryEntry[] {
 			at: quote.created_at,
 		},
 	]
+	if (extras.revisionOf) {
+		entries.push({
+			id: 'revision-of',
+			kind: 'revised',
+			detail: `Révision de ${extras.revisionOf.label}`,
+			at: quote.created_at,
+		})
+	}
 	if (quote.updated_at !== quote.created_at) {
-		const event = STATUS_EVENTS[quote.status]
+		const event = statusEvent(quote, extras)
 		entries.push({
 			id: 'updated',
 			kind: event?.kind ?? 'updated',
@@ -111,5 +154,13 @@ export function buildQuoteHistory(quote: Quote): HistoryEntry[] {
 			at: quote.updated_at,
 		})
 	}
-	return entries
+	for (const event of extras.events) {
+		entries.push({
+			id: event.id,
+			kind: event.kind,
+			detail: event.detail,
+			at: event.at,
+		})
+	}
+	return entries.sort((a, b) => a.at.localeCompare(b.at))
 }

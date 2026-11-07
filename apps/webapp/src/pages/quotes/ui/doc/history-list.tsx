@@ -1,10 +1,12 @@
 import {
 	Banknote,
+	BellRing,
 	CircleCheck,
 	CircleX,
 	FileMinus,
 	FilePlus,
 	FileText,
+	GitBranch,
 	type LucideIcon,
 	Pencil,
 	Send,
@@ -19,6 +21,8 @@ export type HistoryKind =
 	| 'sent'
 	| 'accepted'
 	| 'declined'
+	| 'revised'
+	| 'reminder'
 	| 'payment'
 	| 'credit_note'
 	| 'note'
@@ -37,6 +41,8 @@ const ICONS: Record<HistoryKind, LucideIcon> = {
 	sent: Send,
 	accepted: CircleCheck,
 	declined: CircleX,
+	revised: GitBranch,
+	reminder: BellRing,
 	payment: Banknote,
 	credit_note: FileMinus,
 	note: StickyNote,

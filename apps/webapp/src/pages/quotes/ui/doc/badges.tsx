@@ -4,7 +4,10 @@ import {
 	INVOICE_STATE_LABELS,
 	type InvoiceDisplayState,
 } from '#/pages/invoices/types'
-import { quoteStatusLabel } from '#/pages/quotes/types'
+import {
+	QUOTE_DISPLAY_LABELS,
+	type QuoteDisplayStatus,
+} from '#/pages/quotes/lib/quote-status'
 
 export type DocTone = 'neutral' | 'ok' | 'warn' | 'alert' | 'info'
 
@@ -38,18 +41,20 @@ export function DocBadge({
 	)
 }
 
-const QUOTE_TONES: Record<string, DocTone> = {
-	DRAFT: 'neutral',
-	SENT: 'info',
-	ACCEPTED: 'ok',
-	DECLINED: 'alert',
-	CANCELLED: 'neutral',
+const QUOTE_TONES: Record<QuoteDisplayStatus, DocTone> = {
+	draft: 'neutral',
+	sent: 'info',
+	accepted: 'ok',
+	declined: 'alert',
+	cancelled: 'neutral',
+	superseded: 'neutral',
+	expired: 'warn',
 }
 
-export function QuoteStatusBadge({ status }: { status: string }) {
+export function QuoteStatusBadge({ status }: { status: QuoteDisplayStatus }) {
 	return (
-		<DocBadge tone={QUOTE_TONES[status] ?? 'neutral'}>
-			{quoteStatusLabel(status)}
+		<DocBadge tone={QUOTE_TONES[status]}>
+			{QUOTE_DISPLAY_LABELS[status]}
 		</DocBadge>
 	)
 }

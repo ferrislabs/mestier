@@ -9,11 +9,14 @@ import {
 	ProductTechnicalSheet,
 	type TechnicalSheetValues,
 } from '#/pages/catalog/ui/product-technical-sheet'
+import { useSaveSupplierExtras } from '#/pages/suppliers/feature/mocks/supplier-extras'
 import {
 	buildSupplierRequest,
-	EMPTY_SUPPLIER_FORM,
-} from '#/pages/suppliers/types'
+	emptySupplierValues,
+	extrasOfValues,
+} from '#/pages/suppliers/lib/supplier-form'
 import { SupplierFormDialog } from '#/pages/suppliers/ui/supplier-form-dialog'
+import { useLedger } from '#/pages/treasury/feature/mocks/ledger'
 
 const TYPE_BY_EXTENSION: Record<string, string> = {
 	pdf: 'PDF',
@@ -47,6 +50,8 @@ export function ProductTechnicalSheetField({
 	const canManage = useHasPermission('MANAGE_REFERENCE')
 	const suppliers = useSuppliers(activeOrganization.id)
 	const createSupplier = useCreateSupplier()
+	const saveSupplierExtras = useSaveSupplierExtras()
+	const ledger = useLedger()
 	const [dialogOpen, setDialogOpen] = useState(false)
 	const previews = useFileUrls(values.datasheetKeys)
 
@@ -77,7 +82,11 @@ export function ProductTechnicalSheetField({
 				<SupplierFormDialog
 					open
 					editingName={null}
-					initialValues={EMPTY_SUPPLIER_FORM}
+					initialValues={emptySupplierValues()}
+					categories={ledger.data.categories}
+					archived={null}
+					toPay={0}
+					onToggleArchive={() => undefined}
 					isPending={createSupplier.isPending}
 					error={
 						createSupplier.error
@@ -92,6 +101,10 @@ export function ProductTechnicalSheetField({
 							path: { organization_id: activeOrganization.id },
 							body: buildSupplierRequest(supplierValues),
 						})
+						saveSupplierExtras.mutate(
+							created.data.id,
+							extrasOfValues(supplierValues),
+						)
 						onChange({ supplierId: created.data.id })
 						setDialogOpen(false)
 					}}

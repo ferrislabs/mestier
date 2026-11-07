@@ -22,11 +22,13 @@ import {
 import type { Invoice } from '#/hooks/use-invoices'
 import {
 	type CreditMode,
+	creditConsequenceText,
 	creditedQuantity,
 	creditLineIssue,
 	creditNoteErrors,
 	creditNoteLines,
 	creditPreviewNetCents,
+	creditPreviewTotals,
 	fillAll,
 	type QuantityInputs,
 	selectedCount,
@@ -37,10 +39,27 @@ import {
 	OptionCard,
 } from '#/pages/quotes/ui/doc/primitives'
 
+export type CreditIntent = 'credit' | 'cancel'
+
+const COPY: Record<CreditIntent, { title: string; description: string }> = {
+	credit: {
+		title: 'Émettre un avoir',
+		description:
+			'Un avoir corrige la facture sans la modifier : la facture reste archivée telle qu’elle a été émise, et l’avoir en annule tout ou partie.',
+	},
+	cancel: {
+		title: 'Annuler la facture',
+		description:
+			'L’annulation se fait par un avoir : la facture reste archivée, intacte.',
+	},
+}
+
 interface CreditNoteDialogProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
 	invoice: Invoice
+	intent: CreditIntent
+	remainingCents: number | null
 	isPending: boolean
 	error: string | null
 	onSubmit: (request: {
@@ -51,6 +70,8 @@ interface CreditNoteDialogProps {
 
 function CreditForm({
 	invoice,
+	intent,
+	remainingCents,
 	isPending,
 	error,
 	onClose,
@@ -59,13 +80,20 @@ function CreditForm({
 	onClose: () => void
 }) {
 	const baseId = useId()
-	const [mode, setMode] = useState<CreditMode>('partial')
+	const [mode, setMode] = useState<CreditMode>(
+		intent === 'cancel' ? 'total' : 'partial',
+	)
 	const [reason, setReason] = useState('')
 	const [inputs, setInputs] = useState<QuantityInputs>({})
 	const [attempted, setAttempted] = useState(false)
 	const lines = invoice.lines
 	const errors = creditNoteErrors(lines, mode, inputs, reason)
-	const netCents = creditPreviewNetCents(lines, mode, inputs)
+	const totals = creditPreviewTotals(lines, mode, inputs)
+	const copy = COPY[intent]
+	const sentence =
+		remainingCents === null
+			? null
+			: creditConsequenceText(remainingCents, totals.grossCents)
 
 	const submit = async (event: FormEvent) => {
 		event.preventDefault()
@@ -83,12 +111,8 @@ function CreditForm({
 	return (
 		<form onSubmit={submit} noValidate className="grid gap-4">
 			<DialogHeader>
-				<DialogTitle>Émettre un avoir</DialogTitle>
-				<DialogDescription>
-					Un avoir corrige la facture sans la modifier : la facture reste
-					archivée telle qu’elle a été émise, et l’avoir en annule tout ou
-					partie.
-				</DialogDescription>
+				<DialogTitle>{copy.title}</DialogTitle>
+				<DialogDescription>{copy.description}</DialogDescription>
 			</DialogHeader>
 			<fieldset className="grid gap-3 sm:grid-cols-2">
 				<legend className="mb-2 font-medium text-sm">Type d’avoir</legend>
@@ -98,7 +122,7 @@ function CreditForm({
 					checked={mode === 'total'}
 					onSelect={() => setMode('total')}
 					title="Annulation totale"
-					description="Crédite toutes les lignes de la facture, en entier."
+					description="Crédite toutes les lignes de la facture, en entier : la facture est annulée."
 				/>
 				<OptionCard
 					name={`${baseId}-mode`}
@@ -234,12 +258,24 @@ function CreditForm({
 				</Table>
 			</div>
 			<output className="block rounded-lg border bg-muted/40 p-3 text-sm">
-				<span className="flex items-baseline justify-between gap-4 font-semibold">
-					<span>Total HT crédité</span>
-					<Money cents={netCents} className="text-lg" />
+				<span className="flex items-baseline justify-between gap-4">
+					<span>Total HT</span>
+					<Money cents={totals.netCents} />
 				</span>
-				<span className="mt-1 block text-muted-foreground">
-					La TVA et le total TTC de l’avoir sont calculés à l’émission.
+				<span className="flex items-baseline justify-between gap-4">
+					<span>TVA</span>
+					<Money cents={totals.vatCents} />
+				</span>
+				<span className="mt-1 flex items-baseline justify-between gap-4 border-t pt-2 font-semibold">
+					<span>Total de l’avoir (TTC)</span>
+					<Money cents={totals.grossCents} className="text-lg" />
+				</span>
+				{sentence && (
+					<span className="mt-2 block text-muted-foreground">{sentence}</span>
+				)}
+				<span className="mt-1 block text-muted-foreground text-xs">
+					Montants indicatifs : la TVA et le total TTC définitifs sont calculés
+					à l’émission.
 				</span>
 			</output>
 			{attempted && errors.length > 0 && (
@@ -261,9 +297,15 @@ function CreditForm({
 				<Button type="button" variant="outline" onClick={onClose}>
 					Annuler
 				</Button>
-				<Button type="submit" disabled={isPending}>
+				<Button
+					type="submit"
+					variant={mode === 'total' ? 'destructive' : 'default'}
+					disabled={isPending}
+				>
 					{isPending ? <Loader2 className="animate-spin" /> : null}
-					Émettre l’avoir
+					{mode === 'total'
+						? 'Annuler la facture par un avoir'
+						: 'Émettre l’avoir'}
 				</Button>
 			</DialogFooter>
 		</form>

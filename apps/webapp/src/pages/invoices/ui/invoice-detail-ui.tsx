@@ -7,6 +7,7 @@ import type {
 	InvoicePayment,
 } from '#/hooks/use-invoices'
 import type { InvoiceActivityRecord } from '#/pages/invoices/feature/mocks/invoice-activity'
+import type { RefundRecord } from '#/pages/invoices/feature/mocks/invoice-extras'
 import type { creditNoteLines } from '#/pages/invoices/lib/credit-note-request'
 import type { InvoiceActions } from '#/pages/invoices/lib/invoice-actions'
 import type { PaymentValues } from '#/pages/invoices/lib/payment-form'
@@ -55,6 +56,10 @@ interface InvoiceDetailUIProps {
 	displayState: InvoiceDisplayState
 	actions: InvoiceActions
 	balance: InvoiceBalance | undefined
+	remainingCents: number | null
+	refunds: RefundRecord[]
+	quote: { id: string; reference: string | null } | null
+	issueBounds: { min: string | null; max: string }
 	payments: InvoicePayment[]
 	paymentsLoading: boolean
 	creditNotes: Invoice[]
@@ -86,8 +91,10 @@ interface InvoiceDetailUIProps {
 	onDuplicateLine: (index: number) => string
 	onRemoveLine: (index: number) => void
 	onSave: () => void
-	onIssue: () => Promise<boolean>
+	onIssue: (issueDate: string) => Promise<boolean>
 	onCancel: () => Promise<boolean>
+	onDeleteDraft: () => void
+	onRefund: (values: PaymentValues) => Promise<boolean>
 	onRecordPayment: (values: PaymentValues) => Promise<boolean>
 	onDeletePayment: (paymentId: string) => void
 	onIssueCreditNote: (request: {
@@ -121,12 +128,12 @@ export function InvoiceDetailUI(props: InvoiceDetailUIProps) {
 	} = props
 	const draft = invoice.status === 'DRAFT'
 	const locked = !draft
-	const remainingCents = props.balance?.remaining_cents ?? null
+	const remainingCents = props.remainingCents
 
 	const main = (
 		<>
 			<header className="grid gap-3">
-				<BackLink to="/crm/invoices" label="Factures" />
+				<BackLink to="/crm/factures" label="Factures" />
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
 					{locked && (
 						<Lock
@@ -156,6 +163,7 @@ export function InvoiceDetailUI(props: InvoiceDetailUIProps) {
 					invoice={invoice}
 					actions={props.actions}
 					remainingCents={remainingCents}
+					issueBounds={props.issueBounds}
 					isDirty={isDirty}
 					canSave={props.canSave}
 					isSaving={props.isSaving}
@@ -172,6 +180,8 @@ export function InvoiceDetailUI(props: InvoiceDetailUIProps) {
 					onSave={props.onSave}
 					onIssue={props.onIssue}
 					onCancel={props.onCancel}
+					onDeleteDraft={props.onDeleteDraft}
+					onRefund={props.onRefund}
 					onRecordPayment={props.onRecordPayment}
 					onIssueCreditNote={props.onIssueCreditNote}
 					onSend={props.onSend}
@@ -270,6 +280,7 @@ export function InvoiceDetailUI(props: InvoiceDetailUIProps) {
 			displayState={displayState}
 			activity={props.activity}
 			history={history}
+			quote={props.quote}
 			onSaveNote={props.onSaveNote}
 		/>
 	) : (
@@ -280,7 +291,10 @@ export function InvoiceDetailUI(props: InvoiceDetailUIProps) {
 			displayState={displayState}
 			activity={props.activity}
 			history={history}
+			quote={props.quote}
 			balance={props.balance}
+			remainingCents={props.remainingCents}
+			refunds={props.refunds}
 			payments={props.payments}
 			paymentsLoading={props.paymentsLoading}
 			creditNotes={props.creditNotes}

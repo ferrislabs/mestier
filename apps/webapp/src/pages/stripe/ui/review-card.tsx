@@ -115,10 +115,7 @@ export function ReviewCard({
 					{event.accountId !== null && (
 						<Fact label="Client rattaché">
 							<Link
-								to={buildOrgPath(
-									organizationSlug,
-									'/crm/customers/$customerId',
-								)}
+								to={buildOrgPath(organizationSlug, '/crm/clients/$customerId')}
 								params={{ customerId: event.accountId }}
 								className="rounded-sm outline-none transition-colors hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 							>
@@ -178,7 +175,7 @@ export function ReviewCard({
 						<div className="flex flex-wrap items-center justify-end gap-2">
 							{openInvoices.length === 0 && event.accountId !== null && (
 								<Link
-									to={buildOrgPath(organizationSlug, '/crm/invoices/new')}
+									to={buildOrgPath(organizationSlug, '/crm/factures/nouvelle')}
 									className="rounded-sm text-primary text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 								>
 									Créer une facture pour ce client

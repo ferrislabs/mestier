@@ -19,11 +19,13 @@ function input(
 }
 
 describe('invoiceActions', () => {
-	it('lets a draft be issued or cancelled and nothing else', () => {
+	it('lets a draft be issued, cancelled or deleted and nothing else', () => {
 		const actions = invoiceActions(input({ status: 'DRAFT' }))
 
 		expect(actions.issue.enabled).toBe(true)
 		expect(actions.cancel.enabled).toBe(true)
+		expect(actions.deleteDraft.enabled).toBe(true)
+		expect(actions.refund.visible).toBe(false)
 		expect(actions.recordPayment.visible).toBe(false)
 		expect(actions.creditNote.visible).toBe(false)
 	})
@@ -80,6 +82,24 @@ describe('invoiceActions', () => {
 
 		expect(actions.recordPayment.enabled).toBe(false)
 		expect(actions.send.enabled).toBe(false)
+	})
+})
+
+describe('refund', () => {
+	it('offers a refund, not a new payment, when the client paid too much', () => {
+		const actions = invoiceActions(input({ remainingCents: -3000 }))
+
+		expect(actions.refund.enabled).toBe(true)
+		expect(actions.recordPayment.enabled).toBe(false)
+		expect(actions.recordPayment.reason).toContain('Rembourser')
+		expect(actions.remind.visible).toBe(false)
+	})
+
+	it('hides the refund and the draft deletion on a settled invoice', () => {
+		const actions = invoiceActions(input({ status: 'PAID', remainingCents: 0 }))
+
+		expect(actions.refund.visible).toBe(false)
+		expect(actions.deleteDraft.visible).toBe(false)
 	})
 })
 

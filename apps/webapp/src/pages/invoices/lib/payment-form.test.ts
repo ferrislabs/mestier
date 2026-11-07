@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+	effectiveRemainingCents,
 	initialPaymentValues,
 	paymentErrors,
 	paymentRequest,
+	refundRecord,
 	todayDate,
 } from './payment-form'
 
@@ -76,5 +78,55 @@ describe('paymentRequest', () => {
 			reference: null,
 			note: 'ok',
 		})
+	})
+})
+
+describe('refund mode', () => {
+	const values = {
+		date: TODAY,
+		amount: '30',
+		method: 'Virement',
+		reference: '',
+		note: '',
+	}
+
+	it('proposes the over-payment that is owed back', () => {
+		expect(initialPaymentValues(-4500, TODAY, 'refund').amount).toBe('45,00')
+		expect(initialPaymentValues(12000, TODAY, 'refund').amount).toBe('')
+	})
+
+	it('caps a refund at the over-payment', () => {
+		expect(paymentErrors(values, -4500, TODAY, 'refund')).toEqual([])
+		expect(
+			paymentErrors({ ...values, amount: '50' }, -4500, TODAY, 'refund'),
+		).toEqual([expect.stringContaining('dépasse le trop-perçu')])
+		expect(paymentErrors(values, 12000, TODAY, 'refund')).toEqual([
+			expect.stringContaining('dépasse le trop-perçu'),
+		])
+	})
+
+	it('builds the mock record in cents', () => {
+		expect(
+			refundRecord({ ...values, amount: '30,50', reference: ' R1 ', note: '' }),
+		).toEqual({
+			date: TODAY,
+			amountCents: 3050,
+			method: 'Virement',
+			reference: 'R1',
+			note: '',
+		})
+	})
+})
+
+describe('effectiveRemainingCents', () => {
+	it('moves an over-payment toward zero as refunds are recorded', () => {
+		expect(effectiveRemainingCents(-4500, 3000)).toBe(-1500)
+		expect(effectiveRemainingCents(-4500, 4500)).toBe(0)
+		expect(effectiveRemainingCents(-4500, 9000)).toBe(0)
+	})
+
+	it('leaves a positive or unknown balance alone', () => {
+		expect(effectiveRemainingCents(12000, 3000)).toBe(12000)
+		expect(effectiveRemainingCents(null, 3000)).toBeNull()
 	})
 })

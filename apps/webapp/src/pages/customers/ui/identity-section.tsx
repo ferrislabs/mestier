@@ -14,12 +14,12 @@ import type { Customer } from '#/hooks/use-customers'
 import type { AccountExtras } from '#/pages/customers/feature/mocks/account-extras'
 import { findPerson } from '#/pages/customers/feature/mocks/people'
 import type { AccountForm } from '#/pages/customers/lib/account-form'
+import { openDealsSentence } from '#/pages/customers/lib/accounts'
 import { formatDate } from '#/pages/customers/lib/format'
-import { formatSiren, TAB_INFO } from '#/pages/customers/lib/rubriques'
+import { formatSiret, TAB_INFO } from '#/pages/customers/lib/rubriques'
 import {
 	ACCOUNT_KIND_LABELS,
 	accountStatusOf,
-	customerPipelineStageLabel,
 	kindOf,
 	LEAD_SOURCE_LABELS,
 } from '#/pages/customers/types'
@@ -31,7 +31,6 @@ import {
 	DetailList,
 	DetailRow,
 } from '#/pages/customers/ui/detail-card'
-import { StageBadge } from '#/pages/customers/ui/status-badges'
 
 function websiteHref(website: string): string {
 	return /^https?:\/\//i.test(website) ? website : `https://${website}`
@@ -48,6 +47,7 @@ interface IdentitySectionProps {
 	onConvert: () => void
 	onArchive: () => void
 	onRestore: () => void
+	openDeals: number | null
 }
 
 export function IdentitySection({
@@ -61,6 +61,7 @@ export function IdentitySection({
 	onConvert,
 	onArchive,
 	onRestore,
+	openDeals,
 }: IdentitySectionProps) {
 	const [editing, setEditing] = useState(false)
 	const [confirm, setConfirm] = useState<'convert' | 'archive' | null>(null)
@@ -122,9 +123,9 @@ export function IdentitySection({
 				<DetailList>
 					<DetailRow label="Type">{ACCOUNT_KIND_LABELS[kind]}</DetailRow>
 					{professional && (
-						<DetailRow label="SIREN">
+						<DetailRow label="SIRET">
 							{registration ? (
-								<span className="tabular">{formatSiren(registration)}</span>
+								<span className="tabular">{formatSiret(registration)}</span>
 							) : (
 								<Dash />
 							)}
@@ -177,11 +178,6 @@ export function IdentitySection({
 
 			<DetailCard title="Suivi commercial">
 				<DetailList>
-					<DetailRow label="Étape pipeline">
-						<StageBadge stage={customer.pipeline_stage}>
-							{customerPipelineStageLabel(customer.pipeline_stage)}
-						</StageBadge>
-					</DetailRow>
 					<DetailRow label="Responsable">
 						{owner ? (
 							<span className="inline-flex items-center gap-2">
@@ -210,6 +206,16 @@ export function IdentitySection({
 					<DetailRow label="Créé le">
 						{formatDate(customer.created_at)}
 					</DetailRow>
+					{extras.convertedAt && (
+						<DetailRow label="Converti en client le">
+							{formatDate(extras.convertedAt)}
+						</DetailRow>
+					)}
+					{extras.archivedAt && (
+						<DetailRow label="Archivé le">
+							{formatDate(extras.archivedAt)}
+						</DetailRow>
+					)}
 				</DetailList>
 			</DetailCard>
 
@@ -245,7 +251,7 @@ export function IdentitySection({
 				open={confirm === 'convert'}
 				onOpenChange={(open) => !open && setConfirm(null)}
 				title="Convertir en client"
-				description={`${customer.name} passera de prospect à client.`}
+				description={`${customer.name} passera de prospect à client. La date de conversion sera enregistrée à aujourd’hui.`}
 				confirmLabel="Convertir en client"
 				onConfirm={() => {
 					onConvert()
@@ -256,7 +262,7 @@ export function IdentitySection({
 				open={confirm === 'archive'}
 				onOpenChange={(open) => !open && setConfirm(null)}
 				title={`Archiver ${customer.name} ?`}
-				description="Ses devis, factures et paiements sont conservés, et tu pourras réactiver le compte à tout moment."
+				description={`${openDealsSentence(openDeals)} Ses devis, factures et paiements sont conservés, et tu pourras réactiver le compte à tout moment.`}
 				confirmLabel="Archiver"
 				destructive
 				onConfirm={() => {

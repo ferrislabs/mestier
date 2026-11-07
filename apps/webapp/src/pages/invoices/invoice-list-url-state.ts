@@ -49,3 +49,20 @@ const INVOICE_SORT_VALUES = [
 	'total-asc',
 	'due-asc',
 ]
+
+export function readInvoiceClientParam(): string | null {
+	if (typeof window === 'undefined') return null
+	return new URLSearchParams(window.location.search).get('client') || null
+}
+
+export function clearInvoiceClientParam() {
+	if (typeof window === 'undefined') return
+	const params = new URLSearchParams(window.location.search)
+	params.delete('client')
+	const query = params.toString()
+	window.history.replaceState(
+		null,
+		'',
+		query ? `${window.location.pathname}?${query}` : window.location.pathname,
+	)
+}

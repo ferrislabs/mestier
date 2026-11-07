@@ -169,7 +169,7 @@ function CustomerName({
 		return <>{expenseOrReceipt.customerName}</>
 	return (
 		<Link
-			to={buildOrgPath(organizationSlug, '/crm/customers/$customerId')}
+			to={buildOrgPath(organizationSlug, '/crm/clients/$customerId')}
 			params={{ customerId: expenseOrReceipt.customerId }}
 			className="rounded-sm outline-none transition-colors hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 		>

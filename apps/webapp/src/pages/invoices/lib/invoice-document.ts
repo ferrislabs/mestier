@@ -1,6 +1,7 @@
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Invoice, InvoiceKind, InvoicePayment } from '#/hooks/use-invoices'
 import type { Organization } from '#/hooks/use-organizations'
+import type { RefundInput } from '#/pages/invoices/lib/payment-form'
 import {
 	centsToEuros,
 	invoiceKindLabel,
@@ -21,6 +22,28 @@ export function invoiceHeading(kind: InvoiceKind): string {
 	if (kind === 'FINAL') return 'Facture de solde'
 	if (kind === 'CREDIT_NOTE') return 'Avoir'
 	return 'Facture'
+}
+
+const DAY_MS = 86_400_000
+
+function dayStart(value: string): number {
+	const day = value.slice(0, 10)
+	return Date.UTC(
+		Number(day.slice(0, 4)),
+		Number(day.slice(5, 7)) - 1,
+		Number(day.slice(8, 10)),
+	)
+}
+
+export function paymentTermsLine(
+	issuedAt: string,
+	dueAt: string | null | undefined,
+): string | null {
+	if (!dueAt) return null
+	const days = Math.round((dayStart(dueAt) - dayStart(issuedAt)) / DAY_MS)
+	if (days < 0) return null
+	if (days === 0) return 'Paiement à réception de la facture.'
+	return `Délai de paiement : ${days} ${days < 2 ? 'jour' : 'jours'}.`
 }
 
 export function savedInvoiceTotals(invoice: Invoice): DocTotals {
@@ -72,7 +95,17 @@ export function buildInvoicePaper(input: {
 		showVat: organization.vat_status?.type === 'subject',
 		vatNotice:
 			invoice.vat_breakdown.length === 0 ? vatNoticeOf(organization) : null,
-		notes: invoice.notes ?? '',
+		notes: [
+			invoice.kind === 'CREDIT_NOTE'
+				? null
+				: paymentTermsLine(
+						invoice.issued_at ?? invoice.created_at,
+						invoice.due_at,
+					),
+			invoice.notes,
+		]
+			.filter(Boolean)
+			.join('\n'),
 		reference: input.reference ?? null,
 		reason: invoice.kind === 'CREDIT_NOTE' ? (invoice.notes ?? '') : '',
 	}
@@ -88,6 +121,7 @@ export function buildInvoiceHistory(input: {
 	payments: readonly InvoicePayment[]
 	creditNotes: readonly Invoice[]
 	activity: InvoiceActivity
+	refunds?: readonly (RefundInput & { id: string })[]
 }): HistoryEntry[] {
 	const { invoice, activity } = input
 	const entries: HistoryEntry[] = [
@@ -138,6 +172,17 @@ export function buildInvoiceHistory(input: {
 				currency: 'EUR',
 			}).format(payment.amount_cents / 100)} enregistré (${payment.method})`,
 			at: payment.created_at,
+		})
+	}
+	for (const refund of input.refunds ?? []) {
+		entries.push({
+			id: `refund-${refund.id}`,
+			kind: 'payment',
+			detail: `Remboursement de ${new Intl.NumberFormat('fr-FR', {
+				style: 'currency',
+				currency: 'EUR',
+			}).format(refund.amountCents / 100)} enregistré (${refund.method})`,
+			at: `${refund.date}T12:00:00`,
 		})
 	}
 	for (const note of input.creditNotes) {

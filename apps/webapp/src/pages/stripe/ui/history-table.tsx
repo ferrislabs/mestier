@@ -178,7 +178,7 @@ export function HistoryTable({
 											<Link
 												to={buildOrgPath(
 													organizationSlug,
-													'/crm/customers/$customerId',
+													'/crm/clients/$customerId',
 												)}
 												params={{ customerId: event.accountId }}
 												className="relative rounded-sm outline-none transition-colors hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"

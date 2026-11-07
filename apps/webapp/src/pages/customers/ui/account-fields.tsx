@@ -9,13 +9,11 @@ import {
 	SelectValue,
 } from '#/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
-import type { CustomerPipelineStage } from '#/hooks/use-customers'
 import type { AccountKind } from '#/pages/customers/feature/mocks/account-extras'
 import { PEOPLE } from '#/pages/customers/feature/mocks/people'
 import type { AccountForm } from '#/pages/customers/lib/account-form'
 import {
 	ACCOUNT_KIND_LABELS,
-	customerPipelineStageLabel,
 	LEAD_SOURCE_LABELS,
 	LEAD_SOURCES,
 } from '#/pages/customers/types'
@@ -29,15 +27,6 @@ const KINDS: readonly AccountKind[] = ['professionnel', 'particulier']
 const STATUSES: readonly { value: AccountForm['status']; label: string }[] = [
 	{ value: 'prospect', label: 'Prospect' },
 	{ value: 'client', label: 'Client' },
-]
-
-const PIPELINE_STAGES: readonly CustomerPipelineStage[] = [
-	'NEW',
-	'CONTACTED',
-	'QUALIFIED',
-	'QUOTE_SENT',
-	'WON',
-	'LOST',
 ]
 
 function ChoiceField<T extends string>({
@@ -147,8 +136,9 @@ export function AccountFields({
 			{professional && (
 				<FormField
 					id={registrationNumber.id}
-					label="SIREN"
+					label="SIRET"
 					error={registrationNumber.error}
+					hint="14 chiffres, espaces acceptés."
 				>
 					<Input
 						{...registrationNumber.input}
@@ -158,7 +148,7 @@ export function AccountFields({
 							onChange({ registrationNumber: event.target.value })
 						}
 						autoComplete="off"
-						placeholder="823 456 789"
+						placeholder="823 456 789 00019"
 					/>
 				</FormField>
 			)}
@@ -255,32 +245,6 @@ export function AccountFields({
 					</SelectContent>
 				</Select>
 			</FormField>
-			{mode === 'edit' && (
-				<FormField
-					id={`${baseId}-stage`}
-					label="Étape pipeline"
-					className="sm:col-span-2"
-				>
-					<Select
-						value={form.pipelineStage}
-						onValueChange={(value) => {
-							const stage = PIPELINE_STAGES.find((item) => item === value)
-							if (stage) onChange({ pipelineStage: stage })
-						}}
-					>
-						<SelectTrigger id={`${baseId}-stage`} className="w-full">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{PIPELINE_STAGES.map((stage) => (
-								<SelectItem key={stage} value={stage}>
-									{customerPipelineStageLabel(stage)}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</FormField>
-			)}
 			<FormField
 				id={terms.id}
 				label="Délai de paiement (jours)"

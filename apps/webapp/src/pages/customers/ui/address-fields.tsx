@@ -70,6 +70,20 @@ export function AddressFields({
 					autoComplete="off"
 				/>
 			</FormField>
+			<FormField
+				id={`${street.id}-country`}
+				label="Pays"
+				className="sm:col-span-2"
+			>
+				<Input
+					id={`${street.id}-country`}
+					value={value.country}
+					onChange={(event) =>
+						onChange({ ...value, country: event.target.value })
+					}
+					autoComplete="off"
+				/>
+			</FormField>
 		</>
 	)
 }
