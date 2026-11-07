@@ -22,6 +22,7 @@ pub mod allocation;
 pub mod paths;
 pub mod response;
 pub mod supplier;
+pub mod supplier_error;
 pub mod supplier_invoice;
 
 pub const TAG: &str = "purchasing";

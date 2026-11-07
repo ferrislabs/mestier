@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE expenses\n                SET reimbursed_on = $2, updated_at = $3\n                WHERE id = $1 AND advanced_by_member_id IS NOT NULL AND reimbursed_on IS NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bbc777de3d42b5b8c4a03e6184d62a71b56d0562bca1888d6dc18441068e1ba9"
+}

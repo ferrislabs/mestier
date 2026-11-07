@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM supplier_addresses WHERE supplier_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "089f752a6e1fe1987de6f915f1b2298b0a428e06dea64279a90cc28c349f11e4"
+}

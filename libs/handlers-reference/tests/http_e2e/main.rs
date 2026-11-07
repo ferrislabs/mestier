@@ -5,6 +5,7 @@
 //! second organization used only as the target of the cross-tenant refusal
 //! test.
 
+mod catalog_b6;
 mod harness;
 mod issuer;
 

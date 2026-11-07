@@ -20,8 +20,9 @@ use axum::{Router, middleware::from_fn_with_state};
 use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::{
-    CustomerContextId, CustomerId, Invoice, InvoicePayment, InvoicePaymentId, OrganizationId,
-    Permissions, Project, ProjectId, QuoteId,
+    CustomerContextId, CustomerId, Expense, ExpenseCategory, ExpenseCategoryId, ExpenseId, Invoice,
+    InvoicePayment, InvoicePaymentId, OrganizationId, Permissions, Project, ProjectId, QuoteId,
+    Receipt, ReceiptId,
 };
 
 pub mod invoice;
@@ -31,8 +32,10 @@ pub mod payment;
 pub mod project;
 pub mod quote;
 pub mod response;
+pub mod treasury;
 
 pub const TAG: &str = "invoices";
+pub const TREASURY_TAG: &str = "treasury";
 
 #[derive(Debug, serde::Serialize, PartialEq)]
 pub struct EmptyResponse;
@@ -182,6 +185,39 @@ async fn require_invoice_project(
     Ok(())
 }
 
+async fn require_expense_membership(
+    state: &AppState,
+    identity: &Identity,
+    expense_id: ExpenseId,
+) -> Result<Expense, ApiError> {
+    let expense = state.usecase.get_expense(expense_id).await?;
+    require_org_membership(state, identity, expense.organization_id).await?;
+
+    Ok(expense)
+}
+
+async fn require_category_membership(
+    state: &AppState,
+    identity: &Identity,
+    category_id: ExpenseCategoryId,
+) -> Result<ExpenseCategory, ApiError> {
+    let category = state.usecase.get_expense_category(category_id).await?;
+    require_org_membership(state, identity, category.organization_id).await?;
+
+    Ok(category)
+}
+
+async fn require_receipt_membership(
+    state: &AppState,
+    identity: &Identity,
+    receipt_id: ReceiptId,
+) -> Result<Receipt, ApiError> {
+    let receipt = state.usecase.get_receipt(receipt_id).await?;
+    require_org_membership(state, identity, receipt.organization_id).await?;
+
+    Ok(receipt)
+}
+
 pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .typed_get(invoice::list::handler)
@@ -196,6 +232,20 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(invoice::note::handler)
         .typed_post(quote::create_invoice::handler)
         .typed_get(quote::invoicing::handler)
+        .typed_get(treasury::expense::list_handler)
+        .typed_post(treasury::expense::create_handler)
+        .typed_get(treasury::expense::get_handler)
+        .typed_patch(treasury::expense::update_handler)
+        .typed_delete(treasury::expense::delete_handler)
+        .typed_post(treasury::expense::pay_handler)
+        .typed_post(treasury::expense::reimburse_handler)
+        .typed_get(treasury::category::list_handler)
+        .typed_post(treasury::category::create_handler)
+        .typed_patch(treasury::category::update_handler)
+        .typed_delete(treasury::category::delete_handler)
+        .typed_get(treasury::ledger::read_handler)
+        .typed_post(treasury::ledger::record_handler)
+        .typed_post(treasury::ledger::allocate_handler)
         .typed_post(invoice::cancel::handler)
         .typed_post(invoice::credit_note::handler)
         .typed_get(invoice::credit_note::list_handler)

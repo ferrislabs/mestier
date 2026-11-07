@@ -3,6 +3,7 @@ use axum_extra::routing::RouterExt;
 use handlers::{AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 
 pub mod absence;
+pub mod catalog;
 pub mod cost_basis;
 pub mod custom_unit;
 pub mod employee;

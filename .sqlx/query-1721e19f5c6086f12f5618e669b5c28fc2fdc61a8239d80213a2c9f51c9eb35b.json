@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO expenses (id, org_id, date, label, supplier_id, category_id, reference, amount_ht_cents, vat_cents, due_date, status, paid_on, method, advanced_by_member_id, reimbursed_on, customer_id, proof_file_key, note, created_at, updated_at)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Int4",
+        "Date",
+        "Text",
+        "Date",
+        "Text",
+        "Uuid",
+        "Date",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1721e19f5c6086f12f5618e669b5c28fc2fdc61a8239d80213a2c9f51c9eb35b"
+}

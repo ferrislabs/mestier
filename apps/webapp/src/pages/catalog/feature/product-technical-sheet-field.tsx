@@ -3,20 +3,19 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useFileUrls } from '#/hooks/use-file-url'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { useCreateSupplier, useSuppliers } from '#/hooks/use-suppliers'
+import { useExpenseCategories } from '#/hooks/use-treasury'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { datasheetName } from '#/pages/catalog/lib/product-request'
 import {
 	ProductTechnicalSheet,
 	type TechnicalSheetValues,
 } from '#/pages/catalog/ui/product-technical-sheet'
-import { useSaveSupplierExtras } from '#/pages/suppliers/feature/mocks/supplier-extras'
 import {
 	buildSupplierRequest,
 	emptySupplierValues,
-	extrasOfValues,
 } from '#/pages/suppliers/lib/supplier-form'
 import { SupplierFormDialog } from '#/pages/suppliers/ui/supplier-form-dialog'
-import { useLedger } from '#/pages/treasury/feature/mocks/ledger'
+import { categoryOf } from '#/pages/treasury/lib/ledger-api'
 
 const TYPE_BY_EXTENSION: Record<string, string> = {
 	pdf: 'PDF',
@@ -50,8 +49,7 @@ export function ProductTechnicalSheetField({
 	const canManage = useHasPermission('MANAGE_REFERENCE')
 	const suppliers = useSuppliers(activeOrganization.id)
 	const createSupplier = useCreateSupplier()
-	const saveSupplierExtras = useSaveSupplierExtras()
-	const ledger = useLedger()
+	const categoryRows = useExpenseCategories(activeOrganization.id).data?.data
 	const [dialogOpen, setDialogOpen] = useState(false)
 	const previews = useFileUrls(values.datasheetKeys)
 
@@ -83,7 +81,7 @@ export function ProductTechnicalSheetField({
 					open
 					editingName={null}
 					initialValues={emptySupplierValues()}
-					categories={ledger.data.categories}
+					categories={(categoryRows ?? []).map(categoryOf)}
 					archived={null}
 					toPay={0}
 					onToggleArchive={() => undefined}
@@ -101,10 +99,6 @@ export function ProductTechnicalSheetField({
 							path: { organization_id: activeOrganization.id },
 							body: buildSupplierRequest(supplierValues),
 						})
-						saveSupplierExtras.mutate(
-							created.data.id,
-							extrasOfValues(supplierValues),
-						)
 						onChange({ supplierId: created.data.id })
 						setDialogOpen(false)
 					}}

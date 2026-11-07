@@ -33,13 +33,15 @@ export type Expense = {
 	customerName: string
 	proofName: string | null
 	note: string
+	total: number
+	state: ExpenseDisplayState
+	daysLate: number
 }
 
 export type Receipt = {
 	id: string
 	date: string
 	amount: number
-	vatAmount: number
 	method: PaymentMethod
 	source: PaymentSource
 	customerId: string | null
@@ -54,14 +56,6 @@ export type OpenInvoice = {
 	label: string
 	customerName: string
 	balance: number
-	vatRate: number | null
-}
-
-export type LedgerState = {
-	categories: readonly ExpenseCategory[]
-	expenses: readonly Expense[]
-	receipts: readonly Receipt[]
-	openInvoices: readonly OpenInvoice[]
 }
 
 export type LedgerKind = 'receipt' | 'expense'

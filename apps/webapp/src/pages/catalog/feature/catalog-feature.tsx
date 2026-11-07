@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Label } from '#/components/ui/label'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useBillingSettings } from '#/hooks/use-billing-settings'
 import { useUploadFile } from '#/hooks/use-customers'
 import { useFileUrls } from '#/hooks/use-file-url'
 import { useHasPermission } from '#/hooks/use-permissions'
@@ -16,6 +17,7 @@ import {
 } from '#/hooks/use-reference-catalog'
 import { mutationErrorMessage } from '#/lib/api-error'
 import {
+	apiFrequencyOf,
 	bpOfVatRate,
 	type CatalogFilters,
 	type CatalogForm,
@@ -24,23 +26,21 @@ import {
 	catalogSummary,
 	categoryOptions,
 	duplicateOf,
+	EMPTY_CATALOG_EXTRAS,
 	emptyForm,
 	filterCatalog,
 	formOf,
 	hasSameReference,
-	usageOf,
+	NEVER_USED,
 } from '#/pages/catalog/catalog-model'
-import {
-	EMPTY_CATALOG_EXTRAS,
-	useCatalogExtrasMap,
-	useSaveCatalogExtras,
-} from '#/pages/catalog/feature/mocks/catalog-extras'
-import { useCatalogUsageMap } from '#/pages/catalog/feature/mocks/catalog-usage'
 import { ProductTechnicalSheetField } from '#/pages/catalog/feature/product-technical-sheet-field'
 import { buildProductRequest } from '#/pages/catalog/lib/product-request'
 import type { CatalogEditor } from '#/pages/catalog/ui/catalog-form-dialog'
 import { CatalogUI } from '#/pages/catalog/ui/catalog-ui'
-import { useCrmSettings } from '#/pages/crm-settings/feature/mocks/settings'
+import {
+	billingOf,
+	DEFAULT_BILLING,
+} from '#/pages/crm-settings/lib/settings-api'
 import { parseAmount } from '#/pages/customers/lib/format'
 import { PhotoStrip } from '#/pages/quotes/ui/photo-strip'
 
@@ -104,10 +104,7 @@ function CatalogWorkspace({
 	const uploadFile = useUploadFile()
 	const createCustomUnit = useCreateCustomUnit(organizationId)
 	const canManage = useHasPermission('MANAGE_REFERENCE')
-	const extras = useCatalogExtrasMap()
-	const saveExtras = useSaveCatalogExtras()
-	const usage = useCatalogUsageMap()
-	const settings = useCrmSettings()
+	const billing = useBillingSettings(organizationId)
 	const [query, setQuery] = useState(filters.query)
 	const [editor, setEditor] = useState<CatalogEditor>({ mode: 'create' })
 	const [editing, setEditing] = useState(false)
@@ -119,7 +116,9 @@ function CatalogWorkspace({
 		() => catalogRows(products ?? [], serviceRates ?? []),
 		[products, serviceRates],
 	)
-	const extrasOf = (itemId: string) => extras[itemId] ?? EMPTY_CATALOG_EXTRAS
+	const rowOf = (itemId: string) => rows.find((row) => row.id === itemId)
+	const extrasOf = (itemId: string) =>
+		rowOf(itemId)?.extras ?? EMPTY_CATALOG_EXTRAS
 	const current: CatalogFilters = { ...filters, query }
 	const visible = filterCatalog(rows, extrasOf, current)
 	const categories = categoryOptions(
@@ -131,7 +130,9 @@ function CatalogWorkspace({
 	const customUnits = (catalog.customUnits.data?.data ?? []).map(
 		(customUnit) => customUnit.code,
 	)
-	const defaultVat = settings.data.settings.defaultVatRate
+	const defaultVat = (
+		billing.data ? billingOf(billing.data.data) : DEFAULT_BILLING
+	).defaultVatRate
 
 	const initial: CatalogForm =
 		editor.mode === 'edit'
@@ -151,7 +152,13 @@ function CatalogWorkspace({
 		const costCents = form.cost.trim() === '' ? null : parseAmount(form.cost)
 		const vat = bpOfVatRate(form.vatRate)
 		const price = (priceCents / 100).toFixed(2)
-		let itemId: string
+		const catalog = {
+			category: form.category.trim(),
+			billing_frequency: apiFrequencyOf(form.frequency),
+			cost_cents: costCents,
+			archived:
+				editor.mode === 'edit' ? extrasOf(editor.row.id).archived : false,
+		}
 		if (form.kind === 'product') {
 			const body = {
 				...buildProductRequest({
@@ -167,19 +174,18 @@ function CatalogWorkspace({
 					datasheetKeys: form.datasheetKeys,
 				}),
 				default_vat_rate_bp: vat,
+				...catalog,
 			}
 			if (editor.mode === 'edit' && editor.row.product) {
-				itemId = editor.row.id
 				await updateProduct.mutateAsync({
-					path: { product_id: itemId },
+					path: { product_id: editor.row.id },
 					body,
 				})
 			} else {
-				const created = await createProduct.mutateAsync({
+				await createProduct.mutateAsync({
 					path: { organization_id: organizationId },
 					body,
 				})
-				itemId = created.data.id
 			}
 		} else {
 			const body = {
@@ -188,27 +194,61 @@ function CatalogWorkspace({
 				rate_cents: priceCents,
 				description: form.description.trim() || null,
 				default_vat_rate_bp: vat,
+				...catalog,
 			}
 			if (editor.mode === 'edit' && editor.row.serviceRate) {
-				itemId = editor.row.id
 				await updateServiceRate.mutateAsync({
-					path: { service_rate_id: itemId },
+					path: { service_rate_id: editor.row.id },
 					body,
 				})
 			} else {
-				const created = await createServiceRate.mutateAsync({
+				await createServiceRate.mutateAsync({
 					path: { organization_id: organizationId },
 					body,
 				})
-				itemId = created.data.id
 			}
 		}
-		await saveExtras.mutateAsync(itemId, {
-			category: form.category.trim(),
-			cost: costCents,
-			frequency: form.frequency,
-		})
 		setEditing(false)
+	}
+
+	async function toggleArchive(row: CatalogRow) {
+		const archived = !row.extras.archived
+		const catalog = {
+			category: row.extras.category,
+			billing_frequency: apiFrequencyOf(row.extras.frequency),
+			cost_cents: row.extras.cost,
+			archived,
+		}
+		if (row.product)
+			await updateProduct.mutateAsync({
+				path: { product_id: row.id },
+				body: {
+					name: row.product.name,
+					sku: row.product.sku ?? null,
+					unit: row.product.unit,
+					unit_price_cents: row.product.unit_price_cents,
+					default_vat_rate_bp: row.product.default_vat_rate_bp ?? null,
+					description: row.product.description ?? null,
+					photo_keys: row.product.photo_keys,
+					supplier_id: row.product.supplier_id ?? null,
+					manufacturer: row.product.manufacturer ?? null,
+					technical_specs: row.product.technical_specs ?? null,
+					datasheet_keys: row.product.datasheet_keys,
+					...catalog,
+				},
+			})
+		else if (row.serviceRate)
+			await updateServiceRate.mutateAsync({
+				path: { service_rate_id: row.id },
+				body: {
+					label: row.serviceRate.label,
+					unit: row.serviceRate.unit,
+					rate_cents: row.serviceRate.rate_cents,
+					default_vat_rate_bp: row.serviceRate.default_vat_rate_bp ?? null,
+					description: row.serviceRate.description ?? null,
+					...catalog,
+				},
+			})
 	}
 
 	async function remove(row: CatalogRow) {
@@ -233,7 +273,7 @@ function CatalogWorkspace({
 				onFiltersChange(next)
 			}}
 			extrasOf={extrasOf}
-			usageOf={(itemId) => usageOf(usage, itemId)}
+			usageOf={(itemId) => rowOf(itemId)?.usage ?? NEVER_USED}
 			canManage={canManage}
 			isLoading={catalog.serviceRates.isLoading || catalog.products.isLoading}
 			error={
@@ -310,11 +350,7 @@ function CatalogWorkspace({
 					/>
 				</>
 			)}
-			onToggleArchive={(row) =>
-				void saveExtras.mutateAsync(row.id, {
-					archived: !extrasOf(row.id).archived,
-				})
-			}
+			onToggleArchive={(row) => void toggleArchive(row)}
 			deleting={deleting}
 			onDeleteRequest={setDeleting}
 			onDeleteConfirm={(row) => void remove(row)}

@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE suppliers\n                SET name = $2, registration_number = $3, vat_number = $4, address = $5, phone = $6, email = $7, iban = $8, payment_terms_days = $9, default_category_id = $10, notes = $11, updated_at = $12\n                WHERE id = $1 AND deleted_at IS NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb49c3bca41ca6ba7de87f237b2a468fc1cdda7adf1696bad252965048b2355e"
+}

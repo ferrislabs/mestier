@@ -104,6 +104,17 @@ pub use domain::quote::service::{
 pub use domain::member::service::MemberService;
 pub use domain::role::service::RoleService;
 
+pub use domain::{
+    CatalogProfile, CatalogProfileInput, CatalogUsage, DocumentVatRow, Expense, ExpenseCategory,
+    ExpenseCategoryId, ExpenseCategoryService, ExpenseDisplayState, ExpenseError, ExpenseField,
+    ExpenseId, ExpenseOutcome, ExpenseService, ExpenseStatus, Ledger, LedgerEntry, LedgerError,
+    LedgerKind, LedgerMonth, LedgerMonthError, LedgerOutcome, LedgerService, LedgerStatus,
+    LedgerSummary, MonthTrend, Payables, Receipt, ReceiptId, ReceiptRow, ReceiptService,
+    SupplierAddress, SupplierAddressInput, SupplierContact, SupplierContactInput, SupplierError,
+    SupplierField, SupplierOutcome, SupplierProfile, SupplierProfileInput, VatSummary,
+    build_ledger,
+};
+
 /// The profitability calculation, and the port it reads through. Exposed so the
 /// use case in `application` can drive it, and so the report types are usable
 /// from the handler crates.
@@ -131,8 +142,10 @@ pub use domain::{
     doe_model::ports::{MockDoeModelRepository, MockDoeSettingsRepository},
     employee::ports::{MockEmployeeCostBasisRepository, MockEmployeeRepository},
     equipment::ports::MockEquipmentRepository,
+    expense::ports::{MockExpenseCategoryRepository, MockExpenseRepository},
     invitation::ports::MockInvitationRepository,
     invoice::ports::{MockDocumentFormat, MockInvoiceRepository},
+    ledger::ports::{MockLedgerRepository, MockReceiptRepository},
     maintenance::ports::{MockInterventionRepository, MockMaintenanceContractRepository},
     member::ports::MockMemberRepository,
     organization::ports::MockOrganizationRepository,
@@ -274,6 +287,10 @@ pub use domain::{
         UpsertEmployeeProfileCommand,
     },
     equipment::commands::{CreateEquipmentCommand, UpdateEquipmentCommand},
+    expense::commands::{
+        CreateExpenseCategoryCommand, CreateExpenseCommand, MarkExpensePaidCommand,
+        UpdateExpenseCategoryCommand, UpdateExpenseCommand,
+    },
     file_storage::commands::UploadFileCommand,
     format_number,
     invitation::commands::{AcceptInvitationCommand, InviteMemberCommand, RevokeInvitationCommand},
@@ -291,6 +308,7 @@ pub use domain::{
         QuoteInvoicing, QuoteInvoicingBlocker, line_net_cents as invoice_line_net_cents,
     },
     invoice::service::QuoteInvoicingView,
+    ledger::commands::{AllocateReceiptCommand, RecordReceiptCommand},
     member::commands::{
         AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UnassignRoleCommand,
         UpdateMemberCommand,

@@ -5,6 +5,7 @@ import { EmptyState } from '#/components/empty-state'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
+import type { CatalogExtras } from '#/pages/catalog/catalog-model'
 import {
 	type CatalogFilters,
 	type CatalogForm,
@@ -14,7 +15,6 @@ import {
 	IMMUTABLE_NOTE,
 	isFiltered,
 } from '#/pages/catalog/catalog-model'
-import type { CatalogExtras } from '#/pages/catalog/feature/mocks/catalog-extras'
 import {
 	type CatalogEditor,
 	CatalogFormDialog,

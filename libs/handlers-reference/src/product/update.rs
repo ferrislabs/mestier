@@ -1,11 +1,13 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{ProductId, SupplierId, UpdateProductCommand};
+use mestier_core::{BillingFrequency, ProductId, SupplierId, UpdateProductCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::ProductPath, require_org_membership, response::ProductResponse};
+use crate::{
+    catalog::catalog_input, paths::ProductPath, require_org_membership, response::ProductResponse,
+};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateProductRequest {
@@ -27,6 +29,14 @@ pub struct UpdateProductRequest {
     pub technical_specs: Option<String>,
     #[serde(default)]
     pub datasheet_keys: Vec<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub billing_frequency: Option<BillingFrequency>,
+    #[serde(default)]
+    pub cost_cents: Option<i32>,
+    #[serde(default)]
+    pub archived: Option<bool>,
 }
 
 #[utoipa::path(
@@ -75,6 +85,12 @@ pub async fn handler(
             manufacturer: payload.manufacturer,
             technical_specs: payload.technical_specs,
             datasheet_keys: payload.datasheet_keys,
+            catalog: catalog_input(
+                payload.category,
+                payload.billing_frequency,
+                payload.cost_cents,
+                payload.archived,
+            ),
         })
         .await?;
 

@@ -12,18 +12,12 @@ import {
 	expenseState,
 	expenseTotal,
 	filterLedger,
-	ledgerEntries,
 	ledgerFiltersOf,
-	ledgerMonths,
-	monthlyTrend,
 	parseLedgerSearch,
 	paymentFormErrors,
-	receiptVat,
-	summarizeLedger,
 	validatePaidDate,
-	vatSummary,
 } from '#/pages/treasury/lib/ledger-model'
-import type { Expense, LedgerState, Receipt } from '#/pages/treasury/types'
+import type { Expense, LedgerEntry } from '#/pages/treasury/types'
 
 const TODAY = '2026-11-05'
 
@@ -48,67 +42,46 @@ function expense(overrides: Partial<Expense>): Expense {
 		customerName: '',
 		proofName: null,
 		note: '',
+		total: 12000,
+		state: 'paid',
+		daysLate: 0,
 		...overrides,
 	}
 }
 
-function receipt(overrides: Partial<Receipt>): Receipt {
+function entry(overrides: Partial<LedgerEntry>): LedgerEntry {
 	return {
-		id: 'r1',
+		key: 'receipt:r1',
+		kind: 'receipt',
+		sourceId: 'r1',
 		date: '2026-11-02',
-		amount: 50000,
-		vatAmount: 8333,
-		method: 'transfer',
-		source: 'manual',
-		customerId: null,
-		customerName: 'Lemoine',
-		invoiceLabel: 'F-2026-109',
+		label: 'Paiement F-2026-109',
+		party: 'Lemoine',
 		reference: '',
-		note: '',
+		amount: 50000,
+		status: 'done',
+		method: 'transfer',
+		origin: 'manual',
+		categoryId: null,
+		invoiceLabel: 'F-2026-109',
+		customerId: null,
 		...overrides,
 	}
 }
 
-const state: LedgerState = {
-	categories: [],
-	openInvoices: [],
-	expenses: [
-		expense({ id: 'e1' }),
-		expense({
-			id: 'e2',
-			date: '2026-10-10',
-			paid: false,
-			dueDate: '2026-10-30',
-			paidAt: null,
-		}),
-		expense({ id: 'e3', advancedById: 'julien' }),
-	],
-	receipts: [
-		receipt({ id: 'r1' }),
-		receipt({ id: 'r2', invoiceLabel: null, date: '2026-10-05' }),
-	],
-}
-
-describe('expenseState', () => {
-	it('distinguishes paid, to pay, overdue and advanced expenses', () => {
-		expect(expenseState(state.expenses[0] as Expense, TODAY)).toBe('paid')
-		expect(expenseState(state.expenses[1] as Expense, TODAY)).toBe('overdue')
-		expect(
-			expenseState(expense({ paid: false, dueDate: '2026-12-01' }), TODAY),
-		).toBe('to_pay')
-		expect(expenseState(state.expenses[2] as Expense, TODAY)).toBe(
-			'to_reimburse',
-		)
-		expect(
-			expenseState(expense({ advancedById: 'a', reimbursedAt: TODAY }), TODAY),
-		).toBe('reimbursed')
+describe('expense helpers', () => {
+	it('reads the state and the total computed by the API', () => {
+		expect(expenseState(expense({ state: 'overdue' }))).toBe('overdue')
+		expect(expenseTotal(expense({ total: 12000 }))).toBe(12000)
 	})
 
 	it('offers the right action', () => {
 		expect(canMarkPaid(expense({ paid: false }))).toBe(true)
 		expect(canMarkPaid(expense({ advancedById: 'a' }))).toBe(false)
 		expect(canReimburse(expense({ advancedById: 'a' }))).toBe(true)
-		expect(expenseTotal(expense({}))).toBe(12000)
+		expect(
+			canReimburse(expense({ advancedById: 'a', reimbursedAt: TODAY })),
+		).toBe(false)
 	})
 
 	it('validates a payment date', () => {
@@ -120,35 +93,34 @@ describe('expenseState', () => {
 	})
 })
 
-describe('ledger entries', () => {
-	const entries = ledgerEntries(state, TODAY)
+describe('filterLedger', () => {
+	const entries = [
+		entry({ key: 'receipt:r1' }),
+		entry({
+			key: 'receipt:r2',
+			date: '2026-10-05',
+			status: 'unallocated',
+			invoiceLabel: null,
+		}),
+		entry({
+			key: 'expense:e1',
+			kind: 'expense',
+			label: 'Quincaillerie',
+			party: 'Bernard',
+			amount: -12000,
+			categoryId: 'cat-materiaux',
+		}),
+		entry({
+			key: 'expense:e2',
+			kind: 'expense',
+			date: '2026-10-10',
+			party: 'Bernard',
+			status: 'late',
+			amount: -12000,
+		}),
+	]
 
-	it('sorts newest first and signs expenses negative', () => {
-		expect(entries.map((entry) => entry.key)[0]).toBe('receipt:r1')
-		expect(entries.find((entry) => entry.key === 'expense:e1')?.amount).toBe(
-			-12000,
-		)
-	})
-
-	it('flags an unallocated receipt and a late expense', () => {
-		expect(entries.find((entry) => entry.key === 'receipt:r2')?.status).toBe(
-			'unallocated',
-		)
-		expect(entries.find((entry) => entry.key === 'expense:e2')?.status).toBe(
-			'late',
-		)
-	})
-
-	it('summarizes receipts, expenses and the net balance', () => {
-		const summary = summarizeLedger(entries)
-		expect(summary.receipts).toBe(100000)
-		expect(summary.expenses).toBe(36000)
-		expect(summary.net).toBe(64000)
-		expect(summary.unallocated).toBe(50000)
-		expect(summary.pendingExpenses).toBe(12000)
-	})
-
-	it('filters by type, month, status and text', () => {
+	it('filters by type, month, status, category and text', () => {
 		expect(
 			filterLedger(entries, { ...DEFAULT_LEDGER_FILTERS, type: 'receipt' }),
 		).toHaveLength(2)
@@ -159,25 +131,14 @@ describe('ledger entries', () => {
 			filterLedger(entries, { ...DEFAULT_LEDGER_FILTERS, status: 'late' }),
 		).toHaveLength(1)
 		expect(
+			filterLedger(entries, {
+				...DEFAULT_LEDGER_FILTERS,
+				categoryId: 'cat-materiaux',
+			}),
+		).toHaveLength(1)
+		expect(
 			filterLedger(entries, { ...DEFAULT_LEDGER_FILTERS, query: 'bernard' }),
-		).toHaveLength(3)
-	})
-
-	it('lists the months and a six-month trend ending today', () => {
-		expect(ledgerMonths(entries)).toEqual(['2026-11', '2026-10'])
-		const trend = monthlyTrend(entries, TODAY)
-		expect(trend).toHaveLength(6)
-		expect(trend.at(-1)?.month).toBe('2026-11')
-		expect(trend.at(0)?.month).toBe('2026-06')
-		expect(trend.at(-1)?.receipts).toBe(50000)
-	})
-
-	it('computes the VAT position', () => {
-		expect(vatSummary(state, '2026-11')).toEqual({
-			collected: 8333,
-			deductible: 4000,
-			due: 4333,
-		})
+		).toHaveLength(2)
 	})
 })
 
@@ -229,16 +190,5 @@ describe('forms', () => {
 		expect(
 			paymentFormErrors({ ...values, invoiceId: null }, TODAY, () => null),
 		).toHaveLength(1)
-	})
-
-	it('extracts the VAT of a receipt from the invoice rate', () => {
-		expect(receiptVat(12000, 20)).toBe(2000)
-		expect(receiptVat(11000, 10)).toBe(1000)
-		expect(receiptVat(10000, 0)).toBe(0)
-		expect(receiptVat(-12000, 20)).toBe(-2000)
-	})
-
-	it('falls back to the default rate without an invoice rate', () => {
-		expect(receiptVat(12000, null)).toBe(2000)
 	})
 })

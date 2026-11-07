@@ -1,0 +1,148 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT e.id, e.org_id, e.date, e.label, e.supplier_id, e.category_id, e.reference, e.amount_ht_cents, e.vat_cents, e.due_date, e.status, e.paid_on, e.method, e.advanced_by_member_id, e.reimbursed_on, e.customer_id, e.proof_file_key, e.note, e.created_at, e.updated_at,\n                s.name AS \"supplier_name?\", c.name AS \"customer_name?\"\n            FROM expenses e\n            LEFT JOIN suppliers s ON s.id = e.supplier_id\n            LEFT JOIN customers c ON c.id = e.customer_id\n            WHERE e.org_id = $1\n            ORDER BY e.date DESC, e.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "supplier_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "category_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "reference",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "amount_ht_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "vat_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "due_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 10,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "paid_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 12,
+        "name": "method",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "advanced_by_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "reimbursed_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 15,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "proof_file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "supplier_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "customer_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ce381188947a6aa27bc98c91738ee5c3fd805518c4adb771a09781b03b1b5b58"
+}

@@ -9,7 +9,7 @@ mod tests {
     use crate::domain::product::commands::{CreateProductCommand, UpdateProductCommand};
     use crate::domain::supplier_invoice::commands::CreateSupplierCommand;
     use crate::infrastructure::realtime::EventHub;
-    use crate::{Supplier, SupplierId};
+    use crate::{Supplier, SupplierId, SupplierProfileInput};
 
     fn make_usecase(pool: PgPool) -> MestierUseCase {
         MestierUseCase::new(pool, default_authorizer(), EventHub::new())
@@ -82,8 +82,10 @@ mod tests {
                 address: Some("12 rue des Lilas".to_owned()),
                 phone: None,
                 email: None,
+                profile: SupplierProfileInput::default(),
             })
             .await
+            .unwrap()
             .unwrap()
     }
 
@@ -105,6 +107,7 @@ mod tests {
             manufacturer: Some("Pépinières Martin".to_owned()),
             technical_specs: Some("Hauteur 60 cm, conteneur 3 L".to_owned()),
             datasheet_keys: vec!["sheets/rosier.pdf".to_owned()],
+            catalog: None,
         }
     }
 
@@ -145,6 +148,7 @@ mod tests {
                 manufacturer: None,
                 technical_specs: None,
                 datasheet_keys: vec![],
+                catalog: None,
             })
             .await
             .unwrap();

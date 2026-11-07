@@ -1,9 +1,10 @@
-use authz::Resource;
+use authz::{Resource, Subject};
+use chrono::Utc;
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    OrganizationId, Supplier, SupplierId,
+    OrganizationId, Supplier, SupplierId, SupplierOutcome,
     application::{MestierUseCase, policy},
     domain::supplier_invoice::{
         commands::{CreateSupplierCommand, UpdateSupplierCommand},
@@ -14,11 +15,11 @@ use crate::{
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(supplier, role, member, authz)]
+    #[transactional(supplier, expense_category, role, member, authz)]
     pub async fn create_supplier(
         &self,
         command: CreateSupplierCommand,
-    ) -> Result<Supplier, CoreError> {
+    ) -> Result<SupplierOutcome<Supplier>, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
 
@@ -37,36 +38,36 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = SupplierService::new(supplier_repository);
+        let mut service = SupplierService::new(supplier_repository, expense_category_repository);
         service.create_supplier(command).await
     }
 
-    #[transactional(supplier)]
+    #[transactional(supplier, expense_category)]
     pub async fn get_supplier(&self, id: SupplierId) -> Result<Supplier, CoreError> {
-        let mut service = SupplierService::new(supplier_repository);
+        let mut service = SupplierService::new(supplier_repository, expense_category_repository);
         service.get_supplier(id).await
     }
 
-    #[transactional(supplier)]
+    #[transactional(supplier, expense_category)]
     pub async fn list_suppliers(
         &self,
         organization_id: OrganizationId,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Supplier>, u64), CoreError> {
-        let mut service = SupplierService::new(supplier_repository);
+        let mut service = SupplierService::new(supplier_repository, expense_category_repository);
         service.list_suppliers(organization_id, limit, offset).await
     }
 
-    #[transactional(supplier, role, member, authz)]
+    #[transactional(supplier, expense_category, role, member, authz)]
     pub async fn update_supplier(
         &self,
         command: UpdateSupplierCommand,
-    ) -> Result<Supplier, CoreError> {
+    ) -> Result<SupplierOutcome<Supplier>, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
 
-        let mut service = SupplierService::new(supplier_repository);
+        let mut service = SupplierService::new(supplier_repository, expense_category_repository);
         let existing = service.get_supplier(command.id).await?;
 
         let actor = policy::enrich_for_organization(
@@ -85,5 +86,36 @@ impl MestierUseCase {
         .await?;
 
         service.update_supplier(command).await
+    }
+
+    #[transactional(supplier, expense_category, role, member, authz)]
+    pub async fn archive_supplier(
+        &self,
+        id: SupplierId,
+        archived: bool,
+        actor: Subject,
+    ) -> Result<Supplier, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let mut service = SupplierService::new(supplier_repository, expense_category_repository);
+        let existing = service.get_supplier(id).await?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            &authz,
+            &actor,
+            "reference.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
+
+        service.set_archived(id, archived, Utc::now()).await
     }
 }

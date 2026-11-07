@@ -1,5 +1,4 @@
 import {
-	addDays,
 	centsToInput,
 	monthOf,
 	parseAmount,
@@ -9,10 +8,8 @@ import type {
 	ExpenseDisplayState,
 	LedgerEntry,
 	LedgerKind,
-	LedgerState,
 	LedgerStatus,
 	PaymentMethod,
-	Receipt,
 } from '#/pages/treasury/types'
 
 export type LedgerTypeFilter = 'all' | LedgerKind
@@ -33,22 +30,14 @@ export const DEFAULT_LEDGER_FILTERS: LedgerFilters = {
 	status: null,
 }
 
-export function expenseTotal(
-	expense: Pick<Expense, 'amountHt' | 'vatAmount'>,
-): number {
-	return expense.amountHt + expense.vatAmount
+export function expenseTotal(expense: Pick<Expense, 'total'>): number {
+	return expense.total
 }
 
 export function expenseState(
-	expense: Expense,
-	today: string,
+	expense: Pick<Expense, 'state'>,
 ): ExpenseDisplayState {
-	if (expense.advancedById !== null)
-		return expense.reimbursedAt === null ? 'to_reimburse' : 'reimbursed'
-	if (expense.paid) return 'paid'
-	return expense.dueDate !== null && expense.dueDate < today
-		? 'overdue'
-		: 'to_pay'
+	return expense.state
 }
 
 export function canMarkPaid(expense: Expense): boolean {
@@ -69,67 +58,6 @@ export function validatePaidDate(
 	if (paidAt < expense.date)
 		return ['La date de paiement précède la date de la dépense.']
 	return []
-}
-
-function receiptEntry(receipt: Receipt): LedgerEntry {
-	return {
-		key: `receipt:${receipt.id}`,
-		kind: 'receipt',
-		sourceId: receipt.id,
-		date: receipt.date,
-		label: receipt.invoiceLabel
-			? `${receipt.amount < 0 ? 'Remboursement' : 'Paiement'} ${receipt.invoiceLabel}`
-			: receipt.note || 'Recette non affectée',
-		party: receipt.customerName,
-		reference: receipt.reference,
-		amount: receipt.amount,
-		status:
-			receipt.invoiceLabel === null && receipt.amount > 0
-				? 'unallocated'
-				: 'done',
-		method: receipt.method,
-		origin: receipt.source,
-		categoryId: null,
-		invoiceLabel: receipt.invoiceLabel,
-		customerId: receipt.customerId,
-	}
-}
-
-function expenseEntry(expense: Expense, today: string): LedgerEntry {
-	const display = expenseState(expense, today)
-	return {
-		key: `expense:${expense.id}`,
-		kind: 'expense',
-		sourceId: expense.id,
-		date: expense.date,
-		label: expense.label,
-		party: expense.supplierName,
-		reference: expense.reference,
-		amount: -expenseTotal(expense),
-		status:
-			display === 'overdue'
-				? 'late'
-				: display === 'to_pay'
-					? 'pending'
-					: display === 'to_reimburse'
-						? 'to_reimburse'
-						: 'done',
-		method: expense.method,
-		origin: 'manual',
-		categoryId: expense.categoryId,
-		invoiceLabel: null,
-		customerId: expense.customerId,
-	}
-}
-
-export function ledgerEntries(
-	state: LedgerState,
-	today: string,
-): LedgerEntry[] {
-	return [
-		...state.receipts.map(receiptEntry),
-		...state.expenses.map((expense) => expenseEntry(expense, today)),
-	].sort((a, b) => b.date.localeCompare(a.date) || a.key.localeCompare(b.key))
 }
 
 export function filterLedger(
@@ -163,80 +91,9 @@ export type LedgerSummary = {
 	unallocated: number
 }
 
-export function summarizeLedger(
-	entries: readonly LedgerEntry[],
-): LedgerSummary {
-	let receipts = 0
-	let expenses = 0
-	let pendingExpenses = 0
-	let unallocated = 0
-	for (const entry of entries) {
-		if (entry.kind === 'receipt') {
-			receipts += entry.amount
-			if (entry.status === 'unallocated') unallocated += entry.amount
-		} else {
-			expenses += -entry.amount
-			if (entry.status === 'pending' || entry.status === 'late')
-				pendingExpenses += -entry.amount
-		}
-	}
-	return {
-		receipts,
-		expenses,
-		net: receipts - expenses,
-		pendingExpenses,
-		unallocated,
-	}
-}
-
-export function ledgerMonths(entries: readonly LedgerEntry[]): string[] {
-	return [...new Set(entries.map((entry) => monthOf(entry.date)))]
-		.sort()
-		.reverse()
-}
-
 export type MonthTrend = { month: string; receipts: number; expenses: number }
 
-export function monthlyTrend(
-	entries: readonly LedgerEntry[],
-	today: string,
-	months = 6,
-): MonthTrend[] {
-	const keys: string[] = []
-	let cursor = `${today.slice(0, 7)}-01`
-	for (let index = 0; index < months; index += 1) {
-		keys.unshift(monthOf(cursor))
-		cursor = addDays(cursor, -1).slice(0, 7).concat('-01')
-	}
-	return keys.map((month) => {
-		const inMonth = entries.filter((entry) => monthOf(entry.date) === month)
-		const summary = summarizeLedger(inMonth)
-		return { month, receipts: summary.receipts, expenses: summary.expenses }
-	})
-}
-
 export type VatSummary = { collected: number; deductible: number; due: number }
-
-export function vatSummary(
-	state: LedgerState,
-	month: string | null,
-): VatSummary {
-	const inMonth = (date: string) => month === null || monthOf(date) === month
-	const collected = state.receipts
-		.filter((receipt) => inMonth(receipt.date))
-		.reduce((sum, receipt) => sum + receipt.vatAmount, 0)
-	const deductible = state.expenses
-		.filter((expense) => inMonth(expense.date))
-		.reduce((sum, expense) => sum + expense.vatAmount, 0)
-	return { collected, deductible, due: collected - deductible }
-}
-
-export function payables(state: LedgerState, today: string): Expense[] {
-	return state.expenses.filter((expense) => {
-		const display = expenseState(expense, today)
-		return display === 'to_pay' || display === 'overdue'
-	})
-}
 
 export function fitsBalance(balance: number, amount: number): boolean {
 	return amount <= balance
@@ -388,13 +245,6 @@ export function emptyExpenseValues(today: string): ExpenseFormValues {
 
 export function vatOf(base: number, rate: number): number {
 	return Math.round((base * rate) / 100)
-}
-
-export const DEFAULT_RECEIPT_VAT_RATE = 20
-
-export function receiptVat(amount: number, rate: number | null): number {
-	const applied = rate ?? DEFAULT_RECEIPT_VAT_RATE
-	return Math.round(amount - (amount * 100) / (100 + applied))
 }
 
 export function expenseValuesOf(expense: Expense): ExpenseFormValues {

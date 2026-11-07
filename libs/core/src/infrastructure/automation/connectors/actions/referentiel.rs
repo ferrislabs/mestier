@@ -320,6 +320,7 @@ async fn create_product(context: &ActionContext<'_>) -> Result<Value, String> {
             manufacturer: fields.manufacturer,
             technical_specs: fields.technical_specs,
             datasheet_keys: fields.datasheet_keys,
+            catalog: None,
         })
         .await
         .map(|product| product_json(&product))
@@ -347,6 +348,7 @@ async fn update_product(context: &ActionContext<'_>) -> Result<Value, String> {
             manufacturer: fields.manufacturer,
             technical_specs: fields.technical_specs,
             datasheet_keys: fields.datasheet_keys,
+            catalog: None,
         })
         .await
         .map(|product| product_json(&product))
@@ -433,6 +435,7 @@ async fn create_service_rate(context: &ActionContext<'_>) -> Result<Value, Strin
             rate_cents: fields.rate_cents,
             default_vat_rate_bp: fields.default_vat_rate_bp,
             description: fields.description,
+            catalog: None,
         })
         .await
         .map(|rate| service_rate_json(&rate))
@@ -454,6 +457,7 @@ async fn update_service_rate(context: &ActionContext<'_>) -> Result<Value, Strin
             rate_cents: fields.rate_cents,
             default_vat_rate_bp: fields.default_vat_rate_bp,
             description: fields.description,
+            catalog: None,
         })
         .await
         .map(|rate| service_rate_json(&rate))

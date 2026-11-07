@@ -9,7 +9,7 @@ use crate::domain::supplier_invoice::commands::{
 };
 use crate::{
     ProjectId, ProjectSupplierCostLine, Supplier, SupplierId, SupplierInvoice, SupplierInvoiceId,
-    SupplierInvoiceLineAllocation, SupplierInvoiceLineId,
+    SupplierInvoiceLineAllocation, SupplierInvoiceLineId, SupplierProfileInput,
 };
 
 #[cfg(test)]
@@ -240,16 +240,18 @@ async fn create_supplier(context: &ActionContext<'_>) -> Result<Value, String> {
             address: input.address,
             phone: input.phone,
             email: input.email,
+            profile: SupplierProfileInput::default(),
         })
         .await
+        .map_err(failure)?
         .map(|supplier| supplier_json(&supplier))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn update_supplier(context: &ActionContext<'_>) -> Result<Value, String> {
     let id = SupplierId(context.uuid("supplier_id")?);
     let input = supplier_input(context)?;
-    supplier_of(context, id).await?;
+    let existing = supplier_of(context, id).await?;
 
     context
         .usecase
@@ -262,10 +264,12 @@ async fn update_supplier(context: &ActionContext<'_>) -> Result<Value, String> {
             address: input.address,
             phone: input.phone,
             email: input.email,
+            profile: SupplierProfileInput::from(&existing.profile),
         })
         .await
+        .map_err(failure)?
         .map(|supplier| supplier_json(&supplier))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn list_invoices(context: &ActionContext<'_>) -> Result<Value, String> {

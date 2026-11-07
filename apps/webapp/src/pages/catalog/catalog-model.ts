@@ -1,5 +1,5 @@
+import type { Schemas } from '#/api/api.client'
 import type { Product, ServiceRate } from '#/hooks/use-reference-catalog'
-import type { CatalogExtras } from '#/pages/catalog/feature/mocks/catalog-extras'
 import type { VatRate } from '#/pages/crm-settings/types'
 import { centsToInput, parseAmount } from '#/pages/customers/lib/format'
 
@@ -36,6 +36,72 @@ export const FREQUENCY_SUFFIX: Record<BillingFrequency, string> = {
 export const IMMUTABLE_NOTE =
 	'Modifier un article n’a aucun effet sur les devis et factures existants : les lignes sont copiées au moment où tu les ajoutes.'
 
+export interface CatalogExtras {
+	category: string
+	cost: number | null
+	frequency: BillingFrequency
+	archived: boolean
+}
+
+export const EMPTY_CATALOG_EXTRAS: CatalogExtras = {
+	category: '',
+	cost: null,
+	frequency: 'one_shot',
+	archived: false,
+}
+
+export type CatalogUsage = { quotes: number; invoices: number; total: number }
+
+export const NEVER_USED: CatalogUsage = { quotes: 0, invoices: 0, total: 0 }
+
+const FREQUENCY_OF_API: Record<Schemas.BillingFrequency, BillingFrequency> = {
+	ONE_SHOT: 'one_shot',
+	MONTHLY: 'monthly',
+	QUARTERLY: 'quarterly',
+	YEARLY: 'yearly',
+}
+
+const API_OF_FREQUENCY: Record<BillingFrequency, Schemas.BillingFrequency> = {
+	one_shot: 'ONE_SHOT',
+	monthly: 'MONTHLY',
+	quarterly: 'QUARTERLY',
+	yearly: 'YEARLY',
+}
+
+export function apiFrequencyOf(
+	frequency: BillingFrequency,
+): Schemas.BillingFrequency {
+	return API_OF_FREQUENCY[frequency]
+}
+
+type CatalogFields = Pick<
+	Product,
+	| 'category'
+	| 'billing_frequency'
+	| 'cost_cents'
+	| 'archived_at'
+	| 'usage_count'
+	| 'quote_usage_count'
+	| 'invoice_usage_count'
+>
+
+function extrasOfApi(item: CatalogFields): CatalogExtras {
+	return {
+		category: item.category,
+		cost: item.cost_cents ?? null,
+		frequency: FREQUENCY_OF_API[item.billing_frequency],
+		archived: item.archived_at != null,
+	}
+}
+
+function usageOfApi(item: CatalogFields): CatalogUsage {
+	return {
+		quotes: item.quote_usage_count,
+		invoices: item.invoice_usage_count,
+		total: item.usage_count,
+	}
+}
+
 export type CatalogRow = {
 	id: string
 	kind: CatalogKind
@@ -45,6 +111,8 @@ export type CatalogRow = {
 	unit: string
 	unitPriceCents: number
 	vatRate: VatRate | null
+	extras: CatalogExtras
+	usage: CatalogUsage
 	product: Product | null
 	serviceRate: ServiceRate | null
 }
@@ -79,6 +147,8 @@ export function catalogRows(
 				unit: product.unit,
 				unitPriceCents: product.unit_price_cents,
 				vatRate: vatRateOfBp(product.default_vat_rate_bp),
+				extras: extrasOfApi(product),
+				usage: usageOfApi(product),
 				product,
 				serviceRate: null,
 			}),
@@ -93,6 +163,8 @@ export function catalogRows(
 				unit: serviceRate.unit,
 				unitPriceCents: serviceRate.rate_cents,
 				vatRate: vatRateOfBp(serviceRate.default_vat_rate_bp),
+				extras: extrasOfApi(serviceRate),
+				usage: usageOfApi(serviceRate),
 				product: null,
 				serviceRate,
 			}),
@@ -183,36 +255,6 @@ export function catalogSummary(
 	return archived === 0
 		? base
 		: `${base}, ${plural(archived, 'archivé', 'archivés')}`
-}
-
-export type CatalogUsage = { quotes: number; invoices: number; total: number }
-
-const NEVER_USED: CatalogUsage = { quotes: 0, invoices: 0, total: 0 }
-
-export function catalogUsage(lines: {
-	quoteLines: readonly (string | null)[]
-	invoiceLines: readonly (string | null)[]
-}): Map<string, CatalogUsage> {
-	const usage = new Map<string, CatalogUsage>()
-	function count(itemId: string | null, key: 'quotes' | 'invoices') {
-		if (itemId === null) return
-		const current = usage.get(itemId) ?? NEVER_USED
-		usage.set(itemId, {
-			...current,
-			[key]: current[key] + 1,
-			total: current.total + 1,
-		})
-	}
-	for (const itemId of lines.quoteLines) count(itemId, 'quotes')
-	for (const itemId of lines.invoiceLines) count(itemId, 'invoices')
-	return usage
-}
-
-export function usageOf(
-	usage: ReadonlyMap<string, CatalogUsage>,
-	itemId: string,
-): CatalogUsage {
-	return usage.get(itemId) ?? NEVER_USED
 }
 
 export function usageLabel(usage: CatalogUsage): {

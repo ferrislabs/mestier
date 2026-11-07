@@ -2,7 +2,7 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    OrganizationId, ServiceRate, ServiceRateId,
+    CatalogProfileInput, CatalogUsage, OrganizationId, ServiceRate, ServiceRateId,
     domain::service_rate::{
         commands::{CreateServiceRateCommand, UpdateServiceRateCommand},
         ports::ServiceRateRepository,
@@ -34,6 +34,7 @@ where
         validate_vat_rate_bp(command.default_vat_rate_bp)?;
 
         let now = Utc::now();
+        let catalog = CatalogProfileInput::resolve(command.catalog, None, now)?;
         self.repo
             .insert(&ServiceRate {
                 id: ServiceRateId(generate_uuid_v7()),
@@ -43,6 +44,8 @@ where
                 rate_cents: command.rate_cents,
                 default_vat_rate_bp: command.default_vat_rate_bp,
                 description: command.description,
+                catalog,
+                usage: CatalogUsage::default(),
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -75,12 +78,15 @@ where
         validate_vat_rate_bp(command.default_vat_rate_bp)?;
 
         let mut service_rate = self.get_service_rate(command.id).await?;
+        let now = Utc::now();
+        service_rate.catalog =
+            CatalogProfileInput::resolve(command.catalog, Some(&service_rate.catalog), now)?;
         service_rate.label = command.label;
         service_rate.unit = command.unit;
         service_rate.rate_cents = command.rate_cents;
         service_rate.default_vat_rate_bp = command.default_vat_rate_bp;
         service_rate.description = command.description;
-        service_rate.updated_at = Utc::now();
+        service_rate.updated_at = now;
 
         self.repo.update(&service_rate).await
     }
@@ -148,6 +154,8 @@ mod tests {
             rate_cents: 5500,
             default_vat_rate_bp: None,
             description: None,
+            catalog: Default::default(),
+            usage: Default::default(),
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -172,6 +180,7 @@ mod tests {
                 rate_cents: 5500,
                 default_vat_rate_bp: Some(2000),
                 description: None,
+                catalog: None,
             })
             .await
             .unwrap();
@@ -201,6 +210,7 @@ mod tests {
                 rate_cents: 1200,
                 default_vat_rate_bp: None,
                 description: None,
+                catalog: None,
             })
             .await
             .unwrap();
@@ -240,5 +250,65 @@ mod tests {
         let mut service = ServiceRateService::new(repo);
 
         service.soft_delete_service_rate(id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_stores_category_frequency_cost_and_refuses_a_negative_cost() {
+        let mut repo = MockServiceRateRepository::new();
+        repo.expect_insert().times(1).returning(|r| {
+            let service_rate = r.clone();
+            Box::pin(async move { Ok(service_rate) })
+        });
+        let mut service = ServiceRateService::new(repo);
+        let command = |cost_cents| CreateServiceRateCommand {
+            actor: authz::Subject::system(),
+            organization_id: OrganizationId(Uuid::new_v4()),
+            label: "Entretien".to_owned(),
+            unit: "UNIT".to_owned(),
+            rate_cents: 9000,
+            default_vat_rate_bp: None,
+            description: None,
+            catalog: Some(crate::CatalogProfileInput {
+                category: "Contrats".to_owned(),
+                billing_frequency: crate::BillingFrequency::Quarterly,
+                cost_cents,
+                archived: false,
+            }),
+        };
+
+        let refused = service.create_service_rate(command(Some(-10))).await;
+        let created = service
+            .create_service_rate(command(Some(4000)))
+            .await
+            .unwrap();
+
+        assert!(matches!(refused, Err(CoreError::Conflict(_))));
+        assert_eq!(created.catalog.category, "Contrats");
+        assert_eq!(
+            created.catalog.billing_frequency,
+            crate::BillingFrequency::Quarterly
+        );
+        assert_eq!(created.catalog.cost_cents, Some(4000));
+        assert_eq!(created.catalog.archived_at, None);
+    }
+
+    #[tokio::test]
+    async fn a_negative_rate_is_refused() {
+        let mut service = ServiceRateService::new(MockServiceRateRepository::new());
+
+        let result = service
+            .create_service_rate(CreateServiceRateCommand {
+                actor: authz::Subject::system(),
+                organization_id: OrganizationId(Uuid::new_v4()),
+                label: "Entretien".to_owned(),
+                unit: "UNIT".to_owned(),
+                rate_cents: -1,
+                default_vat_rate_bp: None,
+                description: None,
+                catalog: None,
+            })
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
     }
 }

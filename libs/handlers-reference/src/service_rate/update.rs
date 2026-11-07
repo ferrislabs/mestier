@@ -1,11 +1,14 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{ServiceRateId, UpdateServiceRateCommand};
+use mestier_core::{BillingFrequency, ServiceRateId, UpdateServiceRateCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::{paths::ServiceRatePath, require_org_membership, response::ServiceRateResponse};
+use crate::{
+    catalog::catalog_input, paths::ServiceRatePath, require_org_membership,
+    response::ServiceRateResponse,
+};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateServiceRateRequest {
@@ -17,6 +20,14 @@ pub struct UpdateServiceRateRequest {
     #[serde(default)]
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub billing_frequency: Option<BillingFrequency>,
+    #[serde(default)]
+    pub cost_cents: Option<i32>,
+    #[serde(default)]
+    pub archived: Option<bool>,
 }
 
 #[utoipa::path(
@@ -59,6 +70,12 @@ pub async fn handler(
             rate_cents: payload.rate_cents,
             default_vat_rate_bp: payload.default_vat_rate_bp,
             description: payload.description,
+            catalog: catalog_input(
+                payload.category,
+                payload.billing_frequency,
+                payload.cost_cents,
+                payload.archived,
+            ),
         })
         .await?;
 

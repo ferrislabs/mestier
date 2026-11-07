@@ -27,8 +27,14 @@ use crate::{OrganizationId, ProjectId};
 pub mod commands;
 pub mod events;
 pub mod ports;
+pub mod profile;
 pub mod service;
 pub mod supplier_service;
+
+pub use profile::{
+    SupplierAddress, SupplierAddressInput, SupplierContact, SupplierContactInput, SupplierError,
+    SupplierField, SupplierOutcome, SupplierProfile, SupplierProfileInput,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct SupplierId(pub Uuid);
@@ -62,6 +68,7 @@ pub struct Supplier {
     pub address: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
+    pub profile: SupplierProfile,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -23,10 +23,11 @@ import {
 	VAT_RATES,
 	type VatRate,
 } from '#/pages/crm-settings/types'
-import { PEOPLE } from '#/pages/customers/feature/mocks/people'
+import type { Person } from '#/pages/customers/lib/people'
 import { CustomerPicker } from '#/pages/customers/ui/customer-picker'
 import { Money } from '#/pages/customers/ui/money'
 import { TextArea } from '#/pages/customers/ui/text-area'
+import { proofLabel } from '#/pages/treasury/lib/ledger-api'
 import {
 	applyVatRate,
 	changeAmountHt,
@@ -54,6 +55,8 @@ interface ExpenseFormDialogProps {
 	categories: readonly ExpenseCategory[]
 	suppliers: readonly SupplierOption[]
 	customers: readonly Customer[]
+	people: readonly Person[]
+	onUploadProof: (file: File) => Promise<string>
 	onSubmit: (values: ExpenseFormValues) => Promise<void>
 }
 
@@ -77,6 +80,8 @@ function ExpenseForm({
 	categories,
 	suppliers,
 	customers,
+	people,
+	onUploadProof,
 	onClose,
 	onSubmit,
 }: Omit<ExpenseFormDialogProps, 'open' | 'onOpenChange'> & {
@@ -86,6 +91,8 @@ function ExpenseForm({
 	const [values, setValues] = useState<ExpenseFormValues>(initial)
 	const [attempted, setAttempted] = useState(false)
 	const [fileKey, setFileKey] = useState(0)
+	const [uploading, setUploading] = useState(false)
+	const [failure, setFailure] = useState<string | null>(null)
 	const id = (field: string) => `${baseId}-${field}`
 	const errors = expenseFormErrors(values)
 	const total = expenseTotalOf(values)
@@ -101,7 +108,12 @@ function ExpenseForm({
 			setAttempted(true)
 			return
 		}
-		void onSubmit(values).then(onClose)
+		setFailure(null)
+		void onSubmit(values).then(onClose, (error: unknown) =>
+			setFailure(
+				error instanceof Error ? error.message : 'Enregistrement impossible.',
+			),
+		)
 	}
 
 	return (
@@ -264,7 +276,7 @@ function ExpenseForm({
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value={COMPANY}>L’entreprise</SelectItem>
-							{PEOPLE.map((person) => (
+							{people.map((person) => (
 								<SelectItem key={person.id} value={person.id}>
 									{person.name}
 								</SelectItem>
@@ -317,19 +329,25 @@ function ExpenseForm({
 					id={id('proof')}
 					label="Justificatif"
 					className="sm:col-span-2"
-					hint="Seul le nom du fichier est conservé pour le moment."
+					hint="Un PDF ou une image, joint à la dépense."
 				>
 					<Input
 						key={fileKey}
 						id={id('proof')}
 						type="file"
 						accept=".pdf,image/*"
-						onChange={(event) =>
-							change({
-								proofName:
-									event.target.files?.item(0)?.name ?? values.proofName,
-							})
-						}
+						disabled={uploading}
+						onChange={(event) => {
+							const file = event.target.files?.item(0)
+							if (!file) return
+							setUploading(true)
+							void onUploadProof(file)
+								.then((key) => change({ proofName: key }))
+								.catch(() =>
+									setFailure('Le justificatif n’a pas pu être envoyé.'),
+								)
+								.finally(() => setUploading(false))
+						}}
 					/>
 					{values.proofName !== null && (
 						<p className="flex items-center gap-2 text-[13px]">
@@ -337,7 +355,7 @@ function ExpenseForm({
 								Justificatif retenu :
 							</span>
 							<span className="min-w-0 truncate font-medium">
-								{values.proofName}
+								{proofLabel(values.proofName)}
 							</span>
 							<Button
 								type="button"
@@ -373,11 +391,19 @@ function ExpenseForm({
 						))}
 					</ul>
 				)}
+				{failure !== null && (
+					<p
+						role="alert"
+						className="rounded-md bg-state-alert/8 px-3 py-2 text-[13px] text-state-alert"
+					>
+						{failure}
+					</p>
+				)}
 				<DialogFooter>
 					<Button type="button" variant="outline" onClick={onClose}>
 						Annuler
 					</Button>
-					<Button type="submit">
+					<Button type="submit" disabled={uploading}>
 						{expense ? 'Enregistrer' : 'Saisir la dépense'}
 					</Button>
 				</DialogFooter>

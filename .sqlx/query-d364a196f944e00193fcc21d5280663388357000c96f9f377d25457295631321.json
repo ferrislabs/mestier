@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT issued_on AS \"date!\", (gross_cents - net_cents)::bigint AS \"vat_cents!\",\n                (kind = 'CREDIT_NOTE') AS \"credit_note!\"\n            FROM invoices\n            WHERE org_id = $1 AND deleted_at IS NULL\n                AND status NOT IN ('DRAFT', 'CANCELLED') AND issued_on IS NOT NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "date!",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "vat_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "credit_note!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "d364a196f944e00193fcc21d5280663388357000c96f9f377d25457295631321"
+}

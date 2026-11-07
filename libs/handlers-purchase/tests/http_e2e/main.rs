@@ -14,6 +14,7 @@
 //! cargo test -p handlers-purchase --test http_e2e -- --ignored
 //! ```
 
+mod crm_b6;
 mod harness;
 mod issuer;
 mod supplier;

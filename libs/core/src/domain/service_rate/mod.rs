@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::OrganizationId;
+use crate::{CatalogProfile, CatalogUsage, OrganizationId};
 
 pub mod commands;
 pub mod ports;
@@ -112,6 +112,8 @@ pub struct ServiceRate {
     /// already built from it.
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
+    pub catalog: CatalogProfile,
+    pub usage: CatalogUsage,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

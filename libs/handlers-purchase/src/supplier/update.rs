@@ -1,12 +1,17 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{OrganizationId, SupplierId, UpdateSupplierCommand};
+use handlers::{AppState, DataEnvelope, Response, resolve_actor};
+use mestier_core::{ExpenseCategoryId, OrganizationId, SupplierId, UpdateSupplierCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use super::{load_in_organization, paths::SupplierPath, response::SupplierResponse};
-use crate::require_org_membership;
+use super::{
+    load_in_organization,
+    paths::SupplierPath,
+    profile::{SupplierAddressRequest, SupplierContactRequest, profile_input},
+    response::SupplierResponse,
+};
+use crate::{require_org_membership, supplier_error::SupplierFailure};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateSupplierRequest {
@@ -21,6 +26,18 @@ pub struct UpdateSupplierRequest {
     pub phone: Option<String>,
     #[serde(default)]
     pub email: Option<String>,
+    #[serde(default)]
+    pub iban: Option<String>,
+    #[serde(default)]
+    pub payment_terms_days: Option<i32>,
+    #[serde(default)]
+    pub default_category_id: Option<ExpenseCategoryId>,
+    #[serde(default)]
+    pub notes: Option<String>,
+    #[serde(default)]
+    pub contacts: Vec<SupplierContactRequest>,
+    #[serde(default)]
+    pub addresses: Vec<SupplierAddressRequest>,
 }
 
 #[utoipa::path(
@@ -51,7 +68,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<UpdateSupplierRequest>,
-) -> Result<Response<SupplierResponse>, ApiError> {
+) -> Result<Response<SupplierResponse>, SupplierFailure> {
     require_org_membership(&state, &identity, organization_id).await?;
     load_in_organization(&state, organization_id, supplier_id).await?;
     let (user_id, actor) = resolve_actor(&state, &identity).await?;
@@ -68,8 +85,16 @@ pub async fn handler(
             address: payload.address,
             phone: payload.phone,
             email: payload.email,
+            profile: profile_input(
+                payload.iban,
+                payload.payment_terms_days,
+                payload.default_category_id,
+                payload.notes,
+                payload.contacts,
+                payload.addresses,
+            ),
         })
-        .await?;
+        .await??;
 
     Ok(Response::OK(supplier.into()))
 }

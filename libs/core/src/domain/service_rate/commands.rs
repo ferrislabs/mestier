@@ -12,6 +12,7 @@ pub struct CreateServiceRateCommand {
     pub rate_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
+    pub catalog: Option<crate::CatalogProfileInput>,
 }
 
 #[derive(Debug, Clone)]
@@ -26,4 +27,5 @@ pub struct UpdateServiceRateCommand {
     pub rate_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
+    pub catalog: Option<crate::CatalogProfileInput>,
 }

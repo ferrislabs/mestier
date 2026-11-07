@@ -19,6 +19,8 @@ export namespace Schemas {
   export type AddTicketBadgeRequest = { label: string; tone?: (string | null) | undefined };
   export type AddTicketEntryRequest = { body: string; kind: string };
   export type AddressKind = "BILLING" | "SITE" | "OTHER";
+  export type InvoiceId = string;
+  export type AllocateReceiptRequest = { invoice_id: InvoiceId };
   export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
   export type ApiKeyLocationDto = "header" | "query" | "cookie";
   export type RoleId = string;
@@ -464,6 +466,22 @@ export namespace Schemas {
   export type DoeModelId = string;
   export type CreateDoeRequest = { model_id: DoeModelId };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type ExpenseCategoryId = string;
+  export type SupplierId = string;
+  export type CreateExpenseRequest = {
+    advanced_by_member_id?: (null | MemberId) | undefined;
+    amount_ht_cents: number;
+    category_id: ExpenseCategoryId;
+    customer_id?: (null | CustomerId) | undefined;
+    date: string;
+    due_date?: (string | null) | undefined;
+    label: string;
+    note?: (string | null) | undefined;
+    proof_file_key?: (string | null) | undefined;
+    reference?: (string | null) | undefined;
+    supplier_id?: (null | SupplierId) | undefined;
+    vat_cents?: number | undefined;
+  };
   export type CreateFolderRequest = { name: string; parent_id?: (string | null) | undefined };
   export type CreateIntakeTicketRequest = {
     body: string;
@@ -520,8 +538,11 @@ export namespace Schemas {
   };
   export type CreateMessageRequest = { attachments?: Array<CreateMessageAttachment> | undefined; content: string };
   export type CreateOrganizationRequest = { name: string; slug: string };
-  export type SupplierId = string;
   export type CreateProductRequest = {
+    archived?: (boolean | null) | undefined;
+    billing_frequency?: (null | BillingFrequency) | undefined;
+    category?: (string | null) | undefined;
+    cost_cents?: (number | null) | undefined;
     datasheet_keys?: Array<string> | undefined;
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
@@ -605,16 +626,43 @@ export namespace Schemas {
   };
   export type CreateRoleRequest = { name: string; permissions: Array<string> };
   export type CreateServiceRateRequest = {
+    archived?: (boolean | null) | undefined;
+    billing_frequency?: (null | BillingFrequency) | undefined;
+    category?: (string | null) | undefined;
+    cost_cents?: (number | null) | undefined;
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     label: string;
     rate_cents: number;
     unit: string;
   };
+  export type SupplierAddressRequest = {
+    city?: string | undefined;
+    country?: string | undefined;
+    kind: AddressKind;
+    label?: string | undefined;
+    line2?: string | undefined;
+    postal_code?: string | undefined;
+    street?: string | undefined;
+  };
+  export type SupplierContactRequest = Partial<{
+    email: string;
+    first_name: string;
+    last_name: string;
+    mobile: string;
+    phone: string;
+    role: string;
+  }>;
   export type CreateSupplierRequest = {
     address?: (string | null) | undefined;
+    addresses?: Array<SupplierAddressRequest> | undefined;
+    contacts?: Array<SupplierContactRequest> | undefined;
+    default_category_id?: (null | ExpenseCategoryId) | undefined;
     email?: (string | null) | undefined;
+    iban?: (string | null) | undefined;
     name: string;
+    notes?: (string | null) | undefined;
+    payment_terms_days?: (number | null) | undefined;
     phone?: (string | null) | undefined;
     registration_number?: (string | null) | undefined;
     vat_number?: (string | null) | undefined;
@@ -1042,6 +1090,46 @@ export namespace Schemas {
     version: number;
   };
   export type ExecuteWebhookRequest = { components?: (Array<Component> | null) | undefined; content: string };
+  export type ExpenseCategoryRequest = { hue?: number | undefined; name: string };
+  export type ExpenseCategoryResponse = {
+    created_at: string;
+    hue: number;
+    id: ExpenseCategoryId;
+    name: string;
+    organization_id: OrganizationId;
+    updated_at: string;
+  };
+  export type ExpenseDisplayState = "TO_PAY" | "OVERDUE" | "PAID" | "TO_REIMBURSE" | "REIMBURSED";
+  export type ExpenseId = string;
+  export type PaymentMethod = "CARD" | "TRANSFER" | "CHECK" | "CASH" | "DIRECT_DEBIT";
+  export type ExpenseStatus = "TO_PAY" | "PAID";
+  export type ExpenseResponse = {
+    advanced_by_member_id?: (null | MemberId) | undefined;
+    amount_ht_cents: number;
+    category_id: ExpenseCategoryId;
+    created_at: string;
+    customer_id?: (null | CustomerId) | undefined;
+    customer_name?: (string | null) | undefined;
+    date: string;
+    days_late: number;
+    display_state: ExpenseDisplayState;
+    due_date?: (string | null) | undefined;
+    id: ExpenseId;
+    label: string;
+    method?: (null | PaymentMethod) | undefined;
+    note?: (string | null) | undefined;
+    organization_id: OrganizationId;
+    paid_on?: (string | null) | undefined;
+    proof_file_key?: (string | null) | undefined;
+    reference?: (string | null) | undefined;
+    reimbursed_on?: (string | null) | undefined;
+    status: ExpenseStatus;
+    supplier_id?: (null | SupplierId) | undefined;
+    supplier_name?: (string | null) | undefined;
+    total_cents: number;
+    updated_at: string;
+    vat_cents: number;
+  };
   export type InterventionId = string;
   export type InterventionStatus = "PROPOSED" | "VALIDATED" | "REJECTED";
   export type FieldInterventionResponse = {
@@ -1251,7 +1339,6 @@ export namespace Schemas {
     id: InvoiceEventId;
     kind: InvoiceEventKind;
   };
-  export type InvoiceId = string;
   export type InvoiceLineResponse = {
     created_at: string;
     discount_percent: string;
@@ -1269,7 +1356,6 @@ export namespace Schemas {
     vat_rate_basis_points?: (number | null) | undefined;
   };
   export type InvoicePaymentId = string;
-  export type PaymentMethod = "CARD" | "TRANSFER" | "CHECK" | "CASH" | "DIRECT_DEBIT";
   export type InvoicePaymentResponse = {
     amount_cents: number;
     created_at: string;
@@ -1365,6 +1451,43 @@ export namespace Schemas {
     share_capital_cents?: (number | null) | undefined;
     vat_exemption_basis?: (string | null) | undefined;
     vat_number?: (string | null) | undefined;
+  };
+  export type LedgerKind = "RECEIPT" | "EXPENSE";
+  export type LedgerStatus = "DONE" | "PENDING" | "LATE" | "UNALLOCATED" | "TO_REIMBURSE";
+  export type LedgerEntryResponse = {
+    amount_cents: number;
+    category_id?: (null | ExpenseCategoryId) | undefined;
+    customer_id?: (null | CustomerId) | undefined;
+    date: string;
+    invoice_id?: (null | InvoiceId) | undefined;
+    invoice_number?: (string | null) | undefined;
+    key: string;
+    kind: LedgerKind;
+    label: string;
+    method?: (null | PaymentMethod) | undefined;
+    party: string;
+    reference: string;
+    source_id: string;
+    status: LedgerStatus;
+    supplier_id?: (null | SupplierId) | undefined;
+  };
+  export type PayablesResponse = { overdue_cents: number; total_cents: number };
+  export type LedgerSummaryResponse = {
+    expenses_cents: number;
+    net_cents: number;
+    pending_cents: number;
+    receipts_cents: number;
+    unallocated_cents: number;
+  };
+  export type MonthTrendResponse = { expenses_cents: number; month: string; receipts_cents: number };
+  export type VatSummaryResponse = { collected_cents: number; deductible_cents: number; due_cents: number };
+  export type LedgerResponse = {
+    entries: Array<LedgerEntryResponse>;
+    months: Array<string>;
+    payables: PayablesResponse;
+    summary: LedgerSummaryResponse;
+    trend: Array<MonthTrendResponse>;
+    vat: VatSummaryResponse;
   };
   export type LineAllocationShareRequest = { amount_cents: number; project_id: ProjectId };
   export type MaintenanceLine = {
@@ -1491,6 +1614,7 @@ export namespace Schemas {
     total?: (number | null) | undefined;
   };
   export type PatchTaskResponse = { detached: boolean; task: TaskResponse };
+  export type PayExpenseRequest = { method: PaymentMethod; paid_on: string };
   export type PlanMaintenanceLinesRequest = { line_ids: Array<MaintenanceLineId>; week: string };
   export type PlannedProjectResponse = {
     created_at: string;
@@ -1569,21 +1693,28 @@ export namespace Schemas {
   };
   export type PreviewDoeStyleRequest = { style: DoeStyle };
   export type ProductResponse = {
+    archived_at?: (string | null) | undefined;
+    billing_frequency: BillingFrequency;
+    category: string;
+    cost_cents?: (number | null) | undefined;
     created_at: string;
     datasheet_keys: Array<string>;
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     id: ProductId;
+    invoice_usage_count: number;
     manufacturer?: (string | null) | undefined;
     name: string;
     organization_id: OrganizationId;
     photo_keys: Array<string>;
+    quote_usage_count: number;
     sku?: (string | null) | undefined;
     supplier_id?: (null | SupplierId) | undefined;
     technical_specs?: (string | null) | undefined;
     unit: string;
     unit_price_cents: number;
     updated_at: string;
+    usage_count: number;
   };
   export type ProjectProfitabilityResponse = {
     customer_id?: (null | CustomerId) | undefined;
@@ -1771,9 +1902,29 @@ export namespace Schemas {
   };
   export type RecapGroup = { lines: Array<RecapLine>; town?: (string | null) | undefined };
   export type Recap = { groups: Array<RecapGroup>; week: IsoWeekNumber; year: number };
+  export type ReceiptId = string;
+  export type ReceiptResponse = {
+    amount_cents: number;
+    created_at: string;
+    customer_id?: (null | CustomerId) | undefined;
+    id: ReceiptId;
+    method: PaymentMethod;
+    note?: (string | null) | undefined;
+    organization_id: OrganizationId;
+    paid_on: string;
+    reference?: (string | null) | undefined;
+  };
   export type RecordInterventionRequest = { done_on: string };
   export type RecordInvoicePaymentRequest = {
     amount_cents: number;
+    method: PaymentMethod;
+    note?: (string | null) | undefined;
+    paid_on: string;
+    reference?: (string | null) | undefined;
+  };
+  export type RecordReceiptRequest = {
+    amount_cents: number;
+    customer_id?: (null | CustomerId) | undefined;
     method: PaymentMethod;
     note?: (string | null) | undefined;
     paid_on: string;
@@ -1877,15 +2028,22 @@ export namespace Schemas {
     year: number;
   };
   export type ServiceRateResponse = {
+    archived_at?: (string | null) | undefined;
+    billing_frequency: BillingFrequency;
+    category: string;
+    cost_cents?: (number | null) | undefined;
     created_at: string;
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     id: ServiceRateId;
+    invoice_usage_count: number;
     label: string;
     organization_id: OrganizationId;
+    quote_usage_count: number;
     rate_cents: number;
     unit: string;
     updated_at: string;
+    usage_count: number;
   };
   export type ServiceRateUnit = "FLAT_RATE" | "HOUR" | "DAY" | "UNIT" | "ML" | "M2" | "M3" | "KG" | "TONNE" | "LITRE";
   export type SetEmployeeCostBasisRequest = {
@@ -1903,13 +2061,39 @@ export namespace Schemas {
   export type StartTimeEntryRequest = { task_id: TaskId };
   export type StartedRunResponse = { run_id: string };
   export type StatusFilter = "proposed" | "validated" | "rejected";
+  export type SupplierAddressResponse = {
+    city: string;
+    country: string;
+    id: string;
+    kind: AddressKind;
+    label: string;
+    line2: string;
+    postal_code: string;
+    street: string;
+  };
+  export type SupplierContactResponse = {
+    email: string;
+    first_name: string;
+    id: string;
+    last_name: string;
+    mobile: string;
+    phone: string;
+    role: string;
+  };
   export type SupplierResponse = {
     address?: (string | null) | undefined;
+    addresses: Array<SupplierAddressResponse>;
+    archived_at?: (string | null) | undefined;
+    contacts: Array<SupplierContactResponse>;
     created_at: string;
+    default_category_id?: (null | ExpenseCategoryId) | undefined;
     email?: (string | null) | undefined;
+    iban?: (string | null) | undefined;
     id: SupplierId;
     name: string;
+    notes?: (string | null) | undefined;
     organization_id: OrganizationId;
+    payment_terms_days?: (number | null) | undefined;
     phone?: (string | null) | undefined;
     registration_number?: (string | null) | undefined;
     updated_at: string;
@@ -2092,6 +2276,19 @@ export namespace Schemas {
   };
   export type UpdateDoeSettingsRequest = { style: DoeStyle };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type UpdateExpenseRequest = {
+    amount_ht_cents: number;
+    category_id: ExpenseCategoryId;
+    customer_id?: (null | CustomerId) | undefined;
+    date: string;
+    due_date?: (string | null) | undefined;
+    label: string;
+    note?: (string | null) | undefined;
+    proof_file_key?: (string | null) | undefined;
+    reference?: (string | null) | undefined;
+    supplier_id?: (null | SupplierId) | undefined;
+    vat_cents?: number | undefined;
+  };
   export type UpdateFolderRequest = Partial<{ name: string | null; parent_id: string | null }>;
   export type UpdateInvoiceRequest = {
     customer_context_id: CustomerContextId;
@@ -2131,6 +2328,10 @@ export namespace Schemas {
     slug: string;
   };
   export type UpdateProductRequest = {
+    archived?: (boolean | null) | undefined;
+    billing_frequency?: (null | BillingFrequency) | undefined;
+    category?: (string | null) | undefined;
+    cost_cents?: (number | null) | undefined;
     datasheet_keys?: Array<string> | undefined;
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
@@ -2171,6 +2372,10 @@ export namespace Schemas {
   };
   export type UpdateRoleRequest = { name: string; permissions: Array<string> };
   export type UpdateServiceRateRequest = {
+    archived?: (boolean | null) | undefined;
+    billing_frequency?: (null | BillingFrequency) | undefined;
+    category?: (string | null) | undefined;
+    cost_cents?: (number | null) | undefined;
     default_vat_rate_bp?: (number | null) | undefined;
     description?: (string | null) | undefined;
     label: string;
@@ -2180,8 +2385,14 @@ export namespace Schemas {
   export type UpdateSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type UpdateSupplierRequest = {
     address?: (string | null) | undefined;
+    addresses?: Array<SupplierAddressRequest> | undefined;
+    contacts?: Array<SupplierContactRequest> | undefined;
+    default_category_id?: (null | ExpenseCategoryId) | undefined;
     email?: (string | null) | undefined;
+    iban?: (string | null) | undefined;
     name: string;
+    notes?: (string | null) | undefined;
+    payment_terms_days?: (number | null) | undefined;
     phone?: (string | null) | undefined;
     registration_number?: (string | null) | undefined;
     vat_number?: (string | null) | undefined;
@@ -3781,6 +3992,231 @@ export namespace Endpoints {
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type delete_DeleteExpenseCategory = {
+    method: "DELETE";
+    path: "/api/v1/expense-categories/{category_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { category_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateExpenseCategory = {
+    method: "PATCH";
+    path: "/api/v1/expense-categories/{category_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { category_id: string };
+
+      body: Schemas.ExpenseCategoryRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          hue: number;
+          id: Schemas.ExpenseCategoryId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetExpense = {
+    method: "GET";
+    path: "/api/v1/expenses/{expense_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { expense_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          advanced_by_member_id?: (null | Schemas.MemberId) | undefined;
+          amount_ht_cents: number;
+          category_id: Schemas.ExpenseCategoryId;
+          created_at: string;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          customer_name?: (string | null) | undefined;
+          date: string;
+          days_late: number;
+          display_state: Schemas.ExpenseDisplayState;
+          due_date?: (string | null) | undefined;
+          id: Schemas.ExpenseId;
+          label: string;
+          method?: (null | Schemas.PaymentMethod) | undefined;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on?: (string | null) | undefined;
+          proof_file_key?: (string | null) | undefined;
+          reference?: (string | null) | undefined;
+          reimbursed_on?: (string | null) | undefined;
+          status: Schemas.ExpenseStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name?: (string | null) | undefined;
+          total_cents: number;
+          updated_at: string;
+          vat_cents: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteExpense = {
+    method: "DELETE";
+    path: "/api/v1/expenses/{expense_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { expense_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateExpense = {
+    method: "PATCH";
+    path: "/api/v1/expenses/{expense_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { expense_id: string };
+
+      body: Schemas.UpdateExpenseRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          advanced_by_member_id?: (null | Schemas.MemberId) | undefined;
+          amount_ht_cents: number;
+          category_id: Schemas.ExpenseCategoryId;
+          created_at: string;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          customer_name?: (string | null) | undefined;
+          date: string;
+          days_late: number;
+          display_state: Schemas.ExpenseDisplayState;
+          due_date?: (string | null) | undefined;
+          id: Schemas.ExpenseId;
+          label: string;
+          method?: (null | Schemas.PaymentMethod) | undefined;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on?: (string | null) | undefined;
+          proof_file_key?: (string | null) | undefined;
+          reference?: (string | null) | undefined;
+          reimbursed_on?: (string | null) | undefined;
+          status: Schemas.ExpenseStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name?: (string | null) | undefined;
+          total_cents: number;
+          updated_at: string;
+          vat_cents: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_PayExpense = {
+    method: "POST";
+    path: "/api/v1/expenses/{expense_id}/pay";
+    requestFormat: "json";
+    parameters: {
+      path: { expense_id: string };
+
+      body: Schemas.PayExpenseRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          advanced_by_member_id?: (null | Schemas.MemberId) | undefined;
+          amount_ht_cents: number;
+          category_id: Schemas.ExpenseCategoryId;
+          created_at: string;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          customer_name?: (string | null) | undefined;
+          date: string;
+          days_late: number;
+          display_state: Schemas.ExpenseDisplayState;
+          due_date?: (string | null) | undefined;
+          id: Schemas.ExpenseId;
+          label: string;
+          method?: (null | Schemas.PaymentMethod) | undefined;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on?: (string | null) | undefined;
+          proof_file_key?: (string | null) | undefined;
+          reference?: (string | null) | undefined;
+          reimbursed_on?: (string | null) | undefined;
+          status: Schemas.ExpenseStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name?: (string | null) | undefined;
+          total_cents: number;
+          updated_at: string;
+          vat_cents: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_ReimburseExpense = {
+    method: "POST";
+    path: "/api/v1/expenses/{expense_id}/reimburse";
+    requestFormat: "json";
+    parameters: {
+      path: { expense_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          advanced_by_member_id?: (null | Schemas.MemberId) | undefined;
+          amount_ht_cents: number;
+          category_id: Schemas.ExpenseCategoryId;
+          created_at: string;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          customer_name?: (string | null) | undefined;
+          date: string;
+          days_late: number;
+          display_state: Schemas.ExpenseDisplayState;
+          due_date?: (string | null) | undefined;
+          id: Schemas.ExpenseId;
+          label: string;
+          method?: (null | Schemas.PaymentMethod) | undefined;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on?: (string | null) | undefined;
+          proof_file_key?: (string | null) | undefined;
+          reference?: (string | null) | undefined;
+          reimbursed_on?: (string | null) | undefined;
+          status: Schemas.ExpenseStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name?: (string | null) | undefined;
+          total_cents: number;
+          updated_at: string;
+          vat_cents: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
       401: unknown;
       403: unknown;
       404: unknown;
@@ -6621,6 +7057,144 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListExpenseCategories = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/expense-categories";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          hue: number;
+          id: Schemas.ExpenseCategoryId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateExpenseCategory = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/expense-categories";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.ExpenseCategoryRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          hue: number;
+          id: Schemas.ExpenseCategoryId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type get_ListExpenses = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/expenses";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          advanced_by_member_id?: (null | Schemas.MemberId) | undefined;
+          amount_ht_cents: number;
+          category_id: Schemas.ExpenseCategoryId;
+          created_at: string;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          customer_name?: (string | null) | undefined;
+          date: string;
+          days_late: number;
+          display_state: Schemas.ExpenseDisplayState;
+          due_date?: (string | null) | undefined;
+          id: Schemas.ExpenseId;
+          label: string;
+          method?: (null | Schemas.PaymentMethod) | undefined;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on?: (string | null) | undefined;
+          proof_file_key?: (string | null) | undefined;
+          reference?: (string | null) | undefined;
+          reimbursed_on?: (string | null) | undefined;
+          status: Schemas.ExpenseStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name?: (string | null) | undefined;
+          total_cents: number;
+          updated_at: string;
+          vat_cents: number;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateExpense = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/expenses";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateExpenseRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          advanced_by_member_id?: (null | Schemas.MemberId) | undefined;
+          amount_ht_cents: number;
+          category_id: Schemas.ExpenseCategoryId;
+          created_at: string;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          customer_name?: (string | null) | undefined;
+          date: string;
+          days_late: number;
+          display_state: Schemas.ExpenseDisplayState;
+          due_date?: (string | null) | undefined;
+          id: Schemas.ExpenseId;
+          label: string;
+          method?: (null | Schemas.PaymentMethod) | undefined;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on?: (string | null) | undefined;
+          proof_file_key?: (string | null) | undefined;
+          reference?: (string | null) | undefined;
+          reimbursed_on?: (string | null) | undefined;
+          status: Schemas.ExpenseStatus;
+          supplier_id?: (null | Schemas.SupplierId) | undefined;
+          supplier_name?: (string | null) | undefined;
+          total_cents: number;
+          updated_at: string;
+          vat_cents: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
   export type get_ListMyAssignmentReports = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/field/assignment-reports";
@@ -7006,6 +7580,31 @@ export namespace Endpoints {
       };
       401: unknown;
       403: unknown;
+    };
+  };
+  export type get_ReadLedger = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/ledger";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ month: string }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          entries: Array<Schemas.LedgerEntryResponse>;
+          months: Array<string>;
+          payables: Schemas.PayablesResponse;
+          summary: Schemas.LedgerSummaryResponse;
+          trend: Array<Schemas.MonthTrendResponse>;
+          vat: Schemas.VatSummaryResponse;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
     };
   };
   export type patch_UpdateOrganizationLegalIdentity = {
@@ -7642,21 +8241,28 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          archived_at?: (string | null) | undefined;
+          billing_frequency: Schemas.BillingFrequency;
+          category: string;
+          cost_cents?: (number | null) | undefined;
           created_at: string;
           datasheet_keys: Array<string>;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
+          invoice_usage_count: number;
           manufacturer?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
+          quote_usage_count: number;
           sku?: (string | null) | undefined;
           supplier_id?: (null | Schemas.SupplierId) | undefined;
           technical_specs?: (string | null) | undefined;
           unit: string;
           unit_price_cents: number;
           updated_at: string;
+          usage_count: number;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -7676,21 +8282,28 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          archived_at?: (string | null) | undefined;
+          billing_frequency: Schemas.BillingFrequency;
+          category: string;
+          cost_cents?: (number | null) | undefined;
           created_at: string;
           datasheet_keys: Array<string>;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
+          invoice_usage_count: number;
           manufacturer?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
+          quote_usage_count: number;
           sku?: (string | null) | undefined;
           supplier_id?: (null | Schemas.SupplierId) | undefined;
           technical_specs?: (string | null) | undefined;
           unit: string;
           unit_price_cents: number;
           updated_at: string;
+          usage_count: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -8279,6 +8892,36 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type post_RecordReceipt = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/receipts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.RecordReceiptRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          amount_cents: number;
+          created_at: string;
+          customer_id?: (null | Schemas.CustomerId) | undefined;
+          id: Schemas.ReceiptId;
+          method: Schemas.PaymentMethod;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on: string;
+          reference?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
   export type get_GetProfitability = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/reporting/profitability";
@@ -8386,15 +9029,22 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          archived_at?: (string | null) | undefined;
+          billing_frequency: Schemas.BillingFrequency;
+          category: string;
+          cost_cents?: (number | null) | undefined;
           created_at: string;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ServiceRateId;
+          invoice_usage_count: number;
           label: string;
           organization_id: Schemas.OrganizationId;
+          quote_usage_count: number;
           rate_cents: number;
           unit: string;
           updated_at: string;
+          usage_count: number;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -8414,15 +9064,22 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          archived_at?: (string | null) | undefined;
+          billing_frequency: Schemas.BillingFrequency;
+          category: string;
+          cost_cents?: (number | null) | undefined;
           created_at: string;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ServiceRateId;
+          invoice_usage_count: number;
           label: string;
           organization_id: Schemas.OrganizationId;
+          quote_usage_count: number;
           rate_cents: number;
           unit: string;
           updated_at: string;
+          usage_count: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -8521,11 +9178,18 @@ export namespace Endpoints {
       200: {
         data: Array<{
           address?: (string | null) | undefined;
+          addresses: Array<Schemas.SupplierAddressResponse>;
+          archived_at?: (string | null) | undefined;
+          contacts: Array<Schemas.SupplierContactResponse>;
           created_at: string;
+          default_category_id?: (null | Schemas.ExpenseCategoryId) | undefined;
           email?: (string | null) | undefined;
+          iban?: (string | null) | undefined;
           id: Schemas.SupplierId;
           name: string;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
           registration_number?: (string | null) | undefined;
           updated_at: string;
@@ -8550,11 +9214,18 @@ export namespace Endpoints {
       201: {
         data: {
           address?: (string | null) | undefined;
+          addresses: Array<Schemas.SupplierAddressResponse>;
+          archived_at?: (string | null) | undefined;
+          contacts: Array<Schemas.SupplierContactResponse>;
           created_at: string;
+          default_category_id?: (null | Schemas.ExpenseCategoryId) | undefined;
           email?: (string | null) | undefined;
+          iban?: (string | null) | undefined;
           id: Schemas.SupplierId;
           name: string;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
           registration_number?: (string | null) | undefined;
           updated_at: string;
@@ -8579,11 +9250,18 @@ export namespace Endpoints {
       200: {
         data: {
           address?: (string | null) | undefined;
+          addresses: Array<Schemas.SupplierAddressResponse>;
+          archived_at?: (string | null) | undefined;
+          contacts: Array<Schemas.SupplierContactResponse>;
           created_at: string;
+          default_category_id?: (null | Schemas.ExpenseCategoryId) | undefined;
           email?: (string | null) | undefined;
+          iban?: (string | null) | undefined;
           id: Schemas.SupplierId;
           name: string;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
           registration_number?: (string | null) | undefined;
           updated_at: string;
@@ -8609,11 +9287,18 @@ export namespace Endpoints {
       200: {
         data: {
           address?: (string | null) | undefined;
+          addresses: Array<Schemas.SupplierAddressResponse>;
+          archived_at?: (string | null) | undefined;
+          contacts: Array<Schemas.SupplierContactResponse>;
           created_at: string;
+          default_category_id?: (null | Schemas.ExpenseCategoryId) | undefined;
           email?: (string | null) | undefined;
+          iban?: (string | null) | undefined;
           id: Schemas.SupplierId;
           name: string;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
           registration_number?: (string | null) | undefined;
           updated_at: string;
@@ -8626,6 +9311,76 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+    };
+  };
+  export type post_ArchiveSupplier = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; supplier_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          addresses: Array<Schemas.SupplierAddressResponse>;
+          archived_at?: (string | null) | undefined;
+          contacts: Array<Schemas.SupplierContactResponse>;
+          created_at: string;
+          default_category_id?: (null | Schemas.ExpenseCategoryId) | undefined;
+          email?: (string | null) | undefined;
+          iban?: (string | null) | undefined;
+          id: Schemas.SupplierId;
+          name: string;
+          notes?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          payment_terms_days?: (number | null) | undefined;
+          phone?: (string | null) | undefined;
+          registration_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_number?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_RestoreSupplier = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}/restore";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; supplier_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          addresses: Array<Schemas.SupplierAddressResponse>;
+          archived_at?: (string | null) | undefined;
+          contacts: Array<Schemas.SupplierContactResponse>;
+          created_at: string;
+          default_category_id?: (null | Schemas.ExpenseCategoryId) | undefined;
+          email?: (string | null) | undefined;
+          iban?: (string | null) | undefined;
+          id: Schemas.SupplierId;
+          name: string;
+          notes?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          payment_terms_days?: (number | null) | undefined;
+          phone?: (string | null) | undefined;
+          registration_number?: (string | null) | undefined;
+          updated_at: string;
+          vat_number?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
     };
   };
   export type get_ListSupportApiKeys = {
@@ -9533,21 +10288,28 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          archived_at?: (string | null) | undefined;
+          billing_frequency: Schemas.BillingFrequency;
+          category: string;
+          cost_cents?: (number | null) | undefined;
           created_at: string;
           datasheet_keys: Array<string>;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
+          invoice_usage_count: number;
           manufacturer?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
+          quote_usage_count: number;
           sku?: (string | null) | undefined;
           supplier_id?: (null | Schemas.SupplierId) | undefined;
           technical_specs?: (string | null) | undefined;
           unit: string;
           unit_price_cents: number;
           updated_at: string;
+          usage_count: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -9577,21 +10339,28 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          archived_at?: (string | null) | undefined;
+          billing_frequency: Schemas.BillingFrequency;
+          category: string;
+          cost_cents?: (number | null) | undefined;
           created_at: string;
           datasheet_keys: Array<string>;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ProductId;
+          invoice_usage_count: number;
           manufacturer?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
           photo_keys: Array<string>;
+          quote_usage_count: number;
           sku?: (string | null) | undefined;
           supplier_id?: (null | Schemas.SupplierId) | undefined;
           technical_specs?: (string | null) | undefined;
           unit: string;
           unit_price_cents: number;
           updated_at: string;
+          usage_count: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -10149,6 +10918,41 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type post_AllocateReceipt = {
+    method: "POST";
+    path: "/api/v1/receipts/{receipt_id}/allocate";
+    requestFormat: "json";
+    parameters: {
+      path: { receipt_id: string };
+
+      body: Schemas.AllocateReceiptRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          amount_cents: number;
+          created_at: string;
+          deleted_at?: (string | null) | undefined;
+          deleted_by?: (null | Schemas.UserId) | undefined;
+          id: Schemas.InvoicePaymentId;
+          invoice_id: Schemas.InvoiceId;
+          method: Schemas.PaymentMethod;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          paid_on: string;
+          recorded_by: Schemas.UserId;
+          reference?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
   export type delete_DeleteRole = {
     method: "DELETE";
     path: "/api/v1/roles/{role_id}";
@@ -10197,15 +11001,22 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          archived_at?: (string | null) | undefined;
+          billing_frequency: Schemas.BillingFrequency;
+          category: string;
+          cost_cents?: (number | null) | undefined;
           created_at: string;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ServiceRateId;
+          invoice_usage_count: number;
           label: string;
           organization_id: Schemas.OrganizationId;
+          quote_usage_count: number;
           rate_cents: number;
           unit: string;
           updated_at: string;
+          usage_count: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -10235,15 +11046,22 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          archived_at?: (string | null) | undefined;
+          billing_frequency: Schemas.BillingFrequency;
+          category: string;
+          cost_cents?: (number | null) | undefined;
           created_at: string;
           default_vat_rate_bp?: (number | null) | undefined;
           description?: (string | null) | undefined;
           id: Schemas.ServiceRateId;
+          invoice_usage_count: number;
           label: string;
           organization_id: Schemas.OrganizationId;
+          quote_usage_count: number;
           rate_cents: number;
           unit: string;
           updated_at: string;
+          usage_count: number;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -10751,6 +11569,8 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
     "/api/v1/deals/{deal_id}": Endpoints.patch_UpdateDeal;
     "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
+    "/api/v1/expense-categories/{category_id}": Endpoints.patch_UpdateExpenseCategory;
+    "/api/v1/expenses/{expense_id}": Endpoints.patch_UpdateExpense;
     "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.patch_AmendAssignmentReport;
     "/api/v1/invoices/{invoice_id}": Endpoints.patch_UpdateInvoice;
     "/api/v1/members/{member_id}": Endpoints.patch_UpdateMember;
@@ -10789,6 +11609,8 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
     "/api/v1/deals/{deal_id}": Endpoints.delete_DeleteDeal;
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
+    "/api/v1/expense-categories/{category_id}": Endpoints.delete_DeleteExpenseCategory;
+    "/api/v1/expenses/{expense_id}": Endpoints.delete_DeleteExpense;
     "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.delete_WithdrawAssignmentReport;
     "/api/v1/invitations/{invitation_id}": Endpoints.delete_RevokeInvitation;
     "/api/v1/invoice-payments/{invoice_payment_id}": Endpoints.delete_DeleteInvoicePayment;
@@ -10837,6 +11659,7 @@ export type EndpointByMethod = {
     "/api/v1/deals/{deal_id}": Endpoints.get_GetDeal;
     "/api/v1/employees/{employee_id}/cost-bases": Endpoints.get_ListEmployeeCostBases;
     "/api/v1/equipment/{equipment_id}": Endpoints.get_GetEquipment;
+    "/api/v1/expenses/{expense_id}": Endpoints.get_GetExpense;
     "/api/v1/files/url": Endpoints.get_GetFileUrl;
     "/api/v1/invoices/{invoice_id}": Endpoints.get_GetInvoice;
     "/api/v1/invoices/{invoice_id}/balance": Endpoints.get_GetInvoiceBalance;
@@ -10876,12 +11699,15 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/does/{doe_id}/pdf": Endpoints.get_ExportDoePdf;
     "/api/v1/organizations/{organization_id}/employee-profiles": Endpoints.get_ListEmployeeProfiles;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
+    "/api/v1/organizations/{organization_id}/expense-categories": Endpoints.get_ListExpenseCategories;
+    "/api/v1/organizations/{organization_id}/expenses": Endpoints.get_ListExpenses;
     "/api/v1/organizations/{organization_id}/field/assignment-reports": Endpoints.get_ListMyAssignmentReports;
     "/api/v1/organizations/{organization_id}/field/current": Endpoints.get_GetCurrentTimeEntry;
     "/api/v1/organizations/{organization_id}/field/tasks": Endpoints.get_ListMyFieldTasks;
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.get_ListInvitations;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.get_ListInvoices;
     "/api/v1/organizations/{organization_id}/invoices/outstanding": Endpoints.get_ListOutstandingBalanceByCustomer;
+    "/api/v1/organizations/{organization_id}/ledger": Endpoints.get_ReadLedger;
     "/api/v1/organizations/{organization_id}/maintenance/contracts": Endpoints.get_ListMaintenanceContracts;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.get_GetMaintenanceContract;
     "/api/v1/organizations/{organization_id}/maintenance/grid": Endpoints.get_GetMaintenanceGrid;
@@ -10947,6 +11773,8 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.post_CreateCustomerContext;
     "/api/v1/deals/{deal_id}/stage": Endpoints.post_MoveDealStage;
     "/api/v1/employees/{employee_id}/cost-bases": Endpoints.post_SetEmployeeCostBasis;
+    "/api/v1/expenses/{expense_id}/pay": Endpoints.post_PayExpense;
+    "/api/v1/expenses/{expense_id}/reimburse": Endpoints.post_ReimburseExpense;
     "/api/v1/field/time-entries/{time_entry_id}/photos": Endpoints.post_AttachTimeEntryPhoto;
     "/api/v1/field/time-entries/{time_entry_id}/recover": Endpoints.post_RecoverTimeEntry;
     "/api/v1/field/time-entries/{time_entry_id}/stop": Endpoints.post_StopTimeEntry;
@@ -10983,6 +11811,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-style/preview/pages": Endpoints.post_PreviewDoeStylePages;
     "/api/v1/organizations/{organization_id}/does/{doe_id}/supplies/draft": Endpoints.post_DraftDoeSupply;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
+    "/api/v1/organizations/{organization_id}/expense-categories": Endpoints.post_CreateExpenseCategory;
+    "/api/v1/organizations/{organization_id}/expenses": Endpoints.post_CreateExpense;
     "/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report": Endpoints.post_ReportAssignment;
     "/api/v1/organizations/{organization_id}/field/day-end": Endpoints.post_EndWorkingDay;
     "/api/v1/organizations/{organization_id}/field/tasks/{task_id}/intervention": Endpoints.post_ProposeMaintenanceIntervention;
@@ -11007,10 +11837,13 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/projects/{project_id}/doe": Endpoints.post_CreateDoe;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/restore": Endpoints.post_RestoreProject;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
+    "/api/v1/organizations/{organization_id}/receipts": Endpoints.post_RecordReceipt;
     "/api/v1/organizations/{organization_id}/roles": Endpoints.post_CreateRole;
     "/api/v1/organizations/{organization_id}/service-rates": Endpoints.post_CreateServiceRate;
     "/api/v1/organizations/{organization_id}/supplier-invoices/import": Endpoints.post_ImportSupplierInvoice;
     "/api/v1/organizations/{organization_id}/suppliers": Endpoints.post_CreateSupplier;
+    "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}/archive": Endpoints.post_ArchiveSupplier;
+    "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}/restore": Endpoints.post_RestoreSupplier;
     "/api/v1/organizations/{organization_id}/support/api-keys": Endpoints.post_CreateSupportApiKey;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}/attachments": Endpoints.post_AttachSupportEntryFile;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}/send": Endpoints.post_SendSupportDraft;
@@ -11026,6 +11859,7 @@ export type EndpointByMethod = {
     "/api/v1/quotes/{quote_id}/invoices": Endpoints.post_CreateInvoiceFromQuote;
     "/api/v1/quotes/{quote_id}/plan": Endpoints.post_CreateQuotePlan;
     "/api/v1/quotes/{quote_id}/revision": Endpoints.post_ReviseQuote;
+    "/api/v1/receipts/{receipt_id}/allocate": Endpoints.post_AllocateReceipt;
     "/api/v1/supplier-invoices/{supplier_invoice_id}/confirm": Endpoints.post_ConfirmSupplierInvoice;
     "/api/v1/supplier-invoices/{supplier_invoice_id}/reject": Endpoints.post_RejectSupplierInvoice;
     "/api/v1/support/intake/tickets": Endpoints.post_CreateIntakeTicket;

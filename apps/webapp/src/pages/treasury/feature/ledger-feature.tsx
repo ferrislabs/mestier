@@ -1,39 +1,48 @@
 import { useMemo } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { useCustomers } from '#/hooks/use-customers'
-import { useOutstandingByCustomer } from '#/hooks/use-invoices'
+import { useCustomers, useUploadFile } from '#/hooks/use-customers'
+import {
+	useOutstandingByCustomer,
+	useRecordPayment,
+} from '#/hooks/use-invoices'
 import { useSuppliers } from '#/hooks/use-suppliers'
-import { findPerson } from '#/pages/customers/feature/mocks/people'
-import { useNotice } from '#/pages/customers/feature/use-notice'
-import { parseAmount, todayIso } from '#/pages/customers/lib/format'
 import {
 	useAllocateReceipt,
+	useCreateExpense,
 	useDeleteExpense,
-	useLedger,
-	useMarkExpensePaid,
+	useExpenseCategories,
+	useExpenses,
+	useLedgerRead,
+	usePayExpense,
 	useRecordReceipt,
 	useReimburseExpense,
-	useSaveExpense,
-} from '#/pages/treasury/feature/mocks/ledger'
+	useUpdateExpense,
+} from '#/hooks/use-treasury'
+import { mutationErrorMessage } from '#/lib/api-error'
+import { useNotice } from '#/pages/customers/feature/use-notice'
+import { useOrganizationPeople } from '#/pages/customers/feature/use-organization-people'
+import { parseAmount, todayIso } from '#/pages/customers/lib/format'
+import { findPerson } from '#/pages/customers/lib/people'
+import { useOpenInvoices } from '#/pages/treasury/feature/use-open-invoices'
 import {
-	DEFAULT_LEDGER_FILTERS,
+	apiMethodOf,
+	categoryOf,
+	entryOf,
+	expenseBody,
+	expenseOf,
+	receiptOf,
+	summaryOf,
+	trendOf,
+	vatOf,
+} from '#/pages/treasury/lib/ledger-api'
+import {
 	type ExpenseFormValues,
-	expenseState,
-	expenseTotal,
 	filterLedger,
 	type LedgerSearch,
 	type LedgerSearchPatch,
-	ledgerEntries,
 	ledgerFiltersOf,
-	ledgerMonths,
-	monthlyTrend,
 	type PaymentFormValues,
-	payables,
-	receiptVat,
-	summarizeLedger,
-	vatSummary,
 } from '#/pages/treasury/lib/ledger-model'
-import type { Expense } from '#/pages/treasury/types'
 import { LedgerUI } from '#/pages/treasury/ui/ledger-ui'
 
 interface LedgerFeatureProps {
@@ -41,30 +50,60 @@ interface LedgerFeatureProps {
 	onSearchChange: (patch: LedgerSearchPatch) => void
 }
 
+const EMPTY_SUMMARY = {
+	receipts: 0,
+	expenses: 0,
+	net: 0,
+	pendingExpenses: 0,
+	unallocated: 0,
+}
+
+const EMPTY_VAT = { collected: 0, deductible: 0, due: 0 }
+
 export function LedgerFeature({ search, onSearchChange }: LedgerFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
+	const organizationId = activeOrganization.id
 	const today = todayIso()
 	const notice = useNotice()
-	const ledger = useLedger().data
-	const outstanding = useOutstandingByCustomer(activeOrganization.id)
-	const suppliers = useSuppliers(activeOrganization.id)
-	const customers = useCustomers(activeOrganization.id, {
-		page: 1,
-		perPage: 100,
-	})
-	const saveExpense = useSaveExpense()
-	const deleteExpense = useDeleteExpense()
-	const markPaid = useMarkExpensePaid()
-	const reimburse = useReimburseExpense()
-	const recordReceipt = useRecordReceipt()
-	const allocate = useAllocateReceipt()
-
-	const entries = useMemo(() => ledgerEntries(ledger, today), [ledger, today])
 	const filters = ledgerFiltersOf(search)
-	const visible = filterLedger(entries, filters)
-	const period = summarizeLedger(
-		filterLedger(entries, { ...DEFAULT_LEDGER_FILTERS, month: filters.month }),
+	const ledger = useLedgerRead(organizationId, filters.month).data?.data
+	const expenseRows = useExpenses(organizationId).data?.data
+	const categoryRows = useExpenseCategories(organizationId).data?.data
+	const openInvoices = useOpenInvoices(organizationId)
+	const outstanding = useOutstandingByCustomer(organizationId)
+	const suppliers = useSuppliers(organizationId)
+	const customers = useCustomers(organizationId, { page: 1, perPage: 100 })
+	const { people } = useOrganizationPeople(organizationId)
+	const uploadFile = useUploadFile()
+	const createExpense = useCreateExpense()
+	const updateExpense = useUpdateExpense()
+	const deleteExpense = useDeleteExpense()
+	const payExpense = usePayExpense()
+	const reimburseExpense = useReimburseExpense()
+	const recordReceipt = useRecordReceipt()
+	const recordPayment = useRecordPayment()
+	const allocateReceipt = useAllocateReceipt()
+
+	const entries = useMemo(() => (ledger?.entries ?? []).map(entryOf), [ledger])
+	const receipts = useMemo(
+		() =>
+			(ledger?.entries ?? [])
+				.filter((entry) => entry.kind === 'RECEIPT')
+				.map(receiptOf),
+		[ledger],
 	)
+	const expenses = useMemo(
+		() => (expenseRows ?? []).map(expenseOf),
+		[expenseRows],
+	)
+	const categories = useMemo(
+		() => (categoryRows ?? []).map(categoryOf),
+		[categoryRows],
+	)
+	const customerRows = (customers.data?.data ?? []).filter(
+		(customer) => customer.status !== 'ARCHIVED',
+	)
+	const visible = filterLedger(entries, filters)
 	const balances = (outstanding.data?.data ?? []).filter(
 		(row) => row.outstanding_cents > 0,
 	)
@@ -72,80 +111,74 @@ export function LedgerFeature({ search, onSearchChange }: LedgerFeatureProps) {
 		(sum, row) => sum + row.outstanding_cents,
 		0,
 	)
-	const unpaid = payables(ledger, today)
-	const toPay = unpaid.reduce((sum, expense) => sum + expenseTotal(expense), 0)
-	const overdueToPay = unpaid
-		.filter((expense) => expenseState(expense, today) === 'overdue')
-		.reduce((sum, expense) => sum + expenseTotal(expense), 0)
-	const trend = useMemo(() => monthlyTrend(entries, today), [entries, today])
-	const months = useMemo(() => ledgerMonths(entries), [entries])
-	const customerRows = (customers.data?.data ?? []).filter(
-		(customer) => customer.status !== 'ARCHIVED',
-	)
 	const supplierRows = (suppliers.data?.data ?? []).map((supplier) => ({
 		id: supplier.id,
 		name: supplier.name,
 	}))
 
+	function fail(error: unknown) {
+		notice.show(mutationErrorMessage(error) ?? 'Action impossible.')
+		throw error
+	}
+
 	async function saveExpenseValues(
 		expenseId: string | null,
 		values: ExpenseFormValues,
 	) {
-		const existing = ledger.expenses.find((item) => item.id === expenseId)
+		const existing = expenses.find((item) => item.id === expenseId)
 		const advanced = existing ? existing.advancedById : values.advancedById
-		const draft: Omit<Expense, 'id'> = {
-			date: values.date,
-			label: values.label.trim(),
-			supplierId: values.supplierId,
-			supplierName:
-				supplierRows.find((supplier) => supplier.id === values.supplierId)
-					?.name ?? '',
-			categoryId: values.categoryId,
-			reference: values.reference.trim(),
-			amountHt: parseAmount(values.amountHt) ?? 0,
-			vatAmount:
-				values.vatAmount.trim() === ''
-					? 0
-					: (parseAmount(values.vatAmount) ?? 0),
-			dueDate:
-				advanced !== null || values.dueDate === '' ? null : values.dueDate,
-			paid: existing ? existing.paid : advanced !== null,
-			paidAt: existing
-				? existing.paidAt
-				: advanced !== null
-					? values.date
-					: null,
-			method: existing ? existing.method : null,
-			advancedById: advanced,
-			reimbursedAt: existing ? existing.reimbursedAt : null,
-			customerId: values.customerId,
-			customerName:
-				customerRows.find((customer) => customer.id === values.customerId)
-					?.name ?? '',
-			proofName: values.proofName,
-			note: values.note.trim(),
+		const { advanced_by_member_id: _advanced, ...body } = expenseBody(
+			values,
+			advanced,
+		)
+		try {
+			if (expenseId === null)
+				await createExpense.mutateAsync({
+					path: { organization_id: organizationId },
+					body: expenseBody(values, advanced),
+				})
+			else
+				await updateExpense.mutateAsync({
+					path: { expense_id: expenseId },
+					body,
+				})
+		} catch (error) {
+			return fail(error)
 		}
-		await saveExpense.mutateAsync(expenseId, draft)
 		notice.show(expenseId ? 'Dépense mise à jour.' : 'Dépense enregistrée.')
 	}
 
 	async function recordReceiptValues(values: PaymentFormValues) {
-		const invoice = ledger.openInvoices.find(
-			(item) => item.id === values.invoiceId,
-		)
-		const customer = customerRows.find((item) => item.id === values.customerId)
 		const amount = parseAmount(values.amount) ?? 0
-		await recordReceipt.mutateAsync({
-			date: values.date,
-			amount,
-			vatAmount: receiptVat(amount, invoice?.vatRate ?? null),
-			method: values.method,
-			customerId: customer?.id ?? null,
-			customerName: customer?.name ?? invoice?.customerName ?? '',
-			invoiceLabel: invoice?.label ?? null,
-			reference: values.reference.trim(),
-			note: values.note.trim(),
-		})
+		const reference = values.reference.trim() || null
+		const note = values.note.trim() || null
+		try {
+			if (values.invoiceId !== null)
+				await recordPayment.mutateAsync({
+					path: { invoice_id: values.invoiceId },
+					body: {
+						amount_cents: amount,
+						paid_on: values.date,
+						method: apiMethodOf(values.method),
+						reference,
+						note,
+					},
+				})
+			else
+				await recordReceipt.mutateAsync({
+					path: { organization_id: organizationId },
+					body: {
+						customer_id: values.customerId,
+						amount_cents: amount,
+						paid_on: values.date,
+						method: apiMethodOf(values.method),
+						reference,
+						note,
+					},
+				})
+		} catch (error) {
+			return fail(error)
+		}
 		notice.show('Recette enregistrée.')
 	}
 
@@ -159,45 +192,68 @@ export function LedgerFeature({ search, onSearchChange }: LedgerFeatureProps) {
 			onDismissNotice={notice.clear}
 			entries={entries}
 			visible={visible}
-			period={period}
+			period={ledger ? summaryOf(ledger.summary) : EMPTY_SUMMARY}
 			periodMonth={filters.month}
 			toCollect={toCollect}
 			toCollectCount={balances.length}
-			toPay={toPay}
-			overdueToPay={overdueToPay}
-			vat={vatSummary(ledger, filters.month)}
-			trend={trend}
-			months={months}
-			categories={ledger.categories}
-			expenses={ledger.expenses}
-			receipts={ledger.receipts}
-			openInvoices={ledger.openInvoices}
+			toPay={ledger?.payables.total_cents ?? 0}
+			overdueToPay={ledger?.payables.overdue_cents ?? 0}
+			vat={ledger ? vatOf(ledger.vat) : EMPTY_VAT}
+			trend={ledger ? trendOf(ledger.trend) : []}
+			months={ledger?.months ?? []}
+			categories={categories}
+			expenses={expenses}
+			receipts={receipts}
+			openInvoices={openInvoices}
 			suppliers={supplierRows}
 			customers={customerRows}
+			people={people}
+			onUploadProof={async (file) => {
+				const uploaded = await uploadFile.mutateAsync(file)
+				return uploaded.data.key
+			}}
 			detailActions={{
 				onDeleteExpense: (expense) => {
 					void deleteExpense
-						.mutateAsync(expense.id)
+						.mutateAsync({ path: { expense_id: expense.id } })
 						.then(() => notice.show('Dépense supprimée.'))
+						.catch((error) =>
+							notice.show(mutationErrorMessage(error) ?? 'Action impossible.'),
+						)
 				},
 				onMarkPaid: (expense, paidAt, method) => {
-					void markPaid
-						.mutateAsync(expense.id, paidAt, method)
+					void payExpense
+						.mutateAsync({
+							path: { expense_id: expense.id },
+							body: { paid_on: paidAt, method: apiMethodOf(method) },
+						})
 						.then(() => notice.show('Dépense marquée comme payée.'))
+						.catch((error) =>
+							notice.show(mutationErrorMessage(error) ?? 'Action impossible.'),
+						)
 				},
 				onReimburse: (expense) => {
-					void reimburse
-						.mutateAsync(expense.id, today)
+					void reimburseExpense
+						.mutateAsync({ path: { expense_id: expense.id } })
 						.then(() =>
 							notice.show(
-								`Remboursement de ${findPerson(expense.advancedById)?.name ?? 'la personne'} enregistré.`,
+								`Remboursement de ${findPerson(people, expense.advancedById)?.name ?? 'la personne'} enregistré.`,
 							),
+						)
+						.catch((error) =>
+							notice.show(mutationErrorMessage(error) ?? 'Action impossible.'),
 						)
 				},
 				onAllocate: (receipt, invoice) => {
-					void allocate
-						.mutateAsync(receipt.id, invoice)
+					void allocateReceipt
+						.mutateAsync({
+							path: { receipt_id: receipt.id },
+							body: { invoice_id: invoice.id },
+						})
 						.then(() => notice.show(`Recette affectée à ${invoice.label}.`))
+						.catch((error) =>
+							notice.show(mutationErrorMessage(error) ?? 'Action impossible.'),
+						)
 				},
 			}}
 			onSaveExpense={saveExpenseValues}

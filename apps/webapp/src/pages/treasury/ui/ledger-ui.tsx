@@ -5,6 +5,7 @@ import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import type { Customer } from '#/hooks/use-customers'
 import { formatMoney, formatMonth } from '#/pages/customers/lib/format'
+import type { Person } from '#/pages/customers/lib/people'
 import { Money } from '#/pages/customers/ui/money'
 import { Notice } from '#/pages/customers/ui/notice'
 import { StatTile } from '#/pages/customers/ui/stat-tile'
@@ -67,7 +68,9 @@ interface LedgerUIProps {
 	openInvoices: readonly OpenInvoice[]
 	suppliers: readonly SupplierOption[]
 	customers: readonly Customer[]
-	detailActions: Omit<LedgerDetailActions, 'onEditExpense' | 'today'>
+	people: readonly Person[]
+	onUploadProof: (file: File) => Promise<string>
+	detailActions: Omit<LedgerDetailActions, 'onEditExpense' | 'today' | 'people'>
 	onSaveExpense: (
 		expenseId: string | null,
 		values: ExpenseFormValues,
@@ -99,6 +102,8 @@ export function LedgerUI({
 	openInvoices,
 	suppliers,
 	customers,
+	people,
+	onUploadProof,
 	detailActions,
 	onSaveExpense,
 	onRecordReceipt,
@@ -272,6 +277,7 @@ export function LedgerUI({
 				actions={{
 					...detailActions,
 					today,
+					people,
 					onEditExpense: (expense) => {
 						setEditingExpense(expense)
 						setExpenseOpen(true)
@@ -292,6 +298,8 @@ export function LedgerUI({
 				categories={categories}
 				suppliers={suppliers}
 				customers={customers}
+				people={people}
+				onUploadProof={onUploadProof}
 				onSubmit={(values) => onSaveExpense(editingExpense?.id ?? null, values)}
 			/>
 			<PaymentFormDialog
