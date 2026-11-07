@@ -1,6 +1,7 @@
 import type { Customer } from '#/hooks/use-customers'
 import type { AccountExtras } from '#/pages/customers/feature/mocks/account-extras'
 import { PEOPLE } from '#/pages/customers/feature/mocks/people'
+import { NO_TERMS, type SearchTerms } from '#/pages/customers/lib/accounts'
 import { accountStatusOf } from '#/pages/customers/types'
 
 export type StatusFilter = 'all' | 'client' | 'prospect' | 'archived'
@@ -86,15 +87,21 @@ function compactDigits(text: string): string {
 	return text.replace(/[\s.-]/g, '')
 }
 
-function matchesQuery(customer: Customer, query: string): boolean {
+function matchesQuery(
+	customer: Customer,
+	query: string,
+	terms: SearchTerms,
+): boolean {
 	if (query === '') return true
-	const haystack = [customer.name, customer.email ?? '']
+	const haystack = [customer.name, customer.email ?? '', ...terms.text]
 		.map(normalizeText)
 		.join('\n')
 	if (haystack.includes(query)) return true
 	const digits = compactDigits(query)
 	if (!/^\+?\d{3,}$/.test(digits)) return false
-	return compactDigits(customer.phone ?? '').includes(digits)
+	return [customer.phone ?? '', ...terms.phones].some((phone) =>
+		compactDigits(phone).includes(digits),
+	)
 }
 
 function matchesStatus(customer: Customer, status: StatusFilter): boolean {
@@ -112,6 +119,7 @@ export function filterCustomers(
 	customers: readonly Customer[],
 	extrasOf: (customerId: string) => AccountExtras,
 	filters: ClientFilters,
+	termsOf: (customerId: string) => SearchTerms = () => NO_TERMS,
 ): Customer[] {
 	const query = normalizeText(filters.query)
 	return customers
@@ -119,7 +127,7 @@ export function filterCustomers(
 			(customer) =>
 				matchesStatus(customer, filters.status) &&
 				matchesOwner(extrasOf(customer.id), filters.owner) &&
-				matchesQuery(customer, query),
+				matchesQuery(customer, query, termsOf(customer.id)),
 		)
 		.sort((a, b) => a.name.localeCompare(b.name, 'fr'))
 }

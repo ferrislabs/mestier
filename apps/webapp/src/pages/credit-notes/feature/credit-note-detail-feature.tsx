@@ -50,7 +50,7 @@ export function CreditNoteDetailFeature({
 			<DetailError
 				title="Impossible de charger l’avoir"
 				message={note.error.message}
-				backTo="/crm/credit-notes"
+				backTo="/crm/avoirs"
 				backLabel="Retour aux avoirs"
 				onRetry={() => void note.refetch()}
 			/>
@@ -65,7 +65,7 @@ export function CreditNoteDetailFeature({
 				hint="Il n’existe pas ou l’adresse n’est plus valide."
 			>
 				<Button variant="outline" size="sm" asChild>
-					<Link to={buildOrgPath(activeOrganization.slug, '/crm/credit-notes')}>
+					<Link to={buildOrgPath(activeOrganization.slug, '/crm/avoirs')}>
 						Retour aux avoirs
 					</Link>
 				</Button>
@@ -78,7 +78,7 @@ export function CreditNoteDetailFeature({
 			<Navigate
 				to={buildOrgPath(
 					activeOrganization.slug,
-					`/crm/invoices/${creditNote.id}`,
+					`/crm/factures/${creditNote.id}`,
 				)}
 				replace
 			/>

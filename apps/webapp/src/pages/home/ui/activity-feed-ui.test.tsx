@@ -15,7 +15,7 @@ const ACTIVITY: HomeActivity[] = [
 		id: 'a',
 		title: 'Facture impayée',
 		state: 'late',
-		to: '/o/x/crm/invoices',
+		to: '/o/x/crm/factures',
 		module: crm,
 	},
 	{

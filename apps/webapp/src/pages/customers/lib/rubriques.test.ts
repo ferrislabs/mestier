@@ -3,7 +3,7 @@ import {
 	activitySummary,
 	addressesSummary,
 	contactsSummary,
-	formatSiren,
+	formatSiret,
 	identitySummary,
 	isClientTab,
 	validateClientSearch,
@@ -29,17 +29,20 @@ describe('summaries', () => {
 		expect(activitySummary(0)).toBe('Aucun encours')
 	})
 
-	it('formats a SIREN and describes the identity', () => {
-		expect(formatSiren('823456789')).toBe('823 456 789')
-		expect(formatSiren('n/a')).toBe('n/a')
+	it('formats a SIRET and describes the identity', () => {
+		expect(formatSiret('82345678900012')).toBe('823 456 789 00012')
+		expect(formatSiret('823456789')).toBe('823 456 789')
+		expect(formatSiret('n/a')).toBe('n/a')
 		expect(
-			identitySummary({ registration_number: '823456789' }, 'professionnel', [
-				{ city: ' Rezé ' },
-			]),
-		).toBe('SIREN 823 456 789 · Rezé')
+			identitySummary(
+				{ registration_number: '82345678900012' },
+				'professionnel',
+				[{ city: ' Rezé ' }],
+			),
+		).toBe('SIRET 823 456 789 00012 · Rezé')
 		expect(
 			identitySummary({ registration_number: null }, 'professionnel', []),
-		).toBe('SIREN non renseigné')
+		).toBe('SIRET non renseigné')
 		expect(
 			identitySummary({ registration_number: null }, 'particulier', []),
 		).toBe('Particulier')

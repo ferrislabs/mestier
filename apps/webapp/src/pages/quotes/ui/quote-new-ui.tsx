@@ -17,6 +17,7 @@ import {
 } from '#/pages/quotes/lib/new-quote-form'
 import { vatNoticeOf } from '#/pages/quotes/lib/paper-parties'
 import { previewQuoteTotals } from '#/pages/quotes/lib/quote-document'
+import { canChangeClient } from '#/pages/quotes/lib/quote-draft'
 import {
 	type QuoteFormValues,
 	type QuoteLineFormValues,
@@ -27,6 +28,10 @@ import { CustomerPicker } from '#/pages/quotes/ui/doc/customer-picker'
 import { LinesEditor } from '#/pages/quotes/ui/doc/lines-editor'
 import { LockBanner } from '#/pages/quotes/ui/doc/primitives'
 import { TotalsPanel } from '#/pages/quotes/ui/doc/totals-panel'
+import {
+	type QuoteOwner,
+	QuoteTermsFields,
+} from '#/pages/quotes/ui/quote-terms-fields'
 
 interface QuoteNewUIProps {
 	organizationSlug: string
@@ -38,6 +43,7 @@ interface QuoteNewUIProps {
 	photoUrls: Record<string, string | undefined>
 	vatEnabled: boolean
 	customUnits?: string[]
+	owners?: readonly QuoteOwner[]
 	error?: string | null
 	isCreating?: boolean
 	isUploading?: boolean
@@ -63,6 +69,7 @@ export function QuoteNewUI({
 	photoUrls,
 	vatEnabled,
 	customUnits,
+	owners = [],
 	error,
 	isCreating,
 	isUploading,
@@ -80,6 +87,7 @@ export function QuoteNewUI({
 	const [submitted, setSubmitted] = useState(false)
 	const errors = submitted ? validateNewQuote(values) : {}
 	const hasCustomer = values.customerId !== ''
+	const clientLocked = hasCustomer && !canChangeClient(values.lines)
 	const noAddress =
 		hasCustomer && !isCustomerContextsLoading && customerContexts.length === 0
 
@@ -110,9 +118,11 @@ export function QuoteNewUI({
 						required
 						error={errors.customerId}
 						hint={
-							customers.length === 0
-								? 'Aucun client n’existe encore dans cette organisation.'
-								: undefined
+							clientLocked
+								? 'Le client est verrouillé tant que le devis contient des lignes.'
+								: customers.length === 0
+									? 'Aucun client n’existe encore dans cette organisation.'
+									: undefined
 						}
 					>
 						<CustomerPicker
@@ -120,6 +130,7 @@ export function QuoteNewUI({
 							customers={customers}
 							value={hasCustomer ? values.customerId : null}
 							invalid={errors.customerId !== undefined}
+							disabled={clientLocked}
 							onChange={(customerId) => onChange({ customerId })}
 						/>
 					</FormField>
@@ -167,6 +178,12 @@ export function QuoteNewUI({
 							onChange={(event) => onChange({ title: event.target.value })}
 						/>
 					</FormField>
+					<QuoteTermsFields
+						idPrefix="new-quote"
+						values={values}
+						owners={owners}
+						onChange={onChange}
+					/>
 				</div>
 
 				<section
@@ -180,7 +197,8 @@ export function QuoteNewUI({
 							Lignes
 						</h2>
 						<p className="mt-0.5 text-muted-foreground text-sm">
-							Les montants sont en euros hors taxes.
+							Les montants sont en euros hors taxes. La remise et la fréquence
+							sont indicatives : elles ne modifient pas encore les totaux.
 						</p>
 					</div>
 					<LinesEditor
@@ -221,7 +239,7 @@ export function QuoteNewUI({
 				)}
 				<div className="flex flex-wrap justify-end gap-2 border-t pt-4">
 					<Button variant="outline" asChild>
-						<Link to={buildOrgPath(organizationSlug, '/crm/quotes')}>
+						<Link to={buildOrgPath(organizationSlug, '/crm/devis')}>
 							Annuler
 						</Link>
 					</Button>

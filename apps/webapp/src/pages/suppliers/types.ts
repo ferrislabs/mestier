@@ -1,54 +1,56 @@
-import type { Supplier } from '#/hooks/use-suppliers'
+export type AddressKind = 'billing' | 'site' | 'other'
+
+export const ADDRESS_KIND_LABELS: Record<AddressKind, string> = {
+	billing: 'Facturation',
+	site: 'Site',
+	other: 'Autre',
+}
+
+export const ADDRESS_KINDS: readonly AddressKind[] = [
+	'billing',
+	'site',
+	'other',
+]
+
+export interface SupplierContact {
+	id: string
+	firstName: string
+	lastName: string
+	role: string
+	email: string
+	phone: string
+	mobile: string
+}
+
+export interface SupplierAddress {
+	id: string
+	label: string
+	kind: AddressKind
+	street: string
+	complement: string
+	postalCode: string
+	city: string
+	country: string
+}
+
+export interface SupplierExtras {
+	iban: string
+	defaultCategoryId: string | null
+	paymentTermsDays: number | null
+	notes: string
+	archived: boolean
+	contacts: SupplierContact[] | null
+	addresses: SupplierAddress[] | null
+}
 
 export interface SupplierFormValues {
 	name: string
 	registrationNumber: string
 	vatNumber: string
-	address: string
-	phone: string
-	email: string
-}
-
-export const EMPTY_SUPPLIER_FORM: SupplierFormValues = {
-	name: '',
-	registrationNumber: '',
-	vatNumber: '',
-	address: '',
-	phone: '',
-	email: '',
-}
-
-export function supplierToFormValues(supplier: Supplier): SupplierFormValues {
-	return {
-		name: supplier.name,
-		registrationNumber: supplier.registration_number ?? '',
-		vatNumber: supplier.vat_number ?? '',
-		address: supplier.address ?? '',
-		phone: supplier.phone ?? '',
-		email: supplier.email ?? '',
-	}
-}
-
-function optional(value: string): string | null {
-	const trimmed = value.trim()
-	return trimmed.length > 0 ? trimmed : null
-}
-
-export function buildSupplierRequest(values: SupplierFormValues) {
-	return {
-		name: values.name.trim(),
-		registration_number: optional(values.registrationNumber),
-		vat_number: optional(values.vatNumber),
-		address: optional(values.address),
-		phone: optional(values.phone),
-		email: optional(values.email),
-	}
-}
-
-export function validateSupplierName(name: string): string | undefined {
-	return name.trim().length === 0 ? 'Le nom est obligatoire.' : undefined
-}
-
-export function firstAddressLine(address: string | null | undefined): string {
-	return address?.split('\n')[0]?.trim() ?? ''
+	iban: string
+	defaultCategoryId: string | null
+	paymentTermsDays: string
+	notes: string
+	contacts: SupplierContact[]
+	addresses: SupplierAddress[]
 }

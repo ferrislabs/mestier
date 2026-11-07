@@ -44,7 +44,7 @@ export const MOCK_HOME_ACTIVITY: MockActivity[] = [
 		context: 'SCI Les Tilleuls, 3 991,90 €',
 		state: 'late',
 		when: 'Échue depuis le 23 octobre',
-		to: '/crm/invoices',
+		to: '/crm/factures',
 	},
 	{
 		id: 'crm-stripe-review',
@@ -53,7 +53,7 @@ export const MOCK_HOME_ACTIVITY: MockActivity[] = [
 		context: 'Atelier Bois & Co, 490 €',
 		state: 'waiting',
 		when: 'Reçu le 3 novembre',
-		to: '/crm/invoices',
+		to: '/crm/factures',
 	},
 	{
 		id: 'crm-d210',
@@ -62,7 +62,7 @@ export const MOCK_HOME_ACTIVITY: MockActivity[] = [
 		context: 'Boulangerie Lemoine, 9 057,60 €',
 		state: 'waiting',
 		when: 'Envoyé lundi',
-		to: '/crm/quotes',
+		to: '/crm/devis',
 	},
 	{
 		id: 'crm-d209',
@@ -71,7 +71,7 @@ export const MOCK_HOME_ACTIVITY: MockActivity[] = [
 		context: 'M. et Mme Fabre, 2 187,90 €',
 		state: 'today',
 		time: '14:00',
-		to: '/crm/quotes',
+		to: '/crm/devis',
 	},
 	{
 		id: 'chat-dupont',

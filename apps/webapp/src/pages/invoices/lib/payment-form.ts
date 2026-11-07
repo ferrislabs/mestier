@@ -10,6 +10,8 @@ export const PAYMENT_METHODS = [
 	'Autre',
 ] as const
 
+export type PaymentMode = 'payment' | 'refund'
+
 export interface PaymentValues {
 	date: string
 	amount: string
@@ -24,16 +26,24 @@ export function todayDate(now: Date = new Date()): string {
 	return `${now.getFullYear()}-${month}-${day}`
 }
 
+function owedCents(
+	remainingCents: number | null,
+	mode: PaymentMode,
+): number | null {
+	if (remainingCents === null) return null
+	return mode === 'payment' ? remainingCents : Math.max(0, -remainingCents)
+}
+
 export function initialPaymentValues(
 	remainingCents: number | null,
 	today: string,
+	mode: PaymentMode = 'payment',
 ): PaymentValues {
+	const owed = owedCents(remainingCents, mode)
 	return {
 		date: today,
 		amount:
-			remainingCents !== null && remainingCents > 0
-				? centsToEuros(remainingCents).replace('.', ',')
-				: '',
+			owed !== null && owed > 0 ? centsToEuros(owed).replace('.', ',') : '',
 		method: PAYMENT_METHODS[0],
 		reference: '',
 		note: '',
@@ -44,6 +54,7 @@ export function paymentErrors(
 	values: PaymentValues,
 	remainingCents: number | null,
 	today: string,
+	mode: PaymentMode = 'payment',
 ): string[] {
 	const errors: string[] = []
 	if (values.date === '') errors.push('La date du paiement est obligatoire.')
@@ -51,7 +62,11 @@ export function paymentErrors(
 		errors.push('La date du paiement ne peut pas être dans le futur.')
 	const cents = eurosToCents(values.amount)
 	if (!(cents > 0)) errors.push('Saisis un montant supérieur à zéro.')
-	else if (remainingCents !== null && cents > remainingCents)
+	else if (mode === 'refund') {
+		const owed = owedCents(remainingCents, mode)
+		if (owed !== null && cents > owed)
+			errors.push(`Le montant dépasse le trop-perçu (${formatMoney(owed)}).`)
+	} else if (remainingCents !== null && cents > remainingCents)
 		errors.push(
 			`Le montant dépasse le reste dû (${formatMoney(remainingCents)}).`,
 		)
@@ -69,4 +84,30 @@ export function paymentRequest(
 		reference: values.reference.trim() || null,
 		note: values.note.trim() || null,
 	}
+}
+
+export interface RefundInput {
+	date: string
+	amountCents: number
+	method: string
+	reference: string
+	note: string
+}
+
+export function refundRecord(values: PaymentValues): RefundInput {
+	return {
+		date: values.date,
+		amountCents: eurosToCents(values.amount),
+		method: values.method.trim(),
+		reference: values.reference.trim(),
+		note: values.note.trim(),
+	}
+}
+
+export function effectiveRemainingCents(
+	remainingCents: number | null,
+	refundedCents: number,
+): number | null {
+	if (remainingCents === null || remainingCents >= 0) return remainingCents
+	return Math.min(0, remainingCents + refundedCents)
 }

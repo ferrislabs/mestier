@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
@@ -6,6 +6,8 @@ import type { Organization } from '#/hooks/use-organizations'
 import type { Quote } from '#/hooks/use-quotes'
 import { renderWithRouter } from '#/test/render-with-router'
 import { wrapWithPermissions } from '#/test/with-permissions'
+import type { QuoteSideInfo } from '../lib/quote-side-info'
+import type { QuoteDisplayStatus } from '../lib/quote-status'
 import { emptyQuoteLine, type QuoteFormValues } from '../types'
 import type { PaperDocument } from './doc/document-paper'
 import { QuoteEditUI } from './quote-edit-ui'
@@ -87,12 +89,33 @@ function quote(overrides: Partial<Quote> = {}): Quote {
 	}
 }
 
+function info(
+	displayStatus: QuoteDisplayStatus = 'draft',
+	overrides: Partial<QuoteSideInfo> = {},
+): QuoteSideInfo {
+	return {
+		displayStatus,
+		validity: { text: 'Valable 30 jours après l’envoi', expired: false },
+		answerNote: null,
+		declineReason: '',
+		ownerName: null,
+		revisionOf: null,
+		supersededBy: null,
+		dealId: null,
+		...overrides,
+	}
+}
+
 function values(overrides: Partial<QuoteFormValues> = {}): QuoteFormValues {
 	return {
 		title: 'Rénovation salle de bain',
 		customerId: 'customer-1',
 		customerContextId: 'context-1',
 		lines: [emptyQuoteLine()],
+		ownerId: null,
+		validUntil: '',
+		depositPercent: '',
+		notes: '',
 		...overrides,
 	}
 }
@@ -134,6 +157,9 @@ const PAPER: PaperDocument = {
 function baseProps() {
 	return {
 		quote: quote(),
+		info: info(),
+		owners: [{ id: 'm1', name: 'Julien Roche' }],
+		defaultSigner: '',
 		values: values(),
 		customer: customer(),
 		customers: [customer()],
@@ -147,6 +173,7 @@ function baseProps() {
 		isSaving: false,
 		isDeleting: false,
 		isDuplicating: false,
+		isRevising: false,
 		isUploading: false,
 		isDownloading: false,
 		billingSteps: [],
@@ -175,6 +202,9 @@ function baseProps() {
 		onUploadLinePhoto: vi.fn(),
 		onSave: vi.fn(),
 		onTransition: vi.fn(),
+		onAccept: vi.fn(),
+		onDecline: vi.fn(),
+		onRevise: vi.fn(),
 		onDelete: vi.fn(),
 		onDuplicate: vi.fn(),
 		onDownloadPdf: vi.fn(),
@@ -232,6 +262,7 @@ describe('QuoteEditUI', () => {
 	it('opens a sent quote on the preview', async () => {
 		const props = baseProps()
 		props.quote = quote({ status: 'SENT' })
+		props.info = info('sent')
 		await renderUi(props)
 
 		expect(screen.getByRole('article')).toBeDefined()
@@ -345,22 +376,151 @@ describe('QuoteEditUI', () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		props.quote = quote({ status: 'SENT' })
+		props.info = info('sent')
 		await renderUi(props)
 
 		await user.click(
 			screen.getByRole('button', { name: 'Marquer comme accepté' }),
 		)
 		const dialog = await screen.findByRole('dialog')
+		const confirm = within(dialog).getByRole('button', {
+			name: 'Marquer comme accepté',
+		})
+		expect(confirm).toHaveProperty('disabled', true)
+
+		await user.type(
+			within(dialog).getByLabelText(/Nom de la personne qui signe/),
+			'Mme Durand',
+		)
+		await user.click(confirm)
+
+		expect(props.onAccept).toHaveBeenCalledWith('Mme Durand')
+		expect(props.onTransition).not.toHaveBeenCalled()
+	})
+
+	it('asks for the reason when a quote is declined', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		props.quote = quote({ status: 'SENT' })
+		props.info = info('sent')
+		await renderUi(props)
+
 		await user.click(
-			within(dialog).getByRole('button', { name: 'Marquer comme accepté' }),
+			screen.getByRole('button', { name: 'Marquer comme refusé' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+		await user.type(
+			within(dialog).getByLabelText(/Motif du refus/),
+			'trop cher',
+		)
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Marquer comme refusé' }),
 		)
 
-		expect(props.onTransition).toHaveBeenCalledWith('ACCEPTED')
+		expect(props.onDecline).toHaveBeenCalledWith('trop cher')
+	})
+
+	it('creates a revision of a sent quote', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		props.quote = quote({ status: 'SENT' })
+		props.info = info('sent')
+		await renderUi(props)
+
+		await user.click(screen.getByRole('button', { name: 'Créer une révision' }))
+
+		expect(props.onRevise).toHaveBeenCalled()
+	})
+
+	it('does not let an expired quote be answered, only revised', async () => {
+		const props = baseProps()
+		props.quote = quote({ status: 'SENT' })
+		props.info = info('expired', {
+			validity: { text: 'Valable jusqu’au 1 nov. 2026', expired: true },
+		})
+		await renderUi(props)
+
+		expect(
+			screen.queryByRole('button', { name: 'Marquer comme accepté' }),
+		).toBeNull()
+		expect(
+			screen.getByRole('button', { name: 'Créer une révision' }),
+		).toBeDefined()
+		expect(screen.getByText(/(expiré)/)).toBeDefined()
+	})
+
+	it('names the replaced and the revised quotes in the side column', async () => {
+		const props = baseProps()
+		props.quote = quote({ status: 'SENT' })
+		props.info = info('superseded', {
+			revisionOf: { id: 'q0', label: 'DEV-000' },
+			supersededBy: { id: 'q2', label: 'DEV-002' },
+		})
+		await renderUi(props)
+
+		expect(screen.getByText('Révision de')).toBeDefined()
+		expect(screen.getByRole('link', { name: 'DEV-000' })).toBeDefined()
+		expect(screen.getByText('Remplacé par')).toBeDefined()
+		expect(screen.getByRole('link', { name: 'DEV-002' })).toBeDefined()
+		expect(screen.getAllByText('Remplacé').length).toBeGreaterThan(0)
+	})
+
+	it('leaves a slot for the opportunity', async () => {
+		await renderUi(baseProps())
+
+		expect(screen.getByText('Opportunité')).toBeDefined()
+		expect(screen.getByText('Aucune opportunité liée')).toBeDefined()
+	})
+
+	it('invoices an accepted quote from the new invoice form', async () => {
+		const props = baseProps()
+		props.quote = quote({ status: 'ACCEPTED' })
+		props.info = info('accepted')
+		await renderUi(props)
+
+		const link = screen.getByRole('link', { name: 'Facturer' })
+
+		expect(link.getAttribute('href')).toBe(
+			'/o/atelier-bois/crm/factures/nouvelle?devis=quote-1',
+		)
+	})
+
+	it('locks the client once the quote has lines', async () => {
+		const props = baseProps()
+		props.values = values({
+			lines: [{ ...emptyQuoteLine(), label: 'Pose', unitPrice: '10' }],
+		})
+		await renderUi(props)
+
+		expect(screen.getByRole('combobox', { name: /^Client/ })).toHaveProperty(
+			'disabled',
+			true,
+		)
+	})
+
+	it('reports the responsible, the validity date, the deposit and the notes', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await renderUi(props)
+
+		fireEvent.change(screen.getByLabelText('Valable jusqu’au'), {
+			target: { value: '2026-12-01' },
+		})
+		await user.type(screen.getByLabelText(/Acompte demandé/), '3')
+		await user.type(screen.getByRole('textbox', { name: 'Notes' }), 'x')
+		await user.click(screen.getByRole('combobox', { name: 'Responsable' }))
+		await user.click(screen.getByRole('option', { name: 'Julien Roche' }))
+
+		expect(props.onChange).toHaveBeenCalledWith({ validUntil: '2026-12-01' })
+		expect(props.onChange).toHaveBeenCalledWith({ depositPercent: '3' })
+		expect(props.onChange).toHaveBeenCalledWith({ notes: 'x' })
+		expect(props.onChange).toHaveBeenCalledWith({ ownerId: 'm1' })
 	})
 
 	it('offers the handover to a project once the quote is accepted', async () => {
 		const props = baseProps()
 		props.quote = quote({ status: 'ACCEPTED' })
+		props.info = info('accepted')
 		await renderUi(props)
 
 		expect(

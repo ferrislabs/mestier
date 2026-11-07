@@ -40,7 +40,7 @@ describe('leavesEditor', () => {
 		expect(
 			leavesEditor({
 				current: { pathname: doe },
-				next: { pathname: '/o/menuiserie-duval/crm/customers' },
+				next: { pathname: '/o/menuiserie-duval/crm/clients' },
 			}),
 		).toBe(true)
 	})

@@ -11,38 +11,28 @@ import type { Customer } from '#/hooks/use-customers'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import type { AccountExtras } from '#/pages/customers/feature/mocks/account-extras'
+import type { CustomerListData } from '#/pages/customers/lib/accounts'
 import { formatDate } from '#/pages/customers/lib/format'
 import {
 	ACCOUNT_KIND_LABELS,
 	accountStatusOf,
-	customerPipelineStageLabel,
 	kindOf,
 } from '#/pages/customers/types'
 import { hueOf, NameAvatar } from '#/pages/customers/ui/avatars'
 import { Dash } from '#/pages/customers/ui/detail-card'
 import { Money } from '#/pages/customers/ui/money'
-import {
-	AccountStatusBadge,
-	StageBadge,
-} from '#/pages/customers/ui/status-badges'
-
-export interface Outstanding {
-	cents: number
-	oldestDueAt: string | null
-}
+import { AccountStatusBadge } from '#/pages/customers/ui/status-badges'
 
 export function CustomersTable({
 	organizationSlug,
 	customers,
 	extrasOf,
-	outstandingOf,
-	now,
+	dataOf,
 }: {
 	organizationSlug: string
 	customers: readonly Customer[]
 	extrasOf: (customerId: string) => AccountExtras
-	outstandingOf: (customerId: string) => Outstanding | undefined
-	now: number
+	dataOf: (customerId: string) => CustomerListData
 }) {
 	return (
 		<div className="overflow-hidden rounded-lg border bg-card">
@@ -50,19 +40,19 @@ export function CustomersTable({
 				<TableHeader>
 					<TableRow className="hover:bg-transparent">
 						<TableHead className="pl-4">Client</TableHead>
-						<TableHead className="max-xl:hidden">Contact</TableHead>
+						<TableHead className="max-md:hidden">Ville</TableHead>
+						<TableHead className="max-xl:hidden">Contact principal</TableHead>
 						<TableHead className="text-right">Encours</TableHead>
-						<TableHead className="max-lg:hidden">Étape</TableHead>
-						<TableHead className="max-lg:hidden">Créé le</TableHead>
+						<TableHead className="text-right max-lg:hidden">
+							CA 12 mois
+						</TableHead>
+						<TableHead className="max-lg:hidden">Dernière activité</TableHead>
 						<TableHead className="pr-4">Statut</TableHead>
 					</TableRow>
 				</TableHeader>
 				<TableBody>
 					{customers.map((customer) => {
-						const outstanding = outstandingOf(customer.id)
-						const late =
-							outstanding?.oldestDueAt != null &&
-							new Date(outstanding.oldestDueAt).getTime() < now
+						const data = dataOf(customer.id)
 						const archived = customer.status === 'ARCHIVED'
 						const kind = kindOf(customer, extrasOf(customer.id))
 						return (
@@ -84,7 +74,7 @@ export function CustomersTable({
 											<Link
 												to={buildOrgPath(
 													organizationSlug,
-													'/crm/customers/$customerId',
+													'/crm/clients/$customerId',
 												)}
 												params={{ customerId: customer.id }}
 												className="block truncate font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset"
@@ -97,15 +87,16 @@ export function CustomersTable({
 										</span>
 									</div>
 								</TableCell>
+								<TableCell className="max-md:hidden">
+									{data.city || <Dash />}
+								</TableCell>
 								<TableCell className="max-xl:hidden">
-									{customer.email || customer.phone ? (
+									{data.contactName ? (
 										<>
-											<span className="block truncate">
-												{customer.email || customer.phone}
-											</span>
-											{customer.email && customer.phone && (
+											<span className="block truncate">{data.contactName}</span>
+											{data.contactRole && (
 												<span className="block truncate text-[12px] text-muted-foreground">
-													{customer.phone}
+													{data.contactRole}
 												</span>
 											)}
 										</>
@@ -114,18 +105,18 @@ export function CustomersTable({
 									)}
 								</TableCell>
 								<TableCell className="text-right">
-									{outstanding && outstanding.cents > 0 ? (
+									{data.outstanding > 0 ? (
 										<>
 											<Money
-												cents={outstanding.cents}
+												cents={data.outstanding}
 												className={cn(
 													'block',
-													late && 'font-medium text-state-alert',
+													data.overdue > 0 && 'font-medium text-state-alert',
 												)}
 											/>
-											{late && outstanding.oldestDueAt && (
+											{data.overdue > 0 && (
 												<span className="block text-[12px] text-state-alert">
-													échu depuis le {formatDate(outstanding.oldestDueAt)}
+													dont <Money cents={data.overdue} /> en retard
 												</span>
 											)}
 										</>
@@ -133,13 +124,19 @@ export function CustomersTable({
 										<Dash label="Aucun encours" />
 									)}
 								</TableCell>
-								<TableCell className="max-lg:hidden">
-									<StageBadge stage={customer.pipeline_stage}>
-										{customerPipelineStageLabel(customer.pipeline_stage)}
-									</StageBadge>
+								<TableCell className="text-right max-lg:hidden">
+									{data.revenue12m > 0 ? (
+										<Money cents={data.revenue12m} />
+									) : (
+										<Dash label="Aucun chiffre d’affaires" />
+									)}
 								</TableCell>
 								<TableCell className="text-muted-foreground max-lg:hidden">
-									{formatDate(customer.created_at)}
+									{data.lastActivity ? (
+										formatDate(data.lastActivity)
+									) : (
+										<Dash label="Aucune activité" />
+									)}
 								</TableCell>
 								<TableCell className="pr-4">
 									<AccountStatusBadge

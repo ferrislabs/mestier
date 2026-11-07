@@ -1,4 +1,4 @@
-// MOCK: catalog extras — no backend fields yet. Replace with category, cost, billing frequency and archived on products and service rates.
+// MOCK, pas d'endpoint, remplacé au lot B6 : catégorie, coût, fréquence de facturation et archivage des articles.
 import type { BillingFrequency } from '#/pages/catalog/catalog-model'
 import {
 	createMockStore,

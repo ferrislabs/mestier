@@ -185,6 +185,47 @@ export function catalogSummary(
 		: `${base}, ${plural(archived, 'archivé', 'archivés')}`
 }
 
+export type CatalogUsage = { quotes: number; invoices: number; total: number }
+
+const NEVER_USED: CatalogUsage = { quotes: 0, invoices: 0, total: 0 }
+
+export function catalogUsage(lines: {
+	quoteLines: readonly (string | null)[]
+	invoiceLines: readonly (string | null)[]
+}): Map<string, CatalogUsage> {
+	const usage = new Map<string, CatalogUsage>()
+	function count(itemId: string | null, key: 'quotes' | 'invoices') {
+		if (itemId === null) return
+		const current = usage.get(itemId) ?? NEVER_USED
+		usage.set(itemId, {
+			...current,
+			[key]: current[key] + 1,
+			total: current.total + 1,
+		})
+	}
+	for (const itemId of lines.quoteLines) count(itemId, 'quotes')
+	for (const itemId of lines.invoiceLines) count(itemId, 'invoices')
+	return usage
+}
+
+export function usageOf(
+	usage: ReadonlyMap<string, CatalogUsage>,
+	itemId: string,
+): CatalogUsage {
+	return usage.get(itemId) ?? NEVER_USED
+}
+
+export function usageLabel(usage: CatalogUsage): {
+	main: string
+	detail: string | null
+} {
+	if (usage.total === 0) return { main: 'Jamais utilisé', detail: null }
+	return {
+		main: `${usage.total} ${usage.total > 1 ? 'lignes' : 'ligne'}`,
+		detail: `${usage.quotes} en devis, ${usage.invoices} en factures`,
+	}
+}
+
 export type MarginTone = 'ok' | 'warn' | 'alert'
 
 export function marginTone(percent: number): MarginTone {

@@ -33,7 +33,7 @@ const ICONS: Record<ClientTab, LucideIcon> = {
 export function BackLink({ organizationSlug }: { organizationSlug: string }) {
 	return (
 		<Link
-			to={buildOrgPath(organizationSlug, '/crm/customers')}
+			to={buildOrgPath(organizationSlug, '/crm/clients')}
 			className="-ml-1 inline-flex items-center gap-1.5 rounded-sm px-1 text-[13px] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 		>
 			<ArrowLeft className="size-4" aria-hidden />
@@ -85,14 +85,20 @@ export function CustomerSidebar({
 					<div className="mt-3 flex flex-wrap items-center gap-2">
 						<RequirePermission permission="MANAGE_QUOTES">
 							<Button variant="outline" size="sm" asChild>
-								<Link to={buildOrgPath(organizationSlug, '/crm/quotes/new')}>
+								<Link
+									to={buildOrgPath(organizationSlug, '/crm/devis/nouveau')}
+									search={{ client: customerId }}
+								>
 									<FilePlus2 aria-hidden /> Nouveau devis
 								</Link>
 							</Button>
 						</RequirePermission>
 						<RequirePermission permission="MANAGE_INVOICES">
 							<Button variant="outline" size="sm" asChild>
-								<Link to={buildOrgPath(organizationSlug, '/crm/invoices/new')}>
+								<Link
+									to={buildOrgPath(organizationSlug, '/crm/factures/nouvelle')}
+									search={{ client: customerId }}
+								>
 									<Receipt aria-hidden /> Nouvelle facture
 								</Link>
 							</Button>
@@ -111,7 +117,7 @@ export function CustomerSidebar({
 				}))}
 				renderLink={(item, props) => (
 					<Link
-						to={buildOrgPath(organizationSlug, '/crm/customers/$customerId')}
+						to={buildOrgPath(organizationSlug, '/crm/clients/$customerId')}
 						params={{ customerId }}
 						search={{ onglet: isClientTab(item.id) ? item.id : 'identite' }}
 						{...props}

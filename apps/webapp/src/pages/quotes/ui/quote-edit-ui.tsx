@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Eye, Pencil } from 'lucide-react'
 import { useState } from 'react'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
@@ -6,11 +7,13 @@ import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { InvoiceStatus } from '#/hooks/use-invoices'
 import type { Quote } from '#/hooks/use-quotes'
+import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import { invoiceDisplayState } from '#/pages/invoices/types'
 import type { BillingPipelineStep } from '#/pages/quotes/lib/billing-pipeline'
 import { formatDocumentDate } from '#/pages/quotes/lib/doc-format'
 import { vatNoticeOf } from '#/pages/quotes/lib/paper-parties'
+import type { QuoteSideInfo } from '#/pages/quotes/lib/quote-side-info'
 import {
 	customerDisplayName,
 	type QuoteFormValues,
@@ -26,7 +29,11 @@ import {
 	DetailShell,
 	SideSection,
 } from '#/pages/quotes/ui/doc/detail-shell'
-import { AccountLink, InvoiceLink } from '#/pages/quotes/ui/doc/doc-links'
+import {
+	AccountLink,
+	InvoiceLink,
+	QuoteLink,
+} from '#/pages/quotes/ui/doc/doc-links'
 import {
 	DocumentPaper,
 	type PaperDocument,
@@ -39,6 +46,7 @@ import { LockBanner, Money } from '#/pages/quotes/ui/doc/primitives'
 import { type DocTotals, TotalsPanel } from '#/pages/quotes/ui/doc/totals-panel'
 import { QuoteActionsPanel } from '#/pages/quotes/ui/quote-actions-panel'
 import { QuoteEditForm } from '#/pages/quotes/ui/quote-edit-form'
+import type { QuoteOwner } from '#/pages/quotes/ui/quote-terms-fields'
 import { LEGAL_IDENTITY_FIELD_LABELS } from '#/pages/settings/types'
 
 type Mode = 'edit' | 'preview'
@@ -54,6 +62,9 @@ export interface LinkedInvoice {
 
 interface QuoteEditUIProps {
 	quote: Quote
+	info: QuoteSideInfo
+	owners: readonly QuoteOwner[]
+	defaultSigner: string
 	values: QuoteFormValues
 	customer: Customer | undefined
 	customers: Customer[]
@@ -67,6 +78,7 @@ interface QuoteEditUIProps {
 	isSaving: boolean
 	isDeleting: boolean
 	isDuplicating: boolean
+	isRevising: boolean
 	isUploading: boolean
 	isDownloading: boolean
 	billingSteps: BillingPipelineStep[]
@@ -88,6 +100,9 @@ interface QuoteEditUIProps {
 	onUploadLinePhoto: (index: number, file: File) => Promise<void>
 	onSave: () => void
 	onTransition: (status: Quote['status']) => void
+	onAccept: (signer: string) => void
+	onDecline: (reason: string) => void
+	onRevise: () => void
 	onDelete: () => void
 	onDuplicate: () => void
 	onDownloadPdf: () => void
@@ -123,6 +138,9 @@ function ModeToggle({
 
 export function QuoteEditUI({
 	quote,
+	info,
+	owners,
+	defaultSigner,
 	values,
 	customer,
 	customers,
@@ -136,6 +154,7 @@ export function QuoteEditUI({
 	isSaving,
 	isDeleting,
 	isDuplicating,
+	isRevising,
 	isUploading,
 	isDownloading,
 	billingSteps,
@@ -157,6 +176,9 @@ export function QuoteEditUI({
 	onUploadLinePhoto,
 	onSave,
 	onTransition,
+	onAccept,
+	onDecline,
+	onRevise,
 	onDelete,
 	onDuplicate,
 	onDownloadPdf,
@@ -173,7 +195,7 @@ export function QuoteEditUI({
 	const main = (
 		<>
 			<div className="grid gap-3">
-				<BackLink to="/crm/quotes" label="Devis" />
+				<BackLink to="/crm/devis" label="Devis" />
 				<div className="flex flex-wrap items-start justify-between gap-3">
 					<div className="min-w-0">
 						<div className="flex flex-wrap items-center gap-2.5">
@@ -182,7 +204,7 @@ export function QuoteEditUI({
 									? `Devis ${quote.reference}`
 									: 'Brouillon de devis'}
 							</h1>
-							<QuoteStatusBadge status={quote.status} />
+							<QuoteStatusBadge status={info.displayStatus} />
 						</div>
 						<p className="mt-1 text-muted-foreground text-sm">
 							{customer && (
@@ -241,6 +263,7 @@ export function QuoteEditUI({
 					photoUrls={photoUrls}
 					vatEnabled={vatEnabled}
 					customUnits={customUnits}
+					owners={owners}
 					isLoading={isLoading}
 					isUploading={isUploading}
 					onChange={onChange}
@@ -264,10 +287,34 @@ export function QuoteEditUI({
 		<>
 			<SideSection title="État">
 				<div className="grid gap-1.5">
-					<QuoteStatusBadge status={quote.status} />
+					<QuoteStatusBadge status={info.displayStatus} />
 					<p className="text-muted-foreground text-sm">
 						{draft ? 'Le numéro est attribué à l’envoi.' : `Numéro ${label}`}
 					</p>
+					<p
+						className={cn(
+							'text-sm',
+							info.validity.expired
+								? 'font-medium text-state-alert'
+								: 'text-muted-foreground',
+						)}
+					>
+						{info.validity.text}
+						{info.validity.expired ? ' (expiré)' : ''}
+					</p>
+					{info.answerNote && (
+						<p className="text-muted-foreground text-sm">{info.answerNote}</p>
+					)}
+					{info.declineReason && (
+						<p className="text-muted-foreground text-sm">
+							Motif : {info.declineReason}
+						</p>
+					)}
+					{info.ownerName && (
+						<p className="text-muted-foreground text-sm">
+							Responsable : {info.ownerName}
+						</p>
+					)}
 					<p className="text-muted-foreground text-sm">
 						Créé le {formatDocumentDate(quote.created_at)}
 					</p>
@@ -287,16 +334,23 @@ export function QuoteEditUI({
 					organizationSlug={activeOrganization.slug}
 					quoteId={quote.id}
 					status={quote.status}
+					displayStatus={info.displayStatus}
 					label={label}
+					validityNote={info.validity.text}
+					defaultSigner={defaultSigner}
 					canSave={canSave}
 					canSend={canSend}
 					identityIncompleteForSending={identityIncompleteForSending}
 					isSaving={isSaving}
 					isDeleting={isDeleting}
 					isDuplicating={isDuplicating}
+					isRevising={isRevising}
 					isDownloading={isDownloading}
 					onSave={onSave}
 					onTransition={onTransition}
+					onAccept={onAccept}
+					onDecline={onDecline}
+					onRevise={onRevise}
 					onDelete={onDelete}
 					onDuplicate={onDuplicate}
 					onDownloadPdf={onDownloadPdf}
@@ -348,6 +402,46 @@ export function QuoteEditUI({
 							)}
 						</dd>
 					</div>
+					<div className="grid gap-0.5">
+						<dt className="text-muted-foreground text-xs">Opportunité</dt>
+						<dd className="min-w-0 truncate text-sm">
+							{info.dealId ? (
+								<Link
+									to={buildOrgPath(activeOrganization.slug, '/crm/pipeline')}
+									className="rounded-sm font-medium outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+								>
+									Voir dans le pipeline
+								</Link>
+							) : (
+								<span className="text-muted-foreground">
+									Aucune opportunité liée
+								</span>
+							)}
+						</dd>
+					</div>
+					{info.revisionOf && (
+						<div className="grid gap-0.5">
+							<dt className="text-muted-foreground text-xs">Révision de</dt>
+							<dd className="min-w-0 truncate text-sm">
+								<QuoteLink quoteId={info.revisionOf.id} className="font-medium">
+									{info.revisionOf.label}
+								</QuoteLink>
+							</dd>
+						</div>
+					)}
+					{info.supersededBy && (
+						<div className="grid gap-0.5">
+							<dt className="text-muted-foreground text-xs">Remplacé par</dt>
+							<dd className="min-w-0 truncate text-sm">
+								<QuoteLink
+									quoteId={info.supersededBy.id}
+									className="font-medium"
+								>
+									{info.supersededBy.label}
+								</QuoteLink>
+							</dd>
+						</div>
+					)}
 				</dl>
 			</SideSection>
 			<SideSection title="Historique">

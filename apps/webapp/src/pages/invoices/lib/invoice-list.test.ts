@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { Invoice } from '#/hooks/use-invoices'
 import {
 	computeInvoiceTiles,
+	excludeInvoices,
+	invoiceMatchesAccount,
 	invoiceMatchesSearch,
 	invoiceStateCounts,
 	matchesStateFilter,
@@ -94,5 +96,25 @@ describe('invoiceMatchesSearch', () => {
 			true,
 		)
 		expect(invoiceMatchesSearch(invoice(), 'zzz', 'dupont')).toBe(false)
+	})
+})
+
+describe('excludeInvoices', () => {
+	it('drops the invoices whose id is hidden', () => {
+		const list = [invoice({ id: 'a' }), invoice({ id: 'b' })]
+
+		expect(excludeInvoices(list, ['b']).map((item) => item.id)).toEqual(['a'])
+		expect(excludeInvoices(list, [])).toHaveLength(2)
+	})
+})
+
+describe('invoiceMatchesAccount', () => {
+	it('keeps every invoice without a customer filter', () => {
+		expect(invoiceMatchesAccount(invoice(), null)).toBe(true)
+	})
+
+	it('keeps only the invoices of the chosen customer', () => {
+		expect(invoiceMatchesAccount(invoice(), 'customer-1')).toBe(true)
+		expect(invoiceMatchesAccount(invoice(), 'customer-2')).toBe(false)
 	})
 })

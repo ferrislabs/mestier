@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildBreadcrumbItems, matchingTargets } from '#/modules/breadcrumb'
-import type { NavTarget } from '#/modules/types'
+import { MODULES } from '#/modules/registry'
+import type { ModuleSection, NavTarget } from '#/modules/types'
 
 function labelsOf(pathname: string, detailLabel?: string): string[] {
 	return buildBreadcrumbItems({
@@ -17,32 +18,47 @@ describe('buildBreadcrumbItems', () => {
 	})
 
 	it('adds the matching nav entry', () => {
-		expect(labelsOf('/o/baptiste/crm/customers')).toEqual([
+		expect(labelsOf('/o/baptiste/crm/clients')).toEqual([
 			'Baptiste',
 			'CRM',
-			'Comptes',
+			'Clients',
 		])
 		expect(labelsOf('/o/baptiste/settings')).toEqual(['Baptiste', 'Paramètres'])
 	})
 
 	it('stacks entries from the most general to the most precise', () => {
-		expect(labelsOf('/o/baptiste/crm/customers/pipeline')).toEqual([
-			'Baptiste',
-			'CRM',
-			'Comptes',
-			'Pipeline',
-		])
+		const crm = MODULES.find((module) => module.id === 'crm')
+		if (!crm) throw new Error('registry: crm module missing')
+		const nested: ModuleSection = {
+			id: 'test-nested-section-fixture',
+			label: 'Imbriquée',
+			to: '/crm/clients/imbriquee',
+		}
+		crm.sections.push(nested)
+		try {
+			expect(labelsOf('/o/baptiste/crm/clients/imbriquee')).toEqual([
+				'Baptiste',
+				'CRM',
+				'Clients',
+				'Imbriquée',
+			])
+		} finally {
+			crm.sections.splice(crm.sections.indexOf(nested), 1)
+		}
 	})
 
 	it('adds the detail label last', () => {
-		expect(
-			labelsOf('/o/baptiste/crm/customers/abc-123', 'Marie Leroy'),
-		).toEqual(['Baptiste', 'CRM', 'Comptes', 'Marie Leroy'])
+		expect(labelsOf('/o/baptiste/crm/clients/abc-123', 'Marie Leroy')).toEqual([
+			'Baptiste',
+			'CRM',
+			'Clients',
+			'Marie Leroy',
+		])
 	})
 
 	it('prefixes every link target with the tenant, except the detail', () => {
 		const items = buildBreadcrumbItems({
-			pathname: '/o/baptiste/crm/customers/abc-123',
+			pathname: '/o/baptiste/crm/clients/abc-123',
 			organizationName: 'Baptiste',
 			organizationSlug: 'baptiste',
 			detailLabel: 'Marie Leroy',
@@ -50,17 +66,17 @@ describe('buildBreadcrumbItems', () => {
 
 		expect(items[0]?.to).toBe('/o/baptiste')
 		expect(items[1]?.to).toBe('/o/baptiste/crm')
-		expect(items[2]?.to).toBe('/o/baptiste/crm/customers')
+		expect(items[2]?.to).toBe('/o/baptiste/crm/clients')
 		expect(items[3]?.to).toBeUndefined()
 	})
 
 	it('resolves the quotes trail', () => {
-		expect(labelsOf('/o/baptiste/crm/quotes')).toEqual([
+		expect(labelsOf('/o/baptiste/crm/devis')).toEqual([
 			'Baptiste',
 			'CRM',
 			'Devis',
 		])
-		expect(labelsOf('/o/baptiste/crm/quotes/abc-123', 'Fiche devis')).toEqual([
+		expect(labelsOf('/o/baptiste/crm/devis/abc-123', 'Fiche devis')).toEqual([
 			'Baptiste',
 			'CRM',
 			'Devis',

@@ -1,8 +1,14 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { SuppliersFeature } from '#/pages/suppliers/feature/suppliers-feature'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { buildOrgPath } from '#/modules/org-path'
 
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/purchase/suppliers',
 )({
-	component: SuppliersFeature,
+	validateSearch: (search: Record<string, unknown>) => search,
+	beforeLoad: ({ params, search }) => {
+		throw redirect({
+			to: buildOrgPath(params.organizationSlug, '/crm/fournisseurs'),
+			search,
+		})
+	},
 })

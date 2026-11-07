@@ -5,8 +5,10 @@ import {
 	CircleX,
 	Copy,
 	Download,
+	GitBranch,
 	Loader2,
 	type LucideIcon,
+	Receipt,
 	RotateCcw,
 	Save,
 	Send,
@@ -15,8 +17,11 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { ConfirmDialog } from '#/components/confirm-dialog'
+import { FormField } from '#/components/form-field'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
+import { Input } from '#/components/ui/input'
+import { Textarea } from '#/components/ui/textarea'
 import type { QuoteStatus } from '#/hooks/use-quotes'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
@@ -24,25 +29,29 @@ import {
 	availableQuoteActions,
 	type QuoteAction,
 } from '#/pages/quotes/lib/quote-actions'
+import { invoiceNewPath } from '#/pages/quotes/lib/quote-invoicing'
+import type { QuoteDisplayStatus } from '#/pages/quotes/lib/quote-status'
 
 type Dialog = 'send' | 'accept' | 'decline' | 'cancel' | 'reopen' | 'delete'
 
-const LABELS: Record<Exclude<QuoteAction, 'project'>, string> = {
+const LABELS: Record<Exclude<QuoteAction, 'project' | 'invoice'>, string> = {
 	send: 'Envoyer au client',
 	accept: 'Marquer comme accepté',
 	decline: 'Marquer comme refusé',
 	cancel: 'Annuler le devis',
 	reopen: 'Repasser en brouillon',
+	revise: 'Créer une révision',
 	duplicate: 'Dupliquer',
 	delete: 'Supprimer',
 }
 
-const ICONS: Record<Exclude<QuoteAction, 'project'>, LucideIcon> = {
+const ICONS: Record<Exclude<QuoteAction, 'project' | 'invoice'>, LucideIcon> = {
 	send: Send,
 	accept: CircleCheck,
 	decline: CircleX,
 	cancel: CircleX,
 	reopen: RotateCcw,
+	revise: GitBranch,
 	duplicate: Copy,
 	delete: Trash2,
 }
@@ -51,16 +60,23 @@ interface QuoteActionsPanelProps {
 	organizationSlug: string
 	quoteId: string
 	status: QuoteStatus
+	displayStatus: QuoteDisplayStatus
 	label: string
+	validityNote: string | null
+	defaultSigner: string
 	canSave: boolean
 	canSend: boolean
 	identityIncompleteForSending: boolean
 	isSaving: boolean
 	isDeleting: boolean
 	isDuplicating: boolean
+	isRevising: boolean
 	isDownloading: boolean
 	onSave: () => void
 	onTransition: (status: QuoteStatus) => void
+	onAccept: (signer: string) => void
+	onDecline: (reason: string) => void
+	onRevise: () => void
 	onDelete: () => void
 	onDuplicate: () => void
 	onDownloadPdf: () => void
@@ -70,30 +86,42 @@ export function QuoteActionsPanel({
 	organizationSlug,
 	quoteId,
 	status,
+	displayStatus,
 	label,
+	validityNote,
+	defaultSigner,
 	canSave,
 	canSend,
 	identityIncompleteForSending,
 	isSaving,
 	isDeleting,
 	isDuplicating,
+	isRevising,
 	isDownloading,
 	onSave,
 	onTransition,
+	onAccept,
+	onDecline,
+	onRevise,
 	onDelete,
 	onDuplicate,
 	onDownloadPdf,
 }: QuoteActionsPanelProps) {
 	const [dialog, setDialog] = useState<Dialog | null>(null)
 	const [showErrors, setShowErrors] = useState(false)
-	const actions = availableQuoteActions(status)
-	const busy = isSaving || isDeleting || isDuplicating
+	const [signer, setSigner] = useState(defaultSigner)
+	const [reason, setReason] = useState('')
+	const actions = availableQuoteActions(displayStatus)
+	const busy = isSaving || isDeleting || isDuplicating || isRevising
 	const draft = status === 'DRAFT'
 
 	const close = () => setDialog(null)
 
-	function trigger(action: Exclude<QuoteAction, 'project'>) {
+	function trigger(action: Exclude<QuoteAction, 'project' | 'invoice'>) {
 		if (action === 'duplicate') return onDuplicate()
+		if (action === 'revise') return onRevise()
+		if (action === 'accept') setSigner(defaultSigner)
+		if (action === 'decline') setReason('')
 		if (action === 'send' && !canSend) return setShowErrors(true)
 		setDialog(action)
 	}
@@ -115,7 +143,27 @@ export function QuoteActionsPanel({
 					)}
 					Enregistrer
 				</Button>
+				{displayStatus === 'expired' && (
+					<p className="text-muted-foreground text-sm">
+						{validityNote ?? 'Ce devis a expiré'} : il ne peut plus être
+						accepté. Crée une révision pour proposer de nouvelles conditions.
+					</p>
+				)}
 				{actions.map((action) => {
+					if (action === 'invoice')
+						return (
+							<Button
+								key={action}
+								variant="outline"
+								className="w-full justify-start"
+								asChild
+							>
+								<Link to={invoiceNewPath(organizationSlug, quoteId)}>
+									<Receipt aria-hidden />
+									Facturer
+								</Link>
+							</Button>
+						)
 					if (action === 'project')
 						return (
 							<Button
@@ -127,7 +175,7 @@ export function QuoteActionsPanel({
 								<Link
 									to={buildOrgPath(
 										organizationSlug,
-										`/crm/quotes/${quoteId}/handover`,
+										`/crm/devis/${quoteId}/passation`,
 									)}
 								>
 									<ArrowRightLeft aria-hidden />
@@ -207,23 +255,50 @@ export function QuoteActionsPanel({
 					title={`Marquer le devis ${label} comme accepté`}
 					description="Le client a donné son accord. Le devis pourra ensuite être transformé en projet et facturé."
 					confirmLabel="Marquer comme accepté"
+					disabled={signer.trim() === ''}
 					onConfirm={() => {
-						onTransition('ACCEPTED')
+						onAccept(signer.trim())
 						close()
 					}}
-				/>
+				>
+					<FormField
+						id={`accept-${quoteId}-signer`}
+						label="Nom de la personne qui signe"
+						required
+					>
+						<Input
+							id={`accept-${quoteId}-signer`}
+							value={signer}
+							autoComplete="off"
+							onChange={(event) => setSigner(event.target.value)}
+						/>
+					</FormField>
+				</ConfirmDialog>
 				<ConfirmDialog
 					open={dialog === 'decline'}
 					onOpenChange={(open) => !open && close()}
 					title={`Marquer le devis ${label} comme refusé`}
-					description="Tu pourras ensuite dupliquer le devis pour proposer de nouvelles conditions."
+					description="Tu pourras ensuite créer une révision pour proposer de nouvelles conditions."
 					confirmLabel="Marquer comme refusé"
 					destructive
 					onConfirm={() => {
-						onTransition('DECLINED')
+						onDecline(reason.trim())
 						close()
 					}}
-				/>
+				>
+					<FormField
+						id={`decline-${quoteId}-reason`}
+						label="Motif du refus"
+						hint="Facultatif : prix, délai, concurrent retenu…"
+					>
+						<Textarea
+							id={`decline-${quoteId}-reason`}
+							rows={3}
+							value={reason}
+							onChange={(event) => setReason(event.target.value)}
+						/>
+					</FormField>
+				</ConfirmDialog>
 				<ConfirmDialog
 					open={dialog === 'cancel'}
 					onOpenChange={(open) => !open && close()}

@@ -5,12 +5,12 @@ import type { ModuleTab } from '#/modules/types'
 import { renderWithRouter } from '#/test/render-with-router'
 
 const tabs: ModuleTab[] = [
-	{ id: 'customers', label: 'Clients', to: '/crm/customers', exact: true },
-	{ id: 'quotes', label: 'Devis', to: '/crm/quotes' },
+	{ id: 'customers', label: 'Clients', to: '/crm/clients', exact: true },
+	{ id: 'quotes', label: 'Devis', to: '/crm/devis' },
 	{
 		id: 'invoices',
 		label: 'Factures',
-		to: '/crm/invoices',
+		to: '/crm/factures',
 		status: 'coming-soon',
 	},
 ]
@@ -44,7 +44,7 @@ describe('ScopeBar', () => {
 	it('marks the tab matching the current route', async () => {
 		await renderWithRouter(
 			<ScopeBar label="CRM" tabs={tabs} organizationSlug="dupont" />,
-			'/o/dupont/crm/quotes',
+			'/o/dupont/crm/devis',
 		)
 
 		const current = await screen.findByRole('link', { current: 'page' })
@@ -54,7 +54,7 @@ describe('ScopeBar', () => {
 	it('renders an announced tab as a disabled button rather than a link', async () => {
 		await renderWithRouter(
 			<ScopeBar label="CRM" tabs={tabs} organizationSlug="dupont" />,
-			'/o/dupont/crm/quotes',
+			'/o/dupont/crm/devis',
 		)
 
 		const links = screen.getAllByRole('link').map((link) => link.textContent)
@@ -67,7 +67,7 @@ describe('ScopeBar', () => {
 	it('exposes the navigation under a scope label', async () => {
 		await renderWithRouter(
 			<ScopeBar label="CRM" tabs={tabs} organizationSlug="dupont" />,
-			'/o/dupont/crm/quotes',
+			'/o/dupont/crm/devis',
 		)
 
 		expect(screen.getByRole('navigation', { name: 'CRM' })).toBeDefined()

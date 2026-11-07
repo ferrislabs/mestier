@@ -10,6 +10,7 @@ export type ContactForm = {
 	lastName: string
 	role: string
 	email: string
+	mobile: string
 	phone: string
 }
 
@@ -49,6 +50,7 @@ export type FieldKey =
 	| 'stripeCustomerId'
 	| 'contactName'
 	| 'contactEmail'
+	| 'contactMobile'
 	| 'contactPhone'
 	| 'street'
 	| 'city'
@@ -59,6 +61,7 @@ export type FieldErrors = Partial<Record<FieldKey, string>>
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PHONE_PATTERN = /^\+?[0-9][0-9 .-]{5,18}$/
 const POSTAL_CODE_PATTERN = /^\d{5}$/
+const SIRET_PATTERN = /^(\d{14}|\d{9})$/
 const STRIPE_CUSTOMER_PATTERN = /^cus_[A-Za-z0-9]+$/
 
 export const EMPTY_CONTACT: ContactForm = {
@@ -66,6 +69,7 @@ export const EMPTY_CONTACT: ContactForm = {
 	lastName: '',
 	role: '',
 	email: '',
+	mobile: '',
 	phone: '',
 }
 
@@ -133,6 +137,7 @@ export function isContactEmpty(contact: ContactForm): boolean {
 		contact.firstName.trim() === '' &&
 		contact.lastName.trim() === '' &&
 		contact.email.trim() === '' &&
+		contact.mobile.trim() === '' &&
 		contact.phone.trim() === ''
 	)
 }
@@ -151,6 +156,11 @@ export function validateContactForm(contact: ContactForm): FieldErrors {
 		errors.contactName = 'Renseigne le prénom et le nom du contact.'
 	if (contact.email.trim() !== '' && !EMAIL_PATTERN.test(contact.email.trim()))
 		errors.contactEmail = 'L’adresse e-mail du contact n’est pas valide.'
+	if (
+		contact.mobile.trim() !== '' &&
+		!PHONE_PATTERN.test(contact.mobile.trim())
+	)
+		errors.contactMobile = 'Le numéro de mobile n’est pas valide.'
 	if (contact.phone.trim() !== '' && !PHONE_PATTERN.test(contact.phone.trim()))
 		errors.contactPhone = 'Le numéro de téléphone n’est pas valide.'
 	return errors
@@ -175,6 +185,13 @@ export function validateAccountForm(
 		errors.email = 'L’adresse e-mail n’est pas valide.'
 	if (form.phone.trim() !== '' && !PHONE_PATTERN.test(form.phone.trim()))
 		errors.phone = 'Le numéro de téléphone n’est pas valide.'
+	const registration = form.registrationNumber.replace(/\s/g, '')
+	if (
+		form.kind === 'professionnel' &&
+		registration !== '' &&
+		!SIRET_PATTERN.test(registration)
+	)
+		errors.registrationNumber = 'Le SIRET doit comporter 14 chiffres.'
 	const terms = parsePaymentTerms(form.paymentTerms)
 	if (terms !== null && (!Number.isInteger(terms) || terms < 0 || terms > 60))
 		errors.paymentTerms =
@@ -192,7 +209,24 @@ export function validateAccountForm(
 	return errors
 }
 
-export function extrasOfForm(form: AccountForm): AccountExtras {
+export type FormExtras = Pick<
+	AccountExtras,
+	| 'kind'
+	| 'vatNumber'
+	| 'website'
+	| 'ownerId'
+	| 'source'
+	| 'paymentTermsDays'
+	| 'stripeCustomerId'
+	| 'notes'
+>
+
+export function registrationNumberOf(form: AccountForm): string | null {
+	if (form.kind !== 'professionnel') return null
+	return form.registrationNumber.replace(/\s/g, '') || null
+}
+
+export function extrasOfForm(form: AccountForm): FormExtras {
 	const stripe = form.stripeCustomerId.trim()
 	return {
 		kind: form.kind,

@@ -21,6 +21,24 @@ export type InvoiceRow = {
 	total: number
 }
 
+export type CreditNoteRow = {
+	id: string
+	label: string
+	sourceLabel: string
+	date: string
+	kind: string
+	total: number
+}
+
+export type PaymentRow = {
+	id: string
+	invoiceId: string
+	target: string
+	date: string
+	detail: string
+	amount: number
+}
+
 const QUOTE_STATUS: Record<
 	Schemas.QuoteStatus,
 	{ label: string; tone: ActivityTone }
@@ -70,7 +88,10 @@ export function invoiceRowsOf(
 	customerId: string,
 ): InvoiceRow[] {
 	return invoices
-		.filter((invoice) => invoice.customer_id === customerId)
+		.filter(
+			(invoice) =>
+				invoice.customer_id === customerId && invoice.kind !== 'CREDIT_NOTE',
+		)
 		.map((invoice) => ({
 			id: invoice.id,
 			label: invoice.number || 'Brouillon',
@@ -79,5 +100,57 @@ export function invoiceRowsOf(
 			tone: INVOICE_STATUS[invoice.status].tone,
 			total: invoice.gross_cents,
 		}))
+		.sort(newestFirst)
+}
+
+export function creditNoteRowsOf(
+	invoices: readonly Schemas.InvoiceResponse[],
+	customerId: string,
+): CreditNoteRow[] {
+	return invoices
+		.filter(
+			(invoice) =>
+				invoice.customer_id === customerId && invoice.kind === 'CREDIT_NOTE',
+		)
+		.map((note) => {
+			const source = invoices.find((item) => item.id === note.source_invoice_id)
+			return {
+				id: note.id,
+				label: note.number || 'Brouillon',
+				sourceLabel: source
+					? source.number || 'Brouillon'
+					: 'Facture introuvable',
+				date: note.issued_at ?? note.created_at,
+				kind:
+					source && note.gross_cents >= source.gross_cents
+						? 'Annulation totale'
+						: 'Avoir partiel',
+				total: note.gross_cents,
+			}
+		})
+		.sort(newestFirst)
+}
+
+export function paymentRowsOf(
+	entries: readonly {
+		invoice: Schemas.InvoiceResponse
+		payments: readonly Schemas.InvoicePaymentResponse[]
+	}[],
+): PaymentRow[] {
+	return entries
+		.flatMap(({ invoice, payments }) =>
+			payments
+				.filter((payment) => !payment.deleted_at)
+				.map((payment) => ({
+					id: payment.id,
+					invoiceId: invoice.id,
+					target: invoice.number || 'Brouillon',
+					date: payment.paid_on,
+					detail: [payment.method, payment.reference]
+						.filter(Boolean)
+						.join(' · '),
+					amount: payment.amount_cents,
+				})),
+		)
 		.sort(newestFirst)
 }

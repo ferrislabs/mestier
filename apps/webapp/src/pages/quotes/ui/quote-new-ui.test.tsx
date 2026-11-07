@@ -69,6 +69,10 @@ function values(overrides: Partial<QuoteFormValues> = {}): QuoteFormValues {
 		customerId: '',
 		customerContextId: '',
 		lines: [emptyQuoteLine()],
+		ownerId: null,
+		validUntil: '',
+		depositPercent: '',
+		notes: '',
 		...overrides,
 	}
 }

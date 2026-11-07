@@ -23,7 +23,7 @@ export function AccountLink({
 }: DocLinkProps & { customerId: string }) {
 	return (
 		<Link
-			to={buildOrgPath(useOrgSlug(), '/crm/customers/$customerId')}
+			to={buildOrgPath(useOrgSlug(), '/crm/clients/$customerId')}
 			params={{ customerId }}
 			className={cn(LINK, className)}
 		>
@@ -39,7 +39,7 @@ export function QuoteLink({
 }: DocLinkProps & { quoteId: string }) {
 	return (
 		<Link
-			to={buildOrgPath(useOrgSlug(), '/crm/quotes/$quoteId')}
+			to={buildOrgPath(useOrgSlug(), '/crm/devis/$quoteId')}
 			params={{ quoteId }}
 			className={cn(LINK, className)}
 		>
@@ -55,7 +55,7 @@ export function InvoiceLink({
 }: DocLinkProps & { invoiceId: string }) {
 	return (
 		<Link
-			to={buildOrgPath(useOrgSlug(), '/crm/invoices/$invoiceId')}
+			to={buildOrgPath(useOrgSlug(), '/crm/factures/$invoiceId')}
 			params={{ invoiceId }}
 			className={cn(LINK, className)}
 		>
@@ -71,7 +71,7 @@ export function CreditNoteLink({
 }: DocLinkProps & { creditNoteId: string }) {
 	return (
 		<Link
-			to={buildOrgPath(useOrgSlug(), '/crm/credit-notes/$creditNoteId')}
+			to={buildOrgPath(useOrgSlug(), '/crm/avoirs/$creditNoteId')}
 			params={{ creditNoteId }}
 			className={cn(LINK, className)}
 		>

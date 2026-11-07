@@ -27,11 +27,13 @@ import { cn } from '#/lib/utils'
 import {
 	CATALOG_KIND_LABELS,
 	type CatalogRow,
+	type CatalogUsage,
 	FREQUENCY_SUFFIX,
 	formatPercent,
 	type MarginTone,
 	marginOf,
 	marginTone,
+	usageLabel,
 } from '#/pages/catalog/catalog-model'
 import type { CatalogExtras } from '#/pages/catalog/feature/mocks/catalog-extras'
 import { formatVatRate } from '#/pages/crm-settings/types'
@@ -48,6 +50,20 @@ function unitLabel(row: CatalogRow): string {
 	return row.kind === 'product' && row.unit === 'HOUR'
 		? 'unité'
 		: formatUnitLong(row.unit)
+}
+
+function UsageCell({ usage }: { usage: CatalogUsage }) {
+	const { main, detail } = usageLabel(usage)
+	if (detail === null)
+		return <span className="text-muted-foreground">{main}</span>
+	return (
+		<>
+			<span className="tabular block">{main}</span>
+			<span className="tabular block text-[12px] text-muted-foreground">
+				{detail}
+			</span>
+		</>
+	)
 }
 
 function MarginCell({
@@ -75,6 +91,7 @@ function MarginCell({
 export function CatalogTable({
 	rows,
 	extrasOf,
+	usageOf,
 	canManage,
 	onEdit,
 	onDuplicate,
@@ -83,6 +100,7 @@ export function CatalogTable({
 }: {
 	rows: readonly CatalogRow[]
 	extrasOf: (itemId: string) => CatalogExtras
+	usageOf: (itemId: string) => CatalogUsage
 	canManage: boolean
 	onEdit: (row: CatalogRow) => void
 	onDuplicate: (row: CatalogRow) => void
@@ -102,6 +120,7 @@ export function CatalogTable({
 						<TableHead className="text-right max-lg:hidden">TVA</TableHead>
 						<TableHead className="text-right max-xl:hidden">Coût</TableHead>
 						<TableHead className="text-right">Marge</TableHead>
+						<TableHead className="max-xl:hidden">Utilisation</TableHead>
 						<TableHead>État</TableHead>
 						<TableHead className="w-12 pr-4">
 							<span className="sr-only">Actions</span>
@@ -172,6 +191,9 @@ export function CatalogTable({
 								</TableCell>
 								<TableCell className="text-right">
 									<MarginCell row={row} extras={extras} />
+								</TableCell>
+								<TableCell className="max-xl:hidden">
+									<UsageCell usage={usageOf(row.id)} />
 								</TableCell>
 								<TableCell>
 									<StatusBadge tone={extras.archived ? 'neutral' : 'ok'}>

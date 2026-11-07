@@ -29,7 +29,7 @@ export interface QuoteHandoverFeatureProps {
 export function QuoteHandoverFeature({ quoteId }: QuoteHandoverFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 	const proposalQuery = useQuotePlanProposal(quoteId)
-	const backTo = buildOrgPath(activeOrganization.slug, `/crm/quotes/${quoteId}`)
+	const backTo = buildOrgPath(activeOrganization.slug, `/crm/devis/${quoteId}`)
 
 	if (proposalQuery.isLoading) {
 		return (

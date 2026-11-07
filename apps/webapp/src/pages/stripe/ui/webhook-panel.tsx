@@ -56,7 +56,7 @@ export function WebhookPanel({
 					</p>
 				)}
 				<Link
-					to={buildOrgPath(organizationSlug, '/crm/settings')}
+					to={buildOrgPath(organizationSlug, '/crm/reglages')}
 					className="rounded-sm text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					Gérer le webhook dans les réglages

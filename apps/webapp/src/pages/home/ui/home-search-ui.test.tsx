@@ -10,12 +10,12 @@ const GROUPS: SearchGroup[] = [
 			{
 				id: 'c1',
 				label: 'Atelier Dupont',
-				to: '/o/atelier-bois/crm/customers/c1',
+				to: '/o/atelier-bois/crm/clients/c1',
 			},
 			{
 				id: 'c2',
 				label: 'Menuiserie Martin',
-				to: '/o/atelier-bois/crm/customers/c2',
+				to: '/o/atelier-bois/crm/clients/c2',
 			},
 		],
 	},
@@ -26,7 +26,7 @@ const GROUPS: SearchGroup[] = [
 				id: 'q1',
 				label: 'Terrasse bois',
 				sublabel: 'DEV-2026-014',
-				to: '/o/atelier-bois/crm/quotes/q1',
+				to: '/o/atelier-bois/crm/devis/q1',
 			},
 		],
 	},

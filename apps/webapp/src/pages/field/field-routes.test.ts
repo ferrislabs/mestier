@@ -24,8 +24,8 @@ describe('field routes', () => {
 	})
 
 	it('the console tenant routes are untouched', () => {
-		expect(routeIdFor('/o/acme/crm/quotes')).toBe(
-			'/_app/o/$organizationSlug/crm/quotes/',
+		expect(routeIdFor('/o/acme/crm/devis')).toBe(
+			'/_app/o/$organizationSlug/crm/devis/',
 		)
 	})
 })

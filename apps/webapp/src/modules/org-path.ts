@@ -7,7 +7,7 @@ export const ORG_ROUTE_PREFIX = `${ORG_PATH_SEGMENT}/$organizationSlug`
 /**
  * Prefixes a path relative to the organization.
  *
- * Module registry paths stay relative (`/crm/customers`): the tenant is only
+ * Module registry paths stay relative (`/crm/clients`): the tenant is only
  * added when building a link, so a module never has to know the prefix's shape.
  */
 export function buildOrgPath(organizationSlug: string, to: string): string {

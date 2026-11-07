@@ -9,6 +9,7 @@ import {
 	type CatalogFilters,
 	type CatalogForm,
 	type CatalogRow,
+	type CatalogUsage,
 	DEFAULT_FILTERS,
 	IMMUTABLE_NOTE,
 	isFiltered,
@@ -29,6 +30,7 @@ interface CatalogUIProps {
 	categories: readonly string[]
 	onFiltersChange: (filters: CatalogFilters) => void
 	extrasOf: (itemId: string) => CatalogExtras
+	usageOf: (itemId: string) => CatalogUsage
 	canManage: boolean
 	isLoading: boolean
 	error: string | null
@@ -62,6 +64,7 @@ export function CatalogUI({
 	categories,
 	onFiltersChange,
 	extrasOf,
+	usageOf,
 	canManage,
 	isLoading,
 	error,
@@ -150,6 +153,7 @@ export function CatalogUI({
 				<CatalogTable
 					rows={rows}
 					extrasOf={extrasOf}
+					usageOf={usageOf}
 					canManage={canManage}
 					onEdit={(row) => onOpenEditor({ mode: 'edit', row })}
 					onDuplicate={(row) => onOpenEditor({ mode: 'duplicate', row })}

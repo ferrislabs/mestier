@@ -390,6 +390,13 @@ export function vatOf(base: number, rate: number): number {
 	return Math.round((base * rate) / 100)
 }
 
+export const DEFAULT_RECEIPT_VAT_RATE = 20
+
+export function receiptVat(amount: number, rate: number | null): number {
+	const applied = rate ?? DEFAULT_RECEIPT_VAT_RATE
+	return Math.round(amount - (amount * 100) / (100 + applied))
+}
+
 export function expenseValuesOf(expense: Expense): ExpenseFormValues {
 	return {
 		date: expense.date,

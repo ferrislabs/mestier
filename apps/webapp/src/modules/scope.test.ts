@@ -17,10 +17,10 @@ describe('resolveSection', () => {
 	it('keeps the deepest section covering the path', () => {
 		const crm = moduleById('crm')
 
-		expect(resolveSection(crm, '/crm/customers')?.id).toBe('customers')
-		expect(resolveSection(crm, '/crm/customers/pipeline')?.id).toBe('pipeline')
-		expect(resolveSection(crm, '/crm/customers/abc-123')?.id).toBe('customers')
-		expect(resolveSection(crm, '/crm/quotes/abc-123')?.id).toBe('quotes')
+		expect(resolveSection(crm, '/crm/clients')?.id).toBe('customers')
+		expect(resolveSection(crm, '/crm/pipeline')?.id).toBe('pipeline')
+		expect(resolveSection(crm, '/crm/clients/abc-123')?.id).toBe('customers')
+		expect(resolveSection(crm, '/crm/devis/abc-123')?.id).toBe('quotes')
 	})
 
 	it('keeps no section on the module root', () => {
@@ -28,7 +28,7 @@ describe('resolveSection', () => {
 	})
 
 	it('resolves a section once it is navigable', () => {
-		expect(resolveSection(moduleById('crm'), '/crm/invoices')?.id).toBe(
+		expect(resolveSection(moduleById('crm'), '/crm/factures')?.id).toBe(
 			'invoices',
 		)
 	})
@@ -36,8 +36,8 @@ describe('resolveSection', () => {
 
 describe('resolveScope', () => {
 	it('resolves the section despite the tenant prefix', () => {
-		expect(resolveScope('/o/dupont/crm/customers').label).toBe('Comptes')
-		expect(resolveScope('/o/dupont/crm/quotes').label).toBe('Devis')
+		expect(resolveScope('/o/dupont/crm/clients').label).toBe('Clients')
+		expect(resolveScope('/o/dupont/crm/devis').label).toBe('Devis')
 	})
 
 	it('falls back to the module label outside any section', () => {
@@ -45,22 +45,18 @@ describe('resolveScope', () => {
 	})
 
 	it('exposes no tab until the section declares one', () => {
-		expect(resolveScope('/o/dupont/crm/customers').tabs).toEqual([])
+		expect(resolveScope('/o/dupont/crm/clients').tabs).toEqual([])
 	})
 })
 
 describe('crossOrganizationPath', () => {
 	it('keeps a list screen', () => {
-		expect(crossOrganizationPath('/crm/customers')).toBe('/crm/customers')
-		expect(crossOrganizationPath('/crm/customers/pipeline')).toBe(
-			'/crm/customers/pipeline',
-		)
+		expect(crossOrganizationPath('/crm/clients')).toBe('/crm/clients')
+		expect(crossOrganizationPath('/crm/pipeline')).toBe('/crm/pipeline')
 	})
 
 	it('climbs back to the list from an entity screen', () => {
-		expect(crossOrganizationPath('/crm/customers/abc-123')).toBe(
-			'/crm/customers',
-		)
+		expect(crossOrganizationPath('/crm/clients/abc-123')).toBe('/crm/clients')
 		expect(crossOrganizationPath('/hr/team/abc-123/work-time')).toBe('/hr/team')
 	})
 
@@ -70,6 +66,6 @@ describe('crossOrganizationPath', () => {
 	})
 
 	it('falls back to the landing of a module without an overview', () => {
-		expect(crossOrganizationPath('/crm')).toBe('/crm/customers')
+		expect(crossOrganizationPath('/crm')).toBe('/crm/clients')
 	})
 })

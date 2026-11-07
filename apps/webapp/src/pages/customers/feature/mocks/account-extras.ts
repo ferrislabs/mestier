@@ -1,4 +1,4 @@
-// MOCK: account extras — no backend fields yet. Replace with kind, vat_number, website, owner_id, source, payment_terms_days, stripe_customer_id and notes on the customer resource.
+// MOCK, pas d'endpoint, remplacé au lot B2 : type, TVA, site web, responsable, source, délai de paiement, Stripe, notes, dates de conversion et d'archivage, mobile des contacts, contact et adresse de facturation, type et pays des adresses.
 import {
 	createMockStore,
 	resolveAfterDelay,
@@ -14,6 +14,8 @@ export type LeadSource =
 	| 'architecte'
 	| 'autre'
 
+export type AddressKind = 'billing' | 'site' | 'other'
+
 export interface AccountExtras {
 	kind: AccountKind | null
 	vatNumber: string
@@ -23,6 +25,13 @@ export interface AccountExtras {
 	paymentTermsDays: number | null
 	stripeCustomerId: string | null
 	notes: string
+	convertedAt: string | null
+	archivedAt: string | null
+	billingContactId: string | null
+	billingContextId: string | null
+	mobiles: Readonly<Record<string, string>>
+	addressKinds: Readonly<Record<string, AddressKind>>
+	addressCountries: Readonly<Record<string, string>>
 }
 
 export const EMPTY_EXTRAS: AccountExtras = {
@@ -34,6 +43,13 @@ export const EMPTY_EXTRAS: AccountExtras = {
 	paymentTermsDays: null,
 	stripeCustomerId: null,
 	notes: '',
+	convertedAt: null,
+	archivedAt: null,
+	billingContactId: null,
+	billingContextId: null,
+	mobiles: {},
+	addressKinds: {},
+	addressCountries: {},
 }
 
 const store = createMockStore<Readonly<Record<string, AccountExtras>>>({})

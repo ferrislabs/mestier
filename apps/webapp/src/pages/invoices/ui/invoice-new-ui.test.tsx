@@ -3,10 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Organization } from '#/hooks/use-organizations'
-import {
-	emptyInvoiceLine,
-	type InvoiceFormValues,
-} from '#/pages/invoices/types'
+import type { NewInvoiceFormValues } from '#/pages/invoices/lib/new-invoice-form'
+import { emptyInvoiceLine } from '#/pages/invoices/types'
 import { renderWithRouter } from '#/test/render-with-router'
 import { wrapWithPermissions } from '#/test/with-permissions'
 import { InvoiceNewUI } from './invoice-new-ui'
@@ -49,8 +47,11 @@ const CONTEXT = {
 	city: 'Lyon',
 } as CustomerContext
 
-function values(overrides: Partial<InvoiceFormValues> = {}): InvoiceFormValues {
+function values(
+	overrides: Partial<NewInvoiceFormValues> = {},
+): NewInvoiceFormValues {
 	return {
+		termsDays: '30',
 		kind: 'STANDARD',
 		projectId: '',
 		customerId: '',
@@ -163,6 +164,36 @@ describe('InvoiceNewUI', () => {
 
 		expect(screen.getAllByText('20,00 €').length).toBeGreaterThan(0)
 		expect(screen.getByText('Total HT (aperçu)')).toBeDefined()
+	})
+
+	it('asks for a payment delay of at most 60 days', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		props.values = values({
+			customerId: 'customer-1',
+			customerContextId: 'context-1',
+			termsDays: '90',
+			lines: [{ ...emptyInvoiceLine(), label: 'Pose', unitPrice: '10' }],
+		})
+		await renderUi(props)
+
+		await user.click(screen.getByRole('button', { name: 'Créer le brouillon' }))
+
+		expect(props.onSubmit).not.toHaveBeenCalled()
+		expect(screen.getByText(/entre 0 et 60 jours/)).toBeDefined()
+	})
+
+	it('reports the payment delay typed by the user', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		await renderUi(props)
+
+		await user.type(
+			screen.getByRole('textbox', { name: /Délai de paiement/ }),
+			'5',
+		)
+
+		expect(props.onChange).toHaveBeenCalledWith({ termsDays: '305' })
 	})
 
 	it('hides the submit button without MANAGE_INVOICES', async () => {

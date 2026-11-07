@@ -32,7 +32,7 @@ function PartyCell({
 	if (entry.kind === 'receipt' && entry.customerId !== null)
 		return (
 			<Link
-				to={buildOrgPath(organizationSlug, '/crm/customers/$customerId')}
+				to={buildOrgPath(organizationSlug, '/crm/clients/$customerId')}
 				params={{ customerId: entry.customerId }}
 				className="relative rounded-sm outline-none transition-colors hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 			>

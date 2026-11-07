@@ -31,18 +31,21 @@ const OPEN_INVOICES: readonly OpenInvoice[] = [
 		label: 'F-2026-112',
 		customerName: 'SCI Les Tilleuls',
 		balance: 399190,
+		vatRate: 20,
 	},
 	{
 		id: 'inv-115',
 		label: 'F-2026-115',
 		customerName: 'Atelier Bois & Co',
 		balance: 49000,
+		vatRate: 10,
 	},
 	{
 		id: 'inv-117',
 		label: 'F-2026-117',
 		customerName: 'Boulangerie Lemoine',
 		balance: 905760,
+		vatRate: 20,
 	},
 ]
 

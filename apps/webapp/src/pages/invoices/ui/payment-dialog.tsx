@@ -21,6 +21,7 @@ import {
 import {
 	initialPaymentValues,
 	PAYMENT_METHODS,
+	type PaymentMode,
 	type PaymentValues,
 	paymentErrors,
 	todayDate,
@@ -30,13 +31,40 @@ import { AutoTextarea } from '#/pages/quotes/ui/doc/primitives'
 interface PaymentDialogProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	mode: PaymentMode
 	remainingCents: number | null
 	isPending: boolean
 	error: string | null
 	onSubmit: (values: PaymentValues) => Promise<boolean>
 }
 
+const COPY: Record<
+	PaymentMode,
+	{
+		title: string
+		description: string
+		amount: string
+		submit: string
+	}
+> = {
+	payment: {
+		title: 'Enregistrer un paiement',
+		description:
+			'Note un paiement reçu pour cette facture. Le reste dû se met à jour aussitôt.',
+		amount: 'Montant reçu (€)',
+		submit: 'Enregistrer le paiement',
+	},
+	refund: {
+		title: 'Rembourser le client',
+		description:
+			'Le client a payé plus que le total de la facture : note le remboursement effectué pour solder le trop-perçu.',
+		amount: 'Montant remboursé (€)',
+		submit: 'Enregistrer le remboursement',
+	},
+}
+
 function PaymentForm({
+	mode,
 	remainingCents,
 	isPending,
 	error,
@@ -48,11 +76,12 @@ function PaymentForm({
 	const baseId = useId()
 	const today = todayDate()
 	const [values, setValues] = useState<PaymentValues>(() =>
-		initialPaymentValues(remainingCents, today),
+		initialPaymentValues(remainingCents, today, mode),
 	)
 	const [attempted, setAttempted] = useState(false)
-	const errors = paymentErrors(values, remainingCents, today)
+	const errors = paymentErrors(values, remainingCents, today, mode)
 	const id = (field: string) => `${baseId}-${field}`
+	const copy = COPY[mode]
 
 	const change = (patch: Partial<PaymentValues>) =>
 		setValues((current) => ({ ...current, ...patch }))
@@ -69,11 +98,8 @@ function PaymentForm({
 	return (
 		<form onSubmit={submit} noValidate className="grid gap-4">
 			<DialogHeader>
-				<DialogTitle>Enregistrer un paiement</DialogTitle>
-				<DialogDescription>
-					Note un paiement reçu pour cette facture. Le reste dû se met à jour
-					aussitôt.
-				</DialogDescription>
+				<DialogTitle>{copy.title}</DialogTitle>
+				<DialogDescription>{copy.description}</DialogDescription>
 			</DialogHeader>
 			<div className="grid gap-4 sm:grid-cols-2">
 				<FormField id={id('date')} label="Date" required>
@@ -85,7 +111,7 @@ function PaymentForm({
 						onChange={(event) => change({ date: event.target.value })}
 					/>
 				</FormField>
-				<FormField id={id('amount')} label="Montant reçu (€)" required>
+				<FormField id={id('amount')} label={copy.amount} required>
 					<Input
 						id={id('amount')}
 						inputMode="decimal"
@@ -151,7 +177,7 @@ function PaymentForm({
 				</Button>
 				<Button type="submit" disabled={isPending}>
 					{isPending ? <Loader2 className="animate-spin" /> : null}
-					Enregistrer le paiement
+					{copy.submit}
 				</Button>
 			</DialogFooter>
 		</form>

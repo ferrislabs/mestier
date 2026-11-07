@@ -8,6 +8,8 @@ export interface ActionState {
 
 export type InvoiceActionKey =
 	| 'issue'
+	| 'deleteDraft'
+	| 'refund'
 	| 'cancel'
 	| 'recordPayment'
 	| 'send'
@@ -20,6 +22,8 @@ export interface InvoiceActions extends Record<InvoiceActionKey, ActionState> {
 
 export const ACTION_LABELS: Record<InvoiceActionKey, string> = {
 	issue: 'Émettre la facture',
+	deleteDraft: 'Supprimer le brouillon',
+	refund: 'Rembourser le client',
 	cancel: 'Annuler la facture',
 	recordPayment: 'Enregistrer un paiement',
 	send: 'Envoyer au client',
@@ -29,11 +33,13 @@ export const ACTION_LABELS: Record<InvoiceActionKey, string> = {
 
 const ACTION_ORDER: readonly InvoiceActionKey[] = [
 	'issue',
+	'deleteDraft',
 	'recordPayment',
 	'send',
 	'remind',
 	'creditNote',
 	'cancel',
+	'refund',
 ]
 
 const HIDDEN: ActionState = { visible: false, enabled: false, reason: null }
@@ -56,6 +62,8 @@ export function invoiceActions(input: InvoiceActionsInput): InvoiceActions {
 	if (input.status === 'DRAFT')
 		return {
 			issue: ENABLED,
+			deleteDraft: ENABLED,
+			refund: HIDDEN,
 			cancel: ENABLED,
 			recordPayment: HIDDEN,
 			send: HIDDEN,
@@ -66,6 +74,8 @@ export function invoiceActions(input: InvoiceActionsInput): InvoiceActions {
 	if (input.status === 'CANCELLED')
 		return {
 			issue: HIDDEN,
+			deleteDraft: HIDDEN,
+			refund: HIDDEN,
 			cancel: HIDDEN,
 			recordPayment: blocked(
 				'La facture est annulée : il n’y a plus rien à encaisser.',
@@ -82,12 +92,19 @@ export function invoiceActions(input: InvoiceActionsInput): InvoiceActions {
 		input.creditedCents !== null &&
 		input.grossCents > 0 &&
 		input.creditedCents >= input.grossCents
+	const refundDue = input.remainingCents !== null && input.remainingCents < 0
 	return {
 		issue: HIDDEN,
+		deleteDraft: HIDDEN,
+		refund: refundDue ? ENABLED : HIDDEN,
 		cancel: input.status === 'ISSUED' ? ENABLED : HIDDEN,
-		recordPayment: settled
-			? blocked('La facture est soldée : il n’y a plus rien à encaisser.')
-			: ENABLED,
+		recordPayment: refundDue
+			? blocked(
+					'Un trop-perçu est à rembourser : utilise « Rembourser le client » plutôt qu’un nouveau paiement.',
+				)
+			: settled
+				? blocked('La facture est soldée : il n’y a plus rien à encaisser.')
+				: ENABLED,
 		send: ENABLED,
 		remind: settled ? HIDDEN : ENABLED,
 		creditNote: nothingToCredit

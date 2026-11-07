@@ -50,6 +50,11 @@ import { Textarea } from '#/components/ui/textarea'
 import type { CatalogItem } from '#/hooks/use-catalog-items'
 import { cn } from '#/lib/utils'
 import {
+	BILLING_FREQUENCIES,
+	type BillingFrequency,
+	FREQUENCY_LABELS,
+} from '#/pages/quotes/lib/billing-frequency'
+import {
 	COMMON_VAT_RATES_BP,
 	formatCents,
 	formatUnit,
@@ -68,6 +73,8 @@ export interface EditableDocLine {
 	unit?: string
 	notes?: string
 	photoKeys?: string[]
+	discountPercent?: string
+	frequency?: BillingFrequency
 }
 
 export interface LineProblems {
@@ -261,7 +268,14 @@ export function LinesEditor<L extends EditableDocLine>({
 	const [focusId, setFocusId] = useState<string | null>(null)
 	const [openDetails, setOpenDetails] = useState<ReadonlySet<string>>(new Set())
 	const withUnit = lines.some((line) => line.unit !== undefined)
-	const columns = 5 + (withUnit ? 1 : 0) + (vatEnabled ? 1 : 0)
+	const withDiscount = lines.some((line) => line.discountPercent !== undefined)
+	const withFrequency = lines.some((line) => line.frequency !== undefined)
+	const columns =
+		5 +
+		(withUnit ? 1 : 0) +
+		(withDiscount ? 1 : 0) +
+		(withFrequency ? 1 : 0) +
+		(vatEnabled ? 1 : 0)
 
 	const toggleDetails = (clientId: string) =>
 		setOpenDetails((current) => {
@@ -274,7 +288,12 @@ export function LinesEditor<L extends EditableDocLine>({
 	return (
 		<div className="grid gap-3">
 			<div className="overflow-hidden rounded-lg border">
-				<Table className="min-w-[44rem]">
+				<Table
+					className={cn(
+						'min-w-[44rem]',
+						(withDiscount || withFrequency) && 'min-w-[62rem]',
+					)}
+				>
 					<caption className="sr-only">Lignes du document</caption>
 					<TableHeader className="bg-muted/40">
 						<TableRow className="hover:bg-transparent">
@@ -295,6 +314,16 @@ export function LinesEditor<L extends EditableDocLine>({
 							<TableHead scope="col" className={cn(HEAD, 'w-32 text-right')}>
 								PU HT
 							</TableHead>
+							{withDiscount && (
+								<TableHead scope="col" className={cn(HEAD, 'w-24 text-right')}>
+									Remise %
+								</TableHead>
+							)}
+							{withFrequency && (
+								<TableHead scope="col" className={cn(HEAD, 'w-36')}>
+									Facturation
+								</TableHead>
+							)}
 							{vatEnabled && (
 								<TableHead scope="col" className={cn(HEAD, 'w-28')}>
 									TVA
@@ -450,6 +479,52 @@ export function LinesEditor<L extends EditableDocLine>({
 											className="tabular text-right"
 										/>
 									</TableCell>
+									{withDiscount && (
+										<TableCell className="align-top">
+											<Input
+												id={`${base}-discount`}
+												aria-label={`Remise en pourcentage, ligne ${position}`}
+												inputMode="decimal"
+												autoComplete="off"
+												placeholder="0"
+												value={line.discountPercent ?? ''}
+												onFocus={(event) => event.currentTarget.select()}
+												onChange={(event) =>
+													onPatch(index, {
+														discountPercent: event.target.value,
+													})
+												}
+												className="tabular text-right"
+											/>
+										</TableCell>
+									)}
+									{withFrequency && (
+										<TableCell className="align-top">
+											<Select
+												value={line.frequency ?? 'one_shot'}
+												onValueChange={(frequency) =>
+													onPatch(index, {
+														frequency: frequency as BillingFrequency,
+													})
+												}
+											>
+												<SelectTrigger
+													id={`${base}-frequency`}
+													aria-label={`Fréquence de facturation, ligne ${position}`}
+													className="w-full"
+												>
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{BILLING_FREQUENCIES.map((frequency) => (
+														<SelectItem key={frequency} value={frequency}>
+															{FREQUENCY_LABELS[frequency]}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</TableCell>
+									)}
 									{vatEnabled && (
 										<TableCell className="align-top">
 											<VatRateField

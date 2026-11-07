@@ -14,6 +14,7 @@ export function ContactFields({
 }) {
 	const name = bind('contactName')
 	const email = bind('contactEmail')
+	const mobile = bind('contactMobile')
 	const phone = bind('contactPhone')
 	const nameInvalid = name.input['aria-invalid']
 	const nameDescribedBy = name.input['aria-describedby']
@@ -75,12 +76,19 @@ export function ContactFields({
 					placeholder="prenom.nom@entreprise.fr"
 				/>
 			</FormField>
-			<FormField
-				id={phone.id}
-				label="Téléphone"
-				error={phone.error}
-				className="sm:col-span-2"
-			>
+			<FormField id={mobile.id} label="Mobile" error={mobile.error}>
+				<Input
+					{...mobile.input}
+					type="tel"
+					value={value.mobile}
+					onChange={(event) =>
+						onChange({ ...value, mobile: event.target.value })
+					}
+					autoComplete="off"
+					placeholder="06 12 34 56 78"
+				/>
+			</FormField>
+			<FormField id={phone.id} label="Téléphone fixe" error={phone.error}>
 				<Input
 					{...phone.input}
 					type="tel"
@@ -89,7 +97,7 @@ export function ContactFields({
 						onChange({ ...value, phone: event.target.value })
 					}
 					autoComplete="off"
-					placeholder="06 12 34 56 78"
+					placeholder="02 40 12 34 56"
 				/>
 			</FormField>
 		</>

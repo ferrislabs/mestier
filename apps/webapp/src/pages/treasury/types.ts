@@ -54,6 +54,7 @@ export type OpenInvoice = {
 	label: string
 	customerName: string
 	balance: number
+	vatRate: number | null
 }
 
 export type LedgerState = {

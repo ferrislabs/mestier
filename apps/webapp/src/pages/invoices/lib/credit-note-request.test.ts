@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { InvoiceLine } from '#/hooks/use-invoices'
 import {
+	creditConsequence,
+	creditConsequenceText,
 	creditLineIssue,
 	creditNoteErrors,
 	creditNoteLines,
 	creditPreviewNetCents,
+	creditPreviewTotals,
 	fillAll,
 } from './credit-note-request'
 
@@ -91,5 +94,58 @@ describe('creditNoteErrors', () => {
 describe('fillAll', () => {
 	it('selects the whole quantity of each line', () => {
 		expect(fillAll([line()])).toEqual({ 'line-1': '4' })
+	})
+})
+
+describe('creditPreviewTotals', () => {
+	it('adds the VAT of the credited lines to their net total', () => {
+		expect(creditPreviewTotals([line()], 'total', {})).toEqual({
+			netCents: 18000,
+			vatCents: 3600,
+			grossCents: 21600,
+		})
+		expect(creditPreviewTotals([line()], 'partial', { 'line-1': '1' })).toEqual(
+			{
+				netCents: 4500,
+				vatCents: 900,
+				grossCents: 5400,
+			},
+		)
+	})
+
+	it('has no VAT on a line without a rate', () => {
+		expect(
+			creditPreviewTotals([line({ vat_rate_basis_points: null })], 'total', {}),
+		).toEqual({ netCents: 18000, vatCents: 0, grossCents: 18000 })
+	})
+})
+
+describe('creditConsequence', () => {
+	it('says nothing when no credit is chosen', () => {
+		expect(creditConsequence(12000, 0)).toEqual({ kind: 'none', after: 12000 })
+		expect(creditConsequenceText(12000, 0)).toBeNull()
+	})
+
+	it('reduces the balance, settles it, or turns it into a refund', () => {
+		expect(creditConsequence(12000, 5000)).toEqual({
+			kind: 'reduces',
+			after: 7000,
+		})
+		expect(creditConsequence(12000, 12000)).toEqual({
+			kind: 'settles',
+			after: 0,
+		})
+		expect(creditConsequence(12000, 15000)).toEqual({
+			kind: 'refund',
+			after: -3000,
+		})
+	})
+
+	it('words each outcome', () => {
+		expect(creditConsequenceText(12000, 12000)).toContain(
+			'plus rien à encaisser',
+		)
+		expect(creditConsequenceText(12000, 5000)).toContain('Le reste dû passera')
+		expect(creditConsequenceText(12000, 15000)).toContain('à lui rembourser')
 	})
 })

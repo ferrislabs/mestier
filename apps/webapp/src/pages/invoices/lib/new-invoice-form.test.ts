@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import {
-	emptyInvoiceLine,
-	type InvoiceFormValues,
-} from '#/pages/invoices/types'
+import { emptyInvoiceLine } from '#/pages/invoices/types'
 import {
 	firstInvalidInvoiceFieldId,
+	type NewInvoiceFormValues,
 	validateNewInvoice,
 } from './new-invoice-form'
 
-function values(overrides: Partial<InvoiceFormValues> = {}): InvoiceFormValues {
+function values(
+	overrides: Partial<NewInvoiceFormValues> = {},
+): NewInvoiceFormValues {
 	return {
+		termsDays: '30',
 		kind: 'STANDARD',
 		projectId: '',
 		customerId: 'customer-1',
@@ -34,6 +35,15 @@ describe('validateNewInvoice', () => {
 		expect(validateNewInvoice(values({ customerContextId: '' }))).toEqual({
 			customerContextId: 'Choisis une adresse de facturation.',
 		})
+	})
+
+	it('keeps the payment delay between 0 and 60 days', () => {
+		expect(validateNewInvoice(values({ termsDays: '0' }))).toEqual({})
+		expect(validateNewInvoice(values({ termsDays: '60' }))).toEqual({})
+		expect(validateNewInvoice(values({ termsDays: '61' })).terms).toContain(
+			'entre 0 et 60 jours',
+		)
+		expect(validateNewInvoice(values({ termsDays: '' })).terms).toBeDefined()
 	})
 
 	it('needs at least one complete line', () => {
