@@ -189,15 +189,20 @@ describe('AuthGate', () => {
 		const { signinRedirect } = mountGate({}, '/invite/abc123')
 
 		await waitFor(() => {
-			expect(signinRedirect).toHaveBeenCalledWith({ state: '/invite/abc123' })
+			expect(signinRedirect).toHaveBeenCalledWith({
+				prompt: 'select_account',
+				state: '/invite/abc123',
+			})
 		})
 	})
 
-	it('calls signinRedirect with no options when redirectState is absent', async () => {
+	it('asks for the account chooser without a state when redirectState is absent', async () => {
 		const { signinRedirect } = mountGate({})
 
 		await waitFor(() => {
-			expect(signinRedirect).toHaveBeenCalledWith(undefined)
+			expect(signinRedirect).toHaveBeenCalledWith({
+				prompt: 'select_account',
+			})
 		})
 	})
 })
