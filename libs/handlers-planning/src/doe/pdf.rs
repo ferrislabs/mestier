@@ -77,16 +77,16 @@ pub(crate) async fn load_files(
 ) -> Result<FileBundle, ApiError> {
     let mut bundle = FileBundle::default();
     let mut total_bytes = 0usize;
+    let decoration_keys: Vec<&str> = document.style.decoration_image_keys().collect();
     for key in document.file_keys() {
-        let object =
-            state
-                .file_storage
-                .get(key)
-                .await
-                .map_err(|error| match ApiError::from(error) {
-                    ApiError::NotFound => missing_file(document, key),
-                    other => other,
-                })?;
+        let object = match state.file_storage.get(key).await {
+            Ok(object) => object,
+            Err(error) => match ApiError::from(error) {
+                ApiError::NotFound if decoration_keys.contains(&key) => continue,
+                ApiError::NotFound => return Err(missing_file(document, key)),
+                other => return Err(other),
+            },
+        };
         total_bytes += object.bytes.len();
         if total_bytes > MAX_BUNDLE_BYTES {
             return Err(ApiError::Conflict(format!(

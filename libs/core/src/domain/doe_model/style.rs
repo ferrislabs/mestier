@@ -186,6 +186,180 @@ impl From<DoeTemplate> for String {
     }
 }
 
+/// A length in millimeters on the A4 page, never negative or beyond the page.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(try_from = "f32", into = "f32")]
+pub struct Millimeters(u32);
+
+impl Millimeters {
+    pub const PAGE_WIDTH: f32 = 210.0;
+    pub const PAGE_HEIGHT: f32 = 297.0;
+
+    pub fn get(self) -> f32 {
+        self.0 as f32 / 100.0
+    }
+}
+
+impl TryFrom<f32> for Millimeters {
+    type Error = CoreError;
+
+    fn try_from(value: f32) -> Result<Self, Self::Error> {
+        if !value.is_finite() || !(0.0..=Millimeters::PAGE_HEIGHT).contains(&value) {
+            return Err(CoreError::Conflict(
+                "a position or size must be between 0 and 297 mm".to_owned(),
+            ));
+        }
+        Ok(Self((value * 100.0).round() as u32))
+    }
+}
+
+impl From<Millimeters> for f32 {
+    fn from(value: Millimeters) -> Self {
+        value.get()
+    }
+}
+
+/// How opaque an element is, from 0 (invisible) to 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(try_from = "f32", into = "f32")]
+pub struct Opacity(u16);
+
+impl Opacity {
+    pub fn get(self) -> f32 {
+        f32::from(self.0) / 1000.0
+    }
+}
+
+impl Default for Opacity {
+    fn default() -> Self {
+        Self(1000)
+    }
+}
+
+impl TryFrom<f32> for Opacity {
+    type Error = CoreError;
+
+    fn try_from(value: f32) -> Result<Self, Self::Error> {
+        if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+            return Err(CoreError::Conflict(
+                "an opacity must be between 0 and 1".to_owned(),
+            ));
+        }
+        Ok(Self((value * 1000.0).round() as u16))
+    }
+}
+
+impl From<Opacity> for f32 {
+    fn from(value: Opacity) -> Self {
+        value.get()
+    }
+}
+
+/// Which pages an element is printed on. Full-page attachments (supplier
+/// datasheets, plans) never carry one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DecorationPages {
+    Cover,
+    Inner,
+    #[default]
+    All,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DecorationLayer {
+    #[default]
+    Behind,
+    Front,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageFit {
+    #[default]
+    Contain,
+    Cover,
+}
+
+/// What an element draws. A line is a thin rectangle.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DecorationShape {
+    Image {
+        key: String,
+        #[serde(default)]
+        fit: ImageFit,
+        #[serde(default)]
+        opacity: Opacity,
+    },
+    Rectangle {
+        fill: HexColor,
+        #[serde(default)]
+        opacity: Opacity,
+        #[serde(default)]
+        radius: Millimeters,
+    },
+}
+
+/// One element placed on the page, repeated on every page it applies to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(try_from = "RawDecoration")]
+pub struct DoeDecoration {
+    #[serde(flatten)]
+    pub shape: DecorationShape,
+    pub x: Millimeters,
+    pub y: Millimeters,
+    pub width: Millimeters,
+    pub height: Millimeters,
+    #[serde(default)]
+    pub pages: DecorationPages,
+    #[serde(default)]
+    pub layer: DecorationLayer,
+}
+
+#[derive(Deserialize)]
+struct RawDecoration {
+    #[serde(flatten)]
+    shape: DecorationShape,
+    x: Millimeters,
+    y: Millimeters,
+    width: Millimeters,
+    height: Millimeters,
+    #[serde(default)]
+    pages: DecorationPages,
+    #[serde(default)]
+    layer: DecorationLayer,
+}
+
+impl TryFrom<RawDecoration> for DoeDecoration {
+    type Error = CoreError;
+
+    fn try_from(raw: RawDecoration) -> Result<Self, Self::Error> {
+        let fits = raw.x.get() + raw.width.get() <= Millimeters::PAGE_WIDTH
+            && raw.y.get() + raw.height.get() <= Millimeters::PAGE_HEIGHT;
+        if !fits {
+            return Err(CoreError::Conflict(
+                "an element must stay inside the A4 page".to_owned(),
+            ));
+        }
+        if raw.width.get() <= 0.0 || raw.height.get() <= 0.0 {
+            return Err(CoreError::Conflict(
+                "an element needs a width and a height above 0".to_owned(),
+            ));
+        }
+        Ok(Self {
+            shape: raw.shape,
+            x: raw.x,
+            y: raw.y,
+            width: raw.width,
+            height: raw.height,
+            pages: raw.pages,
+            layer: raw.layer,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(default)]
 pub struct DoeStyle {
@@ -210,6 +384,27 @@ pub struct DoeStyle {
     pub parties_title: DoeLabel,
     pub contents_title: DoeLabel,
     pub supply_table_title: DoeLabel,
+    /// Graphic elements repeated on the pages; the last one is on top.
+    #[serde(deserialize_with = "bounded_decorations")]
+    pub decorations: Vec<DoeDecoration>,
+}
+
+impl DoeStyle {
+    pub const MAX_DECORATIONS: usize = 20;
+}
+
+fn bounded_decorations<'de, D>(deserializer: D) -> Result<Vec<DoeDecoration>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let decorations = Vec::<DoeDecoration>::deserialize(deserializer)?;
+    if decorations.len() > DoeStyle::MAX_DECORATIONS {
+        return Err(serde::de::Error::custom(format!(
+            "a style holds at most {} elements",
+            DoeStyle::MAX_DECORATIONS
+        )));
+    }
+    Ok(decorations)
 }
 
 impl Default for DoeStyle {
@@ -231,6 +426,7 @@ impl Default for DoeStyle {
             parties_title: DoeLabel::fixed("INTERVENANTS"),
             contents_title: DoeLabel::fixed("SOMMAIRE"),
             supply_table_title: DoeLabel::fixed("Identification de la fourniture"),
+            decorations: Vec::new(),
         }
     }
 }
@@ -352,5 +548,64 @@ mod tests {
         );
         assert!(DoeLabel::try_from("   ".to_owned()).is_err());
         assert!(DoeLabel::try_from("x".repeat(121)).is_err());
+    }
+
+    fn style_with(decoration: &str) -> Result<DoeStyle, serde_json::Error> {
+        serde_json::from_str(&format!(r#"{{"decorations":[{decoration}]}}"#))
+    }
+
+    const RECT: &str = r##""kind":"rectangle","fill":"#ff0000""##;
+
+    #[test]
+    fn a_style_without_decorations_has_none() {
+        assert!(DoeStyle::default().decorations.is_empty());
+        let style: DoeStyle = serde_json::from_str("{}").unwrap();
+        assert!(style.decorations.is_empty());
+    }
+
+    #[test]
+    fn decoration_round_trips_with_defaults() {
+        let style = style_with(&format!(
+            r#"{{{RECT},"x":10,"y":280.5,"width":190,"height":2}}"#
+        ))
+        .unwrap();
+        let decoration = &style.decorations[0];
+        assert_eq!(decoration.pages, DecorationPages::All);
+        assert_eq!(decoration.layer, DecorationLayer::Behind);
+        assert_eq!(decoration.y.get(), 280.5);
+        let json = serde_json::to_string(&style).unwrap();
+        assert_eq!(serde_json::from_str::<DoeStyle>(&json).unwrap(), style);
+    }
+
+    #[test]
+    fn decoration_outside_the_page_or_empty_is_refused() {
+        for bad in [
+            r#""x":200,"y":0,"width":20,"height":5"#,
+            r#""x":0,"y":290,"width":5,"height":10"#,
+            r#""x":0,"y":0,"width":0,"height":5"#,
+            r#""x":-1,"y":0,"width":5,"height":5"#,
+        ] {
+            assert!(style_with(&format!("{{{RECT},{bad}}}")).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn opacity_outside_zero_to_one_is_refused() {
+        let image = |opacity: &str| {
+            style_with(&format!(
+                r#"{{"kind":"image","key":"k","opacity":{opacity},"x":0,"y":0,"width":10,"height":10}}"#
+            ))
+        };
+        assert!(image("0.5").is_ok());
+        assert!(image("1.2").is_err());
+        assert!(image("-0.1").is_err());
+    }
+
+    #[test]
+    fn more_than_twenty_decorations_are_refused() {
+        let one = format!(r#"{{{RECT},"x":0,"y":0,"width":1,"height":1}}"#);
+        let many = |n: usize| vec![one.as_str(); n].join(",");
+        assert!(style_with(&many(20)).is_ok());
+        assert!(style_with(&many(21)).is_err());
     }
 }

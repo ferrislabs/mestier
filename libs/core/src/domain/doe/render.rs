@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::domain::{
     doe::{DoeFile, DoeParty, DoeSupply, PhotosPerPage},
-    doe_model::{DoeStyle, HexColor, LogoPosition, LogoSize},
+    doe_model::{DecorationShape, DoeDecoration, DoeStyle, HexColor, LogoPosition, LogoSize},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -50,6 +50,19 @@ pub struct DocumentStyle {
     pub parties_title: String,
     pub contents_title: String,
     pub supply_table_title: String,
+    pub decorations: Vec<DoeDecoration>,
+}
+
+impl DocumentStyle {
+    /// Storage keys of the images the decorations place.
+    pub fn decoration_image_keys(&self) -> impl Iterator<Item = &str> {
+        self.decorations
+            .iter()
+            .filter_map(|decoration| match &decoration.shape {
+                DecorationShape::Image { key, .. } => Some(key.as_str()),
+                DecorationShape::Rectangle { .. } => None,
+            })
+    }
 }
 
 impl From<&DoeStyle> for DocumentStyle {
@@ -68,6 +81,7 @@ impl From<&DoeStyle> for DocumentStyle {
             parties_title: style.parties_title.as_str().to_owned(),
             contents_title: style.contents_title.as_str().to_owned(),
             supply_table_title: style.supply_table_title.as_str().to_owned(),
+            decorations: style.decorations.clone(),
         }
     }
 }

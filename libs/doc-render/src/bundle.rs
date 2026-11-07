@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use mestier_core::{DoeDocument, DoeRenderError, FileBundle, NumberedContent};
+use mestier_core::{DecorationShape, DoeDocument, DoeRenderError, FileBundle, NumberedContent};
 use serde_json::{Value, json};
 use typst::foundations::Bytes;
 
@@ -87,6 +87,17 @@ pub fn prepare(document: &DoeDocument, bundle: &FileBundle) -> Result<Prepared, 
     if let Some(key) = &document.cover_photo_key {
         collector.add(key, Use::Picture)?;
     }
+    // A decoration whose image is gone is dropped, not an export failure.
+    let mut kept_decorations = Vec::with_capacity(document.style.decorations.len());
+    for decoration in &document.style.decorations {
+        if let DecorationShape::Image { key, .. } = &decoration.shape {
+            if bundle.get(key).is_none() {
+                continue;
+            }
+            collector.add(key, Use::Picture)?;
+        }
+        kept_decorations.push(decoration);
+    }
     for party in &document.parties {
         if let Some(key) = &party.logo_key {
             collector.add(key, Use::Picture)?;
@@ -119,6 +130,8 @@ pub fn prepare(document: &DoeDocument, bundle: &FileBundle) -> Result<Prepared, 
     }
 
     let mut doc = serde_json::to_value(document)
+        .map_err(|e| DoeRenderError::Typeset(format!("document is not serializable: {e}")))?;
+    doc["style"]["decorations"] = serde_json::to_value(&kept_decorations)
         .map_err(|e| DoeRenderError::Typeset(format!("document is not serializable: {e}")))?;
     if let Some(parties) = doc.get_mut("parties").and_then(Value::as_array_mut) {
         for (value, party) in parties.iter_mut().zip(&document.parties) {

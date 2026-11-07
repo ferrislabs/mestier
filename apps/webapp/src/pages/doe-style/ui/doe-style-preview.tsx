@@ -1,5 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { cn } from '#/lib/utils'
+import type { Decoration, Rect } from '#/pages/doe-style/lib/decorations'
+import { DecorationOverlay } from '#/pages/doe-style/ui/decoration-overlay'
 
 export const PREVIEW_PAGE_LABELS = [
 	'Couverture',
@@ -13,6 +15,10 @@ interface DoeStylePreviewProps {
 	loading: boolean
 	error: string | null
 	invalid: boolean
+	decorations?: Decoration[]
+	selectedDecoration?: number | null
+	onSelectDecoration?: (index: number) => void
+	onCommitDecoration?: (index: number, rect: Rect) => void
 	onSelectPage: (index: number) => void
 }
 
@@ -26,6 +32,10 @@ export function DoeStylePreview({
 	loading,
 	error,
 	invalid,
+	decorations,
+	selectedDecoration = null,
+	onSelectDecoration,
+	onCommitDecoration,
 	onSelectPage,
 }: DoeStylePreviewProps) {
 	const current = Math.min(activePage, Math.max(pages.length - 1, 0))
@@ -62,6 +72,15 @@ export function DoeStylePreview({
 						</div>
 					)}
 				</div>
+				{page && decorations && onSelectDecoration && onCommitDecoration ? (
+					<DecorationOverlay
+						decorations={decorations}
+						pageIndex={current}
+						selectedIndex={selectedDecoration}
+						onSelect={onSelectDecoration}
+						onCommit={onCommitDecoration}
+					/>
+				) : null}
 				{loading ? (
 					<output
 						aria-label="Aperçu en cours de mise à jour"

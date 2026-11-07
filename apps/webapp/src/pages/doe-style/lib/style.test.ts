@@ -97,3 +97,43 @@ describe('sameStyle', () => {
 		).toBe(false)
 	})
 })
+
+describe('decorations in the style', () => {
+	it('defaults to an empty list, never shared', () => {
+		expect(completeStyle({}).decorations).toEqual([])
+		expect(completeStyle({}).decorations).not.toBe(
+			completeStyle({}).decorations,
+		)
+	})
+
+	it('keeps the decorations that are present', () => {
+		const decorations = [
+			{
+				kind: 'rectangle' as const,
+				fill: '#112233',
+				x: 0,
+				y: 0,
+				width: 10,
+				height: 10,
+			},
+		]
+		expect(completeStyle({ decorations }).decorations).toEqual(decorations)
+	})
+
+	it('reports an invalid decoration under the decorations key', () => {
+		const errors = validateStyle({
+			...DEFAULT_DOE_STYLE,
+			decorations: [
+				{
+					kind: 'rectangle',
+					fill: '#112233',
+					x: 200,
+					y: 0,
+					width: 20,
+					height: 10,
+				},
+			],
+		})
+		expect(errors.decorations).toMatch(/Élément 1/)
+	})
+})

@@ -17,6 +17,7 @@ import {
 	SelectValue,
 } from '#/components/ui/select'
 import { Switch } from '#/components/ui/switch'
+import type { Rect } from '#/pages/doe-style/lib/decorations'
 import {
 	type CompleteDoeStyle,
 	type DoeFont,
@@ -29,6 +30,8 @@ import {
 	TEMPLATE_VARIABLES,
 } from '#/pages/doe-style/lib/style'
 import type { DoeTheme } from '#/pages/doe-style/lib/themes'
+import { ColorField } from '#/pages/doe-style/ui/color-field'
+import { DoeDecorationsSection } from '#/pages/doe-style/ui/doe-decorations-section'
 import { DoeStylePreview } from '#/pages/doe-style/ui/doe-style-preview'
 import { DoeThemePicker } from '#/pages/doe-style/ui/doe-theme-picker'
 
@@ -44,6 +47,13 @@ interface DoeStyleFormProps {
 	previewLoading: boolean
 	previewError: string | null
 	activeThemeId: string | null
+	selectedDecoration: number | null
+	decorationErrors: Array<string | undefined>
+	decorationImageUrl: string | undefined
+	isUploadingDecorationImage: boolean
+	onSelectDecoration: (index: number | null) => void
+	onCommitDecoration: (index: number, rect: Rect) => void
+	onDecorationImageUpload: (index: number, file: File) => void
 	onSelectPage: (index: number) => void
 	onApplyTheme: (theme: DoeTheme) => void
 	onChange: (patch: Partial<CompleteDoeStyle>) => void
@@ -76,6 +86,13 @@ export function DoeStyleForm({
 	previewLoading,
 	previewError,
 	activeThemeId,
+	selectedDecoration,
+	decorationErrors,
+	decorationImageUrl,
+	isUploadingDecorationImage,
+	onSelectDecoration,
+	onCommitDecoration,
+	onDecorationImageUpload,
 	onSelectPage,
 	onApplyTheme,
 	onChange,
@@ -278,6 +295,29 @@ export function DoeStyleForm({
 						/>
 					</div>
 				</Group>
+
+				<Group title="Éléments" defaultOpen={value.decorations.length > 0}>
+					<DoeDecorationsSection
+						decorations={value.decorations}
+						selectedIndex={selectedDecoration}
+						errors={decorationErrors}
+						accentColor={
+							isValidHex(value.primary)
+								? value.primary.trim().toLowerCase()
+								: '#0f3d36'
+						}
+						imageUrl={decorationImageUrl}
+						isUploadingImage={isUploadingDecorationImage}
+						onChange={(decorations) => onChange({ decorations })}
+						onSelect={onSelectDecoration}
+						onImageUpload={onDecorationImageUpload}
+					/>
+					{errors.decorations ? (
+						<p role="alert" className="text-[12px] text-state-alert">
+							{errors.decorations}
+						</p>
+					) : null}
+				</Group>
 			</div>
 			<aside
 				aria-label="Aperçu de la mise en page"
@@ -290,6 +330,10 @@ export function DoeStyleForm({
 					loading={previewLoading}
 					error={previewError}
 					invalid={previewDisabled}
+					decorations={value.decorations}
+					selectedDecoration={selectedDecoration}
+					onSelectDecoration={onSelectDecoration}
+					onCommitDecoration={onCommitDecoration}
 					onSelectPage={onSelectPage}
 				/>
 				<RequirePermission permission="MANAGE_REFERENCE">
@@ -339,46 +383,6 @@ function Group({
 				{children}
 			</CollapsibleContent>
 		</Collapsible>
-	)
-}
-
-function ColorField({
-	label,
-	value,
-	error,
-	onChange,
-}: {
-	label: string
-	value: string
-	error: string | undefined
-	onChange: (value: string) => void
-}) {
-	const valid = isValidHex(value)
-	return (
-		<div className="flex flex-col gap-2">
-			<Label>{label}</Label>
-			<div className="flex items-center gap-2">
-				<input
-					type="color"
-					aria-label={`${label} (sélecteur)`}
-					value={valid ? value.trim().toLowerCase() : '#000000'}
-					className="h-9 w-11 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-					onChange={(event) => onChange(event.target.value)}
-				/>
-				<Input
-					value={value}
-					aria-label={label}
-					aria-invalid={Boolean(error)}
-					className="w-32 font-mono"
-					onChange={(event) => onChange(event.target.value)}
-				/>
-			</div>
-			{error ? (
-				<p role="alert" className="text-[12px] text-state-alert">
-					{error}
-				</p>
-			) : null}
-		</div>
 	)
 }
 

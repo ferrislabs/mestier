@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useUploadFile } from '#/hooks/use-customers'
 import { usePreviewDoeStyle } from '#/hooks/use-doe-models'
 import { useFileUrls } from '#/hooks/use-file-url'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { useStylePreviewPages } from '#/pages/doe-style/feature/use-style-preview-pages'
+import {
+	decorationErrors,
+	type Rect,
+	updateDecoration,
+} from '#/pages/doe-style/lib/decorations'
 import {
 	type CompleteDoeStyle,
 	normalizeStyle,
@@ -28,6 +33,22 @@ export function DoeStyleEditorFeature({
 	const [logoPreview] = useFileUrls(value.logo_key ? [value.logo_key] : [])
 	const live = useStylePreviewPages(organizationId, value)
 	const [activePage, setActivePage] = useState(0)
+	const [selection, setSelection] = useState<number | null>(null)
+	const latest = useRef(value)
+	latest.current = value
+	const selectedDecoration =
+		selection !== null && selection < value.decorations.length
+			? selection
+			: null
+	const selectedItem =
+		selectedDecoration === null
+			? undefined
+			: value.decorations[selectedDecoration]
+	const [decorationImage] = useFileUrls(
+		selectedItem?.kind === 'image' && selectedItem.key
+			? [selectedItem.key]
+			: [],
+	)
 	const errors = validateStyle(value)
 	const error =
 		live.error ??
@@ -44,6 +65,37 @@ export function DoeStyleEditorFeature({
 				previewLoading={live.loading}
 				previewError={error}
 				activeThemeId={activeThemeId(value)}
+				selectedDecoration={selectedDecoration}
+				decorationErrors={decorationErrors(value.decorations)}
+				decorationImageUrl={decorationImage?.url}
+				isUploadingDecorationImage={upload.isPending}
+				onSelectDecoration={setSelection}
+				onCommitDecoration={(index, rect: Rect) => {
+					const current = latest.current.decorations[index]
+					if (!current) return
+					onChange({
+						decorations: updateDecoration(latest.current.decorations, index, {
+							...current,
+							...rect,
+						}),
+					})
+				}}
+				onDecorationImageUpload={(index, file) => {
+					void upload
+						.mutateAsync(file)
+						.then((response) => {
+							const current = latest.current.decorations[index]
+							if (current?.kind !== 'image') return
+							onChange({
+								decorations: updateDecoration(
+									latest.current.decorations,
+									index,
+									{ ...current, key: response.data.key },
+								),
+							})
+						})
+						.catch(() => {})
+				}}
 				onSelectPage={setActivePage}
 				onApplyTheme={(theme) => onChange(applyTheme(value, theme))}
 				logoUrl={logoPreview?.url}

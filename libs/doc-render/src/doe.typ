@@ -47,11 +47,11 @@
   let file = files.at(key)
   for number in range(1, file.pages + 1) {
     if file.kind == "pdf" {
-      page(header: none, footer: none, margin: 0pt)[
+      page(header: none, footer: none, background: none, foreground: none, margin: 0pt)[
         #image(file.path, page: number, width: 100%, height: 100%, fit: "contain")
       ]
     } else {
-      page(header: none, footer: none, margin: 1.5cm)[
+      page(header: none, footer: none, background: none, foreground: none, margin: 1.5cm)[
         #image(file.path, width: 100%, height: 100%, fit: "contain")
       ]
     }
@@ -84,6 +84,29 @@
 
 #set page(paper: "a4", margin: (x: 2cm, y: 2.4cm))
 
+// Decorations are placed in millimeters from the page's top-left corner,
+// whatever the margins. `scope` is "cover" or "inner"; full-page attachments
+// pass none and draw no decoration. Image opacity is a white veil over the
+// image: it reads right behind the content, where the page is white.
+#let decor(scope, layer) = context {
+  for d in style.decorations {
+    if d.layer == layer and (d.pages == "all" or d.pages == scope) {
+      let w = d.width * 1mm
+      let h = d.height * 1mm
+      place(top + left, dx: d.x * 1mm, dy: d.y * 1mm, if d.kind == "image" {
+        block(width: w, height: h, clip: true, {
+          picture(d.key, width: w, height: h, fit: d.fit)
+          if d.opacity < 1 and layer == "behind" {
+            place(top + left, rect(width: w, height: h, fill: white.transparentize(d.opacity * 100%), stroke: none))
+          }
+        })
+      } else {
+        rect(width: w, height: h, fill: rgb(d.fill).transparentize((1 - d.opacity) * 100%), radius: d.radius * 1mm, stroke: none)
+      })
+    }
+  }
+}
+
 #let logo_box = (
   small: (height: 1.6cm, width: 4cm),
   medium: (height: 2.4cm, width: 6cm),
@@ -91,34 +114,28 @@
 ).at(style.cover_logo_size)
 #let logo_align = (left: left, center: center, right: right).at(style.cover_logo_position)
 
-#page(header: none, footer: none)[
+#page(header: none, footer: none, background: decor("cover", "behind"), foreground: decor("cover", "front"))[
   #if style.logo_key != none {
     align(logo_align, picture(style.logo_key, ..logo_box, fit: "contain"))
   }
-  #v(if doc.cover_photo_key != none { 1.2cm } else { 2.5cm })
+  #v(1cm)
   #if doc.place != none {
     text(14pt, fill: muted, doc.place)
-    parbreak()
-  }
-  #titled(32pt, weight: "bold", doc.title)
-  #if doc.lot != none {
-    parbreak()
-    text(16pt, doc.lot)
-  }
-  // The photo takes whatever height the cover has left, so the cover stays
-  // one page whatever the logo size and title length.
-  #if doc.cover_photo_key != none {
-    v(0.8cm)
-    block(width: 100%, height: 1fr, clip: true, radius: 2pt,
-      picture(doc.cover_photo_key, width: 100%, height: 100%, fit: "cover"))
     v(0.4cm)
-  } else {
-    v(1.2cm)
   }
-  #block(width: 100%, fill: primary, inset: (x: 14pt, y: 16pt))[
-    #align(center, titled(on_primary, weight: "bold", size: 17pt, style.cover_title))
+  // The frame carries the document's name, then the DOE title.
+  #block(width: 100%, fill: primary, inset: (x: 14pt, y: 18pt))[
+    #align(center)[
+      #titled(on_primary, weight: "bold", size: 15pt, style.cover_title)
+      #v(8pt)
+      #titled(on_primary, weight: "bold", size: 26pt, doc.title)
+      #if doc.lot != none {
+        v(6pt)
+        text(on_primary, size: 15pt, doc.lot)
+      }
+    ]
   ]
-  #v(1cm)
+  #v(0.8cm)
   #grid(
     columns: (auto, 1fr),
     row-gutter: 8pt,
@@ -127,11 +144,22 @@
     text(weight: "bold")[Rédacteur], dash(doc.author),
     text(weight: "bold")[Indice], doc.revision,
   )
-  #v(if doc.cover_photo_key != none { 0.8cm } else { 1fr })
+  // The photo takes whatever height the cover has left, so the cover stays
+  // one page whatever the logo size and title length.
+  #if doc.cover_photo_key != none {
+    v(0.8cm)
+    block(width: 100%, height: 1fr, clip: true, radius: 2pt,
+      picture(doc.cover_photo_key, width: 100%, height: 100%, fit: "cover"))
+    v(0.8cm)
+  } else {
+    v(1fr)
+  }
   #if contractor != none { party_block(contractor) }
 ]
 
 #set page(
+  background: decor("inner", "behind"),
+  foreground: decor("inner", "front"),
   header: [
     #grid(
       columns: (auto, 1fr, auto),
