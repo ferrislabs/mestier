@@ -187,6 +187,7 @@ impl DoeDocument {
         let mut keys: Vec<&str> = Vec::new();
         keys.extend(self.parties.iter().filter_map(|p| p.logo_key.as_deref()));
         keys.extend(self.style.logo_key.as_deref());
+        keys.extend(self.style.decoration_image_keys());
         keys.extend(self.cover_photo_key.as_deref());
         for section in &self.sections {
             match &section.content {

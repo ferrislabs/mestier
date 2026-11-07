@@ -47,11 +47,11 @@
   let file = files.at(key)
   for number in range(1, file.pages + 1) {
     if file.kind == "pdf" {
-      page(header: none, footer: none, margin: 0pt)[
+      page(header: none, footer: none, background: none, foreground: none, margin: 0pt)[
         #image(file.path, page: number, width: 100%, height: 100%, fit: "contain")
       ]
     } else {
-      page(header: none, footer: none, margin: 1.5cm)[
+      page(header: none, footer: none, background: none, foreground: none, margin: 1.5cm)[
         #image(file.path, width: 100%, height: 100%, fit: "contain")
       ]
     }
@@ -84,6 +84,29 @@
 
 #set page(paper: "a4", margin: (x: 2cm, y: 2.4cm))
 
+// Decorations are placed in millimeters from the page's top-left corner,
+// whatever the margins. `scope` is "cover" or "inner"; full-page attachments
+// pass none and draw no decoration. Image opacity is a white veil over the
+// image: it reads right behind the content, where the page is white.
+#let decor(scope, layer) = context {
+  for d in style.decorations {
+    if d.layer == layer and (d.pages == "all" or d.pages == scope) {
+      let w = d.width * 1mm
+      let h = d.height * 1mm
+      place(top + left, dx: d.x * 1mm, dy: d.y * 1mm, if d.kind == "image" {
+        block(width: w, height: h, clip: true, {
+          picture(d.key, width: w, height: h, fit: d.fit)
+          if d.opacity < 1 and layer == "behind" {
+            place(top + left, rect(width: w, height: h, fill: white.transparentize((1 - d.opacity) * 100%), stroke: none))
+          }
+        })
+      } else {
+        rect(width: w, height: h, fill: rgb(d.fill).transparentize((1 - d.opacity) * 100%), radius: d.radius * 1mm, stroke: none)
+      })
+    }
+  }
+}
+
 #let logo_box = (
   small: (height: 1.6cm, width: 4cm),
   medium: (height: 2.4cm, width: 6cm),
@@ -91,7 +114,7 @@
 ).at(style.cover_logo_size)
 #let logo_align = (left: left, center: center, right: right).at(style.cover_logo_position)
 
-#page(header: none, footer: none)[
+#page(header: none, footer: none, background: decor("cover", "behind"), foreground: decor("cover", "front"))[
   #if style.logo_key != none {
     align(logo_align, picture(style.logo_key, ..logo_box, fit: "contain"))
   }
@@ -135,6 +158,8 @@
 ]
 
 #set page(
+  background: decor("inner", "behind"),
+  foreground: decor("inner", "front"),
   header: [
     #grid(
       columns: (auto, 1fr, auto),

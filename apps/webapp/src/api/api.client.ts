@@ -399,8 +399,24 @@ export namespace Schemas {
   export type DoeLabel = string;
   export type LogoPosition = "left" | "center" | "right";
   export type LogoSize = "small" | "medium" | "large";
-  export type DoeTemplate = string;
+  export type ImageFit = "contain" | "cover";
+  export type Opacity = number;
   export type HexColor = string;
+  export type Millimeters = number;
+  export type DecorationShape =
+    | { fit?: ImageFit | undefined; key: string; kind: "image"; opacity?: Opacity | undefined }
+    | { fill: HexColor; kind: "rectangle"; opacity?: Opacity | undefined; radius?: Millimeters | undefined };
+  export type DecorationLayer = "behind" | "front";
+  export type DecorationPages = "cover" | "inner" | "all";
+  export type DoeDecoration = DecorationShape & {
+    height: Millimeters;
+    layer?: DecorationLayer | undefined;
+    pages?: DecorationPages | undefined;
+    width: Millimeters;
+    x: Millimeters;
+    y: Millimeters;
+  };
+  export type DoeTemplate = string;
   export type DoeStyle = Partial<{
     body_font: DoeFont;
     contents_title: DoeLabel;
@@ -408,6 +424,7 @@ export namespace Schemas {
     cover_logo_size: LogoSize;
     cover_photo: boolean;
     cover_title: DoeLabel;
+    decorations: Array<DoeDecoration>;
     footer_text: DoeTemplate;
     header_logo: boolean;
     header_text: DoeTemplate;

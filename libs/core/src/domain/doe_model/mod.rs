@@ -26,7 +26,10 @@ pub mod service;
 pub mod starter;
 pub mod style;
 
-pub use style::{DoeFont, DoeLabel, DoeStyle, DoeTemplate, LogoPosition, LogoSize, TemplateValues};
+pub use style::{
+    DecorationLayer, DecorationPages, DecorationShape, DoeDecoration, DoeFont, DoeLabel, DoeStyle,
+    DoeTemplate, ImageFit, LogoPosition, LogoSize, Millimeters, Opacity, TemplateValues,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct DoeModelId(pub Uuid);

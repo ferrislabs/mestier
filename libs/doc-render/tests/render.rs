@@ -300,6 +300,7 @@ fn spec_style_2_a_custom_style_reaches_the_pdf() {
         parties_title: label("Les intervenants"),
         contents_title: label("Table des matières"),
         supply_table_title: label("Fiche fourniture"),
+        decorations: Vec::new(),
     });
     document.header = "Treyve Paysages – Avenue".to_owned();
     document.footer = "SIRET 123 456 789".to_owned();
@@ -447,4 +448,91 @@ fn heavy_photos_render_in_reasonable_time() {
         started.elapsed(),
         bytes.len() / 1024
     );
+}
+
+fn decorated(decorations: &str) -> (DoeDocument, FileBundle) {
+    let (mut document, bundle) = fixture();
+    let style: DoeStyle =
+        serde_json::from_str(&format!(r#"{{"decorations":{decorations}}}"#)).unwrap();
+    document.style = DocumentStyle::from(&DoeStyle {
+        logo_key: Some("logo".to_owned()),
+        ..style
+    });
+    (document, bundle)
+}
+
+fn pages_painted(document: &DoeDocument, bundle: &FileBundle, color: &str) -> Vec<usize> {
+    let all: Vec<usize> = (0..40).collect();
+    TypstDoeRenderer
+        .render_svg(document, bundle, &all)
+        .unwrap()
+        .iter()
+        .enumerate()
+        .filter(|(_, svg)| svg.contains(color))
+        .map(|(index, _)| index)
+        .collect()
+}
+
+const MAGENTA: &str = "#ff00ff";
+
+fn magenta(pages: &str, layer: &str) -> String {
+    format!(
+        r##"[{{"kind":"rectangle","fill":"{MAGENTA}","x":10,"y":280,"width":190,"height":4,"pages":"{pages}","layer":"{layer}"}}]"##
+    )
+}
+
+#[test]
+fn layout_a_cover_element_is_printed_on_the_cover_only() {
+    let (document, bundle) = decorated(&magenta("cover", "behind"));
+    assert_eq!(pages_painted(&document, &bundle, MAGENTA), vec![0]);
+}
+
+#[test]
+fn layout_an_inner_element_skips_the_cover_and_full_page_attachments() {
+    let (document, bundle) = decorated(&magenta("inner", "front"));
+    let painted = pages_painted(&document, &bundle, MAGENTA);
+    let total = TypstDoeRenderer
+        .render_svg(&document, &bundle, &(0..40).collect::<Vec<_>>())
+        .unwrap()
+        .len();
+    assert!(!painted.is_empty() && !painted.contains(&0), "{painted:?}");
+    assert!(
+        painted.len() < total - 1,
+        "datasheets and plans are not decorated: {painted:?} of {total}"
+    );
+}
+
+#[test]
+fn layout_an_all_element_is_on_the_cover_and_inner_pages() {
+    let (document, bundle) = decorated(&magenta("all", "behind"));
+    let painted = pages_painted(&document, &bundle, MAGENTA);
+    assert!(painted.contains(&0) && painted.contains(&1), "{painted:?}");
+}
+
+#[test]
+fn layout_an_image_element_is_placed_and_a_missing_one_is_dropped() {
+    let image = |key: &str| {
+        format!(
+            r#"[{{"kind":"image","key":"{key}","x":150,"y":5,"width":40,"height":20,"opacity":0.5}}]"#
+        )
+    };
+    let (document, bundle) = decorated(&image("logo"));
+    let with = TypstDoeRenderer.render(&document, &bundle).unwrap();
+    let (document, bundle) = decorated(&image("gone"));
+    let without = TypstDoeRenderer.render(&document, &bundle).unwrap();
+    assert!(with.len() != without.len());
+    assert!(without.starts_with(b"%PDF"));
+}
+
+#[test]
+fn layout_no_decorations_leaves_the_document_unchanged() {
+    let (document, bundle) = fixture();
+    let (empty, _) = decorated("[]");
+    let a = TypstDoeRenderer
+        .render_svg(&document, &bundle, &[0, 1])
+        .unwrap();
+    let b = TypstDoeRenderer
+        .render_svg(&empty, &bundle, &[0, 1])
+        .unwrap();
+    assert_eq!(a, b);
 }
