@@ -1,6 +1,6 @@
 # CRM : conformité au prototype
 
-Objectif : le CRM du vrai Mestier (front puis back) est identique, en fonctions et en UI, au module CRM du prototype `mestier-rework` (`src/modules/crm`). Le prototype fait foi. Spec : `docs/specs/crm-conformity.md` (à écrire).
+Objectif : le CRM du vrai Mestier (front puis back) est identique, en fonctions et en UI, au module CRM du prototype `mestier-rework` (`src/modules/crm`). Le prototype fait foi. Spec : `docs/specs/crm-conformity.md`. ADR 0011 (opportunités), 0012 (dépenses), 0013 (SIRET).
 
 ## Décisions (2026-11-07)
 - Front d'abord, avec des mocks `localStorage` pour ce que l'API ne porte pas ; les lots backend remplacent les mocks un par un.
@@ -25,7 +25,9 @@ Objectif : le CRM du vrai Mestier (front puis back) est identique, en fonctions 
 
 F1 d'abord, puis F2 à F6 en parallèle (un sous-agent par partition de dossiers, jamais deux écrivains sur un fichier). Fin de lot : `pnpm check`, `pnpm test`, `pnpm build`, comparaison visuelle 3100/3000.
 
-## Lots backend (une branche et une PR chacun)
+## Lots backend (une branche et une PR chacun, empilées)
+Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-b2-customer`, `b3-deals`, `b4-quotes`, `b5-invoices`, `b6-expenses`, `b7-list`, chacune sur la précédente. Base de travail : `mestier_crm` dans le conteneur Postgres local, jamais la base de développement. Chaque lot remplace aussi les mocks front de son périmètre.
+
 | Lot | Contenu | Dépend de | État |
 |---|---|---|---|
 | B1 | Réglages d'organisation : IBAN, BIC, pénalités, indemnité de recouvrement, pied de facture, padding, validité des devis, délai de paiement, TVA par défaut, compteur d'avoirs | – | à faire |
