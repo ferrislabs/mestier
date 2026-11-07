@@ -1,9 +1,14 @@
 import type { Schemas } from '#/api/api.client'
+import { branchLabel } from '#/pages/automation/lib/branch-labels'
 import {
 	describeConnector,
 	triggerCopy,
 } from '#/pages/automation/lib/connector-copy'
-import { toItems } from '#/pages/automation/lib/items'
+import {
+	outputItems,
+	parseStepOutput,
+	triggerItem,
+} from '#/pages/automation/lib/items'
 import { triggerKindOf } from '#/pages/automation/lib/trigger-events'
 
 export interface OutputBranch {
@@ -23,11 +28,19 @@ export type NodeInputView =
 	| { state: 'not-executed'; sourceLabels: string[] }
 	| { state: 'ready'; sourceLabels: string[]; items: unknown[] }
 
+export function outputBranches(output: unknown): OutputBranch[] {
+	const parsed = parseStepOutput(output)
+	return parsed.kind === 'main'
+		? [{ id: 'main', label: 'Sortie', items: parsed.items }]
+		: parsed.lists.map((list) => ({
+				id: list.branch,
+				label: branchLabel(list.branch),
+				items: list.items,
+			}))
+}
+
 function readyView(output: unknown): NodeOutputView {
-	return {
-		state: 'ready',
-		branches: [{ id: 'main', label: 'Sortie', items: toItems(output) }],
-	}
+	return { state: 'ready', branches: outputBranches(output) }
 }
 
 export function outputViewFromStep(
@@ -69,14 +82,17 @@ export function inputViewFromDryStep(
 	if (!step) return { state: 'absent' }
 	if (step.status === 'skipped') return { state: 'not-reached' }
 	const input = step.input ?? (passesThrough ? step.output : undefined)
-	return { state: 'ready', items: toItems(input) }
+	return { state: 'ready', items: outputItems(input, []) }
 }
 
 export function outputViewFromPayload(payload: unknown): NodeOutputView {
 	if (payload === undefined || payload === null) {
 		return { state: 'not-executed' }
 	}
-	return readyView(payload)
+	return {
+		state: 'ready',
+		branches: [{ id: 'main', label: 'Sortie', items: [triggerItem(payload)] }],
+	}
 }
 
 interface DescribedNode {

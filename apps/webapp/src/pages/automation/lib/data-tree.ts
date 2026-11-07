@@ -1,28 +1,27 @@
 import type { Schemas } from '#/api/api.client'
 
-export interface AvailableConnectorData {
-	id: string
+export interface AvailableNodeData {
 	label: string
-	output: unknown
+	items: readonly unknown[]
 }
 
 export interface AvailableData {
 	trigger: unknown
-	connectors: AvailableConnectorData[]
+	nodes: AvailableNodeData[]
 }
 
 export function toEvaluateContext(
 	data: AvailableData,
+	position = 0,
+	loop: Schemas.LoopFrameBody | null = null,
 ): Schemas.EvaluateContextBody {
 	return {
 		trigger: data.trigger,
-		connectors: Object.fromEntries(
-			data.connectors.map((connector) => [
-				connector.id,
-				{ output: connector.output },
-			]),
+		nodes: Object.fromEntries(
+			data.nodes.map((node) => [node.label, [...node.items]]),
 		),
-		loop: null,
+		position,
+		loop,
 	}
 }
 

@@ -6,6 +6,10 @@ import {
 } from '#/pages/automation/lib/connector-copy'
 import type { NodePosition } from '#/pages/automation/lib/graph'
 import {
+	referencedLabels,
+	renameReferencesInValue,
+} from '#/pages/automation/lib/references'
+import {
 	triggerKindOf,
 	triggerPresentation,
 } from '#/pages/automation/lib/trigger-events'
@@ -111,6 +115,26 @@ export function withDetails(
 		},
 		lookup,
 	)
+}
+
+export function withRenamedReferences(
+	nodes: readonly EditorNode[],
+	renamedId: string,
+	oldLabel: string,
+	newLabel: string,
+): EditorNode[] {
+	return nodes.map((node) => {
+		const connector = node.data.connector
+		if (!connector || node.id === renamedId) return node
+		const config = renameReferencesInValue(
+			connector.config,
+			oldLabel,
+			newLabel,
+		) as Record<string, unknown>
+		return config === connector.config
+			? node
+			: { ...node, data: { ...node.data, connector: { ...connector, config } } }
+	})
 }
 
 export function withDisabled(
@@ -239,9 +263,23 @@ export function toGraph(
 ): Schemas.GraphDto {
 	const connectors: Schemas.PlacedConnectorDto[] = []
 	const triggers: Schemas.PlacedTriggerDto[] = []
+	const read = referencedLabels(
+		nodes.map((node) => node.data.connector?.config),
+	)
+	const named = <T extends { name?: string | null }>(
+		placed: T,
+		label: string,
+	): T =>
+		placed.name?.trim() || !read.has(label)
+			? placed
+			: { ...placed, name: label }
 	for (const node of nodes) {
-		if (node.data.connector) connectors.push(node.data.connector)
-		if (node.data.trigger) triggers.push(node.data.trigger)
+		if (node.data.connector) {
+			connectors.push(named(node.data.connector, node.data.label))
+		}
+		if (node.data.trigger) {
+			triggers.push(named(node.data.trigger, node.data.label))
+		}
 	}
 	return {
 		connectors,

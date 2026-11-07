@@ -89,11 +89,23 @@ export function accessor(path: readonly PathSegment[]): string {
 		.join('')
 }
 
+export function escapeNodeLabel(label: string): string {
+	return label.replaceAll('\\', '\\\\').replaceAll("'", "\\'")
+}
+
+function unescapeNodeLabel(escaped: string): string {
+	return escaped.replaceAll("\\'", "'").replaceAll('\\\\', '\\')
+}
+
+export function nodeReference(label: string): string {
+	return `$('${escapeNodeLabel(label)}')`
+}
+
 export function variableExpression(
-	root: string,
+	nodeLabel: string,
 	path: readonly PathSegment[],
 ): string {
-	return `{{ ${root}${accessor(path)} }}`
+	return `{{ ${nodeReference(nodeLabel)}.item.json${accessor(path)} }}`
 }
 
 export function readPath(value: unknown, rest: string): unknown {
@@ -124,19 +136,36 @@ export function readPath(value: unknown, rest: string): unknown {
 	return current
 }
 
-const REFERENCE =
-	/connectors\.([A-Za-z0-9_-]+)\.output((?:\.[A-Za-z_$][\w$]*|\["(?:[^"\\]|\\.)*"\]|\[\d+\])*)/g
+const NODE_ROOT = /\$\('((?:[^'\\]|\\.)*)'\)/g
+const ITEM_PATH =
+	/^\.(?:item|first\(\)|last\(\))(?:\.json(?![\w$]))?((?:\.[A-Za-z_$][\w$]*|\["(?:[^"\\]|\\.)*"\]|\[\d+\])*)/
+const EXPRESSION = /\{\{([\s\S]*?)\}\}/g
+const LEGACY_ROOT = /\bconnectors\s*\.\s*[A-Za-z0-9_-]+\s*\.\s*output\b/
 
-export interface ConnectorReference {
-	connectorId: string
-	accessor: string
+export interface NodeReference {
+	label: string
+	accessor: string | null
 }
 
-export function findConnectorReferences(text: string): ConnectorReference[] {
-	return [...text.matchAll(REFERENCE)].map((match) => ({
-		connectorId: match[1],
-		accessor: match[2],
-	}))
+function expressionsOf(text: string): string[] {
+	return [...text.matchAll(EXPRESSION)].map((match) => match[1])
+}
+
+export function findNodeReferences(text: string): NodeReference[] {
+	return expressionsOf(text).flatMap((expression) =>
+		[...expression.matchAll(NODE_ROOT)].map((match) => {
+			const rest = expression.slice((match.index ?? 0) + match[0].length)
+			const path = ITEM_PATH.exec(rest)
+			return {
+				label: unescapeNodeLabel(match[1]),
+				accessor: path ? path[1] : null,
+			}
+		}),
+	)
+}
+
+export function usesLegacyRoot(text: string): boolean {
+	return expressionsOf(text).some((expression) => LEGACY_ROOT.test(expression))
 }
 
 export function displayPath(path: string): string {

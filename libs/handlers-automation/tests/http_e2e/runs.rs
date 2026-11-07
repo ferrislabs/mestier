@@ -328,3 +328,48 @@ async fn a_parked_step_is_read_back_as_waiting_with_its_resume_time() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_step_reads_back_its_items_as_stored_lists_and_a_legacy_value_unchanged() {
+    let app = harness::start().await;
+    let workflow_id = main_workflow(&app).await;
+    let run_id = start(&app, &workflow_id).await;
+    let stored = [
+        (
+            "c1",
+            json!([{ "n": 1 }, { "n": 5 }]),
+            json!({ "Then": [{ "n": 5 }], "Else": [{ "n": 1 }] }),
+        ),
+        ("c2", json!([{ "n": 5 }]), json!({ "matched": true })),
+    ];
+    for (connector_id, input, output) in &stored {
+        sqlx::query(
+            "INSERT INTO automation.run_step
+                 (id, run_id, connector_id, iteration_path, attempts, status, input, output)
+             VALUES ($1, $2, $3, '', 1, 'succeeded', $4, $5)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(run_id.parse::<Uuid>().expect("a uuid"))
+        .bind(connector_id)
+        .bind(input)
+        .bind(output)
+        .execute(&app.pool)
+        .await
+        .expect("insert the step");
+    }
+
+    let read = get_run(&app, &run_id).await;
+
+    let steps = read["steps"].as_array().expect("steps");
+    for (connector_id, input, output) in &stored {
+        let step = steps
+            .iter()
+            .find(|step| step["connector_id"] == *connector_id)
+            .expect("the stored step");
+        assert_eq!(&step["input"], input);
+        assert_eq!(&step["output"], output);
+    }
+
+    app.cleanup().await;
+}

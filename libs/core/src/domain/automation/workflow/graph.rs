@@ -35,9 +35,8 @@ impl Graph {
 /// One connector instance on the canvas.
 ///
 /// `id` is local to this graph (`"c1"`), assigned by the editor and never
-/// reassigned: it is what expressions reference
-/// (`{{ connectors.c1.output.… }}`) and what edges connect, so renaming a
-/// connector's label must never change it.
+/// reassigned: it is what edges connect, so renaming a connector's label must
+/// never change it. Expressions reach a connector by its `name`, not its `id`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlacedConnector {
     pub id: String,
@@ -79,7 +78,7 @@ pub struct Edge {
 /// leaves from. `None` on every other edge — see
 /// [`super::validation::GraphError::InvalidBranch`] for the rule tying a
 /// branch to the connector kind it is legal on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Branch {
     Then,
     Else,

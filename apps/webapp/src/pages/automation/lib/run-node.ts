@@ -118,3 +118,29 @@ export function nodeNeighbours(
 			.map((edge) => ({ id: edge.to, branch: edge.branch ?? undefined })),
 	}
 }
+
+const PASS_OF_LOOP = /^(.*)\[(\d+)\]$/
+
+export function loopFrameOf(
+	step: Schemas.RunStepResponse | null,
+	steps: readonly Schemas.RunStepResponse[],
+): Schemas.LoopFrameBody | null {
+	if (!step || step.iteration_path === '') return null
+	const segments = step.iteration_path.split('.')
+	const match = PASS_OF_LOOP.exec(segments.pop() ?? '')
+	if (!match) return null
+	const index = Number(match[2])
+	const parentPath = segments.join('.')
+	const loop = steps.find(
+		(candidate) =>
+			candidate.connector_id === match[1] &&
+			candidate.iteration_path === parentPath,
+	)
+	const output = loop?.output
+	if (typeof output !== 'object' || output === null || Array.isArray(output)) {
+		return null
+	}
+	const each = (output as Record<string, unknown>).Each
+	if (!Array.isArray(each) || index >= each.length) return null
+	return { index, item: each[index] }
+}

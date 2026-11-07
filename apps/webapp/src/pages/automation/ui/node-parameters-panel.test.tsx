@@ -93,6 +93,32 @@ describe('NodeParametersPanel', () => {
 		expect(screen.getByText(/glissez une variable/)).toBeDefined()
 	})
 
+	it('words its tip like the prototype, naming the node', async () => {
+		await renderWithRouter(
+			<NodeParametersPanel acceptsExpressions>
+				<p>champs</p>
+			</NodeParametersPanel>,
+		)
+
+		expect(
+			screen.getByText(
+				/ou écrivez une expression qui nomme le nœud, par exemple/,
+			),
+		).toBeDefined()
+	})
+
+	it('writes its example of expression with the name of a node', async () => {
+		await renderWithRouter(
+			<NodeParametersPanel acceptsExpressions>
+				<p>champs</p>
+			</NodeParametersPanel>,
+		)
+
+		expect(
+			screen.getByText("{{ $('Nom du nœud').item.json.client.nom }}"),
+		).toBeDefined()
+	})
+
 	it('keeps the tip back when no field takes an expression', async () => {
 		await renderWithRouter(
 			<NodeParametersPanel acceptsExpressions={false}>

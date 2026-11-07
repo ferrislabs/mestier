@@ -1,4 +1,4 @@
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
 
@@ -35,10 +35,6 @@ fn elements(value: &Value) -> Vec<&Value> {
     match value {
         Value::Null => Vec::new(),
         Value::Array(items) => items.iter().collect(),
-        Value::Object(map) => match map.get("items") {
-            Some(Value::Array(items)) => items.iter().collect(),
-            _ => vec![value],
-        },
         other => vec![other],
     }
 }
@@ -115,7 +111,7 @@ fn decide(config: &Map<String, Value>) -> ConnectorOutcome {
         Mode::ByPosition => by_position(&lists),
         Mode::ByField(field) => by_field(&lists, field),
     };
-    ConnectorOutcome::Produced(json!({ "items": items }))
+    ConnectorOutcome::Produced(Value::Array(items))
 }
 
 impl Connector for FlowMergeConnector {
@@ -127,6 +123,7 @@ impl Connector for FlowMergeConnector {
 #[cfg(test)]
 mod tests {
     use common::OrganizationId;
+    use serde_json::json;
     use uuid::Uuid;
 
     use super::*;
@@ -145,7 +142,7 @@ mod tests {
 
     fn items(outcome: ConnectorOutcome) -> Value {
         match outcome {
-            ConnectorOutcome::Produced(output) => output["items"].clone(),
+            ConnectorOutcome::Produced(output) => output,
             other => panic!("expected an output, got {other:?}"),
         }
     }
@@ -159,11 +156,7 @@ mod tests {
 
     #[test]
     fn append_concatenates_the_lists_of_every_input_in_order() {
-        let inputs = json!([
-            { "items": [{ "id": 1 }, { "id": 2 }] },
-            [{ "id": 3 }],
-            { "id": 4 },
-        ]);
+        let inputs = json!([[{ "id": 1 }, { "id": 2 }], [{ "id": 3 }], { "id": 4 },]);
 
         let merged = items(decide(&config("append", None, inputs)));
 
@@ -191,8 +184,8 @@ mod tests {
     #[test]
     fn combine_by_position_merges_the_objects_of_the_same_rank() {
         let inputs = json!([
-            { "items": [{ "id": 1, "name": "A" }, { "id": 2, "name": "B" }] },
-            { "items": [{ "total": 10 }, { "total": 20 }, { "total": 30 }] },
+            [{ "id": 1, "name": "A" }, { "id": 2, "name": "B" }],
+            [{ "total": 10 }, { "total": 20 }, { "total": 30 }],
         ]);
 
         let merged = items(decide(&config("combine_by_position", None, inputs)));
@@ -232,8 +225,8 @@ mod tests {
     #[test]
     fn combine_by_field_joins_the_objects_sharing_the_field_value() {
         let inputs = json!([
-            { "items": [{ "id": 1, "name": "A" }, { "id": 2, "name": "B" }, { "id": 3, "name": "C" }] },
-            { "items": [{ "id": 3, "total": 30 }, { "id": 1, "total": 10 }] },
+            [{ "id": 1, "name": "A" }, { "id": 2, "name": "B" }, { "id": 3, "name": "C" }],
+            [{ "id": 3, "total": 30 }, { "id": 1, "total": 10 }],
         ]);
 
         let merged = items(decide(&config("combine_by_field", Some("id"), inputs)));
@@ -334,11 +327,24 @@ mod tests {
     #[test]
     fn the_sample_has_the_shape_of_what_a_merge_outputs() {
         let ConnectorOutcome::Produced(output) =
-            decide(&config("append", None, json!([{ "id": 1 }])))
+            decide(&config("append", None, json!([[{ "id": "x" }]])))
         else {
             panic!("a merge produces an output");
         };
 
         super::super::test_support::assert_same_shape(&output, "flow.merge");
+    }
+
+    #[test]
+    fn a_merge_produces_a_list_of_items_not_a_wrapper() {
+        let ConnectorOutcome::Produced(output) = decide(&config(
+            "append",
+            None,
+            json!([[{ "id": 1 }], [{ "id": 2 }]]),
+        )) else {
+            panic!("a merge produces an output");
+        };
+
+        assert_eq!(output, json!([{ "id": 1 }, { "id": 2 }]));
     }
 }

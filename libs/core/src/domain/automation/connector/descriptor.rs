@@ -61,6 +61,14 @@ impl AuthRequirement {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionMode {
+    #[default]
+    PerItem,
+    Once,
+}
+
 /// A connector type: one action a workflow graph can pose and configure
 /// (#199 poses it, #200 executes it). Static and versioned with the binary,
 /// exactly like `events::EventDescriptor` on the trigger side.
@@ -73,9 +81,10 @@ pub struct ConnectorDescriptor {
     pub auth: AuthRequirement,
     pub fields: &'static [Field],
     pub branches: &'static [Branch],
-    /// What this connector's output looks like, so the editor can offer
-    /// `connectors.c1.output.id` in the mapping autocomplete before a single
-    /// run has ever happened.
+    pub execution: ExecutionMode,
+    /// What one item of this connector's output looks like, so the editor can
+    /// offer `$('Nom du nœud').item.json.id` in the mapping autocomplete
+    /// before a single run has ever happened.
     pub output_example: Value,
     /// The config field this connector's output is a copy of, when it is one.
     /// `flow.config` produces exactly what its `variables` field holds, so the
@@ -121,6 +130,13 @@ mod tests {
         assert_eq!(requirement.scheme_kinds(), &["bearer_token", "http_header"]);
     }
 
+    #[test]
+    fn an_execution_mode_serializes_to_the_word_the_wire_uses() {
+        assert_eq!(to_value(ExecutionMode::PerItem).unwrap(), json!("per_item"));
+        assert_eq!(to_value(ExecutionMode::Once).unwrap(), json!("once"));
+        assert_eq!(ExecutionMode::default(), ExecutionMode::PerItem);
+    }
+
     /// The catalogue leaves the crate as JSON (#203): every field must
     /// survive the trip, including the nested ones.
     #[test]
@@ -149,6 +165,7 @@ mod tests {
                 }),
             }],
             branches: &[],
+            execution: ExecutionMode::PerItem,
             output_example: json!({ "id": 42 }),
             output_mirrors_field: None,
             sample_output: json!({ "id": 42 }),
@@ -161,6 +178,7 @@ mod tests {
         assert_eq!(json["family"], "odoo");
         assert_eq!(json["output_example"], json!({ "id": 42 }));
         assert_eq!(json["sample_output"], json!({ "id": 42 }));
+        assert_eq!(json["execution"], "per_item");
         assert_eq!(
             json["auth"],
             json!({ "AnyOf": ["odoo_api", "bearer_token"] })

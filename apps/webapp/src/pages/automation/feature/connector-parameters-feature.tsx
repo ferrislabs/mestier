@@ -10,6 +10,7 @@ import { allowsGeneratedOrigin } from '#/pages/automation/lib/credential-kinds'
 import { allowedCredentialKinds } from '#/pages/automation/lib/credential-picker'
 import type { NodeIssue } from '#/pages/automation/lib/node-issues'
 import { isExpression } from '#/pages/automation/lib/parameters'
+import { previewErrorMessage } from '#/pages/automation/lib/reference-messages'
 import {
 	type ConnectorValidationError,
 	connectorLevelErrors,
@@ -181,7 +182,7 @@ function FieldPreview({
 							status: 'error',
 							message:
 								error instanceof Error
-									? error.message
+									? previewErrorMessage(error.message)
 									: 'L’évaluation a échoué.',
 						})
 					}

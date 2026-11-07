@@ -102,6 +102,7 @@ function descriptor(
 	return {
 		auth,
 		branches: [],
+		execution: 'per_item',
 		family: 'test',
 		fields: [],
 		kind,
@@ -1670,6 +1671,88 @@ describe('WorkflowPageFeature (editor) — errors that go away once fixed', () =
 				'À corriger : URL manquante',
 			),
 		).toBeDefined()
+	})
+})
+
+describe('WorkflowPageFeature (editor) — the refusal of a reference to a node', () => {
+	it('tells in French, on the node and on the field, that a node an expression reads does not run before it', async () => {
+		const withField = {
+			...descriptor('test.withfield', 'Avec un champ'),
+			fields: [
+				{
+					name: 'url',
+					label: 'URL',
+					kind: 'Text' as const,
+					required: true,
+					secret: false,
+					expression: true,
+					visible_when: null,
+				},
+			],
+		}
+		const graph: Schemas.GraphDto = {
+			connectors: [
+				{
+					id: 'c0',
+					kind: 'test.withfield',
+					version: 1,
+					config: {},
+					name: 'Tarifs',
+				},
+				{
+					id: 'c1',
+					kind: 'test.withfield',
+					version: 1,
+					config: { url: "{{ $('Tarifs').item.json.url }}" },
+				},
+			],
+			edges: [{ from: 'c0', to: 'c1', branch: null }],
+			triggers: [],
+		}
+		renderFeature((fakeApi) => {
+			fakeApi.mockGet(CONNECTORS_PATH, () => ({
+				data: { auth_schemes: [], connectors: [withField] },
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: workflowDetail({
+					graph,
+					layout: { c0: { x: 0, y: 0 }, c1: { x: 280, y: 0 } },
+				}),
+				pagination: null,
+			}))
+			fakeApi.mockMutation('put', WORKFLOW_VERSIONS_PATH, () => {
+				throw Object.assign(new Error('Invalid graph'), {
+					status: 422,
+					data: {
+						details: {
+							errors: [
+								{
+									connector_id: 'c1',
+									field: 'url',
+									message:
+										'connector `c1` field `url` references node `Tarifs`, which does not run before it',
+								},
+							],
+						},
+					},
+				})
+			})
+		})
+
+		await clickSave()
+		const node = await screen.findByTestId('rf__node-c1')
+		await within(node).findByLabelText(
+			'À corriger : Le nœud « Tarifs » n’est pas relié en amont de ce nœud.',
+		)
+
+		fireEvent.doubleClick(node)
+		const dialog = await screen.findByRole('dialog')
+		expect(
+			within(dialog).getAllByText(
+				'Le nœud « Tarifs » n’est pas relié en amont de ce nœud.',
+			).length,
+		).toBeGreaterThan(0)
 	})
 })
 

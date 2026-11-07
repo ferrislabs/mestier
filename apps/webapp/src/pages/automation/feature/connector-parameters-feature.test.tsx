@@ -6,6 +6,7 @@ import {
 	ConnectorParametersFeature,
 	type ConnectorParametersFeatureProps,
 } from '#/pages/automation/feature/connector-parameters-feature'
+import { LEGACY_SYNTAX_MESSAGE } from '#/pages/automation/lib/reference-messages'
 import {
 	BEARER_TOKEN,
 	credential as fixture,
@@ -43,6 +44,7 @@ function descriptor(
 	return {
 		auth: 'None',
 		branches: [],
+		execution: 'per_item',
 		family: 'test',
 		fields: [],
 		kind: 'test.fabricated',
@@ -64,7 +66,8 @@ function credential(
 
 const EMPTY_CONTEXT: Schemas.EvaluateContextBody = {
 	trigger: null,
-	connectors: {},
+	nodes: {},
+	position: 0,
 	loop: null,
 }
 
@@ -441,6 +444,64 @@ describe('ConnectorParametersFeature — the live preview', () => {
 		expect(onEvaluateExpression).toHaveBeenCalledWith(
 			'{{ connectors.c1.output.id }}',
 			EMPTY_CONTEXT,
+		)
+	})
+
+	it('says in French that the node an expression reads has nothing to give', async () => {
+		const onEvaluateExpression = vi
+			.fn()
+			.mockRejectedValue(
+				new Error('node `Tarifs` has no output available to this expression'),
+			)
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
+					}),
+					config: { url: "{{ $('Tarifs').item.json.url }}" },
+					onEvaluateExpression,
+				})}
+			/>,
+		)
+
+		await waitFor(
+			() => {
+				expect(
+					screen.getByText(
+						'Le nœud « Tarifs » n’existe pas ou n’est pas relié en amont de ce nœud.',
+					),
+				).toBeDefined()
+			},
+			{ timeout: 2000 },
+		)
+	})
+
+	it('says which syntax replaces connectors.<id>.output in the preview', async () => {
+		const onEvaluateExpression = vi
+			.fn()
+			.mockRejectedValue(
+				new Error(
+					"cette expression utilise l'ancienne syntaxe `connectors.<id>.output` (position 0) : utilise $('Nom du nœud').item.json…",
+				),
+			)
+		render(
+			<ConnectorParametersFeature
+				{...baseProps({
+					descriptor: descriptor({
+						fields: [field({ name: 'url', label: 'URL', expression: true })],
+					}),
+					config: { url: '{{ connectors.c1.output.url }}' },
+					onEvaluateExpression,
+				})}
+			/>,
+		)
+
+		await waitFor(
+			() => {
+				expect(screen.getByText(LEGACY_SYNTAX_MESSAGE)).toBeDefined()
+			},
+			{ timeout: 2000 },
 		)
 	})
 

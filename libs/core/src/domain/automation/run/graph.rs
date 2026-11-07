@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde_json::{Map, Value};
 
-use super::ConnectorOutcome;
+use super::items::StepItems;
 use crate::domain::automation::expression::{
     EvalBudget, ExpressionContext, ExpressionError, parse_template,
 };
@@ -88,41 +88,6 @@ pub fn descendants_via<'a>(graph: &'a Graph, start: &[&'a str]) -> HashSet<&'a s
         }
     }
     visited
-}
-
-pub fn pass_through_output(
-    graph: &Graph,
-    connector_id: &str,
-    produced_in_scope: impl Fn(&str) -> Option<Value>,
-    trigger_payload: Option<&Value>,
-) -> Value {
-    let from_predecessor = graph
-        .edges
-        .iter()
-        .filter(|edge| edge.to == connector_id)
-        .find_map(|edge| {
-            if let Some(produced) = produced_in_scope(&edge.from) {
-                return Some(produced);
-            }
-            graph
-                .triggers
-                .iter()
-                .any(|trigger| trigger.id == edge.from)
-                .then(|| trigger_payload.cloned().unwrap_or(Value::Null))
-        });
-
-    from_predecessor.unwrap_or_else(|| trigger_payload.cloned().unwrap_or(Value::Null))
-}
-
-pub fn disabled_outcome(kind: &str, output: Value) -> ConnectorOutcome {
-    match kind {
-        "flow.condition" => ConnectorOutcome::Branch {
-            taken: Branch::Then,
-            output,
-        },
-        "flow.loop" => ConnectorOutcome::Iterate { items: Vec::new() },
-        _ => ConnectorOutcome::Produced(output),
-    }
 }
 
 /// Renders a loop-nesting stack as `run_step.iteration_path`: empty outside
@@ -245,37 +210,45 @@ pub enum Next<'g, 'o> {
 pub fn next_after<'g, 'o>(
     graph: &'g Graph,
     connector_id: &str,
-    outcome: &'o ConnectorOutcome,
+    output: &'o StepItems,
 ) -> Next<'g, 'o> {
-    match outcome {
-        ConnectorOutcome::Produced(_) => Next::Follow {
+    let StepItems::Branched(lists) = output else {
+        return Next::Follow {
             targets: branch_targets(graph, connector_id, None),
             skipped: Vec::new(),
-        },
-        ConnectorOutcome::Branch { taken, .. } => {
-            let untaken = if *taken == Branch::Then {
-                Branch::Else
-            } else {
-                Branch::Then
-            };
-            let targets = branch_targets(graph, connector_id, Some(*taken));
-            let untaken_targets = branch_targets(graph, connector_id, Some(untaken));
-            let taken_reach = descendants_via(graph, &targets);
-            let untaken_reach = descendants_via(graph, &untaken_targets);
-            let mut skipped: Vec<&str> = untaken_reach.difference(&taken_reach).copied().collect();
-            skipped.sort_unstable();
-            Next::Follow { targets, skipped }
-        }
-        ConnectorOutcome::Iterate { items } => Next::Iterate {
+        };
+    };
+
+    if lists
+        .iter()
+        .any(|(branch, _)| matches!(branch, Branch::Each | Branch::After))
+    {
+        return Next::Iterate {
             after: branch_targets(graph, connector_id, Some(Branch::After)),
             each: branch_targets(graph, connector_id, Some(Branch::Each)),
-            items,
-        },
-        ConnectorOutcome::Failed { .. } | ConnectorOutcome::Wait { .. } => Next::Follow {
-            targets: Vec::new(),
-            skipped: Vec::new(),
-        },
+            items: output.list(Some(Branch::Each)),
+        };
     }
+
+    let mut targets: Vec<&str> = Vec::new();
+    let mut untaken_targets: Vec<&str> = Vec::new();
+    for (branch, items) in lists {
+        let reached = branch_targets(graph, connector_id, Some(*branch));
+        if items.is_empty() {
+            untaken_targets.extend(reached);
+        } else {
+            for target in reached {
+                if !targets.contains(&target) {
+                    targets.push(target);
+                }
+            }
+        }
+    }
+    let taken_reach = descendants_via(graph, &targets);
+    let untaken_reach = descendants_via(graph, &untaken_targets);
+    let mut skipped: Vec<&str> = untaken_reach.difference(&taken_reach).copied().collect();
+    skipped.sort_unstable();
+    Next::Follow { targets, skipped }
 }
 
 pub const MERGE_KIND: &str = "flow.merge";
@@ -296,37 +269,6 @@ pub fn merge_blockers<'a>(graph: &'a Graph, connector_id: &str) -> Vec<&'a str> 
         .filter(|from| *from != connector_id && connectors.contains(from))
         .filter(|from| seen.insert(from))
         .collect()
-}
-
-pub fn merge_inputs(
-    graph: &Graph,
-    connector_id: &str,
-    produced_in_scope: impl Fn(&str) -> Option<Value>,
-    trigger_payload: Option<&Value>,
-) -> Vec<Value> {
-    let mut seen: HashSet<&str> = HashSet::new();
-    let mut trigger_taken = false;
-    let mut inputs = Vec::new();
-
-    for edge in graph.edges.iter().filter(|edge| edge.to == connector_id) {
-        if !seen.insert(edge.from.as_str()) {
-            continue;
-        }
-        if let Some(produced) = produced_in_scope(&edge.from) {
-            inputs.push(produced);
-            continue;
-        }
-        let from_trigger = graph.triggers.iter().any(|trigger| trigger.id == edge.from);
-        if from_trigger
-            && !trigger_taken
-            && let Some(payload) = trigger_payload
-        {
-            trigger_taken = true;
-            inputs.push(payload.clone());
-        }
-    }
-
-    inputs
 }
 
 #[cfg(test)]
@@ -449,8 +391,8 @@ mod tests {
         );
     }
 
-    fn produced_outcome() -> ConnectorOutcome {
-        ConnectorOutcome::Produced(Value::Null)
+    fn produced_outcome() -> StepItems {
+        StepItems::Main(vec![json!({ "n": 1 })])
     }
 
     fn graph_of(connectors: &[&str], edges: Vec<Edge>) -> Graph {
@@ -489,58 +431,12 @@ mod tests {
         assert_eq!(merge_blockers(&graph, "m"), vec!["a"]);
     }
 
-    #[test]
-    fn merge_inputs_follow_the_edge_order_and_ignore_what_did_not_succeed() {
-        let graph = graph_of(
-            &["a", "b", "c", "m"],
-            vec![
-                edge("c", "m", None),
-                edge("a", "m", None),
-                edge("b", "m", None),
-                edge("a", "m", Some(Branch::Then)),
-            ],
-        );
-        let produced = |id: &str| match id {
-            "a" => Some(Value::from("from a")),
-            "c" => Some(Value::from("from c")),
-            _ => None,
+    fn branch(taken: Branch) -> StepItems {
+        let (then, otherwise) = match taken {
+            Branch::Then => (vec![json!({ "n": 1 })], Vec::new()),
+            _ => (Vec::new(), vec![json!({ "n": 1 })]),
         };
-
-        let inputs = merge_inputs(&graph, "m", produced, None);
-
-        assert_eq!(inputs, vec![Value::from("from c"), Value::from("from a")]);
-    }
-
-    #[test]
-    fn merge_inputs_carry_the_trigger_payload_once_for_a_trigger_edge() {
-        let mut graph = graph_of(&["a", "m"], vec![edge("a", "m", None)]);
-        for id in ["t1", "t2"] {
-            graph
-                .triggers
-                .push(crate::domain::automation::workflow::PlacedTrigger {
-                    id: id.to_string(),
-                    kind: crate::domain::automation::workflow::TriggerKind::Manual,
-                    name: None,
-                    description: None,
-                });
-        }
-        graph.edges.insert(0, edge("t1", "m", None));
-        graph.edges.insert(1, edge("t2", "m", None));
-        let payload = json!({ "n": 1 });
-        let from_a = |id: &str| (id == "a").then(|| Value::from("a"));
-
-        let with_payload = merge_inputs(&graph, "m", from_a, Some(&payload));
-        let without_payload = merge_inputs(&graph, "m", from_a, None);
-
-        assert_eq!(with_payload, vec![payload, Value::from("a")]);
-        assert_eq!(without_payload, vec![Value::from("a")]);
-    }
-
-    fn branch(taken: Branch) -> ConnectorOutcome {
-        ConnectorOutcome::Branch {
-            taken,
-            output: Value::Null,
-        }
+        StepItems::Branched(vec![(Branch::Then, then), (Branch::Else, otherwise)])
     }
 
     #[test]
@@ -620,9 +516,10 @@ mod tests {
             ],
             triggers: Vec::new(),
         };
-        let outcome = ConnectorOutcome::Iterate {
-            items: vec![Value::from(1), Value::from(2)],
-        };
+        let outcome = StepItems::Branched(vec![
+            (Branch::Each, vec![Value::from(1), Value::from(2)]),
+            (Branch::After, vec![Value::from(1), Value::from(2)]),
+        ]);
 
         let Next::Iterate { after, each, items } = next_after(&graph, "l", &outcome) else {
             panic!("an iteration iterates");
@@ -634,23 +531,75 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_outcome_goes_nowhere() {
+    fn a_branch_that_carries_items_on_both_sides_follows_both_and_skips_nothing() {
         let graph = Graph {
             connectors: vec![],
-            edges: vec![edge("a", "b", None)],
+            edges: vec![
+                edge("c", "yes", Some(Branch::Then)),
+                edge("c", "no", Some(Branch::Else)),
+                edge("c", "both", Some(Branch::Then)),
+                edge("c", "both", Some(Branch::Else)),
+            ],
             triggers: Vec::new(),
         };
-        let failed = ConnectorOutcome::Failed {
-            error: "boom".to_string(),
-        };
+        let output = StepItems::Branched(vec![
+            (Branch::Then, vec![json!({ "n": 1 })]),
+            (Branch::Else, vec![json!({ "n": 2 })]),
+        ]);
 
         assert_eq!(
-            next_after(&graph, "a", &failed),
+            next_after(&graph, "c", &output),
             Next::Follow {
-                targets: Vec::new(),
+                targets: vec!["yes", "both", "no"],
                 skipped: Vec::new(),
             }
         );
+    }
+
+    #[test]
+    fn a_branch_that_carries_nothing_anywhere_skips_both_sides() {
+        let graph = Graph {
+            connectors: vec![],
+            edges: vec![
+                edge("c", "yes", Some(Branch::Then)),
+                edge("c", "no", Some(Branch::Else)),
+            ],
+            triggers: Vec::new(),
+        };
+        let output =
+            StepItems::Branched(vec![(Branch::Then, Vec::new()), (Branch::Else, Vec::new())]);
+
+        assert_eq!(
+            next_after(&graph, "c", &output),
+            Next::Follow {
+                targets: Vec::new(),
+                skipped: vec!["no", "yes"],
+            }
+        );
+    }
+
+    #[test]
+    fn a_loop_with_no_item_still_continues_with_its_after_branch() {
+        let graph = Graph {
+            connectors: vec![],
+            edges: vec![
+                edge("l", "body", Some(Branch::Each)),
+                edge("l", "done", Some(Branch::After)),
+            ],
+            triggers: Vec::new(),
+        };
+        let output = StepItems::Branched(vec![
+            (Branch::Each, Vec::new()),
+            (Branch::After, Vec::new()),
+        ]);
+
+        let Next::Iterate { after, each, items } = next_after(&graph, "l", &output) else {
+            panic!("a loop iterates");
+        };
+
+        assert_eq!(after, vec!["done"]);
+        assert_eq!(each, vec!["body"]);
+        assert!(items.is_empty());
     }
 
     #[test]
@@ -677,11 +626,12 @@ mod tests {
 
     fn nested_ctx<'a>(
         trigger: &'a Value,
-        connectors: &'a BTreeMap<String, Value>,
+        nodes: &'a BTreeMap<String, Vec<Value>>,
     ) -> ExpressionContext<'a> {
         ExpressionContext {
             trigger: Some(trigger),
-            connectors,
+            nodes,
+            position: 0,
             loop_frame: None,
             now: fixed_now(),
         }
@@ -757,11 +707,12 @@ mod tests {
     fn a_failing_field_is_named_with_the_error_it_raised() {
         let config = serde_json::from_value::<Map<String, Value>>(json!({
             "name": "fine",
-            "url": "https://example.com/{{ connectors.c1.output.nope }}"
+            "url": "https://example.com/{{ $('Devis').item.json.nope }}"
         }))
         .unwrap();
         let trigger = json!({});
-        let connectors = BTreeMap::new();
+        let mut connectors = BTreeMap::new();
+        connectors.insert("Devis".to_string(), vec![json!({})]);
         let ctx = nested_ctx(&trigger, &connectors);
 
         let error = resolve_config_within(&config, &ctx, &mut EvalBudget::default()).unwrap_err();
@@ -770,12 +721,12 @@ mod tests {
         assert_eq!(
             error.source,
             ExpressionError::MissingPath {
-                path: "connectors.c1.output.nope".to_string()
+                path: "$('Devis').item.json.nope".to_string()
             }
         );
         assert_eq!(
             error.to_string(),
-            "field `url`: missing path `connectors.c1.output.nope`"
+            "field `url`: missing path `$('Devis').item.json.nope`"
         );
     }
 
@@ -858,10 +809,11 @@ mod tests {
         let mut config = Map::new();
         config.insert("literal".to_string(), json!("plain text"));
         config.insert("expr".to_string(), json!("{{ upper(\"hi\") }}"));
-        let connectors = BTreeMap::new();
+        let nodes = BTreeMap::new();
         let ctx = ExpressionContext {
             trigger: None,
-            connectors: &connectors,
+            nodes: &nodes,
+            position: 0,
             loop_frame: None,
             now: fixed_now(),
         };
@@ -875,10 +827,11 @@ mod tests {
     #[test]
     fn resolve_config_on_an_empty_map_is_an_empty_map() {
         let config = Map::new();
-        let connectors = BTreeMap::new();
+        let nodes = BTreeMap::new();
         let ctx = ExpressionContext {
             trigger: None,
-            connectors: &connectors,
+            nodes: &nodes,
+            position: 0,
             loop_frame: None,
             now: fixed_now(),
         };
@@ -890,10 +843,11 @@ mod tests {
     fn resolve_config_surfaces_the_first_evaluation_error() {
         let mut config = Map::new();
         config.insert("bad".to_string(), json!("{{ trigger.missing }}"));
-        let connectors = BTreeMap::new();
+        let nodes = BTreeMap::new();
         let ctx = ExpressionContext {
             trigger: None,
-            connectors: &connectors,
+            nodes: &nodes,
+            position: 0,
             loop_frame: None,
             now: fixed_now(),
         };
@@ -955,151 +909,5 @@ mod tests {
         };
 
         assert_eq!(roots(&graph), vec!["c1"]);
-    }
-
-    fn trigger(id: &str) -> crate::domain::automation::workflow::PlacedTrigger {
-        crate::domain::automation::workflow::PlacedTrigger {
-            id: id.to_string(),
-            kind: crate::domain::automation::workflow::TriggerKind::Manual,
-            name: None,
-            description: None,
-        }
-    }
-
-    fn produced(entries: &[(&str, Value)]) -> impl Fn(&str) -> Option<Value> {
-        let outputs: BTreeMap<String, Value> = entries
-            .iter()
-            .map(|(id, output)| ((*id).to_string(), output.clone()))
-            .collect();
-        move |source: &str| outputs.get(source).cloned()
-    }
-
-    #[test]
-    fn a_disabled_connector_after_a_connector_passes_that_connectors_output() {
-        let graph = Graph {
-            connectors: vec![
-                connector("c1", "http.request"),
-                connector("c2", "http.request"),
-            ],
-            edges: vec![edge("t1", "c1", None), edge("c1", "c2", None)],
-            triggers: vec![trigger("t1")],
-        };
-        let passed = pass_through_output(
-            &graph,
-            "c2",
-            produced(&[("c1", json!({ "status": 200 }))]),
-            Some(&json!({ "from": "trigger" })),
-        );
-
-        assert_eq!(passed, json!({ "status": 200 }));
-    }
-
-    #[test]
-    fn a_disabled_connector_straight_after_the_trigger_passes_the_trigger_payload() {
-        let graph = Graph {
-            connectors: vec![connector("c1", "http.request")],
-            edges: vec![edge("t1", "c1", None)],
-            triggers: vec![trigger("t1")],
-        };
-        let payload = json!({ "quote": 42 });
-
-        let passed = pass_through_output(&graph, "c1", produced(&[]), Some(&payload));
-
-        assert_eq!(passed, payload);
-    }
-
-    #[test]
-    fn with_several_predecessors_the_first_edge_that_produced_something_wins() {
-        let graph = Graph {
-            connectors: vec![
-                connector("a", "http.request"),
-                connector("b", "http.request"),
-                connector("merge", "http.request"),
-            ],
-            edges: vec![
-                edge("t1", "a", None),
-                edge("t1", "b", None),
-                edge("b", "merge", None),
-                edge("a", "merge", None),
-            ],
-            triggers: vec![trigger("t1")],
-        };
-        assert_eq!(
-            pass_through_output(
-                &graph,
-                "merge",
-                produced(&[("a", json!("from a")), ("b", json!("from b"))]),
-                None
-            ),
-            json!("from b"),
-            "b's edge comes first in the edge list"
-        );
-    }
-
-    #[test]
-    fn a_predecessor_that_never_ran_is_stepped_over() {
-        let graph = Graph {
-            connectors: vec![
-                connector("skipped", "http.request"),
-                connector("ran", "http.request"),
-                connector("merge", "http.request"),
-            ],
-            edges: vec![
-                edge("t1", "skipped", None),
-                edge("t1", "ran", None),
-                edge("skipped", "merge", None),
-                edge("ran", "merge", None),
-            ],
-            triggers: vec![trigger("t1")],
-        };
-        assert_eq!(
-            pass_through_output(
-                &graph,
-                "merge",
-                produced(&[("ran", json!("only me"))]),
-                None
-            ),
-            json!("only me")
-        );
-    }
-
-    #[test]
-    fn with_no_predecessor_and_no_payload_the_output_is_null() {
-        let graph = Graph {
-            connectors: vec![connector("c1", "http.request")],
-            edges: vec![],
-            triggers: Vec::new(),
-        };
-
-        assert_eq!(
-            pass_through_output(&graph, "c1", produced(&[]), None),
-            Value::Null
-        );
-        assert_eq!(
-            pass_through_output(&graph, "c1", produced(&[]), Some(&json!({ "a": 1 }))),
-            json!({ "a": 1 }),
-            "a root connector with no trigger edge falls back to the payload"
-        );
-    }
-
-    #[test]
-    fn a_disabled_condition_takes_its_main_branch_and_a_disabled_loop_iterates_nothing() {
-        let output = json!({ "matched": false, "items": [1, 2] });
-
-        assert_eq!(
-            disabled_outcome("flow.condition", output.clone()),
-            ConnectorOutcome::Branch {
-                taken: Branch::Then,
-                output: output.clone()
-            }
-        );
-        assert_eq!(
-            disabled_outcome("flow.loop", output.clone()),
-            ConnectorOutcome::Iterate { items: Vec::new() }
-        );
-        assert_eq!(
-            disabled_outcome("http.request", output.clone()),
-            ConnectorOutcome::Produced(output)
-        );
     }
 }

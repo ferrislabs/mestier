@@ -886,7 +886,7 @@ async fn a_nested_broken_reference_dot_segment_and_repeated_header_are_refused_w
         operation_graph(
             &collection_id,
             "getAddress",
-            json!({ "path": { "id": "{{ connectors.ghost.output.id }}" } }),
+            json!({ "path": { "id": "{{ $('ghost').item.json.id }}" } }),
         ),
     )
     .await;

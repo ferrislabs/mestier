@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -16,7 +16,7 @@ use crate::{
     domain::automation::{
         catalogue::event_catalogue,
         collection::{COLLECTION_OPERATION_KIND, Collection, NESTED_EXPRESSION_FIELDS},
-        connector::{ConnectorCatalogue, connector_catalogue},
+        connector::{ConnectorCatalogue, ExecutionMode, connector_catalogue},
         credential::Credential,
         expression::{EvalBudget, ExpressionContext, LoopFrame, json_size},
         ports::{CollectionRepository, CredentialRepository},
@@ -24,9 +24,10 @@ use crate::{
             ConnectorOutcome, DryRunDispatch, DryRunError, DryRunInput, DryRunLimit, DryRunStep,
             MAX_DRY_RUN_BYTES, MAX_DRY_RUN_DURATION, MAX_DRY_RUN_EDGES, MAX_DRY_RUN_FIELD_BYTES,
             MAX_DRY_RUN_LOOP_ITEMS, MAX_DRY_RUN_NODE_BYTES, MAX_DRY_RUN_NODES,
-            MAX_DRY_RUN_PAYLOAD_BYTES, MAX_DRY_RUN_PENDING, MAX_DRY_RUN_STEPS, Next,
-            StoredOperation, disabled_outcome, format_iteration_path, next_after,
-            pass_through_output, resolve_config_nested_within, resolve_config_within,
+            MAX_DRY_RUN_PAYLOAD_BYTES, MAX_DRY_RUN_PENDING, MAX_DRY_RUN_STEPS, MERGE_KIND, Next,
+            NodeIndex, StepItems, StoredOperation, as_item, flatten, format_iteration_path,
+            gather_lists, next_after, push_result, referenced_names, resolve_config_nested_within,
+            resolve_config_within, trigger_item,
         },
         workflow::{
             Branch, Graph, GraphError, PlacedConnector, TriggerKind, next_due, recurrence_of,
@@ -312,16 +313,6 @@ fn stored_operation<'a>(
     })
 }
 
-fn stored_output(outcome: &ConnectorOutcome) -> Result<Value, &str> {
-    match outcome {
-        ConnectorOutcome::Produced(output)
-        | ConnectorOutcome::Branch { output, .. }
-        | ConnectorOutcome::Wait { output, .. } => Ok(output.clone()),
-        ConnectorOutcome::Iterate { items } => Ok(json!({ "items": items })),
-        ConnectorOutcome::Failed { error } => Err(error),
-    }
-}
-
 struct Walk<'a, D> {
     dispatch: &'a D,
     graph: &'a Graph,
@@ -331,7 +322,7 @@ struct Walk<'a, D> {
     deadline: Instant,
     shape: Shape<'a>,
     recorder: Recorder,
-    outputs: BTreeMap<String, Value>,
+    node_index: NodeIndex<'a>,
     scopes: Vec<Scope>,
 }
 
@@ -387,7 +378,7 @@ impl<D: DryRunDispatch> Walk<'_, D> {
         Ok(())
     }
 
-    fn succeeded_output(&self, source: &str) -> Option<Value> {
+    fn succeeded_items(&self, source: &str) -> Option<StepItems> {
         let node = *self.shape.index.get(source)?;
         let found = self
             .scopes
@@ -395,14 +386,39 @@ impl<D: DryRunDispatch> Walk<'_, D> {
             .rev()
             .find_map(|scope| scope.settled.get(&node))?;
         match found {
-            Settled::Succeeded(position) => Some(
+            Settled::Succeeded(position) => Some(StepItems::from_json(
                 self.recorder.steps[*position]
                     .output
-                    .clone()
-                    .unwrap_or(Value::Null),
-            ),
+                    .as_ref()
+                    .unwrap_or(&Value::Null),
+            )),
             Settled::Skipped | Settled::Failed => None,
         }
+    }
+
+    fn loop_item(&self, loop_id: &str) -> Option<Value> {
+        self.scopes[self.scopes.len() - 1]
+            .path
+            .iter()
+            .rev()
+            .find(|step| step.loop_id == loop_id)
+            .map(|step| step.item.as_ref().clone())
+    }
+
+    fn input_lists(&self, node_id: &str, trigger: &Value) -> Vec<Vec<Value>> {
+        gather_lists(
+            self.graph,
+            node_id,
+            |from, branch| {
+                if branch == Some(Branch::Each)
+                    && let Some(item) = self.loop_item(from)
+                {
+                    return Some(vec![as_item(item)]);
+                }
+                self.succeeded_items(from).map(|items| items.sent(branch))
+            },
+            trigger,
+        )
     }
 
     fn settle(
@@ -442,94 +458,148 @@ impl<D: DryRunDispatch> Walk<'_, D> {
         let placed = self.shape.placed[node];
         let depth = self.scopes.len() - 1;
         let text = self.scopes[depth].text.clone();
+        let trigger = trigger_item(self.payloads.of(pending.trigger));
+        let descriptor = self.catalogue.get(&placed.kind, placed.version);
+        let branches = descriptor.map_or(&[][..], |descriptor| descriptor.branches);
+        let mode = descriptor.map_or(ExecutionMode::PerItem, |descriptor| descriptor.execution);
+        let lists = self.input_lists(&placed.id, &trigger);
+        let input = flatten(&lists);
+        let recorded_input = Some(Value::Array(input.clone()));
 
         if placed.disabled {
-            let output = pass_through_output(
-                self.graph,
-                &placed.id,
-                |source| self.succeeded_output(source),
-                self.payloads.of(pending.trigger),
-            );
-            let outcome = disabled_outcome(&placed.kind, output.clone());
-            self.outputs
-                .insert(placed.id.clone(), json!({ "output": output.clone() }));
+            let output = StepItems::passthrough(branches, input);
             self.settle(
                 node,
                 Settled::Succeeded(0),
-                DryRunStep::succeeded(&placed.id, &text, None, output),
+                DryRunStep::succeeded(&placed.id, &text, recorded_input, output.to_json()),
             )?;
-            self.advance(node, &outcome, pending.trigger)?;
+            self.advance(node, &output, pending.trigger)?;
             return Ok(Flow::Continue);
         }
 
-        let resolved = {
-            let scope = &self.scopes[depth];
-            let loop_frame = scope.path.last().map(|step| LoopFrame {
-                item: &step.item,
-                index: step.index,
-            });
-            let ctx = ExpressionContext {
-                trigger: self.payloads.of(pending.trigger),
-                connectors: &self.outputs,
-                loop_frame,
-                now: Utc::now(),
-            };
-            let mut budget = EvalBudget::new(MAX_DRY_RUN_NODE_BYTES);
-            if placed.kind == COLLECTION_OPERATION_KIND {
-                resolve_config_nested_within(
-                    &placed.config,
-                    &ctx,
-                    &NESTED_EXPRESSION_FIELDS,
-                    &mut budget,
-                )
-            } else {
-                resolve_config_within(&placed.config, &ctx, &mut budget)
-            }
-        };
-        let config = match resolved {
-            Ok(config) => config,
-            Err(error) => return self.fail(node, None, error.to_string()),
-        };
-
-        let Some(descriptor) = self.catalogue.get(&placed.kind, placed.version) else {
+        let Some(descriptor) = descriptor else {
             let message = format!(
                 "no connector `{}` version {} in the catalogue",
                 placed.kind, placed.version
             );
-            return self.fail(node, Some(Value::Object(config)), message);
-        };
-        let answered = self.dispatch.dry_run(
-            descriptor,
-            &DryRunInput {
-                config: &config,
-                stored: stored_operation(placed, self.collections),
-            },
-        );
-        let Some(outcome) = answered else {
-            let message = format!(
-                "no connector implementation for `{}` version {}",
-                placed.kind, placed.version
-            );
-            return self.fail(node, Some(Value::Object(config)), message);
+            return self.fail(node, recorded_input, message);
         };
 
-        match stored_output(&outcome) {
-            Err(error) => {
-                let error = error.to_owned();
-                self.fail(node, Some(Value::Object(config)), error)
+        let nested: &[&str] = if placed.kind == COLLECTION_OPERATION_KIND {
+            &NESTED_EXPRESSION_FIELDS
+        } else {
+            &[]
+        };
+        let names = referenced_names(&placed.config, nested);
+        let view = self.node_index.view(
+            &names,
+            &placed.id,
+            &trigger,
+            |id| self.loop_item(id),
+            |id| self.succeeded_items(id),
+        );
+
+        let positions: Vec<usize> = match mode {
+            ExecutionMode::PerItem => (0..input.len()).collect(),
+            ExecutionMode::Once => vec![0],
+        };
+        let mut budget = EvalBudget::new(MAX_DRY_RUN_NODE_BYTES);
+        let mut produced: Vec<Value> = Vec::new();
+        let mut then_items: Vec<Value> = Vec::new();
+        let mut else_items: Vec<Value> = Vec::new();
+        let mut iterated: Vec<Value> = Vec::new();
+        let mut parked = false;
+
+        for position in positions {
+            let resolved = {
+                let scope = &self.scopes[depth];
+                let loop_frame = scope.path.last().map(|step| LoopFrame {
+                    item: &step.item,
+                    index: step.index,
+                });
+                let ctx = ExpressionContext {
+                    trigger: self.payloads.of(pending.trigger),
+                    nodes: &view,
+                    position,
+                    loop_frame,
+                    now: Utc::now(),
+                };
+                if placed.kind == COLLECTION_OPERATION_KIND {
+                    resolve_config_nested_within(
+                        &placed.config,
+                        &ctx,
+                        &NESTED_EXPRESSION_FIELDS,
+                        &mut budget,
+                    )
+                } else {
+                    resolve_config_within(&placed.config, &ctx, &mut budget)
+                }
+            };
+            let mut config = match resolved {
+                Ok(config) => config,
+                Err(error) => return self.fail(node, recorded_input, error.to_string()),
+            };
+            if placed.kind == MERGE_KIND {
+                config.insert(
+                    "inputs".to_owned(),
+                    Value::Array(lists.iter().cloned().map(Value::Array).collect()),
+                );
             }
-            Ok(output) => {
-                self.outputs
-                    .insert(placed.id.clone(), json!({ "output": output.clone() }));
-                self.settle(
-                    node,
-                    Settled::Succeeded(0),
-                    DryRunStep::succeeded(&placed.id, &text, Some(Value::Object(config)), output),
-                )?;
-                self.advance(node, &outcome, pending.trigger)?;
-                Ok(Flow::Continue)
+
+            let answered = self.dispatch.dry_run(
+                descriptor,
+                &DryRunInput {
+                    config: &config,
+                    stored: stored_operation(placed, self.collections),
+                },
+            );
+            let Some(outcome) = answered else {
+                let message = format!(
+                    "no connector implementation for `{}` version {}",
+                    placed.kind, placed.version
+                );
+                return self.fail(node, recorded_input, message);
+            };
+
+            match outcome {
+                ConnectorOutcome::Produced(value) => push_result(&mut produced, value),
+                ConnectorOutcome::Branch { taken, .. } => {
+                    if let Some(item) = input.get(position) {
+                        if taken == Branch::Then {
+                            then_items.push(item.clone());
+                        } else {
+                            else_items.push(item.clone());
+                        }
+                    }
+                }
+                ConnectorOutcome::Iterate { items } => iterated = items,
+                ConnectorOutcome::Wait { .. } => parked = true,
+                ConnectorOutcome::Failed { error } => {
+                    return self.fail(node, recorded_input, error);
+                }
             }
         }
+
+        let output = if parked {
+            StepItems::Main(input)
+        } else if branches.contains(&Branch::Then) {
+            StepItems::Branched(vec![(Branch::Then, then_items), (Branch::Else, else_items)])
+        } else if branches.contains(&Branch::Each) {
+            iterated.truncate(MAX_DRY_RUN_LOOP_ITEMS);
+            StepItems::Branched(vec![
+                (Branch::Each, iterated.clone()),
+                (Branch::After, iterated),
+            ])
+        } else {
+            StepItems::Main(produced)
+        };
+        self.settle(
+            node,
+            Settled::Succeeded(0),
+            DryRunStep::succeeded(&placed.id, &text, recorded_input, output.to_json()),
+        )?;
+        self.advance(node, &output, pending.trigger)?;
+        Ok(Flow::Continue)
     }
 
     fn index_of(&self, from: &str, to: &str) -> Result<usize, DryRunError> {
@@ -578,11 +648,11 @@ impl<D: DryRunDispatch> Walk<'_, D> {
     fn advance(
         &mut self,
         node: usize,
-        outcome: &ConnectorOutcome,
+        output: &StepItems,
         trigger: Option<usize>,
     ) -> Result<(), DryRunError> {
         let from = self.shape.placed[node].id.as_str();
-        match next_after(self.graph, from, outcome) {
+        match next_after(self.graph, from, output) {
             Next::Follow { targets, skipped } => {
                 let mut untaken: Vec<usize> = skipped
                     .iter()
@@ -699,7 +769,7 @@ pub(crate) fn walk<D: DryRunDispatch>(
             steps: Vec::new(),
             spent: 0,
         },
-        outputs: BTreeMap::new(),
+        node_index: NodeIndex::new(graph),
         scopes: Vec::new(),
     }
     .run(&starts)
@@ -1011,6 +1081,15 @@ mod tests {
             .clone()
     }
 
+    fn sampled(kind: &str) -> Value {
+        json!([sample_of(kind)])
+    }
+
+    fn named(mut connector: PlacedConnector, name: &str) -> PlacedConnector {
+        connector.name = Some(name.to_owned());
+        connector
+    }
+
     #[test]
     fn an_unsaved_linear_graph_yields_one_step_per_node_in_walk_order() {
         let graph = graph(
@@ -1034,20 +1113,174 @@ mod tests {
                 .iter()
                 .all(|step| step.status == DryRunStatus::Succeeded && step.error.is_none())
         );
-        assert_eq!(first(&steps, "c1").output, Some(json!({ "n": 1 })));
-        assert_eq!(
-            first(&steps, "c1").input,
-            Some(json!({ "variables": { "n": 1 } }))
-        );
-        assert_eq!(first(&steps, "c2").output, Some(sample_of("http.request")));
-        assert_eq!(
-            first(&steps, "c2").input,
-            Some(json!({ "method": "GET", "url": "https://example.com/a" }))
-        );
+        assert_eq!(first(&steps, "c1").output, Some(json!([{ "n": 1 }])));
+        assert_eq!(first(&steps, "c1").input, Some(json!([{}])));
+        assert_eq!(first(&steps, "c2").output, Some(sampled("http.request")));
+        assert_eq!(first(&steps, "c2").input, Some(json!([{ "n": 1 }])));
         assert_eq!(
             first(&steps, "c3").output,
-            Some(sample_of("mestier.customer.create"))
+            Some(sampled("mestier.customer.create"))
         );
+        assert_eq!(first(&steps, "c3").input, first(&steps, "c2").output);
+    }
+
+    #[test]
+    fn a_per_item_node_fed_two_items_answers_one_sample_per_item() {
+        let graph = graph(
+            vec![
+                config_node("a", json!({ "n": 1 })),
+                config_node("b", json!({ "n": 2 })),
+                customer_node("c", "x"),
+            ],
+            vec![
+                edge("t1", "a", None),
+                edge("t1", "b", None),
+                edge("a", "c", None),
+                edge("b", "c", None),
+            ],
+        );
+        let spy = RecordingDispatch::new();
+
+        let steps = walk_with(&spy, &graph, &[], None, &json!({})).expect("the walk completes");
+
+        assert_eq!(
+            *spy.reached.borrow(),
+            [
+                "flow.config",
+                "flow.config",
+                "mestier.customer.create",
+                "mestier.customer.create"
+            ]
+        );
+        assert_eq!(
+            first(&steps, "c").input,
+            Some(json!([{ "n": 1 }, { "n": 2 }]))
+        );
+        assert_eq!(
+            first(&steps, "c").output,
+            Some(json!([
+                sample_of("mestier.customer.create"),
+                sample_of("mestier.customer.create")
+            ]))
+        );
+    }
+
+    #[test]
+    fn a_once_node_is_reached_once_whatever_the_number_of_items() {
+        let graph = graph(
+            vec![
+                config_node("a", json!({ "n": 1 })),
+                config_node("b", json!({ "n": 2 })),
+                node("w", "flow.wait", json!({ "duration": 1, "unit": "hours" })),
+                config_node("after", json!({ "ran": true })),
+            ],
+            vec![
+                edge("t1", "a", None),
+                edge("t1", "b", None),
+                edge("a", "w", None),
+                edge("b", "w", None),
+                edge("w", "after", None),
+            ],
+        );
+        let spy = RecordingDispatch::new();
+
+        let steps = walk_with(&spy, &graph, &[], None, &json!({})).expect("the walk completes");
+
+        assert_eq!(
+            spy.reached
+                .borrow()
+                .iter()
+                .filter(|kind| *kind == "flow.wait")
+                .count(),
+            1
+        );
+        assert_eq!(
+            first(&steps, "w").input,
+            Some(json!([{ "n": 1 }, { "n": 2 }]))
+        );
+        assert_eq!(
+            first(&steps, "after").output,
+            Some(json!([{ "ran": true }]))
+        );
+    }
+
+    #[test]
+    fn a_node_with_no_item_is_not_reached_but_still_answers_an_empty_list() {
+        let graph = graph(
+            vec![
+                disabled(loop_node("l", "{{ also not evaluated")),
+                customer_node("after", "x"),
+                config_node("config", json!({ "ran": true })),
+            ],
+            vec![
+                edge("t1", "l", None),
+                edge("l", "after", Some(Branch::After)),
+                edge("l", "config", Some(Branch::After)),
+            ],
+        );
+        let spy = RecordingDispatch::new();
+
+        let steps = walk_with(&spy, &graph, &[], None, &json!({})).expect("the walk completes");
+
+        assert_eq!(*spy.reached.borrow(), ["flow.config"]);
+        assert_eq!(first(&steps, "after").status, DryRunStatus::Succeeded);
+        assert_eq!(first(&steps, "after").input, Some(json!([])));
+        assert_eq!(first(&steps, "after").output, Some(json!([])));
+        assert_eq!(
+            first(&steps, "config").output,
+            Some(json!([{ "ran": true }]))
+        );
+    }
+
+    #[test]
+    fn a_trigger_is_reached_by_its_name_and_a_branch_by_the_name_of_its_condition() {
+        let mut graph = graph(
+            vec![
+                named(condition_node("cond", "{{ trigger.paid }}"), "Payé ?"),
+                config_node("yes", json!("{{ $('Payé ?').item.json }}")),
+                config_node("start", json!("{{ $('Départ').first().json }}")),
+            ],
+            vec![
+                edge("t1", "cond", None),
+                edge("t1", "start", None),
+                edge("cond", "yes", Some(Branch::Then)),
+            ],
+        );
+        graph.triggers[0].name = Some("Départ".to_owned());
+
+        let steps = walk_real(&graph, &json!({ "paid": true }));
+
+        assert_eq!(first(&steps, "yes").output, Some(json!([{ "paid": true }])));
+        assert_eq!(
+            first(&steps, "start").output,
+            Some(json!([{ "paid": true }]))
+        );
+    }
+
+    #[test]
+    fn a_loop_body_reads_the_item_of_its_own_iteration_through_the_loop_name() {
+        let graph = graph(
+            vec![
+                named(loop_node("l", "{{ trigger.items }}"), "Boucle"),
+                config_node("body", json!("{{ $('Boucle').item.json }}")),
+                config_node("done", json!("{{ $('Boucle').last().json }}")),
+            ],
+            vec![
+                edge("t1", "l", None),
+                edge("l", "body", Some(Branch::Each)),
+                edge("l", "done", Some(Branch::After)),
+            ],
+        );
+
+        let steps = walk_real(&graph, &json!({ "items": [{ "n": 1 }, { "n": 2 }] }));
+
+        let bodies: Vec<&Value> = steps
+            .iter()
+            .filter(|step| step.connector_id == "body")
+            .map(|step| step.output.as_ref().unwrap())
+            .collect();
+        assert_eq!(bodies, [&json!([{ "n": 1 }]), &json!([{ "n": 2 }])]);
+        assert_eq!(first(&steps, "done").output, Some(json!([{ "n": 2 }])));
     }
 
     #[test]
@@ -1079,7 +1312,7 @@ mod tests {
         assert_eq!(steps.len(), 3);
         assert_eq!(
             first(&steps, "c3").output,
-            Some(sample_of("odoo.create_partner"))
+            Some(sampled("odoo.create_partner"))
         );
     }
 
@@ -1106,7 +1339,7 @@ mod tests {
         assert_eq!(ids(&unpaid), ["c1", "c2", "c4", "c3"]);
         assert_eq!(
             first(&unpaid, "c1").output,
-            Some(json!({ "matched": false }))
+            Some(json!({ "Then": [], "Else": [{ "paid": false }] }))
         );
         assert_eq!(first(&unpaid, "c2").status, DryRunStatus::Skipped);
         assert_eq!(first(&unpaid, "c4").status, DryRunStatus::Skipped);
@@ -1114,6 +1347,10 @@ mod tests {
         assert!(first(&unpaid, "c2").input.is_none() && first(&unpaid, "c2").output.is_none());
 
         assert_eq!(ids(&paid), ["c1", "c3", "c2", "c4"]);
+        assert_eq!(
+            first(&paid, "c1").output,
+            Some(json!({ "Then": [{ "paid": true }], "Else": [] }))
+        );
         assert_eq!(first(&paid, "c3").status, DryRunStatus::Skipped);
         assert_eq!(first(&paid, "c2").status, DryRunStatus::Succeeded);
         assert_eq!(first(&paid, "c4").status, DryRunStatus::Succeeded);
@@ -1123,8 +1360,8 @@ mod tests {
     fn a_condition_reads_the_sample_output_of_the_node_before_it() {
         let graph = graph(
             vec![
-                http_node("c1", "https://example.com/a"),
-                condition_node("c2", "{{ connectors.c1.output.status == 200 }}"),
+                named(http_node("c1", "https://example.com/a"), "Appel"),
+                condition_node("c2", "{{ $('Appel').item.json.status == 200 }}"),
                 customer_node("c3", "then"),
                 customer_node("c4", "else"),
             ],
@@ -1138,7 +1375,10 @@ mod tests {
 
         let steps = walk_real(&graph, &json!({}));
 
-        assert_eq!(first(&steps, "c2").output, Some(json!({ "matched": true })));
+        assert_eq!(
+            first(&steps, "c2").output,
+            Some(json!({ "Then": [sample_of("http.request")], "Else": [] }))
+        );
         assert_eq!(first(&steps, "c3").status, DryRunStatus::Succeeded);
         assert_eq!(first(&steps, "c4").status, DryRunStatus::Skipped);
     }
@@ -1175,14 +1415,18 @@ mod tests {
         assert_eq!(
             bodies,
             [
-                &json!({ "name": "a" }),
-                &json!({ "name": "b" }),
-                &json!({ "name": "c" })
+                &json!([{ "valeur": "a" }]),
+                &json!([{ "valeur": "b" }]),
+                &json!([{ "valeur": "c" }])
             ]
         );
         assert_eq!(
             first(&steps, "c1").output,
-            Some(json!({ "items": ["a", "b", "c", "d", "e"] }))
+            Some(json!({ "Each": ["a", "b", "c"], "After": ["a", "b", "c"] }))
+        );
+        assert_eq!(
+            first(&steps, "c3").input,
+            Some(json!([{ "valeur": "a" }, { "valeur": "b" }, { "valeur": "c" }]))
         );
     }
 
@@ -1227,8 +1471,8 @@ mod tests {
         let graph = graph(
             vec![
                 config_node("c1", json!({ "n": 1 })),
-                disabled(customer_node("c2", "never created")),
-                http_node("c3", "https://example.com/{{ connectors.c2.output.n }}"),
+                named(disabled(customer_node("c2", "never created")), "Coupé"),
+                config_node("c3", json!("{{ $('Coupé').item.json }}")),
             ],
             vec![
                 edge("t1", "c1", None),
@@ -1240,15 +1484,12 @@ mod tests {
 
         let steps = walk_with(&spy, &graph, &[], None, &json!({})).expect("the walk completes");
 
-        assert_eq!(*spy.reached.borrow(), ["flow.config", "http.request"]);
+        assert_eq!(*spy.reached.borrow(), ["flow.config", "flow.config"]);
         let passed = first(&steps, "c2");
         assert_eq!(passed.status, DryRunStatus::Succeeded);
         assert_eq!(passed.output, first(&steps, "c1").output);
-        assert!(passed.input.is_none());
-        assert_eq!(
-            first(&steps, "c3").input,
-            Some(json!({ "method": "GET", "url": "https://example.com/1" }))
-        );
+        assert_eq!(passed.input, first(&steps, "c1").output);
+        assert_eq!(first(&steps, "c3").output, Some(json!([{ "n": 1 }])));
     }
 
     #[test]
@@ -1268,9 +1509,16 @@ mod tests {
 
         let steps = walk_real(&graph, &json!({}));
 
-        assert_eq!(first(&steps, "c2").output, Some(json!({ "n": 1 })));
-        assert_eq!(first(&steps, "c3").output, Some(json!({ "n": 1 })));
-        assert!(first(&steps, "c2").input.is_none() && first(&steps, "c3").input.is_none());
+        assert_eq!(
+            first(&steps, "c2").output,
+            Some(json!({ "Then": [{ "n": 1 }], "Else": [] }))
+        );
+        assert_eq!(
+            first(&steps, "c3").output,
+            Some(json!({ "Each": [], "After": [] }))
+        );
+        assert_eq!(first(&steps, "c2").input, Some(json!([{ "n": 1 }])));
+        assert_eq!(first(&steps, "c3").input, Some(json!([{ "n": 1 }])));
     }
 
     #[test]
@@ -1284,7 +1532,7 @@ mod tests {
 
         assert_eq!(
             first(&steps, "c1").output,
-            Some(json!({ "quote_id": "q-1" }))
+            Some(json!([{ "quote_id": "q-1" }]))
         );
     }
 
@@ -1321,10 +1569,10 @@ mod tests {
     fn a_reference_to_an_output_that_does_not_exist_fails_the_node_that_references_it() {
         let graph = graph(
             vec![
-                http_node("c1", "https://example.com/a"),
+                named(http_node("c1", "https://example.com/a"), "Appel"),
                 http_node(
                     "c2",
-                    "https://example.com/{{ connectors.c1.output.body.nope }}",
+                    "https://example.com/{{ $('Appel').item.json.body.nope }}",
                 ),
                 customer_node("c3", "never reached"),
             ],
@@ -1340,10 +1588,11 @@ mod tests {
         assert_eq!(ids(&steps), ["c1", "c2", "c3"]);
         let broken = first(&steps, "c2");
         assert_eq!(broken.status, DryRunStatus::Failed);
-        assert!(broken.input.is_none() && broken.output.is_none());
+        assert_eq!(broken.input, first(&steps, "c1").output);
+        assert!(broken.output.is_none());
         let message = broken.error.as_deref().unwrap();
         assert!(
-            message.contains("connectors.c1.output.body.nope"),
+            message.contains("$('Appel').item.json.body.nope"),
             "{broken:?}"
         );
         assert!(message.starts_with("field `url`"), "{message}");
@@ -1354,7 +1603,7 @@ mod tests {
     #[test]
     fn a_reference_to_a_node_that_is_not_in_the_graph_fails_the_referencing_node() {
         let graph = graph(
-            vec![customer_node("c1", "{{ connectors.ghost.output.name }}")],
+            vec![customer_node("c1", "{{ $('Fantôme').item.json.name }}")],
             vec![edge("t1", "c1", None)],
         );
 
@@ -1362,7 +1611,7 @@ mod tests {
 
         let broken = first(&steps, "c1");
         assert_eq!(broken.status, DryRunStatus::Failed);
-        assert!(broken.error.as_deref().unwrap().contains("ghost"));
+        assert!(broken.error.as_deref().unwrap().contains("Fantôme"));
     }
 
     #[test]
@@ -1370,8 +1619,8 @@ mod tests {
         let graph = graph(
             vec![
                 condition_node("c1", "{{ false }}"),
-                config_node("then", json!({ "x": 1 })),
-                customer_node("else", "{{ connectors.then.output.x }}"),
+                named(config_node("then", json!({ "x": 1 })), "Alors"),
+                customer_node("else", "{{ $('Alors').item.json.x }}"),
             ],
             vec![
                 edge("t1", "c1", None),
@@ -1385,13 +1634,7 @@ mod tests {
         assert_eq!(first(&steps, "then").status, DryRunStatus::Skipped);
         let broken = first(&steps, "else");
         assert_eq!(broken.status, DryRunStatus::Failed);
-        assert!(
-            broken
-                .error
-                .as_deref()
-                .unwrap()
-                .contains("connectors.then.output.x")
-        );
+        assert!(broken.error.as_deref().unwrap().contains("Alors"));
     }
 
     #[test]
@@ -1405,7 +1648,7 @@ mod tests {
 
         let failed = first(&steps, "c1");
         assert_eq!(failed.status, DryRunStatus::Failed);
-        assert_eq!(failed.input, Some(json!({ "predicate": "not a boolean" })));
+        assert_eq!(failed.input, Some(json!([{}])));
         assert!(failed.error.as_deref().unwrap().contains("boolean"));
     }
 
@@ -1445,9 +1688,9 @@ mod tests {
         let graph = graph(
             vec![
                 config_node("c1", json!({ "n": 1 })),
-                config_node("c2", json!({ "from": "c2" })),
-                config_node("c3", json!({ "from": "c3" })),
-                customer_node("c4", "{{ connectors.c2.output.from }}"),
+                named(config_node("c2", json!({ "from": "c2" })), "Gauche"),
+                named(config_node("c3", json!({ "from": "c3" })), "Droite"),
+                config_node("c4", json!("{{ $('Gauche').item.json }}")),
             ],
             vec![
                 edge("t1", "c1", None),
@@ -1466,7 +1709,11 @@ mod tests {
                 .iter()
                 .all(|step| step.status == DryRunStatus::Succeeded)
         );
-        assert_eq!(first(&steps, "c4").input, Some(json!({ "name": "c2" })));
+        assert_eq!(
+            first(&steps, "c4").input,
+            Some(json!([{ "from": "c2" }, { "from": "c3" }]))
+        );
+        assert_eq!(first(&steps, "c4").output, Some(json!([{ "from": "c2" }])));
     }
 
     #[test]
@@ -1504,7 +1751,11 @@ mod tests {
         );
         assert_eq!(
             first(&steps, "w1").output,
-            Some(catalogue.get("flow.wait", 1).unwrap().sample_output.clone())
+            Some(json!([catalogue
+                .get("flow.wait", 1)
+                .unwrap()
+                .sample_output
+                .clone()]))
         );
         assert_eq!(
             first(&steps, "m1").output,
@@ -1525,8 +1776,8 @@ mod tests {
                 config_node("c1", json!({})),
                 config_node("c2", json!({})),
                 config_node("c3", json!({})),
-                config_node("c5", json!({ "late": "yes" })),
-                customer_node("c4", "{{ connectors.c5.output.late }}"),
+                named(config_node("c5", json!({ "late": "yes" })), "Tard"),
+                config_node("c4", json!("{{ $('Tard').item.json }}")),
             ],
             vec![
                 edge("t1", "c1", None),
@@ -1542,7 +1793,7 @@ mod tests {
 
         assert_eq!(ids(&steps), ["c1", "c2", "c3", "c5", "c4"]);
         assert_eq!(first(&steps, "c4").status, DryRunStatus::Succeeded);
-        assert_eq!(first(&steps, "c4").input, Some(json!({ "name": "yes" })));
+        assert_eq!(first(&steps, "c4").output, Some(json!([{ "late": "yes" }])));
     }
 
     #[test]
@@ -1570,9 +1821,9 @@ mod tests {
     fn every_entry_reads_the_example_of_its_own_trigger() {
         let mut graph = graph(
             vec![
-                customer_node("c1", "{{ to_string(trigger.x) }}"),
-                customer_node("c2", "{{ to_string(trigger.x) }}"),
-                customer_node("c3", "{{ to_string(trigger.x) }}"),
+                config_node("c1", json!("{{ trigger }}")),
+                config_node("c2", json!("{{ trigger }}")),
+                config_node("c3", json!("{{ trigger }}")),
             ],
             vec![
                 edge("t1", "c1", None),
@@ -1604,9 +1855,11 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(first(&all, "c1").input, Some(json!({ "name": "1" })));
-        assert_eq!(first(&all, "c2").input, Some(json!({ "name": "2" })));
-        assert_eq!(first(&all, "c3").input, Some(json!({ "name": "1" })));
+        assert_eq!(first(&all, "c1").output, Some(json!([{ "x": 1 }])));
+        assert_eq!(first(&all, "c2").output, Some(json!([{ "x": 2 }])));
+        assert_eq!(first(&all, "c3").output, Some(json!([{ "x": 1 }])));
+        assert_eq!(first(&all, "c1").input, Some(json!([{ "x": 1 }])));
+        assert_eq!(first(&all, "c2").input, Some(json!([{ "x": 2 }])));
         assert_eq!(ids(&only_t2), ["c2"]);
     }
 
@@ -1614,8 +1867,8 @@ mod tests {
     fn a_node_fed_by_the_trigger_and_by_another_node_waits_for_that_node() {
         let graph = graph(
             vec![
-                config_node("c1", json!({ "v": 1 })),
-                customer_node("c2", "{{ to_string(connectors.c1.output.v) }}"),
+                named(config_node("c1", json!({ "v": 1 })), "Source"),
+                config_node("c2", json!("{{ $('Source').item.json }}")),
             ],
             vec![
                 edge("t1", "c2", None),
@@ -1629,7 +1882,8 @@ mod tests {
 
         assert_eq!(ids(&steps), ["c1", "c2"]);
         assert_eq!(ids(&selected), ["c1", "c2"]);
-        assert_eq!(first(&steps, "c2").input, Some(json!({ "name": "1" })));
+        assert_eq!(first(&steps, "c2").output, Some(json!([{ "v": 1 }])));
+        assert_eq!(first(&steps, "c2").input, Some(json!([{}, { "v": 1 }])));
     }
 
     #[test]
@@ -1694,13 +1948,12 @@ mod tests {
 
     #[test]
     fn a_walk_whose_steps_would_weigh_more_than_the_budget_is_refused() {
-        let bulky = "x".repeat(1_000_000);
         let graph = graph(
             vec![
                 loop_node("l1", "{{ trigger.items }}"),
                 loop_node("l2", "{{ trigger.items }}"),
                 loop_node("l3", "{{ trigger.items }}"),
-                customer_node("leaf", &bulky),
+                customer_node("leaf", "x"),
             ],
             vec![
                 edge("t1", "l1", None),
@@ -1710,12 +1963,14 @@ mod tests {
             ],
         );
 
+        let pad = json!({ "pad": "x".repeat(600_000) });
+
         let error = walk_with(
             &ConnectorDryRun,
             &graph,
             &[],
             None,
-            &json!({ "items": [1, 2, 3] }),
+            &json!({ "items": [pad.clone(), pad.clone(), pad] }),
         )
         .unwrap_err();
 
@@ -1904,7 +2159,10 @@ mod tests {
         .unwrap_err();
 
         assert!(
-            matches!(error, DryRunError::TooManySteps { .. }),
+            matches!(
+                error,
+                DryRunError::TooManySteps { .. } | DryRunError::TooLarge { .. }
+            ),
             "{error:?}"
         );
         assert!(started.elapsed() < std::time::Duration::from_secs(5));
@@ -2126,12 +2384,9 @@ mod tests {
 
         assert_eq!(
             first(&steps, "c1").output,
-            Some(json!({ "status": 201, "headers": {}, "body": { "city": "Lyon" } }))
+            Some(json!([{ "status": 201, "headers": {}, "body": { "city": "Lyon" } }]))
         );
-        assert_eq!(
-            first(&steps, "c1").input,
-            Some(json!({ "path": { "id": "a-1" } }))
-        );
+        assert_eq!(first(&steps, "c1").input, Some(json!([{ "id": "a-1" }])));
     }
 
     #[test]
@@ -2455,7 +2710,7 @@ mod tests {
 
         assert_eq!(
             first(&steps, "c1").output,
-            Some(json!({ "status": 201, "headers": {}, "body": { "city": "Lyon" } }))
+            Some(json!([{ "status": 201, "headers": {}, "body": { "city": "Lyon" } }]))
         );
         let DryRunError::InvalidGraph(errors) = &refused else {
             panic!("expected InvalidGraph, got {refused:?}");
@@ -2490,10 +2745,13 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            first(&sampled, "c1").input,
-            Some(json!({ "name": "018f3b2a-0000-7000-8000-000000000001" }))
+            first(&sampled, "c1").input.as_ref().unwrap()[0]["quote_id"],
+            "018f3b2a-0000-7000-8000-000000000001"
         );
-        assert_eq!(first(&given, "c1").input, Some(json!({ "name": "q-9" })));
+        assert_eq!(
+            first(&given, "c1").input,
+            Some(json!([{ "quote_id": "q-9" }]))
+        );
     }
 
     #[tokio::test]
@@ -2518,10 +2776,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            first(&steps, "c1").input,
-            Some(json!({ "name": "018f3b2a-0000-7000-8000-000000000001" }))
+            first(&steps, "c1").input.as_ref().unwrap()[0]["quote_id"],
+            "018f3b2a-0000-7000-8000-000000000001"
         );
-        assert_eq!(first(&steps, "c2").input, Some(json!({ "name": "{}" })));
+        assert_eq!(first(&steps, "c2").input, Some(json!([{}])));
     }
 
     #[tokio::test]
@@ -2727,13 +2985,17 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            first(&sampled, "c1").input,
-            Some(json!({ "name": "paiement.recu" }))
+            first(&sampled, "c1").input.as_ref().unwrap()[0]["evenement"],
+            "paiement.recu"
         );
         let scheduled = first(&sampled, "c2").input.clone().unwrap();
-        let instant = chrono::DateTime::parse_from_rfc3339(scheduled["name"].as_str().unwrap())
-            .expect("an RFC 3339 instant");
+        let instant =
+            chrono::DateTime::parse_from_rfc3339(scheduled[0]["scheduled_for"].as_str().unwrap())
+                .expect("an RFC 3339 instant");
         assert!(instant > chrono::Utc::now());
-        assert_eq!(first(&given, "c1").input, Some(json!({ "name": "autre" })));
+        assert_eq!(
+            first(&given, "c1").input.as_ref().unwrap()[0]["evenement"],
+            "autre"
+        );
     }
 }

@@ -176,6 +176,7 @@ function descriptor(
 	return {
 		auth: 'None',
 		branches,
+		execution: 'per_item',
 		family: 'test',
 		fields,
 		kind,
@@ -1196,7 +1197,7 @@ describe('WorkflowCanvas — deleting', () => {
 			graph: graphWith(
 				[
 					connector('c2', SIMPLE_KIND, {
-						url: '{{ connectors.c1.output.id }}',
+						url: "{{ $('Supprimé').item.json.id }}",
 					}),
 				],
 				[{ from: 't1', to: 'c2', branch: null }],
@@ -1209,7 +1210,7 @@ describe('WorkflowCanvas — deleting', () => {
 		await screen.findByTestId('rf__node-c2')
 		expect(
 			within(screen.getByTestId('rf__node-c2')).getByRole('img', {
-				name: /À corriger : Le nœud « c1 » n’existe plus\./,
+				name: /À corriger : Le nœud « Supprimé » n’existe plus\./,
 			}),
 		).toBeDefined()
 	})
@@ -1468,14 +1469,14 @@ describe('WorkflowCanvas — the node details', () => {
 					name: /from_simple, texte|from_simple, nombre/,
 				})
 				.getAttribute('aria-label'),
-		).toContain('{{ connectors.c2.output.from_simple }}')
+		).toContain("{{ $('Simple').item.json.from_simple }}")
 	})
 
 	it('fills the trigger entry from the subscribed event before any run exists', async () => {
 		renderHarness({
 			graph: graphWith(
 				[connector('c1', SIMPLE_KIND)],
-				[],
+				[{ from: 't1', to: 'c1', branch: null }],
 				[trigger('t1', { Events: ['quote.accepted'] })],
 			),
 			layout: layoutOf(['t1', -220, 0], ['c1', 0, 0]),
@@ -1490,13 +1491,17 @@ describe('WorkflowCanvas — the node details', () => {
 			within(dialog)
 				.getByRole('button', { name: /quote_id/ })
 				.getAttribute('aria-label'),
-		).toContain('{{ trigger.quote_id }}')
+		).toContain("{{ $('quote.accepted').item.json.quote_id }}")
 	})
 
 	it('shows the real values on the Exécution view once a last run exists', async () => {
 		const user = userEvent.setup()
 		renderHarness({
-			graph: graphWith([connector('c1', SIMPLE_KIND)], [], [trigger('t1')]),
+			graph: graphWith(
+				[connector('c1', SIMPLE_KIND)],
+				[{ from: 't1', to: 'c1', branch: null }],
+				[trigger('t1')],
+			),
 			layout: layoutOf(['t1', -220, 0], ['c1', 0, 0]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			lastRun: { triggerPayload: { quote_id: 'q-real' }, connectorOutputs: {} },
@@ -1548,7 +1553,7 @@ describe('WorkflowCanvas — the node details', () => {
 						id: 's1',
 						iteration_path: '',
 						status: 'succeeded',
-						output: { created_id: 'abc-123' },
+						output: [{ created_id: 'abc-123' }],
 					},
 				],
 			]),
@@ -1701,7 +1706,7 @@ describe('WorkflowCanvas — the result of the last run', () => {
 			graph: graphWith(
 				[
 					connector('c1', SIMPLE_KIND, {
-						url: '{{ connectors.gone.output.id }}',
+						url: "{{ $('Disparu').item.json.id }}",
 					}),
 				],
 				[],
@@ -1715,7 +1720,9 @@ describe('WorkflowCanvas — the result of the last run', () => {
 		await screen.findByTestId('rf__node-c1')
 
 		expect(badgesOf('c1')).toEqual([
-			expect.stringMatching(/^À corriger : Le nœud « gone » n’existe plus\./),
+			expect.stringMatching(
+				/^À corriger : Le nœud « Disparu » n’existe plus\./,
+			),
 		])
 		expect(frameOf('c1')).toContain('border-state-alert')
 		expect(frameOf('c1')).not.toContain('border-(--auto-success)')
@@ -1896,6 +1903,43 @@ describe('WorkflowCanvas — the node menu', () => {
 		await user.click(screen.getByRole('button', { name: 'Renommer' }))
 
 		expect(saved(onSaveSpy).graph.connectors[0].name).toBe('Nouveau nom')
+	})
+
+	it('rewrites in the other nodes the references to a node that is renamed', async () => {
+		const user = userEvent.setup()
+		const { onSaveSpy } = renderHarness({
+			graph: graphWith(
+				[
+					{ ...connector('c1', SIMPLE_KIND), name: 'Tarifs' },
+					connector('c2', SIMPLE_KIND, {
+						url: "{{ $('Tarifs').item.json.url }}",
+						body: { lignes: [{ code: "{{ $('Tarifs').item.json.code }}" }] },
+					}),
+				],
+				[{ from: 'c1', to: 'c2', branch: null }],
+			),
+			layout: layoutOf(['c1', 0, 0], ['c2', 300, 0]),
+			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
+		})
+
+		fireEvent.contextMenu(await screen.findByTestId('rf__node-c1'), {
+			clientX: 200,
+			clientY: 150,
+		})
+		await user.click(await screen.findByRole('menuitem', { name: /Renommer/ }))
+		const input = await screen.findByLabelText('Nom du nœud')
+		await user.clear(input)
+		await user.type(input, 'Prix fournisseur')
+		await user.click(screen.getByRole('button', { name: 'Renommer' }))
+
+		const { graph } = saved(onSaveSpy)
+		expect(graph.connectors[0].name).toBe('Prix fournisseur')
+		expect(graph.connectors[1].config).toEqual({
+			url: "{{ $('Prix fournisseur').item.json.url }}",
+			body: {
+				lignes: [{ code: "{{ $('Prix fournisseur').item.json.code }}" }],
+			},
+		})
 	})
 
 	it('disables and re-enables a node, marking it on the canvas', async () => {
@@ -2175,7 +2219,11 @@ describe('WorkflowCanvas — testing the workflow', () => {
 
 	it('is not offered to somebody who cannot test, nor in the node details', async () => {
 		renderHarness({
-			graph: graphWith([connector('c1', SIMPLE_KIND)], [], [trigger('t1')]),
+			graph: graphWith(
+				[connector('c1', SIMPLE_KIND)],
+				[{ from: 't1', to: 'c1', branch: null }],
+				[trigger('t1')],
+			),
 			layout: layoutOf(['t1', -220, 0], ['c1', 0, 0]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			canTest: false,
@@ -2195,7 +2243,11 @@ describe('WorkflowCanvas — testing the workflow', () => {
 
 	it('fills the output column and the input tab of a node from the dry run, and the real run no longer shows for it', async () => {
 		renderHarness({
-			graph: graphWith([connector('c1', SIMPLE_KIND)], [], [trigger('t1')]),
+			graph: graphWith(
+				[connector('c1', SIMPLE_KIND)],
+				[{ from: 't1', to: 'c1', branch: null }],
+				[trigger('t1')],
+			),
 			layout: layoutOf(['t1', -220, 0], ['c1', 0, 0]),
 			descriptors: descriptorMap(SIMPLE_DESCRIPTOR),
 			runSteps: new Map([
@@ -2208,7 +2260,7 @@ describe('WorkflowCanvas — testing the workflow', () => {
 						id: 's1',
 						iteration_path: '',
 						status: 'succeeded',
-						output: { created_id: 'reel-1' },
+						output: [{ created_id: 'reel-1' }],
 					},
 				],
 			]),
@@ -2220,8 +2272,8 @@ describe('WorkflowCanvas — testing the workflow', () => {
 							connector_id: 'c1',
 							iteration_path: '',
 							status: 'succeeded',
-							input: { url: 'https://a.test' },
-							output: { created_id: 'blanc-1' },
+							input: [{ url: 'https://a.test' }],
+							output: [{ created_id: 'blanc-1' }],
 							error: null,
 						},
 					],

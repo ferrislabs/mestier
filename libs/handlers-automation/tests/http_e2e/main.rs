@@ -206,7 +206,7 @@ async fn a_valid_expression_resolves_against_the_supplied_context() {
             "template": "{{ trigger.name }}",
             "context": {
                 "trigger": { "name": "Brioche" },
-                "connectors": {},
+                "nodes": {},
                 "loop": null
             }
         }))
@@ -223,6 +223,112 @@ async fn a_valid_expression_resolves_against_the_supplied_context() {
 
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
+async fn a_node_reference_resolves_the_item_of_the_same_rank_as_the_position() {
+    let app = harness::start().await;
+    let nodes = json!({
+        "Rechercher les devis": [
+            { "client": { "nom": "Ada" } },
+            { "client": { "nom": "Grace" } }
+        ]
+    });
+
+    let answer = async |template: &str, position: u64| {
+        client()
+            .post(app.evaluate_expression_url())
+            .bearer_auth(&app.token)
+            .json(&json!({
+                "template": template,
+                "context": { "trigger": null, "nodes": nodes, "position": position, "loop": null }
+            }))
+            .send()
+            .await
+            .expect("the api answers the evaluate call")
+    };
+
+    let second = answer("{{ $('Rechercher les devis').item.json.client.nom }}", 1).await;
+    let everyone = answer("{{ $('Rechercher les devis').all() }}", 0).await;
+    let sentence = answer(
+        "Bonjour {{ $('Rechercher les devis').first().json.client.nom }}",
+        1,
+    )
+    .await;
+
+    assert_eq!(second.status(), 200);
+    let second: Value = second.json().await.expect("json");
+    assert_eq!(second["data"]["value"], json!("Grace"));
+    let everyone: Value = everyone.json().await.expect("json");
+    assert_eq!(
+        everyone["data"]["value"],
+        json!([{ "client": { "nom": "Ada" } }, { "client": { "nom": "Grace" } }])
+    );
+    let sentence: Value = sentence.json().await.expect("json");
+    assert_eq!(sentence["data"]["value"], json!("Bonjour Ada"));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_broken_node_reference_is_refused_naming_the_node() {
+    let app = harness::start().await;
+
+    for (template, nodes, expected) in [
+        ("{{ $('Absent').item.json.x }}", json!({}), "Absent"),
+        ("{{ $('Vide').item.json.x }}", json!({ "Vide": [] }), "Vide"),
+    ] {
+        let response = client()
+            .post(app.evaluate_expression_url())
+            .bearer_auth(&app.token)
+            .json(&json!({
+                "template": template,
+                "context": { "trigger": null, "nodes": nodes, "loop": null }
+            }))
+            .send()
+            .await
+            .expect("the api answers the evaluate call");
+
+        assert_eq!(response.status(), 422, "{template}");
+        let body: Value = response.json().await.expect("the answer is json");
+        assert!(
+            body["message"].as_str().unwrap().contains(expected),
+            "{body}"
+        );
+    }
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn the_old_connectors_syntax_is_refused_naming_the_new_one() {
+    let app = harness::start().await;
+
+    let response = client()
+        .post(app.evaluate_expression_url())
+        .bearer_auth(&app.token)
+        .json(&json!({
+            "template": "{{ connectors.c1.output.total }}",
+            "context": { "trigger": null, "nodes": {}, "loop": null }
+        }))
+        .send()
+        .await
+        .expect("the api answers the evaluate call");
+
+    assert_eq!(response.status(), 422);
+    let body: Value = response.json().await.expect("the answer is json");
+    assert!(
+        body["message"]
+            .as_str()
+            .unwrap()
+            .contains("$('Nom du nœud').item.json"),
+        "{body}"
+    );
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
 async fn a_missing_path_is_refused_naming_the_path() {
     let app = harness::start().await;
 
@@ -231,7 +337,7 @@ async fn a_missing_path_is_refused_naming_the_path() {
         .bearer_auth(&app.token)
         .json(&json!({
             "template": "{{ trigger.missing }}",
-            "context": { "trigger": {}, "connectors": {}, "loop": null }
+            "context": { "trigger": {}, "nodes": {}, "loop": null }
         }))
         .send()
         .await
@@ -260,7 +366,7 @@ async fn loop_outside_a_loop_frame_is_refused() {
         .bearer_auth(&app.token)
         .json(&json!({
             "template": "{{ loop.item }}",
-            "context": { "trigger": null, "connectors": {}, "loop": null }
+            "context": { "trigger": null, "nodes": {}, "loop": null }
         }))
         .send()
         .await
@@ -276,9 +382,9 @@ async fn loop_outside_a_loop_frame_is_refused() {
 async fn an_oversized_context_is_refused() {
     let app = harness::start().await;
 
-    let mut connectors = serde_json::Map::new();
+    let mut nodes = serde_json::Map::new();
     for index in 0..300 {
-        connectors.insert(format!("c{index}"), json!(true));
+        nodes.insert(format!("Noeud {index}"), json!([{ "ok": true }]));
     }
 
     let response = client()
@@ -286,7 +392,7 @@ async fn an_oversized_context_is_refused() {
         .bearer_auth(&app.token)
         .json(&json!({
             "template": "{{ 1 }}",
-            "context": { "trigger": null, "connectors": connectors, "loop": null }
+            "context": { "trigger": null, "nodes": nodes, "loop": null }
         }))
         .send()
         .await
@@ -307,7 +413,7 @@ async fn a_view_only_member_can_evaluate_an_expression() {
         .bearer_auth(&app.view_only_token)
         .json(&json!({
             "template": "{{ 1 }}",
-            "context": { "trigger": null, "connectors": {}, "loop": null }
+            "context": { "trigger": null, "nodes": {}, "loop": null }
         }))
         .send()
         .await
@@ -328,7 +434,7 @@ async fn a_caller_without_view_automation_is_refused_evaluating_an_expression() 
         .bearer_auth(&app.no_role_token)
         .json(&json!({
             "template": "{{ 1 }}",
-            "context": { "trigger": null, "connectors": {}, "loop": null }
+            "context": { "trigger": null, "nodes": {}, "loop": null }
         }))
         .send()
         .await

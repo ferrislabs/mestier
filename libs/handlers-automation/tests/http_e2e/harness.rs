@@ -251,6 +251,13 @@ impl App {
         format!("{}/dry-run", self.workflows_url())
     }
 
+    pub fn connectors_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/connectors",
+            self.base_url, self.organization_id
+        )
+    }
+
     pub fn evaluate_expression_url(&self) -> String {
         format!(
             "{}/api/v1/organizations/{}/automation/expressions/evaluate",

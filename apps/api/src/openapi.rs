@@ -417,6 +417,7 @@ impl Modify for SecurityAddon {
         automation::response::SelectOptionResponse,
         automation::response::VisibleWhenResponse,
         automation::response::AuthRequirementResponse,
+        automation::response::ExecutionModeResponse,
         automation::response::EventDescriptorResponse,
         automation::response::WorkflowResponse,
         automation::response::WorkflowDetailResponse,

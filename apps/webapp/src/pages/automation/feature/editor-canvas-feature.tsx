@@ -76,8 +76,8 @@ import {
 	shortcutLabels,
 } from '#/pages/automation/lib/shortcuts'
 import {
-	connectorOutput,
 	type LastRunData,
+	nodeOutput,
 	type UpstreamSources,
 } from '#/pages/automation/lib/upstream-entries'
 import type { ConnectorValidationError } from '#/pages/automation/lib/validation'
@@ -464,11 +464,9 @@ function EditorCanvas({
 			nodeIssuesByNode(
 				graph.nodes,
 				graph.edges,
-				(connectorId) => {
-					const node = graph.nodes.find(
-						(candidate) => candidate.id === connectorId,
-					)
-					return node ? connectorOutput(node, sources) : undefined
+				(nodeId) => {
+					const node = graph.nodes.find((candidate) => candidate.id === nodeId)
+					return node ? nodeOutput(node, sources) : undefined
 				},
 				collectionReads,
 			),

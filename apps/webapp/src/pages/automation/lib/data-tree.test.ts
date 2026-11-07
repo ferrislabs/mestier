@@ -6,22 +6,36 @@ import {
 } from '#/pages/automation/lib/data-tree'
 
 describe('toEvaluateContext', () => {
-	it('wraps each connector output under an "output" key, matching the grammar', () => {
+	it('gives the items of each node under its name, at the first position', () => {
 		const context = toEvaluateContext({
 			trigger: { a: 1 },
-			connectors: [{ id: 'c1', label: 'x', output: { id: 42 } }],
+			nodes: [{ label: 'Tarifs', items: [{ id: 42 }, { id: 43 }] }],
 		})
 
 		expect(context).toEqual({
 			trigger: { a: 1 },
-			connectors: { c1: { output: { id: 42 } } },
+			nodes: { Tarifs: [{ id: 42 }, { id: 43 }] },
+			position: 0,
 			loop: null,
 		})
 	})
 
-	it('passes an empty connector list through as an empty object', () => {
-		const context = toEvaluateContext({ trigger: null, connectors: [] })
-		expect(context.connectors).toEqual({})
+	it('passes an empty node list through as an empty object', () => {
+		const context = toEvaluateContext({ trigger: null, nodes: [] })
+		expect(context.nodes).toEqual({})
+	})
+
+	it('reads the item at the position asked for', () => {
+		expect(toEvaluateContext({ trigger: null, nodes: [] }, 2).position).toBe(2)
+	})
+
+	it('carries the pass of the loop the node is in', () => {
+		expect(
+			toEvaluateContext({ trigger: null, nodes: [] }, 0, {
+				index: 1,
+				item: 'b',
+			}).loop,
+		).toEqual({ index: 1, item: 'b' })
 	})
 })
 

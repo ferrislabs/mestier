@@ -2,8 +2,10 @@ use std::borrow::Cow;
 
 use serde_json::Value;
 
-use super::ast::{BinOp, Expr, Part, Path, PathRoot, PathSegment, Template, TemplateKind, UnaryOp};
-use super::budget::{EvalBudget, json_size};
+use super::ast::{
+    BinOp, Expr, NodeSelector, Part, Path, PathRoot, PathSegment, Template, TemplateKind, UnaryOp,
+};
+use super::budget::{EvalBudget, json_size, json_size_of};
 use super::context::ExpressionContext;
 use super::error::ExpressionError;
 
@@ -30,7 +32,15 @@ impl Template {
                         }
                         Part::Expr(Expr::Path(path)) => {
                             let resolved = resolve_path(path, ctx)?;
-                            push_stringified(&mut out, &resolved, budget)?;
+                            match resolved {
+                                Resolved::Value(value) => {
+                                    push_stringified(&mut out, &value, budget)?;
+                                }
+                                Resolved::All(items) => {
+                                    budget.charge(json_size_of(items))?;
+                                    out.push_str(&serde_json::to_string(items).unwrap_or_default());
+                                }
+                            }
                         }
                         Part::Expr(expr) => {
                             let value = eval_expr(expr, ctx, budget)?;
@@ -53,8 +63,8 @@ fn eval_expr(
         Expr::Literal(value) => Ok(value.clone()),
         Expr::Path(path) => {
             let resolved = resolve_path(path, ctx)?;
-            budget.charge(json_size(&resolved))?;
-            Ok(resolved.into_owned())
+            budget.charge(resolved.size())?;
+            Ok(resolved.into_value())
         }
         Expr::Unary {
             op: UnaryOp::Not,
@@ -410,32 +420,73 @@ fn parse_number_string(s: &str) -> Option<Value> {
     }
 }
 
-/// Resolves one path against the context. A path is never partially
-/// resolved and reported as `null`: any step that cannot be taken — a
-/// missing trigger, an unknown connector id, a missing field, an
-/// out-of-bounds index, indexing into the wrong container type — collapses
-/// into a single `MissingPath` naming the whole path as written.
+enum Resolved<'c> {
+    Value(Cow<'c, Value>),
+    All(&'c [Value]),
+}
+
+impl Resolved<'_> {
+    fn size(&self) -> usize {
+        match self {
+            Self::Value(value) => json_size(value),
+            Self::All(items) => json_size_of(*items),
+        }
+    }
+
+    fn into_value(self) -> Value {
+        match self {
+            Self::Value(value) => value.into_owned(),
+            Self::All(items) => Value::Array(items.to_vec()),
+        }
+    }
+}
+
 fn resolve_path<'c>(
     path: &Path,
     ctx: &ExpressionContext<'c>,
-) -> Result<Cow<'c, Value>, ExpressionError> {
+) -> Result<Resolved<'c>, ExpressionError> {
     let missing = || ExpressionError::MissingPath {
         path: path.to_source(),
     };
 
-    match path.root {
+    match &path.root {
         PathRoot::Trigger => {
             let root = ctx.trigger.ok_or_else(missing)?;
             follow(root, &path.segments)
-                .map(Cow::Borrowed)
+                .map(|value| Resolved::Value(Cow::Borrowed(value)))
                 .ok_or_else(missing)
         }
-        PathRoot::Connectors => {
-            let Some((PathSegment::Field(id), rest)) = path.segments.split_first() else {
-                return Err(missing());
+        PathRoot::Node { name, selector } => {
+            let items: &'c [Value] = ctx
+                .nodes
+                .get(name.as_str())
+                .map(Vec::as_slice)
+                .ok_or_else(|| ExpressionError::UnknownNode { name: name.clone() })?;
+            let no_item = || ExpressionError::NoItem { name: name.clone() };
+            let (element, rest) = match selector {
+                NodeSelector::Item => {
+                    let last = items.len().checked_sub(1).ok_or_else(no_item)?;
+                    (&items[ctx.position.min(last)], path.segments.as_slice())
+                }
+                NodeSelector::First => {
+                    (items.first().ok_or_else(no_item)?, path.segments.as_slice())
+                }
+                NodeSelector::Last => (items.last().ok_or_else(no_item)?, path.segments.as_slice()),
+                NodeSelector::All => match path.segments.split_first() {
+                    None => return Ok(Resolved::All(items)),
+                    Some((PathSegment::Index(index), rest)) => {
+                        (items.get(*index).ok_or_else(missing)?, rest)
+                    }
+                    Some(_) => return Err(missing()),
+                },
             };
-            let root = ctx.connectors.get(id).ok_or_else(missing)?;
-            follow(root, rest).map(Cow::Borrowed).ok_or_else(missing)
+            let rest = match rest.split_first() {
+                Some((PathSegment::Field(alias), after)) if alias == "json" => after,
+                _ => rest,
+            };
+            follow(element, rest)
+                .map(|value| Resolved::Value(Cow::Borrowed(value)))
+                .ok_or_else(missing)
         }
         PathRoot::Loop => {
             let frame = ctx
@@ -447,15 +498,15 @@ fn resolve_path<'c>(
                     let mut whole = serde_json::Map::new();
                     whole.insert("item".to_string(), frame.item.clone());
                     whole.insert("index".to_string(), Value::from(frame.index));
-                    Ok(Cow::Owned(Value::Object(whole)))
+                    Ok(Resolved::Value(Cow::Owned(Value::Object(whole))))
                 }
                 Some((PathSegment::Field(name), rest)) if name == "item" => {
                     follow(frame.item, rest)
-                        .map(Cow::Borrowed)
+                        .map(|value| Resolved::Value(Cow::Borrowed(value)))
                         .ok_or_else(missing)
                 }
                 Some((PathSegment::Field(name), rest)) if name == "index" && rest.is_empty() => {
-                    Ok(Cow::Owned(Value::from(frame.index)))
+                    Ok(Resolved::Value(Cow::Owned(Value::from(frame.index))))
                 }
                 Some(_) => Err(missing()),
             }

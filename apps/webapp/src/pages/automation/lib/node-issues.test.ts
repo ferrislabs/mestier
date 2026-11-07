@@ -11,56 +11,156 @@ import {
 	nodeIssues,
 	nodeIssuesByNode,
 } from '#/pages/automation/lib/node-issues'
+import { LEGACY_SYNTAX_MESSAGE } from '#/pages/automation/lib/reference-messages'
 
 const lookup: EditorLookup = { descriptors: new Map(), events: [] }
 
-function node(id: string, config: Record<string, unknown> = {}) {
+function node(
+	id: string,
+	config: Record<string, unknown> = {},
+	name: string = id,
+) {
 	const connector: Schemas.PlacedConnectorDto = {
 		id,
 		kind: 'http.request',
 		version: 1,
 		config,
-		name: id,
+		name,
 	}
 	return connectorNode(connector, { x: 0, y: 0 }, lookup)
 }
 
 const nothing = () => undefined
 
+const reading = (name: string) => ({
+	url: `{{ $('${name}').item.json.id }}`,
+})
+
 describe('nodeIssues', () => {
 	it('flags a reference to a node that no longer exists', () => {
-		const target = node('c2', { url: '{{ connectors.c9.output.id }}' })
+		const target = node('c2', reading('Fantôme'))
 		expect(nodeIssues(target, [target], [], nothing)).toEqual([
-			{ parameter: 'url', message: 'Le nœud « c9 » n’existe plus.' },
+			{ parameter: 'url', message: 'Le nœud « Fantôme » n’existe plus.' },
 		])
 	})
 
 	it('flags a reference to a node that is not upstream', () => {
-		const source = node('c1')
-		const target = node('c2', { url: '{{ connectors.c1.output.id }}' })
+		const source = node('c1', {}, 'Tarifs')
+		const target = node('c2', reading('Tarifs'))
 		expect(nodeIssues(target, [source, target], [], nothing)[0].message).toBe(
-			'Le nœud « c1 » n’est pas relié en amont de ce nœud.',
+			'Le nœud « Tarifs » n’est pas relié en amont de ce nœud.',
 		)
 	})
 
-	it('flags a key missing from a known output', () => {
-		const source = node('c1')
-		const target = node('c2', { url: '{{ connectors.c1.output.id }}' })
+	it('flags a key missing from the first item of a known output', () => {
+		const source = node('c1', {}, 'Tarifs')
+		const target = node('c2', reading('Tarifs'))
 		const edges = [{ id: 'e', source: 'c1', target: 'c2' }]
 		expect(
-			nodeIssues(target, [source, target], edges, () => ({ name: 'x' }))[0]
+			nodeIssues(target, [source, target], edges, () => [{ name: 'x' }])[0]
 				.message,
-		).toBe('La clé « id » est absente de la sortie de « c1 ».')
+		).toBe('La clé « id » est absente de la sortie de « Tarifs ».')
+	})
+
+	it('reads the first item of the branch that feeds the node', () => {
+		const source = node('c1', {}, 'Si')
+		const target = node('c2', reading('Si'))
+		const edges = [
+			{ id: 'e', source: 'c1', target: 'c2', sourceHandle: 'Else' },
+		]
+		const output = () => ({ Then: [{ id: 1 }], Else: [{ other: 2 }] })
+
+		expect(nodeIssues(target, [source, target], edges, output)[0].message).toBe(
+			'La clé « id » est absente de la sortie de « Si ».',
+		)
+		expect(
+			nodeIssues(
+				target,
+				[source, target],
+				[{ ...edges[0], sourceHandle: 'Then' }],
+				output,
+			),
+		).toEqual([])
+	})
+
+	it('checks a trigger like any other node it reads', () => {
+		const clic = triggerNode(
+			{ id: 't1', kind: 'Manual', name: 'Clic' },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		const target = node('c2', reading('Clic'))
+		const edges = [{ id: 'e', source: 't1', target: 'c2' }]
+
+		expect(nodeIssues(target, [clic, target], [], nothing)[0].message).toBe(
+			'Le nœud « Clic » n’est pas relié en amont de ce nœud.',
+		)
+		expect(
+			nodeIssues(target, [clic, target], edges, () => ({ ok: true }))[0]
+				.message,
+		).toBe('La clé « id » est absente de la sortie de « Clic ».')
 	})
 
 	it('stays quiet when the reference resolves or the output is unknown', () => {
-		const source = node('c1')
-		const target = node('c2', { url: '{{ connectors.c1.output.id }}' })
+		const source = node('c1', {}, 'Tarifs')
+		const target = node('c2', reading('Tarifs'))
 		const edges = [{ id: 'e', source: 'c1', target: 'c2' }]
 		expect(
-			nodeIssues(target, [source, target], edges, () => ({ id: 1 })),
+			nodeIssues(target, [source, target], edges, () => [{ id: 1 }]),
 		).toEqual([])
 		expect(nodeIssues(target, [source, target], edges, nothing)).toEqual([])
+	})
+
+	it('does not check a key through all(), which names no item', () => {
+		const source = node('c1', {}, 'Tarifs')
+		const target = node('c2', { url: "{{ len($('Tarifs').all()) }}" })
+		const edges = [{ id: 'e', source: 'c1', target: 'c2' }]
+
+		expect(nodeIssues(target, [source, target], edges, () => [{}])).toEqual([])
+	})
+
+	it('finds the node by the name it was given, apostrophe included', () => {
+		const source = node('c1', {}, "Prix d'achat")
+		const target = node('c2', { url: "{{ $('Prix d\\'achat').item.json.id }}" })
+		const edges = [{ id: 'e', source: 'c1', target: 'c2' }]
+
+		expect(
+			nodeIssues(target, [source, target], edges, () => [{ id: 1 }]),
+		).toEqual([])
+	})
+
+	it('reads the references held by a nested object, escaped names included', () => {
+		const source = node('c1', {}, "Prix d'achat")
+		const target = node('c2', {
+			body: { lignes: [{ prix: "{{ $('Prix d\\'achat').item.json.prix }}" }] },
+		})
+		const edges = [{ id: 'e', source: 'c1', target: 'c2' }]
+
+		expect(
+			nodeIssues(target, [source, target], edges, () => [{ prix: 1 }]),
+		).toEqual([])
+		expect(nodeIssues(target, [target], [], nothing)).toEqual([
+			{
+				parameter: 'body',
+				message: "Le nœud « Prix d'achat » n’existe plus.",
+			},
+		])
+	})
+
+	it('names the syntax to use instead of connectors.<id>.output', () => {
+		const target = node('c2', { url: '{{ connectors.c1.output.id }}' })
+
+		expect(nodeIssues(target, [target], [], nothing)).toEqual([
+			{ parameter: 'url', message: LEGACY_SYNTAX_MESSAGE },
+		])
+	})
+
+	it('says each problem of a parameter once', () => {
+		const target = node('c2', {
+			url: "{{ $('Fantôme').item.json.a }}{{ $('Fantôme').item.json.b }}",
+		})
+
+		expect(nodeIssues(target, [target], [], nothing)).toHaveLength(1)
 	})
 })
 
@@ -193,10 +293,10 @@ describe('nodeIssues — a node made from a collection operation', () => {
 
 	it('flags a reference in a parameter under the field that carries it', () => {
 		const target = operationNode('c2', {
-			path: { id: '{{ connectors.c9.output.id }}' },
+			path: { id: "{{ $('Fantôme').item.json.id }}" },
 		})
 		expect(nodeIssues(target, [target], [], nothing, foundReads(PETS))).toEqual(
-			[{ parameter: 'path.id', message: 'Le nœud « c9 » n’existe plus.' }],
+			[{ parameter: 'path.id', message: 'Le nœud « Fantôme » n’existe plus.' }],
 		)
 	})
 

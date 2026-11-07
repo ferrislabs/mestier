@@ -64,6 +64,7 @@ function descriptor(
 	return {
 		auth: 'None',
 		branches: [],
+		execution: 'per_item',
 		family: 'test',
 		fields: [],
 		kind,
@@ -104,8 +105,8 @@ function runDetail(overrides: Record<string, unknown> = {}) {
 				attempts: 1,
 				status: 'succeeded',
 				created_at: '2026-08-05T00:00:01Z',
-				input: { url: 'https://a' },
-				output: { id: 1 },
+				input: [{ url: 'https://a' }],
+				output: [{ id: 1 }],
 			},
 		],
 		...overrides,
@@ -915,7 +916,7 @@ describe('WorkflowExecutionsFeature — loops', () => {
 						status: 'succeeded',
 						created_at: `2026-08-05T00:00:0${index + 1}Z`,
 						started_at: `2026-08-05T00:00:0${index + 1}Z`,
-						output: { id: index },
+						output: [{ id: index }],
 					})),
 				}),
 				pagination: null,
@@ -976,20 +977,24 @@ describe('WorkflowExecutionsFeature — node parameters', () => {
 						started_at: '2026-08-05T00:00:01Z',
 						finished_at: '2026-08-05T00:00:02Z',
 						input: [{ client: 'Hugo' }, { client: 'Nadia' }],
-						output: { id: 1 },
+						output: [{ id: 1 }, { id: 2 }],
 					},
 				],
 			}),
 			pagination: null,
 		}))
-		api.mockMutation('post', EVALUATE_PATH, (params) => ({
-			data: {
-				value: `resolved:${JSON.stringify(
-					(params as { body: { context: { loop: unknown } } }).body.context
-						.loop,
-				)}`,
-			},
-		}))
+		api.mockMutation('post', EVALUATE_PATH, (params) => {
+			const { context } = (
+				params as {
+					body: { context: { position: number; nodes: unknown } }
+				}
+			).body
+			return {
+				data: {
+					value: `resolved:${JSON.stringify({ position: context.position, nodes: context.nodes })}`,
+				},
+			}
+		})
 	}
 
 	it('resolves expressions through the engine for the selected input item', async () => {
@@ -999,7 +1004,7 @@ describe('WorkflowExecutionsFeature — node parameters', () => {
 		const dialog = await screen.findByRole('dialog')
 
 		expect(
-			await within(dialog).findByText(/resolved:\{"index":0/),
+			await within(dialog).findByText(/resolved:\{"position":0/),
 		).toBeDefined()
 		expect(within(dialog).getByText('Expression')).toBeDefined()
 		expect(within(dialog).getByText('1 sur 2')).toBeDefined()
@@ -1009,7 +1014,7 @@ describe('WorkflowExecutionsFeature — node parameters', () => {
 		)
 
 		expect(
-			await within(dialog).findByText(/resolved:\{"index":1/),
+			await within(dialog).findByText(/resolved:\{"position":1/),
 		).toBeDefined()
 	})
 
@@ -1515,7 +1520,7 @@ describe('WorkflowExecutionsFeature — the names saved in the graph of the run'
 		})
 		const buttons = within(steps).getAllByRole('button')
 		expect(buttons[0]?.textContent).toBe(
-			'1Quand le devis est accepté' + 'Démarré',
+			'1Quand le devis est accepté' + 'Démarré · 1 élément',
 		)
 		expect(buttons[1]?.textContent).toBe('2Facturer le clientSMTP expiré')
 		expect(within(steps).getByText('2 / 2 nœuds')).toBeDefined()
@@ -1623,6 +1628,136 @@ describe('WorkflowExecutionsFeature — the branches of the canvas', () => {
 		const dialog = await screen.findByRole('dialog')
 		expect(within(dialog).getByText(/\(branche vrai\)/)).toBeDefined()
 		expect(within(dialog).queryByText(/branche Then/)).toBeNull()
+	})
+})
+
+describe('WorkflowExecutionsFeature — the items of a run', () => {
+	const ITEMS_GRAPH: Schemas.GraphDto = {
+		triggers: [],
+		connectors: [
+			{ id: 'c1', kind: 'test.condition', version: 1, config: {} },
+			{
+				id: 'c2',
+				kind: 'test.simple',
+				version: 1,
+				config: { url: "{{ $('Condition').item.json.n }}" },
+			},
+		],
+		edges: [{ from: 'c1', to: 'c2', branch: 'Then' }],
+	}
+
+	function withItems(api: FakeApi) {
+		api.mockGet(CONNECTORS_PATH, () => ({
+			data: {
+				auth_schemes: [],
+				connectors: [
+					{
+						...descriptor('test.simple', 'Étape simple'),
+						fields: [
+							{
+								name: 'url',
+								label: 'Adresse',
+								kind: 'Text',
+								required: true,
+								secret: false,
+								expression: true,
+							},
+						],
+					},
+					{
+						...descriptor('test.condition', 'Condition'),
+						branches: ['Then', 'Else'],
+					},
+				],
+			},
+			pagination: null,
+		}))
+		api.mockGet(RUN_PATH, () => ({
+			data: runDetail({
+				graph: ITEMS_GRAPH,
+				steps: [
+					{
+						id: 's1',
+						connector_id: 'c1',
+						iteration_path: '',
+						attempts: 1,
+						status: 'succeeded',
+						created_at: '2026-08-05T00:00:01Z',
+						started_at: '2026-08-05T00:00:01Z',
+						finished_at: '2026-08-05T00:00:02Z',
+						input: [{ n: 1 }, { n: 2 }, { n: 3 }],
+						output: { Then: [{ n: 1 }], Else: [{ n: 2 }, { n: 3 }] },
+					},
+					{
+						id: 's2',
+						connector_id: 'c2',
+						iteration_path: '',
+						attempts: 1,
+						status: 'succeeded',
+						created_at: '2026-08-05T00:00:03Z',
+						started_at: '2026-08-05T00:00:03Z',
+						finished_at: '2026-08-05T00:00:04Z',
+						input: [{ n: 1 }],
+						output: [{ ok: true }],
+					},
+				],
+			}),
+			pagination: null,
+		}))
+		api.mockMutation('post', EVALUATE_PATH, (params) => ({
+			data: {
+				value: `resolved:${JSON.stringify(
+					(params as { body: { context: { nodes: unknown } } }).body.context
+						.nodes,
+				)}`,
+			},
+		}))
+	}
+
+	it('tells in the Déroulé how many items each step received and produced', async () => {
+		render(withItems)
+
+		const steps = await screen.findByRole('complementary', {
+			name: 'Déroulé de l’exécution',
+		})
+
+		expect(
+			within(steps).getByRole('button', { name: /Condition/ }).textContent,
+		).toContain('3 → vrai 1 · faux 2')
+		expect(
+			within(steps).getByRole('button', { name: /Étape simple/ }).textContent,
+		).toContain('1 → 1 élément')
+	})
+
+	it('counts the items in and out in the node details, and switches between the branches', async () => {
+		render(withItems)
+
+		await openStep('Condition')
+		const dialog = await screen.findByRole('dialog')
+
+		expect(within(dialog).getByText('Entrée · 3 éléments')).toBeDefined()
+		expect(within(dialog).getByText('Sortie · 3 éléments')).toBeDefined()
+		expect(
+			within(dialog).getByRole('radio', { name: 'vrai (1)' }),
+		).toBeDefined()
+		expect(within(dialog).getByText('1 élément')).toBeDefined()
+
+		await userEvent.click(
+			within(dialog).getByRole('radio', { name: 'faux (2)' }),
+		)
+
+		expect(within(dialog).getByText('2 éléments')).toBeDefined()
+	})
+
+	it('gives the engine the items of the nodes before, by name, to resolve the expressions', async () => {
+		render(withItems)
+
+		await openStep('Étape simple')
+		const dialog = await screen.findByRole('dialog')
+
+		expect(
+			await within(dialog).findByText('resolved:{"Condition":[{"n":1}]}'),
+		).toBeDefined()
 	})
 })
 

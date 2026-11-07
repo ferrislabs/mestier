@@ -10,6 +10,7 @@ import {
 	triggerNode,
 	withDetails,
 	withDisabled,
+	withRenamedReferences,
 } from '#/pages/automation/lib/editor-nodes'
 
 const descriptors = new Map<string, Schemas.ConnectorDescriptorResponse>([
@@ -23,6 +24,7 @@ const descriptors = new Map<string, Schemas.ConnectorDescriptorResponse>([
 			auth: 'None',
 			fields: [],
 			branches: ['Then', 'Else'],
+			execution: 'per_item',
 			output_example: null,
 		},
 	],
@@ -51,6 +53,7 @@ describe('editor nodes', () => {
 					auth: 'None',
 					fields: [],
 					branches: ['Then', 'Else'],
+					execution: 'per_item',
 					output_example: null,
 				},
 			],
@@ -64,6 +67,7 @@ describe('editor nodes', () => {
 					auth: 'None',
 					fields: [],
 					branches: [],
+					execution: 'per_item',
 					output_example: null,
 				},
 			],
@@ -242,6 +246,135 @@ describe('editor nodes', () => {
 		expect(off.data.disabled).toBe(true)
 		expect(withDisabled(off, false, lookup).data.disabled).toBe(false)
 		expect(withDisabled(trigger, true, lookup)).toBe(trigger)
+	})
+
+	it('rewrites the references to a renamed node in every other node, nested ones included', () => {
+		const renamed = connectorNode(
+			{ id: 'c1', kind: 'flow.if', version: 1, config: {}, name: 'Tarifs' },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		const reader = connectorNode(
+			{
+				id: 'c2',
+				kind: 'http.request',
+				version: 1,
+				config: {
+					url: "{{ $('Tarifs').item.json.url }}",
+					body: { lignes: [{ code: "{{ $('Tarifs').item.json.code }}" }] },
+				},
+			},
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		const other = connectorNode(
+			{ id: 'c3', kind: 'http.request', version: 1, config: { a: 'x' } },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+
+		const next = withRenamedReferences(
+			[renamed, reader, other],
+			'c1',
+			'Tarifs',
+			'Prix fournisseur',
+		)
+
+		expect(next[1].data.connector?.config).toEqual({
+			url: "{{ $('Prix fournisseur').item.json.url }}",
+			body: {
+				lignes: [{ code: "{{ $('Prix fournisseur').item.json.code }}" }],
+			},
+		})
+		expect(next[0]).toBe(renamed)
+		expect(next[2]).toBe(other)
+	})
+
+	it('leaves the config of the renamed node itself alone', () => {
+		const self = connectorNode(
+			{
+				id: 'c1',
+				kind: 'flow.if',
+				version: 1,
+				config: { a: "{{ $('Tarifs').item.json.x }}" },
+				name: 'Tarifs',
+			},
+			{ x: 0, y: 0 },
+			lookup,
+		)
+
+		expect(withRenamedReferences([self], 'c1', 'Tarifs', 'Autre')[0]).toBe(self)
+	})
+
+	it('saves under its name a node that is read by another one but was never named', () => {
+		const source = connectorNode(
+			{ id: 'c1', kind: 'flow.if', version: 1, config: {} },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		const reader = connectorNode(
+			{
+				id: 'c2',
+				kind: 'http.request',
+				version: 1,
+				config: { url: "{{ $('Condition').item.json.url }}" },
+			},
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		const clic = triggerNode(
+			{ id: 't1', kind: 'Manual' },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+
+		const saved = toGraph([clic, source, reader], [])
+
+		expect(saved.connectors[0].name).toBe('Condition')
+		expect(saved.connectors[1].name).toBeUndefined()
+		expect(saved.triggers[0].name).toBeUndefined()
+	})
+
+	it('saves a trigger under its name once a node reads it', () => {
+		const clic = triggerNode(
+			{ id: 't1', kind: 'Manual' },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		const reader = connectorNode(
+			{
+				id: 'c2',
+				kind: 'http.request',
+				version: 1,
+				config: { url: "{{ $('Clic').item.json.url }}" },
+			},
+			{ x: 0, y: 0 },
+			lookup,
+		)
+
+		expect(toGraph([clic, reader], []).triggers[0].name).toBe('Clic')
+	})
+
+	it('keeps the name a node was given', () => {
+		const source = connectorNode(
+			{ id: 'c1', kind: 'flow.if', version: 1, config: {}, name: 'Tarifs' },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		const reader = connectorNode(
+			{
+				id: 'c2',
+				kind: 'http.request',
+				version: 1,
+				config: { url: "{{ $('Tarifs').item.json.url }}" },
+			},
+			{ x: 0, y: 0 },
+			lookup,
+		)
+
+		expect(toGraph([source, reader], []).connectors[0]).toBe(
+			source.data.connector,
+		)
 	})
 
 	it('finds the first output that has no edge yet', () => {

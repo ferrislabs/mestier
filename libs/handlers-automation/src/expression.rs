@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 
 use crate::{paths::EvaluateExpressionPath, require_view_automation};
 
-pub const MAX_CONTEXT_CONNECTORS: usize = 256;
+pub const MAX_CONTEXT_NODES: usize = 256;
 pub const MAX_CONTEXT_BYTES: usize = 256 * 1024;
 
 pub fn router(_state: &AppState) -> Router<AppState> {
@@ -30,7 +30,9 @@ pub struct EvaluateContextBody {
     #[serde(default)]
     pub trigger: Option<Value>,
     #[serde(default)]
-    pub connectors: BTreeMap<String, Value>,
+    pub nodes: BTreeMap<String, Vec<Value>>,
+    #[serde(default)]
+    pub position: usize,
     #[serde(default)]
     pub r#loop: Option<LoopFrameBody>,
 }
@@ -47,10 +49,10 @@ pub struct EvaluateExpressionResponse {
 }
 
 fn bounds_error(context: &EvaluateContextBody) -> Option<ApiError> {
-    if context.connectors.len() > MAX_CONTEXT_CONNECTORS {
+    if context.nodes.len() > MAX_CONTEXT_NODES {
         return Some(ApiError::UnprocessableEntity(format!(
-            "the context holds at most {MAX_CONTEXT_CONNECTORS} connector outputs, got {}",
-            context.connectors.len()
+            "the context holds at most {MAX_CONTEXT_NODES} node outputs, got {}",
+            context.nodes.len()
         )));
     }
 
@@ -102,9 +104,16 @@ pub async fn evaluate(
         item: &frame.item,
         index: frame.index,
     });
+    let nodes: BTreeMap<String, Vec<Value>> = payload
+        .context
+        .nodes
+        .iter()
+        .map(|(name, items)| (name.trim().to_owned(), items.clone()))
+        .collect();
     let ctx = ExpressionContext {
         trigger: payload.context.trigger.as_ref(),
-        connectors: &payload.context.connectors,
+        nodes: &nodes,
+        position: payload.context.position,
         loop_frame,
         now: Utc::now(),
     };
@@ -120,37 +129,46 @@ pub async fn evaluate(
 mod tests {
     use super::*;
 
-    fn context_with_connectors(count: usize) -> EvaluateContextBody {
-        let mut connectors = BTreeMap::new();
+    fn context_with_nodes(count: usize) -> EvaluateContextBody {
+        let mut nodes = BTreeMap::new();
         for index in 0..count {
-            connectors.insert(format!("c{index}"), Value::Bool(true));
+            nodes.insert(format!("Noeud {index}"), vec![Value::Bool(true)]);
         }
         EvaluateContextBody {
             trigger: None,
-            connectors,
+            nodes,
+            position: 0,
             r#loop: None,
         }
     }
 
     #[test]
     fn a_context_within_bounds_is_accepted() {
-        let context = context_with_connectors(1);
+        let context = context_with_nodes(1);
 
         assert!(bounds_error(&context).is_none());
     }
 
     #[test]
-    fn a_context_over_the_connector_cap_names_that_bound() {
-        let context = context_with_connectors(MAX_CONTEXT_CONNECTORS + 1);
+    fn a_context_over_the_node_cap_names_that_bound() {
+        let context = context_with_nodes(MAX_CONTEXT_NODES + 1);
 
         let error = bounds_error(&context).expect("must be refused");
         assert!(matches!(error, ApiError::UnprocessableEntity(_)));
-        assert!(error.to_string().contains("connector"));
+        assert!(error.to_string().contains("node"));
+    }
+
+    #[test]
+    fn a_context_defaults_to_no_node_and_the_first_position() {
+        let context: EvaluateContextBody = serde_json::from_value(serde_json::json!({})).unwrap();
+
+        assert!(context.nodes.is_empty());
+        assert_eq!(context.position, 0);
     }
 
     #[test]
     fn a_context_over_the_byte_cap_names_that_bound() {
-        let mut context = context_with_connectors(1);
+        let mut context = context_with_nodes(1);
         context.trigger = Some(Value::String("x".repeat(MAX_CONTEXT_BYTES)));
 
         let error = bounds_error(&context).expect("must be refused");

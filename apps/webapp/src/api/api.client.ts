@@ -279,9 +279,11 @@ export namespace Schemas {
     | { components: Array<Component>; type: "ACTION_ROW" }
     | { emoji?: (string | null) | undefined; label: string; style: ButtonStyle; type: "BUTTON"; url: string };
   export type ConfirmSupplierInvoiceRequest = Partial<{ notes: string | null }>;
+  export type ExecutionModeResponse = "per_item" | "once";
   export type ConnectorDescriptorResponse = {
     auth: AuthRequirementResponse;
     branches: Array<BranchDto>;
+    execution: ExecutionModeResponse;
     family: string;
     fields: Array<FieldResponse>;
     kind: string;
@@ -925,8 +927,9 @@ export namespace Schemas {
   };
   export type LoopFrameBody = { index: number; item: unknown };
   export type EvaluateContextBody = Partial<{
-    connectors: Record<string, unknown>;
     loop: null | LoopFrameBody;
+    nodes: Record<string, Array<unknown>>;
+    position: number;
     trigger: unknown;
   }>;
   export type EvaluateExpressionRequest = { context: EvaluateContextBody; template: unknown };

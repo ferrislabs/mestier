@@ -11,11 +11,8 @@ use serde_json::Value;
 /// the evaluator must never call `Utc::now()` itself.
 pub struct ExpressionContext<'a> {
     pub trigger: Option<&'a Value>,
-    /// Connector id -> `{ "output": <its raw output> }`. `connectors.c1.output`
-    /// reads `connectors["c1"]["output"]`, so every caller populating this map
-    /// must wrap a connector's produced value under an `"output"` key rather
-    /// than inserting it directly.
-    pub connectors: &'a BTreeMap<String, Value>,
+    pub nodes: &'a BTreeMap<String, Vec<Value>>,
+    pub position: usize,
     pub loop_frame: Option<LoopFrame<'a>>,
     pub now: DateTime<Utc>,
 }

@@ -26,6 +26,7 @@ import {
 	withDetails,
 	withDisabled,
 	withPresentation,
+	withRenamedReferences,
 } from '#/pages/automation/lib/editor-nodes'
 import {
 	findFreePosition,
@@ -410,9 +411,28 @@ export function useWorkflowGraph({
 	const updateDetails = useCallback(
 		(nodeId: string, patch: NodeDetailsPatch) => {
 			record(`meta:${nodeId}`)
-			mapNode(nodeId, (node) => withDetails(node, patch, lookupRef.current))
+			const { nodes, edges } = stateRef.current
+			const target = nodes.find((node) => node.id === nodeId)
+			if (!target) return
+			const renamed = withDetails(target, patch, lookupRef.current)
+			const next = nodes.map((node) => (node.id === nodeId ? renamed : node))
+			commit(
+				{
+					nodes:
+						renamed.data.label === target.data.label
+							? next
+							: withRenamedReferences(
+									next,
+									nodeId,
+									target.data.label,
+									renamed.data.label,
+								),
+					edges,
+				},
+				true,
+			)
 		},
-		[mapNode, record],
+		[commit, record],
 	)
 
 	const setDisabled = useCallback(

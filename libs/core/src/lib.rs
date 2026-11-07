@@ -15,8 +15,8 @@ pub use domain::automation::collection::{
     ReplaceCollectionCommand, RequestBody, SecurityKind, SecurityScheme,
 };
 pub use domain::automation::connector::{
-    AuthRequirement, ConnectorCatalogue, ConnectorCatalogueError, ConnectorDescriptor, Field,
-    FieldKind, SelectOption, VisibleWhen, connector_catalogue,
+    AuthRequirement, ConnectorCatalogue, ConnectorCatalogueError, ConnectorDescriptor,
+    ExecutionMode, Field, FieldKind, SelectOption, VisibleWhen, connector_catalogue,
 };
 pub use domain::automation::credential::{
     CreateCredentialCommand, Credential, CredentialError, CredentialOrigin, CredentialStatus,

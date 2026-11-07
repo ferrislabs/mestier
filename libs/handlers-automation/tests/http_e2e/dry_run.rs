@@ -16,6 +16,11 @@ fn http_get(id: &str, url: &str) -> Value {
     node(id, "http.request", json!({ "method": "GET", "url": url }))
 }
 
+fn named(mut node: Value, name: &str) -> Value {
+    node["name"] = json!(name);
+    node
+}
+
 fn customer(id: &str, name: &str) -> Value {
     node(id, "mestier.customer.create", json!({ "name": name }))
 }
@@ -152,19 +157,13 @@ async fn an_unsaved_draft_answers_one_step_per_reachable_node_and_writes_no_row(
         assert_eq!(each["status"], "succeeded");
         assert_eq!(each["error"], Value::Null);
     }
-    assert_eq!(step(&steps, "c1")["output"], json!({ "n": 1 }));
-    assert_eq!(
-        step(&steps, "c1")["input"],
-        json!({ "variables": { "n": 1 } })
-    );
+    assert_eq!(step(&steps, "c1")["output"], json!([{ "n": 1 }]));
+    assert_eq!(step(&steps, "c1")["input"], json!([{}]));
     assert_eq!(
         step(&steps, "c2")["output"],
-        json!({ "status": 200, "headers": {}, "body": {} })
+        json!([{ "status": 200, "headers": {}, "body": {} }])
     );
-    assert_eq!(
-        step(&steps, "c2")["input"],
-        json!({ "method": "GET", "url": "https://example.com/a" })
-    );
+    assert_eq!(step(&steps, "c2")["input"], json!([{ "n": 1 }]));
     assert_eq!(rows(&app).await, before, "no run, no step, no customer");
 
     app.cleanup().await;
@@ -225,18 +224,18 @@ async fn the_wait_merge_note_search_project_and_channel_nodes_answer_their_sampl
     for each in &steps {
         assert_eq!(each["status"], "succeeded", "{each}");
     }
-    assert_eq!(step(&steps, "wait")["output"]["unit"], "days");
-    assert_eq!(
-        step(&steps, "search")["output"]["count"],
-        step(&steps, "search")["output"]["items"]
+    assert_eq!(step(&steps, "wait")["output"][0]["unit"], "days");
+    assert!(
+        step(&steps, "search")["output"]
             .as_array()
-            .expect("items")
-            .len()
+            .expect("a list of quotes")
+            .iter()
+            .all(|quote| quote["reference"].is_string())
     );
-    assert!(step(&steps, "merge")["output"]["items"].is_array());
-    assert!(step(&steps, "note")["output"]["note_id"].is_string());
-    assert!(step(&steps, "project")["output"]["project_id"].is_string());
-    assert!(step(&steps, "post")["output"]["message_id"].is_string());
+    assert!(step(&steps, "merge")["output"].is_array());
+    assert!(step(&steps, "note")["output"][0]["note_id"].is_string());
+    assert!(step(&steps, "project")["output"][0]["project_id"].is_string());
+    assert!(step(&steps, "post")["output"][0]["message_id"].is_string());
     assert_eq!(rows(&app).await, before, "no run, no step, no customer");
     let written: i64 = sqlx::query_scalar(
         "SELECT (SELECT COUNT(*) FROM projects WHERE org_id = $1)
@@ -347,11 +346,11 @@ async fn a_condition_follows_the_branch_its_sample_data_selects() {
     let app = harness::start().await;
     let graph = draft(
         vec![
-            http_get("c1", "https://example.com/a"),
+            named(http_get("c1", "https://example.com/a"), "Appel"),
             node(
                 "c2",
                 "flow.condition",
-                json!({ "predicate": "{{ connectors.c1.output.status == 200 }}" }),
+                json!({ "predicate": "{{ $('Appel').item.json.status == 200 }}" }),
             ),
             customer("c3", "then"),
             customer("c4", "else"),
@@ -366,7 +365,10 @@ async fn a_condition_follows_the_branch_its_sample_data_selects() {
 
     let steps = steps_of(dry_run(&app, &app.token, &json!({ "graph": graph })).await).await;
 
-    assert_eq!(step(&steps, "c2")["output"], json!({ "matched": true }));
+    assert_eq!(
+        step(&steps, "c2")["output"],
+        json!({ "Then": [{ "status": 200, "headers": {}, "body": {} }], "Else": [] })
+    );
     assert_eq!(step(&steps, "c3")["status"], "succeeded");
     assert_eq!(step(&steps, "c4")["status"], "skipped");
     assert_eq!(step(&steps, "c4")["input"], Value::Null);
@@ -413,7 +415,7 @@ async fn a_loop_iterates_at_most_three_sample_items() {
     let names: Vec<&Value> = steps
         .iter()
         .filter(|step| step["connector_id"] == "c2")
-        .map(|step| &step["input"]["name"])
+        .map(|step| &step["input"][0]["valeur"])
         .collect();
     assert_eq!(names, [&json!("a"), &json!("b"), &json!("c")]);
 
@@ -438,8 +440,8 @@ async fn a_disabled_node_passes_the_previous_output_through() {
     let steps = steps_of(dry_run(&app, &app.token, &json!({ "graph": graph })).await).await;
 
     assert_eq!(step(&steps, "c2")["status"], "succeeded");
-    assert_eq!(step(&steps, "c2")["output"], json!({ "n": 1 }));
-    assert_eq!(step(&steps, "c2")["input"], Value::Null);
+    assert_eq!(step(&steps, "c2")["output"], json!([{ "n": 1 }]));
+    assert_eq!(step(&steps, "c2")["input"], json!([{ "n": 1 }]));
     assert_eq!(rows(&app).await, before);
 
     app.cleanup().await;
@@ -452,10 +454,10 @@ async fn a_reference_to_an_output_that_does_not_exist_fails_the_referencing_node
     let app = harness::start().await;
     let graph = draft(
         vec![
-            http_get("c1", "https://example.com/a"),
+            named(http_get("c1", "https://example.com/a"), "Appel"),
             http_get(
                 "c2",
-                "https://example.com/{{ connectors.c1.output.body.nope }}",
+                "https://example.com/{{ $('Appel').item.json.body.nope }}",
             ),
             customer("c3", "never reached"),
         ],
@@ -474,7 +476,7 @@ async fn a_reference_to_an_output_that_does_not_exist_fails_the_referencing_node
     let message = step(&steps, "c2")["error"].as_str().expect("an error");
     assert!(message.starts_with("field `url`"), "{message}");
     assert!(
-        message.contains("connectors.c1.output.body.nope"),
+        message.contains("$('Appel').item.json.body.nope"),
         "{message}"
     );
     assert_eq!(step(&steps, "c3")["status"], "skipped");
@@ -550,7 +552,7 @@ async fn a_collection_operation_answers_with_its_stored_example_until_the_collec
 
     assert_eq!(
         step(&steps, "c1")["output"],
-        json!({ "status": 201, "headers": {}, "body": { "city": "Lyon" } })
+        json!([{ "status": 201, "headers": {}, "body": { "city": "Lyon" } }])
     );
     assert_eq!(refused.status(), 422);
     let refusal: Value = refused.json().await.expect("json");
@@ -751,17 +753,14 @@ async fn a_walk_past_the_byte_ceiling_answers_422() {
     connectors.push(node(
         "leaf",
         "http.request",
-        json!({
-            "method": "POST",
-            "url": format!("https://example.com/{}", pad("a")),
-            "headers": { "x-pad": pad("b") },
-            "body": { "blob": pad("c") }
-        }),
+        json!({ "method": "POST", "url": "https://example.com/a" }),
     ));
     edges.push(edge("l4", "leaf", json!("Each")));
     let body = json!({
         "graph": draft(connectors, edges),
-        "trigger_payload": { "items": [1, 2, 3] }
+        "trigger_payload": {
+            "items": [{ "pad": pad("a") }, { "pad": pad("b") }, { "pad": pad("c") }]
+        }
     });
 
     let (status, refusal) = refusal_of(dry_run(&app, &app.token, &body).await).await;
@@ -940,9 +939,9 @@ async fn a_webhook_and_a_schedule_feed_their_example_to_the_nodes_after_them() {
 
     assert_eq!(
         step(&steps, "c1")["input"],
-        json!({ "name": "paiement.recu" })
+        json!([{ "evenement": "paiement.recu" }])
     );
-    let instant = step(&steps, "c2")["input"]["name"]
+    let instant = step(&steps, "c2")["input"][0]["scheduled_for"]
         .as_str()
         .expect("an instant")
         .to_owned();
@@ -950,11 +949,10 @@ async fn a_webhook_and_a_schedule_feed_their_example_to_the_nodes_after_them() {
         chrono::DateTime::parse_from_rfc3339(&instant).expect("an RFC 3339 instant")
             > chrono::Utc::now()
     );
-    assert_eq!(
-        step(&steps, "c3")["input"],
-        json!({ "name": "Europe/Paris" })
-    );
-    let day = step(&steps, "c4")["input"]["name"].as_str().expect("a day");
+    assert_eq!(step(&steps, "c3")["input"][0]["fuseau"], "Europe/Paris");
+    let day = step(&steps, "c4")["input"][0]["jour"]
+        .as_str()
+        .expect("a day");
     assert!(
         [
             "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
@@ -962,7 +960,7 @@ async fn a_webhook_and_a_schedule_feed_their_example_to_the_nodes_after_them() {
         .contains(&day),
         "{day}"
     );
-    let local = step(&steps, "c5")["input"]["name"]
+    let local = step(&steps, "c5")["input"][0]["horodatage"]
         .as_str()
         .expect("a local reading")
         .to_owned();

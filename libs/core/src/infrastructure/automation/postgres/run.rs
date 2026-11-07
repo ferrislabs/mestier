@@ -2191,6 +2191,93 @@ mod tests {
         .await;
     }
 
+    fn graph_with_predicate(predicate: &str) -> Graph {
+        let mut graph = simple_graph();
+        graph.connectors[0]
+            .config
+            .insert("predicate".to_string(), json!(predicate));
+        graph
+    }
+
+    async fn workflow_is_enabled(pool: &PgPool, workflow_id: Uuid) -> bool {
+        sqlx::query_scalar::<_, bool>("SELECT enabled FROM automation.workflow WHERE id = $1")
+            .bind(workflow_id)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn the_legacy_expression_migration_disables_only_workflows_whose_current_version_uses_it()
+    {
+        const UP: &str = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../migrations/20261108000001_disable_workflows_with_legacy_expressions.up.sql"
+        ));
+        const DOWN: &str = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../migrations/20261108000001_disable_workflows_with_legacy_expressions.down.sql"
+        ));
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "legacy-migration").await;
+        let (legacy, _) = seed_workflow_version(
+            &pool,
+            org_id,
+            graph_with_predicate("{{ connectors.c0.output.matched }}"),
+        )
+        .await;
+        let (spaced, _) = seed_workflow_version(
+            &pool,
+            org_id,
+            graph_with_predicate("{{ not  connectors.c0.output.matched }}"),
+        )
+        .await;
+        let (nested, _) = seed_workflow_version(
+            &pool,
+            org_id,
+            graph_with_predicate("sent to {{ upper(connectors.c9.output.name) }}"),
+        )
+        .await;
+        let (modern, _) = seed_workflow_version(
+            &pool,
+            org_id,
+            graph_with_predicate("{{ $('Devis').item.json.matched }}"),
+        )
+        .await;
+        let (plain, _) = seed_workflow_version(&pool, org_id, simple_graph()).await;
+        let (mentioned, _) = seed_workflow_version(
+            &pool,
+            org_id,
+            graph_with_predicate("the connectors.c1 word outside of any expression"),
+        )
+        .await;
+        let (superseded, _) = seed_workflow_version(
+            &pool,
+            org_id,
+            graph_with_predicate("{{ connectors.c0.output.matched }}"),
+        )
+        .await;
+        with_tx(&pool, async |tx| {
+            let mut repo = PgWorkflowRepository::new(&tx);
+            repo.insert_version(org_id, superseded, &simple_graph(), None)
+                .await
+        })
+        .await
+        .unwrap();
+
+        sqlx::raw_sql(UP).execute(&pool).await.unwrap();
+
+        for disabled in [legacy, spaced, nested] {
+            assert!(!workflow_is_enabled(&pool, disabled).await, "{disabled}");
+        }
+        for untouched in [modern, plain, mentioned, superseded] {
+            assert!(workflow_is_enabled(&pool, untouched).await, "{untouched}");
+        }
+        sqlx::raw_sql(DOWN).execute(&pool).await.unwrap();
+        assert!(!workflow_is_enabled(&pool, legacy).await);
+    }
+
     // --- purge_succeeded --------------------------------------------------
 
     #[tokio::test]

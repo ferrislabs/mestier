@@ -5,20 +5,22 @@ use std::time::Instant;
 use chrono::{DateTime, Utc};
 use common::{CoreError, OrganizationId, generate_uuid_v7};
 use mestier_macros::transactional;
-use serde_json::{Value, json};
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
     application::MestierUseCase,
     domain::automation::{
         collection::{COLLECTION_OPERATION_KIND, NESTED_EXPRESSION_FIELDS},
-        expression::ExpressionContext,
+        connector::{ExecutionMode, connector_catalogue},
+        expression::{ExpressionContext, LoopFrame},
         ports::{AutomationSettingsRepository, RunRepository, WorkflowRepository},
         run::{
-            ConnectorInput, ConnectorOutcome, DueRun, LoopStackEntry, MERGE_KIND, Next, Run,
-            RunOverview, RunSettlement, RunStatus, RunStep, StepStatus, connectors_by_id,
-            descendants_via, disabled_outcome, format_iteration_path, merge_blockers, merge_inputs,
-            next_after, pass_through_output, resolve_config, resolve_config_nested, roots,
+            ConnectorInput, ConnectorOutcome, DueRun, LoopStackEntry, MERGE_KIND, Next, NodeIndex,
+            Run, RunOverview, RunSettlement, RunStatus, RunStep, StepItems, StepStatus, as_item,
+            connectors_by_id, descendants_via, flatten, format_iteration_path, gather_lists,
+            merge_blockers, next_after, push_result, referenced_names, resolve_config,
+            resolve_config_nested, roots, trigger_item,
         },
         settings::with_jitter,
         workflow::{Branch, Graph, PlacedConnector},
@@ -82,6 +84,14 @@ impl Frame {
             .collect();
         format_iteration_path(&entries)
     }
+
+    fn loop_item(&self, loop_id: &str) -> Option<Value> {
+        self.path
+            .iter()
+            .rev()
+            .find(|step| step.loop_id == loop_id)
+            .map(|step| step.item.as_ref().clone())
+    }
 }
 
 /// What one slice of one run did, before it is settled.
@@ -109,27 +119,62 @@ fn succeeded_output_in_scope(
     (step.status == StepStatus::Succeeded).then(|| step.output.clone().unwrap_or(Value::Null))
 }
 
-enum MergeGate {
+fn succeeded_items_in_scope(
+    index: &HashMap<(String, String), RunStep>,
+    connector_id: &str,
+    scope_paths: &[String],
+) -> Option<StepItems> {
+    succeeded_output_in_scope(index, connector_id, scope_paths)
+        .map(|output| StepItems::from_json(&output))
+}
+
+fn input_lists(
+    graph: &Graph,
+    index: &HashMap<(String, String), RunStep>,
+    frame: &Frame,
+    trigger: &Value,
+) -> Vec<Vec<Value>> {
+    let scope_paths = frame.scope_paths();
+    gather_lists(
+        graph,
+        &frame.connector_id,
+        |from, branch| {
+            if branch == Some(Branch::Each)
+                && let Some(item) = frame.loop_item(from)
+            {
+                return Some(vec![as_item(item)]);
+            }
+            succeeded_items_in_scope(index, from, &scope_paths).map(|items| items.sent(branch))
+        },
+        trigger,
+    )
+}
+
+enum InputGate {
     Ready,
     Parked,
     Deferred,
 }
 
-fn merge_gate(
+fn input_gate(
     graph: &Graph,
     index: &HashMap<(String, String), RunStep>,
     frame: &Frame,
-) -> MergeGate {
+) -> InputGate {
+    let blockers = merge_blockers(graph, &frame.connector_id);
+    if blockers.len() < 2 {
+        return InputGate::Ready;
+    }
     let scope_paths = frame.scope_paths();
-    let mut gate = MergeGate::Ready;
-    for blocker in merge_blockers(graph, &frame.connector_id) {
+    let mut gate = InputGate::Ready;
+    for blocker in blockers {
         let step = scope_paths
             .iter()
             .find_map(|path| index.get(&(blocker.to_owned(), path.clone())));
         match step.map(|step| step.status) {
-            Some(StepStatus::Waiting) => return MergeGate::Parked,
+            Some(StepStatus::Waiting) => return InputGate::Parked,
             Some(status) if status.is_settled() => {}
-            _ => gate = MergeGate::Deferred,
+            _ => gate = InputGate::Deferred,
         }
     }
     gate
@@ -160,7 +205,8 @@ fn pass_through_step(
     run_id: Uuid,
     connector_id: &str,
     iteration_path: &str,
-    output: &Value,
+    input: &[Value],
+    output: &StepItems,
 ) -> RunStep {
     let now = Utc::now();
     RunStep {
@@ -170,8 +216,8 @@ fn pass_through_step(
         iteration_path: iteration_path.to_owned(),
         attempts: 0,
         status: StepStatus::Succeeded,
-        input: None,
-        output: Some(output.clone()),
+        input: Some(Value::Array(input.to_vec())),
+        output: Some(output.to_json()),
         error: None,
         resume_at: None,
         started_at: Some(now),
@@ -180,34 +226,110 @@ fn pass_through_step(
     }
 }
 
-/// Rebuilds the [`ConnectorOutcome`] a settled step's persisted `output`
-/// represents, without recomputing anything — the resumption discipline the
-/// whole module rests on. The mapping is the mirror image of what
-/// `process_run` writes for each kind: `flow.condition` derives `taken` from
-/// `matched`, `flow.loop` reads `items` back, anything else is a plain
-/// `Produced`.
-fn reconstruct_outcome(kind: &str, output: &Value) -> ConnectorOutcome {
-    match kind {
-        "flow.condition" => {
-            let matched = output
-                .get("matched")
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
-            ConnectorOutcome::Branch {
-                taken: if matched { Branch::Then } else { Branch::Else },
-                output: output.clone(),
+enum NodeResult {
+    Done(StepItems),
+    Wait {
+        resume_at: DateTime<Utc>,
+        items: StepItems,
+    },
+    Failed(String),
+}
+
+struct NodeRun<'a> {
+    due: &'a DueRun,
+    placed: &'a PlacedConnector,
+    mode: ExecutionMode,
+    branches: &'a [Branch],
+    input: &'a [Value],
+    lists: &'a [Vec<Value>],
+    view: &'a BTreeMap<String, Vec<Value>>,
+    loop_step: Option<&'a LoopStep>,
+}
+
+async fn run_over_items(connectors: &ConnectorRegistry, run: &NodeRun<'_>) -> NodeResult {
+    let positions: Vec<usize> = match run.mode {
+        ExecutionMode::PerItem => (0..run.input.len()).collect(),
+        ExecutionMode::Once => vec![0],
+    };
+    let mut produced: Vec<Value> = Vec::new();
+    let mut then_items: Vec<Value> = Vec::new();
+    let mut else_items: Vec<Value> = Vec::new();
+    let mut iterated: Vec<Value> = Vec::new();
+
+    for position in positions {
+        let ctx = ExpressionContext {
+            trigger: run.due.trigger_payload.as_ref(),
+            nodes: run.view,
+            position,
+            loop_frame: run.loop_step.map(|step| LoopFrame {
+                item: &step.item,
+                index: step.index,
+            }),
+            now: Utc::now(),
+        };
+        let resolved = if run.placed.kind == COLLECTION_OPERATION_KIND {
+            resolve_config_nested(&run.placed.config, &ctx, &NESTED_EXPRESSION_FIELDS)
+        } else {
+            resolve_config(&run.placed.config, &ctx)
+        };
+        let mut config = match resolved {
+            Ok(config) => config,
+            Err(error) => return NodeResult::Failed(error.to_string()),
+        };
+        if run.placed.kind == MERGE_KIND {
+            config.insert(
+                "inputs".to_owned(),
+                Value::Array(run.lists.iter().cloned().map(Value::Array).collect()),
+            );
+        }
+
+        let input = ConnectorInput {
+            org_id: run.due.org_id,
+            run_id: run.due.id,
+            config: &config,
+            credential_id: run.placed.credential_id,
+            operation: run.placed.operation.as_ref(),
+        };
+        let outcome = match connectors
+            .execute(&run.placed.kind, run.placed.version, input)
+            .await
+        {
+            Ok(outcome) => outcome,
+            Err(unknown) => return NodeResult::Failed(unknown.to_string()),
+        };
+
+        match outcome {
+            ConnectorOutcome::Produced(value) => push_result(&mut produced, value),
+            ConnectorOutcome::Branch { taken, .. } => {
+                if let Some(item) = run.input.get(position) {
+                    if taken == Branch::Then {
+                        then_items.push(item.clone());
+                    } else {
+                        else_items.push(item.clone());
+                    }
+                }
             }
+            ConnectorOutcome::Iterate { items } => iterated = items,
+            ConnectorOutcome::Wait { resume_at, .. } => {
+                return NodeResult::Wait {
+                    resume_at,
+                    items: StepItems::Main(run.input.to_vec()),
+                };
+            }
+            ConnectorOutcome::Failed { error } => return NodeResult::Failed(error),
         }
-        "flow.loop" => {
-            let items = output
-                .get("items")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-            ConnectorOutcome::Iterate { items }
-        }
-        _ => ConnectorOutcome::Produced(output.clone()),
     }
+
+    NodeResult::Done(if run.branches.contains(&Branch::Then) {
+        StepItems::Branched(vec![(Branch::Then, then_items), (Branch::Else, else_items)])
+    } else if run.branches.contains(&Branch::Each) {
+        StepItems::Branched(vec![
+            (Branch::Each, iterated.clone()),
+            (Branch::After, iterated),
+        ])
+    } else {
+        StepItems::Main(produced)
+    })
 }
 
 impl MestierUseCase {
@@ -509,7 +631,9 @@ impl MestierUseCase {
             .collect();
 
         let placed_by_id: HashMap<&str, &PlacedConnector> = connectors_by_id(&graph);
-        let mut connector_outputs: BTreeMap<String, Value> = BTreeMap::new();
+        let catalogue = connector_catalogue();
+        let node_index = NodeIndex::new(&graph);
+        let trigger = trigger_item(due.trigger_payload.as_ref());
 
         let mut stack: Vec<Frame> = roots(&graph)
             .into_iter()
@@ -525,10 +649,6 @@ impl MestierUseCase {
         let mut parked_until: Option<DateTime<Utc>> = None;
         let mut deferred: Vec<Frame> = Vec::new();
         let mut forced: HashSet<(String, String)> = HashSet::new();
-        // Set the moment the walk must stop early; `None` once it drains the
-        // whole stack means the run is done. Settling happens once, after
-        // the loop, so every exit path — including the two `break`s below —
-        // goes through the same place instead of each carrying its own call.
         let mut early_result: Option<SliceResult> = None;
 
         loop {
@@ -546,37 +666,15 @@ impl MestierUseCase {
             let iteration_path = frame.iteration_path();
             let key = (frame.connector_id.clone(), iteration_path.clone());
 
-            // Only a *settled* step (succeeded, skipped, or permanently
-            // dead) carries a trustworthy outcome to read back — see
-            // `StepStatus::is_settled`. `Pending`/`InFlight`/`Failed` all
-            // fall through to a fresh attempt below: `InFlight` is exactly a
-            // worker that died mid-step, and there is no exactly-once here.
             if let Some(existing) = index.get(&key).cloned()
                 && existing.status.is_settled()
             {
                 match existing.status {
                     StepStatus::Succeeded => {
-                        let output = existing.output.clone().unwrap_or(Value::Null);
-                        connector_outputs.insert(
-                            frame.connector_id.clone(),
-                            json!({ "output": output.clone() }),
-                        );
-                        let placed = placed_by_id.get(frame.connector_id.as_str()).copied();
-                        let kind = placed.map(|p| p.kind.as_str()).unwrap_or_default();
-                        let reconstructed = if placed.is_some_and(|p| p.disabled) {
-                            disabled_outcome(kind, output.clone())
-                        } else {
-                            reconstruct_outcome(kind, &output)
-                        };
-                        self.advance(
-                            due.id,
-                            &graph,
-                            &frame,
-                            &reconstructed,
-                            &mut stack,
-                            &mut index,
-                        )
-                        .await?;
+                        let output =
+                            StepItems::from_json(existing.output.as_ref().unwrap_or(&Value::Null));
+                        self.advance(due.id, &graph, &frame, &output, &mut stack, &mut index)
+                            .await?;
                         continue;
                     }
                     StepStatus::Skipped => continue,
@@ -626,36 +724,10 @@ impl MestierUseCase {
                 break;
             };
 
-            if placed.disabled {
-                let scope_paths = frame.scope_paths();
-                let output = pass_through_output(
-                    &graph,
-                    &frame.connector_id,
-                    |source| succeeded_output_in_scope(&index, source, &scope_paths),
-                    due.trigger_payload.as_ref(),
-                );
-                let settled = self
-                    .write_step(&pass_through_step(
-                        due.id,
-                        &frame.connector_id,
-                        &iteration_path,
-                        &output,
-                    ))
-                    .await?;
-                steps_executed += 1;
-                let outcome = disabled_outcome(&placed.kind, output.clone());
-                connector_outputs.insert(frame.connector_id.clone(), json!({ "output": output }));
-                index.insert(key, settled);
-
-                self.advance(due.id, &graph, &frame, &outcome, &mut stack, &mut index)
-                    .await?;
-                continue;
-            }
-
             if let Some(existing) = index.get(&key).cloned()
                 && existing.status == StepStatus::Waiting
             {
-                let output = existing.output.clone().unwrap_or(Value::Null);
+                let output = StepItems::from_json(existing.output.as_ref().unwrap_or(&Value::Null));
                 let resumed = self
                     .write_step(&RunStep {
                         status: StepStatus::Succeeded,
@@ -665,62 +737,66 @@ impl MestierUseCase {
                     })
                     .await?;
                 steps_executed += 1;
-                connector_outputs.insert(
-                    frame.connector_id.clone(),
-                    json!({ "output": output.clone() }),
-                );
                 index.insert(key, resumed);
-                let outcome = ConnectorOutcome::Produced(output);
-                self.advance(due.id, &graph, &frame, &outcome, &mut stack, &mut index)
+                self.advance(due.id, &graph, &frame, &output, &mut stack, &mut index)
                     .await?;
                 continue;
             }
 
-            if placed.kind == MERGE_KIND && !forced.contains(&key) {
-                match merge_gate(&graph, &index, &frame) {
-                    MergeGate::Ready => {}
-                    MergeGate::Parked => continue,
-                    MergeGate::Deferred => {
+            if !forced.contains(&key) {
+                match input_gate(&graph, &index, &frame) {
+                    InputGate::Ready => {}
+                    InputGate::Parked => continue,
+                    InputGate::Deferred => {
                         deferred.push(frame);
                         continue;
                     }
                 }
             }
 
-            let loop_frame =
-                frame
-                    .path
-                    .last()
-                    .map(|step| crate::domain::automation::expression::LoopFrame {
-                        item: &step.item,
-                        index: step.index,
-                    });
-            let now = Utc::now();
-            let ctx = ExpressionContext {
-                trigger: due.trigger_payload.as_ref(),
-                connectors: &connector_outputs,
-                loop_frame,
-                now,
-            };
-            let resolved = if placed.kind == COLLECTION_OPERATION_KIND {
-                resolve_config_nested(&placed.config, &ctx, &NESTED_EXPRESSION_FIELDS)
-            } else {
-                resolve_config(&placed.config, &ctx)
-            };
-            let resolved = resolved.map(|mut config| {
-                if placed.kind == MERGE_KIND {
-                    let scope_paths = frame.scope_paths();
-                    let inputs = merge_inputs(
-                        &graph,
-                        &frame.connector_id,
-                        |source| succeeded_output_in_scope(&index, source, &scope_paths),
-                        due.trigger_payload.as_ref(),
-                    );
-                    config.insert("inputs".to_owned(), Value::Array(inputs));
-                }
-                config
-            });
+            let descriptor = catalogue.get(&placed.kind, placed.version);
+            let branches = descriptor.map_or(&[][..], |descriptor| descriptor.branches);
+            let mode = descriptor.map_or(ExecutionMode::PerItem, |descriptor| descriptor.execution);
+            let lists = input_lists(&graph, &index, &frame, &trigger);
+            let input = flatten(&lists);
 
+            if placed.disabled {
+                let output = StepItems::passthrough(branches, input.clone());
+                let settled = self
+                    .write_step(&pass_through_step(
+                        due.id,
+                        &frame.connector_id,
+                        &iteration_path,
+                        &input,
+                        &output,
+                    ))
+                    .await?;
+                steps_executed += 1;
+                index.insert(key, settled);
+
+                self.advance(due.id, &graph, &frame, &output, &mut stack, &mut index)
+                    .await?;
+                continue;
+            }
+
+            let scope_paths = frame.scope_paths();
+            let names = referenced_names(
+                &placed.config,
+                if placed.kind == COLLECTION_OPERATION_KIND {
+                    &NESTED_EXPRESSION_FIELDS
+                } else {
+                    &[]
+                },
+            );
+            let view = node_index.view(
+                &names,
+                &frame.connector_id,
+                &trigger,
+                |id| frame.loop_item(id),
+                |id| succeeded_items_in_scope(&index, id, &scope_paths),
+            );
+
+            let now = Utc::now();
             let in_flight = RunStep {
                 id: generate_uuid_v7(),
                 run_id: due.id,
@@ -728,10 +804,7 @@ impl MestierUseCase {
                 iteration_path: iteration_path.clone(),
                 attempts: attempts_before + 1,
                 status: StepStatus::InFlight,
-                input: resolved
-                    .as_ref()
-                    .ok()
-                    .map(|config| Value::Object(config.clone())),
+                input: Some(Value::Array(input.clone())),
                 output: None,
                 error: None,
                 resume_at: None,
@@ -742,32 +815,23 @@ impl MestierUseCase {
             let written = self.write_step(&in_flight).await?;
             steps_executed += 1;
 
-            let outcome = match resolved {
-                Err(error) => ConnectorOutcome::Failed {
-                    error: error.to_string(),
+            let result = run_over_items(
+                connectors,
+                &NodeRun {
+                    due,
+                    placed,
+                    mode,
+                    branches,
+                    input: &input,
+                    lists: &lists,
+                    view: &view,
+                    loop_step: frame.path.last(),
                 },
-                Ok(config) => {
-                    let input = ConnectorInput {
-                        org_id: due.org_id,
-                        run_id: due.id,
-                        config: &config,
-                        credential_id: placed.credential_id,
-                        operation: placed.operation.as_ref(),
-                    };
-                    match connectors
-                        .execute(&placed.kind, placed.version, input)
-                        .await
-                    {
-                        Ok(outcome) => outcome,
-                        Err(unknown) => ConnectorOutcome::Failed {
-                            error: unknown.to_string(),
-                        },
-                    }
-                }
-            };
+            )
+            .await;
 
-            match &outcome {
-                ConnectorOutcome::Failed { error } => {
+            match result {
+                NodeResult::Failed(error) => {
                     let settings = self.retry_schedule_for(due.org_id).await?;
                     let next_attempt_at = settings
                         .backoff_after(attempts_before)
@@ -789,44 +853,34 @@ impl MestierUseCase {
                     self.write_step(&settled).await?;
 
                     early_result = Some(SliceResult::StepFailed {
-                        error: error.clone(),
+                        error,
                         dead,
                         next_attempt_at,
                     });
                     break;
                 }
-                ConnectorOutcome::Wait { resume_at, output } => {
+                NodeResult::Wait { resume_at, items } => {
                     let parked = RunStep {
                         status: StepStatus::Waiting,
-                        output: Some(output.clone()),
-                        resume_at: Some(*resume_at),
+                        output: Some(items.to_json()),
+                        resume_at: Some(resume_at),
                         ..written
                     };
                     let parked = self.write_step(&parked).await?;
                     index.insert(key, parked);
-                    parked_until = earliest(parked_until, *resume_at);
+                    parked_until = earliest(parked_until, resume_at);
                 }
-                _ => {
-                    let output = match &outcome {
-                        ConnectorOutcome::Produced(output) => output.clone(),
-                        ConnectorOutcome::Branch { output, .. } => output.clone(),
-                        ConnectorOutcome::Iterate { items } => json!({ "items": items }),
-                        ConnectorOutcome::Failed { .. } | ConnectorOutcome::Wait { .. } => {
-                            unreachable!("handled above")
-                        }
-                    };
+                NodeResult::Done(output) => {
                     let settled = RunStep {
                         status: StepStatus::Succeeded,
-                        output: Some(output.clone()),
+                        output: Some(output.to_json()),
                         finished_at: Some(Utc::now()),
                         ..written
                     };
                     let settled = self.write_step(&settled).await?;
-                    connector_outputs
-                        .insert(frame.connector_id.clone(), json!({ "output": output }));
                     index.insert(key, settled);
 
-                    self.advance(due.id, &graph, &frame, &outcome, &mut stack, &mut index)
+                    self.advance(due.id, &graph, &frame, &output, &mut stack, &mut index)
                         .await?;
                 }
             }
@@ -873,11 +927,11 @@ impl MestierUseCase {
         run_id: Uuid,
         graph: &Graph,
         frame: &Frame,
-        outcome: &ConnectorOutcome,
+        output: &StepItems,
         stack: &mut Vec<Frame>,
         index: &mut HashMap<(String, String), RunStep>,
     ) -> Result<(), CoreError> {
-        match next_after(graph, &frame.connector_id, outcome) {
+        match next_after(graph, &frame.connector_id, output) {
             Next::Follow { targets, skipped } => {
                 let iteration_path = frame.iteration_path();
                 let to_skip: Vec<&str> = skipped
@@ -1220,6 +1274,11 @@ mod tests {
         connector
     }
 
+    fn named(mut connector: PlacedConnector, name: &str) -> PlacedConnector {
+        connector.name = Some(name.to_owned());
+        connector
+    }
+
     async fn step_output(pool: &PgPool, run_id: Uuid, connector_id: &str) -> Option<Value> {
         sqlx::query_scalar!(
             r#"SELECT output FROM automation.run_step
@@ -1378,7 +1437,10 @@ mod tests {
         assert_eq!(steps[0].status, "succeeded");
         assert_eq!(steps[0].attempts, 0);
         assert_eq!(steps[0].error, None);
-        assert_eq!(step_output(&pool, run_id, "ghost").await, Some(payload));
+        assert_eq!(
+            step_output(&pool, run_id, "ghost").await,
+            Some(json!([payload]))
+        );
     }
 
     #[tokio::test]
@@ -1448,11 +1510,11 @@ mod tests {
         assert_eq!(status_of(&steps, "after"), Some("succeeded"), "{steps:?}");
         assert_eq!(
             step_output(&pool, run_id, "off").await,
-            Some(json!({ "x": 1 }))
+            Some(json!([{ "x": 1 }]))
         );
         assert_eq!(
             step_output(&pool, run_id, "after").await,
-            Some(json!({ "y": 2 }))
+            Some(json!([{ "y": 2 }]))
         );
     }
 
@@ -1501,7 +1563,7 @@ mod tests {
         for (iteration, branch) in ["then", "else", "then"].into_iter().enumerate() {
             assert_eq!(
                 step_output_at(&pool, run_id, "merge", &format!("loop1[{iteration}]")).await,
-                Some(json!({ "branch": branch })),
+                Some(json!([{ "branch": branch }])),
                 "iteration {iteration} must carry the branch it took, not a leftover"
             );
         }
@@ -1543,8 +1605,8 @@ mod tests {
         for iteration in 0..2 {
             assert_eq!(
                 step_output_at(&pool, run_id, "inside", &format!("loop1[{iteration}]")).await,
-                Some(json!({ "scope": "outside" })),
-                "the first incoming edge comes from the connector before the loop"
+                Some(json!([{ "scope": "outside" }, { "valeur": iteration + 1 }])),
+                "the node receives what the connector before the loop sends, then the loop's item"
             );
         }
     }
@@ -1586,7 +1648,10 @@ mod tests {
         assert_eq!(status_of(&steps, "c1"), Some("succeeded"));
         assert_eq!(status_of(&steps, "then_side"), Some("succeeded"));
         assert_eq!(status_of(&steps, "else_side"), Some("skipped"));
-        assert_eq!(step_output(&pool, run_id, "c1").await, Some(payload));
+        assert_eq!(
+            step_output(&pool, run_id, "c1").await,
+            Some(json!({ "Then": [payload], "Else": [] }))
+        );
     }
 
     #[tokio::test]
@@ -2565,9 +2630,11 @@ mod tests {
         assert_eq!(steps[0].connector_id, "c1");
         assert_eq!(steps[0].status, StepStatus::Succeeded);
         assert_eq!(steps[0].attempts, 1);
-        let input = steps[0].input.as_ref().expect("a resolved input is kept");
-        assert_eq!(input["name"], json!("Inspected Customer"));
-        assert!(steps[0].output.is_some());
+        let input = steps[0].input.as_ref().expect("the input items are kept");
+        assert_eq!(input, &json!([{}]));
+        let output = steps[0].output.as_ref().expect("the output items are kept");
+        assert_eq!(output[0]["name"], json!("Inspected Customer"));
+        assert_eq!(output.as_array().map(Vec::len), Some(1));
     }
 
     #[tokio::test]
@@ -2861,13 +2928,16 @@ mod tests {
         let usecase = use_case(pool.clone());
         let graph = Graph {
             connectors: vec![
-                flow_config(
-                    "c2",
-                    json!({ "firstname": "John", "lastname": "Doe", "id": "1" }),
+                named(
+                    flow_config(
+                        "c2",
+                        json!({ "firstname": "John", "lastname": "Doe", "id": "1" }),
+                    ),
+                    "Réglages",
                 ),
-                http_get(
+                customer_create(
                     "c1",
-                    "http://127.0.0.1:1/todos/{{ connectors.c2.output.id }}",
+                    "{{ $('Réglages').item.json.firstname }} {{ $('Réglages').item.json.lastname }} #{{ $('Réglages').item.json.id }}",
                 ),
             ],
             edges: vec![edge("c2", "c1", None)],
@@ -2886,18 +2956,22 @@ mod tests {
             .unwrap();
 
         let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
-        let http_step = steps
+        let customer_step = steps
             .iter()
             .find(|s| s.connector_id == "c1")
-            .expect("the http.request step has its own row");
-        let input = http_step
-            .input
+            .expect("the customer step has its own row");
+        let output = customer_step
+            .output
             .as_ref()
-            .expect("a resolved input is recorded for a step that ran");
+            .expect("an output is recorded for a step that ran");
         assert_eq!(
-            input["url"],
-            json!("http://127.0.0.1:1/todos/1"),
-            "the http connector must receive the id resolved from flow.config's output"
+            output[0]["name"],
+            json!("John Doe #1"),
+            "the connector must receive the values resolved from flow.config's item"
+        );
+        assert_eq!(
+            customer_step.input,
+            Some(json!([{ "firstname": "John", "lastname": "Doe", "id": "1" }]))
         );
     }
 
@@ -2910,11 +2984,8 @@ mod tests {
         let usecase = use_case(pool.clone());
         let graph = Graph {
             connectors: vec![
-                flow_config("c2", json!({ "id": "2" })),
-                http_get(
-                    "c1",
-                    "http://127.0.0.1:1/todos/{{ connectors.c2.output.id }}",
-                ),
+                named(flow_config("c2", json!({ "id": "2" })), "Réglages"),
+                customer_create("c1", "todo {{ $('Réglages').item.json.id }}"),
             ],
             edges: vec![edge("c2", "c1", None)],
             triggers: Vec::new(),
@@ -2954,18 +3025,18 @@ mod tests {
             .unwrap();
 
         let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
-        let http_step = steps
+        let customer_step = steps
             .iter()
             .find(|s| s.connector_id == "c1")
-            .expect("the http.request step ran on the resumed pass");
-        let input = http_step
-            .input
+            .expect("the customer step ran on the resumed pass");
+        let output = customer_step
+            .output
             .as_ref()
-            .expect("a resolved input is recorded for a step that ran");
+            .expect("an output is recorded for a step that ran");
         assert_eq!(
-            input["url"],
-            json!("http://127.0.0.1:1/todos/2"),
-            "the resumed pass must resolve c2's output the same way the first pass would"
+            output[0]["name"],
+            json!("todo 2"),
+            "the resumed pass must resolve c2's items the same way the first pass would"
         );
     }
 
@@ -3100,8 +3171,8 @@ mod tests {
             assert_eq!(run_status(&pool, first).await, "succeeded");
             assert_eq!(run_status(&pool, second).await, "succeeded");
             let output = step_output(&pool, first, "c1").await.unwrap();
-            assert_eq!(output["status"], 200);
-            assert_eq!(output["body"], json!({ "street": "x" }));
+            assert_eq!(output[0]["status"], 200);
+            assert_eq!(output[0]["body"], json!({ "street": "x" }));
             let paths: Vec<String> = server.requests().into_iter().map(|r| r.path).collect();
             assert_eq!(paths, ["/addresses/7", "/v2/places/7"]);
         }
@@ -3193,7 +3264,7 @@ mod tests {
                 .unwrap();
 
             let output = step_output(&pool, run_id, "c1").await.unwrap();
-            assert_eq!(output, json!({ "name": "{{ trigger.id }}" }));
+            assert_eq!(output, json!([{ "name": "{{ trigger.id }}" }]));
         }
 
         #[tokio::test]
@@ -3443,8 +3514,7 @@ mod tests {
             );
             assert!(step_state(&pool, run_id, "c3").await.is_none());
             let output = step_output(&pool, run_id, "w1").await.unwrap();
-            assert_eq!(output["unit"], "days");
-            assert_eq!(output["duration"], 2);
+            assert_eq!(output, json!([{ "before": true }]));
 
             let run = run_state(&pool, run_id).await;
             assert_eq!(run.status, "running");
@@ -3470,8 +3540,8 @@ mod tests {
                 "resuming never executes the wait again"
             );
             assert_eq!(
-                step_output(&pool, run_id, "w1").await.unwrap()["unit"],
-                "days"
+                step_output(&pool, run_id, "w1").await.unwrap(),
+                json!([{ "before": true }])
             );
             assert_eq!(
                 step_state(&pool, run_id, "c3").await.unwrap().status,
@@ -3646,7 +3716,7 @@ mod tests {
             let run_id = start(usecase, org_id, graph).await;
             pass(usecase).await;
             assert_eq!(run_status(pool, run_id).await, "succeeded");
-            step_output(pool, run_id, "m").await.unwrap()["items"].clone()
+            step_output(pool, run_id, "m").await.unwrap()
         }
 
         #[tokio::test]
@@ -3745,7 +3815,7 @@ mod tests {
             resume_time_has_come(&pool, run_id, "w").await;
             pass(&usecase).await;
 
-            let items = step_output(&pool, run_id, "m").await.unwrap()["items"].clone();
+            let items = step_output(&pool, run_id, "m").await.unwrap();
             assert_eq!(items, json!([{ "from": "a" }, { "from": "b" }]));
             assert_eq!(run_status(&pool, run_id).await, "succeeded");
         }
@@ -3789,11 +3859,492 @@ mod tests {
             resume_time_has_come(&pool, run_id, "w").await;
             pass(&usecase).await;
 
-            let items = step_output(&pool, run_id, "m").await.unwrap()["items"].clone();
-            assert_eq!(items[0], json!({ "from": "b" }));
-            assert_eq!(items[1]["unit"], "minutes");
-            assert_eq!(items.as_array().unwrap().len(), 2);
+            let items = step_output(&pool, run_id, "m").await.unwrap();
+            assert_eq!(items, json!([{ "from": "b" }, { "from": "a" }]));
             assert_eq!(run_status(&pool, run_id).await, "succeeded");
+        }
+    }
+
+    mod items_runs {
+        use super::*;
+        use crate::domain::automation::workflow::{PlacedTrigger, TriggerKind};
+
+        fn merge_append(id: &str) -> PlacedConnector {
+            let mut config = serde_json::Map::new();
+            config.insert("mode".to_string(), json!("append"));
+            PlacedConnector {
+                id: id.to_string(),
+                kind: "flow.merge".to_string(),
+                version: 1,
+                credential_id: None,
+                config,
+                name: None,
+                description: None,
+                disabled: false,
+                operation: None,
+            }
+        }
+
+        fn quote_search(id: &str) -> PlacedConnector {
+            PlacedConnector {
+                id: id.to_string(),
+                kind: "mestier.quote.search".to_string(),
+                version: 1,
+                credential_id: None,
+                config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
+                operation: None,
+            }
+        }
+
+        fn three_sources() -> (Vec<PlacedConnector>, Vec<Edge>) {
+            (
+                vec![
+                    named(flow_config("a", json!({ "n": 1 })), "A"),
+                    named(flow_config("b", json!({ "n": 5 })), "B"),
+                    named(flow_config("c", json!({ "n": 9 })), "C"),
+                    named(merge_append("m"), "Fusion"),
+                ],
+                vec![
+                    edge("a", "m", None),
+                    edge("b", "m", None),
+                    edge("c", "m", None),
+                ],
+            )
+        }
+
+        async fn run_once(
+            usecase: &MestierUseCase,
+            pool: &PgPool,
+            org_id: OrganizationId,
+            graph: Graph,
+            payload: Value,
+        ) -> Uuid {
+            let workflow_id = start_workflow(usecase, org_id, graph).await;
+            let run_id = usecase
+                .start_run(org_id, workflow_id, payload)
+                .await
+                .unwrap();
+            make_run_due_now(pool, run_id).await;
+            usecase
+                .run_engine_pass(
+                    &ConnectorRegistry::new(usecase.clone()),
+                    "worker-1",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+            run_id
+        }
+
+        fn names(output: &Value) -> Vec<String> {
+            output
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item["name"].as_str().unwrap().to_owned())
+                .collect()
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_node_fed_three_items_runs_three_times_and_produces_three_items() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "three-items").await;
+            let usecase = use_case(pool.clone());
+            let (mut connectors, mut edges) = three_sources();
+            connectors.push(named(
+                customer_create("create", "Client {{ $('Fusion').item.json.n }}"),
+                "Création",
+            ));
+            edges.push(edge("m", "create", None));
+            let graph = Graph {
+                connectors,
+                edges,
+                triggers: Vec::new(),
+            };
+
+            let run_id = run_once(&usecase, &pool, org_id, graph, json!({})).await;
+
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            assert_eq!(customer_count(&pool, org_id).await, 3);
+            let merged = step_output(&pool, run_id, "m").await.unwrap();
+            assert_eq!(merged, json!([{ "n": 1 }, { "n": 5 }, { "n": 9 }]));
+            let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
+            let created = steps.iter().find(|s| s.connector_id == "create").unwrap();
+            assert_eq!(created.input, Some(merged));
+            assert_eq!(
+                names(created.output.as_ref().unwrap()),
+                ["Client 1", "Client 5", "Client 9"]
+            );
+            assert_eq!(created.attempts, 1);
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_condition_sends_each_item_to_the_branch_its_predicate_selects() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "split").await;
+            let usecase = use_case(pool.clone());
+            let (mut connectors, mut edges) = three_sources();
+            connectors.extend([
+                named(
+                    condition("cond", "{{ $('Fusion').item.json.n > 4 }}"),
+                    "Seuil",
+                ),
+                customer_create("big", "Gros {{ $('Seuil').item.json.n }}"),
+                customer_create("small", "Petit {{ $('Seuil').item.json.n }}"),
+            ]);
+            edges.extend([
+                edge("m", "cond", None),
+                edge("cond", "big", Some(Branch::Then)),
+                edge("cond", "small", Some(Branch::Else)),
+            ]);
+            let graph = Graph {
+                connectors,
+                edges,
+                triggers: Vec::new(),
+            };
+
+            let run_id = run_once(&usecase, &pool, org_id, graph, json!({})).await;
+
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            assert_eq!(
+                step_output(&pool, run_id, "cond").await.unwrap(),
+                json!({ "Then": [{ "n": 5 }, { "n": 9 }], "Else": [{ "n": 1 }] })
+            );
+            assert_eq!(
+                names(&step_output(&pool, run_id, "big").await.unwrap()),
+                ["Gros 5", "Gros 9"]
+            );
+            assert_eq!(
+                names(&step_output(&pool, run_id, "small").await.unwrap()),
+                ["Petit 1"]
+            );
+            assert_eq!(customer_count(&pool, org_id).await, 3);
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_branch_that_gets_no_item_is_skipped_and_the_other_one_runs() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "split-empty").await;
+            let usecase = use_case(pool.clone());
+            let (mut connectors, mut edges) = three_sources();
+            connectors.extend([
+                named(
+                    condition("cond", "{{ $('Fusion').item.json.n > 0 }}"),
+                    "Seuil",
+                ),
+                customer_create("big", "Gros {{ $('Seuil').item.json.n }}"),
+                customer_create("small", "Petit"),
+            ]);
+            edges.extend([
+                edge("m", "cond", None),
+                edge("cond", "big", Some(Branch::Then)),
+                edge("cond", "small", Some(Branch::Else)),
+            ]);
+            let graph = Graph {
+                connectors,
+                edges,
+                triggers: Vec::new(),
+            };
+
+            let run_id = run_once(&usecase, &pool, org_id, graph, json!({})).await;
+
+            let steps = run_steps(&pool, run_id).await;
+            assert_eq!(status_of(&steps, "big"), Some("succeeded"), "{steps:?}");
+            assert_eq!(status_of(&steps, "small"), Some("skipped"), "{steps:?}");
+            assert_eq!(customer_count(&pool, org_id).await, 3);
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn with_no_item_a_per_item_node_does_not_run_and_a_once_node_does() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "zero-items").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    named(quote_search("search"), "Recherche"),
+                    customer_create("create", "Jamais"),
+                    flow_config("config", json!({ "ran": true })),
+                ],
+                edges: vec![
+                    edge("search", "create", None),
+                    edge("search", "config", None),
+                ],
+                triggers: Vec::new(),
+            };
+
+            let run_id = run_once(&usecase, &pool, org_id, graph, json!({})).await;
+
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            assert_eq!(step_output(&pool, run_id, "search").await, Some(json!([])));
+            let steps = run_steps(&pool, run_id).await;
+            assert_eq!(status_of(&steps, "create"), Some("succeeded"));
+            assert_eq!(step_output(&pool, run_id, "create").await, Some(json!([])));
+            assert_eq!(customer_count(&pool, org_id).await, 0);
+            assert_eq!(
+                step_output(&pool, run_id, "config").await,
+                Some(json!([{ "ran": true }]))
+            );
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_reference_to_a_node_that_produced_no_item_fails_the_step_naming_the_node() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "no-item").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    named(quote_search("search"), "Recherche"),
+                    flow_config("config", json!("{{ $('Recherche').item.json }}")),
+                ],
+                edges: vec![edge("search", "config", None)],
+                triggers: Vec::new(),
+            };
+
+            let run_id = run_once(&usecase, &pool, org_id, graph, json!({})).await;
+
+            let steps = run_steps(&pool, run_id).await;
+            assert_eq!(status_of(&steps, "config"), Some("failed"), "{steps:?}");
+            let error = steps
+                .iter()
+                .find(|s| s.connector_id == "config")
+                .and_then(|s| s.error.clone())
+                .unwrap();
+            assert!(error.contains("Recherche"), "{error}");
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_stored_workflow_with_the_old_syntax_fails_clearly_when_run() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "legacy").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    flow_config("source", json!({ "id": "1" })),
+                    flow_config("target", json!("PLACEHOLDER")),
+                ],
+                edges: vec![edge("source", "target", None)],
+                triggers: Vec::new(),
+            };
+            let workflow_id = start_workflow(&usecase, org_id, graph).await;
+            sqlx::query(
+                "UPDATE automation.workflow_version
+                 SET graph = replace(graph::text, 'PLACEHOLDER', '{{ connectors.source.output.id }}')::jsonb
+                 WHERE workflow_id = $1",
+            )
+            .bind(workflow_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+            let run_id = usecase
+                .start_run(org_id, workflow_id, json!({}))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, run_id).await;
+
+            usecase
+                .run_engine_pass(
+                    &ConnectorRegistry::new(usecase.clone()),
+                    "worker-1",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+
+            let steps = run_steps(&pool, run_id).await;
+            assert_eq!(status_of(&steps, "target"), Some("failed"), "{steps:?}");
+            let error = steps
+                .iter()
+                .find(|s| s.connector_id == "target")
+                .and_then(|s| s.error.clone())
+                .unwrap();
+            assert!(
+                error.contains("cette expression utilise l'ancienne syntaxe"),
+                "{error}"
+            );
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_trigger_is_reached_by_its_name_and_produces_one_item() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "trigger-name").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    flow_config("first", json!("{{ $('Départ').item.json }}")),
+                    flow_config("second", json!("{{ $('Départ').first().json }}")),
+                ],
+                edges: vec![edge("t1", "first", None), edge("first", "second", None)],
+                triggers: vec![PlacedTrigger {
+                    id: "t1".to_string(),
+                    kind: TriggerKind::Manual,
+                    name: Some("Départ".to_string()),
+                    description: None,
+                }],
+            };
+
+            let run_id = run_once(&usecase, &pool, org_id, graph, json!({ "quote": 7 })).await;
+
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            assert_eq!(
+                step_output(&pool, run_id, "first").await,
+                Some(json!([{ "quote": 7 }]))
+            );
+            assert_eq!(
+                step_output(&pool, run_id, "second").await,
+                Some(json!([{ "quote": 7 }]))
+            );
+            let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
+            let first = steps.iter().find(|s| s.connector_id == "first").unwrap();
+            assert_eq!(first.input, Some(json!([{ "quote": 7 }])));
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_loop_iterates_the_items_of_a_node_and_each_iteration_reads_its_own_item() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "loop-items").await;
+            let usecase = use_case(pool.clone());
+            let (mut connectors, mut edges) = three_sources();
+            connectors.extend([
+                named(flow_loop("l", json!("{{ $('Fusion').all() }}")), "Boucle"),
+                customer_create("body", "Tour {{ $('Boucle').item.json.n }}"),
+                flow_config("done", json!("{{ $('Boucle').last().json }}")),
+            ]);
+            edges.extend([
+                edge("m", "l", None),
+                edge("l", "body", Some(Branch::Each)),
+                edge("l", "done", Some(Branch::After)),
+            ]);
+            let graph = Graph {
+                connectors,
+                edges,
+                triggers: Vec::new(),
+            };
+
+            let run_id = run_once(&usecase, &pool, org_id, graph, json!({})).await;
+
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            assert_eq!(
+                step_output(&pool, run_id, "l").await.unwrap(),
+                json!({
+                    "Each": [{ "n": 1 }, { "n": 5 }, { "n": 9 }],
+                    "After": [{ "n": 1 }, { "n": 5 }, { "n": 9 }],
+                })
+            );
+            for (iteration, expected) in ["Tour 1", "Tour 5", "Tour 9"].into_iter().enumerate() {
+                let output =
+                    step_output_at(&pool, run_id, "body", &format!("l[{iteration}]")).await;
+                assert_eq!(names(&output.unwrap()), [expected]);
+            }
+            assert_eq!(
+                step_output(&pool, run_id, "done").await,
+                Some(json!([{ "n": 9 }]))
+            );
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_node_with_two_predecessors_runs_once_with_the_items_of_both() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "two-preds").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    named(flow_config("a", json!({ "from": "a" })), "A"),
+                    named(flow_config("b", json!({ "from": "b" })), "B"),
+                    customer_create(
+                        "join",
+                        "{{ $('A').item.json.from }}{{ $('B').item.json.from }}",
+                    ),
+                ],
+                edges: vec![edge("a", "join", None), edge("b", "join", None)],
+                triggers: Vec::new(),
+            };
+
+            let run_id = run_once(&usecase, &pool, org_id, graph, json!({})).await;
+
+            let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
+            let join: Vec<_> = steps.iter().filter(|s| s.connector_id == "join").collect();
+            assert_eq!(join.len(), 1);
+            assert_eq!(
+                join[0].input,
+                Some(json!([{ "from": "a" }, { "from": "b" }]))
+            );
+            assert_eq!(names(join[0].output.as_ref().unwrap()), ["ab", "ab"]);
+            assert_eq!(customer_count(&pool, org_id).await, 2);
+        }
+
+        #[tokio::test]
+        #[ignore = "requires live postgres"]
+        async fn a_stored_value_that_is_not_a_list_still_advances_a_resumed_run() {
+            let _guard = RUN_CLAIM_LOCK.lock().await;
+            let pool = make_pool().await;
+            let org_id = seed_organization(&pool, "legacy-output").await;
+            let usecase = use_case(pool.clone());
+            let graph = Graph {
+                connectors: vec![
+                    flow_config("first", json!({ "x": 1 })),
+                    named(flow_config("second", json!({ "y": 2 })), "Second"),
+                ],
+                edges: vec![edge("first", "second", None)],
+                triggers: Vec::new(),
+            };
+            let workflow_id = start_workflow(&usecase, org_id, graph).await;
+            let run_id = usecase
+                .start_run(org_id, workflow_id, json!({}))
+                .await
+                .unwrap();
+            make_run_due_now(&pool, run_id).await;
+            usecase
+                .run_engine_pass(
+                    &ConnectorRegistry::new(usecase.clone()),
+                    "worker-1",
+                    schedule_with_step_budget(1),
+                )
+                .await
+                .unwrap();
+            sqlx::query(
+                "UPDATE automation.run_step SET output = '{\"x\": 1}'::jsonb
+                 WHERE run_id = $1 AND connector_id = 'first'",
+            )
+            .bind(run_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+            make_run_due_now(&pool, run_id).await;
+
+            usecase
+                .run_engine_pass(
+                    &ConnectorRegistry::new(usecase.clone()),
+                    "worker-2",
+                    generous_schedule(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(run_status(&pool, run_id).await, "succeeded");
+            let steps = usecase.list_run_steps(org_id, run_id).await.unwrap();
+            let second = steps.iter().find(|s| s.connector_id == "second").unwrap();
+            assert_eq!(second.input, Some(json!([{ "x": 1 }])));
         }
     }
 }
