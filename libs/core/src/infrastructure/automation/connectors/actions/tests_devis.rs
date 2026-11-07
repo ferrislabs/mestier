@@ -25,7 +25,7 @@ async fn a_quote_is_created_read_and_moved_to_another_status() {
     let _guard = RUN_CLAIM_LOCK.lock().await;
     let pool = automation_pool().await;
     let acme = world_support::organization(&pool, "devis-write").await;
-    let customer = world_support::customer(&pool, acme).await;
+    let customer = world_support::customer_billed_in_nantes(&pool, acme).await;
     let registry = registry(&pool);
 
     let created = produced(

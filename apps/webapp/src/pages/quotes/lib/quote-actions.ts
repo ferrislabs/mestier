@@ -5,7 +5,6 @@ export type QuoteAction =
 	| 'accept'
 	| 'decline'
 	| 'cancel'
-	| 'reopen'
 	| 'revise'
 	| 'project'
 	| 'invoice'
@@ -19,24 +18,15 @@ export function availableQuoteActions(
 		case 'draft':
 			return ['send', 'duplicate', 'delete']
 		case 'sent':
-			return [
-				'accept',
-				'decline',
-				'revise',
-				'cancel',
-				'reopen',
-				'duplicate',
-				'delete',
-			]
+			return ['accept', 'decline', 'revise', 'cancel', 'duplicate']
 		case 'expired':
-			return ['revise', 'cancel', 'reopen', 'duplicate', 'delete']
+			return ['revise', 'cancel', 'duplicate']
 		case 'accepted':
-			return ['project', 'invoice', 'duplicate', 'delete']
+			return ['project', 'invoice', 'duplicate']
 		case 'declined':
-			return ['revise', 'reopen', 'duplicate', 'delete']
+			return ['revise', 'duplicate']
 		case 'cancelled':
-			return ['reopen', 'duplicate', 'delete']
 		case 'superseded':
-			return ['duplicate', 'delete']
+			return ['duplicate']
 	}
 }

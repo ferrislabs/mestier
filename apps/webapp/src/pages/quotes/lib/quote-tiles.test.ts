@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Quote } from '#/hooks/use-quotes'
-import { EMPTY_QUOTE_EXTRAS } from './quote-extras'
+import { EMPTY_TERMS, type QuoteTerms } from './quote-terms'
 import { computeQuoteTiles } from './quote-tiles'
 
 function quote(status: Quote['status'], netCents = 1000): Quote {
@@ -15,6 +15,9 @@ function quote(status: Quote['status'], netCents = 1000): Quote {
 		net_cents: netCents,
 		gross_cents: netCents,
 		vat_breakdown: [],
+		deposit_percent: '0',
+		is_expired: false,
+		recurring: [],
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
 	}
@@ -54,11 +57,9 @@ describe('computeQuoteTiles', () => {
 
 describe('computeQuoteTiles on a dated view', () => {
 	const TODAY = '2026-11-07'
-	const view = (
-		extras: Record<string, Partial<typeof EMPTY_QUOTE_EXTRAS>>,
-	) => ({
+	const view = (terms: Record<string, Partial<QuoteTerms>>) => ({
 		today: TODAY,
-		extrasOf: (id: string) => ({ ...EMPTY_QUOTE_EXTRAS, ...extras[id] }),
+		termsOf: (id: string) => ({ ...EMPTY_TERMS, ...terms[id] }),
 	})
 	const dated = (
 		status: Quote['status'],
@@ -69,7 +70,10 @@ describe('computeQuoteTiles on a dated view', () => {
 
 	it('does not count an expired quote as awaiting an answer', () => {
 		const tiles = computeQuoteTiles(
-			[quote('SENT', 2000), { ...quote('SENT', 500), id: 'old' }],
+			[
+				quote('SENT', 2000),
+				{ ...quote('SENT', 500), id: 'old', is_expired: true },
+			],
 			view({ old: { validUntil: '2026-10-01' } }),
 		)
 
@@ -80,7 +84,7 @@ describe('computeQuoteTiles on a dated view', () => {
 		const tiles = computeQuoteTiles(
 			[
 				dated('ACCEPTED', 'won', '2026-11-01T00:00:00Z'),
-				{ ...quote('SENT'), id: 'old' },
+				{ ...quote('SENT'), id: 'old', is_expired: true },
 			],
 			view({ old: { validUntil: '2026-11-01' } }),
 		)
@@ -102,7 +106,7 @@ describe('computeQuoteTiles on a dated view', () => {
 		expect(tiles.acceptanceRate).toBe(100)
 	})
 
-	it('prefers the answer date kept in the extras', () => {
+	it('prefers the answer date the backend recorded', () => {
 		const tiles = computeQuoteTiles(
 			[dated('ACCEPTED', 'q', '2026-01-02T00:00:00Z')],
 			view({ q: { respondedAt: '2026-11-02' } }),
@@ -113,7 +117,7 @@ describe('computeQuoteTiles on a dated view', () => {
 
 	it('does not count a replaced quote as pending', () => {
 		const tiles = computeQuoteTiles(
-			[{ ...quote('SENT'), id: 'old' }],
+			[{ ...quote('SUPERSEDED'), id: 'old' }],
 			view({ old: { supersededBy: { id: 'n', label: 'DEV-2' } } }),
 		)
 

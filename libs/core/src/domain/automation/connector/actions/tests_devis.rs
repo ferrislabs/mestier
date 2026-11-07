@@ -30,5 +30,14 @@ fn the_status_options_are_the_ones_the_domain_parses() {
     for option in STATUSES {
         assert!(QuoteStatus::from_str(option.value).is_ok());
     }
-    assert_eq!(STATUSES.len(), QuoteStatus::ALL.len());
+    let settable = QuoteStatus::ALL
+        .into_iter()
+        .filter(|status| *status != QuoteStatus::Superseded)
+        .count();
+    assert_eq!(STATUSES.len(), settable);
+    assert!(
+        STATUSES
+            .iter()
+            .all(|option| option.value != QuoteStatus::Superseded.as_str())
+    );
 }

@@ -157,6 +157,7 @@ impl Modify for SecurityAddon {
         quote::quote::get_one::handler,
         quote::quote::update::handler,
         quote::quote::update_status::handler,
+        quote::quote::revise::handler,
         quote::quote::soft_delete::handler,
         quote::quote::export_pdf::handler,
         quote::quote::plan_proposal::handler,
@@ -511,6 +512,7 @@ impl Modify for SecurityAddon {
         quote::quote::plan::PlannedTaskRequest,
         quote::response::QuoteLineResponse,
         quote::response::QuoteVatBreakdownLineResponse,
+        quote::response::RecurringTotalResponse,
         quote::response::QuoteResponse,
         quote::response::TaskProposalResponse,
         quote::response::QuotePlanProposalResponse,
@@ -1327,6 +1329,29 @@ mod tests {
                 json.contains(&format!("\"operationId\":\"{operation_id}\"")),
                 "{operation_id} is missing from the document"
             );
+        }
+    }
+
+    #[test]
+    fn the_quote_lifecycle_routes_and_schemas_reach_the_document() {
+        let document = ApiDoc::openapi();
+        let json = serde_json::to_string(&document).expect("the document serializes");
+
+        assert!(
+            document
+                .paths
+                .paths
+                .contains_key("/api/v1/quotes/{quote_id}/revision")
+        );
+        for name in [
+            "\"operationId\":\"reviseQuote\"",
+            "\"RecurringTotalResponse\"",
+            "\"BillingFrequency\"",
+            "\"IssuerSnapshot\"",
+            "\"RecipientSnapshot\"",
+            "\"SUPERSEDED\"",
+        ] {
+            assert!(json.contains(name), "{name} is missing from the document");
         }
     }
 

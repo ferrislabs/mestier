@@ -6,11 +6,12 @@ use iam::{
     infrastructure::ferriskey::{FerriskeyConfig, FerriskeyIamProvider},
 };
 use mestier_core::{
-    AddressKind, AssigneeRef, CreateCustomerCommand, CreateCustomerContextCommand,
-    CreateDealCommand, CreateOrganizationCommand, CreateProjectCommand, CreateQuoteCommand,
-    CreateTaskCommand, CreateUserCommand, Customer, CustomerError, CustomerProfile, CustomerStatus,
-    DealError, DealStageName, EventHub, MestierUseCase, MoveDealCommand, PatchTaskCommand,
-    QuoteLineCommand, ServiceRateUnit, default_authorizer,
+    AddressKind, AssigneeRef, BillingFrequency, CreateCustomerCommand,
+    CreateCustomerContextCommand, CreateDealCommand, CreateOrganizationCommand,
+    CreateProjectCommand, CreateQuoteCommand, CreateTaskCommand, CreateUserCommand, Customer,
+    CustomerError, CustomerProfile, CustomerStatus, DealError, DealStageName, EventHub,
+    MestierUseCase, MoveDealCommand, PatchTaskCommand, QuoteLineCommand, QuoteTermsCommand,
+    ServiceRateUnit, default_authorizer,
 };
 use rust_decimal::Decimal;
 use sqlx::postgres::PgPoolOptions;
@@ -431,9 +432,13 @@ async fn seed_demo_data(
                 customer_id: customer.id,
                 customer_context_id: context.id,
                 deal_id: None,
+                terms: QuoteTermsCommand::default(),
                 lines: vec![
                     QuoteLineCommand {
                         service_rate_id: None,
+                        product_id: None,
+                        discount_percent: Decimal::ZERO,
+                        billing_frequency: BillingFrequency::OneShot,
                         label: "Fourniture et pose des meubles de cuisine".to_owned(),
                         quantity: Decimal::from(1),
                         unit: ServiceRateUnit::FlatRate.as_str().to_owned(),
@@ -444,6 +449,9 @@ async fn seed_demo_data(
                     },
                     QuoteLineCommand {
                         service_rate_id: None,
+                        product_id: None,
+                        discount_percent: Decimal::ZERO,
+                        billing_frequency: BillingFrequency::OneShot,
                         label: "Main d'oeuvre pose".to_owned(),
                         quantity: Decimal::from(3),
                         unit: ServiceRateUnit::Day.as_str().to_owned(),
@@ -456,7 +464,8 @@ async fn seed_demo_data(
             },
             actor,
         )
-        .await?;
+        .await?
+        .map_err(|refusal| SeedError::Core(CoreError::Conflict(refusal.to_string())))?;
 
     Ok(())
 }

@@ -3,6 +3,31 @@ import { describe, expect, it } from 'vitest'
 import { TotalsPanel } from './totals-panel'
 
 describe('TotalsPanel', () => {
+	it('lists the recurring totals under the grand total when there are some', () => {
+		render(
+			<TotalsPanel
+				totals={{
+					netCents: 3000,
+					vat: [],
+					grossCents: 3000,
+					recurring: [
+						{
+							frequency: 'quarterly',
+							netCents: 1500,
+							vatCents: 0,
+							grossCents: 1500,
+						},
+					],
+				}}
+			/>,
+		)
+
+		expect(screen.getByText('Dont facturé de façon récurrente')).toBeDefined()
+		expect(screen.getByText('Trimestriel (HT)')).toBeDefined()
+		const row = screen.getByText('Trimestriel (HT)').parentElement
+		expect(row?.textContent).toMatch(/15,00.*\/ trimestre/)
+	})
+
 	it('reads HT, each VAT rate charged, then TTC', () => {
 		render(
 			<TotalsPanel

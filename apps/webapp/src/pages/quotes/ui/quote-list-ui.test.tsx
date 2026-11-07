@@ -4,10 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Customer } from '#/hooks/use-customers'
 import type { Organization } from '#/hooks/use-organizations'
 import type { Quote } from '#/hooks/use-quotes'
-import {
-	EMPTY_QUOTE_EXTRAS,
-	type QuoteExtras,
-} from '#/pages/quotes/lib/quote-extras'
+import { EMPTY_TERMS, type QuoteTerms } from '#/pages/quotes/lib/quote-terms'
 import { renderWithRouter } from '#/test/render-with-router'
 import { wrapWithPermissions } from '#/test/with-permissions'
 import { QuoteListUI } from './quote-list-ui'
@@ -54,6 +51,9 @@ function quote(overrides: Partial<Quote> = {}): Quote {
 		net_cents: 10000,
 		gross_cents: 12000,
 		vat_breakdown: [],
+		deposit_percent: '0',
+		is_expired: false,
+		recurring: [],
 		created_at: '2026-06-01T09:00:00Z',
 		updated_at: '2026-06-01T09:00:00Z',
 		...overrides,
@@ -81,7 +81,7 @@ function baseProps() {
 			}),
 		],
 		owners: [] as QuoteOwner[],
-		extrasOf: (_quoteId: string): QuoteExtras => EMPTY_QUOTE_EXTRAS,
+		termsOf: (_quoteId: string): QuoteTerms => EMPTY_TERMS,
 		today: '2026-11-07',
 		quotesPagination: null,
 		quotePage: 1,
@@ -207,8 +207,11 @@ describe('QuoteListUI', () => {
 
 	it('shows the validity date and flags an expired quote', async () => {
 		const props = baseProps()
-		props.extrasOf = (id) => ({
-			...EMPTY_QUOTE_EXTRAS,
+		props.quotes = props.quotes.map((item) =>
+			item.id === 'quote-1' ? { ...item, is_expired: true } : item,
+		)
+		props.termsOf = (id) => ({
+			...EMPTY_TERMS,
 			validUntil: id === 'quote-1' ? '2026-11-01' : '2026-12-01',
 		})
 		await renderUi(props)
@@ -220,10 +223,13 @@ describe('QuoteListUI', () => {
 
 	it('shows the display status, expired and replaced included', async () => {
 		const props = baseProps()
-		props.extrasOf = (id) =>
+		props.quotes = props.quotes.map((item) =>
+			item.id === 'quote-1' ? { ...item, is_expired: true } : item,
+		)
+		props.termsOf = (id) =>
 			id === 'quote-1'
-				? { ...EMPTY_QUOTE_EXTRAS, validUntil: '2026-11-01' }
-				: EMPTY_QUOTE_EXTRAS
+				? { ...EMPTY_TERMS, validUntil: '2026-11-01' }
+				: EMPTY_TERMS
 		await renderUi(props)
 
 		expect(screen.getAllByText('Expiré').length).toBeGreaterThan(0)
@@ -234,8 +240,8 @@ describe('QuoteListUI', () => {
 		const user = userEvent.setup()
 		const props = baseProps()
 		props.owners = [{ id: 'm1', name: 'Julien Roche' }]
-		props.extrasOf = (id) => ({
-			...EMPTY_QUOTE_EXTRAS,
+		props.termsOf = (id) => ({
+			...EMPTY_TERMS,
 			ownerId: id === 'quote-2' ? 'm1' : null,
 		})
 		await renderUi(props)

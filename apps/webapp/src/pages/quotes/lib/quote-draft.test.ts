@@ -5,6 +5,7 @@ import {
 	canChangeClient,
 	DEFAULT_VALIDITY_DAYS,
 	defaultValidUntil,
+	isClientLocked,
 	NO_OWNER,
 	ownerFromSelect,
 	ownerToSelect,
@@ -86,8 +87,9 @@ describe('validityNote', () => {
 		expect(note.expired).toBe(false)
 	})
 
-	it('flags a sent quote past its date as expired', () => {
-		expect(validityNote('SENT', '2026-11-01', TODAY).expired).toBe(true)
+	it('flags a sent quote as expired only when the backend says so', () => {
+		expect(validityNote('SENT', '2026-11-01', TODAY, true).expired).toBe(true)
+		expect(validityNote('SENT', '2026-11-01', TODAY, false).expired).toBe(false)
 	})
 
 	it('also flags a draft whose date has already passed', () => {
@@ -96,5 +98,26 @@ describe('validityNote', () => {
 
 	it('does not flag an accepted quote', () => {
 		expect(validityNote('ACCEPTED', '2026-11-01', TODAY).expired).toBe(false)
+	})
+})
+
+describe('isClientLocked', () => {
+	const empty = [{ label: '', unitPrice: '', catalogItemId: '' }]
+	const typed = [{ label: 'Pose', unitPrice: '', catalogItemId: '' }]
+
+	it('stays open while there is no customer yet', () => {
+		expect(isClientLocked(false, 0, empty)).toBe(false)
+	})
+
+	it('stays open for a customer and a form without lines', () => {
+		expect(isClientLocked(true, 0, empty)).toBe(false)
+	})
+
+	it('locks once a line is typed', () => {
+		expect(isClientLocked(true, 0, typed)).toBe(true)
+	})
+
+	it('locks while the saved quote has lines, even if the form was emptied', () => {
+		expect(isClientLocked(true, 2, empty)).toBe(true)
 	})
 })

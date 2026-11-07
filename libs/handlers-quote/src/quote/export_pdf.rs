@@ -145,15 +145,27 @@ fn render_quote_pdf(
             String::new()
         };
 
+        let line_net = line
+            .net_cents()
+            .ok()
+            .and_then(|net| i32::try_from(net).ok())
+            .unwrap_or_default();
+        let discount = if line.discount_percent.get().is_zero() {
+            String::new()
+        } else {
+            format!(", remise {}%", line.discount_percent.get().normalize())
+        };
+
         text_lines.push(format!(
-            "{}. {} - {} {} x {}{} = {}",
+            "{}. {} - {} {} x {}{}{} = {}",
             index + 1,
             line.label,
             line.quantity.normalize(),
             line.unit.as_str(),
             format_cents(line.unit_price_cents),
+            discount,
             rate,
-            format_cents(line_net_cents(line.quantity, line.unit_price_cents)),
+            format_cents(line_net),
         ));
 
         if let Some(notes) = &line.notes {
@@ -187,15 +199,26 @@ fn render_quote_pdf(
 
     text_lines.push(format!("Total TTC: {}", format_cents(quote.gross_cents)));
 
+    for recurring in quote.recurring() {
+        text_lines.push(format!(
+            "Dont facturé {}: {} HT, {} TTC",
+            recurring_label(recurring.frequency),
+            format_cents(recurring.net_cents),
+            format_cents(recurring.gross_cents),
+        ));
+    }
+
     let content = render_pdf_text_stream(&text_lines);
     build_pdf(content.as_bytes())
 }
 
-fn line_net_cents(quantity: rust_decimal::Decimal, unit_price_cents: i32) -> i32 {
-    use rust_decimal::prelude::ToPrimitive;
+fn recurring_label(frequency: mestier_core::BillingFrequency) -> &'static str {
+    use mestier_core::BillingFrequency;
 
-    (quantity * rust_decimal::Decimal::from(unit_price_cents))
-        .round_dp(0)
-        .to_i32()
-        .unwrap_or(0)
+    match frequency {
+        BillingFrequency::OneShot => "une fois",
+        BillingFrequency::Monthly => "chaque mois",
+        BillingFrequency::Quarterly => "chaque trimestre",
+        BillingFrequency::Yearly => "chaque annee",
+    }
 }

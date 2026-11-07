@@ -229,23 +229,10 @@ where
         let saved = self.deals.update(&deal).await?;
 
         if won {
-            self.convert_prospect(&saved, now).await?;
+            convert_prospect(&mut self.customers, saved.customer_id, now).await?;
         }
 
         Ok(Ok(saved))
-    }
-
-    async fn convert_prospect(&mut self, deal: &Deal, now: DateTime<Utc>) -> Result<(), CoreError> {
-        let Some(mut customer) = self.customers.find_by_id(deal.customer_id).await? else {
-            return Ok(());
-        };
-        if customer.status != CustomerStatus::Prospect {
-            return Ok(());
-        }
-        customer.change_status(CustomerStatus::Client, now);
-        customer.updated_at = now;
-        self.customers.update(&customer).await?;
-        Ok(())
     }
 
     pub async fn delete_deal(
@@ -281,4 +268,21 @@ where
 
         Ok(summarise(&by_stage, &closed, conversions))
     }
+}
+
+pub(crate) async fn convert_prospect(
+    customers: &mut impl CustomerRepository,
+    customer_id: CustomerId,
+    now: DateTime<Utc>,
+) -> Result<(), CoreError> {
+    let Some(mut customer) = customers.find_by_id(customer_id).await? else {
+        return Ok(());
+    };
+    if customer.status != CustomerStatus::Prospect {
+        return Ok(());
+    }
+    customer.change_status(CustomerStatus::Client, now);
+    customer.updated_at = now;
+    customers.update(&customer).await?;
+    Ok(())
 }

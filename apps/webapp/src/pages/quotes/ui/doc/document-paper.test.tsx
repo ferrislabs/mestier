@@ -55,6 +55,50 @@ function paper(overrides: Partial<PaperDocument> = {}): PaperDocument {
 }
 
 describe('DocumentPaper', () => {
+	it('prints the recurring totals the backend returned, one per frequency', () => {
+		render(
+			<DocumentPaper
+				document={paper({
+					totals: {
+						netCents: 18000,
+						vat: [{ rateBp: 2000, vatCents: 3600 }],
+						grossCents: 21600,
+						recurring: [
+							{
+								frequency: 'monthly',
+								netCents: 2000,
+								vatCents: 400,
+								grossCents: 2400,
+							},
+							{
+								frequency: 'yearly',
+								netCents: 12000,
+								vatCents: 2400,
+								grossCents: 14400,
+							},
+						],
+					},
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('Dont facturé de façon récurrente')).toBeDefined()
+		expect(screen.getByText('Mensuel (HT)')).toBeDefined()
+		expect(screen.getByText('Annuel (HT)')).toBeDefined()
+		expect(screen.getByText('Mensuel (HT)').parentElement?.textContent).toMatch(
+			/20,00.*\/ mois/,
+		)
+		expect(screen.getByText('Annuel (HT)').parentElement?.textContent).toMatch(
+			/120,00.*\/ an/,
+		)
+	})
+
+	it('prints no recurring block when every line is billed once', () => {
+		render(<DocumentPaper document={paper()} />)
+
+		expect(screen.queryByText('Dont facturé de façon récurrente')).toBeNull()
+	})
+
 	it('prints the issuer, the recipient, the lines and the backend totals', () => {
 		render(<DocumentPaper document={paper()} />)
 

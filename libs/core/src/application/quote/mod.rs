@@ -1,16 +1,20 @@
+use chrono::Utc;
 use common::CoreError;
 use mestier_macros::transactional;
 
 use authz::Resource;
 
 use crate::{
-    OrganizationId, Quote, QuoteId, TaskProposal,
+    DealQuoteLinks, OrganizationId, Quote, QuoteId, QuoteOutcome, TaskProposal,
     application::{MestierUseCase, policy},
     domain::quote::{
         commands::{CreateQuoteCommand, UpdateQuoteCommand, UpdateQuoteStatusCommand},
         ports::QuoteRepository,
         search::{QuoteSearch, QuoteSearchResults},
-        service::{QuoteService, propose_tasks_from_quote, require_quote_accepted},
+        service::{
+            QuoteChange, QuoteLookups, QuoteService, propose_tasks_from_quote,
+            require_quote_accepted,
+        },
     },
 };
 
@@ -29,16 +33,29 @@ impl MestierUseCase {
     /// the actor is threaded through the use case's own signature instead.
     /// `role`/`member`/`authz` are added to the repository list purely to
     /// enforce `quote.manage` — nothing else about this use case changes.
-    #[transactional(quote, organization, role, member, authz, emitter)]
+    #[transactional(
+        quote,
+        organization,
+        customer,
+        customer_contact,
+        customer_context,
+        role,
+        member,
+        authz,
+        emitter
+    )]
     pub async fn create_quote(
         &self,
         command: CreateQuoteCommand,
         actor: authz::Subject,
-    ) -> Result<Quote, CoreError> {
+    ) -> Result<QuoteOutcome<Quote>, CoreError> {
+        let mut organization_repository = organization_repository;
+        let mut customer_repository = customer_repository;
+        let mut customer_contact_repository = customer_contact_repository;
+        let mut customer_context_repository = customer_context_repository;
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
 
-        // A create carries its own organization id — nothing to load first.
         let actor = policy::enrich_for_organization(
             actor,
             command.organization_id,
@@ -54,8 +71,17 @@ impl MestierUseCase {
         )
         .await?;
 
+        let mut lookups = QuoteLookups {
+            organizations: &mut organization_repository,
+            customers: &mut customer_repository,
+            contacts: &mut customer_contact_repository,
+            addresses: &mut customer_context_repository,
+            members: &mut member_repository,
+        };
         let mut service = QuoteService::new(quote_repository, emitter);
-        service.create_quote(command, organization_repository).await
+        service
+            .create_quote(command, &mut lookups, Utc::now())
+            .await
     }
 
     #[transactional(quote, emitter)]
@@ -88,17 +114,28 @@ impl MestierUseCase {
             .await
     }
 
-    /// `actor` — see `create_quote`'s own doc. A bare `command.id` never
-    /// carries a trustworthy organization: the quote is loaded first, and
-    /// its own `organization_id` is what the policy check runs against —
-    /// never anything derived from the path or the command.
-    #[transactional(quote, organization, role, member, authz, emitter)]
+    #[transactional(
+        quote,
+        organization,
+        customer,
+        customer_contact,
+        customer_context,
+        deal,
+        role,
+        member,
+        authz,
+        emitter
+    )]
     pub async fn update_quote(
         &self,
         command: UpdateQuoteCommand,
         actor: authz::Subject,
-    ) -> Result<Quote, CoreError> {
+    ) -> Result<QuoteOutcome<Quote>, CoreError> {
         let mut quote_repository = quote_repository;
+        let mut organization_repository = organization_repository;
+        let mut customer_repository = customer_repository;
+        let mut customer_contact_repository = customer_contact_repository;
+        let mut customer_context_repository = customer_context_repository;
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
 
@@ -122,19 +159,44 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = QuoteService::new(quote_repository, emitter);
-        service.update_quote(command, organization_repository).await
+        let now = Utc::now();
+        let outcome = {
+            let mut lookups = QuoteLookups {
+                organizations: &mut organization_repository,
+                customers: &mut customer_repository,
+                contacts: &mut customer_contact_repository,
+                addresses: &mut customer_context_repository,
+                members: &mut member_repository,
+            };
+            let mut service = QuoteService::new(quote_repository, emitter);
+            service.update_quote(command, &mut lookups, now).await?
+        };
+
+        follow_deal(outcome, deal_repository, customer_repository, now).await
     }
 
-    /// `actor` — see `create_quote`'s own doc; loads the quote first for the
-    /// same reason `update_quote` does.
-    #[transactional(quote, organization, role, member, authz, emitter)]
+    #[transactional(
+        quote,
+        organization,
+        customer,
+        customer_contact,
+        customer_context,
+        deal,
+        role,
+        member,
+        authz,
+        emitter
+    )]
     pub async fn update_quote_status(
         &self,
         command: UpdateQuoteStatusCommand,
         actor: authz::Subject,
-    ) -> Result<Quote, CoreError> {
+    ) -> Result<QuoteOutcome<Quote>, CoreError> {
         let mut quote_repository = quote_repository;
+        let mut organization_repository = organization_repository;
+        let mut customer_repository = customer_repository;
+        let mut customer_contact_repository = customer_contact_repository;
+        let mut customer_context_repository = customer_context_repository;
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
 
@@ -158,20 +220,30 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = QuoteService::new(quote_repository, emitter);
-        service
-            .update_quote_status(command, organization_repository)
-            .await
+        let now = Utc::now();
+        let outcome = {
+            let mut lookups = QuoteLookups {
+                organizations: &mut organization_repository,
+                customers: &mut customer_repository,
+                contacts: &mut customer_contact_repository,
+                addresses: &mut customer_context_repository,
+                members: &mut member_repository,
+            };
+            let mut service = QuoteService::new(quote_repository, emitter);
+            service
+                .update_quote_status(command, &mut lookups, now)
+                .await?
+        };
+
+        follow_deal(outcome, deal_repository, customer_repository, now).await
     }
 
-    /// `actor` — see `create_quote`'s own doc; loads the quote first for the
-    /// same reason `update_quote` does.
     #[transactional(quote, role, member, authz, emitter)]
-    pub async fn soft_delete_quote(
+    pub async fn revise_quote(
         &self,
         id: QuoteId,
         actor: authz::Subject,
-    ) -> Result<(), CoreError> {
+    ) -> Result<QuoteOutcome<Quote>, CoreError> {
         let mut quote_repository = quote_repository;
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
@@ -197,7 +269,41 @@ impl MestierUseCase {
         .await?;
 
         let mut service = QuoteService::new(quote_repository, emitter);
-        service.soft_delete_quote(id).await
+        service.revise_quote(id, Utc::now()).await
+    }
+
+    #[transactional(quote, role, member, authz, emitter)]
+    pub async fn soft_delete_quote(
+        &self,
+        id: QuoteId,
+        actor: authz::Subject,
+    ) -> Result<QuoteOutcome<()>, CoreError> {
+        let mut quote_repository = quote_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let existing = quote_repository
+            .find_by_id(id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+
+        let actor = policy::enrich_for_organization(
+            actor,
+            existing.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        policy::require(
+            authz,
+            &actor,
+            "quote.manage",
+            Resource::new("organization", existing.organization_id.0.to_string()),
+        )
+        .await?;
+
+        let mut service = QuoteService::new(quote_repository, emitter);
+        service.soft_delete_quote(id, Utc::now()).await
     }
 
     /// `GET .../plan-proposal`: one suggested task per quote line, and
@@ -216,4 +322,21 @@ impl MestierUseCase {
 
         Ok((quote, proposal))
     }
+}
+
+async fn follow_deal(
+    outcome: QuoteOutcome<QuoteChange>,
+    deals: impl crate::domain::deal::ports::DealRepository,
+    customers: impl crate::domain::customer::ports::CustomerRepository,
+    now: chrono::DateTime<Utc>,
+) -> Result<QuoteOutcome<Quote>, CoreError> {
+    let change = match outcome {
+        Ok(change) => change,
+        Err(refusal) => return Ok(Err(refusal)),
+    };
+    DealQuoteLinks::new(deals, customers)
+        .follow(&change, now)
+        .await?;
+
+    Ok(Ok(change.quote))
 }

@@ -4,7 +4,7 @@ import { Input } from '#/components/ui/input'
 import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import { buildOrgPath } from '#/modules/org-path'
-import { canChangeClient } from '#/pages/quotes/lib/quote-draft'
+import { isClientLocked } from '#/pages/quotes/lib/quote-draft'
 import {
 	type QuoteFormValues,
 	type QuoteLineFormValues,
@@ -30,6 +30,7 @@ interface QuoteEditFormProps {
 	vatEnabled: boolean
 	customUnits: string[]
 	owners: readonly QuoteOwner[]
+	savedLineCount?: number
 	isLoading: boolean
 	isUploading: boolean
 	onChange: (patch: Partial<QuoteFormValues>) => void
@@ -53,6 +54,7 @@ export function QuoteEditForm({
 	vatEnabled,
 	customUnits,
 	owners,
+	savedLineCount = 0,
 	isLoading,
 	isUploading,
 	onChange,
@@ -65,7 +67,7 @@ export function QuoteEditForm({
 	onUploadLinePhoto,
 }: QuoteEditFormProps) {
 	const hasCustomer = values.customerId !== ''
-	const clientLocked = hasCustomer && !canChangeClient(values.lines)
+	const clientLocked = isClientLocked(hasCustomer, savedLineCount, values.lines)
 	const noAddress = hasCustomer && !isLoading && customerContexts.length === 0
 	return (
 		<div className="grid gap-5">

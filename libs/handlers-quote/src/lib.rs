@@ -7,6 +7,7 @@ use mestier_core::{CustomerContextId, CustomerId, DealId, OrganizationId, Permis
 pub mod paths;
 pub mod pdf;
 pub mod quote;
+pub mod quote_error;
 pub mod response;
 
 pub const TAG: &str = "quotes";
@@ -131,6 +132,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_patch(quote::update::handler)
         .typed_patch(quote::update_status::handler)
         .typed_delete(quote::soft_delete::handler)
+        .typed_post(quote::revise::handler)
         .typed_get(quote::export_pdf::handler)
         .typed_get(quote::plan_proposal::handler)
         .typed_post(quote::plan::handler)

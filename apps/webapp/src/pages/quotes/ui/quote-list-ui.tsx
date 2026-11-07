@@ -61,7 +61,6 @@ import {
 	normalizeText,
 	plural,
 } from '#/pages/quotes/lib/doc-format'
-import type { QuoteExtras } from '#/pages/quotes/lib/quote-extras'
 import {
 	matchesClient,
 	matchesOwner,
@@ -75,6 +74,7 @@ import {
 	type QuoteDisplayStatus,
 	quoteDisplayStatus,
 } from '#/pages/quotes/lib/quote-status'
+import type { QuoteTerms } from '#/pages/quotes/lib/quote-terms'
 import { computeQuoteTiles } from '#/pages/quotes/lib/quote-tiles'
 import {
 	getQuoteListUrlState,
@@ -99,7 +99,7 @@ interface QuoteListUIProps {
 	customers: Customer[]
 	quotes: Quote[]
 	owners: readonly QuoteOwner[]
-	extrasOf: (quoteId: string) => QuoteExtras
+	termsOf: (quoteId: string) => QuoteTerms
 	today: string
 	clientFilter?: string | null
 	onClearClientFilter?: () => void
@@ -177,7 +177,7 @@ export function QuoteListUI({
 	customers,
 	quotes,
 	owners,
-	extrasOf,
+	termsOf,
 	today,
 	clientFilter = null,
 	onClearClientFilter,
@@ -207,20 +207,19 @@ export function QuoteListUI({
 	)
 	const [ownerFilter, setOwnerFilter] = useState(OWNER_ALL)
 	const tiles = useMemo(
-		() => computeQuoteTiles(quotes, { today, extrasOf }),
-		[quotes, today, extrasOf],
+		() => computeQuoteTiles(quotes, { today, termsOf }),
+		[quotes, today, termsOf],
 	)
 	const scopedQuotes = useMemo(
 		() =>
 			quotes.filter(
 				(quote) =>
-					matchesOwner(extrasOf(quote.id).ownerId, ownerFilter) &&
+					matchesOwner(termsOf(quote.id).ownerId, ownerFilter) &&
 					matchesClient(quote.customer_id, clientFilter),
 			),
-		[quotes, extrasOf, ownerFilter, clientFilter],
+		[quotes, termsOf, ownerFilter, clientFilter],
 	)
-	const displayOf = (quote: Quote) =>
-		quoteDisplayStatus(quote.status, extrasOf(quote.id), today)
+	const displayOf = (quote: Quote) => quoteDisplayStatus(quote)
 
 	const quotePaginationView = getPaginationViewModel(
 		quotesPagination,
@@ -578,7 +577,7 @@ export function QuoteListUI({
 										</TableCell>
 										<TableCell className="whitespace-nowrap max-xl:hidden">
 											<ValidityCell
-												validUntil={extrasOf(quote.id).validUntil}
+												validUntil={termsOf(quote.id).validUntil}
 												expired={displayOf(quote) === 'expired'}
 											/>
 										</TableCell>

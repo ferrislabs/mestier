@@ -15,17 +15,17 @@ import { useCreateQuote } from '#/hooks/use-quotes'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
-import { saveQuoteExtras } from '#/pages/quotes/feature/mocks/quote-extras'
 import {
 	duplicateItem,
 	moveItem,
 	newLineId,
 } from '#/pages/quotes/lib/doc-lines'
 import { defaultValidUntil } from '#/pages/quotes/lib/quote-draft'
-import { extrasPatchFromForm } from '#/pages/quotes/lib/quote-form-extras'
+import { termsBody } from '#/pages/quotes/lib/quote-form-terms'
 import {
 	copyQuoteLine,
 	lineFromCatalogItem,
+	quoteLineBodies,
 } from '#/pages/quotes/lib/quote-lines'
 import { toIsoDate } from '#/pages/quotes/lib/quote-status'
 import {
@@ -34,7 +34,6 @@ import {
 } from '#/pages/quotes/quote-list-url-state'
 import {
 	emptyQuoteLine,
-	eurosToCents,
 	type QuoteFormValues,
 	type QuoteLineFormValues,
 } from '#/pages/quotes/types'
@@ -118,23 +117,10 @@ function QuoteNewWorkspace({
 					title: value.title.trim(),
 					customer_id: value.customerId,
 					customer_context_id: value.customerContextId,
-					lines: value.lines.map((line) => ({
-						service_rate_id: line.serviceRateId || null,
-						label: line.label.trim(),
-						quantity: line.quantity.replace(',', '.').trim(),
-						unit: line.unit,
-						unit_price_cents: eurosToCents(line.unitPrice),
-						vat_rate_bp: line.vatRateBp === '' ? null : Number(line.vatRateBp),
-						notes: line.notes.trim() || null,
-						photo_keys: line.photoKeys,
-					})),
+					deal_id: readQuoteDealParam() ?? null,
+					...termsBody(value),
+					lines: quoteLineBodies(value.lines),
 				},
-			})
-
-			const dealId = readQuoteDealParam()
-			saveQuoteExtras(quote.data.id, {
-				...extrasPatchFromForm(value),
-				...(dealId ? { dealId } : {}),
 			})
 
 			// Straight to the quote that was just written, not back to the list.

@@ -49,11 +49,17 @@ describe('availableQuoteActions', () => {
 		expect(availableQuoteActions('superseded')).not.toContain('revise')
 	})
 
-	it('can always be duplicated and deleted', () => {
+	it('can always be duplicated', () => {
 		for (const status of ALL) {
 			expect(availableQuoteActions(status)).toContain('duplicate')
-			expect(availableQuoteActions(status)).toContain('delete')
 		}
+	})
+
+	it('only deletes a draft, a sent quote is locked', () => {
+		for (const status of ALL.filter((item) => item !== 'draft')) {
+			expect(availableQuoteActions(status)).not.toContain('delete')
+		}
+		expect(availableQuoteActions('draft')).toContain('delete')
 	})
 
 	it('only invoices an accepted quote', () => {

@@ -1,46 +1,55 @@
-//! The state a scenario carries from one step to the next.
-//!
-//! It knows the domain service and the two ports it depends on — a repository
-//! and an event emitter — and nothing about Postgres, Axum or the transaction
-//! machinery. That is the point: these scenarios describe business rules, so
-//! they must keep failing for business reasons only.
-
+use chrono::{DateTime, TimeZone, Utc};
 use common::CoreError;
 use events::testing::RecordingEmitter;
 use mestier_core::{
-    CustomerContextId, CustomerId, MockQuoteRepository, OrganizationId, Quote, QuoteId,
+    CustomerContextId, CustomerId, MockQuoteRepository, OrganizationId, Quote, QuoteError, QuoteId,
     QuoteService,
 };
 
-use crate::repository::{self, Store};
+use crate::repository::{self, Client, Company, Doubles, Store};
 
-/// The service under test, wired to the doubles this suite owns.
-///
-/// The emitter is borrowed rather than moved so a `Then` step can still read
-/// what was published after the service has done its work.
 pub type Service<'a> = QuoteService<MockQuoteRepository, &'a RecordingEmitter>;
 
 #[derive(Debug, Default, cucumber::World)]
 pub struct QuoteWorld {
     pub store: Store,
     pub emitter: RecordingEmitter,
-    /// Who the scenario is acting for. Every quote is scoped to one company.
     pub organization_id: Option<OrganizationId>,
     pub customer_id: Option<CustomerId>,
     pub customer_context_id: Option<CustomerContextId>,
-    /// The quote the last `When` produced or the last `Given` seeded.
     pub quote_id: Option<QuoteId>,
-    /// The outcome of the last write, kept whole so a scenario can assert on a
-    /// refusal instead of unwinding on it.
+    pub source_id: Option<QuoteId>,
     pub outcome: Option<Result<Quote, CoreError>>,
+    pub refusal: Option<QuoteError>,
+    pub today: Option<DateTime<Utc>>,
+    pub subject_to_vat: bool,
+    pub without_billing_address: bool,
+    pub validity_days: Option<i64>,
 }
 
 impl QuoteWorld {
-    /// Builds a service over a mock freshly stubbed against the shared store.
-    /// Short-lived by design: it holds a borrow of the emitter, so a step drops
-    /// it before asserting.
     pub fn service(&self) -> Service<'_> {
         QuoteService::new(repository::stubbed(&self.store), &self.emitter)
+    }
+
+    pub fn doubles(&self) -> Doubles {
+        repository::doubles(
+            &Company {
+                id: self.organization_id(),
+                subject_to_vat: self.subject_to_vat,
+                validity_days: self.validity_days.unwrap_or(30),
+            },
+            &Client {
+                id: self.customer_id(),
+                address_id: self.customer_context_id(),
+                has_billing_address: !self.without_billing_address,
+            },
+        )
+    }
+
+    pub fn now(&self) -> DateTime<Utc> {
+        self.today
+            .unwrap_or_else(|| Utc.with_ymd_and_hms(2026, 11, 7, 9, 0, 0).unwrap())
     }
 
     pub fn organization_id(&self) -> OrganizationId {
@@ -58,26 +67,37 @@ impl QuoteWorld {
             .expect("a scenario states the customer in its `Given`")
     }
 
-    /// The quote the scenario is talking about, reloaded from the store so an
-    /// assertion reads what was persisted rather than what was returned.
-    pub fn current_quote(&self) -> Quote {
-        let id = self
-            .quote_id
-            .expect("a scenario creates or seeds a quote before asserting on it");
-
+    pub fn quote(&self, id: QuoteId) -> Quote {
         repository::quotes(&self.store)
             .iter()
             .find(|quote| quote.id == id)
             .cloned()
-            .expect("the quote the scenario just acted on is in the store")
+            .expect("the quote the scenario acted on is in the store")
     }
 
-    /// Records what a write returned, and remembers the quote it produced so
-    /// the following steps can talk about "the quote" without naming it again.
+    pub fn current_quote(&self) -> Quote {
+        self.quote(
+            self.quote_id
+                .expect("a scenario creates or seeds a quote before asserting on it"),
+        )
+    }
+
     pub fn record(&mut self, outcome: Result<Quote, CoreError>) {
         if let Ok(quote) = &outcome {
             self.quote_id = Some(quote.id);
         }
+        self.refusal = None;
         self.outcome = Some(outcome);
+    }
+
+    pub fn record_outcome(&mut self, outcome: Result<Result<Quote, QuoteError>, CoreError>) {
+        match outcome {
+            Ok(Ok(quote)) => self.record(Ok(quote)),
+            Ok(Err(refusal)) => {
+                self.outcome = None;
+                self.refusal = Some(refusal);
+            }
+            Err(error) => self.record(Err(error)),
+        }
     }
 }

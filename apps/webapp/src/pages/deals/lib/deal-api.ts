@@ -33,6 +33,7 @@ const QUOTE_STATUS_OF_API: Record<Schemas.QuoteStatus, DealQuoteStatus> = {
 	ACCEPTED: 'accepted',
 	DECLINED: 'declined',
 	CANCELLED: 'cancelled',
+	SUPERSEDED: 'superseded',
 }
 
 export function stageOfApi(stage: ApiDealStage): DealStage {

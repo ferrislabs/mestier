@@ -1,0 +1,187 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE quotes\n            SET status = CAST($2 AS text)::quote_status,\n                reference = $3,\n                valid_until = $4,\n                responded_at = $5,\n                responded_by = $6,\n                decline_reason = $7,\n                issuer_snapshot = $8,\n                recipient_snapshot = $9,\n                updated_at = $10\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, valid_until, deposit_percent, owner_member_id, notes, billing_contact_id, billing_address_id, responded_at, responded_by, decline_reason, revision_of_id, (SELECT r.id FROM quotes r WHERE r.revision_of_id = quotes.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS \"superseded_by_id?\", issuer_snapshot, recipient_snapshot, deleted_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "reference",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "customer_context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "deal_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "net_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "vat_breakdown",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "gross_cents",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "valid_until",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 12,
+        "name": "deposit_percent",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 13,
+        "name": "owner_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "billing_contact_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "billing_address_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "responded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "responded_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "decline_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "revision_of_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 21,
+        "name": "superseded_by_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
+        "name": "issuer_snapshot",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 23,
+        "name": "recipient_snapshot",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 24,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 25,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 26,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Date",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      null,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "71abd0753ffe5c105a1cb5765d06223b2b5cbf7d6915967a9ad6354178583156"
+}
