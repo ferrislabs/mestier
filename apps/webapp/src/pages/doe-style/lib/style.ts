@@ -1,4 +1,5 @@
 import type { Schemas } from '#/api/api.client'
+import { validateDecorations } from '#/pages/doe-style/lib/decorations'
 
 export type DoeStyle = Schemas.DoeStyle
 export type DoeFont = NonNullable<DoeStyle['heading_font']>
@@ -28,6 +29,7 @@ export const DEFAULT_DOE_STYLE: CompleteDoeStyle = {
 	parties_title: 'INTERVENANTS',
 	contents_title: 'SOMMAIRE',
 	supply_table_title: 'Identification de la fourniture',
+	decorations: [],
 }
 
 export const FONT_LABELS: Record<DoeFont, string> = {
@@ -65,7 +67,7 @@ export function isValidHex(value: string): boolean {
 export function completeStyle(
 	partial: DoeStyle | null | undefined,
 ): CompleteDoeStyle {
-	const merged: CompleteDoeStyle = { ...DEFAULT_DOE_STYLE }
+	const merged: CompleteDoeStyle = { ...DEFAULT_DOE_STYLE, decorations: [] }
 	if (!partial) return merged
 	const target = merged as Record<string, unknown>
 	for (const [key, value] of Object.entries(partial)) {
@@ -111,6 +113,7 @@ export function validateStyle(style: CompleteDoeStyle): StyleErrors {
 		parties_title: labelError(style.parties_title),
 		contents_title: labelError(style.contents_title),
 		supply_table_title: labelError(style.supply_table_title),
+		decorations: validateDecorations(style.decorations),
 	}
 	const errors: StyleErrors = {}
 	for (const [key, message] of Object.entries(candidates)) {

@@ -58,3 +58,23 @@ describe('themes', () => {
 		)
 	})
 })
+
+describe('themes and decorations', () => {
+	it('leaves the decorations untouched', () => {
+		const decorations = [
+			{
+				kind: 'rectangle' as const,
+				fill: '#112233',
+				x: 0,
+				y: 0,
+				width: 10,
+				height: 10,
+			},
+		]
+		const themed = applyTheme(
+			{ ...DEFAULT_DOE_STYLE, decorations },
+			theme('terre'),
+		)
+		expect(themed.decorations).toEqual(decorations)
+	})
+})

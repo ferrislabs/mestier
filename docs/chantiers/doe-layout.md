@@ -1,6 +1,6 @@
 # DOE : éléments de mise en page répétés
 
-État : **spec, 2026-11-07**, à valider.
+État : **implémenté, 2026-11-07** (branche `feat/doe-layout`). Écarts avec la spec ci-dessous.
 
 ## Goal
 
@@ -90,3 +90,10 @@ cargo test --workspace
 cargo test -p mestier-core -- --ignored
 cd apps/webapp && pnpm check && pnpm test && pnpm build
 ```
+
+## Écarts constatés à l'implémentation
+
+- **Opacité d'une image** : Typst n'a pas d'opacité sur les images. Elle est rendue par un voile blanc, donc juste en couche `behind` ; en `front`, elle est sans effet. Le rectangle n'a pas cette limite.
+- **Clé d'image inconnue de l'organisation** (invariant 3) : non vérifiée, comme pour le logo (les clés ne sont pas contrôlées aujourd'hui). Une clé inexistante est ignorée à l'export (invariant 4).
+- **Redimensionnement au clavier** : non fait, seules les flèches de déplacement existent ; la taille se règle à la souris ou dans les champs numériques.
+- **Gestes** : testés en unitaire (conversions, bornage), pas dans un navigateur.
