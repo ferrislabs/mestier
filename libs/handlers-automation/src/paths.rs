@@ -43,6 +43,19 @@ pub struct CredentialRotatePath {
 }
 
 #[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/automation/folders")]
+pub struct FoldersPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/automation/folders/{folder_id}")]
+pub struct FolderPath {
+    pub organization_id: OrganizationId,
+    pub folder_id: Uuid,
+}
+
+#[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/automation/workflows")]
 pub struct WorkflowsPath {
     pub organization_id: OrganizationId,

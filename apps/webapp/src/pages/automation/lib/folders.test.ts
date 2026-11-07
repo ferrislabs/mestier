@@ -4,6 +4,7 @@ import {
 	countWorkflowsInSubtree,
 	folderPath,
 	isInSubtree,
+	toWorkflowFolders,
 	type WorkflowFolder,
 } from '#/pages/automation/lib/folders'
 
@@ -46,5 +47,34 @@ describe('folders', () => {
 		]
 		expect(countWorkflowsInSubtree(FOLDERS, workflows, 'sales')).toBe(2)
 		expect(countWorkflowsInSubtree(FOLDERS, workflows, 'billing')).toBe(1)
+	})
+})
+
+describe('toWorkflowFolders', () => {
+	it('turns the flat API list into folders, a missing parent meaning the root', () => {
+		expect(
+			toWorkflowFolders([
+				{ id: 'a', name: 'Ventes', parent_id: null },
+				{ id: 'b', name: 'Relances', parent_id: 'a' },
+				{ id: 'c', name: 'Support' },
+			]),
+		).toEqual([
+			{ id: 'a', name: 'Ventes', parentId: null },
+			{ id: 'b', name: 'Relances', parentId: 'a' },
+			{ id: 'c', name: 'Support', parentId: null },
+		])
+	})
+
+	it('builds a tree the other helpers can walk', () => {
+		const folders = toWorkflowFolders([
+			{ id: 'a', name: 'Ventes', parent_id: null },
+			{ id: 'b', name: 'Relances', parent_id: 'a' },
+		])
+
+		expect(folderPath(folders, 'b').map((folder) => folder.name)).toEqual([
+			'Ventes',
+			'Relances',
+		])
+		expect(countWorkflowsInSubtree(folders, [{ folderId: 'b' }], 'a')).toBe(1)
 	})
 })

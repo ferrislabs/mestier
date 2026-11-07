@@ -17,10 +17,12 @@ export interface NodeOperationRef {
 }
 
 export interface NodeMeta {
-	label?: string
-	subtitle?: string
-	disabled?: boolean
 	operation?: NodeOperationRef
+}
+
+export interface NodeDetailsPatch {
+	name?: string
+	description?: string
 }
 
 export type NodeMetaMap = Record<string, NodeMeta>
@@ -92,18 +94,53 @@ export function withPresentation(
 	lookup: EditorLookup,
 ): EditorNode {
 	const defaults = defaultPresentation(node.data, lookup)
-	const meta = node.data.meta
+	const placed = node.data.connector ?? node.data.trigger
 	return {
 		...node,
 		data: {
 			...node.data,
-			label: meta.label ?? defaults.label,
-			subtitle: meta.subtitle ?? defaults.subtitle,
-			disabled: meta.disabled ?? false,
+			label: placed?.name || defaults.label,
+			subtitle: placed?.description ?? defaults.subtitle,
+			disabled: node.data.connector?.disabled ?? false,
 			family: defaults.family,
 			typeLabel: defaults.typeLabel,
 		},
 	}
+}
+
+export function withDetails(
+	node: EditorNode,
+	patch: NodeDetailsPatch,
+	lookup: EditorLookup,
+): EditorNode {
+	const { connector, trigger } = node.data
+	return withPresentation(
+		{
+			...node,
+			data: {
+				...node.data,
+				...(connector ? { connector: { ...connector, ...patch } } : {}),
+				...(trigger ? { trigger: { ...trigger, ...patch } } : {}),
+			},
+		},
+		lookup,
+	)
+}
+
+export function withDisabled(
+	node: EditorNode,
+	disabled: boolean,
+	lookup: EditorLookup,
+): EditorNode {
+	const { connector } = node.data
+	if (!connector) return node
+	return withPresentation(
+		{
+			...node,
+			data: { ...node.data, connector: { ...connector, disabled } },
+		},
+		lookup,
+	)
 }
 
 function branchesOf(
@@ -250,13 +287,7 @@ export function toLayout(
 export function toMeta(nodes: readonly EditorNode[]): NodeMetaMap {
 	const meta: NodeMetaMap = {}
 	for (const node of nodes) {
-		const { label, subtitle, disabled, operation } = node.data.meta
-		if (
-			label !== undefined ||
-			subtitle !== undefined ||
-			disabled ||
-			operation !== undefined
-		) {
+		if (node.data.meta.operation !== undefined) {
 			meta[node.id] = node.data.meta
 		}
 	}

@@ -4,7 +4,21 @@ export const NEW_WORKFLOW_ID = 'nouveau'
 
 export type WorkflowExecutionsSearch = {
 	vue: 'executions'
-	execution?: string
+	execution?: number
+}
+
+const EXECUTION_DIGITS = /^\d+$/
+
+export function parseExecutionNumber(value: unknown): number | undefined {
+	const number =
+		typeof value === 'string' && EXECUTION_DIGITS.test(value)
+			? Number(value)
+			: value
+	return typeof number === 'number' &&
+		Number.isSafeInteger(number) &&
+		number > 0
+		? number
+		: undefined
 }
 
 export type WorkflowExecutionsLocation = {
@@ -29,21 +43,29 @@ export function newWorkflowPath(): string {
 }
 
 export function workflowExecutionsSearch(
-	executionId?: string,
+	executionNumber?: number,
 ): WorkflowExecutionsSearch {
-	return executionId
-		? { vue: 'executions', execution: executionId }
-		: { vue: 'executions' }
+	const execution = parseExecutionNumber(executionNumber)
+	return execution === undefined
+		? { vue: 'executions' }
+		: { vue: 'executions', execution }
 }
 
 export function workflowExecutionsLocation(
 	workflowId: string,
-	executionId?: string,
+	executionNumber?: number,
 ): WorkflowExecutionsLocation {
 	return {
 		to: workflowPath(workflowId),
-		search: workflowExecutionsSearch(executionId),
+		search: workflowExecutionsSearch(executionNumber),
 	}
+}
+
+export function legacyExecutionLocation(
+	workflowId: string,
+	runId: string,
+): WorkflowExecutionsLocation {
+	return workflowExecutionsLocation(workflowId, parseExecutionNumber(runId))
 }
 
 export function executionsPath(): string {
@@ -68,16 +90,15 @@ export function projectPath(projectId: string): string {
 
 export type WorkflowSearch = {
 	vue?: 'executions'
-	execution?: string
+	execution?: number
 }
 
 export function parseWorkflowSearch(
 	raw: Record<string, unknown>,
 ): WorkflowSearch {
+	const execution = parseExecutionNumber(raw.execution)
 	return {
 		...(raw.vue === 'executions' ? { vue: 'executions' as const } : {}),
-		...(typeof raw.execution === 'string' && raw.execution !== ''
-			? { execution: raw.execution }
-			: {}),
+		...(execution === undefined ? {} : { execution }),
 	}
 }

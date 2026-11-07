@@ -57,6 +57,10 @@ impl Modify for SecurityAddon {
         automation::credential::update::handler,
         automation::credential::delete::handler,
         automation::credential::rotate::handler,
+        automation::folder::list::handler,
+        automation::folder::create::handler,
+        automation::folder::update::handler,
+        automation::folder::delete::handler,
         automation::workflow::list::handler,
         automation::workflow::create::handler,
         automation::workflow::get_one::handler,
@@ -355,6 +359,8 @@ impl Modify for SecurityAddon {
         automation::credential::create::CreateCredentialRequest,
         automation::credential::create::CredentialOriginRequest,
         automation::credential::update::UpdateCredentialRequest,
+        automation::folder::create::CreateFolderRequest,
+        automation::folder::update::UpdateFolderRequest,
         automation::workflow::create::CreateWorkflowRequest,
         automation::workflow::update::UpdateWorkflowRequest,
         automation::workflow::save_version::SaveWorkflowVersionRequest,
@@ -365,6 +371,7 @@ impl Modify for SecurityAddon {
         automation::run::start::StartedRunResponse,
         automation::response::CredentialResponse,
         automation::response::CredentialWithSecretResponse,
+        automation::response::FolderResponse,
         automation::response::ConnectorsResponse,
         automation::response::ConnectorDescriptorResponse,
         automation::response::AuthSchemeResponse,
@@ -1133,5 +1140,182 @@ mod tests {
             dangling.is_empty(),
             "referenced but never registered: {dangling:?}"
         );
+    }
+
+    #[test]
+    fn every_automation_folder_route_reaches_the_document() {
+        let document = ApiDoc::openapi();
+        let paths = &document.paths.paths;
+
+        let collection = "/api/v1/organizations/{organization_id}/automation/folders";
+        let item = "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}";
+        for path in [collection, item] {
+            assert!(
+                paths.contains_key(path),
+                "{path} is missing from the document"
+            );
+        }
+
+        let json = serde_json::to_string(&document).expect("the document serializes");
+        for operation_id in [
+            "listWorkflowFolders",
+            "createWorkflowFolder",
+            "updateWorkflowFolder",
+            "deleteWorkflowFolder",
+        ] {
+            assert!(
+                json.contains(&format!("\"operationId\":\"{operation_id}\"")),
+                "{operation_id} is missing from the document"
+            );
+        }
+
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+        for schema in [
+            "FolderResponse",
+            "CreateFolderRequest",
+            "UpdateFolderRequest",
+        ] {
+            assert!(schemas.contains_key(schema), "{schema} is not registered");
+        }
+    }
+
+    #[test]
+    fn workflows_carry_their_folder_tags_and_archive_state_in_the_document() {
+        let document = ApiDoc::openapi();
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+
+        for (schema, fields) in [
+            ("WorkflowResponse", ["folder_id", "tags", "archived_at"]),
+            (
+                "WorkflowDetailResponse",
+                ["folder_id", "tags", "archived_at"],
+            ),
+            ("CreateWorkflowRequest", ["enabled", "folder_id", "tags"]),
+            ("UpdateWorkflowRequest", ["folder_id", "tags", "archived"]),
+        ] {
+            let json = serde_json::to_value(schemas.get(schema).expect(schema)).unwrap();
+            for field in fields {
+                assert!(
+                    json["properties"].get(field).is_some(),
+                    "{schema} lacks {field}: {json}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn listing_workflows_documents_the_archived_filter() {
+        let document = ApiDoc::openapi();
+        let json = serde_json::to_value(&document).expect("the document serializes");
+
+        let parameters = json["paths"]["/api/v1/organizations/{organization_id}/automation/workflows"]
+            ["get"]["parameters"]
+            .as_array()
+            .expect("the list operation has parameters");
+
+        assert!(
+            parameters
+                .iter()
+                .any(|parameter| parameter["name"] == "archived" && parameter["in"] == "query"),
+            "{parameters:?}"
+        );
+    }
+
+    #[test]
+    fn graph_nodes_carry_their_name_description_and_disabled_flag_in_the_document() {
+        let document = ApiDoc::openapi();
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+
+        for (schema, fields) in [
+            (
+                "PlacedConnectorDto",
+                vec!["name", "description", "disabled"],
+            ),
+            ("PlacedTriggerDto", vec!["name", "description"]),
+        ] {
+            let json = serde_json::to_value(schemas.get(schema).expect(schema)).unwrap();
+            for field in &fields {
+                assert!(
+                    json["properties"].get(*field).is_some(),
+                    "{schema} lacks {field}: {json}"
+                );
+            }
+            let required = json["required"].as_array().cloned().unwrap_or_default();
+            for field in &fields {
+                assert!(
+                    !required.iter().any(|name| name == field),
+                    "{schema}.{field} must stay optional for clients written before it existed"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn runs_carry_their_number_progress_and_trigger_fields_in_the_document() {
+        let document = ApiDoc::openapi();
+        let schemas = &document
+            .components
+            .as_ref()
+            .expect("the document has components")
+            .schemas;
+        let fields = [
+            "number",
+            "steps_done",
+            "steps_total",
+            "trigger_id",
+            "trigger_event_name",
+            "failed_connector_id",
+            "workflow_version_created_at",
+        ];
+
+        let run_schema = serde_json::to_string(schemas.get("RunResponse").unwrap()).unwrap();
+        for field in fields {
+            assert!(
+                run_schema.contains(&format!("\"{field}\"")),
+                "RunResponse lacks {field}: {run_schema}"
+            );
+        }
+        let detail_schema =
+            serde_json::to_string(schemas.get("RunDetailResponse").unwrap()).unwrap();
+        assert!(
+            detail_schema.contains("#/components/schemas/RunResponse"),
+            "RunDetailResponse must extend RunResponse: {detail_schema}"
+        );
+
+        let run = serde_json::to_value(schemas.get("RunResponse").unwrap()).unwrap();
+        assert_eq!(run["properties"]["number"]["type"], "integer");
+        assert_eq!(run["properties"]["number"]["format"], "int64");
+        assert_eq!(run["properties"]["steps_done"]["format"], "int32");
+        assert_eq!(run["properties"]["steps_total"]["format"], "int32");
+        let required = run["required"].as_array().expect("required fields");
+        for field in [
+            "number",
+            "steps_done",
+            "steps_total",
+            "workflow_version_created_at",
+        ] {
+            assert!(
+                required.iter().any(|name| name == field),
+                "{field} must be required"
+            );
+        }
+        for field in ["trigger_id", "trigger_event_name", "failed_connector_id"] {
+            assert!(
+                !required.iter().any(|name| name == field),
+                "{field} is nullable and must not be required"
+            );
+        }
     }
 }

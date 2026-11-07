@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
 	canvasShortcutFor,
+	disableToggleFor,
 	isMacPlatform,
 	shortcutLabels,
 } from '#/pages/automation/lib/shortcuts'
@@ -52,5 +53,51 @@ describe('shortcutLabels', () => {
 			true,
 		)
 		expect(isMacPlatform('Mozilla/5.0 (X11; Linux x86_64)')).toBe(false)
+	})
+})
+
+describe('disableToggleFor', () => {
+	const connector = (id: string, disabled = false) => ({
+		id,
+		kind: 'connector' as const,
+		disabled,
+	})
+	const trigger = (id: string) => ({
+		id,
+		kind: 'trigger' as const,
+		disabled: false,
+	})
+
+	it('disables a connector that is enabled and enables one that is disabled', () => {
+		expect(disableToggleFor([connector('c1')])).toEqual({
+			ids: ['c1'],
+			disabled: true,
+		})
+		expect(disableToggleFor([connector('c1', true)])).toEqual({
+			ids: ['c1'],
+			disabled: false,
+		})
+	})
+
+	it('enables the connectors only when all of them are disabled', () => {
+		expect(
+			disableToggleFor([connector('c1', true), connector('c2', true)]),
+		).toEqual({ ids: ['c1', 'c2'], disabled: false })
+		expect(disableToggleFor([connector('c1', true), connector('c2')])).toEqual({
+			ids: ['c1', 'c2'],
+			disabled: true,
+		})
+	})
+
+	it('never touches a trigger, nor lets it decide for the connectors', () => {
+		expect(disableToggleFor([trigger('t1'), connector('c1', true)])).toEqual({
+			ids: ['c1'],
+			disabled: false,
+		})
+	})
+
+	it('has nothing to toggle for a trigger alone or for no selection', () => {
+		expect(disableToggleFor([trigger('t1')])).toBeNull()
+		expect(disableToggleFor([])).toBeNull()
 	})
 })

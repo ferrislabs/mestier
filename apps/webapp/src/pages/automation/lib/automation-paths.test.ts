@@ -5,8 +5,10 @@ import {
 	collectionsPath,
 	executionsPath,
 	identificationsPath,
+	legacyExecutionLocation,
 	NEW_WORKFLOW_ID,
 	newWorkflowPath,
+	parseExecutionNumber,
 	parseWorkflowSearch,
 	projectPath,
 	workflowExecutionsLocation,
@@ -44,34 +46,96 @@ describe('automation paths', () => {
 		})
 	})
 
-	it('keeps the selected run in the search when there is one', () => {
-		expect(workflowExecutionsSearch('run-1')).toEqual({
+	it('keeps the number of the selected run in the search when there is one', () => {
+		expect(workflowExecutionsSearch(1285)).toEqual({
 			vue: 'executions',
-			execution: 'run-1',
+			execution: 1285,
 		})
-		expect(workflowExecutionsLocation('wf-1', 'run-1')).toEqual({
+		expect(workflowExecutionsLocation('wf-1', 1285)).toEqual({
 			to: '/automatisation/workflows/wf-1',
-			search: { vue: 'executions', execution: 'run-1' },
+			search: { vue: 'executions', execution: 1285 },
 		})
 	})
 
-	it('leaves out an empty run identifier', () => {
-		expect(workflowExecutionsSearch('')).toEqual({ vue: 'executions' })
+	it('leaves out a missing or impossible run number', () => {
 		expect(workflowExecutionsSearch(undefined)).toEqual({ vue: 'executions' })
+		expect(workflowExecutionsSearch(0)).toEqual({ vue: 'executions' })
+		expect(workflowExecutionsSearch(-4)).toEqual({ vue: 'executions' })
+		expect(workflowExecutionsSearch(1.5)).toEqual({ vue: 'executions' })
+		expect(workflowExecutionsSearch(Number.NaN)).toEqual({ vue: 'executions' })
+	})
+})
+
+describe('parseExecutionNumber', () => {
+	it('keeps a positive whole number, given as a number or as digits', () => {
+		expect(parseExecutionNumber(1285)).toBe(1285)
+		expect(parseExecutionNumber('1285')).toBe(1285)
+		expect(parseExecutionNumber('7')).toBe(7)
+	})
+
+	it('rejects everything else', () => {
+		for (const value of [
+			'',
+			' ',
+			'run-1',
+			'1285a',
+			'12.5',
+			'-3',
+			'0',
+			'1e3',
+			' 12',
+			'018f6c1e-7b1a-4d2e-9c11-5f3a2b4c6d7e',
+			0,
+			-3,
+			1.5,
+			Number.NaN,
+			Number.POSITIVE_INFINITY,
+			null,
+			undefined,
+			true,
+			{},
+		]) {
+			expect(parseExecutionNumber(value)).toBeUndefined()
+		}
+	})
+})
+
+describe('legacyExecutionLocation', () => {
+	it('sends an old run link to the executions view, the run selected when its id is a number', () => {
+		expect(legacyExecutionLocation('wf-1', '1285')).toEqual({
+			to: '/automatisation/workflows/wf-1',
+			search: { vue: 'executions', execution: 1285 },
+		})
+	})
+
+	it('sends an old link that carries a UUID to the executions view alone', () => {
+		expect(
+			legacyExecutionLocation('wf-1', '018f6c1e-7b1a-4d2e-9c11-5f3a2b4c6d7e'),
+		).toEqual({
+			to: '/automatisation/workflows/wf-1',
+			search: { vue: 'executions' },
+		})
 	})
 })
 
 describe('parseWorkflowSearch', () => {
-	it('keeps the executions view and a non-empty run identifier', () => {
-		expect(
-			parseWorkflowSearch({ vue: 'executions', execution: 'run-1' }),
-		).toEqual({ vue: 'executions', execution: 'run-1' })
+	it('keeps the executions view and the number of a run', () => {
+		expect(parseWorkflowSearch({ vue: 'executions', execution: 1285 })).toEqual(
+			{
+				vue: 'executions',
+				execution: 1285,
+			},
+		)
 	})
 
-	it('keeps a run identifier without a view', () => {
-		expect(parseWorkflowSearch({ execution: 'run-1' })).toEqual({
-			execution: 'run-1',
-		})
+	it('converts the digits the address bar hands over', () => {
+		expect(
+			parseWorkflowSearch({ vue: 'executions', execution: '1285' }),
+		).toEqual({ vue: 'executions', execution: 1285 })
+	})
+
+	it('keeps a run number without a view', () => {
+		expect(parseWorkflowSearch({ execution: 12 })).toEqual({ execution: 12 })
 	})
 
 	it('drops any other view', () => {
@@ -79,10 +143,10 @@ describe('parseWorkflowSearch', () => {
 		expect(parseWorkflowSearch({ vue: true })).toEqual({})
 	})
 
-	it('drops an empty or non-string run identifier', () => {
-		expect(parseWorkflowSearch({ execution: '' })).toEqual({})
-		expect(parseWorkflowSearch({ execution: 12 })).toEqual({})
-		expect(parseWorkflowSearch({ execution: null })).toEqual({})
+	it('drops a run identifier that is not a positive whole number', () => {
+		for (const execution of ['', 'run-1', 0, -3, 1.5, '12.5', null, true]) {
+			expect(parseWorkflowSearch({ execution })).toEqual({})
+		}
 	})
 
 	it('ignores unknown keys', () => {

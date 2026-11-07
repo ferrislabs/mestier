@@ -26,7 +26,10 @@ pub async fn handler(
 ) -> Result<Response<Vec<RunResponse>>, ApiError> {
     require_view_automation(&state, &identity, path.organization_id).await?;
 
-    let runs = state.usecase.list_runs(path.organization_id).await?;
+    let runs = state
+        .usecase
+        .list_run_overviews(path.organization_id)
+        .await?;
     let body: Vec<RunResponse> = runs.into_iter().map(RunResponse::from).collect();
 
     Ok(Response::OK(body))

@@ -27,6 +27,7 @@ async function settleAt(href: string) {
 
 	return {
 		pathname: router.state.location.pathname,
+		href: router.state.location.href,
 		search: router.state.location.search as Record<string, unknown>,
 		validatedSearch: match?._strictSearch,
 		routeId: match?.routeId,
@@ -131,28 +132,43 @@ describe('automatisation legacy URLs', () => {
 		expect(settled.search).toEqual({ vue: 'executions' })
 	})
 
-	it('redirects a run to the executions view with the run selected', async () => {
+	it('redirects a run to the executions view with its number selected', async () => {
 		const settled = await settleAt(
-			'/o/acme/automatisation/workflow-1/executions/run-1',
+			'/o/acme/automatisation/workflow-1/executions/1285',
 		)
 
 		expect(settled.pathname).toBe('/o/acme/automatisation/workflows/workflow-1')
-		expect(settled.search).toEqual({ vue: 'executions', execution: 'run-1' })
+		expect(settled.search).toEqual({ vue: 'executions', execution: 1285 })
+		expect(settled.href).toBe(
+			'/o/acme/automatisation/workflows/workflow-1?vue=executions&execution=1285',
+		)
 		expect(settled.routeId).toBe(
 			'/_app/o/$organizationSlug/automatisation/workflows/$workflowId',
+		)
+	})
+
+	it('redirects a run known by its UUID to the executions view alone', async () => {
+		const settled = await settleAt(
+			'/o/acme/automatisation/workflow-1/executions/018f6c1e-7b1a-4d2e-9c11-5f3a2b4c6d7e',
+		)
+
+		expect(settled.pathname).toBe('/o/acme/automatisation/workflows/workflow-1')
+		expect(settled.search).toEqual({ vue: 'executions' })
+		expect(settled.href).toBe(
+			'/o/acme/automatisation/workflows/workflow-1?vue=executions',
 		)
 	})
 })
 
 describe('automatisation workflow search', () => {
-	it('keeps the executions view and the selected run', async () => {
+	it('keeps the executions view and the number of the selected run', async () => {
 		const settled = await settleAt(
-			'/o/acme/automatisation/workflows/workflow-1?vue=executions&execution=run-1',
+			'/o/acme/automatisation/workflows/workflow-1?vue=executions&execution=1285',
 		)
 
 		expect(settled.validatedSearch).toEqual({
 			vue: 'executions',
-			execution: 'run-1',
+			execution: 1285,
 		})
 	})
 
@@ -164,11 +180,13 @@ describe('automatisation workflow search', () => {
 		expect(settled.validatedSearch).toEqual({})
 	})
 
-	it('drops a run that is not a string', async () => {
-		const settled = await settleAt(
-			'/o/acme/automatisation/workflows/workflow-1?execution=12',
-		)
+	it('drops a run that is not a positive whole number', async () => {
+		for (const execution of ['run-1', '0', '-3', '1.5']) {
+			const settled = await settleAt(
+				`/o/acme/automatisation/workflows/workflow-1?execution=${execution}`,
+			)
 
-		expect(settled.validatedSearch).toEqual({})
+			expect(settled.validatedSearch).toEqual({})
+		}
 	})
 })

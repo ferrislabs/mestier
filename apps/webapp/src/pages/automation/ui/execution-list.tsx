@@ -15,8 +15,7 @@ import {
 export type ExecutionFilter = 'all' | 'running' | 'success' | 'error'
 
 export interface ExecutionListEntry {
-	id: string
-	shortId: string
+	number: number
 	status: ExecutionStatus
 	startedAt: string
 	trigger: string
@@ -33,15 +32,15 @@ const FILTERS: readonly { value: ExecutionFilter; label: string }[] = [
 export function ExecutionList({
 	entries,
 	total,
-	selectedId,
+	selectedNumber,
 	onSelect,
 	filter,
 	onFilterChange,
 }: {
 	entries: readonly ExecutionListEntry[]
 	total: number
-	selectedId: string | null
-	onSelect: (id: string) => void
+	selectedNumber: number | null
+	onSelect: (number: number) => void
 	filter: ExecutionFilter
 	onFilterChange: (filter: ExecutionFilter) => void
 }) {
@@ -91,13 +90,13 @@ export function ExecutionList({
 				) : (
 					<ul className="grid gap-0.5">
 						{entries.map((entry) => {
-							const active = entry.id === selectedId
+							const active = entry.number === selectedNumber
 							return (
-								<li key={entry.id}>
+								<li key={entry.number}>
 									<button
 										type="button"
 										aria-current={active ? 'true' : undefined}
-										onClick={() => onSelect(entry.id)}
+										onClick={() => onSelect(entry.number)}
 										className={cn(
 											'relative flex w-full items-start gap-2.5 rounded-md py-2 pr-2 pl-3 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
 											active && 'bg-accent',
@@ -122,7 +121,7 @@ export function ExecutionList({
 													{entry.startedAt}
 												</span>
 												<span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-													#{entry.shortId}
+													#{entry.number}
 												</span>
 											</span>
 											<span className="mt-0.5 block truncate text-muted-foreground text-xs">

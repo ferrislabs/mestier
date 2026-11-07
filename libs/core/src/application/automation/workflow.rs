@@ -5,13 +5,15 @@ use uuid::Uuid;
 
 use crate::{
     application::MestierUseCase,
+    application::automation::folder::ensure_folder_exists,
     domain::automation::{
         catalogue::event_catalogue,
         connector::connector_catalogue,
         ports::{CredentialRepository, SubscriptionRepository, WorkflowRepository},
         workflow::{
-            CreateWorkflowCommand, GraphError, SaveWorkflowVersionCommand, UpdateWorkflowCommand,
-            Workflow, WorkflowVersion, validate_graph,
+            ArchiveScope, CreateWorkflowCommand, GraphError, SaveWorkflowVersionCommand,
+            UpdateWorkflowCommand, Workflow, WorkflowDescription, WorkflowInitialState,
+            WorkflowName, WorkflowVersion, validate_graph,
         },
     },
 };
@@ -30,21 +32,45 @@ fn format_graph_errors(errors: &[GraphError]) -> String {
 }
 
 impl MestierUseCase {
-    #[transactional(workflow)]
     pub async fn create_workflow(
         &self,
         command: CreateWorkflowCommand,
     ) -> Result<Workflow, CoreError> {
+        self.create_workflow_in_state(command, WorkflowInitialState::default())
+            .await
+    }
+
+    #[transactional(workflow, workflow_folder)]
+    pub async fn create_workflow_in_state(
+        &self,
+        command: CreateWorkflowCommand,
+        initial_state: WorkflowInitialState,
+    ) -> Result<Workflow, CoreError> {
         let mut repository = workflow_repository;
+        let mut folders = workflow_folder_repository;
+        let name = WorkflowName::try_from(command.name)
+            .map_err(|error| CoreError::Conflict(error.to_string()))?;
+        let description = command
+            .description
+            .map(WorkflowDescription::try_from)
+            .transpose()
+            .map_err(|error| CoreError::Conflict(error.to_string()))?;
+        if let Some(folder_id) = initial_state.folder_id {
+            ensure_folder_exists(&mut folders, command.org_id, folder_id).await?;
+        }
+
         let now = Utc::now();
         let workflow = Workflow {
             id: generate_uuid_v7(),
             org_id: command.org_id,
-            name: command.name,
-            description: command.description,
-            enabled: true,
+            name: name.into_string(),
+            description: description.map(WorkflowDescription::into_string),
+            enabled: initial_state.enabled,
             current_version_id: None,
             layout: None,
+            folder_id: initial_state.folder_id,
+            tags: initial_state.tags,
+            archived_at: None,
             created_at: now,
             updated_at: now,
         };
@@ -65,29 +91,40 @@ impl MestierUseCase {
     #[transactional(workflow)]
     pub async fn list_workflows(&self, org_id: OrganizationId) -> Result<Vec<Workflow>, CoreError> {
         let mut repository = workflow_repository;
-        repository.list_by_organization(org_id).await
+        repository
+            .list_by_organization(org_id, ArchiveScope::All)
+            .await
     }
 
     #[transactional(workflow)]
+    pub async fn list_workflows_by_scope(
+        &self,
+        org_id: OrganizationId,
+        scope: ArchiveScope,
+    ) -> Result<Vec<Workflow>, CoreError> {
+        let mut repository = workflow_repository;
+        repository.list_by_organization(org_id, scope).await
+    }
+
+    #[transactional(workflow, workflow_folder)]
     pub async fn update_workflow(
         &self,
         command: UpdateWorkflowCommand,
     ) -> Result<Workflow, CoreError> {
         let mut repository = workflow_repository;
+        let mut folders = workflow_folder_repository;
         let existing = repository
-            .find_by_id(command.org_id, command.id)
+            .find_by_id_for_update(command.org_id, command.id)
             .await?
             .ok_or(CoreError::NotFound)?;
+        if let Some(Some(folder_id)) = command.folder_id {
+            ensure_folder_exists(&mut folders, command.org_id, folder_id).await?;
+        }
 
-        let updated = Workflow {
-            name: command.name.unwrap_or(existing.name),
-            description: command.description.unwrap_or(existing.description),
-            enabled: command.enabled.unwrap_or(existing.enabled),
-            updated_at: Utc::now(),
-            ..existing
-        };
+        let org_id = command.org_id;
+        let updated = existing.apply(command, Utc::now())?;
 
-        repository.update(command.org_id, &updated).await
+        repository.update(org_id, &updated).await
     }
 
     #[transactional(workflow)]
@@ -119,7 +156,8 @@ impl MestierUseCase {
         workflows
             .find_by_id(command.org_id, command.workflow_id)
             .await?
-            .ok_or(CoreError::NotFound)?;
+            .ok_or(CoreError::NotFound)?
+            .ensure_not_archived()?;
 
         let catalogue = connector_catalogue();
         let events = event_catalogue();
@@ -203,8 +241,9 @@ mod tests {
     use super::*;
     use crate::application::default_authorizer;
     use crate::application::test_support::automation_pool;
+    use crate::domain::automation::folder::{CreateFolderCommand, FolderName, FolderRefusal};
     use crate::domain::automation::workflow::{
-        Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind,
+        Edge, Graph, PlacedConnector, PlacedTrigger, TriggerKind, WorkflowRefusal, WorkflowTags,
     };
     use crate::infrastructure::automation::webhook::secret::SecretCipher;
     use crate::infrastructure::realtime::EventHub;
@@ -265,6 +304,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config,
+                name: None,
+                description: None,
+                disabled: false,
             }],
             edges: vec![Edge {
                 from: "t1".to_string(),
@@ -274,6 +316,8 @@ mod tests {
             triggers: vec![PlacedTrigger {
                 id: "t1".to_string(),
                 kind: TriggerKind::Manual,
+                name: None,
+                description: None,
             }],
         }
     }
@@ -378,9 +422,12 @@ mod tests {
             .update_workflow(UpdateWorkflowCommand {
                 org_id,
                 id: created.id,
-                name: Some("New name".to_string()),
+                name: Some(WorkflowName::try_from("New name".to_string()).unwrap()),
                 description: Some(None),
                 enabled: Some(false),
+                folder_id: None,
+                tags: None,
+                archived: None,
             })
             .await
             .unwrap();
@@ -401,9 +448,12 @@ mod tests {
             .update_workflow(UpdateWorkflowCommand {
                 org_id,
                 id: generate_uuid_v7(),
-                name: Some("Nope".to_string()),
+                name: Some(WorkflowName::try_from("Nope".to_string()).unwrap()),
                 description: None,
                 enabled: None,
+                folder_id: None,
+                tags: None,
+                archived: None,
             })
             .await
             .expect_err("there is nothing to update");
@@ -512,6 +562,9 @@ mod tests {
                     version: 1,
                     credential_id: None,
                     config: config.clone(),
+                    name: None,
+                    description: None,
+                    disabled: false,
                 },
                 PlacedConnector {
                     id: "c2".to_string(),
@@ -519,6 +572,9 @@ mod tests {
                     version: 1,
                     credential_id: None,
                     config,
+                    name: None,
+                    description: None,
+                    disabled: false,
                 },
             ],
             edges: vec![
@@ -537,10 +593,14 @@ mod tests {
                 PlacedTrigger {
                     id: "t1".to_string(),
                     kind: TriggerKind::Events(vec!["quote.accepted".to_string()]),
+                    name: None,
+                    description: None,
                 },
                 PlacedTrigger {
                     id: "t2".to_string(),
                     kind: TriggerKind::Events(vec!["quote.declined".to_string()]),
+                    name: None,
+                    description: None,
                 },
             ],
         }
@@ -758,6 +818,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config: serde_json::Map::new(),
+                name: None,
+                description: None,
+                disabled: false,
             }],
             edges: Vec::new(),
             triggers: Vec::new(),
@@ -832,6 +895,9 @@ mod tests {
                 m.insert("predicate".to_string(), serde_json::json!("{{ true }}"));
                 m
             },
+            name: None,
+            description: None,
+            disabled: false,
         });
         let error = usecase
             .save_workflow_version(SaveWorkflowVersionCommand {
@@ -845,5 +911,516 @@ mod tests {
             .expect_err("a stranger's credential must not validate");
 
         assert!(matches!(error, CoreError::Conflict(_)));
+    }
+
+    fn plain_command(org_id: OrganizationId, name: &str) -> CreateWorkflowCommand {
+        CreateWorkflowCommand {
+            org_id,
+            name: name.to_string(),
+            description: Some("Original description".to_string()),
+        }
+    }
+
+    fn untouched(workflow: &Workflow) -> UpdateWorkflowCommand {
+        UpdateWorkflowCommand {
+            org_id: workflow.org_id,
+            id: workflow.id,
+            name: None,
+            description: None,
+            enabled: None,
+            folder_id: None,
+            tags: None,
+            archived: None,
+        }
+    }
+
+    fn untouched_for(org_id: OrganizationId, id: Uuid) -> UpdateWorkflowCommand {
+        UpdateWorkflowCommand {
+            org_id,
+            id,
+            name: None,
+            description: None,
+            enabled: None,
+            folder_id: None,
+            tags: None,
+            archived: None,
+        }
+    }
+
+    fn tags(raw: &[&str]) -> WorkflowTags {
+        WorkflowTags::try_from(raw.iter().map(|tag| (*tag).to_owned()).collect::<Vec<_>>()).unwrap()
+    }
+
+    async fn create_folder(usecase: &MestierUseCase, org_id: OrganizationId, name: &str) -> Uuid {
+        usecase
+            .create_workflow_folder(CreateFolderCommand {
+                org_id,
+                name: FolderName::try_from(name.to_owned()).unwrap(),
+                parent_id: None,
+            })
+            .await
+            .unwrap()
+            .id
+    }
+
+    fn is_archived_refusal(error: &CoreError) -> bool {
+        matches!(error, CoreError::Conflict(message)
+            if WorkflowRefusal::from_conflict(message) == Some(WorkflowRefusal::Archived))
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_workflow_can_be_created_disabled_in_a_folder_with_tags() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "create-state").await;
+        let usecase = use_case(pool);
+        let folder_id = create_folder(&usecase, org_id, "Facturation").await;
+
+        let created = usecase
+            .create_workflow_in_state(
+                plain_command(org_id, "Draft"),
+                WorkflowInitialState {
+                    enabled: false,
+                    folder_id: Some(folder_id),
+                    tags: tags(&["CRM", "relance"]),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert!(!created.enabled);
+        assert_eq!(created.folder_id, Some(folder_id));
+        assert_eq!(created.tags, tags(&["CRM", "relance"]));
+        assert_eq!(created.archived_at, None);
+        assert_eq!(
+            usecase.find_workflow(org_id, created.id).await.unwrap(),
+            Some(created)
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn creating_with_the_default_state_is_enabled_unfiled_and_untagged() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "create-default").await;
+        let usecase = use_case(pool);
+
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Plain"))
+            .await
+            .unwrap();
+
+        assert!(created.enabled);
+        assert_eq!(created.folder_id, None);
+        assert!(created.tags.is_empty());
+        assert_eq!(created.archived_at, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn creating_in_a_missing_or_foreign_folder_is_refused() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "create-folder").await;
+        let stranger = seed_organization(&pool, "create-folder-stranger").await;
+        let usecase = use_case(pool);
+        let foreign_folder = create_folder(&usecase, stranger, "Theirs").await;
+
+        for folder_id in [generate_uuid_v7(), foreign_folder] {
+            let error = usecase
+                .create_workflow_in_state(
+                    plain_command(org_id, "Misfiled"),
+                    WorkflowInitialState {
+                        folder_id: Some(folder_id),
+                        ..WorkflowInitialState::default()
+                    },
+                )
+                .await
+                .expect_err("the folder is not in this organization");
+
+            assert!(matches!(&error, CoreError::Conflict(m)
+                if FolderRefusal::from_conflict(m) == Some(FolderRefusal::Missing)));
+        }
+        assert!(usecase.list_workflows(org_id).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn updated_at_moves_for_a_rename_or_a_new_description_and_for_nothing_else() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "updated-at").await;
+        let usecase = use_case(pool);
+        let folder_id = create_folder(&usecase, org_id, "Folder").await;
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Name"))
+            .await
+            .unwrap();
+
+        let reclassified = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                enabled: Some(false),
+                folder_id: Some(Some(folder_id)),
+                tags: Some(tags(&["a", "b"])),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        let archived = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                archived: Some(true),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        let unarchived = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                archived: Some(false),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        let renamed = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                name: Some(WorkflowName::try_from("Other".to_string()).unwrap()),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        let redescribed = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                description: Some(None),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(reclassified.updated_at, created.updated_at);
+        assert_eq!(archived.updated_at, created.updated_at);
+        assert_eq!(unarchived.updated_at, created.updated_at);
+        assert!(renamed.updated_at > created.updated_at);
+        assert!(redescribed.updated_at > renamed.updated_at);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn saving_a_new_version_moves_updated_at() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "updated-at-version").await;
+        let usecase = use_case(pool);
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Name"))
+            .await
+            .unwrap();
+
+        usecase
+            .save_workflow_version(SaveWorkflowVersionCommand {
+                org_id,
+                workflow_id: created.id,
+                graph: valid_graph(),
+                layout: None,
+                created_by: None,
+            })
+            .await
+            .unwrap();
+
+        let reloaded = usecase
+            .find_workflow(org_id, created.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(reloaded.updated_at > created.updated_at);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn archiving_stamps_the_instant_disables_and_unarchiving_leaves_it_disabled() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "archive").await;
+        let usecase = use_case(pool);
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Name"))
+            .await
+            .unwrap();
+        assert!(created.enabled);
+
+        let archived = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                archived: Some(true),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        assert!(archived.archived_at.is_some());
+        assert!(!archived.enabled);
+
+        let unarchived = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                archived: Some(false),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        assert_eq!(unarchived.archived_at, None);
+        assert!(!unarchived.enabled);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_archived_workflow_cannot_be_enabled_but_a_disabled_one_can() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "archive-enable").await;
+        let usecase = use_case(pool);
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Name"))
+            .await
+            .unwrap();
+        usecase
+            .update_workflow(UpdateWorkflowCommand {
+                archived: Some(true),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+
+        let refused = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                enabled: Some(true),
+                ..untouched(&created)
+            })
+            .await
+            .expect_err("archived workflows stay disabled");
+        assert!(is_archived_refusal(&refused));
+
+        let restored = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                archived: Some(false),
+                enabled: Some(true),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        assert!(restored.enabled);
+        assert_eq!(restored.archived_at, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_update_waits_for_a_concurrent_one_and_never_undoes_its_archive() {
+        use crate::domain::automation::ports::WorkflowRepository;
+        use crate::infrastructure::automation::postgres::PgWorkflowRepository;
+        use crate::infrastructure::postgres::with_tx;
+
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "update-race").await;
+        let usecase = use_case(pool.clone());
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Name"))
+            .await
+            .unwrap();
+        let (locked_tx, locked_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+        let archiver = tokio::spawn({
+            let pool = pool.clone();
+            let id = created.id;
+            async move {
+                with_tx(&pool, async |tx| {
+                    let mut repo = PgWorkflowRepository::new(&tx);
+                    let current = repo
+                        .find_by_id_for_update(org_id, id)
+                        .await?
+                        .expect("the workflow exists");
+                    locked_tx.send(()).ok();
+                    release_rx.await.ok();
+                    let archived = current.apply(
+                        UpdateWorkflowCommand {
+                            archived: Some(true),
+                            ..untouched_for(org_id, id)
+                        },
+                        chrono::Utc::now(),
+                    )?;
+                    repo.update(org_id, &archived).await
+                })
+                .await
+            }
+        });
+        locked_rx.await.unwrap();
+
+        let mut renaming = Box::pin(usecase.update_workflow(UpdateWorkflowCommand {
+            name: Some(WorkflowName::try_from("Renamed".to_string()).unwrap()),
+            ..untouched(&created)
+        }));
+        let waiting =
+            tokio::time::timeout(std::time::Duration::from_millis(300), &mut renaming).await;
+
+        assert!(
+            waiting.is_err(),
+            "the second update must wait for the first"
+        );
+        release_tx.send(()).unwrap();
+        archiver.await.unwrap().unwrap();
+        let renamed = tokio::time::timeout(std::time::Duration::from_secs(5), renaming)
+            .await
+            .expect("the waiting update proceeds once the first commits")
+            .unwrap();
+        assert_eq!(renamed.name, "Renamed");
+        assert!(
+            renamed.archived_at.is_some(),
+            "the rename was computed from a stale copy and unarchived the workflow"
+        );
+        assert!(!renamed.enabled);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn listing_hides_archived_workflows_unless_asked_for_them() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "list-scope").await;
+        let usecase = use_case(pool);
+        let active = usecase
+            .create_workflow(plain_command(org_id, "Active"))
+            .await
+            .unwrap();
+        let archived = usecase
+            .create_workflow(plain_command(org_id, "Archived"))
+            .await
+            .unwrap();
+        usecase
+            .update_workflow(UpdateWorkflowCommand {
+                archived: Some(true),
+                ..untouched(&archived)
+            })
+            .await
+            .unwrap();
+
+        let ids =
+            |workflows: Vec<Workflow>| workflows.into_iter().map(|w| w.id).collect::<Vec<_>>();
+        let only_active = usecase
+            .list_workflows_by_scope(org_id, ArchiveScope::Active)
+            .await
+            .unwrap();
+        let only_archived = usecase
+            .list_workflows_by_scope(org_id, ArchiveScope::Archived)
+            .await
+            .unwrap();
+        let everything = usecase.list_workflows(org_id).await.unwrap();
+
+        assert_eq!(ids(only_active), vec![active.id]);
+        assert_eq!(ids(only_archived), vec![archived.id]);
+        assert_eq!(everything.len(), 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn moving_a_workflow_between_folders_and_back_to_the_root() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "move-folder").await;
+        let usecase = use_case(pool);
+        let folder_id = create_folder(&usecase, org_id, "Folder").await;
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Name"))
+            .await
+            .unwrap();
+
+        let filed = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                folder_id: Some(Some(folder_id)),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        let kept = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                tags: Some(tags(&["x"])),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        let rooted = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                folder_id: Some(None),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(filed.folder_id, Some(folder_id));
+        assert_eq!(kept.folder_id, Some(folder_id));
+        assert_eq!(rooted.folder_id, None);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn moving_a_workflow_into_a_foreign_folder_is_refused() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "move-foreign").await;
+        let stranger = seed_organization(&pool, "move-foreign-stranger").await;
+        let usecase = use_case(pool);
+        let foreign_folder = create_folder(&usecase, stranger, "Theirs").await;
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Name"))
+            .await
+            .unwrap();
+
+        let error = usecase
+            .update_workflow(UpdateWorkflowCommand {
+                folder_id: Some(Some(foreign_folder)),
+                ..untouched(&created)
+            })
+            .await
+            .expect_err("the folder belongs to someone else");
+
+        assert!(matches!(&error, CoreError::Conflict(m)
+            if FolderRefusal::from_conflict(m) == Some(FolderRefusal::Missing)));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn saving_a_version_of_an_archived_workflow_is_refused_until_it_is_unarchived() {
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool, "archive-save").await;
+        let usecase = use_case(pool);
+        let created = usecase
+            .create_workflow(plain_command(org_id, "Name"))
+            .await
+            .unwrap();
+        usecase
+            .update_workflow(UpdateWorkflowCommand {
+                archived: Some(true),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        let save = |graph| SaveWorkflowVersionCommand {
+            org_id,
+            workflow_id: created.id,
+            graph,
+            layout: None,
+            created_by: None,
+        };
+
+        let refused = usecase
+            .save_workflow_version(save(valid_graph()))
+            .await
+            .expect_err("archived workflows are frozen");
+        assert!(is_archived_refusal(&refused));
+        assert!(
+            usecase
+                .list_workflow_versions(org_id, created.id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        usecase
+            .update_workflow(UpdateWorkflowCommand {
+                archived: Some(false),
+                ..untouched(&created)
+            })
+            .await
+            .unwrap();
+        let saved = usecase
+            .save_workflow_version(save(valid_graph()))
+            .await
+            .unwrap();
+        assert_eq!(saved.version, 1);
     }
 }

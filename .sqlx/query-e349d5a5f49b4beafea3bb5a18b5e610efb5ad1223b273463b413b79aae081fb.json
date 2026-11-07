@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT output FROM automation.run_step\n               WHERE run_id = $1 AND connector_id = $2 AND iteration_path = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "output",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "e349d5a5f49b4beafea3bb5a18b5e610efb5ad1223b273463b413b79aae081fb"
+}

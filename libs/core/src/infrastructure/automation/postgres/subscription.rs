@@ -151,6 +151,8 @@ mod tests {
         PlacedTrigger {
             id: id.to_string(),
             kind: TriggerKind::Events(names.iter().map(|n| (*n).to_string()).collect()),
+            name: None,
+            description: None,
         }
     }
 
@@ -158,6 +160,8 @@ mod tests {
         PlacedTrigger {
             id: id.to_string(),
             kind: TriggerKind::Manual,
+            name: None,
+            description: None,
         }
     }
 

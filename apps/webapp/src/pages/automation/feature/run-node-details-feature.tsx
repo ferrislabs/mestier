@@ -5,7 +5,6 @@ import { buildOrgPath } from '#/modules/org-path'
 import { useResolvedParameters } from '#/pages/automation/feature/use-resolved-parameters'
 import { identificationsPath } from '#/pages/automation/lib/automation-paths'
 import { branchLabel } from '#/pages/automation/lib/branch-labels'
-import { shortRunId } from '#/pages/automation/lib/execution-log'
 import { toItems } from '#/pages/automation/lib/items'
 import { runNodeAppearance } from '#/pages/automation/lib/run-appearance'
 import {
@@ -141,7 +140,7 @@ export function RunNodeDetailsFeature({
 
 	return (
 		<RunNodeDetails
-			runShortId={shortRunId(run.id)}
+			runNumber={run.number}
 			versionLabel={versionLabel}
 			node={node}
 			typeLabel={

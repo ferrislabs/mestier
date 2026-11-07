@@ -20,7 +20,7 @@ import {
 
 export interface ExecutionDetailHeader {
 	runId: string
-	shortId: string
+	number: number
 	startedAt: string
 	trigger: string
 	status: ExecutionStatus
@@ -65,7 +65,7 @@ function ExecutionDetail({
 	const { header, failure } = detail
 	return (
 		<section
-			aria-label={`Exécution #${header.shortId}`}
+			aria-label={`Exécution #${header.number}`}
 			className="flex min-h-0 min-w-0 flex-col"
 		>
 			<header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-border border-b bg-card px-5 py-3">
@@ -73,7 +73,7 @@ function ExecutionDetail({
 					<h2 className="font-semibold text-base leading-tight">
 						Exécution{' '}
 						<span className="font-mono text-muted-foreground">
-							#{header.shortId}
+							#{header.number}
 						</span>
 					</h2>
 					<p className="mt-0.5 text-muted-foreground text-sm">
@@ -152,14 +152,14 @@ function ExecutionDetail({
 export interface WorkflowExecutionsProps {
 	entries: readonly ExecutionListEntry[]
 	total: number
-	selectedId: string | null
+	selectedNumber: number | null
 	filter: ExecutionFilter
 	isLoading: boolean
 	error: string | null
 	detail: ExecutionDetailData | null
 	detailLoading: boolean
 	detailError: string | null
-	onSelect: (id: string) => void
+	onSelect: (number: number) => void
 	onFilterChange: (filter: ExecutionFilter) => void
 	onOpenNode: (nodeId: string) => void
 	nodeDialog: ReactNode
@@ -168,7 +168,7 @@ export interface WorkflowExecutionsProps {
 export function WorkflowExecutions({
 	entries,
 	total,
-	selectedId,
+	selectedNumber,
 	filter,
 	isLoading,
 	error,
@@ -207,7 +207,7 @@ export function WorkflowExecutions({
 			<ExecutionList
 				entries={entries}
 				total={total}
-				selectedId={selectedId}
+				selectedNumber={selectedNumber}
 				onSelect={onSelect}
 				filter={filter}
 				onFilterChange={onFilterChange}

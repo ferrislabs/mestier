@@ -40,6 +40,20 @@ vi.mock('#/pages/automation/feature/workflow-canvas-feature', () => ({
 					Poser un déclencheur
 				</button>
 				<p>{session.dirty ? 'sale' : 'propre'}</p>
+				<p>{session.enabled ? 'actif' : 'inactif'}</p>
+				<button type="button" onClick={() => session.onEnabledChange(true)}>
+					Activer
+				</button>
+				<button
+					type="button"
+					onClick={() => session.onNameChange('Relance des devis')}
+				>
+					Nommer
+				</button>
+				<button type="button" onClick={session.onSave}>
+					Enregistrer
+				</button>
+				{session.saveError ? <p>{session.saveError}</p> : null}
 			</div>
 		)
 	},
@@ -48,19 +62,23 @@ vi.mock('#/pages/automation/feature/workflow-canvas-feature', () => ({
 vi.mock('#/pages/automation/feature/workflow-executions-feature', () => ({
 	WorkflowExecutionsFeature: ({
 		workflowId,
-		runId,
+		executionNumber,
 	}: {
 		workflowId: string
-		runId?: string
+		executionNumber?: number
 	}) => (
 		<p>
-			exécutions {workflowId} {runId ?? 'sans exécution'}
+			exécutions {workflowId} {executionNumber ?? 'sans exécution'}
 		</p>
 	),
 }))
 
+const WORKFLOWS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows'
 const WORKFLOW_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
+const VERSIONS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions'
 const MY_PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
 
@@ -84,6 +102,9 @@ function workflow(id: string) {
 		name: `Workflow ${id}`,
 		description: null,
 		enabled: true,
+		folder_id: null,
+		tags: [],
+		archived_at: null,
 		layout: null,
 		current_version: null,
 		created_at: '2026-08-01T00:00:00Z',
@@ -118,17 +139,29 @@ function installApi(unknown: readonly string[] = []) {
 		data: { permissions: ['VIEW_AUTOMATION', 'MANAGE_AUTOMATION'] },
 		pagination: null,
 	}))
+	api.mockMutation('post', WORKFLOWS_PATH, (params) => {
+		const body = (params as { body: Record<string, unknown> }).body
+		return {
+			data: { ...workflow('workflow-new'), ...body },
+			pagination: null,
+		}
+	})
+	api.mockMutation('patch', WORKFLOW_PATH, (params) => {
+		const body = (params as { body: Record<string, unknown> }).body
+		return { data: { ...workflow('workflow-1'), ...body }, pagination: null }
+	})
+	api.mockMutation('put', VERSIONS_PATH, () => ({ data: {}, pagination: null }))
 	return api
 }
 
 function Harness({
 	initialId,
 	initialView = 'editor',
-	executionId,
+	executionNumber,
 }: {
 	initialId: string
 	initialView?: EditorView
-	executionId?: string
+	executionNumber?: number
 }) {
 	const [workflowId, setWorkflowId] = useState(initialId)
 	const [view, setView] = useState<EditorView>(initialView)
@@ -146,7 +179,7 @@ function Harness({
 			<WorkflowPageFeature
 				workflowId={workflowId}
 				view={view}
-				executionId={executionId}
+				executionNumber={executionNumber}
 			/>
 		</>
 	)
@@ -185,10 +218,10 @@ describe('WorkflowPageFeature', () => {
 		await renderPage({
 			initialId: 'workflow-1',
 			initialView: 'executions',
-			executionId: 'run-1',
+			executionNumber: 1285,
 		})
 
-		expect(await screen.findByText('exécutions workflow-1 run-1')).toBeTruthy()
+		expect(await screen.findByText('exécutions workflow-1 1285')).toBeTruthy()
 	})
 
 	it('shows the not-found screen for an id the server does not know', async () => {
@@ -266,5 +299,94 @@ describe('WorkflowPageFeature', () => {
 		await waitFor(() => {
 			expect(screen.getByText('propre')).toBeTruthy()
 		})
+	})
+})
+
+describe('WorkflowPageFeature — saving', () => {
+	function callsOf(api: ReturnType<typeof installApi>, method: string) {
+		return api.calls.filter((call) => call.method === method)
+	}
+
+	it('creates a draft with one POST that carries the name and the switch, then saves the graph, with no PATCH', async () => {
+		const user = userEvent.setup()
+		const api = installApi()
+		await renderPage({ initialId: 'nouveau' })
+		await user.click(
+			await screen.findByRole('button', { name: 'Poser un déclencheur' }),
+		)
+		await user.click(screen.getByRole('button', { name: 'Nommer' }))
+		await user.click(screen.getByRole('button', { name: 'Activer' }))
+
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() => expect(callsOf(api, 'put')).toHaveLength(1))
+		expect(callsOf(api, 'post')).toHaveLength(1)
+		expect(callsOf(api, 'post')[0]?.params).toEqual({
+			path: { organization_id: 'org-1' },
+			body: { name: 'Relance des devis', enabled: true },
+		})
+		expect(callsOf(api, 'put')[0]?.params).toMatchObject({
+			path: { organization_id: 'org-1', workflow_id: 'workflow-new' },
+			body: { graph: { triggers: [{ id: 't1', kind: 'Manual' }] } },
+		})
+		expect(callsOf(api, 'patch')).toEqual([])
+	})
+
+	it('creates a draft left off with enabled: false, and still no PATCH', async () => {
+		const user = userEvent.setup()
+		const api = installApi()
+		await renderPage({ initialId: 'nouveau' })
+
+		await user.click(await screen.findByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() => expect(callsOf(api, 'put')).toHaveLength(1))
+		expect(callsOf(api, 'post')[0]?.params).toEqual({
+			path: { organization_id: 'org-1' },
+			body: { name: 'Mon workflow', enabled: false },
+		})
+		expect(callsOf(api, 'patch')).toEqual([])
+	})
+
+	it('tells the user when the draft could not be created, and saves no graph', async () => {
+		const user = userEvent.setup()
+		const api = installApi()
+		api.mockMutation('post', WORKFLOWS_PATH, () => {
+			throw new Error('Nom déjà pris')
+		})
+		await renderPage({ initialId: 'nouveau' })
+
+		await user.click(await screen.findByRole('button', { name: 'Enregistrer' }))
+
+		expect(
+			await screen.findByText('L’enregistrement a échoué : Nom déjà pris'),
+		).toBeTruthy()
+		expect(callsOf(api, 'put')).toEqual([])
+		expect(callsOf(api, 'patch')).toEqual([])
+	})
+
+	it('updates a stored workflow with one PATCH and reloads its detail through the update hook', async () => {
+		const user = userEvent.setup()
+		const api = installApi()
+		await renderPage({ initialId: 'workflow-1' })
+		await user.click(await screen.findByRole('button', { name: 'Nommer' }))
+		const loadedBefore = callsOf(api, 'get').filter(
+			(call) => call.path === WORKFLOW_PATH,
+		).length
+
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() => expect(callsOf(api, 'patch')).toHaveLength(1))
+		expect(callsOf(api, 'patch')[0]?.params).toEqual({
+			path: { organization_id: 'org-1', workflow_id: 'workflow-1' },
+			body: { name: 'Relance des devis' },
+		})
+		await waitFor(() =>
+			expect(
+				callsOf(api, 'get').filter((call) => call.path === WORKFLOW_PATH)
+					.length,
+			).toBeGreaterThan(loadedBefore),
+		)
+		expect(callsOf(api, 'post')).toEqual([])
+		expect(callsOf(api, 'put')).toEqual([])
 	})
 })

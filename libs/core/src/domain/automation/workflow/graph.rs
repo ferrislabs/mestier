@@ -29,6 +29,12 @@ pub struct PlacedConnector {
     pub version: u16,
     pub credential_id: Option<Uuid>,
     pub config: serde_json::Map<String, serde_json::Value>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub disabled: bool,
 }
 
 /// One connection between two connectors, by their graph-local `id`s.
@@ -61,6 +67,10 @@ pub enum Branch {
 pub struct PlacedTrigger {
     pub id: String,
     pub kind: TriggerKind,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -95,6 +105,9 @@ mod tests {
                         m.insert("predicate".to_string(), json!("{{ true }}"));
                         m
                     },
+                    name: None,
+                    description: None,
+                    disabled: false,
                 },
                 PlacedConnector {
                     id: "c2".to_string(),
@@ -102,6 +115,9 @@ mod tests {
                     version: 1,
                     credential_id: Some(Uuid::from_u128(1)),
                     config,
+                    name: None,
+                    description: None,
+                    disabled: false,
                 },
             ],
             edges: vec![
@@ -120,10 +136,14 @@ mod tests {
                 PlacedTrigger {
                     id: "t1".to_string(),
                     kind: TriggerKind::Manual,
+                    name: None,
+                    description: None,
                 },
                 PlacedTrigger {
                     id: "t2".to_string(),
                     kind: TriggerKind::Events(vec!["quote.accepted".to_string()]),
+                    name: None,
+                    description: None,
                 },
             ],
         }
@@ -146,14 +166,20 @@ mod tests {
                         "kind": "flow.condition",
                         "version": 1,
                         "credential_id": null,
-                        "config": { "predicate": "{{ true }}" }
+                        "config": { "predicate": "{{ true }}" },
+                        "name": null,
+                        "description": null,
+                        "disabled": false
                     },
                     {
                         "id": "c2",
                         "kind": "odoo.create_partner",
                         "version": 1,
                         "credential_id": "00000000-0000-0000-0000-000000000001",
-                        "config": { "kind": "{{ trigger.payload.customer_kind }}" }
+                        "config": { "kind": "{{ trigger.payload.customer_kind }}" },
+                        "name": null,
+                        "description": null,
+                        "disabled": false
                     }
                 ],
                 "edges": [
@@ -161,8 +187,13 @@ mod tests {
                     { "from": "c1", "to": "c1", "branch": null }
                 ],
                 "triggers": [
-                    { "id": "t1", "kind": "Manual" },
-                    { "id": "t2", "kind": { "Events": ["quote.accepted"] } }
+                    { "id": "t1", "kind": "Manual", "name": null, "description": null },
+                    {
+                        "id": "t2",
+                        "kind": { "Events": ["quote.accepted"] },
+                        "name": null,
+                        "description": null
+                    }
                 ]
             })
         );
@@ -201,6 +232,45 @@ mod tests {
             serde_json::from_value(json).expect("a graph with no triggers key deserializes");
 
         assert_eq!(graph, Graph::default());
+    }
+
+    #[test]
+    fn a_graph_stored_before_node_labels_existed_reads_back_with_the_defaults() {
+        let stored = json!({
+            "connectors": [{
+                "id": "c1",
+                "kind": "flow.condition",
+                "version": 1,
+                "credential_id": null,
+                "config": { "predicate": "{{ true }}" }
+            }],
+            "edges": [{ "from": "t1", "to": "c1", "branch": null }],
+            "triggers": [{ "id": "t1", "kind": "Manual" }]
+        });
+
+        let graph: Graph = serde_json::from_value(stored).expect("an old graph still reads");
+
+        assert_eq!(graph.connectors[0].name, None);
+        assert_eq!(graph.connectors[0].description, None);
+        assert!(!graph.connectors[0].disabled);
+        assert_eq!(graph.triggers[0].name, None);
+        assert_eq!(graph.triggers[0].description, None);
+    }
+
+    #[test]
+    fn node_labels_and_the_disabled_flag_round_trip() {
+        let mut graph = sample_graph();
+        graph.connectors[0].name = Some("Is it paid".to_string());
+        graph.connectors[0].description = Some("Stops unpaid quotes".to_string());
+        graph.connectors[0].disabled = true;
+        graph.triggers[1].name = Some("Quote accepted".to_string());
+        graph.triggers[1].description = Some("Fires on acceptance".to_string());
+
+        let encoded = serde_json::to_string(&graph).expect("graph serializes");
+        let decoded: Graph = serde_json::from_str(&encoded).expect("graph deserializes");
+
+        assert_eq!(decoded, graph);
+        assert!(decoded.connectors[0].disabled);
     }
 
     #[test]

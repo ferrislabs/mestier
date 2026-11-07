@@ -63,32 +63,68 @@ impl<'tx> EventDispatchRepository for PgEventDispatchRepository<'tx> {
         // retriggers A, is a different workflow each time and stays allowed.
         let runs = sqlx::query!(
             r#"
+            WITH candidate AS (
+                SELECT e.org_id, w.id AS workflow_id, w.current_version_id,
+                       e.id AS event_id, e.payload, s.trigger_id, e.occurred_at
+                FROM automation.event e
+                JOIN automation.subscription s
+                  ON s.org_id = e.org_id
+                 AND s.enabled
+                 AND e.name = ANY(s.event_names)
+                 AND s.kind = 'workflow'
+                JOIN automation.workflow w
+                  ON w.id = s.target_id
+                 AND w.org_id = e.org_id
+                 AND w.current_version_id IS NOT NULL
+                 AND w.enabled
+                 AND w.archived_at IS NULL
+                JOIN automation.workflow_version wv
+                  ON wv.id = w.current_version_id
+                 AND EXISTS (
+                       SELECT 1
+                       FROM jsonb_array_elements(wv.graph -> 'triggers') AS trig
+                       WHERE trig ->> 'id' = s.trigger_id
+                         AND jsonb_typeof(trig -> 'kind') = 'object'
+                     )
+                LEFT JOIN automation.run r
+                       ON e.actor_kind = 'automation' AND r.id = e.actor_id
+                WHERE e.id = ANY($1)
+                  AND (r.id IS NULL OR s.kind <> 'workflow' OR r.workflow_id <> s.target_id)
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM automation.run existing
+                        WHERE existing.trigger_event_id = e.id
+                          AND existing.workflow_id = w.id
+                          AND existing.trigger_id IS NOT DISTINCT FROM s.trigger_id
+                      )
+            ),
+            numbered AS (
+                SELECT candidate.*,
+                       row_number() OVER (
+                           PARTITION BY org_id
+                           ORDER BY occurred_at, event_id, workflow_id, trigger_id
+                       ) AS position,
+                       count(*) OVER (PARTITION BY org_id) AS batch_size
+                FROM candidate
+            ),
+            reserved AS (
+                INSERT INTO automation.run_counter AS counter (org_id, last_value)
+                SELECT org_id, count(*)
+                FROM candidate
+                GROUP BY org_id
+                ORDER BY org_id
+                ON CONFLICT (org_id) DO UPDATE
+                SET last_value = counter.last_value + EXCLUDED.last_value
+                RETURNING counter.org_id, counter.last_value
+            )
             INSERT INTO automation.run
                 (id, org_id, workflow_id, workflow_version_id, trigger_event_id,
-                 trigger_payload, trigger_id, status, next_attempt_at, created_at)
-            SELECT gen_random_uuid(), e.org_id, w.id, w.current_version_id, e.id, e.payload,
-                   s.trigger_id, 'pending', now(), now()
-            FROM automation.event e
-            JOIN automation.subscription s
-              ON s.org_id = e.org_id
-             AND s.enabled
-             AND e.name = ANY(s.event_names)
-             AND s.kind = 'workflow'
-            JOIN automation.workflow w
-              ON w.id = s.target_id
-             AND w.current_version_id IS NOT NULL
-            JOIN automation.workflow_version wv
-              ON wv.id = w.current_version_id
-             AND EXISTS (
-                   SELECT 1
-                   FROM jsonb_array_elements(wv.graph -> 'triggers') AS trig
-                   WHERE trig ->> 'id' = s.trigger_id
-                     AND jsonb_typeof(trig -> 'kind') = 'object'
-                 )
-            LEFT JOIN automation.run r
-                   ON e.actor_kind = 'automation' AND r.id = e.actor_id
-            WHERE e.id = ANY($1)
-              AND (r.id IS NULL OR s.kind <> 'workflow' OR r.workflow_id <> s.target_id)
+                 trigger_payload, trigger_id, status, next_attempt_at, created_at, run_number)
+            SELECT gen_random_uuid(), n.org_id, n.workflow_id, n.current_version_id, n.event_id,
+                   n.payload, n.trigger_id, 'pending', now(), now(),
+                   reserved.last_value - n.batch_size + n.position
+            FROM numbered n
+            JOIN reserved ON reserved.org_id = n.org_id
             ON CONFLICT ON CONSTRAINT uq_automation_run_trigger_workflow DO NOTHING
             "#,
             &claimed,
@@ -206,6 +242,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config,
+                name: None,
+                description: None,
+                disabled: false,
             }],
             edges: vec![Edge {
                 from: "t1".to_string(),
@@ -215,6 +254,8 @@ mod tests {
             triggers: vec![PlacedTrigger {
                 id: "t1".to_string(),
                 kind: TriggerKind::Events(vec!["quote.accepted".to_string()]),
+                name: None,
+                description: None,
             }],
         };
 
@@ -230,6 +271,9 @@ mod tests {
                     enabled: true,
                     current_version_id: None,
                     layout: None,
+                    folder_id: None,
+                    tags: Default::default(),
+                    archived_at: None,
                     created_at: now,
                     updated_at: now,
                 })
@@ -270,6 +314,9 @@ mod tests {
                 version: 1,
                 credential_id: None,
                 config,
+                name: None,
+                description: None,
+                disabled: false,
             }],
             edges: vec![Edge {
                 from: "t1".to_string(),
@@ -279,6 +326,8 @@ mod tests {
             triggers: vec![PlacedTrigger {
                 id: "t1".to_string(),
                 kind: TriggerKind::Manual,
+                name: None,
+                description: None,
             }],
         };
         usecase
@@ -398,20 +447,33 @@ mod tests {
         .unwrap()
         .expect("workflow has a version");
 
-        let run_id = generate_uuid_v7();
-        sqlx::query!(
-            r#"INSERT INTO automation.run
-                   (id, org_id, workflow_id, workflow_version_id, status, created_at)
-               VALUES ($1, $2, $3, $4, 'succeeded', now())"#,
-            run_id,
-            org_id.0,
-            workflow_id,
-            version_id,
-        )
-        .execute(pool)
+        use crate::domain::automation::ports::RunRepository;
+
+        let now = chrono::Utc::now();
+        with_tx(pool, async |tx| {
+            let mut repo = crate::infrastructure::automation::postgres::PgRunRepository::new(&tx);
+            repo.create_run(&crate::domain::automation::run::Run {
+                id: generate_uuid_v7(),
+                org_id,
+                workflow_id,
+                workflow_version_id: version_id,
+                trigger_event_id: None,
+                trigger_payload: None,
+                trigger_id: None,
+                status: crate::domain::automation::run::RunStatus::Succeeded,
+                error: None,
+                next_attempt_at: None,
+                locked_at: None,
+                locked_by: None,
+                started_at: None,
+                finished_at: None,
+                created_at: now,
+            })
+            .await
+        })
         .await
-        .unwrap();
-        run_id
+        .unwrap()
+        .id
     }
 
     #[tokio::test]
@@ -495,6 +557,96 @@ mod tests {
         );
     }
 
+    async fn set_workflow_state(pool: &PgPool, workflow_id: Uuid, enabled: bool, archived: bool) {
+        sqlx::query!(
+            "UPDATE automation.workflow
+             SET enabled = $2, archived_at = CASE WHEN $3 THEN now() END
+             WHERE id = $1",
+            workflow_id,
+            enabled,
+            archived,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_disabled_workflow_receives_no_run_but_its_event_is_still_done_with() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let workflow_id = seed_workflow(&pool, org_id).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
+        set_workflow_state(&pool, workflow_id, false, false).await;
+        let event_id = seed_event(&pool, org_id, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(runs_for(&pool, event_id).await, 0);
+        assert!(is_dispatched(&pool, event_id).await);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_archived_workflow_receives_no_run() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let workflow_id = seed_workflow(&pool, org_id).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
+        set_workflow_state(&pool, workflow_id, false, true).await;
+        let event_id = seed_event(&pool, org_id, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(runs_for(&pool, event_id).await, 0);
+        assert!(is_dispatched(&pool, event_id).await);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn only_the_enabled_workflow_receives_a_run_when_two_share_a_trigger() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let enabled = seed_workflow(&pool, org_id).await;
+        let disabled = seed_workflow(&pool, org_id).await;
+        seed_workflow_subscription(&pool, org_id, enabled, "t1", &["quote.accepted"], true).await;
+        seed_workflow_subscription(&pool, org_id, disabled, "t1", &["quote.accepted"], true).await;
+        set_workflow_state(&pool, disabled, false, false).await;
+        let event_id = seed_event(&pool, org_id, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(runs_for_workflow(&pool, event_id, enabled).await, 1);
+        assert_eq!(runs_for_workflow(&pool, event_id, disabled).await, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn re_enabling_a_workflow_lets_the_next_event_start_a_run() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        let org_id = seed_organization(&pool).await;
+        let workflow_id = seed_workflow(&pool, org_id).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
+        set_workflow_state(&pool, workflow_id, false, false).await;
+        let skipped = seed_event(&pool, org_id, Actor::system()).await;
+        dispatch(&pool).await;
+        set_workflow_state(&pool, workflow_id, true, false).await;
+        let delivered = seed_event(&pool, org_id, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(runs_for(&pool, skipped).await, 0);
+        assert_eq!(runs_for(&pool, delivered).await, 1);
+    }
+
     #[tokio::test]
     #[ignore = "requires live postgres"]
     async fn a_subscription_of_another_organization_receives_no_run() {
@@ -517,6 +669,25 @@ mod tests {
         dispatch(&pool).await;
 
         assert_eq!(runs_for(&pool, event_id).await, 0);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn a_subscription_pointing_at_another_organizations_workflow_receives_no_run() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        let mine = seed_organization(&pool).await;
+        let theirs = seed_organization(&pool).await;
+        let their_workflow = seed_workflow(&pool, theirs).await;
+        seed_workflow_subscription(&pool, mine, their_workflow, "t1", &["quote.accepted"], true)
+            .await;
+        let event_id = seed_event(&pool, mine, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(runs_for(&pool, event_id).await, 0);
+        assert_eq!(counter_of(&pool, mine).await, None);
+        assert_eq!(counter_of(&pool, theirs).await, None);
     }
 
     #[tokio::test]
@@ -702,6 +873,180 @@ mod tests {
         let second = dispatch(&pool).await;
 
         assert_eq!(second.events, 0);
+    }
+
+    async fn numbers_of(pool: &PgPool, org_id: OrganizationId) -> Vec<i64> {
+        sqlx::query_scalar!(
+            r#"SELECT run_number AS "run_number!" FROM automation.run
+               WHERE org_id = $1 ORDER BY run_number"#,
+            org_id.0,
+        )
+        .fetch_all(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn counter_of(pool: &PgPool, org_id: OrganizationId) -> Option<i64> {
+        sqlx::query_scalar!(
+            "SELECT last_value FROM automation.run_counter WHERE org_id = $1",
+            org_id.0,
+        )
+        .fetch_optional(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn number_of_run_for(pool: &PgPool, event_id: Uuid, workflow_id: Uuid) -> i64 {
+        sqlx::query_scalar!(
+            r#"SELECT run_number AS "run_number!" FROM automation.run
+               WHERE trigger_event_id = $1 AND workflow_id = $2"#,
+            event_id,
+            workflow_id,
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn dispatched_runs_get_distinct_consecutive_numbers_in_event_order() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        dispatch(&pool).await;
+        let org_id = seed_organization(&pool).await;
+        let workflow_a = seed_workflow(&pool, org_id).await;
+        let workflow_b = seed_workflow(&pool, org_id).await;
+        seed_workflow_subscription(&pool, org_id, workflow_a, "t1", &["quote.accepted"], true)
+            .await;
+        seed_workflow_subscription(&pool, org_id, workflow_b, "t1", &["quote.accepted"], true)
+            .await;
+        let first = seed_event(&pool, org_id, Actor::system()).await;
+        let second = seed_event(&pool, org_id, Actor::system()).await;
+        let third = seed_event(&pool, org_id, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(numbers_of(&pool, org_id).await, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(counter_of(&pool, org_id).await, Some(6));
+        let numbers_by_event = [
+            number_of_run_for(&pool, first, workflow_a).await,
+            number_of_run_for(&pool, first, workflow_b).await,
+            number_of_run_for(&pool, second, workflow_a).await,
+            number_of_run_for(&pool, second, workflow_b).await,
+            number_of_run_for(&pool, third, workflow_a).await,
+            number_of_run_for(&pool, third, workflow_b).await,
+        ];
+        assert!(
+            numbers_by_event[0].max(numbers_by_event[1])
+                < numbers_by_event[2].min(numbers_by_event[3]),
+            "{numbers_by_event:?}"
+        );
+        assert!(
+            numbers_by_event[2].max(numbers_by_event[3])
+                < numbers_by_event[4].min(numbers_by_event[5]),
+            "{numbers_by_event:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn one_batch_numbers_each_organization_on_its_own_counter() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        dispatch(&pool).await;
+        let org_a = seed_organization(&pool).await;
+        let org_b = seed_organization(&pool).await;
+        let workflow_a = seed_workflow(&pool, org_a).await;
+        let workflow_b = seed_workflow(&pool, org_b).await;
+        seed_workflow_subscription(&pool, org_a, workflow_a, "t1", &["quote.accepted"], true).await;
+        seed_workflow_subscription(&pool, org_b, workflow_b, "t1", &["quote.accepted"], true).await;
+        seed_run(&pool, org_a, workflow_a).await;
+        seed_event(&pool, org_a, Actor::system()).await;
+        seed_event(&pool, org_b, Actor::system()).await;
+        seed_event(&pool, org_a, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(numbers_of(&pool, org_a).await, vec![1, 2, 3]);
+        assert_eq!(numbers_of(&pool, org_b).await, vec![1]);
+        assert_eq!(counter_of(&pool, org_a).await, Some(3));
+        assert_eq!(counter_of(&pool, org_b).await, Some(1));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn replaying_the_fan_out_burns_no_number() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        dispatch(&pool).await;
+        let org_id = seed_organization(&pool).await;
+        let workflow_id = seed_workflow(&pool, org_id).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
+        let event_id = seed_event(&pool, org_id, Actor::system()).await;
+        dispatch(&pool).await;
+
+        sqlx::query!(
+            "UPDATE automation.event SET dispatched_at = NULL WHERE id = $1",
+            event_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        dispatch(&pool).await;
+        seed_event(&pool, org_id, Actor::system()).await;
+        dispatch(&pool).await;
+
+        assert_eq!(numbers_of(&pool, org_id).await, vec![1, 2]);
+        assert_eq!(counter_of(&pool, org_id).await, Some(2));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn two_dispatchers_working_one_organization_at_once_never_share_a_number() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        dispatch(&pool).await;
+        let org_id = seed_organization(&pool).await;
+        let workflow_id = seed_workflow(&pool, org_id).await;
+        seed_workflow_subscription(&pool, org_id, workflow_id, "t1", &["quote.accepted"], true)
+            .await;
+        for _ in 0..4 {
+            seed_event(&pool, org_id, Actor::system()).await;
+        }
+
+        let one_event_at_a_time = |pool: PgPool| async move {
+            for _ in 0..2 {
+                with_tx(&pool, async |tx| {
+                    let mut repo = PgEventDispatchRepository::new(&tx);
+                    repo.dispatch_pending(1).await
+                })
+                .await
+                .unwrap();
+            }
+        };
+        tokio::join!(
+            one_event_at_a_time(pool.clone()),
+            one_event_at_a_time(pool.clone())
+        );
+
+        assert_eq!(numbers_of(&pool, org_id).await, vec![1, 2, 3, 4]);
+        assert_eq!(counter_of(&pool, org_id).await, Some(4));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn an_event_nobody_wants_leaves_the_counter_untouched() {
+        let _guard = DISPATCH_LOCK.lock().await;
+        let pool = make_pool().await;
+        dispatch(&pool).await;
+        let org_id = seed_organization(&pool).await;
+        seed_event(&pool, org_id, Actor::system()).await;
+
+        dispatch(&pool).await;
+
+        assert_eq!(counter_of(&pool, org_id).await, None);
     }
 
     #[test]

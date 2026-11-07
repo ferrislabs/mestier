@@ -9,6 +9,8 @@ import {
 	toGraph,
 	toMeta,
 	triggerNode,
+	withDetails,
+	withDisabled,
 } from '#/pages/automation/lib/editor-nodes'
 
 const descriptors = new Map<string, Schemas.ConnectorDescriptorResponse>([
@@ -125,16 +127,43 @@ describe('editor nodes', () => {
 		expect(nodes[1].data.branches).toEqual(['Then', 'Else'])
 	})
 
-	it('lets a stored name, description and flag override the defaults', () => {
-		const node = connectorNode(graph.connectors[0], { x: 0, y: 0 }, lookup, {
-			label: 'Mon test',
-			subtitle: 'Pourquoi',
-			disabled: true,
-		})
+	it('lets the name, description and flag saved with the node override the defaults', () => {
+		const node = connectorNode(
+			{
+				...graph.connectors[0],
+				name: 'Mon test',
+				description: 'Pourquoi',
+				disabled: true,
+			},
+			{ x: 0, y: 0 },
+			lookup,
+		)
 		expect(node.data).toMatchObject({
 			label: 'Mon test',
 			subtitle: 'Pourquoi',
 			disabled: true,
+		})
+	})
+
+	it('falls back to the default name when the saved one is blank, and keeps an emptied description empty', () => {
+		const node = connectorNode(
+			{ ...graph.connectors[0], name: '', description: '' },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		expect(node.data).toMatchObject({ label: 'Condition', subtitle: '' })
+	})
+
+	it('names and describes a trigger from the graph and never disables it', () => {
+		const node = triggerNode(
+			{ ...graph.triggers[0], name: 'Départ', description: 'Au clic' },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		expect(node.data).toMatchObject({
+			label: 'Départ',
+			subtitle: 'Au clic',
+			disabled: false,
 		})
 	})
 
@@ -150,15 +179,51 @@ describe('editor nodes', () => {
 		expect(toGraph(nodes, toEditorEdges(graph))).toEqual(graph)
 	})
 
-	it('keeps only the non-default meta', () => {
+	it('keeps only the collection operation of a node in the local meta', () => {
 		const plain = triggerNode(graph.triggers[0], { x: 0, y: 0 }, lookup)
-		const named = triggerNode(graph.triggers[0], { x: 0, y: 0 }, lookup, {
-			label: 'Départ',
+		const named = connectorNode(
+			{ ...graph.connectors[0], name: 'Départ', disabled: true },
+			{ x: 0, y: 0 },
+			lookup,
+		)
+		const operation = { collectionId: 'petstore', operationId: 'list' }
+		const fromCollection = connectorNode(
+			{ ...graph.connectors[0], id: 'c2' },
+			{ x: 0, y: 0 },
+			lookup,
+			{ operation },
+		)
+		expect(toMeta([plain, named])).toEqual({})
+		expect(toMeta([fromCollection])).toEqual({ c2: { operation } })
+	})
+
+	it('writes a new name and description on the connector or trigger itself', () => {
+		const connector = connectorNode(graph.connectors[0], { x: 0, y: 0 }, lookup)
+		const trigger = triggerNode(graph.triggers[0], { x: 0, y: 0 }, lookup)
+
+		const renamed = withDetails(connector, { name: 'Vérifier' }, lookup)
+		const described = withDetails(trigger, { description: 'Au clic' }, lookup)
+
+		expect(renamed.data.connector?.name).toBe('Vérifier')
+		expect(renamed.data.label).toBe('Vérifier')
+		expect(described.data.trigger?.description).toBe('Au clic')
+		expect(described.data.subtitle).toBe('Au clic')
+		expect(toGraph([renamed], []).connectors[0]).toMatchObject({
+			id: 'c1',
+			name: 'Vérifier',
 		})
-		expect(toMeta([plain])).toEqual({})
-		expect(toMeta([{ ...named, id: 't2' }])).toEqual({
-			t2: { label: 'Départ' },
-		})
+	})
+
+	it('disables a connector in the graph and leaves a trigger alone', () => {
+		const connector = connectorNode(graph.connectors[0], { x: 0, y: 0 }, lookup)
+		const trigger = triggerNode(graph.triggers[0], { x: 0, y: 0 }, lookup)
+
+		const off = withDisabled(connector, true, lookup)
+
+		expect(off.data.connector?.disabled).toBe(true)
+		expect(off.data.disabled).toBe(true)
+		expect(withDisabled(off, false, lookup).data.disabled).toBe(false)
+		expect(withDisabled(trigger, true, lookup)).toBe(trigger)
 	})
 
 	it('finds the first output that has no edge yet', () => {

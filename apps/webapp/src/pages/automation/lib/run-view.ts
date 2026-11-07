@@ -8,6 +8,10 @@ import {
 import { formatMilliseconds } from '#/pages/automation/lib/format'
 import { toItems } from '#/pages/automation/lib/items'
 import {
+	isManualTrigger,
+	triggerPresentation,
+} from '#/pages/automation/lib/trigger-events'
+import {
 	elapsedMsSince,
 	groupRunSteps,
 	isTerminalRunStatus,
@@ -80,10 +84,69 @@ function stepDuration(step: Schemas.RunStepResponse): number | null {
 }
 
 function triggerSubtitle(trigger: Schemas.PlacedTriggerDto): string {
+	if (trigger.description !== undefined && trigger.description !== null)
+		return trigger.description
 	if (trigger.kind === 'Manual') return 'Déclenchement manuel'
 	const names = trigger.kind.Events
 	if (names.length === 0) return 'Aucun événement configuré'
 	return names.length === 1 ? (names[0] ?? '') : `${names.length} événements`
+}
+
+export function triggerLabel(
+	trigger: Schemas.PlacedTriggerDto,
+	events: readonly Schemas.EventDescriptorResponse[] = [],
+): string {
+	return trigger.name || triggerPresentation(trigger, events).label
+}
+
+export function connectorLabel(
+	connector: Schemas.PlacedConnectorDto,
+	descriptor: Schemas.ConnectorDescriptorResponse | undefined,
+): string {
+	return (
+		connector.name ||
+		connectorCopy(connector.kind)?.label ||
+		descriptor?.label ||
+		connector.id
+	)
+}
+
+function connectorSubtitle(connector: Schemas.PlacedConnectorDto): string {
+	return (
+		connector.description ??
+		connectorCopy(connector.kind)?.subtitle ??
+		UNKNOWN_SUBTITLE
+	)
+}
+
+export function graphNodeNames(
+	graph: Schemas.GraphDto,
+	descriptors: ReadonlyMap<string, Schemas.ConnectorDescriptorResponse>,
+	events: readonly Schemas.EventDescriptorResponse[] = [],
+): Map<string, string> {
+	return new Map([
+		...graph.triggers.map(
+			(trigger) => [trigger.id, triggerLabel(trigger, events)] as const,
+		),
+		...graph.connectors.map(
+			(connector) =>
+				[
+					connector.id,
+					connectorLabel(connector, descriptors.get(connector.kind)),
+				] as const,
+		),
+	])
+}
+
+const TRIGGER_STARTED_NOTE = 'Démarré'
+
+function firedTrigger(
+	run: Schemas.RunDetailResponse,
+	graph: Schemas.GraphDto,
+): Schemas.PlacedTriggerDto | undefined {
+	if (run.trigger_id)
+		return graph.triggers.find((trigger) => trigger.id === run.trigger_id)
+	return graph.triggers.find(isManualTrigger) ?? graph.triggers[0]
 }
 
 function noteFor(status: ExecutionStatus, durationMs: number | null): string {
@@ -164,18 +227,21 @@ export function buildRunView(
 	run: Schemas.RunDetailResponse,
 	descriptors: Map<string, Schemas.ConnectorDescriptorResponse>,
 	now: number = Date.now(),
+	events: readonly Schemas.EventDescriptorResponse[] = [],
 ): RunView {
 	const graph = run.graph ?? { connectors: [], edges: [], triggers: [] }
 	const best = representativeStepByConnector(run.steps)
 	const runFinished = isTerminalRunStatus(run.status)
 	const runStarted = run.status !== 'pending'
+	const fired = firedTrigger(run, graph)
 
 	const triggerNodes: RunNodeView[] = graph.triggers.map((trigger) => {
-		const status: ExecutionStatus = runStarted ? 'success' : 'waiting'
+		const status: ExecutionStatus =
+			trigger !== fired ? 'skipped' : runStarted ? 'success' : 'waiting'
 		return {
 			id: trigger.id,
 			kind: 'trigger',
-			label: 'Déclencheur',
+			label: triggerLabel(trigger, events),
 			family: undefined,
 			subtitle: triggerSubtitle(trigger),
 			status,
@@ -183,7 +249,12 @@ export function buildRunView(
 			step: null,
 			connector: null,
 			trigger,
-			note: status === 'success' ? 'Démarré' : 'En attente',
+			note:
+				status === 'success'
+					? TRIGGER_STARTED_NOTE
+					: status === 'skipped'
+						? 'Non appelé'
+						: 'En attente',
 			order: null,
 		}
 	})
@@ -200,12 +271,9 @@ export function buildRunView(
 		return {
 			id: connector.id,
 			kind: 'connector',
-			label:
-				connectorCopy(connector.kind)?.label ??
-				descriptor?.label ??
-				connector.id,
+			label: connectorLabel(connector, descriptor),
 			family: descriptor?.family,
-			subtitle: connectorCopy(connector.kind)?.subtitle ?? UNKNOWN_SUBTITLE,
+			subtitle: connectorSubtitle(connector),
 			status,
 			durationMs,
 			step,
@@ -227,7 +295,19 @@ export function buildRunView(
 	const executed = ordered.filter((step) =>
 		EXECUTED_STATUSES.has(toStepExecutionStatus(step.status)),
 	)
-	const steps: RunStepView[] = executed.map((step) => {
+	const triggerSteps: RunStepView[] = triggerNodes
+		.filter((node) => node.status === 'success')
+		.map((node) => ({
+			stepId: `trigger:${node.id}`,
+			nodeId: node.id,
+			label: node.label,
+			plainLabel: node.label,
+			family: undefined,
+			connectorKind: undefined,
+			status: node.status,
+			detail: node.note,
+		}))
+	const connectorSteps: RunStepView[] = executed.map((step) => {
 		const node = byId.get(step.connector_id)
 		const status = toStepExecutionStatus(step.status)
 		return {
@@ -241,6 +321,7 @@ export function buildRunView(
 			detail: stepDetail(status, step, now),
 		}
 	})
+	const steps: RunStepView[] = [...triggerSteps, ...connectorSteps]
 	const failed = steps.find((step) => step.status === 'error') ?? null
 	const orderOf = new Map<string, number>()
 	steps.forEach((step, index) => {
@@ -267,14 +348,9 @@ export function buildRunView(
 			detail: unreachedDetail(node),
 		}))
 
-	const reached = (id: string) => {
-		const node = byId.get(id)
-		if (node === undefined) return false
-		return node.kind === 'trigger' ? node.status !== 'waiting' : orderOf.has(id)
-	}
 	const traversedEdges = new Set(
 		graph.edges
-			.filter((edge) => reached(edge.from) && reached(edge.to))
+			.filter((edge) => orderOf.has(edge.from) && orderOf.has(edge.to))
 			.map(realEdgeId),
 	)
 
@@ -313,7 +389,10 @@ export function buildRunView(
 			order: orderOf.get(node.id) ?? null,
 		})),
 		steps,
-		stepGroups: toGroups(groupRunSteps(executed)),
+		stepGroups: [
+			...triggerSteps.map((step): RunStepGroup => ({ kind: 'step', step })),
+			...toGroups(groupRunSteps(executed)),
+		],
 		pending,
 		traversedEdges,
 		edgeCounts,

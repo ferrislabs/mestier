@@ -52,6 +52,7 @@ export interface WorkflowRow {
 	lastRun: WorkflowLastRun | null
 	updatedAt: string
 	tags: readonly string[]
+	folderId: string | null
 	folderLabel: string | null
 }
 

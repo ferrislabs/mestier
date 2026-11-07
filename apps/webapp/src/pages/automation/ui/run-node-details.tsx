@@ -41,7 +41,7 @@ export interface RunNodeReplay {
 }
 
 export interface RunNodeDetailsProps {
-	runShortId: string
+	runNumber: number
 	versionLabel: string
 	node: RunNodeView
 	typeLabel: string
@@ -74,7 +74,7 @@ function statusDetail(node: RunNodeView): string | undefined {
 }
 
 export function RunNodeDetails({
-	runShortId,
+	runNumber,
 	versionLabel,
 	node,
 	typeLabel,
@@ -183,7 +183,7 @@ export function RunNodeDetails({
 					if (!open) onClose()
 				}}
 				title={node.label}
-				description={`${typeLabel} · ${node.subtitle} · Exécution #${runShortId}`}
+				description={`${typeLabel} · ${node.subtitle} · Exécution #${runNumber}`}
 				icon={icon}
 				hue={hue}
 				status={

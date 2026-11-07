@@ -1,12 +1,12 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { buildOrgPath } from '#/modules/org-path'
-import { workflowExecutionsLocation } from '#/pages/automation/lib/automation-paths'
+import { legacyExecutionLocation } from '#/pages/automation/lib/automation-paths'
 
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/automatisation/$workflowId/executions/$runId',
 )({
 	beforeLoad: ({ params }) => {
-		const { to, search } = workflowExecutionsLocation(
+		const { to, search } = legacyExecutionLocation(
 			params.workflowId,
 			params.runId,
 		)

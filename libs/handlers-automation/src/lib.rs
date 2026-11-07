@@ -14,8 +14,11 @@ use mestier_core::{OrganizationId, Permissions};
 
 pub mod catalogue;
 pub mod credential;
+pub mod error;
 pub mod expression;
+pub mod folder;
 pub mod paths;
+mod request;
 pub mod response;
 pub mod run;
 pub mod settings;
@@ -101,6 +104,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .merge(catalogue::router(state))
         .merge(credential::router(state))
+        .merge(folder::router(state))
         .merge(workflow::router(state))
         .merge(run::router(state))
         .merge(settings::router(state))

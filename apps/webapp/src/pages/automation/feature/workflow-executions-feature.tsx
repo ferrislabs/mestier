@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
+	type Run,
 	useAutomationEvents,
 	useAutomationRuns,
 	useConnectorCatalogue,
@@ -14,8 +15,7 @@ import { buildOrgPath } from '#/modules/org-path'
 import { RunNodeDetailsFeature } from '#/pages/automation/feature/run-node-details-feature'
 import { WorkflowTopBarFeature } from '#/pages/automation/feature/workflow-top-bar-feature'
 import { workflowExecutionsLocation } from '#/pages/automation/lib/automation-paths'
-import { connectorAppearance } from '#/pages/automation/lib/connector-appearance'
-import { shortRunId } from '#/pages/automation/lib/execution-log'
+import { typographicEventLabels } from '#/pages/automation/lib/event-search'
 import { toExecutionStatus } from '#/pages/automation/lib/execution-status'
 import {
 	formatMilliseconds,
@@ -24,8 +24,11 @@ import {
 } from '#/pages/automation/lib/format'
 import { readLayout } from '#/pages/automation/lib/graph'
 import { mergedLayout } from '#/pages/automation/lib/layout'
+import { runNodeAppearance } from '#/pages/automation/lib/run-appearance'
 import {
 	buildRunView,
+	graphNodeNames,
+	type RunNodeView,
 	type RunStepGroup,
 	type RunStepView,
 } from '#/pages/automation/lib/run-view'
@@ -34,7 +37,6 @@ import {
 	isTerminalRunStatus,
 	runElapsedMs,
 	runTriggerLabel,
-	triggerEventLabel,
 } from '#/pages/automation/lib/workflow-runs'
 import type { ExecutionFilter } from '#/pages/automation/ui/execution-list'
 import type {
@@ -62,12 +64,12 @@ function isNotFoundError(error: unknown): boolean {
 
 export interface WorkflowExecutionsFeatureProps {
 	workflowId: string
-	runId?: string
+	executionNumber?: number
 }
 
 export function WorkflowExecutionsFeature({
 	workflowId,
-	runId,
+	executionNumber,
 }: WorkflowExecutionsFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 
@@ -77,7 +79,7 @@ export function WorkflowExecutionsFeature({
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
 			workflowId={workflowId}
-			runId={runId}
+			executionNumber={executionNumber}
 		/>
 	)
 }
@@ -88,8 +90,12 @@ function descriptorsByKind(
 	return new Map(connectors.map((connector) => [connector.kind, connector]))
 }
 
-function toStepEntry(step: RunStepView, plain = false): ExecutionStepEntry {
-	const appearance = connectorAppearance(step.family, step.connectorKind)
+function toStepEntry(
+	step: RunStepView,
+	nodes: ReadonlyMap<string, RunNodeView>,
+	plain = false,
+): ExecutionStepEntry {
+	const appearance = runNodeAppearance(nodes.get(step.nodeId))
 	return {
 		id: step.stepId,
 		nodeId: step.nodeId,
@@ -103,11 +109,12 @@ function toStepEntry(step: RunStepView, plain = false): ExecutionStepEntry {
 
 function toStepItems(
 	groups: readonly RunStepGroup[],
+	nodes: ReadonlyMap<string, RunNodeView>,
 	insideLoop = false,
 ): ExecutionStepItem[] {
 	return groups.map((group): ExecutionStepItem => {
 		if (group.kind === 'step')
-			return { kind: 'step', step: toStepEntry(group.step, insideLoop) }
+			return { kind: 'step', step: toStepEntry(group.step, nodes, insideLoop) }
 		return {
 			kind: 'loop',
 			id: group.id,
@@ -115,7 +122,7 @@ function toStepItems(
 			iterations: group.iterations.map((iteration) => ({
 				index: iteration.index,
 				path: iteration.path,
-				children: toStepItems(iteration.children, true),
+				children: toStepItems(iteration.children, nodes, true),
 			})),
 		}
 	})
@@ -125,12 +132,12 @@ function WorkflowExecutionsWorkspace({
 	organizationId,
 	organizationSlug,
 	workflowId,
-	runId,
+	executionNumber,
 }: {
 	organizationId: string
 	organizationSlug: string
 	workflowId: string
-	runId?: string
+	executionNumber?: number
 }) {
 	const navigate = useNavigate()
 	const workflowQuery = useWorkflow(organizationId, workflowId)
@@ -147,12 +154,12 @@ function WorkflowExecutionsWorkspace({
 		() =>
 			(runsQuery.data?.data ?? [])
 				.filter((run) => run.workflow_id === workflowId)
-				.sort((a, b) => (a.created_at < b.created_at ? 1 : -1)),
+				.sort((a, b) => b.number - a.number),
 		[runsQuery.data, workflowId],
 	)
-	const selectedId = runs.some((run) => run.id === runId)
-		? (runId ?? null)
-		: (runs[0]?.id ?? null)
+	const selectedRun =
+		runs.find((item) => item.number === executionNumber) ?? runs[0]
+	const selectedId = selectedRun?.id ?? null
 	const runQuery = useRunPolling(organizationId, selectedId)
 	const run = runQuery.data?.data
 	const { refetch: refetchRuns } = runsQuery
@@ -180,34 +187,41 @@ function WorkflowExecutionsWorkspace({
 		return () => window.clearInterval(timer)
 	}, [isTicking])
 
-	const eventLabels = useMemo(
-		() =>
-			new Map(
-				(eventsQuery.data?.data ?? []).map((event) => [
-					event.name,
-					event.label,
-				]),
-			),
+	const events = useMemo(
+		() => typographicEventLabels(eventsQuery.data?.data ?? []),
 		[eventsQuery.data],
 	)
-	const currentVersion = workflowQuery.data?.data.current_version
-	const currentEventLabel = triggerEventLabel(
-		currentVersion?.graph.triggers ?? [],
-		eventLabels,
+	const eventLabels = useMemo(
+		() => new Map(events.map((event) => [event.name, event.label])),
+		[events],
 	)
-	const versionLabelOf = (versionId: string) =>
-		currentVersion && versionId === currentVersion.id
-			? formatVersionLabel(currentVersion.created_at)
-			: `Version ${shortRunId(versionId)}`
-	const ownEventLabel = run?.graph
-		? triggerEventLabel(run.graph.triggers, eventLabels)
-		: null
-	const eventLabelOf = (item: { id: string; workflow_version_id: string }) => {
-		if (item.id === run?.id && ownEventLabel !== null) return ownEventLabel
-		return item.workflow_version_id === currentVersion?.id
-			? currentEventLabel
-			: null
-	}
+	const descriptors = useMemo(
+		() => descriptorsByKind(catalogueQuery.data?.data.connectors ?? []),
+		[catalogueQuery.data],
+	)
+	const currentVersion = workflowQuery.data?.data.current_version
+	const currentNodeNames = useMemo(
+		() =>
+			currentVersion
+				? graphNodeNames(currentVersion.graph, descriptors, events)
+				: undefined,
+		[currentVersion, descriptors, events],
+	)
+	const ownNodeNames = useMemo(
+		() =>
+			run?.graph ? graphNodeNames(run.graph, descriptors, events) : undefined,
+		[run?.graph, descriptors, events],
+	)
+	const triggerOf = (item: Run) =>
+		runTriggerLabel(item, {
+			events: eventLabels,
+			nodeNames:
+				item.id === run?.id
+					? ownNodeNames
+					: item.workflow_version_id === currentVersion?.id
+						? currentNodeNames
+						: undefined,
+		})
 
 	const entries = runs
 		.filter((item) => {
@@ -217,24 +231,22 @@ function WorkflowExecutionsWorkspace({
 		.map((item) => {
 			const duration = runElapsedMs(item, now)
 			return {
-				id: item.id,
-				shortId: shortRunId(item.id),
+				number: item.number,
 				status: toExecutionStatus(item.status),
 				startedAt: formatStartedAt(item.started_at ?? item.created_at),
-				trigger: runTriggerLabel(item, eventLabelOf(item)),
+				trigger: triggerOf(item),
 				duration: duration === null ? null : formatMilliseconds(duration),
 			}
 		})
 
-	const descriptors = useMemo(
-		() => descriptorsByKind(catalogueQuery.data?.data.connectors ?? []),
-		[catalogueQuery.data],
-	)
-
 	const viewNow = runStatus === 'running' ? now : undefined
 	const view = useMemo(
-		() => (run ? buildRunView(run, descriptors, viewNow) : null),
-		[run, descriptors, viewNow],
+		() => (run ? buildRunView(run, descriptors, viewNow, events) : null),
+		[run, descriptors, viewNow, events],
+	)
+	const nodesById = useMemo(
+		() => new Map((view?.nodes ?? []).map((node) => [node.id, node])),
+		[view],
 	)
 
 	const layout = useMemo(() => {
@@ -247,23 +259,23 @@ function WorkflowExecutionsWorkspace({
 			? {
 					header: {
 						runId: run.id,
-						shortId: shortRunId(run.id),
+						number: run.number,
 						startedAt: formatStartedAt(run.started_at ?? run.created_at),
-						trigger: runTriggerLabel(run, eventLabelOf(run)),
+						trigger: triggerOf(run),
 						status: view.status,
 						duration:
 							view.durationMs === null
 								? undefined
 								: formatMilliseconds(view.durationMs),
-						versionLabel: versionLabelOf(run.workflow_version_id),
+						versionLabel: formatVersionLabel(run.workflow_version_created_at),
 						isCurrentVersion: run.workflow_version_id === currentVersion?.id,
 					},
 					graph: run.graph ?? null,
 					layout,
 					descriptors,
 					view,
-					steps: toStepItems(view.stepGroups),
-					pending: view.pending.map((step) => toStepEntry(step)),
+					steps: toStepItems(view.stepGroups, nodesById),
+					pending: view.pending.map((step) => toStepEntry(step, nodesById)),
 					failure: view.failed
 						? {
 								label: view.failed.label,
@@ -307,8 +319,8 @@ function WorkflowExecutionsWorkspace({
 				view={view}
 				descriptors={descriptors}
 				node={openNode}
-				triggerLabel={runTriggerLabel(run, eventLabelOf(run))}
-				versionLabel={versionLabelOf(run.workflow_version_id)}
+				triggerLabel={triggerOf(run)}
+				versionLabel={formatVersionLabel(run.workflow_version_created_at)}
 				replay={{
 					available: canReplay(run.status),
 					isReplaying: replayRun.isPending,
@@ -342,16 +354,16 @@ function WorkflowExecutionsWorkspace({
 				<WorkflowExecutions
 					entries={entries}
 					total={runs.length}
-					selectedId={selectedId}
+					selectedNumber={selectedRun?.number ?? null}
 					filter={filter}
 					isLoading={runsQuery.isLoading || workflowQuery.isLoading}
 					error={loadError}
 					detail={detail}
 					detailLoading={runQuery.isLoading}
 					detailError={runQuery.error?.message ?? null}
-					onSelect={(id) => {
+					onSelect={(number) => {
 						setOpenNodeId(null)
-						const location = workflowExecutionsLocation(workflowId, id)
+						const location = workflowExecutionsLocation(workflowId, number)
 						void navigate({
 							to: buildOrgPath(organizationSlug, location.to),
 							search: location.search,

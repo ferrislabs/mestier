@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useAutomationRuns,
@@ -8,12 +8,7 @@ import {
 	type Workflow,
 } from '#/hooks/use-automation'
 import { useWorkflowActions } from '#/pages/automation/feature/use-workflow-actions'
-import {
-	useArchivedWorkflowIds,
-	useWorkflowFolders,
-	useWorkflowPlacementActions,
-	useWorkflowPlacements,
-} from '#/pages/automation/feature/use-workflow-folders'
+import { useWorkflowFolders } from '#/pages/automation/feature/use-workflow-folders'
 import {
 	childFolders,
 	countWorkflowsInSubtree,
@@ -79,20 +74,11 @@ function AutomationWorkflowsWorkspace({
 	const updateWorkflow = useUpdateWorkflow()
 	const deleteWorkflow = useDeleteWorkflow()
 
-	const folders = useWorkflowFolders()
-	const placements = useWorkflowPlacements()
-	const archived = useArchivedWorkflowIds()
-	const placementActions = useWorkflowPlacementActions()
+	const folders = useWorkflowFolders(organizationId)
 	const workflowActions = useWorkflowActions(organizationId)
 	const [actionError, setActionError] = useState<string | null>(null)
 
-	const allItems: Workflow[] = workflows.data?.data ?? []
-	const items = allItems.filter((workflow) => !archived.has(workflow.id))
-	const { rememberNames } = placementActions
-
-	useEffect(() => {
-		rememberNames(allItems)
-	}, [allItems, rememberNames])
+	const items: Workflow[] = workflows.data?.data ?? []
 	const latestRuns = latestRunByWorkflow(runs.data?.data ?? [])
 
 	const folder = folderId ? findFolder(folders.data, folderId) : undefined
@@ -103,39 +89,33 @@ function AutomationWorkflowsWorkspace({
 					.join(' › ')
 			: null
 
-	const rows: WorkflowRow[] = items.map((workflow) => {
-		const placement = placements.data[workflow.id]
-		return {
-			id: workflow.id,
-			name: workflow.name,
-			description: workflow.description ?? null,
-			enabled: workflow.enabled,
-			lastRun: latestRuns.get(workflow.id) ?? null,
-			updatedAt: workflow.updated_at,
-			tags: placement?.tags ?? [],
-			folderLabel: folder ? null : pathLabel(placement?.folderId ?? null),
-		}
-	})
+	const rows: WorkflowRow[] = items.map((workflow) => ({
+		id: workflow.id,
+		name: workflow.name,
+		description: workflow.description ?? null,
+		enabled: workflow.enabled,
+		lastRun: latestRuns.get(workflow.id) ?? null,
+		updatedAt: workflow.updated_at,
+		tags: workflow.tags,
+		folderId: workflow.folder_id ?? null,
+		folderLabel: folder ? null : pathLabel(workflow.folder_id ?? null),
+	}))
 
-	const folderIdOf = (id: string) => placements.data[id]?.folderId ?? null
 	const scoped = folderId
-		? rows.filter((row) => folderIdOf(row.id) === folderId)
+		? rows.filter((row) => row.folderId === folderId)
 		: rows
-	const tags = useMemo(() => collectTags(scoped), [scoped])
+	const tags = collectTags(scoped)
 	const visible = sortWorkflows(filterWorkflows(scoped, query, tag), sort)
 	const subfolders = (folderId ? childFolders(folders.data, folderId) : []).map(
 		(subfolder) => ({
 			folder: subfolder,
-			workflowCount: countWorkflowsInSubtree(
-				folders.data,
-				rows.map((row) => ({ folderId: folderIdOf(row.id) })),
-				subfolder.id,
-			),
+			workflowCount: countWorkflowsInSubtree(folders.data, rows, subfolder.id),
 		}),
 	)
 
 	const error =
 		workflows.error ??
+		folders.error ??
 		runs.error ??
 		updateWorkflow.error ??
 		deleteWorkflow.error
@@ -145,17 +125,14 @@ function AutomationWorkflowsWorkspace({
 		id: row.id,
 		name: row.name,
 		description: row.description,
+		folderId: row.folderId,
 		tags: row.tags,
 	})
 
 	const duplicate = async (row: WorkflowRow) => {
 		setActionError(null)
 		try {
-			const copyId = await workflowActions.duplicate(sourceOf(row))
-			placementActions.place(copyId, {
-				folderId: folderIdOf(row.id),
-				tags: row.tags,
-			})
+			await workflowActions.duplicate(sourceOf(row))
 		} catch (caught) {
 			setActionError(
 				caught instanceof Error && caught.message
@@ -201,7 +178,13 @@ function AutomationWorkflowsWorkspace({
 				error={errorMessage}
 				folder={folder ?? null}
 				folderPath={folderId ? folderPath(folders.data, folderId) : []}
-				folderMissing={folderId !== undefined && folder === undefined}
+				folderMissing={
+					folderId !== undefined &&
+					!folders.isLoading &&
+					!folders.error &&
+					folder === undefined
+				}
+				folderPending={folderId !== undefined && folders.isLoading}
 				subfolders={subfolders}
 				hasWorkflowsInScope={scoped.length > 0}
 				query={query}
@@ -229,7 +212,12 @@ function AutomationWorkflowsWorkspace({
 				}
 				onDuplicate={(row) => void duplicate(row)}
 				onExport={(row) => void exportRow(row)}
-				onArchive={(row) => placementActions.archive(row.id)}
+				onArchive={(row) =>
+					updateWorkflow.mutate({
+						path: { organization_id: organizationId, workflow_id: row.id },
+						body: { archived: true },
+					})
+				}
 				onDelete={(row) =>
 					void deleteWorkflow.mutateAsync({
 						path: { organization_id: organizationId, workflow_id: row.id },

@@ -15,7 +15,7 @@ function row(overrides: Partial<ExecutionRow> = {}): ExecutionRow {
 	return {
 		key: 'run-1',
 		runId: 'run-1',
-		shortId: 'abcdef12',
+		number: 1285,
 		workflowId: 'wf-1',
 		workflowName: 'Relance des devis',
 		startedLabel: 'Aujourd’hui à 09:00:00',
@@ -25,8 +25,8 @@ function row(overrides: Partial<ExecutionRow> = {}): ExecutionRow {
 		stepsTotal: 5,
 		status: 'error',
 		durationMs: 2000,
-		failure: 'SMTP expiré',
-		version: 'Version 12345678',
+		failure: { nodeLabel: 'Envoyer l’e-mail', message: 'SMTP expiré' },
+		version: 'Version du 31 oct. 2026 à 18:20',
 		...overrides,
 	}
 }
@@ -78,14 +78,44 @@ describe('AutomationExecutionsLog', () => {
 		await rendered
 
 		const link = screen.getByRole('link', {
-			name: 'Ouvrir l’exécution abcdef12 de Relance des devis',
+			name: 'Ouvrir l’exécution 1285 de Relance des devis',
 		})
+		expect(link.textContent).toBe('#1285')
 		expect(link.getAttribute('href')).toBe(
-			'/o/atelier-bois/automatisation/workflows/wf-1?vue=executions&execution=run-1',
+			'/o/atelier-bois/automatisation/workflows/wf-1?vue=executions&execution=1285',
 		)
 
-		await user.click(screen.getByText('SMTP expiré'))
+		await user.click(screen.getByText(': SMTP expiré'))
 		expect(props.onOpen).toHaveBeenCalledWith(row())
+	})
+
+	it('names the failed node in red, then the message in grey', async () => {
+		await render().rendered
+
+		const node = screen.getByText('Envoyer l’e-mail')
+		expect(node.className).toContain('text-state-alert')
+		const message = screen.getByText(': SMTP expiré')
+		expect(message.className).toContain('text-muted-foreground')
+		expect(node.parentElement?.getAttribute('title')).toBe(
+			'Envoyer l’e-mail : SMTP expiré',
+		)
+	})
+
+	it('shows the message alone, in red, while the failed node is not known', async () => {
+		await render({
+			rows: [row({ failure: { nodeLabel: null, message: 'SMTP expiré' } })],
+		}).rendered
+
+		const message = screen.getByText('SMTP expiré')
+		expect(message.className).toContain('text-state-alert')
+		expect(message.getAttribute('title')).toBe('SMTP expiré')
+	})
+
+	it('writes the node counts and the version under the workflow', async () => {
+		await render().rendered
+
+		expect(screen.getByText('2 / 5')).toBeDefined()
+		expect(screen.getByText('Version du 31 oct. 2026 à 18:20')).toBeDefined()
 	})
 
 	it('says there is nothing yet, or nothing for these filters, and offers a reset', async () => {

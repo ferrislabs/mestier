@@ -116,6 +116,47 @@ impl App {
         format!("{}/{workflow_id}/versions", self.workflows_url())
     }
 
+    pub fn folders_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/folders",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn folder_url(&self, folder_id: &str) -> String {
+        format!("{}/{folder_id}", self.folders_url())
+    }
+
+    pub fn runs_url(&self, workflow_id: &str) -> String {
+        format!("{}/{workflow_id}/runs", self.workflows_url())
+    }
+
+    pub fn run_log_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/runs",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn run_url(&self, run_id: &str) -> String {
+        format!("{}/{run_id}", self.run_log_url())
+    }
+
+    pub fn run_replay_url(&self, run_id: &str) -> String {
+        format!("{}/replay", self.run_url(run_id))
+    }
+
+    pub fn other_organization_id(&self) -> Uuid {
+        self.other_organization_id
+    }
+
+    pub fn other_organization_workflows_url(&self) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/automation/workflows",
+            self.base_url, self.other_organization_id
+        )
+    }
+
     pub fn settings_url(&self) -> String {
         format!(
             "{}/api/v1/organizations/{}/automation/settings",
@@ -132,7 +173,7 @@ impl App {
 
     /// Drops the fixture. Every table listed here references `organizations`
     /// without `ON DELETE CASCADE`, so one missing from the list makes the
-    /// final delete fail — silently, since the errors are swallowed.
+    /// final delete fail, loudly.
     pub async fn cleanup(&self) {
         for organization_id in [self.organization_id, self.other_organization_id] {
             for statement in [
@@ -140,10 +181,11 @@ impl App {
                 "DELETE FROM automation.event WHERE org_id = $1",
                 "DELETE FROM organizations WHERE id = $1",
             ] {
-                let _ = sqlx::query(statement)
+                sqlx::query(statement)
                     .bind(organization_id)
                     .execute(&self.pool)
-                    .await;
+                    .await
+                    .unwrap_or_else(|error| panic!("cleanup failed on `{statement}`: {error}"));
             }
         }
 
@@ -153,10 +195,11 @@ impl App {
             self.no_role_user_id,
             self.outsider_user_id,
         ] {
-            let _ = sqlx::query("DELETE FROM users WHERE id = $1")
+            sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(user_id)
                 .execute(&self.pool)
-                .await;
+                .await
+                .unwrap_or_else(|error| panic!("cleanup failed deleting user {user_id}: {error}"));
         }
     }
 }

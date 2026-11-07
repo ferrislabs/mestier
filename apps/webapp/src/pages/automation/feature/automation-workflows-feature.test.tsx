@@ -2,14 +2,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
 import { AutomationWorkflowsFeature } from '#/pages/automation/feature/automation-workflows-feature'
-import { resetPlacementsMock } from '#/pages/automation/feature/mocks/workflow-placements'
+import {
+	type FakeApi,
+	installFakeTanstackApi,
+} from '#/pages/automation/test/fake-tanstack-api'
 import { renderWithRouter } from '#/test/render-with-router'
 import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
 
@@ -18,6 +21,8 @@ const WORKFLOWS_PATH =
 const WORKFLOW_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}'
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
+const FOLDERS_PATH =
+	'/api/v1/organizations/{organization_id}/automation/folders'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -27,6 +32,7 @@ const ORGANIZATION: Organization = {
 	missing_legal_identity_fields: [],
 	field_clock_enabled: false,
 	vat_on_debits: false,
+	mcp_enabled: false,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
 }
@@ -39,11 +45,31 @@ function workflow(overrides: Record<string, unknown> = {}) {
 		description: null,
 		enabled: true,
 		current_version_id: null,
+		folder_id: null,
+		tags: [],
+		archived_at: null,
 		created_at: '2026-08-01T00:00:00Z',
 		updated_at: '2026-08-01T00:00:00Z',
 		...overrides,
 	}
 }
+
+function folder(overrides: Record<string, unknown> = {}) {
+	return {
+		id: 'folder-ventes',
+		name: 'Ventes',
+		parent_id: null,
+		created_at: '2026-08-01T00:00:00Z',
+		...overrides,
+	}
+}
+
+const VENTES = folder()
+const RELANCES = folder({
+	id: 'folder-relances',
+	name: 'Relances',
+	parent_id: 'folder-ventes',
+})
 
 function run(overrides: Record<string, unknown> = {}) {
 	return {
@@ -57,72 +83,11 @@ function run(overrides: Record<string, unknown> = {}) {
 	}
 }
 
-type Handler = (params: unknown) => unknown
-
-interface FakeApi {
-	calls: { method: string; path: string; params: unknown }[]
-	mockGet: (path: string, handler: Handler) => void
-	mockMutation: (method: string, path: string, handler: Handler) => void
-}
-
-function installFakeTanstackApi(): FakeApi {
-	const calls: { method: string; path: string; params: unknown }[] = []
-	const getHandlers = new Map<string, Handler>()
-	const mutationHandlers = new Map<string, Handler>()
-
-	function queryKeyFor(path: string, params: unknown) {
-		const p = (params ?? {}) as { path?: unknown; query?: unknown }
-		return [{ _id: path, path: p.path, query: p.query }]
-	}
-
-	const fakeApi = {
-		get(path: string, params: unknown) {
-			const queryKey = queryKeyFor(path, params)
-			return {
-				queryKey,
-				queryOptions: {
-					queryKey,
-					queryFn: async () => {
-						calls.push({ method: 'get', path, params })
-						const handler = getHandlers.get(path)
-						if (!handler) throw new Error(`unmocked GET ${path}`)
-						return handler(params)
-					},
-				},
-			}
-		},
-		mutation(method: string, path: string) {
-			return {
-				mutationOptions: {
-					mutationKey: [{ method, path }],
-					mutationFn: async (params: unknown) => {
-						calls.push({ method, path, params })
-						const handler = mutationHandlers.get(`${method}:${path}`)
-						if (!handler) {
-							throw new Error(`unmocked ${method.toUpperCase()} ${path}`)
-						}
-						return handler(params)
-					},
-				},
-			}
-		},
-	}
-
-	// biome-ignore lint/suspicious/noExplicitAny: test-only fake, shape matches TanstackQueryApiClient's used surface
-	;(window as any).tanstackApi = fakeApi
-
-	return {
-		calls,
-		mockGet: (path, handler) => getHandlers.set(path, handler),
-		mockMutation: (method, path, handler) =>
-			mutationHandlers.set(`${method}:${path}`, handler),
-	}
-}
-
 function renderFeature(configure: (api: FakeApi) => void, folderId?: string) {
 	const api = installFakeTanstackApi()
 	api.mockGet(WORKFLOWS_PATH, () => ({ data: [workflow()], pagination: null }))
 	api.mockGet(RUNS_PATH, () => ({ data: [], pagination: null }))
+	api.mockGet(FOLDERS_PATH, () => ({ data: [], pagination: null }))
 	configure(api)
 
 	const queryClient = new QueryClient({
@@ -202,7 +167,12 @@ describe('AutomationWorkflowsFeature — create', () => {
 	})
 
 	it('offers the same draft link on a project page', async () => {
-		await renderFeature(() => {}, 'ventes')
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, () => ({
+				data: [VENTES],
+				pagination: null,
+			}))
+		}, 'folder-ventes')
 
 		expect(
 			(
@@ -324,7 +294,12 @@ describe('AutomationWorkflowsFeature — projects', () => {
 	})
 
 	it('opens a project page with its breadcrumb and subprojects', async () => {
-		await renderFeature(() => {}, 'ventes')
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, () => ({
+				data: [VENTES, RELANCES],
+				pagination: null,
+			}))
+		}, 'folder-ventes')
 
 		expect(await screen.findByRole('heading', { name: 'Ventes' })).toBeDefined()
 		expect(
@@ -342,50 +317,198 @@ describe('AutomationWorkflowsFeature — projects', () => {
 
 		expect(await screen.findByText('Projet introuvable')).toBeDefined()
 	})
-})
 
-describe('AutomationWorkflowsFeature — seeded placements', () => {
-	beforeEach(() => {
-		localStorage.clear()
-		resetPlacementsMock()
+	it('does not call the project missing while the folders are still loading', async () => {
+		let release: (() => void) | undefined
+		const loaded = new Promise<void>((resolve) => {
+			release = resolve
+		})
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, async () => {
+				await loaded
+				return { data: [VENTES], pagination: null }
+			})
+		}, 'folder-ventes')
+
+		await screen.findByText('Chargement des workflows…')
+		expect(screen.queryByText('Projet introuvable')).toBeNull()
+		expect(screen.queryByRole('heading', { name: 'Workflows' })).toBeNull()
+
+		release?.()
+
+		expect(await screen.findByRole('heading', { name: 'Ventes' })).toBeDefined()
+		expect(screen.queryByText('Projet introuvable')).toBeNull()
 	})
 
-	it('puts a workflow with a known name in its project, shown with its path on the root page', async () => {
+	it('does not call the project missing when the folders could not be loaded', async () => {
 		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, () => {
+				throw new Error('Dossiers indisponibles')
+			})
+		}, 'folder-ventes')
+
+		expect(await screen.findByText('Dossiers indisponibles')).toBeDefined()
+		expect(screen.queryByText('Projet introuvable')).toBeNull()
+	})
+})
+
+describe('AutomationWorkflowsFeature — folder and tags of a workflow', () => {
+	beforeAll(() => {
+		Object.assign(Element.prototype, {
+			scrollIntoView: () => {},
+			hasPointerCapture: () => false,
+			releasePointerCapture: () => {},
+		})
+	})
+
+	const relanceDesDevis = () =>
+		workflow({
+			name: 'Relance des devis',
+			folder_id: 'folder-relances',
+			tags: ['Ventes', 'Clients'],
+		})
+
+	it('shows the project path and the tags the API sends, on the root page', async () => {
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, () => ({
+				data: [VENTES, RELANCES],
+				pagination: null,
+			}))
 			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
-				data: [workflow({ name: 'Relance des devis' })],
+				data: [relanceDesDevis()],
 				pagination: null,
 			}))
 		})
 
 		expect(await screen.findByText('Ventes › Relances')).toBeDefined()
 		expect(screen.getByText('Ventes')).toBeDefined()
+		expect(screen.getByText('Clients')).toBeDefined()
 	})
 
-	it('lists that workflow inside its project page and counts it in the parent project', async () => {
+	it('lists the workflow inside its project and counts it in the parent project', async () => {
+		const folders = [VENTES, RELANCES]
 		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, () => ({ data: folders, pagination: null }))
 			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
-				data: [workflow({ name: 'Relance des devis' })],
+				data: [relanceDesDevis()],
 				pagination: null,
 			}))
-		}, 'ventes-relances')
+		}, 'folder-relances')
 
 		expect(await screen.findByText('Relance des devis')).toBeDefined()
 		expect(
 			screen.queryByText('Ce projet ne contient encore aucun workflow.'),
 		).toBeNull()
 	})
+
+	it('counts the workflow of a subproject in the subproject row of its parent', async () => {
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, () => ({
+				data: [VENTES, RELANCES],
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+				data: [relanceDesDevis()],
+				pagination: null,
+			}))
+		}, 'folder-ventes')
+
+		const subfolders = await screen.findByRole('list', {
+			name: 'Sous-dossiers',
+		})
+		expect(subfolders.textContent).toContain('1 workflow')
+		expect(screen.queryByText('Relance des devis')).toBeNull()
+	})
+
+	it('keeps a workflow out of a project it does not belong to', async () => {
+		const support = folder({ id: 'folder-support', name: 'Support' })
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, () => ({
+				data: [VENTES, support],
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+				data: [workflow({ folder_id: 'folder-support' })],
+				pagination: null,
+			}))
+		}, 'folder-ventes')
+
+		expect(
+			await screen.findByText('Ce projet ne contient encore aucun workflow.'),
+		).toBeDefined()
+		expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
+	})
+
+	it('leaves a workflow without folder at the root, with no project and no tag', async () => {
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, () => ({
+				data: [VENTES],
+				pagination: null,
+			}))
+		})
+
+		expect(await screen.findByText('Créer une facture Odoo')).toBeDefined()
+		expect(screen.queryByText('Projet :')).toBeNull()
+		expect(screen.queryByText('Ventes')).toBeNull()
+	})
+
+	it('offers the tags of the listed workflows to the tag filter', async () => {
+		const user = userEvent.setup()
+		await renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+				data: [
+					workflow({ id: 'workflow-1', tags: ['Support'] }),
+					workflow({ id: 'workflow-2', name: 'Autre', tags: ['Ventes'] }),
+				],
+				pagination: null,
+			}))
+		})
+
+		const trigger = await screen.findByRole('combobox', {
+			name: 'Filtrer par tag',
+		})
+		trigger.focus()
+		await user.keyboard('{Enter}')
+
+		expect(
+			screen.getAllByRole('option').map((option) => option.textContent),
+		).toEqual(['Tous les tags', 'Support', 'Ventes'])
+
+		await user.click(screen.getByRole('option', { name: 'Ventes' }))
+
+		expect(screen.getByText('Autre')).toBeDefined()
+		expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
+	})
+
+	it('asks the API for the live workflows only', async () => {
+		const api = await renderFeature(() => {})
+		await screen.findByText('Créer une facture Odoo')
+
+		const queries = api.calls
+			.filter((call) => call.method === 'get' && call.path === WORKFLOWS_PATH)
+			.map((call) => (call.params as { query?: Record<string, unknown> }).query)
+		expect(queries.length).toBeGreaterThan(0)
+		for (const query of queries) expect(query?.archived).toBeUndefined()
+	})
 })
 
 describe('AutomationWorkflowsFeature — row actions', () => {
-	beforeEach(() => {
-		localStorage.clear()
-		resetPlacementsMock()
-	})
+	function archivableApi(fakeApi: FakeApi, options: { failWith?: Error } = {}) {
+		let archived = false
+		fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+			data: archived ? [] : [workflow()],
+			pagination: null,
+		}))
+		fakeApi.mockMutation('patch', WORKFLOW_PATH, () => {
+			if (options.failWith) throw options.failWith
+			archived = true
+			return { data: workflow({ archived_at: '2026-11-05T00:00:00Z' }) }
+		})
+	}
 
-	it('archives a workflow client-side without calling the delete endpoint', async () => {
+	it('archives a workflow through the API and drops its row', async () => {
 		const user = userEvent.setup()
-		const api = await renderFeature(() => {})
+		const api = await renderFeature((fakeApi) => archivableApi(fakeApi))
 
 		await user.click(
 			await screen.findByRole('button', { name: /Actions pour/ }),
@@ -395,16 +518,52 @@ describe('AutomationWorkflowsFeature — row actions', () => {
 		await waitFor(() => {
 			expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
 		})
+		const patch = api.calls.find(
+			(call) => call.method === 'patch' && call.path === WORKFLOW_PATH,
+		)
+		expect(patch?.params).toMatchObject({
+			path: { organization_id: 'org-1', workflow_id: 'workflow-1' },
+			body: { archived: true },
+		})
 		expect(api.calls.some((call) => call.method === 'delete')).toBe(false)
 	})
 
-	it('duplicates a workflow by creating a copy and saving its graph as the first version', async () => {
+	it('keeps the row and says why when the API refuses to archive', async () => {
+		const user = userEvent.setup()
+		const api = await renderFeature((fakeApi) =>
+			archivableApi(fakeApi, { failWith: new Error('Archivage impossible') }),
+		)
+
+		await user.click(
+			await screen.findByRole('button', { name: /Actions pour/ }),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Archiver' }))
+
+		expect(await screen.findByText('Archivage impossible')).toBeDefined()
+		expect(screen.getByText('Créer une facture Odoo')).toBeDefined()
+		expect(api.calls.some((call) => call.method === 'patch')).toBe(true)
+	})
+
+	it('duplicates a workflow into a disabled copy in the same project with the same tags, then saves its graph as the first version', async () => {
 		const user = userEvent.setup()
 		const graph = { triggers: [], connectors: [], edges: [] }
+		const original = workflow({
+			description: 'Émet la facture.',
+			folder_id: 'folder-ventes',
+			tags: ['Ventes', 'Clients'],
+		})
 		const api = await renderFeature((fakeApi) => {
+			fakeApi.mockGet(FOLDERS_PATH, () => ({
+				data: [VENTES],
+				pagination: null,
+			}))
+			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+				data: [original],
+				pagination: null,
+			}))
 			fakeApi.mockGet(WORKFLOW_PATH, () => ({
 				data: {
-					...workflow(),
+					...original,
 					current_version: {
 						id: 'v1',
 						version: 1,
@@ -419,6 +578,7 @@ describe('AutomationWorkflowsFeature — row actions', () => {
 				data: workflow({
 					id: 'workflow-2',
 					name: 'Créer une facture Odoo (copie)',
+					enabled: false,
 				}),
 			}))
 			fakeApi.mockMutation(
@@ -441,10 +601,43 @@ describe('AutomationWorkflowsFeature — row actions', () => {
 				body: { graph },
 			})
 		})
-		expect(
-			api.calls.find((call) => call.method === 'post')?.params,
-		).toMatchObject({
-			body: { name: 'Créer une facture Odoo (copie)' },
+		const posts = api.calls.filter((call) => call.method === 'post')
+		expect(posts).toHaveLength(1)
+		expect(posts[0]?.params).toEqual({
+			path: { organization_id: 'org-1' },
+			body: {
+				name: 'Créer une facture Odoo (copie)',
+				description: 'Émet la facture.',
+				enabled: false,
+				folder_id: 'folder-ventes',
+				tags: ['Ventes', 'Clients'],
+			},
+		})
+		expect(api.calls.some((call) => call.method === 'patch')).toBe(false)
+	})
+
+	it('copies a workflow that sits at the root with no tag as such', async () => {
+		const user = userEvent.setup()
+		const api = await renderFeature((fakeApi) => {
+			fakeApi.mockGet(WORKFLOW_PATH, () => ({
+				data: { ...workflow(), current_version: null, layout: null },
+			}))
+			fakeApi.mockMutation('post', WORKFLOWS_PATH, () => ({
+				data: workflow({ id: 'workflow-2' }),
+			}))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: /Actions pour/ }),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Dupliquer' }))
+
+		await waitFor(() => {
+			expect(
+				api.calls.find((call) => call.method === 'post')?.params,
+			).toMatchObject({
+				body: { enabled: false, folder_id: null, tags: [] },
+			})
 		})
 	})
 

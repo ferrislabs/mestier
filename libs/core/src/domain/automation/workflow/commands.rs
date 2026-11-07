@@ -3,12 +3,31 @@ use uuid::Uuid;
 
 use super::WorkflowLayout;
 use super::graph::Graph;
+use super::tags::WorkflowTags;
+use super::text::{WorkflowDescription, WorkflowName};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateWorkflowCommand {
     pub org_id: OrganizationId,
     pub name: String,
     pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkflowInitialState {
+    pub enabled: bool,
+    pub folder_id: Option<Uuid>,
+    pub tags: WorkflowTags,
+}
+
+impl Default for WorkflowInitialState {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            folder_id: None,
+            tags: WorkflowTags::default(),
+        }
+    }
 }
 
 /// Every field optional and applied only when present. `description` is
@@ -19,9 +38,12 @@ pub struct CreateWorkflowCommand {
 pub struct UpdateWorkflowCommand {
     pub org_id: OrganizationId,
     pub id: Uuid,
-    pub name: Option<String>,
-    pub description: Option<Option<String>>,
+    pub name: Option<WorkflowName>,
+    pub description: Option<Option<WorkflowDescription>>,
     pub enabled: Option<bool>,
+    pub folder_id: Option<Option<Uuid>>,
+    pub tags: Option<WorkflowTags>,
+    pub archived: Option<bool>,
 }
 
 /// Saves an edit: the graph is validated, then persisted as a new immutable

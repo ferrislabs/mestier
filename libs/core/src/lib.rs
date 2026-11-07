@@ -18,17 +18,25 @@ pub use domain::automation::event_catalogue;
 pub use domain::automation::expression::{
     ExpressionContext, ExpressionError, LoopFrame, Template, parse_template,
 };
+pub use domain::automation::folder::{
+    CreateFolderCommand, FolderName, FolderNameError, FolderRefusal, FolderTree, MAX_FOLDER_DEPTH,
+    MAX_FOLDER_NAME_LENGTH, MAX_FOLDERS_PER_ORGANIZATION, UpdateFolderCommand, WorkflowFolder,
+};
 pub use domain::automation::ports::DispatchOutcome;
 pub use domain::automation::run::{
-    Connector, ConnectorInput, ConnectorOutcome, DueRun, Run, RunSettlement, RunStatus, RunStep,
-    StepStatus,
+    Connector, ConnectorInput, ConnectorOutcome, DueRun, Run, RunOverview, RunSettlement,
+    RunStatus, RunStep, StepStatus,
 };
 pub use domain::automation::secret::SealedSecret;
 pub use domain::automation::settings::{AutomationSettings, SettingsBounds};
 pub use domain::automation::workflow::{
-    Branch, CreateWorkflowCommand, Edge, Graph, GraphError, MAX_LAYOUT_ENTRIES, NodePosition,
+    ArchiveScope, Branch, CreateWorkflowCommand, Edge, Graph, GraphError, MAX_LAYOUT_ENTRIES,
+    MAX_NODE_DESCRIPTION_LENGTH, MAX_NODE_NAME_LENGTH, MAX_RAW_TAGS, MAX_TAG_LENGTH, MAX_TAGS,
+    MAX_WORKFLOW_DESCRIPTION_LENGTH, MAX_WORKFLOW_NAME_LENGTH, NodePosition, NodeRef,
     PlacedConnector, PlacedTrigger, SaveWorkflowVersionCommand, TriggerKind, UpdateWorkflowCommand,
-    Workflow, WorkflowLayout, WorkflowReference, WorkflowVersion, validate_graph,
+    Workflow, WorkflowDescription, WorkflowDescriptionError, WorkflowInitialState, WorkflowLayout,
+    WorkflowName, WorkflowNameError, WorkflowReference, WorkflowRefusal, WorkflowTags,
+    WorkflowTagsError, WorkflowVersion, validate_graph,
 };
 pub use infrastructure::automation::connectors::{ConnectorRegistry, UnknownConnectorKind};
 pub use infrastructure::automation::webhook::{

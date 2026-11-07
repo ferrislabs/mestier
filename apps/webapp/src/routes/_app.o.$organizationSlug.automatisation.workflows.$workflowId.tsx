@@ -17,7 +17,7 @@ function WorkflowPage() {
 		<WorkflowPageFeature
 			workflowId={workflowId}
 			view={search.vue === 'executions' ? 'executions' : 'editor'}
-			executionId={search.execution}
+			executionNumber={search.execution}
 		/>
 	)
 }

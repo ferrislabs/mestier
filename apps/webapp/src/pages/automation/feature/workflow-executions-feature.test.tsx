@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -73,10 +73,14 @@ function descriptor(
 function run(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 'run-1',
+		number: 7,
 		organization_id: 'org-1',
 		workflow_id: 'workflow-1',
 		workflow_version_id: 'v1',
+		workflow_version_created_at: new Date(2026, 9, 31, 18, 20).toISOString(),
 		status: 'succeeded',
+		steps_done: 1,
+		steps_total: 1,
 		created_at: '2026-08-05T00:00:00Z',
 		started_at: '2026-08-05T00:00:00.000Z',
 		finished_at: '2026-08-05T00:00:01.000Z',
@@ -105,10 +109,12 @@ function runDetail(overrides: Record<string, unknown> = {}) {
 	}
 }
 
+let activeQueryClient: QueryClient | null = null
+
 function render(
 	configure: (api: FakeApi) => void = () => {},
 	permissions: string[] = ['VIEW_AUTOMATION', 'MANAGE_AUTOMATION'],
-	runId?: string,
+	executionNumber?: number,
 ) {
 	const api = installFakeTanstackApi()
 	api.mockGet(WORKFLOW_PATH, () => ({
@@ -158,6 +164,7 @@ function render(
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	})
+	activeQueryClient = queryClient
 
 	function Providers({ children }: { children: ReactNode }) {
 		return (
@@ -173,7 +180,10 @@ function render(
 
 	const rendered = renderWithRouter(
 		<Providers>
-			<WorkflowExecutionsFeature workflowId="workflow-1" runId={runId} />
+			<WorkflowExecutionsFeature
+				workflowId="workflow-1"
+				executionNumber={executionNumber}
+			/>
 		</Providers>,
 	)
 
@@ -189,6 +199,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+	cleanup()
+	activeQueryClient?.clear()
+	activeQueryClient = null
+	vi.clearAllTimers()
 	vi.useRealTimers()
 })
 
@@ -202,13 +216,13 @@ async function openStep(name: string) {
 }
 
 describe('WorkflowExecutionsFeature — the list', () => {
-	it('lists only this workflow’s runs, most recent first', async () => {
+	it('lists only this workflow’s runs, by number, the latest first', async () => {
 		render((api) => {
 			api.mockGet(RUNS_PATH, () => ({
 				data: [
-					run({ id: 'aaaaaaaa-old', created_at: '2026-08-01T00:00:00Z' }),
-					run({ id: 'bbbbbbbb-new', created_at: '2026-08-03T00:00:00Z' }),
-					run({ id: 'cccccccc-other', workflow_id: 'workflow-2' }),
+					run({ id: 'aaaaaaaa-old', number: 3 }),
+					run({ id: 'bbbbbbbb-new', number: 12 }),
+					run({ id: 'cccccccc-other', number: 13, workflow_id: 'workflow-2' }),
 				],
 				pagination: null,
 			}))
@@ -219,34 +233,60 @@ describe('WorkflowExecutionsFeature — the list', () => {
 		})
 		const items = within(list).getAllByRole('button')
 		expect(items.map((item) => item.textContent)).toEqual([
-			expect.stringContaining('#bbbbbbbb'),
-			expect.stringContaining('#aaaaaaaa'),
+			expect.stringContaining('#12'),
+			expect.stringContaining('#3'),
 		])
+		expect(items[0]?.getAttribute('aria-current')).toBe('true')
 	})
 
-	it('selects the given run', async () => {
+	it('selects the run whose number is in the search', async () => {
 		render(
 			(api) => {
 				api.mockGet(RUNS_PATH, () => ({
 					data: [
-						run({ id: 'aaaaaaaa-old', created_at: '2026-08-01T00:00:00Z' }),
-						run({ id: 'bbbbbbbb-new', created_at: '2026-08-03T00:00:00Z' }),
+						run({ id: 'aaaaaaaa-old', number: 3 }),
+						run({ id: 'bbbbbbbb-new', number: 12 }),
 					],
 					pagination: null,
 				}))
-				api.mockGet(RUN_PATH, (params) => ({
-					data: runDetail({
-						id: (params as { path: { run_id: string } }).path.run_id,
-					}),
+				api.mockGet(RUN_PATH, (params) => {
+					const id = (params as { path: { run_id: string } }).path.run_id
+					return {
+						data: runDetail({
+							id,
+							number: id === 'aaaaaaaa-old' ? 3 : 12,
+						}),
+						pagination: null,
+					}
+				})
+			},
+			undefined,
+			3,
+		)
+
+		expect(
+			await screen.findByRole('region', { name: 'Exécution #3' }),
+		).toBeDefined()
+	})
+
+	it('opens the latest run when the number matches none', async () => {
+		render(
+			(api) => {
+				api.mockGet(RUNS_PATH, () => ({
+					data: [run({ id: 'aaaaaaaa-old', number: 3 })],
+					pagination: null,
+				}))
+				api.mockGet(RUN_PATH, () => ({
+					data: runDetail({ number: 3 }),
 					pagination: null,
 				}))
 			},
 			undefined,
-			'aaaaaaaa-old',
+			99,
 		)
 
 		expect(
-			await screen.findByRole('region', { name: 'Exécution #aaaaaaaa' }),
+			await screen.findByRole('region', { name: 'Exécution #3' }),
 		).toBeDefined()
 	})
 
@@ -275,8 +315,8 @@ describe('WorkflowExecutionsFeature — the list', () => {
 		const { rendered } = render((api) => {
 			api.mockGet(RUNS_PATH, () => ({
 				data: [
-					run({ id: 'aaaaaaaa-old', created_at: '2026-08-01T00:00:00Z' }),
-					run({ id: 'bbbbbbbb-new', created_at: '2026-08-03T00:00:00Z' }),
+					run({ id: 'aaaaaaaa-old', number: 3 }),
+					run({ id: 'bbbbbbbb-new', number: 12 }),
 				],
 				pagination: null,
 			}))
@@ -285,12 +325,12 @@ describe('WorkflowExecutionsFeature — the list', () => {
 		const list = await screen.findByRole('complementary', {
 			name: 'Liste des exécutions',
 		})
-		await user.click(within(list).getByRole('button', { name: /#aaaaaaaa/ }))
+		await user.click(within(list).getByRole('button', { name: /#3/ }))
 
 		const { router } = await rendered
 		await waitFor(() =>
 			expect(router.state.location.href).toBe(
-				'/o/atelier-bois/automatisation/workflows/workflow-1?vue=executions&execution=aaaaaaaa-old',
+				'/o/atelier-bois/automatisation/workflows/workflow-1?vue=executions&execution=3',
 			),
 		)
 	})
@@ -520,18 +560,57 @@ describe('WorkflowExecutionsFeature — the header and the list labels', () => {
 		}))
 	}
 
-	it('writes the current version as a date and flags it as current', async () => {
+	it('writes the version of the run as a date and flags it as current', async () => {
 		render(withCurrentVersion)
 
 		expect(
-			await screen.findByText('Version du 28 oct. 2026 à 11:05'),
+			await screen.findByText('Version du 31 oct. 2026 à 18:20'),
 		).toBeDefined()
 		expect(screen.getByText('· actuelle')).toBeDefined()
 	})
 
-	it('names an event-triggered run after the event of the workflow trigger', async () => {
+	it('writes an older version with its own date, never the date of the current one', async () => {
 		render((api) => {
 			withCurrentVersion(api)
+			api.mockGet(RUNS_PATH, () => ({
+				data: [
+					run({
+						workflow_version_id: 'v0',
+						workflow_version_created_at: new Date(
+							2026,
+							8,
+							3,
+							9,
+							42,
+						).toISOString(),
+					}),
+				],
+				pagination: null,
+			}))
+			api.mockGet(RUN_PATH, () => ({
+				data: runDetail({
+					workflow_version_id: 'v0',
+					workflow_version_created_at: new Date(
+						2026,
+						8,
+						3,
+						9,
+						42,
+					).toISOString(),
+				}),
+				pagination: null,
+			}))
+		})
+
+		expect(
+			await screen.findByText('Version du 3 sept. 2026 à 09:42'),
+		).toBeDefined()
+		expect(screen.getByText('· antérieure')).toBeDefined()
+		expect(screen.queryByText(/28 oct/)).toBeNull()
+	})
+
+	it('names an event-triggered run after the event it carries', async () => {
+		render((api) => {
 			api.mockGet(EVENTS_PATH, () => ({
 				data: [
 					{
@@ -545,7 +624,12 @@ describe('WorkflowExecutionsFeature — the header and the list labels', () => {
 				pagination: null,
 			}))
 			api.mockGet(RUNS_PATH, () => ({
-				data: [run({ trigger_event_id: 'evt-1' })],
+				data: [
+					run({
+						trigger_event_id: 'evt-1',
+						trigger_event_name: 'quote.accepted',
+					}),
+				],
 				pagination: null,
 			}))
 		})
@@ -874,6 +958,7 @@ describe('WorkflowExecutionsFeature — a run in progress', () => {
 	function liveRun(overrides: Record<string, unknown> = {}) {
 		return run({
 			id: 'live-1',
+			number: 12,
 			status: 'running',
 			created_at: new Date(START - 2200).toISOString(),
 			started_at: new Date(START - 2200).toISOString(),
@@ -905,7 +990,7 @@ describe('WorkflowExecutionsFeature — a run in progress', () => {
 
 	it('counts the time since the start in the list, the header and the steps', async () => {
 		vi.useFakeTimers({ toFake: ['Date'], now: START })
-		render(withLiveRun)
+		await render(withLiveRun).rendered
 
 		const list = await screen.findByRole('complementary', {
 			name: 'Liste des exécutions',
@@ -923,7 +1008,7 @@ describe('WorkflowExecutionsFeature — a run in progress', () => {
 
 	it('keeps counting on its own between two fetches', async () => {
 		vi.useFakeTimers({ toFake: ['Date'], now: START })
-		render(withLiveRun)
+		await render(withLiveRun).rendered
 		const list = await screen.findByRole('complementary', {
 			name: 'Liste des exécutions',
 		})
@@ -942,20 +1027,21 @@ describe('WorkflowExecutionsFeature — a run in progress', () => {
 
 	it('counts every running run of the list, not only the selected one', async () => {
 		vi.useFakeTimers({ toFake: ['Date'], now: START })
-		render((api) => {
+		await render((api) => {
 			withLiveRun(api)
 			api.mockGet(RUNS_PATH, () => ({
 				data: [
 					liveRun(),
 					liveRun({
 						id: 'live-2',
+						number: 11,
 						created_at: new Date(START - 9000).toISOString(),
 						started_at: new Date(START - 7000).toISOString(),
 					}),
 				],
 				pagination: null,
 			}))
-		})
+		}).rendered
 		const list = await screen.findByRole('complementary', {
 			name: 'Liste des exécutions',
 		})
@@ -970,16 +1056,25 @@ describe('WorkflowExecutionsFeature — a run in progress', () => {
 	it('reloads the list on its own while a run is going, so the other runs advance', async () => {
 		vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
 		let listCalls = 0
-		render((api) => {
+		const { rendered } = render((api) => {
 			api.mockGet(RUNS_PATH, () => {
 				listCalls += 1
 				return {
 					data: [
-						run({ id: 'done-1', created_at: '2026-08-05T00:00:09Z' }),
+						run({
+							id: 'done-1',
+							number: 2,
+							created_at: '2026-08-05T00:00:09Z',
+						}),
 						listCalls > 2
-							? run({ id: 'live-2', created_at: '2026-08-05T00:00:01Z' })
+							? run({
+									id: 'live-2',
+									number: 1,
+									created_at: '2026-08-05T00:00:01Z',
+								})
 							: run({
 									id: 'live-2',
+									number: 1,
 									status: 'running',
 									created_at: '2026-08-05T00:00:01Z',
 									finished_at: null,
@@ -989,6 +1084,7 @@ describe('WorkflowExecutionsFeature — a run in progress', () => {
 				}
 			})
 		})
+		await rendered
 		const list = await screen.findByRole('complementary', {
 			name: 'Liste des exécutions',
 		})
@@ -1007,35 +1103,15 @@ describe('WorkflowExecutionsFeature — a run in progress', () => {
 })
 
 describe('WorkflowExecutionsFeature — the trigger of each run', () => {
-	function version(id: string, event: string) {
+	function version(event: string) {
 		return {
-			id,
-			version: 1,
-			workflow_id: 'workflow-1',
-			created_at: new Date(2026, 9, 28, 11, 5).toISOString(),
-			graph: {
-				connectors: [],
-				edges: [],
-				triggers: [{ id: 't1', kind: { Events: [event] } }],
-			},
+			connectors: [],
+			edges: [],
+			triggers: [{ id: 't1', kind: { Events: [event] } }],
 		}
 	}
 
-	function withVersions(api: FakeApi) {
-		api.mockGet(WORKFLOW_PATH, () => ({
-			data: {
-				id: 'workflow-1',
-				organization_id: 'org-1',
-				name: 'Créer une facture Odoo',
-				description: null,
-				enabled: true,
-				layout: null,
-				current_version: version('v2', 'quote.accepted'),
-				created_at: '2026-08-01T00:00:00Z',
-				updated_at: '2026-08-01T00:00:00Z',
-			},
-			pagination: null,
-		}))
+	function withEvents(api: FakeApi) {
 		api.mockGet(EVENTS_PATH, () => ({
 			data: [
 				{
@@ -1059,15 +1135,19 @@ describe('WorkflowExecutionsFeature — the trigger of each run', () => {
 			data: [
 				run({
 					id: 'bbbbbbbb-new',
+					number: 12,
 					workflow_version_id: 'v2',
+					trigger_id: 't1',
 					trigger_event_id: 'evt-2',
-					created_at: '2026-08-03T00:00:00Z',
+					trigger_event_name: 'quote.accepted',
 				}),
 				run({
 					id: 'aaaaaaaa-old',
+					number: 3,
 					workflow_version_id: 'v1',
+					trigger_id: 't1',
 					trigger_event_id: 'evt-1',
-					created_at: '2026-08-01T00:00:00Z',
+					trigger_event_name: 'invoice.issued',
 				}),
 			],
 			pagination: null,
@@ -1078,12 +1158,12 @@ describe('WorkflowExecutionsFeature — the trigger of each run', () => {
 			return {
 				data: runDetail({
 					id,
+					number: old ? 3 : 12,
 					workflow_version_id: old ? 'v1' : 'v2',
+					trigger_id: 't1',
 					trigger_event_id: old ? 'evt-1' : 'evt-2',
-					graph: version(
-						old ? 'v1' : 'v2',
-						old ? 'invoice.issued' : 'quote.accepted',
-					).graph,
+					trigger_event_name: old ? 'invoice.issued' : 'quote.accepted',
+					graph: version(old ? 'invoice.issued' : 'quote.accepted'),
 					steps: [],
 				}),
 				pagination: null,
@@ -1091,39 +1171,159 @@ describe('WorkflowExecutionsFeature — the trigger of each run', () => {
 		})
 	}
 
-	it('does not give a run of an older version the trigger of the current version', async () => {
-		render(withVersions)
+	it('names every run after the event it carries, whatever the version of the workflow', async () => {
+		render(withEvents)
 
 		const list = await screen.findByRole('complementary', {
 			name: 'Liste des exécutions',
 		})
-		await waitFor(() =>
-			expect(within(list).getAllByRole('button')[0]?.textContent).toContain(
-				'Devis accepté',
-			),
-		)
-		const [, oldest] = within(list).getAllByRole('button')
-		expect(oldest?.textContent).not.toContain('Devis accepté')
-		expect(oldest?.textContent).toContain('Événement')
-	})
-
-	it('names the selected older run after the trigger of its own version', async () => {
-		render(withVersions, undefined, 'aaaaaaaa-old')
-
-		const region = await screen.findByRole('region', {
-			name: 'Exécution #aaaaaaaa',
-		})
-		await waitFor(() =>
-			expect(within(region).getByText(/Facture émise/)).toBeDefined(),
-		)
-		const list = screen.getByRole('complementary', {
-			name: 'Liste des exécutions',
-		})
 		await waitFor(() => {
 			const [newest, oldest] = within(list).getAllByRole('button')
-			expect(oldest?.textContent).toContain('Facture émise')
 			expect(newest?.textContent).toContain('Devis accepté')
+			expect(oldest?.textContent).toContain('Facture émise')
 		})
+	})
+
+	it('names the header of the selected run after its own event', async () => {
+		render(withEvents, undefined, 3)
+
+		const region = await screen.findByRole('region', { name: 'Exécution #3' })
+
+		await waitFor(() =>
+			expect(within(region).getByText(/· Facture émise$/)).toBeDefined(),
+		)
+	})
+
+	it('names a run after its trigger node when no event came with it', async () => {
+		render((api) => {
+			api.mockGet(RUNS_PATH, () => ({
+				data: [run({ trigger_id: 't1' })],
+				pagination: null,
+			}))
+			api.mockGet(RUN_PATH, () => ({
+				data: runDetail({
+					trigger_id: 't1',
+					graph: {
+						connectors: [],
+						edges: [],
+						triggers: [{ id: 't1', kind: 'Manual', name: 'Chaque lundi' }],
+					},
+					steps: [],
+				}),
+				pagination: null,
+			}))
+		})
+
+		const region = await screen.findByRole('region', { name: 'Exécution #7' })
+
+		await waitFor(() =>
+			expect(
+				within(region).getAllByText(/Chaque lundi/).length,
+			).toBeGreaterThan(0),
+		)
+	})
+})
+
+describe('WorkflowExecutionsFeature — the names saved in the graph of the run', () => {
+	const NAMED: Schemas.GraphDto = {
+		triggers: [
+			{
+				id: 't1',
+				kind: { Events: ['quote.accepted'] },
+				name: 'Quand le devis est accepté',
+			},
+		],
+		connectors: [
+			{
+				id: 'c1',
+				kind: 'test.simple',
+				version: 1,
+				config: {},
+				name: 'Facturer le client',
+				description: 'Crée la facture',
+			},
+		],
+		edges: [{ from: 't1', to: 'c1', branch: null }],
+	}
+
+	function withNamedRun(api: FakeApi) {
+		api.mockGet(RUNS_PATH, () => ({
+			data: [run({ status: 'failed', trigger_id: 't1' })],
+			pagination: null,
+		}))
+		api.mockGet(RUN_PATH, () => ({
+			data: runDetail({
+				status: 'failed',
+				trigger_id: 't1',
+				graph: NAMED,
+				steps: [
+					{
+						id: 's1',
+						connector_id: 'c1',
+						iteration_path: '',
+						attempts: 1,
+						status: 'dead',
+						created_at: '2026-08-05T00:00:01Z',
+						started_at: '2026-08-05T00:00:01Z',
+						finished_at: '2026-08-05T00:00:02Z',
+						error: 'SMTP expiré',
+					},
+				],
+			}),
+			pagination: null,
+		}))
+	}
+
+	it('names the nodes of the canvas after the graph, with their description', async () => {
+		render(withNamedRun)
+
+		const node = await screen.findByTestId('rf__node-c1')
+		expect(within(node).getByText('Facturer le client')).toBeDefined()
+		expect(within(node).getByText('Crée la facture')).toBeDefined()
+		const start = screen.getByTestId('rf__node-t1')
+		expect(within(start).getByText('Quand le devis est accepté')).toBeDefined()
+	})
+
+	it('numbers the trigger first in the steps, under its name, and counts it', async () => {
+		render(withNamedRun)
+
+		const steps = await screen.findByRole('complementary', {
+			name: 'Déroulé de l’exécution',
+		})
+		const buttons = within(steps).getAllByRole('button')
+		expect(buttons[0]?.textContent).toBe(
+			'1Quand le devis est accepté' + 'Démarré',
+		)
+		expect(buttons[1]?.textContent).toBe('2Facturer le clientSMTP expiré')
+		expect(within(steps).getByText('2 / 2 nœuds')).toBeDefined()
+	})
+
+	it('gives the trigger a step number in its own dialog, like any other node', async () => {
+		render(withNamedRun)
+
+		await openStep('Quand le devis est accepté')
+
+		const dialog = await screen.findByRole('dialog')
+		expect(within(dialog).getByText(/étape 1/)).toBeDefined()
+	})
+
+	it('names the failed node in the banner and titles the node dialog with its name', async () => {
+		render(withNamedRun)
+
+		const alert = await screen.findByRole('alert')
+		expect(alert.textContent).toContain('Échec sur « Facturer le client »')
+
+		await openStep('Facturer le client')
+		const dialog = await screen.findByRole('dialog')
+		expect(dialog.getAttribute('aria-labelledby')).not.toBeNull()
+		expect(
+			document.getElementById(dialog.getAttribute('aria-labelledby') ?? '')
+				?.textContent,
+		).toBe('Facturer le client')
+		expect(
+			document.getElementById(dialog.getAttribute('aria-describedby') ?? '')
+				?.textContent,
+		).toContain('Exécution #7')
 	})
 })
 

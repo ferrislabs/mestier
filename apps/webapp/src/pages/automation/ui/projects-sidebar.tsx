@@ -18,6 +18,8 @@ export function ProjectsSidebar({
 	organizationSlug: string
 	entries: readonly ProjectsSidebarEntry[]
 }) {
+	if (entries.length === 0) return null
+
 	return (
 		<nav aria-labelledby="automation-projects-heading" className="mt-4">
 			<h2

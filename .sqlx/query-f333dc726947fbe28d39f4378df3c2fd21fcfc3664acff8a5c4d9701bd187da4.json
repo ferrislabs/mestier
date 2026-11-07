@@ -1,0 +1,143 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH version_sizes AS MATERIALIZED (\n               SELECT wv.id,\n                      wv.created_at,\n                      (CASE WHEN jsonb_typeof(wv.graph -> 'connectors') = 'array'\n                            THEN jsonb_array_length(wv.graph -> 'connectors')\n                            ELSE 0\n                       END)::int4 AS connectors\n               FROM automation.workflow_version wv\n               WHERE wv.id IN (\n                   SELECT DISTINCT scoped.workflow_version_id\n                   FROM automation.run scoped\n                   WHERE scoped.org_id = $1 AND ($2::uuid IS NULL OR scoped.id = $2)\n               )\n           )\n           SELECT r.id, r.org_id, r.workflow_id, r.workflow_version_id, r.trigger_event_id,\n                  r.trigger_payload, r.trigger_id, r.status, r.error, r.next_attempt_at,\n                  r.locked_at, r.locked_by, r.started_at, r.finished_at, r.created_at,\n                  r.run_number AS \"number!\",\n                  COALESCE(done.connectors, 0)::int4 AS \"steps_done!\",\n                  version_sizes.connectors AS \"steps_total!\",\n                  e.name AS \"trigger_event_name?\",\n                  failed.connector_id AS \"failed_connector_id?\",\n                  version_sizes.created_at AS \"workflow_version_created_at!\"\n           FROM automation.run r\n           JOIN version_sizes ON version_sizes.id = r.workflow_version_id\n           LEFT JOIN automation.event e ON e.id = r.trigger_event_id AND e.org_id = r.org_id\n           LEFT JOIN LATERAL (\n               SELECT count(DISTINCT connector_id) AS connectors\n               FROM automation.run_step\n               WHERE run_id = r.id AND status = 'succeeded'\n           ) done ON true\n           LEFT JOIN LATERAL (\n               SELECT connector_id\n               FROM automation.run_step\n               WHERE run_id = r.id AND status IN ('dead', 'failed')\n               ORDER BY (status = 'dead') DESC, created_at, id\n               LIMIT 1\n           ) failed ON true\n           WHERE r.org_id = $1 AND ($2::uuid IS NULL OR r.id = $2)\n           ORDER BY r.created_at DESC, r.run_number DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "workflow_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "workflow_version_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "trigger_event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "trigger_payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "trigger_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "next_attempt_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "locked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "locked_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "finished_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "number!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 16,
+        "name": "steps_done!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 17,
+        "name": "steps_total!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 18,
+        "name": "trigger_event_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "failed_connector_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "workflow_version_created_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f333dc726947fbe28d39f4378df3c2fd21fcfc3664acff8a5c4d9701bd187da4"
+}

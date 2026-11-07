@@ -170,6 +170,9 @@ impl MestierUseCase {
                     version: 1,
                     credential_id: None,
                     config: serde_json::Map::new(),
+                    name: None,
+                    description: None,
+                    disabled: false,
                 }],
                 edges: vec![Edge {
                     from: "t1".to_owned(),
@@ -179,6 +182,8 @@ impl MestierUseCase {
                 triggers: vec![PlacedTrigger {
                     id: "t1".to_owned(),
                     kind: TriggerKind::Manual,
+                    name: None,
+                    description: None,
                 }],
             },
             layout: None,
