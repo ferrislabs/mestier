@@ -283,9 +283,11 @@ export namespace Schemas {
   export type ConnectorDescriptorResponse = {
     auth: AuthRequirementResponse;
     branches: Array<BranchDto>;
+    description?: (string | null) | undefined;
     execution: ExecutionModeResponse;
     family: string;
     fields: Array<FieldResponse>;
+    group?: (string | null) | undefined;
     kind: string;
     label: string;
     output_example: unknown;

@@ -677,3 +677,77 @@ describe('NodeCreatorFeature — the collections', () => {
 		})
 	})
 })
+
+describe('NodeCreatorFeature — the generated Mestier actions', () => {
+	const GROUPED = [
+		{
+			...descriptorOf('mestier.invoice.send', 'mestier', 'Envoyer une facture'),
+			group: 'Factures',
+		},
+		{
+			...descriptorOf(
+				'mestier.invoice.cancel',
+				'mestier',
+				'Annuler une facture',
+			),
+			group: 'Factures',
+		},
+		{
+			...descriptorOf('mestier.doe.generate', 'mestier', 'Générer un DOE'),
+			group: 'DOE',
+		},
+	]
+
+	it('shows the groups collapsed, alphabetical, and opens one on click', async () => {
+		const user = userEvent.setup()
+		const { panel } = await renderCreator({ descriptors: GROUPED })
+
+		await user.click(
+			within(panel).getByRole('button', { name: /Actions Mestier/ }),
+		)
+
+		const headings = within(panel).getAllByRole('heading', { level: 4 })
+		expect(headings.map((heading) => heading.textContent)).toEqual([
+			'DOE1',
+			'Factures2',
+		])
+		expect(within(panel).queryByText('Annuler une facture')).toBeNull()
+
+		await user.click(within(panel).getByRole('button', { name: /Factures/ }))
+
+		expect(rowsOf(panel)).toEqual([
+			'Annuler une facture',
+			'Envoyer une facture',
+		])
+	})
+
+	it('opens every matching group while searching', async () => {
+		const user = userEvent.setup()
+		const { panel } = await renderCreator({ descriptors: GROUPED })
+
+		await user.type(
+			within(panel).getByRole('searchbox', { name: 'Rechercher un nœud' }),
+			'doe',
+		)
+
+		expect(rowsOf(panel)).toEqual(['Générer un DOE'])
+	})
+
+	it('creates the node of a generated action', async () => {
+		const user = userEvent.setup()
+		const { panel, onCreate } = await renderCreator({ descriptors: GROUPED })
+
+		await user.type(
+			within(panel).getByRole('searchbox', { name: 'Rechercher un nœud' }),
+			'factures',
+		)
+		await user.click(
+			within(panel).getByRole('button', { name: /Envoyer une facture/ }),
+		)
+
+		expect(onCreate).toHaveBeenCalledWith({
+			type: 'connector',
+			descriptor: GROUPED[0],
+		})
+	})
+})

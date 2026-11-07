@@ -159,6 +159,7 @@ mod tests {
             output_example: Value::Null,
             output_mirrors_field: None,
             group: None,
+            description: None,
             sample_output: sample,
         }
     }

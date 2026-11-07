@@ -1,11 +1,19 @@
-import { ArrowLeft, ArrowRight, Library, Search, X } from 'lucide-react'
-import { type ReactNode, useEffect, useRef } from 'react'
+import {
+	ArrowLeft,
+	ArrowRight,
+	ChevronRight,
+	Library,
+	Search,
+	X,
+} from 'lucide-react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import type { CollectionOperation } from '#/pages/automation/lib/collections'
-import type {
-	CreatorCategory,
-	CreatorKind,
+import {
+	type CreatorCategory,
+	type CreatorKind,
+	groupCreatorKinds,
 } from '#/pages/automation/lib/creator'
 import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
 import { MethodBadge } from '#/pages/automation/ui/method-badge'
@@ -106,11 +114,79 @@ function KindRow({ kind, onPick }: { kind: CreatorKind; onPick: () => void }) {
 			<KindIconTile icon={kind.icon} hue={kind.hue} size="sm" />
 			<span className="min-w-0 flex-1">
 				<span className="block truncate font-medium text-sm">{kind.label}</span>
-				<span className="block text-muted-foreground text-xs leading-snug">
-					{kind.description}
-				</span>
+				{kind.description !== '' && (
+					<span className="block text-muted-foreground text-xs leading-snug">
+						{kind.description}
+					</span>
+				)}
 			</span>
 		</button>
+	)
+}
+
+function KindGroupSection({
+	label,
+	kinds,
+	forceOpen,
+	renderKind,
+}: {
+	label: string
+	kinds: readonly CreatorKind[]
+	forceOpen: boolean
+	renderKind: (kind: CreatorKind) => ReactNode
+}) {
+	const [opened, setOpened] = useState(false)
+	const open = forceOpen || opened
+	return (
+		<section aria-label={label}>
+			<h4 className="m-0">
+				<button
+					type="button"
+					aria-expanded={open}
+					onClick={() => setOpened(!opened)}
+					className="flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-left font-medium text-muted-foreground text-xs outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+				>
+					<ChevronRight
+						className={open ? 'size-3.5 rotate-90' : 'size-3.5'}
+						aria-hidden
+					/>
+					<span className="flex-1">{label}</span>
+					<span className="font-normal">{kinds.length}</span>
+				</button>
+			</h4>
+			{open && <ul>{kinds.map(renderKind)}</ul>}
+		</section>
+	)
+}
+
+function KindList({
+	kinds,
+	forceOpen,
+	renderKind,
+}: {
+	kinds: readonly CreatorKind[]
+	forceOpen: boolean
+	renderKind: (kind: CreatorKind) => ReactNode
+}) {
+	if (!kinds.some((kind) => kind.group !== null)) {
+		return <ul>{kinds.map(renderKind)}</ul>
+	}
+	return (
+		<>
+			{groupCreatorKinds(kinds).map((group) =>
+				group.label === null ? (
+					<ul key="">{group.kinds.map(renderKind)}</ul>
+				) : (
+					<KindGroupSection
+						key={group.label}
+						label={group.label}
+						kinds={group.kinds}
+						forceOpen={forceOpen}
+						renderKind={renderKind}
+					/>
+				),
+			)}
+		</>
 	)
 }
 
@@ -248,7 +324,13 @@ export function NodeCreatorPanel({
 						/>
 					</>
 				)}
-				{view.type === 'kinds' && <ul>{view.kinds.map(renderKind)}</ul>}
+				{view.type === 'kinds' && (
+					<KindList
+						kinds={view.kinds}
+						forceOpen={false}
+						renderKind={renderKind}
+					/>
+				)}
 				{view.type === 'collections' &&
 					(view.status === 'loading' ? (
 						<Notice>Chargement des collections…</Notice>
@@ -325,7 +407,11 @@ export function NodeCreatorPanel({
 									<h3 className="px-3 pt-2 pb-1 font-medium text-muted-foreground text-xs">
 										{group.label}
 									</h3>
-									<ul>{group.kinds.map(renderKind)}</ul>
+									<KindList
+										kinds={group.kinds}
+										forceOpen
+										renderKind={renderKind}
+									/>
 								</section>
 							))}
 							{view.operations.length > 0 && (

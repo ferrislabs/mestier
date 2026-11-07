@@ -93,6 +93,7 @@ pub struct ConnectorDescriptor {
     /// has run.
     pub output_mirrors_field: Option<&'static str>,
     pub group: Option<&'static str>,
+    pub description: Option<&'static str>,
     pub sample_output: Value,
 }
 
@@ -170,6 +171,7 @@ mod tests {
             output_example: json!({ "id": 42 }),
             output_mirrors_field: None,
             group: None,
+            description: None,
             sample_output: json!({ "id": 42 }),
         };
 

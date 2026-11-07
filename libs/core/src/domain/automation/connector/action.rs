@@ -35,6 +35,7 @@ impl ActionSpec {
             output_example: example,
             output_mirrors_field: None,
             group: Some(self.group),
+            description: Some(self.description),
             sample_output: sample,
         }
     }

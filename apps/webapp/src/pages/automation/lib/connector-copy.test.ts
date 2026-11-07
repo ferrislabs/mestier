@@ -6,9 +6,11 @@ import {
 	Mail,
 	Merge,
 	MessageSquare,
+	ReceiptText,
 	StickyNote,
 	Timer,
 	Webhook,
+	Wrench,
 } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import {
@@ -44,6 +46,12 @@ const SERVER_KINDS = [
 	'mestier.project.create',
 	'mestier.chat.post_message',
 	'smtp.send',
+]
+
+const GENERATED_KINDS = [
+	'mestier.invoice.send',
+	'mestier.doe.generate',
+	'mestier.support.close_ticket',
 ]
 
 const SHARED_HUE_KINDS = ['flow.merge']
@@ -241,6 +249,89 @@ describe('connectorCopy', () => {
 
 	it('is undefined for a kind it has never heard of', () => {
 		expect(connectorCopy('nope.nothing')).toBeUndefined()
+	})
+})
+
+describe('describeConnector — generated Mestier actions', () => {
+	it('relies on the fallback: no hand-written entry is needed', () => {
+		for (const kind of GENERATED_KINDS) {
+			expect(connectorCopy(kind), kind).toBeUndefined()
+		}
+	})
+
+	it('shows the server label, the group as subtitle and the server description', () => {
+		const copy = describeConnector({
+			kind: 'mestier.invoice.send',
+			family: 'mestier',
+			label: 'Envoyer une facture',
+			group: 'Factures',
+			description: 'Envoie une facture au client',
+		})
+
+		expect(copy).toMatchObject({
+			label: 'Envoyer une facture',
+			subtitle: 'Factures',
+			description: 'Envoie une facture au client',
+			category: 'actions',
+			internal: false,
+		})
+		expect(copy.icon).toBe(ReceiptText)
+	})
+
+	it('leaves the description empty when the server sends none', () => {
+		expect(
+			describeConnector({
+				kind: 'mestier.x.y',
+				family: 'mestier',
+				label: 'Y',
+				description: null,
+			}).description,
+		).toBe('')
+	})
+
+	it('gives each known group its own icon and tint', () => {
+		const groups = [
+			'Achats',
+			'Clients',
+			'Devis',
+			'Discussions',
+			'DOE',
+			'Entretien',
+			'Factures',
+			'Planning',
+			'Rapports',
+			'Référentiel',
+			'Support',
+			'Terrain',
+		]
+		const hues = groups.map(
+			(group) =>
+				describeConnector({
+					kind: 'mestier.x.y',
+					family: 'mestier',
+					label: 'Y',
+					group,
+				}).hue,
+		)
+
+		expect(new Set(hues).size).toBe(groups.length)
+	})
+
+	it('falls back on the wrench and hue 220 for an unknown or missing group', () => {
+		for (const group of ['Inconnu', null, undefined]) {
+			const copy = describeConnector({
+				kind: 'mestier.x.y',
+				family: 'mestier',
+				label: 'Y',
+				group,
+			})
+			expect(copy.icon).toBe(Wrench)
+			expect(copy.hue).toBe(220)
+		}
+		expect(
+			describeConnector({ kind: 'mestier.x.y', family: 'mestier', label: 'Y' })
+				.subtitle,
+		).toBe('Connecteur')
 	})
 })
 

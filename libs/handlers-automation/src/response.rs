@@ -151,6 +151,7 @@ pub struct ConnectorDescriptorResponse {
     pub output_example: Value,
     pub output_mirrors_field: Option<String>,
     pub group: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
@@ -188,6 +189,7 @@ impl From<&mestier_core::ConnectorDescriptor> for ConnectorDescriptorResponse {
             output_example: value.output_example.clone(),
             output_mirrors_field: value.output_mirrors_field.map(str::to_owned),
             group: value.group.map(str::to_owned),
+            description: value.description.map(str::to_owned),
         }
     }
 }

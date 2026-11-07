@@ -380,6 +380,44 @@ describe('ConnectorConfigForm — the signing_credential_id field', () => {
 	})
 })
 
+describe('ConnectorConfigForm — a generated action', () => {
+	it('renders every field kind with the server label and no crash', () => {
+		render(
+			<ConnectorConfigForm
+				{...baseProps({
+					descriptor: descriptor({
+						kind: 'mestier.invoice.send',
+						family: 'mestier',
+						fields: [
+							field({ name: 'a', label: 'Texte serveur', kind: 'Text' }),
+							field({ name: 'b', label: 'Nombre serveur', kind: 'Number' }),
+							field({ name: 'c', label: 'Booléen serveur', kind: 'Bool' }),
+							field({ name: 'd', label: 'Json serveur', kind: 'Json' }),
+							field({
+								name: 'e',
+								label: 'Choix serveur',
+								kind: {
+									Select: { options: [{ value: 'x', label: 'Option X' }] },
+								},
+							}),
+						],
+					}),
+				})}
+			/>,
+		)
+
+		for (const label of [
+			'Texte serveur',
+			'Nombre serveur',
+			'Booléen serveur',
+			'Json serveur',
+			'Choix serveur',
+		]) {
+			expect(screen.getByText(label)).toBeDefined()
+		}
+	})
+})
+
 describe('ConnectorConfigForm — the copy of a known connector', () => {
 	const httpFields = [
 		field({

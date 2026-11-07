@@ -1629,6 +1629,7 @@ mod tests {
                 output_example: json!({}),
                 output_mirrors_field: None,
                 group: None,
+                description: None,
                 sample_output: json!({}),
             })
             .expect("first registration succeeds");
@@ -1716,6 +1717,7 @@ mod tests {
                 output_example: json!({}),
                 output_mirrors_field: None,
                 group: None,
+                description: None,
                 sample_output: json!({}),
             })
             .expect("first registration succeeds");
@@ -1768,6 +1770,7 @@ mod tests {
                 output_example: json!({}),
                 output_mirrors_field: None,
                 group: None,
+                description: None,
                 sample_output: json!({}),
             })
             .expect("open registers");
@@ -1813,6 +1816,7 @@ mod tests {
                 output_example: json!({}),
                 output_mirrors_field: None,
                 group: None,
+                description: None,
                 sample_output: json!({}),
             })
             .expect("open registers");
@@ -2552,6 +2556,7 @@ mod tests {
                 output_example: json!({}),
                 output_mirrors_field: None,
                 group: None,
+                description: None,
                 sample_output: json!({}),
             })
             .expect("fork registers");
@@ -2568,6 +2573,7 @@ mod tests {
                 output_example: json!({}),
                 output_mirrors_field: None,
                 group: None,
+                description: None,
                 sample_output: json!({}),
             })
             .expect("sink registers");
@@ -2659,6 +2665,7 @@ mod tests {
                 output_example: json!({}),
                 output_mirrors_field: None,
                 group: None,
+                description: None,
                 sample_output: json!({}),
             })
             .expect("each registers");
@@ -2683,6 +2690,7 @@ mod tests {
                 output_example: json!({}),
                 output_mirrors_field: None,
                 group: None,
+                description: None,
                 sample_output: json!({}),
             })
             .expect("body registers");
