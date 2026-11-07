@@ -2,6 +2,7 @@ import type {
 	Customer,
 	CustomerContact,
 	CustomerContext,
+	CustomerListItem,
 	LeadSource,
 } from '#/hooks/use-customers'
 import {
@@ -112,25 +113,18 @@ export function accountDetailsOf(
 	}
 }
 
-export function directoryTerms(
-	contacts: readonly Pick<
-		CustomerContact,
-		'id' | 'first_name' | 'last_name' | 'role' | 'email' | 'phone' | 'mobile'
-	>[],
-	contexts: readonly Pick<CustomerContext, 'city'>[],
+export function rowTerms(
+	row: Pick<CustomerListItem, 'city' | 'primary_contact'>,
 ): SearchTerms {
+	const contact = row.primary_contact
 	return {
 		text: [
-			...contexts.map((context) => context.city ?? ''),
-			...contacts.flatMap((contact) => [
-				contactName(contact),
-				contact.email ?? '',
-				contact.role ?? '',
-			]),
+			row.city ?? '',
+			contact ? contactName(contact) : '',
+			contact?.email ?? '',
+			contact?.role ?? '',
 		].filter(Boolean),
-		phones: contacts
-			.flatMap((contact) => [contact.phone ?? '', contact.mobile ?? ''])
-			.filter((phone): phone is string => Boolean(phone)),
+		phones: [contact?.phone ?? '', contact?.mobile ?? ''].filter(Boolean),
 	}
 }
 

@@ -150,6 +150,9 @@ impl App {
     /// Removes the fixture, child rows first.
     pub async fn cleanup(&self) {
         for statement in [
+            "DELETE FROM invoice_payments WHERE org_id = $1",
+            "DELETE FROM invoices WHERE org_id = $1 AND source_invoice_id IS NOT NULL",
+            "DELETE FROM invoices WHERE org_id = $1",
             "DELETE FROM quotes WHERE org_id = $1",
             "DELETE FROM deals WHERE org_id = $1",
             "UPDATE customers SET billing_contact_id = NULL, billing_address_id = NULL WHERE org_id = $1",

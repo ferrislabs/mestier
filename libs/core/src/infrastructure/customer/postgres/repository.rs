@@ -1,10 +1,13 @@
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    Customer, CustomerContactId, CustomerContextId, CustomerId, LeadSource, OrganizationId,
-    PaymentTermsDays,
+    Customer, CustomerContactId, CustomerContextId, CustomerDirectoryEntry, CustomerId,
+    CustomerInvoiceFact, InvoiceKind, InvoiceStatus, LeadSource, OrganizationId, PaymentTermsDays,
+    PrimaryContact,
     domain::customer::ports::CustomerRepository,
     infrastructure::{
         customer::postgres::model::CustomerRow,
@@ -118,6 +121,135 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
             .collect::<Result<Vec<_>, CoreError>>()?;
 
         Ok((customers, total as u64))
+    }
+
+    async fn directory(
+        &mut self,
+        organization_id: OrganizationId,
+        customer_ids: &[CustomerId],
+    ) -> Result<Vec<CustomerDirectoryEntry>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<uuid::Uuid> = customer_ids.iter().map(|id| id.0).collect();
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                c.id AS "customer_id!",
+                (
+                    SELECT NULLIF(btrim(x.city), '')
+                    FROM customer_contexts x
+                    WHERE x.customer_id = c.id AND x.deleted_at IS NULL
+                    ORDER BY (x.id IS NOT DISTINCT FROM c.billing_address_id) DESC,
+                             (x.kind = 'BILLING') DESC, x.created_at ASC, x.id ASC
+                    LIMIT 1
+                ) AS "city?",
+                k.first_name AS "first_name?",
+                k.last_name AS "last_name?",
+                k.role AS "role?",
+                k.email AS "email?",
+                k.phone AS "phone?",
+                k.mobile AS "mobile?",
+                (
+                    SELECT MAX(q.created_at)
+                    FROM quotes q
+                    WHERE q.customer_id = c.id AND q.org_id = c.org_id AND q.deleted_at IS NULL
+                ) AS "last_quote_at?"
+            FROM customers c
+            LEFT JOIN LATERAL (
+                SELECT first_name, last_name, role, email, phone, mobile
+                FROM customer_contacts
+                WHERE customer_id = c.id AND deleted_at IS NULL
+                ORDER BY is_primary DESC, created_at ASC, id ASC
+                LIMIT 1
+            ) k ON TRUE
+            WHERE c.org_id = $1 AND c.id = ANY($2) AND c.deleted_at IS NULL
+            "#,
+            organization_id.0,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| CustomerDirectoryEntry {
+                customer_id: CustomerId(row.customer_id),
+                city: row.city,
+                primary_contact: row.first_name.zip(row.last_name).map(
+                    |(first_name, last_name)| PrimaryContact {
+                        first_name,
+                        last_name,
+                        role: row.role,
+                        email: row.email,
+                        phone: row.phone,
+                        mobile: row.mobile,
+                    },
+                ),
+                last_quote_at: row.last_quote_at,
+            })
+            .collect())
+    }
+
+    async fn invoice_facts(
+        &mut self,
+        organization_id: OrganizationId,
+        customer_ids: &[CustomerId],
+    ) -> Result<Vec<CustomerInvoiceFact>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<uuid::Uuid> = customer_ids.iter().map(|id| id.0).collect();
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                i.customer_id AS "customer_id!",
+                i.kind::text AS "kind!",
+                i.status::text AS "status!",
+                i.gross_cents AS "gross_cents!",
+                i.net_cents AS "net_cents!",
+                i.issued_at AS "issued_at!",
+                i.issued_on AS "issued_on!",
+                i.due_at AS "due_at?",
+                COALESCE((
+                    SELECT SUM(p.amount_cents)
+                    FROM invoice_payments p
+                    WHERE p.invoice_id = i.id AND p.deleted_at IS NULL
+                ), 0)::BIGINT AS "paid_cents!",
+                COALESCE((
+                    SELECT SUM(c.gross_cents)
+                    FROM invoices c
+                    WHERE c.source_invoice_id = i.id AND c.deleted_at IS NULL
+                        AND c.status NOT IN ('DRAFT', 'CANCELLED')
+                ), 0)::BIGINT AS "credited_cents!"
+            FROM invoices i
+            WHERE i.org_id = $1 AND i.customer_id = ANY($2) AND i.deleted_at IS NULL
+                AND i.status NOT IN ('DRAFT', 'CANCELLED')
+            "#,
+            organization_id.0,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok(CustomerInvoiceFact {
+                    customer_id: CustomerId(row.customer_id),
+                    kind: InvoiceKind::from_str(&row.kind).map_err(|e| {
+                        CoreError::Internal(format!("invalid invoice kind in database: {e}"))
+                    })?,
+                    status: InvoiceStatus::from_str(&row.status).map_err(|e| {
+                        CoreError::Internal(format!("invalid invoice status in database: {e}"))
+                    })?,
+                    gross_cents: row.gross_cents,
+                    net_cents: row.net_cents,
+                    issued_at: row.issued_at,
+                    issued_on: row.issued_on,
+                    due_on: row.due_at.map(|due| due.date_naive()),
+                    paid_cents: row.paid_cents,
+                    credited_cents: row.credited_cents,
+                })
+            })
+            .collect()
     }
 
     async fn update(&mut self, customer: &Customer) -> Result<Customer, CoreError> {

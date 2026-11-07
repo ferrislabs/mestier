@@ -403,3 +403,315 @@ async fn deleting_the_billing_address_falls_back_to_another_billing_address() {
     })
     .await;
 }
+
+struct SeedInvoice {
+    organization_id: OrganizationId,
+    customer_id: CustomerId,
+    context_id: CustomerContextId,
+    kind: &'static str,
+    status: &'static str,
+    gross_cents: i32,
+    issued_on: chrono::NaiveDate,
+    due_on: chrono::NaiveDate,
+    source: Option<Uuid>,
+}
+
+async fn seed_invoice(tx: &SharedTx<'_>, seed: SeedInvoice) -> Uuid {
+    let SeedInvoice {
+        organization_id,
+        customer_id,
+        context_id,
+        kind,
+        status,
+        gross_cents,
+        issued_on,
+        due_on,
+        source,
+    } = seed;
+    let mut guard = tx.lock().await;
+    let id = generate_uuid_v7();
+    let issued_at = issued_on.and_hms_opt(9, 0, 0).unwrap().and_utc();
+    let issued = status != "DRAFT";
+    sqlx::query(
+        r#"
+        INSERT INTO invoices (id, org_id, number, kind, customer_id, customer_context_id, status,
+            issued_at, issued_on, due_at, net_cents, gross_cents, issuer_identity, source_invoice_id,
+            reason)
+        VALUES ($1, $2, $3, $4::invoice_kind, $5, $6, $7::invoice_status, $8, $9, $10, $11, $12, $13,
+            $14, $15)
+        "#,
+    )
+    .bind(id)
+    .bind(organization_id.0)
+    .bind(issued.then(|| format!("N-{id}")))
+    .bind(kind)
+    .bind(customer_id.0)
+    .bind(context_id.0)
+    .bind(status)
+    .bind(issued.then_some(issued_at))
+    .bind(issued.then_some(issued_on))
+    .bind(due_on.and_hms_opt(0, 0, 0).unwrap().and_utc())
+    .bind(gross_cents * 5 / 6)
+    .bind(gross_cents)
+    .bind(issued.then(|| serde_json::json!({})))
+    .bind(source)
+    .bind((kind == "CREDIT_NOTE").then_some("Erreur"))
+    .execute(&mut ***guard)
+    .await
+    .unwrap();
+    id
+}
+
+async fn seed_payment(
+    tx: &SharedTx<'_>,
+    organization_id: OrganizationId,
+    invoice_id: Uuid,
+    amount_cents: i32,
+) {
+    let mut guard = tx.lock().await;
+    let user_id: Uuid = sqlx::query_scalar("SELECT owner_id FROM organizations WHERE id = $1")
+        .bind(organization_id.0)
+        .fetch_one(&mut ***guard)
+        .await
+        .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO invoice_payments (id, org_id, invoice_id, amount_cents, paid_on, method, recorded_by)
+        VALUES ($1, $2, $3, $4, CURRENT_DATE, 'TRANSFER', $5)
+        "#,
+    )
+    .bind(generate_uuid_v7())
+    .bind(organization_id.0)
+    .bind(invoice_id)
+    .bind(amount_cents)
+    .bind(user_id)
+    .execute(&mut ***guard)
+    .await
+    .unwrap();
+}
+
+async fn seed_quote(
+    tx: &SharedTx<'_>,
+    organization_id: OrganizationId,
+    customer_id: CustomerId,
+    context_id: CustomerContextId,
+    created_at: chrono::DateTime<Utc>,
+    deleted: bool,
+) {
+    let mut guard = tx.lock().await;
+    let id = generate_uuid_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO quotes (id, org_id, customer_id, customer_context_id, status, net_cents,
+            gross_cents, title, reference, created_at, deleted_at)
+        VALUES ($1, $2, $3, $4, 'DRAFT', 0, 0, 'Devis', $5, $6, $7)
+        "#,
+    )
+    .bind(id)
+    .bind(organization_id.0)
+    .bind(customer_id.0)
+    .bind(context_id.0)
+    .bind(format!("Q-{id}"))
+    .bind(created_at)
+    .bind(deleted.then_some(created_at))
+    .execute(&mut ***guard)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_customer_row_carries_its_city_and_primary_contact() {
+    run(async |tx| {
+        let organization_id = seed_organization(&tx).await;
+        let mut customers = PgCustomerRepository::new(&tx);
+        let mut contacts = PgCustomerContactRepository::new(&tx);
+        let mut contexts = PgCustomerContextRepository::new(&tx);
+
+        let mut stored = customers.insert(&customer(organization_id, "Mine")).await?;
+        let bare = customers.insert(&customer(organization_id, "Bare")).await?;
+        let mut site = address(stored.id, "Atelier", AddressKind::Site);
+        site.city = Some("Rennes".to_owned());
+        contexts.insert(&site).await?;
+        let mut billing = address(stored.id, "Siège", AddressKind::Billing);
+        billing.city = Some("  Lyon ".to_owned());
+        contexts.insert(&billing).await?;
+        contacts
+            .insert(&contact(stored.id, "Second", false))
+            .await?;
+        let primary = contact(stored.id, "Marc", true);
+        contacts.insert(&primary).await?;
+
+        let entries = customers
+            .directory(organization_id, &[stored.id, bare.id])
+            .await?;
+        let of = |id: CustomerId| {
+            entries
+                .iter()
+                .find(|entry| entry.customer_id == id)
+                .unwrap()
+        };
+        assert_eq!(of(stored.id).city.as_deref(), Some("Lyon"));
+        assert_eq!(
+            of(stored.id)
+                .primary_contact
+                .as_ref()
+                .map(|c| c.first_name.as_str()),
+            Some("Marc")
+        );
+        assert_eq!(
+            of(stored.id)
+                .primary_contact
+                .as_ref()
+                .and_then(|c| c.mobile.as_deref()),
+            Some("0612345678")
+        );
+        assert_eq!(of(bare.id).city, None);
+        assert_eq!(of(bare.id).primary_contact, None);
+
+        stored.profile.billing_address_id = None;
+        let chosen = contexts
+            .insert(&address(stored.id, "Compta", AddressKind::Other))
+            .await?;
+        stored.profile.billing_address_id = Some(chosen.id);
+        customers.update(&stored).await?;
+        let entries = customers.directory(organization_id, &[stored.id]).await?;
+        assert_eq!(entries[0].city.as_deref(), Some("Nantes"));
+        Ok(())
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn the_directory_and_the_invoice_facts_stay_inside_the_organization() {
+    run(async |tx| {
+        let mine = seed_organization(&tx).await;
+        let other = seed_organization(&tx).await;
+        let mut customers = PgCustomerRepository::new(&tx);
+        let mut contexts = PgCustomerContextRepository::new(&tx);
+        let stored = customers.insert(&customer(mine, "Mine")).await?;
+        let context = contexts
+            .insert(&address(stored.id, "Siège", AddressKind::Billing))
+            .await?;
+        let today = Utc::now().date_naive();
+        seed_invoice(
+            &tx,
+            SeedInvoice {
+                organization_id: mine,
+                customer_id: stored.id,
+                context_id: context.id,
+                kind: "STANDARD",
+                status: "ISSUED",
+                gross_cents: 12_000,
+                issued_on: today,
+                due_on: today,
+                source: None,
+            },
+        )
+        .await;
+
+        assert!(customers.directory(other, &[stored.id]).await?.is_empty());
+        assert!(
+            customers
+                .invoice_facts(other, &[stored.id])
+                .await?
+                .is_empty()
+        );
+        assert_eq!(customers.invoice_facts(mine, &[stored.id]).await?.len(), 1);
+        Ok(())
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn invoice_facts_carry_payments_and_credit_notes_and_skip_drafts_and_cancelled() {
+    run(async |tx| {
+        let organization_id = seed_organization(&tx).await;
+        let mut customers = PgCustomerRepository::new(&tx);
+        let mut contexts = PgCustomerContextRepository::new(&tx);
+        let stored = customers.insert(&customer(organization_id, "Mine")).await?;
+        let context = contexts
+            .insert(&address(stored.id, "Siège", AddressKind::Billing))
+            .await?;
+        let today = Utc::now().date_naive();
+        let past = today - chrono::Duration::days(40);
+        let due = today - chrono::Duration::days(10);
+        let id = |kind: &'static str, status: &'static str, gross: i32, source: Option<Uuid>| {
+            seed_invoice(
+                &tx,
+                SeedInvoice {
+                    organization_id,
+                    customer_id: stored.id,
+                    context_id: context.id,
+                    kind,
+                    status,
+                    gross_cents: gross,
+                    issued_on: past,
+                    due_on: due,
+                    source,
+                },
+            )
+        };
+        let late = id("STANDARD", "ISSUED", 12_000, None).await;
+        id("STANDARD", "DRAFT", 99_000, None).await;
+        id("STANDARD", "CANCELLED", 88_000, None).await;
+        id("CREDIT_NOTE", "ISSUED", 2_400, Some(late)).await;
+        seed_payment(&tx, organization_id, late, 3_000).await;
+
+        let facts = customers
+            .invoice_facts(organization_id, &[stored.id])
+            .await?;
+
+        assert_eq!(facts.len(), 2);
+        let standard = facts
+            .iter()
+            .find(|fact| fact.kind == crate::InvoiceKind::Standard)
+            .unwrap();
+        assert_eq!(standard.gross_cents, 12_000);
+        assert_eq!(standard.paid_cents, 3_000);
+        assert_eq!(standard.credited_cents, 2_400);
+        assert_eq!(standard.due_on, Some(due));
+        assert_eq!(standard.issued_on, past);
+
+        let indicators = crate::domain::customer::directory::indicators_of(&facts, today);
+        assert_eq!(indicators.overdue_cents, 12_000 - 3_000 - 2_400);
+        assert_eq!(indicators.revenue_12m_cents, 10_000 - 2_000);
+        Ok(())
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn the_last_quote_date_ignores_deleted_quotes() {
+    run(async |tx| {
+        let organization_id = seed_organization(&tx).await;
+        let mut customers = PgCustomerRepository::new(&tx);
+        let mut contexts = PgCustomerContextRepository::new(&tx);
+        let stored = customers.insert(&customer(organization_id, "Mine")).await?;
+        let context = contexts
+            .insert(&address(stored.id, "Siège", AddressKind::Billing))
+            .await?;
+        let earlier = Utc::now() - chrono::Duration::days(30);
+        let latest = Utc::now() - chrono::Duration::days(3);
+        seed_quote(&tx, organization_id, stored.id, context.id, earlier, false).await;
+        seed_quote(&tx, organization_id, stored.id, context.id, latest, false).await;
+        seed_quote(
+            &tx,
+            organization_id,
+            stored.id,
+            context.id,
+            Utc::now(),
+            true,
+        )
+        .await;
+
+        let entries = customers.directory(organization_id, &[stored.id]).await?;
+
+        assert_eq!(entries[0].last_quote_at, Some(latest));
+        Ok(())
+    })
+    .await;
+}

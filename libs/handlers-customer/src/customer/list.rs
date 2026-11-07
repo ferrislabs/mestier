@@ -7,7 +7,7 @@ use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
 };
 
-use crate::{paths::CustomersPath, require_view_customers, response::CustomerResponse};
+use crate::{paths::CustomersPath, require_view_customers, response::CustomerListItemResponse};
 
 #[utoipa::path(
     get,
@@ -19,7 +19,7 @@ use crate::{paths::CustomersPath, require_view_customers, response::CustomerResp
         PaginationParams,
     ),
     responses(
-        (status = 200, description = "Paginated list of customers", body = inline(DataEnvelope<Vec<CustomerResponse>>)),
+        (status = 200, description = "Paginated list of customers", body = inline(DataEnvelope<Vec<CustomerListItemResponse>>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -30,17 +30,20 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Query(pagination): Query<PaginationParams>,
-) -> Result<Response<CustomerResponse>, ApiError> {
+) -> Result<Response<CustomerListItemResponse>, ApiError> {
     require_view_customers(&state, &identity, path.organization_id).await?;
 
     let per_page = pagination.per_page();
     let page = pagination.page();
     let offset = pagination.offset();
-    let (customers, total) = state
+    let (rows, total) = state
         .usecase
-        .list_customers(path.organization_id, per_page, offset)
+        .list_customer_rows(path.organization_id, per_page, offset)
         .await?;
-    let items: Vec<CustomerResponse> = customers.into_iter().map(CustomerResponse::from).collect();
+    let items: Vec<CustomerListItemResponse> = rows
+        .into_iter()
+        .map(CustomerListItemResponse::from)
+        .collect();
     let is_empty = items.is_empty();
     let meta = PaginationMetadata::new(per_page, page, Some(total), is_empty);
 

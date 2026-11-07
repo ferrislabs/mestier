@@ -116,18 +116,18 @@ function matchesOwner(customer: Customer, owner: string): boolean {
 	return customer.owner_member_id === owner
 }
 
-export function filterCustomers(
-	customers: readonly Customer[],
+export function filterCustomers<T extends Customer>(
+	customers: readonly T[],
 	filters: ClientFilters,
-	termsOf: (customerId: string) => SearchTerms = () => NO_TERMS,
-): Customer[] {
+	termsOf: (customer: T) => SearchTerms = () => NO_TERMS,
+): T[] {
 	const query = normalizeText(filters.query)
 	return customers
 		.filter(
 			(customer) =>
 				matchesStatus(customer, filters.status) &&
 				matchesOwner(customer, filters.owner) &&
-				matchesQuery(customer, query, termsOf(customer.id)),
+				matchesQuery(customer, query, termsOf(customer)),
 		)
 		.sort((a, b) => a.name.localeCompare(b.name, 'fr'))
 }

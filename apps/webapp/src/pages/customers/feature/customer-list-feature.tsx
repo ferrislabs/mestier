@@ -5,25 +5,19 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useBillingSettings } from '#/hooks/use-billing-settings'
 import { useCustomers } from '#/hooks/use-customers'
 import { useOutstandingByCustomer } from '#/hooks/use-invoices'
-import { useQuotes } from '#/hooks/use-quotes'
 import { mutationErrorMessage } from '#/lib/api-error'
 import {
 	type ClientFilters,
 	customersSummary,
 	filterCustomers,
 } from '#/pages/customers/customer-list-url-state'
-import { useAllInvoices } from '#/pages/customers/feature/use-all-invoices'
 import { useCreateCustomerAccount } from '#/pages/customers/feature/use-create-customer-account'
-import { useCustomerDirectory } from '#/pages/customers/feature/use-customer-directory'
 import { useOrganizationPeople } from '#/pages/customers/feature/use-organization-people'
 import {
-	billingContextOf,
 	type CustomerListData,
 	contactName,
-	directoryTerms,
-	mainContactOf,
+	rowTerms,
 } from '#/pages/customers/lib/accounts'
-import { customerStats } from '#/pages/customers/lib/stats'
 import { CustomerListUI } from '#/pages/customers/ui/customer-list-ui'
 
 const DEFAULT_PAGE_SIZE = 50
@@ -78,8 +72,6 @@ function CustomerList({
 	const pushedQueries = useRef<string[]>([])
 	const customers = useCustomers(organizationId, { page, perPage: pageSize })
 	const outstanding = useOutstandingByCustomer(organizationId)
-	const quotes = useQuotes(organizationId)
-	const allInvoices = useAllInvoices(organizationId)
 	const settings = useBillingSettings(organizationId)
 	const { people, currentPersonId } = useOrganizationPeople(organizationId)
 	const account = useCreateCustomerAccount(organizationId, organizationSlug)
@@ -94,17 +86,8 @@ function CustomerList({
 	const rows = customers.data?.data
 	const all = useMemo(() => rows ?? [], [rows])
 	const active: ClientFilters = { ...filters, query }
-	const directory = useCustomerDirectory(all.map((customer) => customer.id))
-	const termsOf = (customerId: string) =>
-		directoryTerms(
-			directory.contactsOf(customerId),
-			directory.contextsOf(customerId),
-		)
-	const visible = filterCustomers(all, active, termsOf)
-	const billingAddressIds = new Map(
-		all.map((customer) => [customer.id, customer.billing_address_id]),
-	)
-	const now = Date.now()
+	const visible = filterCustomers(all, active, rowTerms)
+	const rowsById = new Map(all.map((row) => [row.id, row]))
 	const outstandingCents = new Map(
 		(outstanding.data?.data ?? []).map((row) => [
 			row.customer_id,
@@ -112,27 +95,16 @@ function CustomerList({
 		]),
 	)
 	const dataOf = (customerId: string): CustomerListData => {
-		const cents = outstandingCents.get(customerId) ?? 0
-		const stats = customerStats({
-			customerId,
-			invoices: allInvoices.invoices,
-			quotes: quotes.data?.data ?? [],
-			outstandingCents: cents,
-			now,
-		})
-		const contact = mainContactOf(directory.contactsOf(customerId))
-		const context = billingContextOf(
-			directory.contextsOf(customerId),
-			billingAddressIds.get(customerId),
-		)
+		const row = rowsById.get(customerId)
+		const contact = row?.primary_contact
 		return {
-			city: context?.city?.trim() ?? '',
+			city: row?.city?.trim() ?? '',
 			contactName: contact ? contactName(contact) : '',
 			contactRole: contact?.role ?? '',
-			outstanding: cents,
-			overdue: stats.overdue,
-			revenue12m: stats.revenue12m,
-			lastActivity: stats.lastActivity,
+			outstanding: outstandingCents.get(customerId) ?? 0,
+			overdue: row?.overdue_cents ?? 0,
+			revenue12m: row?.revenue_12m_cents ?? 0,
+			lastActivity: row?.last_activity_at ?? null,
 		}
 	}
 	const pagination = getPaginationViewModel(

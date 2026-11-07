@@ -1,9 +1,10 @@
 use authz::Subject;
+use chrono::Utc;
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    Customer, CustomerId, CustomerOutcome, OrganizationId,
+    Customer, CustomerId, CustomerListRow, CustomerOutcome, OrganizationId,
     application::MestierUseCase,
     domain::customer::{
         commands::{CreateCustomerCommand, UpdateCustomerCommand},
@@ -54,6 +55,25 @@ impl MestierUseCase {
             authz,
         );
         service.list_customers(organization_id, limit, offset).await
+    }
+
+    #[transactional(customer, deal, role, member, authz)]
+    pub async fn list_customer_rows(
+        &self,
+        organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<CustomerListRow>, u64), CoreError> {
+        let mut service = CustomerService::new(
+            customer_repository,
+            deal_repository,
+            member_repository,
+            role_repository,
+            authz,
+        );
+        service
+            .list_customer_rows(organization_id, limit, offset, Utc::now().date_naive())
+            .await
     }
 
     #[transactional(customer, deal, role, member, authz)]

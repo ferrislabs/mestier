@@ -1,8 +1,8 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
     AddressKind, Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId,
-    CustomerId, CustomerKind, CustomerStatus, Deal, DealId, DealStageName, LeadSource, MemberId,
-    OrganizationId, PipelineSummary,
+    CustomerId, CustomerKind, CustomerListRow, CustomerStatus, Deal, DealId, DealStageName,
+    LeadSource, MemberId, OrganizationId, PipelineSummary, PrimaryContact,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -54,6 +54,53 @@ impl From<Customer> for CustomerResponse {
             archived_at: value.archived_at,
             created_at: value.created_at,
             updated_at: value.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct PrimaryContactResponse {
+    pub first_name: String,
+    pub last_name: String,
+    pub role: Option<String>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub mobile: Option<String>,
+}
+
+impl From<PrimaryContact> for PrimaryContactResponse {
+    fn from(value: PrimaryContact) -> Self {
+        Self {
+            first_name: value.first_name,
+            last_name: value.last_name,
+            role: value.role,
+            email: value.email,
+            phone: value.phone,
+            mobile: value.mobile,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct CustomerListItemResponse {
+    #[serde(flatten)]
+    pub customer: CustomerResponse,
+    pub city: Option<String>,
+    pub primary_contact: Option<PrimaryContactResponse>,
+    pub revenue_12m_cents: i64,
+    pub overdue_cents: i64,
+    pub last_activity_at: Option<DateTime<Utc>>,
+}
+
+impl From<CustomerListRow> for CustomerListItemResponse {
+    fn from(value: CustomerListRow) -> Self {
+        Self {
+            customer: CustomerResponse::from(value.customer),
+            city: value.city,
+            primary_contact: value.primary_contact.map(PrimaryContactResponse::from),
+            revenue_12m_cents: value.revenue_12m_cents,
+            overdue_cents: value.overdue_cents,
+            last_activity_at: value.last_activity_at,
         }
     }
 }

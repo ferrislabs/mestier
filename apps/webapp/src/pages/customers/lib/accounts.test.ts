@@ -8,9 +8,9 @@ import {
 	contextKind,
 	countryCodeOf,
 	countryLabelOf,
-	directoryTerms,
 	mainContactOf,
 	openDealsSentence,
+	rowTerms,
 } from '#/pages/customers/lib/accounts'
 
 const contacts = [
@@ -139,26 +139,30 @@ describe('accountDetailsOf', () => {
 	})
 })
 
-describe('directoryTerms', () => {
-	it('gathers the searchable text and phones of a customer', () => {
-		const terms = directoryTerms(
-			[
-				{
-					id: 'k1',
-					first_name: 'Léa',
-					last_name: 'Duval',
-					role: 'Gérante',
-					email: 'lea@x.fr',
-					phone: '02 40 12 34 56',
-					mobile: '06 12 34 56 78',
-				},
-			],
-			[{ city: 'Rezé' }],
-		)
+describe('rowTerms', () => {
+	it('gathers the searchable text and phones of a list row', () => {
+		const terms = rowTerms({
+			city: 'Rezé',
+			primary_contact: {
+				first_name: 'Léa',
+				last_name: 'Duval',
+				role: 'Gérante',
+				email: 'lea@x.fr',
+				phone: '02 40 12 34 56',
+				mobile: '06 12 34 56 78',
+			},
+		})
 		expect(terms.text).toEqual(
 			expect.arrayContaining(['Rezé', 'Léa Duval', 'lea@x.fr', 'Gérante']),
 		)
 		expect(terms.phones).toEqual(['02 40 12 34 56', '06 12 34 56 78'])
+	})
+
+	it('is empty for a row without city or contact', () => {
+		expect(rowTerms({ city: null, primary_contact: null })).toEqual({
+			text: [],
+			phones: [],
+		})
 	})
 })
 
