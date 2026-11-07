@@ -31,9 +31,9 @@ impl<'tx> CustomerContactRepository for PgCustomerContactRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerContactRow,
             r#"
-            INSERT INTO customer_contacts (id, customer_id, first_name, last_name, role, phone, email, is_primary, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING id, customer_id, first_name, last_name, role, phone, email, is_primary, deleted_at, created_at, updated_at
+            INSERT INTO customer_contacts (id, customer_id, first_name, last_name, role, phone, mobile, email, is_primary, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING id, customer_id, first_name, last_name, role, phone, mobile, email, is_primary, deleted_at, created_at, updated_at
             "#,
             customer_contact.id.0,
             customer_contact.customer_id.0,
@@ -41,6 +41,7 @@ impl<'tx> CustomerContactRepository for PgCustomerContactRepository<'tx> {
             customer_contact.last_name,
             customer_contact.role,
             customer_contact.phone,
+            customer_contact.mobile,
             customer_contact.email,
             customer_contact.is_primary,
             customer_contact.deleted_at,
@@ -62,7 +63,7 @@ impl<'tx> CustomerContactRepository for PgCustomerContactRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerContactRow,
             r#"
-            SELECT id, customer_id, first_name, last_name, role, phone, email, is_primary, deleted_at, created_at, updated_at
+            SELECT id, customer_id, first_name, last_name, role, phone, mobile, email, is_primary, deleted_at, created_at, updated_at
             FROM customer_contacts
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -85,7 +86,7 @@ impl<'tx> CustomerContactRepository for PgCustomerContactRepository<'tx> {
         let rows = sqlx::query_as!(
             CustomerContactRow,
             r#"
-            SELECT id, customer_id, first_name, last_name, role, phone, email, is_primary, deleted_at, created_at, updated_at
+            SELECT id, customer_id, first_name, last_name, role, phone, mobile, email, is_primary, deleted_at, created_at, updated_at
             FROM customer_contacts
             WHERE customer_id = $1 AND deleted_at IS NULL
             ORDER BY is_primary DESC, last_name ASC, first_name ASC, created_at ASC
@@ -119,15 +120,16 @@ impl<'tx> CustomerContactRepository for PgCustomerContactRepository<'tx> {
             CustomerContactRow,
             r#"
             UPDATE customer_contacts
-            SET first_name = $2, last_name = $3, role = $4, phone = $5, email = $6, is_primary = $7, updated_at = $8
+            SET first_name = $2, last_name = $3, role = $4, phone = $5, mobile = $6, email = $7, is_primary = $8, updated_at = $9
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, customer_id, first_name, last_name, role, phone, email, is_primary, deleted_at, created_at, updated_at
+            RETURNING id, customer_id, first_name, last_name, role, phone, mobile, email, is_primary, deleted_at, created_at, updated_at
             "#,
             customer_contact.id.0,
             customer_contact.first_name,
             customer_contact.last_name,
             customer_contact.role,
             customer_contact.phone,
+            customer_contact.mobile,
             customer_contact.email,
             customer_contact.is_primary,
             customer_contact.updated_at,
@@ -161,6 +163,26 @@ impl<'tx> CustomerContactRepository for PgCustomerContactRepository<'tx> {
         if result.rows_affected() == 0 {
             return Err(CoreError::NotFound);
         }
+
+        sqlx::query!(
+            r#"
+            UPDATE customers
+            SET billing_contact_id = (
+                    SELECT other.id
+                    FROM customer_contacts other
+                    WHERE other.customer_id = customers.id AND other.deleted_at IS NULL
+                    ORDER BY other.is_primary DESC, other.created_at ASC
+                    LIMIT 1
+                ),
+                updated_at = $2
+            WHERE billing_contact_id = $1
+            "#,
+            id.0,
+            deleted_at,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
 
         Ok(())
     }

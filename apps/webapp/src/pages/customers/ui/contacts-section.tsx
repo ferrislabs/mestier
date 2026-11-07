@@ -206,7 +206,6 @@ function ContactCard({
 
 export function ContactsSection({
 	contacts,
-	mobiles,
 	billingContactId,
 	isLoading,
 	loadError,
@@ -214,7 +213,6 @@ export function ContactsSection({
 	actions,
 }: {
 	contacts: readonly CustomerContact[]
-	mobiles: Readonly<Record<string, string>>
 	billingContactId: string | undefined
 	isLoading: boolean
 	loadError: string | null
@@ -271,7 +269,7 @@ export function ContactsSection({
 						<li key={contact.id}>
 							<ContactCard
 								contact={contact}
-								mobile={mobiles[contact.id] ?? ''}
+								mobile={contact.mobile ?? ''}
 								isBilling={contact.id === billingContactId}
 								actions={actions}
 							/>

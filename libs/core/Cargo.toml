@@ -121,3 +121,7 @@ harness = false
 [[test]]
 name = "billing_bdd"
 harness = false
+
+[[test]]
+name = "customer_bdd"
+harness = false

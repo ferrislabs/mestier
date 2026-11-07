@@ -11,16 +11,17 @@ import { RequirePermission } from '#/components/require-permission'
 import { RubriqueLayout } from '#/components/rubrique-layout'
 import { Button } from '#/components/ui/button'
 import type { Customer } from '#/hooks/use-customers'
-import type { AccountExtras } from '#/pages/customers/feature/mocks/account-extras'
-import { findPerson } from '#/pages/customers/feature/mocks/people'
 import type { AccountForm } from '#/pages/customers/lib/account-form'
-import { openDealsSentence } from '#/pages/customers/lib/accounts'
+import {
+	type AccountDetails,
+	openDealsSentence,
+} from '#/pages/customers/lib/accounts'
 import { formatDate } from '#/pages/customers/lib/format'
+import type { Person } from '#/pages/customers/lib/people'
 import { formatSiret, TAB_INFO } from '#/pages/customers/lib/rubriques'
 import {
 	ACCOUNT_KIND_LABELS,
 	accountStatusOf,
-	kindOf,
 	LEAD_SOURCE_LABELS,
 } from '#/pages/customers/types'
 import { PersonAvatar } from '#/pages/customers/ui/avatars'
@@ -38,7 +39,9 @@ function websiteHref(website: string): string {
 
 interface IdentitySectionProps {
 	customer: Customer
-	extras: AccountExtras
+	details: AccountDetails
+	owner: Person | undefined
+	people: readonly Person[]
 	defaultTerms: number
 	initialForm: AccountForm
 	isSaving: boolean
@@ -52,7 +55,9 @@ interface IdentitySectionProps {
 
 export function IdentitySection({
 	customer,
-	extras,
+	details,
+	owner,
+	people,
 	defaultTerms,
 	initialForm,
 	isSaving,
@@ -66,8 +71,7 @@ export function IdentitySection({
 	const [editing, setEditing] = useState(false)
 	const [confirm, setConfirm] = useState<'convert' | 'archive' | null>(null)
 	const status = accountStatusOf(customer.status)
-	const kind = kindOf(customer, extras)
-	const owner = findPerson(extras.ownerId)
+	const kind = details.kind
 	const professional = kind === 'professionnel'
 	const registration = (customer.registration_number ?? '').trim()
 	return (
@@ -82,6 +86,7 @@ export function IdentitySection({
 						name={customer.name}
 						initial={initialForm}
 						defaultTerms={defaultTerms}
+						people={people}
 						isPending={isSaving}
 						error={saveError}
 						onSubmit={async (form) => {
@@ -132,8 +137,8 @@ export function IdentitySection({
 						</DetailRow>
 					)}
 					<DetailRow label="N° de TVA">
-						{extras.vatNumber ? (
-							<span className="tabular">{extras.vatNumber}</span>
+						{details.vatNumber ? (
+							<span className="tabular">{details.vatNumber}</span>
 						) : (
 							<Dash />
 						)}
@@ -158,14 +163,14 @@ export function IdentitySection({
 						)}
 					</DetailRow>
 					<DetailRow label="Site web">
-						{extras.website ? (
+						{details.website ? (
 							<a
-								href={websiteHref(extras.website)}
+								href={websiteHref(details.website)}
 								target="_blank"
 								rel="noreferrer"
 								className="inline-flex items-center gap-1.5 rounded-sm text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 							>
-								{extras.website}
+								{details.website}
 								<ExternalLink className="size-3.5" aria-hidden />
 								<span className="sr-only">(nouvel onglet)</span>
 							</a>
@@ -189,11 +194,11 @@ export function IdentitySection({
 						)}
 					</DetailRow>
 					<DetailRow label="Source">
-						{extras.source ? LEAD_SOURCE_LABELS[extras.source] : <Dash />}
+						{details.source ? LEAD_SOURCE_LABELS[details.source] : <Dash />}
 					</DetailRow>
 					<DetailRow label="Délai de paiement">
-						{extras.paymentTermsDays !== null ? (
-							`${extras.paymentTermsDays} jours`
+						{details.paymentTermsDays !== null ? (
+							`${details.paymentTermsDays} jours`
 						) : (
 							<span>
 								{defaultTerms} jours{' '}
@@ -206,14 +211,14 @@ export function IdentitySection({
 					<DetailRow label="Créé le">
 						{formatDate(customer.created_at)}
 					</DetailRow>
-					{extras.convertedAt && (
+					{details.convertedAt && (
 						<DetailRow label="Converti en client le">
-							{formatDate(extras.convertedAt)}
+							{formatDate(details.convertedAt)}
 						</DetailRow>
 					)}
-					{extras.archivedAt && (
+					{details.archivedAt && (
 						<DetailRow label="Archivé le">
-							{formatDate(extras.archivedAt)}
+							{formatDate(details.archivedAt)}
 						</DetailRow>
 					)}
 				</DetailList>
@@ -222,8 +227,8 @@ export function IdentitySection({
 			<DetailCard title="Paiements Stripe">
 				<DetailList>
 					<DetailRow label="Identifiant client Stripe">
-						{extras.stripeCustomerId ? (
-							<span className="font-mono">{extras.stripeCustomerId}</span>
+						{details.stripeCustomerId ? (
+							<span className="font-mono">{details.stripeCustomerId}</span>
 						) : (
 							<Dash />
 						)}
@@ -231,15 +236,15 @@ export function IdentitySection({
 				</DetailList>
 				<p className="mt-3 text-[12px] text-muted-foreground">
 					Sert à rattacher automatiquement les paiements reçus par webhook.
-					{extras.stripeCustomerId
+					{details.stripeCustomerId
 						? ''
 						: ' Laissé vide, il est renseigné au premier paiement rapproché par l’e-mail d’un contact.'}
 				</p>
 			</DetailCard>
 
 			<DetailCard title="Notes">
-				{extras.notes ? (
-					<p className="whitespace-pre-wrap text-[13px]">{extras.notes}</p>
+				{details.notes ? (
+					<p className="whitespace-pre-wrap text-[13px]">{details.notes}</p>
 				) : (
 					<p className="text-[13px] text-muted-foreground">
 						Aucune note. Utilise « Modifier » pour en ajouter.

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE customers\n            SET status = $2, pipeline_stage = $3, name = $4, registration_number = $5, phone = $6, email = $7, updated_at = $8\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            UPDATE customer_contexts\n            SET label = $2, kind = $3, address_line = $4, address_line2 = $5, postal_code = $6, city = $7, country = $8, photo_key = $9, updated_at = $10\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, customer_id, label, kind, address_line, address_line2, postal_code, city, country, photo_key, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -10,51 +10,61 @@
       },
       {
         "ordinal": 1,
-        "name": "org_id",
+        "name": "customer_id",
         "type_info": "Uuid"
       },
       {
         "ordinal": 2,
-        "name": "status",
+        "name": "label",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "pipeline_stage",
+        "name": "kind",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "name",
+        "name": "address_line",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "registration_number",
+        "name": "address_line2",
         "type_info": "Text"
       },
       {
         "ordinal": 6,
-        "name": "phone",
+        "name": "postal_code",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
-        "name": "email",
+        "name": "city",
         "type_info": "Text"
       },
       {
         "ordinal": 8,
+        "name": "country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "photo_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -62,6 +72,8 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Text",
+        "Text",
         "Text",
         "Text",
         "Text",
@@ -76,14 +88,16 @@
       false,
       false,
       false,
+      true,
+      true,
+      true,
+      true,
       false,
-      true,
-      true,
       true,
       true,
       false,
       false
     ]
   },
-  "hash": "2c2cfe5b0090db736c84829b16b5647b58a6dd58377f35d57ea841032fb1ad3a"
+  "hash": "a9963c0a07d7c584aaa141101ed02b192d234aa0b62e678c9ccae53742e80351"
 }

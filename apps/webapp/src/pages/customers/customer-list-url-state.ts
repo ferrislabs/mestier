@@ -1,6 +1,4 @@
 import type { Customer } from '#/hooks/use-customers'
-import type { AccountExtras } from '#/pages/customers/feature/mocks/account-extras'
-import { PEOPLE } from '#/pages/customers/feature/mocks/people'
 import { NO_TERMS, type SearchTerms } from '#/pages/customers/lib/accounts'
 import { accountStatusOf } from '#/pages/customers/types'
 
@@ -39,10 +37,13 @@ export function isStatusFilter(value: unknown): value is StatusFilter {
 	return typeof value === 'string' && STATUS_FILTERS.includes(value)
 }
 
+const MEMBER_ID_PATTERN =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function isOwnerFilter(value: unknown): value is string {
 	return (
 		typeof value === 'string' &&
-		(value === OWNER_NONE || PEOPLE.some((person) => person.id === value))
+		(value === OWNER_NONE || MEMBER_ID_PATTERN.test(value))
 	)
 }
 
@@ -109,15 +110,14 @@ function matchesStatus(customer: Customer, status: StatusFilter): boolean {
 	return status === 'all' ? own !== 'archived' : own === status
 }
 
-function matchesOwner(extras: AccountExtras, owner: string): boolean {
+function matchesOwner(customer: Customer, owner: string): boolean {
 	if (owner === OWNER_ALL) return true
-	if (owner === OWNER_NONE) return extras.ownerId === null
-	return extras.ownerId === owner
+	if (owner === OWNER_NONE) return !customer.owner_member_id
+	return customer.owner_member_id === owner
 }
 
 export function filterCustomers(
 	customers: readonly Customer[],
-	extrasOf: (customerId: string) => AccountExtras,
 	filters: ClientFilters,
 	termsOf: (customerId: string) => SearchTerms = () => NO_TERMS,
 ): Customer[] {
@@ -126,7 +126,7 @@ export function filterCustomers(
 		.filter(
 			(customer) =>
 				matchesStatus(customer, filters.status) &&
-				matchesOwner(extrasOf(customer.id), filters.owner) &&
+				matchesOwner(customer, filters.owner) &&
 				matchesQuery(customer, query, termsOf(customer.id)),
 		)
 		.sort((a, b) => a.name.localeCompare(b.name, 'fr'))

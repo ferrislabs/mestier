@@ -1,4 +1,4 @@
-import type { LeadSource } from '#/pages/customers/feature/mocks/account-extras'
+import type { LeadSource } from '#/hooks/use-customers'
 
 export type { LeadSource }
 

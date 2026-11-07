@@ -51,7 +51,7 @@ use crate::domain::invoice::ports::DocumentFormatError;
 use crate::domain::organization::legal_identity::{
     ElectronicInvoicingFacts, LegalIdentity, VatStatus,
 };
-use crate::{Customer, Invoice, InvoiceKind, InvoiceLine};
+use crate::{Customer, Invoice, InvoiceKind, InvoiceLine, siren_of};
 
 /// Validates `invoice` against the EN 16931 core profile and serialises it
 /// as CII, in one call — [`en16931_formats::cii::to_string_for`] does both,
@@ -145,7 +145,8 @@ fn to_en16931_date(at: chrono::DateTime<chrono::Utc>) -> Date {
 
 fn seller_party(facts: &ElectronicInvoicingFacts) -> Party {
     let issuer = &facts.issuer;
-    let registration = Identifier::schemed(issuer.registration_number.clone(), FR_SIRENE_SCHEME);
+    let siren = siren_of(&issuer.registration_number);
+    let registration = Identifier::schemed(siren.clone(), FR_SIRENE_SCHEME);
 
     Party {
         name: Some(issuer.legal_name.clone()),
@@ -155,8 +156,7 @@ fn seller_party(facts: &ElectronicInvoicingFacts) -> Party {
             VatStatus::NotSubject { .. } => None,
         },
         additional_legal_information: Some(additional_legal_information(issuer)),
-        electronic_address: Identifier::eas(issuer.registration_number.clone(), FR_SIRENE_SCHEME)
-            .ok(),
+        electronic_address: Identifier::eas(siren, FR_SIRENE_SCHEME).ok(),
         address: PostalAddress {
             line1: Some(issuer.address.line1.clone()),
             line2: issuer.address.line2.clone(),
@@ -191,13 +191,11 @@ fn additional_legal_information(issuer: &LegalIdentity) -> String {
 /// on why, and on the refusal that leaves for [`super::write_cii_xml`] to
 /// surface.
 fn buyer_party(customer: &Customer, registration_number: &str) -> Party {
+    let siren = siren_of(registration_number);
     Party {
         name: Some(customer.name.clone()),
-        legal_registration: Some(Identifier::schemed(
-            registration_number.to_owned(),
-            FR_SIRENE_SCHEME,
-        )),
-        electronic_address: Identifier::eas(registration_number.to_owned(), FR_SIRENE_SCHEME).ok(),
+        legal_registration: Some(Identifier::schemed(siren.clone(), FR_SIRENE_SCHEME)),
+        electronic_address: Identifier::eas(siren, FR_SIRENE_SCHEME).ok(),
         ..Party::default()
     }
 }

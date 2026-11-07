@@ -31,7 +31,7 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 | Lot | Contenu | Dépend de | État |
 |---|---|---|---|
 | B1 | Réglages d'organisation : IBAN, BIC, pénalités, indemnité de recouvrement, pied de facture, padding, validité des devis, délai de paiement, TVA par défaut, compteur d'avoirs | – | PR ouverte |
-| B2 | Client : type, site web, TVA, responsable, source, notes, délai de paiement, contact et adresse de facturation, dates de conversion et d'archivage, SIRET. Contact : mobile. Adresse : type, pays | – | à faire |
+| B2 | Client : type, site web, TVA, responsable, source, notes, délai de paiement, contact et adresse de facturation, dates de conversion et d'archivage, SIRET. Contact : mobile. Adresse : type, pays | – | PR ouverte |
 | B3 | Opportunités (`deal`) + migration depuis `pipeline_stage` | B2 | à faire |
 | B4 | Devis : validité, acompte, motif de refus, signataire, responsable, opportunité, notes, remise et fréquence par ligne, révisions, « remplacé » | B3 | à faire |
 | B5 | Factures : titre, délai de paiement, mentions légales, note interne, envoi et relance, création depuis un devis, suppression de brouillon, date d'émission, mode de règlement typé, remboursement | B1, B4 | à faire |
@@ -62,6 +62,14 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 - Le formulaire Entreprise écrase une organisation non assujettie à la TVA en « assujettie » (il exige un numéro de TVA). Comportement du prototype, à arbitrer.
 - Antérieur à B1 : `quote_number_counters.next_number` et `invoice_number_counters.next_number` contiennent le dernier numéro attribué ; le seed de la migration quote (`MAX+1`) saute un numéro.
 - `cargo test -p mestier-core -- --ignored` échoue sur les harnais cucumber (`unexpected argument '--ignored'`), comme avant B1 : utiliser `--lib -- --ignored --test-threads=1`.
+
+## Reports issus de B2
+- `people.ts` (responsables fictifs) reste utilisé par `pages/deals`, `pages/treasury` et la création d'opportunité de la fiche client : à remplacer par les vrais membres en B3 et B6.
+- L'identifiant client Stripe reste un mock (`pages/customers/feature/mocks/stripe-customer-ids.ts`).
+- Les connecteurs d'automatisation n'exposent pas les nouveaux champs client (leurs échantillons de catalogue changeraient). Leur `update_customer` conserve le profil existant.
+- Une valeur `registration_number` déjà stockée et invalide (ni 9 ni 14 chiffres) se lit sans erreur, mais la modification de la fiche est refusée tant qu'elle n'est pas corrigée.
+- Un id client d'une autre organisation répond 403 (barrière d'appartenance existante), pas 404 comme le spec le fixe. Spec amendé : le comportement existant est gardé.
+- Les deux requêtes par client de la liste (`use-customer-directory`) restent : B7.
 
 ## À vérifier au lot concerné
 - Sémantique de `POST /invoices/{id}/cancel` et d'un montant négatif sur un paiement (B5, remboursement).

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE customers\n            SET billing_contact_id = (\n                    SELECT other.id\n                    FROM customer_contacts other\n                    WHERE other.customer_id = customers.id AND other.deleted_at IS NULL\n                    ORDER BY other.is_primary DESC, other.created_at ASC\n                    LIMIT 1\n                ),\n                updated_at = $2\n            WHERE billing_contact_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b4a70857a5edd38436c488300f3430169c938ecf590f6293b46aab788320e31"
+}

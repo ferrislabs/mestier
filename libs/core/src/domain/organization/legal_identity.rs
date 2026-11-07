@@ -397,6 +397,9 @@ mod tests {
             registration_number: value.map(str::to_owned),
             phone: None,
             email: None,
+            profile: crate::CustomerProfile::default(),
+            converted_at: None,
+            archived_at: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -413,6 +416,17 @@ mod tests {
 
         assert_eq!(facts.issuer.legal_name, "Acme SARL");
         assert_eq!(facts.customer_registration_number, "123 456 789");
+    }
+
+    #[test]
+    fn electronic_invoicing_facts_keep_a_fourteen_digit_customer_siret() {
+        let facts = ElectronicInvoicingFacts::try_new(
+            &complete_organization(),
+            &customer_with_registration_number(Some("12345678900012")),
+        )
+        .unwrap();
+
+        assert_eq!(facts.customer_registration_number, "12345678900012");
     }
 
     #[test]

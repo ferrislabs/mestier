@@ -139,6 +139,7 @@ impl App {
     /// Removes the fixture, child rows first.
     pub async fn cleanup(&self) {
         for statement in [
+            "UPDATE customers SET billing_contact_id = NULL, billing_address_id = NULL WHERE org_id = $1",
             "DELETE FROM customer_contexts WHERE customer_id IN (SELECT id FROM customers WHERE org_id = $1)",
             "DELETE FROM customer_contacts WHERE customer_id IN (SELECT id FROM customers WHERE org_id = $1)",
             "DELETE FROM customers WHERE org_id = $1",

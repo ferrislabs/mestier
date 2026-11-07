@@ -1,4 +1,3 @@
-// MOCK: people — no backend endpoint yet. Replace with the organization members (useReferenceCatalog members).
 export interface Person {
 	id: string
 	name: string

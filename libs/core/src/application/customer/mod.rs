@@ -3,7 +3,7 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    Customer, CustomerId, OrganizationId,
+    Customer, CustomerId, CustomerOutcome, OrganizationId,
     application::MestierUseCase,
     domain::customer::{
         commands::{CreateCustomerCommand, UpdateCustomerCommand},
@@ -16,7 +16,7 @@ impl MestierUseCase {
     pub async fn create_customer(
         &self,
         command: CreateCustomerCommand,
-    ) -> Result<Customer, CoreError> {
+    ) -> Result<CustomerOutcome<Customer>, CoreError> {
         let mut service = CustomerService::new(
             customer_repository,
             member_repository,
@@ -57,7 +57,7 @@ impl MestierUseCase {
     pub async fn update_customer(
         &self,
         command: UpdateCustomerCommand,
-    ) -> Result<Customer, CoreError> {
+    ) -> Result<CustomerOutcome<Customer>, CoreError> {
         let mut service = CustomerService::new(
             customer_repository,
             member_repository,

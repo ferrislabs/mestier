@@ -505,8 +505,10 @@ mod tests {
                 registration_number: None,
                 phone: None,
                 email: None,
+                profile: crate::CustomerProfile::default(),
             })
             .await
+            .unwrap()
             .unwrap();
         let context = usecase
             .create_customer_context(
@@ -514,9 +516,12 @@ mod tests {
                     actor: authz::Subject::system(),
                     customer_id: customer.id,
                     label: "Main site".to_string(),
+                    kind: crate::AddressKind::Site,
                     address_line: None,
+                    address_line2: None,
                     postal_code: None,
                     city: None,
+                    country: "FR".to_string(),
                     photo_key: None,
                 },
             )

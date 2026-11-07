@@ -10,9 +10,9 @@ import {
 	DEFAULT_FILTERS,
 	hasActiveFilters,
 } from '#/pages/customers/customer-list-url-state'
-import type { AccountExtras } from '#/pages/customers/feature/mocks/account-extras'
 import type { AccountForm } from '#/pages/customers/lib/account-form'
 import type { CustomerListData } from '#/pages/customers/lib/accounts'
+import type { Person } from '#/pages/customers/lib/people'
 import { CustomerCreateDialog } from '#/pages/customers/ui/customer-create-dialog'
 import { CustomersTable } from '#/pages/customers/ui/customers-table'
 import { CustomersToolbar } from '#/pages/customers/ui/customers-toolbar'
@@ -23,7 +23,7 @@ interface CustomerListUIProps {
 	customers: readonly Customer[]
 	filters: ClientFilters
 	onFiltersChange: (filters: ClientFilters) => void
-	extrasOf: (customerId: string) => AccountExtras
+	people: readonly Person[]
 	dataOf: (customerId: string) => CustomerListData
 	organizationSlug: string
 	error: string | null
@@ -54,7 +54,7 @@ export function CustomerListUI({
 	customers,
 	filters,
 	onFiltersChange,
-	extrasOf,
+	people,
 	dataOf,
 	organizationSlug,
 	error,
@@ -101,6 +101,7 @@ export function CustomerListUI({
 							onOpenChange={onCreatingChange}
 							defaultTerms={defaultTerms}
 							defaultOwnerId={defaultOwnerId}
+							people={people}
 							isPending={isCreating}
 							error={createError}
 							onSubmit={onCreate}
@@ -113,7 +114,11 @@ export function CustomerListUI({
 					</RequirePermission>
 				}
 			/>
-			<CustomersToolbar filters={filters} onChange={onFiltersChange} />
+			<CustomersToolbar
+				filters={filters}
+				people={people}
+				onChange={onFiltersChange}
+			/>
 			{error ? (
 				<div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-state-alert/30 bg-state-alert/8 px-4 py-3 text-[13px] text-state-alert">
 					<p className="font-medium">{error}</p>
@@ -150,7 +155,6 @@ export function CustomerListUI({
 				<CustomersTable
 					organizationSlug={organizationSlug}
 					customers={customers}
-					extrasOf={extrasOf}
 					dataOf={dataOf}
 				/>
 			)}

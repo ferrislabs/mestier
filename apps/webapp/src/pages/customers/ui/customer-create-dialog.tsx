@@ -14,6 +14,7 @@ import {
 	emptyAccountForm,
 	validateAccountForm,
 } from '#/pages/customers/lib/account-form'
+import type { Person } from '#/pages/customers/lib/people'
 import { AccountFields } from '#/pages/customers/ui/account-fields'
 import { AddressFields } from '#/pages/customers/ui/address-fields'
 import { ContactFields } from '#/pages/customers/ui/contact-fields'
@@ -26,6 +27,7 @@ interface CustomerCreateDialogProps {
 	trigger?: ReactNode
 	defaultTerms: number
 	defaultOwnerId: string | null
+	people: readonly Person[]
 	isPending: boolean
 	error: string | null
 	onSubmit: (form: AccountForm) => Promise<void>
@@ -37,6 +39,7 @@ export function CustomerCreateDialog({
 	trigger,
 	defaultTerms,
 	defaultOwnerId,
+	people,
 	isPending,
 	error,
 	onSubmit,
@@ -48,6 +51,7 @@ export function CustomerCreateDialog({
 				<CustomerCreateForm
 					defaultTerms={defaultTerms}
 					defaultOwnerId={defaultOwnerId}
+					people={people}
 					isPending={isPending}
 					error={error}
 					onSubmit={onSubmit}
@@ -60,6 +64,7 @@ export function CustomerCreateDialog({
 function CustomerCreateForm({
 	defaultTerms,
 	defaultOwnerId,
+	people,
 	isPending,
 	error,
 	onSubmit,
@@ -103,6 +108,7 @@ function CustomerCreateForm({
 						bind={bind}
 						mode="create"
 						defaultTerms={defaultTerms}
+						people={people}
 					/>
 				</FormSection>
 				<FormSection

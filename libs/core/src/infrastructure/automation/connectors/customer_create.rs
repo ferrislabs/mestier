@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::application::MestierUseCase;
 use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
 use crate::domain::customer::commands::CreateCustomerCommand;
-use crate::{CustomerPipelineStage, CustomerStatus};
+use crate::{CustomerPipelineStage, CustomerProfile, CustomerStatus};
 
 /// `mestier.customer.create`: the one internal connector the run engine
 /// (#200) proves itself against. It calls the existing `create_customer` use
@@ -59,13 +59,17 @@ impl Connector for CustomerCreateConnector {
                 registration_number: None,
                 phone,
                 email,
+                profile: CustomerProfile::default(),
             })
             .await
         {
-            Ok(customer) => ConnectorOutcome::Produced(json!({
+            Ok(Ok(customer)) => ConnectorOutcome::Produced(json!({
                 "id": customer.id.0,
                 "name": customer.name,
             })),
+            Ok(Err(refusal)) => ConnectorOutcome::Failed {
+                error: refusal.to_string(),
+            },
             Err(error) => ConnectorOutcome::Failed {
                 error: error.to_string(),
             },

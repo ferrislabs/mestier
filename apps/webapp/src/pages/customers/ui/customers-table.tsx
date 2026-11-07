@@ -10,7 +10,6 @@ import {
 import type { Customer } from '#/hooks/use-customers'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
-import type { AccountExtras } from '#/pages/customers/feature/mocks/account-extras'
 import type { CustomerListData } from '#/pages/customers/lib/accounts'
 import { formatDate } from '#/pages/customers/lib/format'
 import {
@@ -26,12 +25,10 @@ import { AccountStatusBadge } from '#/pages/customers/ui/status-badges'
 export function CustomersTable({
 	organizationSlug,
 	customers,
-	extrasOf,
 	dataOf,
 }: {
 	organizationSlug: string
 	customers: readonly Customer[]
-	extrasOf: (customerId: string) => AccountExtras
 	dataOf: (customerId: string) => CustomerListData
 }) {
 	return (
@@ -54,7 +51,7 @@ export function CustomersTable({
 					{customers.map((customer) => {
 						const data = dataOf(customer.id)
 						const archived = customer.status === 'ARCHIVED'
-						const kind = kindOf(customer, extrasOf(customer.id))
+						const kind = kindOf(customer)
 						return (
 							<TableRow
 								key={customer.id}

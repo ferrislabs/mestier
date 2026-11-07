@@ -15,6 +15,8 @@ pub struct UpdateCustomerContactRequest {
     pub last_name: String,
     pub role: Option<String>,
     pub phone: Option<String>,
+    #[serde(default)]
+    pub mobile: Option<String>,
     pub email: Option<String>,
     pub is_primary: bool,
 }
@@ -63,6 +65,7 @@ pub async fn handler(
             last_name: payload.last_name,
             role: payload.role,
             phone: payload.phone,
+            mobile: payload.mobile,
             email: payload.email,
             is_primary: payload.is_primary,
         })

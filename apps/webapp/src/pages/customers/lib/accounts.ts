@@ -1,9 +1,15 @@
-import type { CustomerContact, CustomerContext } from '#/hooks/use-customers'
+import type {
+	Customer,
+	CustomerContact,
+	CustomerContext,
+	LeadSource,
+} from '#/hooks/use-customers'
 import {
-	type AccountExtras,
+	type AccountKind,
 	type AddressKind,
-	EMPTY_EXTRAS,
-} from '#/pages/customers/feature/mocks/account-extras'
+	addressKindOf,
+	kindOf,
+} from '#/pages/customers/types'
 
 type NamedContact = Pick<CustomerContact, 'first_name' | 'last_name'>
 
@@ -26,48 +32,92 @@ export function mainContactOf<T extends Pick<CustomerContact, 'is_primary'>>(
 
 export function billingContactOf<
 	T extends Pick<CustomerContact, 'id' | 'is_primary'>,
->(contacts: readonly T[], extras: Pick<AccountExtras, 'billingContactId'>) {
+>(contacts: readonly T[], billingContactId: string | null | undefined) {
 	return (
-		contacts.find((contact) => contact.id === extras.billingContactId) ??
+		contacts.find((contact) => contact.id === billingContactId) ??
 		mainContactOf(contacts)
 	)
 }
 
 export function contextKind(
-	contextId: string,
-	extras: Pick<AccountExtras, 'addressKinds'>,
+	context: Pick<CustomerContext, 'kind'>,
 ): AddressKind {
-	return extras.addressKinds[contextId] ?? 'site'
+	return addressKindOf(context.kind)
 }
 
-export function contextCountry(
-	contextId: string,
-	extras: Pick<AccountExtras, 'addressCountries'>,
-): string {
-	return extras.addressCountries[contextId] ?? 'France'
+const DEFAULT_COUNTRY_CODE = 'FR'
+
+const DEFAULT_COUNTRY_LABEL = 'France'
+
+export function countryLabelOf(country: string): string {
+	const trimmed = country.trim()
+	return trimmed === '' || trimmed.toUpperCase() === DEFAULT_COUNTRY_CODE
+		? DEFAULT_COUNTRY_LABEL
+		: trimmed
 }
 
-export function billingContextOf<T extends Pick<CustomerContext, 'id'>>(
+export function countryCodeOf(input: string): string {
+	const trimmed = input.trim()
+	return trimmed === '' ||
+		trimmed.toLowerCase() === DEFAULT_COUNTRY_LABEL.toLowerCase()
+		? DEFAULT_COUNTRY_CODE
+		: trimmed
+}
+
+export function billingContextOf<
+	T extends Pick<CustomerContext, 'id' | 'kind'>,
+>(
 	contexts: readonly T[],
-	extras: Pick<
-		AccountExtras,
-		'billingContextId' | 'addressKinds' | 'addressCountries'
-	>,
+	billingAddressId: string | null | undefined,
 ): T | undefined {
 	return (
-		contexts.find((context) => context.id === extras.billingContextId) ??
-		contexts.find((context) => extras.addressKinds[context.id] === 'billing') ??
+		contexts.find((context) => context.id === billingAddressId) ??
+		contexts.find((context) => context.kind === 'BILLING') ??
 		contexts[0]
 	)
+}
+
+export interface AccountDetails {
+	kind: AccountKind
+	vatNumber: string
+	website: string
+	ownerId: string | null
+	source: LeadSource | null
+	paymentTermsDays: number | null
+	stripeCustomerId: string | null
+	notes: string
+	convertedAt: string | null
+	archivedAt: string | null
+	billingContactId: string | null
+	billingAddressId: string | null
+}
+
+export function accountDetailsOf(
+	customer: Customer,
+	stripeCustomerId: string | null,
+): AccountDetails {
+	return {
+		kind: kindOf(customer),
+		vatNumber: customer.vat_number ?? '',
+		website: customer.website ?? '',
+		ownerId: customer.owner_member_id ?? null,
+		source: customer.lead_source ?? null,
+		paymentTermsDays: customer.payment_terms_days ?? null,
+		stripeCustomerId,
+		notes: customer.notes ?? '',
+		convertedAt: customer.converted_at ?? null,
+		archivedAt: customer.archived_at ?? null,
+		billingContactId: customer.billing_contact_id ?? null,
+		billingAddressId: customer.billing_address_id ?? null,
+	}
 }
 
 export function directoryTerms(
 	contacts: readonly Pick<
 		CustomerContact,
-		'id' | 'first_name' | 'last_name' | 'role' | 'email' | 'phone'
+		'id' | 'first_name' | 'last_name' | 'role' | 'email' | 'phone' | 'mobile'
 	>[],
 	contexts: readonly Pick<CustomerContext, 'city'>[],
-	extras: Pick<AccountExtras, 'mobiles'> = EMPTY_EXTRAS,
 ): SearchTerms {
 	return {
 		text: [
@@ -79,7 +129,7 @@ export function directoryTerms(
 			]),
 		].filter(Boolean),
 		phones: contacts
-			.flatMap((contact) => [contact.phone ?? '', extras.mobiles[contact.id]])
+			.flatMap((contact) => [contact.phone ?? '', contact.mobile ?? ''])
 			.filter((phone): phone is string => Boolean(phone)),
 	}
 }
@@ -101,13 +151,4 @@ export function openDealsSentence(count: number | null): string {
 	return count === 1
 		? 'Son opportunité ouverte sera marquée comme perdue (motif : compte archivé) et ne pourra pas être rouverte.'
 		: `Ses ${count} opportunités ouvertes seront marquées comme perdues (motif : compte archivé) et ne pourront pas être rouvertes.`
-}
-
-export function withEntry<V extends string>(
-	record: Readonly<Record<string, V>>,
-	key: string,
-	value: V | '',
-): Record<string, V> {
-	const { [key]: _removed, ...rest } = record
-	return value === '' ? rest : { ...rest, [key]: value }
 }

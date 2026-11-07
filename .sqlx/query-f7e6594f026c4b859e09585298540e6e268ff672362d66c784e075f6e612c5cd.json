@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at\n            FROM customers\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, customer_id, first_name, last_name, role, phone, mobile, email, is_primary, deleted_at, created_at, updated_at\n            FROM customer_contacts\n            WHERE customer_id = $1 AND deleted_at IS NULL\n            ORDER BY is_primary DESC, last_name ASC, first_name ASC, created_at ASC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -10,32 +10,32 @@
       },
       {
         "ordinal": 1,
-        "name": "org_id",
+        "name": "customer_id",
         "type_info": "Uuid"
       },
       {
         "ordinal": 2,
-        "name": "status",
+        "name": "first_name",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "pipeline_stage",
+        "name": "last_name",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "name",
+        "name": "role",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "registration_number",
+        "name": "phone",
         "type_info": "Text"
       },
       {
         "ordinal": 6,
-        "name": "phone",
+        "name": "mobile",
         "type_info": "Text"
       },
       {
@@ -45,23 +45,30 @@
       },
       {
         "ordinal": 8,
+        "name": "is_primary",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -69,14 +76,15 @@
       false,
       false,
       false,
+      true,
+      true,
+      true,
+      true,
       false,
-      true,
-      true,
-      true,
       true,
       false,
       false
     ]
   },
-  "hash": "991920850e1a347408af6c7218931cff1011fff6c3339d875958d7c7a18e0f53"
+  "hash": "f7e6594f026c4b859e09585298540e6e268ff672362d66c784e075f6e612c5cd"
 }
