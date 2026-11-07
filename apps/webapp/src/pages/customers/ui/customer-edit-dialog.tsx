@@ -13,6 +13,7 @@ import {
 	type AccountForm,
 	validateAccountForm,
 } from '#/pages/customers/lib/account-form'
+import type { Person } from '#/pages/customers/lib/people'
 import { AccountFields } from '#/pages/customers/ui/account-fields'
 import { FormErrors, FormSection } from '#/pages/customers/ui/form-section'
 import { useFormBinding } from '#/pages/customers/ui/use-form-binding'
@@ -24,6 +25,7 @@ interface CustomerEditDialogProps {
 	initial: AccountForm
 	trigger?: ReactNode
 	defaultTerms: number
+	people: readonly Person[]
 	isPending: boolean
 	error: string | null
 	onSubmit: (form: AccountForm) => Promise<void>
@@ -49,6 +51,7 @@ function CustomerEditForm({
 	name,
 	initial,
 	defaultTerms,
+	people,
 	isPending,
 	error,
 	onSubmit,
@@ -90,6 +93,7 @@ function CustomerEditForm({
 						bind={bind}
 						mode="edit"
 						defaultTerms={defaultTerms}
+						people={people}
 					/>
 				</FormSection>
 				<FormErrors messages={error ? [error] : []} />

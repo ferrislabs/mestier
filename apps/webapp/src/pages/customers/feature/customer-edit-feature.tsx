@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '#/components/ui/button'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useBillingSettings } from '#/hooks/use-billing-settings'
 import {
 	useCreateCustomerContact,
 	useCreateCustomerContext,
@@ -18,25 +19,27 @@ import {
 import { useOutstandingByCustomer } from '#/hooks/use-invoices'
 import { useQuotes } from '#/hooks/use-quotes'
 import { mutationErrorMessage } from '#/lib/api-error'
-import { useCrmSettings } from '#/pages/crm-settings/feature/mocks/settings'
-import {
-	useAccountExtras,
-	useSaveAccountExtras,
-} from '#/pages/customers/feature/mocks/account-extras'
 import { CURRENT_PERSON_ID } from '#/pages/customers/feature/mocks/people'
+import {
+	useSaveStripeCustomerId,
+	useStripeCustomerId,
+} from '#/pages/customers/feature/mocks/stripe-customer-ids'
 import { useAllInvoices } from '#/pages/customers/feature/use-all-invoices'
-import { addressLineOf } from '#/pages/customers/feature/use-create-customer-account'
 import { useCustomerPayments } from '#/pages/customers/feature/use-customer-payments'
+import { useOrganizationPeople } from '#/pages/customers/feature/use-organization-people'
 import {
 	type AccountForm,
 	accountFormOf,
 	type ContactForm,
+	profileOfForm,
 	registrationNumberOf,
+	stripeCustomerIdOf,
 } from '#/pages/customers/lib/account-form'
 import {
+	accountDetailsOf,
 	billingContactOf,
 	billingContextOf,
-	withEntry,
+	countryCodeOf,
 } from '#/pages/customers/lib/accounts'
 import {
 	creditNoteRowsOf,
@@ -44,7 +47,7 @@ import {
 	paymentRowsOf,
 	quoteRowsOf,
 } from '#/pages/customers/lib/activity'
-import { todayIso } from '#/pages/customers/lib/format'
+import { findPerson } from '#/pages/customers/lib/people'
 import {
 	activitySummary,
 	addressesSummary,
@@ -56,9 +59,9 @@ import { customerStats } from '#/pages/customers/lib/stats'
 import {
 	ACCOUNT_KIND_LABELS,
 	accountStatusOf,
+	apiAddressKindOf,
 	customerBody,
 	kindOf,
-	reactivatedStatus,
 } from '#/pages/customers/types'
 import { ActivitySection } from '#/pages/customers/ui/activity-section'
 import { AddressesSection } from '#/pages/customers/ui/addresses-section'
@@ -90,9 +93,10 @@ export function CustomerEditFeature({
 	const outstanding = useOutstandingByCustomer(organizationId)
 	const quotes = useQuotes(organizationId)
 	const invoices = useAllInvoices(organizationId)
-	const extras = useAccountExtras(customerId)
-	const settings = useCrmSettings()
-	const saveExtras = useSaveAccountExtras()
+	const stripeCustomerId = useStripeCustomerId(customerId)
+	const settings = useBillingSettings(organizationId)
+	const saveStripeCustomerId = useSaveStripeCustomerId()
+	const { people } = useOrganizationPeople(organizationId)
 	const updateCustomer = useUpdateCustomer()
 	const createContact = useCreateCustomerContact()
 	const updateContact = useUpdateCustomerContact()
@@ -143,9 +147,10 @@ export function CustomerEditFeature({
 	const openDeals = customerDeals.deals.filter((deal) =>
 		isOpenStage(deal.stage),
 	).length
-	const kind = kindOf(customer, extras)
+	const kind = kindOf(customer)
 	const status = accountStatusOf(customer.status)
-	const defaultTerms = settings.data.settings.paymentTermsDays
+	const details = accountDetailsOf(customer, stripeCustomerId)
+	const defaultTerms = settings.data?.data.payment_terms_days ?? 30
 
 	const save = async (form: AccountForm) => {
 		await updateCustomer.mutateAsync({
@@ -155,20 +160,13 @@ export function CustomerEditFeature({
 				registration_number: registrationNumberOf(form),
 				email: form.email.trim() || null,
 				phone: form.phone.trim() || null,
+				...profileOfForm(form),
 			}),
 		})
-		const stripe = form.stripeCustomerId.trim()
-		const terms = form.paymentTerms.trim()
-		await saveExtras.mutateAsync(customer.id, {
-			kind: form.kind,
-			vatNumber: form.vatNumber.trim(),
-			website: form.website.trim(),
-			ownerId: form.ownerId,
-			source: form.source,
-			paymentTermsDays: terms === '' ? null : Number(terms),
-			stripeCustomerId: stripe === '' ? null : stripe,
-			notes: form.notes.trim(),
-		})
+		await saveStripeCustomerId.mutateAsync(
+			customer.id,
+			stripeCustomerIdOf(form),
+		)
 	}
 
 	const saveContact = async (
@@ -181,24 +179,19 @@ export function CustomerEditFeature({
 			role: form.role.trim() || null,
 			email: form.email.trim() || null,
 			phone: form.phone.trim() || null,
+			mobile: form.mobile.trim() || null,
 			is_primary: contact?.is_primary ?? contactList.length === 0,
 		}
-		const contactId = contact
-			? (
-					await updateContact.mutateAsync({
-						path: { customer_contact_id: contact.id },
-						body,
-					})
-				).data.id
-			: (
-					await createContact.mutateAsync({
-						path: { customer_id: customer.id },
-						body,
-					})
-				).data.id
-		await saveExtras.mutateAsync(customer.id, {
-			mobiles: withEntry(extras.mobiles, contactId, form.mobile.trim()),
-		})
+		if (contact)
+			await updateContact.mutateAsync({
+				path: { customer_contact_id: contact.id },
+				body,
+			})
+		else
+			await createContact.mutateAsync({
+				path: { customer_id: customer.id },
+				body,
+			})
 	}
 
 	const convert = async () => {
@@ -206,7 +199,6 @@ export function CustomerEditFeature({
 			path: { customer_id: customer.id },
 			body: customerBody(customer, { status: 'CLIENT', pipeline_stage: 'WON' }),
 		})
-		await saveExtras.mutateAsync(customer.id, { convertedAt: todayIso() })
 	}
 
 	const archive = async () => {
@@ -214,28 +206,39 @@ export function CustomerEditFeature({
 			path: { customer_id: customer.id },
 			body: customerBody(customer, { status: 'ARCHIVED' }),
 		})
-		await saveExtras.mutateAsync(customer.id, { archivedAt: todayIso() })
 	}
 
 	const restore = async () => {
 		await updateCustomer.mutateAsync({
 			path: { customer_id: customer.id },
-			body: customerBody(customer, reactivatedStatus(customer)),
+			body: customerBody(customer, { status: 'PROSPECT' }),
 		})
-		await saveExtras.mutateAsync(customer.id, { archivedAt: null })
 	}
+
+	const designateBilling = (patch: {
+		billing_contact_id?: string
+		billing_address_id?: string
+	}) =>
+		void updateCustomer
+			.mutateAsync({
+				path: { customer_id: customer.id },
+				body: customerBody(customer, patch),
+			})
+			.catch(() => undefined)
 
 	const ignore = () => undefined
 
 	const contactError =
 		mutationErrorMessage(createContact.error) ??
 		mutationErrorMessage(updateContact.error) ??
-		mutationErrorMessage(deleteContact.error)
+		mutationErrorMessage(deleteContact.error) ??
+		mutationErrorMessage(updateCustomer.error)
 	const contextError =
 		mutationErrorMessage(createContext.error) ??
 		mutationErrorMessage(updateContext.error) ??
 		mutationErrorMessage(deleteContext.error) ??
-		mutationErrorMessage(uploadFile.error)
+		mutationErrorMessage(uploadFile.error) ??
+		mutationErrorMessage(updateCustomer.error)
 
 	const summaries = {
 		identite: identitySummary(customer, kind, contextList),
@@ -262,10 +265,12 @@ export function CustomerEditFeature({
 			{tab === 'identite' && (
 				<IdentitySection
 					customer={customer}
-					extras={extras}
+					details={details}
+					owner={findPerson(people, details.ownerId)}
+					people={people}
 					defaultTerms={defaultTerms}
-					initialForm={accountFormOf(customer, extras, kind)}
-					isSaving={updateCustomer.isPending || saveExtras.isPending}
+					initialForm={accountFormOf(customer, stripeCustomerId)}
+					isSaving={updateCustomer.isPending || saveStripeCustomerId.isPending}
 					saveError={mutationErrorMessage(updateCustomer.error)}
 					onSave={save}
 					onConvert={() => void convert().catch(ignore)}
@@ -277,8 +282,9 @@ export function CustomerEditFeature({
 			{tab === 'contacts' && (
 				<ContactsSection
 					contacts={contactList}
-					mobiles={extras.mobiles}
-					billingContactId={billingContactOf(contactList, extras)?.id}
+					billingContactId={
+						billingContactOf(contactList, customer.billing_contact_id)?.id
+					}
 					isLoading={contacts.isLoading}
 					loadError={mutationErrorMessage(contacts.error)}
 					onRetry={() => void contacts.refetch()}
@@ -298,35 +304,25 @@ export function CustomerEditFeature({
 									role: contact.role ?? null,
 									email: contact.email ?? null,
 									phone: contact.phone ?? null,
+									mobile: contact.mobile ?? null,
 									is_primary: true,
 								},
 							}),
 						onMakeBilling: (contact) =>
-							void saveExtras.mutateAsync(customer.id, {
-								billingContactId: contact.id,
-							}),
+							designateBilling({ billing_contact_id: contact.id }),
 						onDelete: (contact) =>
-							deleteContact.mutate(
-								{ path: { customer_contact_id: contact.id } },
-								{
-									onSuccess: () =>
-										void saveExtras.mutateAsync(customer.id, {
-											mobiles: withEntry(extras.mobiles, contact.id, ''),
-											billingContactId:
-												extras.billingContactId === contact.id
-													? null
-													: extras.billingContactId,
-										}),
-								},
-							),
+							deleteContact.mutate({
+								path: { customer_contact_id: contact.id },
+							}),
 					}}
 				/>
 			)}
 			{tab === 'adresses' && (
 				<AddressesSection
 					contexts={contextList}
-					extras={extras}
-					billingContextId={billingContextOf(contextList, extras)?.id}
+					billingContextId={
+						billingContextOf(contextList, customer.billing_address_id)?.id
+					}
 					isLoading={contexts.isLoading}
 					loadError={mutationErrorMessage(contexts.error)}
 					onRetry={() => void contexts.refetch()}
@@ -344,67 +340,31 @@ export function CustomerEditFeature({
 						onSave: async (context, draft) => {
 							const body = {
 								label: draft.label.trim(),
-								address_line:
-									addressLineOf(
-										draft.address.street,
-										draft.address.complement,
-									) || null,
+								kind: apiAddressKindOf(draft.kind),
+								address_line: draft.address.street.trim() || null,
+								address_line2: draft.address.complement.trim() || null,
 								postal_code: draft.address.postalCode.trim() || null,
 								city: draft.address.city.trim() || null,
+								country: countryCodeOf(draft.address.country),
 								photo_key: draft.photoKey.trim() || null,
 							}
-							const contextId = context
-								? (
-										await updateContext.mutateAsync({
-											path: { customer_context_id: context.id },
-											body,
-										})
-									).data.id
-								: (
-										await createContext.mutateAsync({
-											path: { customer_id: customer.id },
-											body,
-										})
-									).data.id
-							await saveExtras.mutateAsync(customer.id, {
-								addressKinds: {
-									...extras.addressKinds,
-									[contextId]: draft.kind,
-								},
-								addressCountries: withEntry(
-									extras.addressCountries,
-									contextId,
-									draft.address.country.trim(),
-								),
-							})
+							if (context)
+								await updateContext.mutateAsync({
+									path: { customer_context_id: context.id },
+									body,
+								})
+							else
+								await createContext.mutateAsync({
+									path: { customer_id: customer.id },
+									body,
+								})
 						},
 						onMakeBilling: (context) =>
-							void saveExtras.mutateAsync(customer.id, {
-								billingContextId: context.id,
-							}),
+							designateBilling({ billing_address_id: context.id }),
 						onDelete: (context) =>
-							deleteContext.mutate(
-								{ path: { customer_context_id: context.id } },
-								{
-									onSuccess: () =>
-										void saveExtras.mutateAsync(customer.id, {
-											addressKinds: withEntry(
-												extras.addressKinds,
-												context.id,
-												'',
-											),
-											addressCountries: withEntry(
-												extras.addressCountries,
-												context.id,
-												'',
-											),
-											billingContextId:
-												extras.billingContextId === context.id
-													? null
-													: extras.billingContextId,
-										}),
-								},
-							),
+							deleteContext.mutate({
+								path: { customer_context_id: context.id },
+							}),
 					}}
 				/>
 			)}

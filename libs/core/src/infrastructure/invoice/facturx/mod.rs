@@ -381,6 +381,50 @@ mod tests {
     }
 
     #[test]
+    fn the_party_identifier_is_the_first_nine_digits_of_a_siret_under_scheme_0002() {
+        let (invoice, mut facts, customer) = issued_invoice_and_facts();
+        facts.issuer.registration_number = "12345678900012".to_owned();
+        facts.customer_registration_number = "98765432100019".to_owned();
+
+        let model = cii::to_en16931_invoice(&invoice, &facts, &customer);
+
+        for party in [&model.seller, &model.buyer] {
+            let registration = party.legal_registration.as_ref().expect("a registration");
+            assert_eq!(registration.scheme(), Some("0002"));
+            let address = party.electronic_address.as_ref().expect("an address");
+            assert_eq!(address.scheme(), Some("0002"));
+        }
+        let seller = model.seller.legal_registration.as_ref().unwrap();
+        let buyer = model.buyer.legal_registration.as_ref().unwrap();
+        assert_eq!(seller.content(), "123456789");
+        assert_eq!(buyer.content(), "987654321");
+        assert_eq!(
+            model.buyer.electronic_address.as_ref().unwrap().content(),
+            "987654321"
+        );
+        assert_eq!(
+            model.seller.electronic_address.as_ref().unwrap().content(),
+            "123456789"
+        );
+    }
+
+    #[test]
+    fn a_nine_digit_identifier_is_sent_unchanged() {
+        let (invoice, facts, customer) = issued_invoice_and_facts();
+
+        let model = cii::to_en16931_invoice(&invoice, &facts, &customer);
+
+        assert_eq!(
+            model.seller.legal_registration.as_ref().unwrap().content(),
+            "123456789"
+        );
+        assert_eq!(
+            model.buyer.legal_registration.as_ref().unwrap().content(),
+            "987654321"
+        );
+    }
+
+    #[test]
     fn a_malformed_visual_document_is_refused_as_an_embedding_error() {
         let err = pdfa::embed_cii_xml(
             b"not a pdf",
@@ -450,6 +494,9 @@ mod tests {
             registration_number: Some("987654321".to_owned()),
             phone: None,
             email: None,
+            profile: crate::CustomerProfile::default(),
+            converted_at: None,
+            archived_at: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,

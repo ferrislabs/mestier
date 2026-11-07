@@ -6,10 +6,11 @@ use iam::{
     infrastructure::ferriskey::{FerriskeyConfig, FerriskeyIamProvider},
 };
 use mestier_core::{
-    AssigneeRef, CreateCustomerCommand, CreateCustomerContextCommand, CreateOrganizationCommand,
-    CreateProjectCommand, CreateQuoteCommand, CreateTaskCommand, CreateUserCommand,
-    CustomerPipelineStage, CustomerStatus, EventHub, MestierUseCase, PatchTaskCommand,
-    QuoteLineCommand, ServiceRateUnit, default_authorizer,
+    AddressKind, AssigneeRef, CreateCustomerCommand, CreateCustomerContextCommand,
+    CreateOrganizationCommand, CreateProjectCommand, CreateQuoteCommand, CreateTaskCommand,
+    CreateUserCommand, Customer, CustomerError, CustomerPipelineStage, CustomerProfile,
+    CustomerStatus, EventHub, MestierUseCase, PatchTaskCommand, QuoteLineCommand, ServiceRateUnit,
+    default_authorizer,
 };
 use rust_decimal::Decimal;
 use sqlx::postgres::PgPoolOptions;
@@ -182,59 +183,75 @@ async fn provision_owner(args: &SeedArgs, usecase: &MestierUseCase) -> Result<Ow
 /// A handful of realistic records exercising planning, quotes and
 /// customers — not exhaustive fixture data. Every use case below already
 /// exists in `libs/core`; nothing new is added to reach this.
+fn accepted(outcome: Result<Customer, CustomerError>) -> Result<Customer, SeedError> {
+    outcome.map_err(|refusal| SeedError::Core(CoreError::Conflict(refusal.to_string())))
+}
+
 async fn seed_demo_data(
     usecase: &MestierUseCase,
     actor: Subject,
     organization_id: common::OrganizationId,
     owner_local_id: UserId,
 ) -> Result<(), SeedError> {
-    let customer = usecase
-        .create_customer(CreateCustomerCommand {
-            actor: actor.clone(),
-            organization_id,
-            status: CustomerStatus::Client,
-            pipeline_stage: CustomerPipelineStage::Won,
-            name: "Menuiserie Bertrand".to_owned(),
-            registration_number: None,
-            phone: Some("+33 6 12 34 56 78".to_owned()),
-            email: Some("contact@menuiserie-bertrand.example".to_owned()),
-        })
-        .await?;
+    let customer = accepted(
+        usecase
+            .create_customer(CreateCustomerCommand {
+                actor: actor.clone(),
+                organization_id,
+                status: CustomerStatus::Client,
+                pipeline_stage: CustomerPipelineStage::Won,
+                name: "Menuiserie Bertrand".to_owned(),
+                registration_number: None,
+                phone: Some("+33 6 12 34 56 78".to_owned()),
+                email: Some("contact@menuiserie-bertrand.example".to_owned()),
+                profile: CustomerProfile::default(),
+            })
+            .await?,
+    )?;
 
-    usecase
-        .create_customer(CreateCustomerCommand {
-            actor: actor.clone(),
-            organization_id,
-            status: CustomerStatus::Prospect,
-            pipeline_stage: CustomerPipelineStage::QuoteSent,
-            name: "Rénovation Lefèvre".to_owned(),
-            registration_number: None,
-            phone: Some("+33 6 98 76 54 32".to_owned()),
-            email: Some("m.lefevre@example.com".to_owned()),
-        })
-        .await?;
+    accepted(
+        usecase
+            .create_customer(CreateCustomerCommand {
+                actor: actor.clone(),
+                organization_id,
+                status: CustomerStatus::Prospect,
+                pipeline_stage: CustomerPipelineStage::QuoteSent,
+                name: "Rénovation Lefèvre".to_owned(),
+                registration_number: None,
+                phone: Some("+33 6 98 76 54 32".to_owned()),
+                email: Some("m.lefevre@example.com".to_owned()),
+                profile: CustomerProfile::default(),
+            })
+            .await?,
+    )?;
 
-    usecase
-        .create_customer(CreateCustomerCommand {
-            actor: actor.clone(),
-            organization_id,
-            status: CustomerStatus::Prospect,
-            pipeline_stage: CustomerPipelineStage::New,
-            name: "Toiture Morel".to_owned(),
-            registration_number: None,
-            phone: None,
-            email: Some("j.morel@example.com".to_owned()),
-        })
-        .await?;
+    accepted(
+        usecase
+            .create_customer(CreateCustomerCommand {
+                actor: actor.clone(),
+                organization_id,
+                status: CustomerStatus::Prospect,
+                pipeline_stage: CustomerPipelineStage::New,
+                name: "Toiture Morel".to_owned(),
+                registration_number: None,
+                phone: None,
+                email: Some("j.morel@example.com".to_owned()),
+                profile: CustomerProfile::default(),
+            })
+            .await?,
+    )?;
 
     let context = usecase
         .create_customer_context(CreateCustomerContextCommand {
             actor: actor.clone(),
             customer_id: customer.id,
             label: "Chantier principal".to_owned(),
+            kind: AddressKind::Site,
             address_line: Some("14 rue des Artisans".to_owned()),
+            address_line2: None,
             postal_code: Some("69003".to_owned()),
             city: Some("Lyon".to_owned()),
+            country: "FR".to_owned(),
             photo_key: None,
         })
         .await?;

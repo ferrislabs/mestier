@@ -1,6 +1,6 @@
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
-import type { AccountKind } from '#/pages/customers/feature/mocks/account-extras'
 import { formatMoney } from '#/pages/customers/lib/format'
+import type { AccountKind } from '#/pages/customers/types'
 
 export type ClientTab = 'identite' | 'contacts' | 'adresses' | 'activite'
 

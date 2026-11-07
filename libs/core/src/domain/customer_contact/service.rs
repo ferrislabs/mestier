@@ -94,6 +94,7 @@ where
             &command.last_name,
             &command.role,
             &command.phone,
+            &command.mobile,
             &command.email,
         )?;
 
@@ -109,6 +110,7 @@ where
                 last_name: command.last_name,
                 role: command.role,
                 phone: command.phone,
+                mobile: command.mobile,
                 email: command.email,
                 is_primary: command.is_primary,
                 deleted_at: None,
@@ -143,6 +145,7 @@ where
             &command.last_name,
             &command.role,
             &command.phone,
+            &command.mobile,
             &command.email,
         )?;
 
@@ -155,6 +158,7 @@ where
         customer_contact.last_name = command.last_name;
         customer_contact.role = command.role;
         customer_contact.phone = command.phone;
+        customer_contact.mobile = command.mobile;
         customer_contact.email = command.email;
         customer_contact.is_primary = command.is_primary;
         customer_contact.updated_at = Utc::now();
@@ -181,12 +185,14 @@ fn validate_customer_contact(
     last_name: &str,
     role: &Option<String>,
     phone: &Option<String>,
+    mobile: &Option<String>,
     email: &Option<String>,
 ) -> Result<(), CoreError> {
     validate_required("customer_contact first name", first_name)?;
     validate_required("customer_contact last name", last_name)?;
     validate_optional("customer_contact role", role)?;
     validate_optional("customer_contact phone", phone)?;
+    validate_optional("customer_contact mobile", mobile)?;
     validate_optional("customer_contact email", email)?;
     Ok(())
 }
@@ -229,6 +235,7 @@ mod tests {
             last_name: "Martin".to_owned(),
             role: Some("Acheteuse".to_owned()),
             phone: None,
+            mobile: None,
             email: Some("alice@example.com".to_owned()),
             is_primary: true,
             deleted_at: None,
@@ -248,6 +255,9 @@ mod tests {
             registration_number: None,
             phone: None,
             email: None,
+            profile: crate::CustomerProfile::default(),
+            converted_at: None,
+            archived_at: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -305,6 +315,7 @@ mod tests {
                 last_name: "Martin".to_owned(),
                 role: None,
                 phone: None,
+                mobile: None,
                 email: None,
                 is_primary: false,
             })
@@ -348,6 +359,7 @@ mod tests {
                 last_name: "Martin".to_owned(),
                 role: Some("Direction".to_owned()),
                 phone: Some("0102030405".to_owned()),
+                mobile: Some("0601020304".to_owned()),
                 email: None,
                 is_primary: false,
             })
@@ -355,6 +367,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(updated.first_name, "Nadia");
+        assert_eq!(updated.mobile.as_deref(), Some("0601020304"));
+        assert_eq!(updated.phone.as_deref(), Some("0102030405"));
         assert!(!updated.is_primary);
     }
 
@@ -419,6 +433,7 @@ mod tests {
                 last_name: "Martin".to_owned(),
                 role: None,
                 phone: None,
+                mobile: None,
                 email: None,
                 is_primary: false,
             })

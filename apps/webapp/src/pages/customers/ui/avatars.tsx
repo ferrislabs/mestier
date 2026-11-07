@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { cn } from '#/lib/utils'
-import type { Person } from '#/pages/customers/feature/mocks/people'
+import type { Person } from '#/pages/customers/lib/people'
 
 const SIZES = {
 	sm: 'size-6 text-[10px]',

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { Customer } from '#/hooks/use-customers'
 import {
+	accountFormOf,
 	emptyAccountForm,
 	parsePaymentTerms,
+	profileOfForm,
 	registrationNumberOf,
+	stripeCustomerIdOf,
 	validateAccountForm,
 } from '#/pages/customers/lib/account-form'
 
@@ -120,5 +124,93 @@ describe('registrationNumberOf', () => {
 		expect(
 			registrationNumberOf({ ...form, registrationNumber: ' ' }),
 		).toBeNull()
+	})
+})
+
+describe('profileOfForm', () => {
+	it('sends the customer profile in the API vocabulary', () => {
+		const form = {
+			...emptyAccountForm('m1'),
+			kind: 'particulier' as const,
+			vatNumber: ' FR123 ',
+			website: ' https://x.fr ',
+			source: 'salon' as const,
+			paymentTerms: '45',
+			notes: ' Livraison le matin ',
+		}
+		expect(profileOfForm(form)).toEqual({
+			kind: 'INDIVIDUAL',
+			website: 'https://x.fr',
+			vat_number: 'FR123',
+			owner_member_id: 'm1',
+			lead_source: 'salon',
+			notes: 'Livraison le matin',
+			payment_terms_days: 45,
+		})
+	})
+
+	it('sends blank texts and terms as null', () => {
+		expect(profileOfForm(emptyAccountForm(null))).toEqual({
+			kind: 'PROFESSIONAL',
+			website: null,
+			vat_number: null,
+			owner_member_id: null,
+			lead_source: null,
+			notes: null,
+			payment_terms_days: null,
+		})
+	})
+})
+
+describe('accountFormOf', () => {
+	const customer: Customer = {
+		id: 'c1',
+		organization_id: 'org',
+		name: 'Boulangerie Lemoine',
+		status: 'CLIENT',
+		pipeline_stage: 'WON',
+		kind: 'INDIVIDUAL',
+		registration_number: null,
+		vat_number: 'FR123',
+		website: 'https://x.fr',
+		owner_member_id: 'm1',
+		lead_source: 'recommandation',
+		payment_terms_days: 0,
+		notes: 'Note',
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+	}
+
+	it('fills the form from the customer and the Stripe identifier', () => {
+		const form = accountFormOf(customer, 'cus_1')
+		expect(form.kind).toBe('particulier')
+		expect(form.status).toBe('client')
+		expect(form.vatNumber).toBe('FR123')
+		expect(form.website).toBe('https://x.fr')
+		expect(form.ownerId).toBe('m1')
+		expect(form.source).toBe('recommandation')
+		expect(form.paymentTerms).toBe('0')
+		expect(form.notes).toBe('Note')
+		expect(form.stripeCustomerId).toBe('cus_1')
+	})
+
+	it('leaves the terms blank when the customer has none', () => {
+		const form = accountFormOf(
+			{ ...customer, payment_terms_days: null, owner_member_id: null },
+			null,
+		)
+		expect(form.paymentTerms).toBe('')
+		expect(form.ownerId).toBeNull()
+		expect(form.stripeCustomerId).toBe('')
+	})
+})
+
+describe('stripeCustomerIdOf', () => {
+	it('trims the identifier and maps blank to null', () => {
+		const form = emptyAccountForm(null)
+		expect(stripeCustomerIdOf({ ...form, stripeCustomerId: ' cus_1 ' })).toBe(
+			'cus_1',
+		)
+		expect(stripeCustomerIdOf(form)).toBeNull()
 	})
 })

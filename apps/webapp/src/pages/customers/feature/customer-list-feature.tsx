@@ -2,24 +2,20 @@ import { AlertCircle } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getPaginationViewModel } from '#/components/data-view'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useBillingSettings } from '#/hooks/use-billing-settings'
 import { useCustomers } from '#/hooks/use-customers'
 import { useOutstandingByCustomer } from '#/hooks/use-invoices'
 import { useQuotes } from '#/hooks/use-quotes'
 import { mutationErrorMessage } from '#/lib/api-error'
-import { useCrmSettings } from '#/pages/crm-settings/feature/mocks/settings'
 import {
 	type ClientFilters,
 	customersSummary,
 	filterCustomers,
 } from '#/pages/customers/customer-list-url-state'
-import {
-	EMPTY_EXTRAS,
-	useAccountExtrasMap,
-} from '#/pages/customers/feature/mocks/account-extras'
-import { CURRENT_PERSON_ID } from '#/pages/customers/feature/mocks/people'
 import { useAllInvoices } from '#/pages/customers/feature/use-all-invoices'
 import { useCreateCustomerAccount } from '#/pages/customers/feature/use-create-customer-account'
 import { useCustomerDirectory } from '#/pages/customers/feature/use-customer-directory'
+import { useOrganizationPeople } from '#/pages/customers/feature/use-organization-people'
 import {
 	billingContextOf,
 	type CustomerListData,
@@ -82,10 +78,10 @@ function CustomerList({
 	const pushedQueries = useRef<string[]>([])
 	const customers = useCustomers(organizationId, { page, perPage: pageSize })
 	const outstanding = useOutstandingByCustomer(organizationId)
-	const extras = useAccountExtrasMap()
 	const quotes = useQuotes(organizationId)
 	const allInvoices = useAllInvoices(organizationId)
-	const settings = useCrmSettings()
+	const settings = useBillingSettings(organizationId)
+	const { people, currentPersonId } = useOrganizationPeople(organizationId)
 	const account = useCreateCustomerAccount(organizationId, organizationSlug)
 
 	useEffect(() => {
@@ -98,15 +94,16 @@ function CustomerList({
 	const rows = customers.data?.data
 	const all = useMemo(() => rows ?? [], [rows])
 	const active: ClientFilters = { ...filters, query }
-	const extrasOf = (customerId: string) => extras[customerId] ?? EMPTY_EXTRAS
 	const directory = useCustomerDirectory(all.map((customer) => customer.id))
 	const termsOf = (customerId: string) =>
 		directoryTerms(
 			directory.contactsOf(customerId),
 			directory.contextsOf(customerId),
-			extrasOf(customerId),
 		)
-	const visible = filterCustomers(all, extrasOf, active, termsOf)
+	const visible = filterCustomers(all, active, termsOf)
+	const billingAddressIds = new Map(
+		all.map((customer) => [customer.id, customer.billing_address_id]),
+	)
 	const now = Date.now()
 	const outstandingCents = new Map(
 		(outstanding.data?.data ?? []).map((row) => [
@@ -126,7 +123,7 @@ function CustomerList({
 		const contact = mainContactOf(directory.contactsOf(customerId))
 		const context = billingContextOf(
 			directory.contextsOf(customerId),
-			extrasOf(customerId),
+			billingAddressIds.get(customerId),
 		)
 		return {
 			city: context?.city?.trim() ?? '',
@@ -162,15 +159,15 @@ function CustomerList({
 			customers={visible}
 			filters={active}
 			onFiltersChange={change}
-			extrasOf={extrasOf}
+			people={people}
 			dataOf={dataOf}
 			error={mutationErrorMessage(customers.error)}
 			isLoading={customers.isLoading}
 			onRetry={() => void customers.refetch()}
 			creating={creating}
 			onCreatingChange={setCreating}
-			defaultTerms={settings.data.settings.paymentTermsDays}
-			defaultOwnerId={CURRENT_PERSON_ID}
+			defaultTerms={settings.data?.data.payment_terms_days ?? 30}
+			defaultOwnerId={currentPersonId}
 			isCreating={account.isPending}
 			createError={account.error}
 			onCreate={async (form) => {

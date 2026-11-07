@@ -9,11 +9,11 @@ import {
 	SelectValue,
 } from '#/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
-import type { AccountKind } from '#/pages/customers/feature/mocks/account-extras'
-import { PEOPLE } from '#/pages/customers/feature/mocks/people'
 import type { AccountForm } from '#/pages/customers/lib/account-form'
+import type { Person } from '#/pages/customers/lib/people'
 import {
 	ACCOUNT_KIND_LABELS,
+	type AccountKind,
 	LEAD_SOURCE_LABELS,
 	LEAD_SOURCES,
 } from '#/pages/customers/types'
@@ -77,12 +77,14 @@ export function AccountFields({
 	bind,
 	mode,
 	defaultTerms,
+	people,
 }: {
 	form: AccountForm
 	onChange: (patch: Partial<AccountForm>) => void
 	bind: BindField
 	mode: 'create' | 'edit'
 	defaultTerms: number
+	people: readonly Person[]
 }) {
 	const name = bind('name')
 	const registrationNumber = bind('registrationNumber')
@@ -215,7 +217,7 @@ export function AccountFields({
 					</SelectTrigger>
 					<SelectContent>
 						<SelectItem value={NONE}>Aucun</SelectItem>
-						{PEOPLE.map((person) => (
+						{people.map((person) => (
 							<SelectItem key={person.id} value={person.id}>
 								{person.name}
 							</SelectItem>

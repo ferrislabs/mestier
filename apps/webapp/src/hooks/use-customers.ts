@@ -227,6 +227,9 @@ export function useDeleteCustomerContext(customerId: string) {
 				queryClient.invalidateQueries({
 					queryKey: customerContextKey(variables.path.customer_context_id),
 				}),
+				queryClient.invalidateQueries({
+					queryKey: customerKey(customerId),
+				}),
 			])
 		},
 	})
@@ -281,6 +284,9 @@ export function useDeleteCustomerContact(customerId: string) {
 				queryClient.invalidateQueries({
 					queryKey: customerContactKey(variables.path.customer_contact_id),
 				}),
+				queryClient.invalidateQueries({
+					queryKey: customerKey(customerId),
+				}),
 			])
 		},
 	})
@@ -304,6 +310,9 @@ export type Customer = Schemas.CustomerResponse
 export type CustomerPayload = Schemas.CreateCustomerRequest
 export type CustomerPipelineStage = Schemas.CustomerPipelineStage
 export type CustomerStatus = Schemas.CustomerStatus
+export type CustomerKind = Schemas.CustomerKind
+export type AddressKind = Schemas.AddressKind
+export type LeadSource = Schemas.LeadSource
 export type CustomerContact = Schemas.CustomerContactResponse
 export type CustomerContactPayload = Schemas.CreateCustomerContactRequest
 export type CustomerContext = Schemas.CustomerContextResponse

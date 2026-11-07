@@ -11,6 +11,8 @@ pub mod commands;
 pub mod ports;
 pub mod service;
 
+pub use service::CustomerContactService;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct CustomerContactId(pub Uuid);
 
@@ -36,6 +38,7 @@ pub struct CustomerContact {
     pub last_name: String,
     pub role: Option<String>,
     pub phone: Option<String>,
+    pub mobile: Option<String>,
     pub email: Option<String>,
     pub is_primary: bool,
     pub deleted_at: Option<DateTime<Utc>>,

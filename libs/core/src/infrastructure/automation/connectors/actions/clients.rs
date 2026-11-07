@@ -11,12 +11,13 @@ use crate::domain::customer::commands::UpdateCustomerCommand;
 use crate::domain::customer_contact::commands::{
     CreateCustomerContactCommand, UpdateCustomerContactCommand,
 };
+use crate::domain::customer_context::DEFAULT_COUNTRY;
 use crate::domain::customer_context::commands::{
     CreateCustomerContextCommand, UpdateCustomerContextCommand,
 };
 use crate::{
-    Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId, CustomerId,
-    CustomerPipelineStage, CustomerStatus,
+    AddressKind, Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId,
+    CustomerId, CustomerPipelineStage, CustomerStatus, RegistrationNumber,
 };
 
 #[cfg(test)]
@@ -356,10 +357,14 @@ async fn update_customer(context: &ActionContext<'_>) -> Result<Value, String> {
     let status = select::<CustomerStatus>(context, "status")?;
     let pipeline_stage = select::<CustomerPipelineStage>(context, "pipeline_stage")?;
     let name = context.text("name")?.to_owned();
-    let registration_number = owned(context.optional_text("registration_number")?);
+    let registration_number = context
+        .optional_text("registration_number")?
+        .map(RegistrationNumber::try_from)
+        .transpose()
+        .map_err(|refusal| refusal.to_string())?;
     let phone = owned(context.optional_text("phone")?);
     let email = owned(context.optional_text("email")?);
-    customer_of_run(context, id).await?;
+    let current = customer_of_run(context, id).await?;
 
     context
         .usecase
@@ -372,10 +377,12 @@ async fn update_customer(context: &ActionContext<'_>) -> Result<Value, String> {
             registration_number,
             phone,
             email,
+            profile: current.profile,
         })
         .await
+        .map_err(failure)?
         .map(|customer| customer_json(&customer))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn delete_customer(context: &ActionContext<'_>) -> Result<Value, String> {
@@ -431,6 +438,7 @@ async fn create_contact(context: &ActionContext<'_>) -> Result<Value, String> {
             last_name,
             role,
             phone,
+            mobile: None,
             email,
             is_primary,
         })
@@ -447,7 +455,7 @@ async fn update_contact(context: &ActionContext<'_>) -> Result<Value, String> {
     let phone = owned(context.optional_text("phone")?);
     let email = owned(context.optional_text("email")?);
     let is_primary = context.optional_bool("is_primary")?.unwrap_or(false);
-    contact_of_run(context, id).await?;
+    let current = contact_of_run(context, id).await?;
 
     context
         .usecase
@@ -458,6 +466,7 @@ async fn update_contact(context: &ActionContext<'_>) -> Result<Value, String> {
             last_name,
             role,
             phone,
+            mobile: current.mobile,
             email,
             is_primary,
         })
@@ -515,9 +524,12 @@ async fn create_context(context: &ActionContext<'_>) -> Result<Value, String> {
             actor: context.actor(),
             customer_id,
             label,
+            kind: AddressKind::default(),
             address_line,
+            address_line2: None,
             postal_code,
             city,
+            country: DEFAULT_COUNTRY.to_owned(),
             photo_key,
         })
         .await
@@ -532,7 +544,7 @@ async fn update_context(context: &ActionContext<'_>) -> Result<Value, String> {
     let postal_code = owned(context.optional_text("postal_code")?);
     let city = owned(context.optional_text("city")?);
     let photo_key = owned(context.optional_text("photo_key")?);
-    context_of_run(context, id).await?;
+    let current = context_of_run(context, id).await?;
 
     context
         .usecase
@@ -540,9 +552,12 @@ async fn update_context(context: &ActionContext<'_>) -> Result<Value, String> {
             actor: context.actor(),
             id,
             label,
+            kind: current.kind,
             address_line,
+            address_line2: current.address_line2,
             postal_code,
             city,
+            country: current.country,
             photo_key,
         })
         .await

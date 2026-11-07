@@ -1,7 +1,7 @@
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomers } from '#/hooks/use-customers'
 import { useCrmSettings } from '#/pages/crm-settings/feature/mocks/settings'
-import { useSaveAccountExtras } from '#/pages/customers/feature/mocks/account-extras'
+import { useSaveStripeCustomerId } from '#/pages/customers/feature/mocks/stripe-customer-ids'
 import { useNotice } from '#/pages/customers/feature/use-notice'
 import { todayIso } from '#/pages/customers/lib/format'
 import {
@@ -42,7 +42,7 @@ export function StripeFeature({ search, onSearchChange }: StripeFeatureProps) {
 	const allocate = useAllocateStripeEvent()
 	const ignore = useIgnoreStripeEvent()
 	const simulate = useSimulateStripeEvent()
-	const saveExtras = useSaveAccountExtras()
+	const saveStripeCustomerId = useSaveStripeCustomerId()
 
 	return (
 		<StripeUI
@@ -69,9 +69,7 @@ export function StripeFeature({ search, onSearchChange }: StripeFeatureProps) {
 			onLink={(event, customer) => {
 				void link.mutateAsync(event.id, customer).then(() => {
 					if (event.customerId)
-						void saveExtras.mutateAsync(customer.id, {
-							stripeCustomerId: event.customerId,
-						})
+						void saveStripeCustomerId.mutateAsync(customer.id, event.customerId)
 					notice.show(linkNotice(customer.name))
 				})
 			}}

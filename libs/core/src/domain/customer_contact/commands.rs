@@ -13,6 +13,7 @@ pub struct CreateCustomerContactCommand {
     pub last_name: String,
     pub role: Option<String>,
     pub phone: Option<String>,
+    pub mobile: Option<String>,
     pub email: Option<String>,
     pub is_primary: bool,
 }
@@ -28,6 +29,7 @@ pub struct UpdateCustomerContactCommand {
     pub last_name: String,
     pub role: Option<String>,
     pub phone: Option<String>,
+    pub mobile: Option<String>,
     pub email: Option<String>,
     pub is_primary: bool,
 }

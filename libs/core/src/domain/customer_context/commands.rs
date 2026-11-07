@@ -1,6 +1,6 @@
 use authz::Subject;
 
-use crate::{CustomerContextId, CustomerId};
+use crate::{AddressKind, CustomerContextId, CustomerId};
 
 #[derive(Debug, Clone)]
 pub struct CreateCustomerContextCommand {
@@ -10,9 +10,12 @@ pub struct CreateCustomerContextCommand {
     pub actor: Subject,
     pub customer_id: CustomerId,
     pub label: String,
+    pub kind: AddressKind,
     pub address_line: Option<String>,
+    pub address_line2: Option<String>,
     pub postal_code: Option<String>,
     pub city: Option<String>,
+    pub country: String,
     pub photo_key: Option<String>,
 }
 
@@ -24,8 +27,11 @@ pub struct UpdateCustomerContextCommand {
     pub actor: Subject,
     pub id: CustomerContextId,
     pub label: String,
+    pub kind: AddressKind,
     pub address_line: Option<String>,
+    pub address_line2: Option<String>,
     pub postal_code: Option<String>,
     pub city: Option<String>,
+    pub country: String,
     pub photo_key: Option<String>,
 }

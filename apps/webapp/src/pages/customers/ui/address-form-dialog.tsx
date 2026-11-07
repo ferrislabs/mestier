@@ -19,13 +19,16 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import type { AddressKind } from '#/pages/customers/feature/mocks/account-extras'
 import {
 	type AddressForm,
 	isAddressEmpty,
 	validateAddressForm,
 } from '#/pages/customers/lib/account-form'
-import { ADDRESS_KIND_LABELS, ADDRESS_KINDS } from '#/pages/customers/types'
+import {
+	ADDRESS_KIND_LABELS,
+	ADDRESS_KINDS,
+	type AddressKind,
+} from '#/pages/customers/types'
 import { AddressFields } from '#/pages/customers/ui/address-fields'
 import { FormErrors } from '#/pages/customers/ui/form-section'
 import { useFormBinding } from '#/pages/customers/ui/use-form-binding'

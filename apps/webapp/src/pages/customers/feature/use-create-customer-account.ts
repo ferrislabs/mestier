@@ -3,25 +3,21 @@ import {
 	useCreateCustomer,
 	useCreateCustomerContact,
 	useCreateCustomerContext,
+	useUpdateCustomer,
 } from '#/hooks/use-customers'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
-import {
-	type AccountExtras,
-	useSaveAccountExtras,
-} from '#/pages/customers/feature/mocks/account-extras'
+import { useSaveStripeCustomerId } from '#/pages/customers/feature/mocks/stripe-customer-ids'
 import {
 	type AccountForm,
-	extrasOfForm,
 	isAddressEmpty,
 	isContactEmpty,
+	profileOfForm,
 	registrationNumberOf,
+	stripeCustomerIdOf,
 } from '#/pages/customers/lib/account-form'
-import { todayIso } from '#/pages/customers/lib/format'
-
-export function addressLineOf(street: string, complement: string): string {
-	return [street.trim(), complement.trim()].filter(Boolean).join(', ')
-}
+import { countryCodeOf } from '#/pages/customers/lib/accounts'
+import { customerBody } from '#/pages/customers/types'
 
 export function useCreateCustomerAccount(
 	organizationId: string,
@@ -29,9 +25,10 @@ export function useCreateCustomerAccount(
 ) {
 	const navigate = useNavigate()
 	const createCustomer = useCreateCustomer(organizationId)
+	const updateCustomer = useUpdateCustomer()
 	const createContact = useCreateCustomerContact()
 	const createContext = useCreateCustomerContext()
-	const saveExtras = useSaveAccountExtras()
+	const saveStripeCustomerId = useSaveStripeCustomerId()
 
 	async function create(form: AccountForm) {
 		const contact = isContactEmpty(form.contact) ? null : form.contact
@@ -44,15 +41,12 @@ export function useCreateCustomerAccount(
 				registration_number: registrationNumberOf(form),
 				email: contact?.email.trim() || null,
 				phone: contact?.phone.trim() || null,
+				...profileOfForm(form),
 			},
 		})
 		const customerId = response.data.id
-		const extras = extrasOfForm(form)
-		const today = todayIso()
-		const patch: Partial<AccountExtras> = {
-			...extras,
-			convertedAt: form.status === 'client' ? today : null,
-		}
+		let billingContactId: string | null = null
+		let billingAddressId: string | null = null
 		if (contact) {
 			const created = await createContact.mutateAsync({
 				path: { customer_id: customerId },
@@ -62,34 +56,39 @@ export function useCreateCustomerAccount(
 					role: contact.role.trim() || null,
 					email: contact.email.trim() || null,
 					phone: contact.phone.trim() || null,
+					mobile: contact.mobile.trim() || null,
 					is_primary: true,
 				},
 			})
-			const contactId = created.data.id
-			patch.billingContactId = contactId
-			const mobile = contact.mobile.trim()
-			if (mobile) patch.mobiles = { [contactId]: mobile }
+			billingContactId = created.data.id
 		}
 		if (!isAddressEmpty(form.address)) {
 			const created = await createContext.mutateAsync({
 				path: { customer_id: customerId },
 				body: {
 					label: form.kind === 'particulier' ? 'Domicile' : 'Siège',
-					address_line:
-						addressLineOf(form.address.street, form.address.complement) || null,
+					kind: 'BILLING',
+					address_line: form.address.street.trim() || null,
+					address_line2: form.address.complement.trim() || null,
 					postal_code: form.address.postalCode.trim() || null,
 					city: form.address.city.trim() || null,
+					country: countryCodeOf(form.address.country),
 					photo_key: null,
 				},
 			})
-			const contextId = created.data.id
-			patch.billingContextId = contextId
-			patch.addressKinds = { [contextId]: 'billing' }
-			patch.addressCountries = {
-				[contextId]: form.address.country.trim() || 'France',
-			}
+			billingAddressId = created.data.id
 		}
-		await saveExtras.mutateAsync(customerId, patch)
+		if (billingContactId || billingAddressId)
+			await updateCustomer.mutateAsync({
+				path: { customer_id: customerId },
+				body: customerBody(response.data, {
+					billing_contact_id: billingContactId,
+					billing_address_id: billingAddressId,
+				}),
+			})
+		const stripeCustomerId = stripeCustomerIdOf(form)
+		if (stripeCustomerId)
+			await saveStripeCustomerId.mutateAsync(customerId, stripeCustomerId)
 		void navigate({
 			to: buildOrgPath(organizationSlug, '/crm/clients/$customerId'),
 			params: { customerId },
@@ -100,12 +99,14 @@ export function useCreateCustomerAccount(
 		create,
 		isPending:
 			createCustomer.isPending ||
+			updateCustomer.isPending ||
 			createContact.isPending ||
 			createContext.isPending,
 		error:
 			mutationErrorMessage(createCustomer.error) ??
 			mutationErrorMessage(createContact.error) ??
 			mutationErrorMessage(createContext.error) ??
+			mutationErrorMessage(updateCustomer.error) ??
 			null,
 	}
 }

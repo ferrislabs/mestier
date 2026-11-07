@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, customer_id, label, address_line, postal_code, city, photo_key, deleted_at, created_at, updated_at\n            FROM customer_contexts\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, customer_id, first_name, last_name, role, phone, mobile, email, is_primary, deleted_at, created_at, updated_at\n            FROM customer_contacts\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -15,41 +15,51 @@
       },
       {
         "ordinal": 2,
-        "name": "label",
+        "name": "first_name",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "address_line",
+        "name": "last_name",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "postal_code",
+        "name": "role",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "city",
+        "name": "phone",
         "type_info": "Text"
       },
       {
         "ordinal": 6,
-        "name": "photo_key",
+        "name": "mobile",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "is_primary",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -63,14 +73,16 @@
       false,
       false,
       false,
-      true,
+      false,
       true,
       true,
       true,
       true,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "2ff94b19eb0f4de4df703f87d09f2b0bd33a04ac3aa8ef0e3f77382adac94fc3"
+  "hash": "dfbce1ee8717b376d149f83a9c3e0548244ae70658287f7ce3ca9f1319b1a0f8"
 }

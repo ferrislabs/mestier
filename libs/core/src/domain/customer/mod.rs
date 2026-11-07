@@ -9,7 +9,14 @@ use crate::OrganizationId;
 
 pub mod commands;
 pub mod ports;
+pub mod profile;
 pub mod service;
+
+pub use profile::{
+    CustomerError, CustomerField, CustomerKind, CustomerOutcome, CustomerProfile, LeadSource,
+    RegistrationNumber, payment_terms_of, siren_of,
+};
+pub use service::CustomerService;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct CustomerId(pub Uuid);
@@ -128,9 +135,38 @@ pub struct Customer {
     pub registration_number: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
+    pub profile: CustomerProfile,
+    pub converted_at: Option<DateTime<Utc>>,
+    pub archived_at: Option<DateTime<Utc>>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl Customer {
+    pub fn change_status(&mut self, requested: CustomerStatus, now: DateTime<Utc>) {
+        let restoring =
+            self.status == CustomerStatus::Archived && requested == CustomerStatus::Prospect;
+        let next = if restoring && self.converted_at.is_some() {
+            CustomerStatus::Client
+        } else {
+            requested
+        };
+
+        match next {
+            CustomerStatus::Client => {
+                self.converted_at.get_or_insert(now);
+                self.archived_at = None;
+            }
+            CustomerStatus::Prospect => self.archived_at = None,
+            CustomerStatus::Archived => {
+                if self.status != CustomerStatus::Archived {
+                    self.archived_at = Some(now);
+                }
+            }
+        }
+        self.status = next;
+    }
 }
 
 #[cfg(test)]
@@ -160,6 +196,109 @@ mod tests {
             "CLIENT".parse::<CustomerStatus>().unwrap(),
             CustomerStatus::Client
         );
+    }
+
+    fn prospect() -> Customer {
+        let now = Utc::now();
+        Customer {
+            id: CustomerId(Uuid::new_v4()),
+            organization_id: OrganizationId(Uuid::new_v4()),
+            status: CustomerStatus::Prospect,
+            pipeline_stage: CustomerPipelineStage::New,
+            name: "Alice Dupont".to_owned(),
+            registration_number: None,
+            phone: None,
+            email: None,
+            profile: CustomerProfile::default(),
+            converted_at: None,
+            archived_at: None,
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn at(day: u32) -> DateTime<Utc> {
+        chrono::TimeZone::with_ymd_and_hms(&Utc, 2026, 11, day, 9, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn converting_a_prospect_sets_converted_at() {
+        let mut customer = prospect();
+
+        customer.change_status(CustomerStatus::Client, at(2));
+
+        assert_eq!(customer.status, CustomerStatus::Client);
+        assert_eq!(customer.converted_at, Some(at(2)));
+    }
+
+    #[test]
+    fn converting_again_keeps_the_first_date() {
+        let mut customer = prospect();
+        customer.change_status(CustomerStatus::Client, at(2));
+
+        customer.change_status(CustomerStatus::Client, at(20));
+
+        assert_eq!(customer.converted_at, Some(at(2)));
+    }
+
+    #[test]
+    fn archiving_sets_archived_at_and_keeps_the_conversion() {
+        let mut customer = prospect();
+        customer.change_status(CustomerStatus::Client, at(2));
+
+        customer.change_status(CustomerStatus::Archived, at(5));
+
+        assert_eq!(customer.status, CustomerStatus::Archived);
+        assert_eq!(customer.archived_at, Some(at(5)));
+        assert_eq!(customer.converted_at, Some(at(2)));
+    }
+
+    #[test]
+    fn archiving_an_archived_customer_keeps_the_first_archive_date() {
+        let mut customer = prospect();
+        customer.change_status(CustomerStatus::Archived, at(5));
+
+        customer.change_status(CustomerStatus::Archived, at(9));
+
+        assert_eq!(customer.archived_at, Some(at(5)));
+    }
+
+    #[test]
+    fn restoring_a_converted_customer_returns_to_client() {
+        let mut customer = prospect();
+        customer.change_status(CustomerStatus::Client, at(2));
+        customer.change_status(CustomerStatus::Archived, at(5));
+
+        customer.change_status(CustomerStatus::Prospect, at(8));
+
+        assert_eq!(customer.status, CustomerStatus::Client);
+        assert_eq!(customer.archived_at, None);
+        assert_eq!(customer.converted_at, Some(at(2)));
+    }
+
+    #[test]
+    fn restoring_a_never_converted_customer_returns_to_prospect() {
+        let mut customer = prospect();
+        customer.change_status(CustomerStatus::Archived, at(5));
+
+        customer.change_status(CustomerStatus::Prospect, at(8));
+
+        assert_eq!(customer.status, CustomerStatus::Prospect);
+        assert_eq!(customer.archived_at, None);
+        assert_eq!(customer.converted_at, None);
+    }
+
+    #[test]
+    fn converting_an_archived_prospect_makes_it_a_client() {
+        let mut customer = prospect();
+        customer.change_status(CustomerStatus::Archived, at(5));
+
+        customer.change_status(CustomerStatus::Client, at(8));
+
+        assert_eq!(customer.status, CustomerStatus::Client);
+        assert_eq!(customer.converted_at, Some(at(8)));
+        assert_eq!(customer.archived_at, None);
     }
 
     #[test]

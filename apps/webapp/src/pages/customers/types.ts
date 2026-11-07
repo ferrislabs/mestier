@@ -1,16 +1,19 @@
 import type {
+	AddressKind as ApiAddressKind,
 	Customer,
 	CustomerContact,
 	CustomerContext,
+	CustomerKind,
 	CustomerPipelineStage,
 	CustomerStatus,
-} from '#/hooks/use-customers'
-import type {
-	AccountExtras,
-	AccountKind,
-	AddressKind,
 	LeadSource,
-} from '#/pages/customers/feature/mocks/account-extras'
+} from '#/hooks/use-customers'
+
+export type { LeadSource }
+
+export type AccountKind = 'particulier' | 'professionnel'
+
+export type AddressKind = 'billing' | 'site' | 'other'
 
 export interface CustomerFormValues {
 	status: CustomerStatus
@@ -33,6 +36,7 @@ export interface CustomerContactFormValues {
 	role: string
 	email: string
 	phone: string
+	mobile: string
 	isPrimary: boolean
 }
 
@@ -83,6 +87,7 @@ export function customerContactToForm(
 		role: customerContact?.role ?? '',
 		email: customerContact?.email ?? '',
 		phone: customerContact?.phone ?? '',
+		mobile: customerContact?.mobile ?? '',
 		isPrimary: customerContact?.is_primary ?? false,
 	}
 }
@@ -130,6 +135,7 @@ export const EMPTY_CUSTOMER_CONTACT_FORM: CustomerContactFormValues = {
 	role: '',
 	email: '',
 	phone: '',
+	mobile: '',
 	isPrimary: false,
 }
 
@@ -171,12 +177,26 @@ export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
 
 export const LEAD_SOURCES = Object.keys(LEAD_SOURCE_LABELS) as LeadSource[]
 
-export function kindOf(
-	customer: Pick<Customer, 'registration_number'>,
-	extras: Pick<AccountExtras, 'kind'>,
-): AccountKind {
-	if (extras.kind !== null) return extras.kind
-	return customer.registration_number ? 'professionnel' : 'particulier'
+export function accountKindOf(kind: CustomerKind): AccountKind {
+	return kind === 'INDIVIDUAL' ? 'particulier' : 'professionnel'
+}
+
+export function customerKindOf(kind: AccountKind): CustomerKind {
+	return kind === 'particulier' ? 'INDIVIDUAL' : 'PROFESSIONAL'
+}
+
+export function kindOf(customer: Pick<Customer, 'kind'>): AccountKind {
+	return accountKindOf(customer.kind)
+}
+
+export function addressKindOf(kind: ApiAddressKind): AddressKind {
+	if (kind === 'BILLING') return 'billing'
+	return kind === 'OTHER' ? 'other' : 'site'
+}
+
+export function apiAddressKindOf(kind: AddressKind): ApiAddressKind {
+	if (kind === 'billing') return 'BILLING'
+	return kind === 'other' ? 'OTHER' : 'SITE'
 }
 
 export type CustomerBodyOverrides = Partial<{
@@ -186,6 +206,15 @@ export type CustomerBodyOverrides = Partial<{
 	registration_number: string | null
 	email: string | null
 	phone: string | null
+	kind: CustomerKind
+	website: string | null
+	vat_number: string | null
+	owner_member_id: string | null
+	lead_source: LeadSource | null
+	notes: string | null
+	payment_terms_days: number | null
+	billing_contact_id: string | null
+	billing_address_id: string | null
 }>
 
 export function customerBody(
@@ -199,15 +228,15 @@ export function customerBody(
 		registration_number: customer.registration_number ?? null,
 		email: customer.email ?? null,
 		phone: customer.phone ?? null,
+		kind: customer.kind,
+		website: customer.website ?? null,
+		vat_number: customer.vat_number ?? null,
+		owner_member_id: customer.owner_member_id ?? null,
+		lead_source: customer.lead_source ?? null,
+		notes: customer.notes ?? null,
+		payment_terms_days: customer.payment_terms_days ?? null,
+		billing_contact_id: customer.billing_contact_id ?? null,
+		billing_address_id: customer.billing_address_id ?? null,
 		...overrides,
 	}
-}
-
-export function reactivatedStatus(customer: Customer): {
-	status: CustomerStatus
-	pipeline_stage: CustomerPipelineStage
-} {
-	return customer.pipeline_stage === 'WON'
-		? { status: 'CLIENT', pipeline_stage: 'WON' }
-		: { status: 'PROSPECT', pipeline_stage: customer.pipeline_stage }
 }

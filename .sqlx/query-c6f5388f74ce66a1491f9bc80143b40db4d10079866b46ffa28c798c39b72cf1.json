@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, customer_id, first_name, last_name, role, phone, email, is_primary, deleted_at, created_at, updated_at\n            FROM customer_contacts\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT id, customer_id, label, kind, address_line, address_line2, postal_code, city, country, photo_key, deleted_at, created_at, updated_at\n            FROM customer_contexts\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -15,46 +15,56 @@
       },
       {
         "ordinal": 2,
-        "name": "first_name",
+        "name": "label",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "last_name",
+        "name": "kind",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "role",
+        "name": "address_line",
         "type_info": "Text"
       },
       {
         "ordinal": 5,
-        "name": "phone",
+        "name": "address_line2",
         "type_info": "Text"
       },
       {
         "ordinal": 6,
-        "name": "email",
+        "name": "postal_code",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
-        "name": "is_primary",
-        "type_info": "Bool"
+        "name": "city",
+        "type_info": "Text"
       },
       {
         "ordinal": 8,
+        "name": "country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "photo_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -72,11 +82,13 @@
       true,
       true,
       true,
+      true,
       false,
+      true,
       true,
       false,
       false
     ]
   },
-  "hash": "aca7772d0a1c9490913add44850429b31e0b1e7880d1bba87d630fd91397b4a5"
+  "hash": "c6f5388f74ce66a1491f9bc80143b40db4d10079866b46ffa28c798c39b72cf1"
 }

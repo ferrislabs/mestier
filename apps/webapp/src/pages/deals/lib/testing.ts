@@ -44,6 +44,7 @@ export function customer(overrides: Partial<Customer> = {}): Customer {
 		phone: null,
 		status: 'PROSPECT',
 		pipeline_stage: 'NEW',
+		kind: 'PROFESSIONAL',
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
 		...overrides,

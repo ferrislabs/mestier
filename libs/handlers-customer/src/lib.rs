@@ -7,6 +7,7 @@ use mestier_core::{CustomerContactId, CustomerId, OrganizationId, Permissions};
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
+pub mod customer_error;
 pub mod paths;
 pub mod response;
 
@@ -16,6 +17,10 @@ pub const TAG: &str = "customers";
 pub struct EmptyResponse;
 
 pub use handlers::membership::require_org_membership;
+
+pub(crate) fn default_country() -> String {
+    mestier_core::DEFAULT_COUNTRY.to_owned()
+}
 
 async fn require_customer_membership(
     state: &AppState,

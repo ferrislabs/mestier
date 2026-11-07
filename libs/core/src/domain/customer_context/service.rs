@@ -92,8 +92,10 @@ where
         validate_customer_context(
             &command.label,
             &command.address_line,
+            &command.address_line2,
             &command.postal_code,
             &command.city,
+            &command.country,
             &command.photo_key,
         )?;
 
@@ -106,9 +108,12 @@ where
                 id: CustomerContextId(generate_uuid_v7()),
                 customer_id: command.customer_id,
                 label: command.label,
+                kind: command.kind,
                 address_line: command.address_line,
+                address_line2: command.address_line2,
                 postal_code: command.postal_code,
                 city: command.city,
+                country: command.country,
                 photo_key: command.photo_key,
                 deleted_at: None,
                 created_at: now,
@@ -140,8 +145,10 @@ where
         validate_customer_context(
             &command.label,
             &command.address_line,
+            &command.address_line2,
             &command.postal_code,
             &command.city,
+            &command.country,
             &command.photo_key,
         )?;
 
@@ -151,9 +158,12 @@ where
             .await?;
 
         customer_context.label = command.label;
+        customer_context.kind = command.kind;
         customer_context.address_line = command.address_line;
+        customer_context.address_line2 = command.address_line2;
         customer_context.postal_code = command.postal_code;
         customer_context.city = command.city;
+        customer_context.country = command.country;
         customer_context.photo_key = command.photo_key;
         customer_context.updated_at = Utc::now();
 
@@ -177,14 +187,18 @@ where
 fn validate_customer_context(
     label: &str,
     address_line: &Option<String>,
+    address_line2: &Option<String>,
     postal_code: &Option<String>,
     city: &Option<String>,
+    country: &str,
     photo_key: &Option<String>,
 ) -> Result<(), CoreError> {
     validate_required("customer_context label", label)?;
     validate_optional("customer_context address line", address_line)?;
+    validate_optional("customer_context address line 2", address_line2)?;
     validate_optional("customer_context postal code", postal_code)?;
     validate_optional("customer_context city", city)?;
+    validate_required("customer_context country", country)?;
     validate_optional("customer_context photo key", photo_key)?;
     Ok(())
 }
@@ -224,9 +238,12 @@ mod tests {
             id,
             customer_id,
             label: "Maison".to_owned(),
+            kind: crate::AddressKind::Site,
             address_line: Some("1 rue des Lilas".to_owned()),
+            address_line2: None,
             postal_code: Some("75001".to_owned()),
             city: Some("Paris".to_owned()),
+            country: "FR".to_owned(),
             photo_key: None,
             deleted_at: None,
             created_at: now,
@@ -245,6 +262,9 @@ mod tests {
             registration_number: None,
             phone: None,
             email: None,
+            profile: crate::CustomerProfile::default(),
+            converted_at: None,
+            archived_at: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -299,15 +319,21 @@ mod tests {
                 actor: system_actor(),
                 customer_id,
                 label: "Maison".to_owned(),
+                kind: crate::AddressKind::Billing,
                 address_line: Some("1 rue des Lilas".to_owned()),
+                address_line2: Some("Bâtiment B".to_owned()),
                 postal_code: Some("75001".to_owned()),
                 city: Some("Paris".to_owned()),
+                country: "BE".to_owned(),
                 photo_key: None,
             })
             .await
             .unwrap();
 
         assert_eq!(created.label, "Maison");
+        assert_eq!(created.kind, crate::AddressKind::Billing);
+        assert_eq!(created.country, "BE");
+        assert_eq!(created.address_line2.as_deref(), Some("Bâtiment B"));
     }
 
     #[tokio::test]
@@ -341,15 +367,19 @@ mod tests {
                 actor: system_actor(),
                 id,
                 label: "Atelier".to_owned(),
+                kind: crate::AddressKind::Other,
                 address_line: Some("2 rue des Lilas".to_owned()),
+                address_line2: None,
                 postal_code: Some("69001".to_owned()),
                 city: Some("Lyon".to_owned()),
+                country: "FR".to_owned(),
                 photo_key: Some("uploads/customer_context.jpg".to_owned()),
             })
             .await
             .unwrap();
 
         assert_eq!(updated.label, "Atelier");
+        assert_eq!(updated.kind, crate::AddressKind::Other);
         assert_eq!(
             updated.photo_key.as_deref(),
             Some("uploads/customer_context.jpg")
@@ -445,9 +475,12 @@ mod tests {
                 actor: system_actor(),
                 customer_id: CustomerId(Uuid::new_v4()),
                 label: "Maison".to_owned(),
+                kind: crate::AddressKind::Site,
                 address_line: Some("".to_owned()),
+                address_line2: None,
                 postal_code: Some("75001".to_owned()),
                 city: Some("Paris".to_owned()),
+                country: "FR".to_owned(),
                 photo_key: None,
             })
             .await
@@ -490,9 +523,12 @@ mod tests {
                 actor: policy::user_subject(user_id, Vec::new()),
                 id,
                 label: "Atelier".to_owned(),
+                kind: crate::AddressKind::Site,
                 address_line: None,
+                address_line2: None,
                 postal_code: None,
                 city: None,
+                country: "FR".to_owned(),
                 photo_key: None,
             })
             .await

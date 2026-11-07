@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_EXTRAS } from '#/pages/customers/feature/mocks/account-extras'
+import type { Customer } from '#/hooks/use-customers'
 import {
+	accountDetailsOf,
 	billingContactOf,
 	billingContextOf,
 	contactName,
-	contextCountry,
 	contextKind,
+	countryCodeOf,
+	countryLabelOf,
 	directoryTerms,
 	mainContactOf,
 	openDealsSentence,
-	withEntry,
 } from '#/pages/customers/lib/accounts'
 
 const contacts = [
@@ -18,9 +19,23 @@ const contacts = [
 ]
 
 const contexts = [
-	{ id: 'a1', label: 'Chantier', city: 'Rezé' },
-	{ id: 'a2', label: 'Siège', city: 'Nantes' },
+	{ id: 'a1', label: 'Chantier', city: 'Rezé', kind: 'SITE' as const },
+	{ id: 'a2', label: 'Siège', city: 'Nantes', kind: 'SITE' as const },
 ]
+
+function customerFixture(overrides: Partial<Customer>): Customer {
+	return {
+		id: 'c1',
+		organization_id: 'org',
+		name: 'Boulangerie Lemoine',
+		status: 'CLIENT',
+		pipeline_stage: 'WON',
+		kind: 'PROFESSIONAL',
+		created_at: '2026-01-01T00:00:00Z',
+		updated_at: '2026-01-01T00:00:00Z',
+		...overrides,
+	}
+}
 
 describe('contacts', () => {
 	it('names a contact', () => {
@@ -36,46 +51,92 @@ describe('contacts', () => {
 	})
 
 	it('picks the designated billing contact, then the primary one', () => {
-		expect(
-			billingContactOf(contacts, { ...EMPTY_EXTRAS, billingContactId: 'k1' })
-				?.id,
-		).toBe('k1')
-		expect(
-			billingContactOf(contacts, { ...EMPTY_EXTRAS, billingContactId: 'gone' })
-				?.id,
-		).toBe('k2')
-		expect(billingContactOf(contacts, EMPTY_EXTRAS)?.id).toBe('k2')
+		expect(billingContactOf(contacts, 'k1')?.id).toBe('k1')
+		expect(billingContactOf(contacts, 'gone')?.id).toBe('k2')
+		expect(billingContactOf(contacts, null)?.id).toBe('k2')
+		expect(billingContactOf(contacts, undefined)?.id).toBe('k2')
 	})
 })
 
 describe('addresses', () => {
 	it('prefers the designated billing address, then a billing-kind one, then the first', () => {
+		expect(billingContextOf(contexts, 'a2')?.id).toBe('a2')
 		expect(
-			billingContextOf(contexts, { ...EMPTY_EXTRAS, billingContextId: 'a2' })
-				?.id,
+			billingContextOf(
+				[
+					{ id: 'a1', kind: 'SITE' as const },
+					{ id: 'a2', kind: 'BILLING' as const },
+				],
+				null,
+			)?.id,
 		).toBe('a2')
-		expect(
-			billingContextOf(contexts, {
-				...EMPTY_EXTRAS,
-				addressKinds: { a2: 'billing' },
-			})?.id,
-		).toBe('a2')
-		expect(billingContextOf(contexts, EMPTY_EXTRAS)?.id).toBe('a1')
-		expect(billingContextOf([], EMPTY_EXTRAS)).toBeUndefined()
+		expect(billingContextOf(contexts, null)?.id).toBe('a1')
+		expect(billingContextOf([], null)).toBeUndefined()
 	})
 
-	it('defaults the kind and the country', () => {
-		expect(contextKind('a1', EMPTY_EXTRAS)).toBe('site')
-		expect(
-			contextKind('a1', { ...EMPTY_EXTRAS, addressKinds: { a1: 'other' } }),
-		).toBe('other')
-		expect(contextCountry('a1', EMPTY_EXTRAS)).toBe('France')
-		expect(
-			contextCountry('a1', {
-				...EMPTY_EXTRAS,
-				addressCountries: { a1: 'Belgique' },
+	it('maps the API kind to the screen vocabulary', () => {
+		expect(contextKind({ kind: 'SITE' })).toBe('site')
+		expect(contextKind({ kind: 'BILLING' })).toBe('billing')
+		expect(contextKind({ kind: 'OTHER' })).toBe('other')
+	})
+
+	it('shows the stored country code as a country name', () => {
+		expect(countryLabelOf('FR')).toBe('France')
+		expect(countryLabelOf(' fr ')).toBe('France')
+		expect(countryLabelOf('')).toBe('France')
+		expect(countryLabelOf('BE')).toBe('BE')
+		expect(countryLabelOf('Belgique')).toBe('Belgique')
+	})
+
+	it('stores France as its code and keeps any other country as typed', () => {
+		expect(countryCodeOf('France')).toBe('FR')
+		expect(countryCodeOf(' france ')).toBe('FR')
+		expect(countryCodeOf('')).toBe('FR')
+		expect(countryCodeOf('Belgique')).toBe('Belgique')
+	})
+})
+
+describe('accountDetailsOf', () => {
+	it('reads every detail from the customer and the Stripe mock', () => {
+		const details = accountDetailsOf(
+			customerFixture({
+				kind: 'INDIVIDUAL',
+				vat_number: 'FR123',
+				website: 'https://x.fr',
+				owner_member_id: 'm1',
+				lead_source: 'salon',
+				payment_terms_days: 45,
+				notes: 'Livraison le matin',
+				converted_at: '2026-10-01T09:00:00Z',
+				archived_at: null,
+				billing_contact_id: 'k1',
+				billing_address_id: 'a2',
 			}),
-		).toBe('Belgique')
+			'cus_123',
+		)
+		expect(details).toEqual({
+			kind: 'particulier',
+			vatNumber: 'FR123',
+			website: 'https://x.fr',
+			ownerId: 'm1',
+			source: 'salon',
+			paymentTermsDays: 45,
+			stripeCustomerId: 'cus_123',
+			notes: 'Livraison le matin',
+			convertedAt: '2026-10-01T09:00:00Z',
+			archivedAt: null,
+			billingContactId: 'k1',
+			billingAddressId: 'a2',
+		})
+	})
+
+	it('defaults the optional details of a bare customer', () => {
+		const details = accountDetailsOf(customerFixture({}), null)
+		expect(details.kind).toBe('professionnel')
+		expect(details.vatNumber).toBe('')
+		expect(details.paymentTermsDays).toBeNull()
+		expect(details.convertedAt).toBeNull()
+		expect(details.stripeCustomerId).toBeNull()
 	})
 })
 
@@ -90,10 +151,10 @@ describe('directoryTerms', () => {
 					role: 'Gérante',
 					email: 'lea@x.fr',
 					phone: '02 40 12 34 56',
+					mobile: '06 12 34 56 78',
 				},
 			],
 			[{ city: 'Rezé' }],
-			{ ...EMPTY_EXTRAS, mobiles: { k1: '06 12 34 56 78' } },
 		)
 		expect(terms.text).toEqual(
 			expect.arrayContaining(['Rezé', 'Léa Duval', 'lea@x.fr', 'Gérante']),
@@ -116,15 +177,5 @@ describe('openDealsSentence', () => {
 		expect(openDealsSentence(3)).toBe(
 			'Ses 3 opportunités ouvertes seront marquées comme perdues (motif : compte archivé) et ne pourront pas être rouvertes.',
 		)
-	})
-})
-
-describe('withEntry', () => {
-	it('sets, replaces and drops an entry without touching the source', () => {
-		const source = { a: '1' }
-		expect(withEntry(source, 'b', '2')).toEqual({ a: '1', b: '2' })
-		expect(withEntry(source, 'a', '9')).toEqual({ a: '9' })
-		expect(withEntry(source, 'a', '')).toEqual({})
-		expect(source).toEqual({ a: '1' })
 	})
 })

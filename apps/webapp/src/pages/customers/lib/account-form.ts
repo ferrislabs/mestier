@@ -1,9 +1,13 @@
-import type { Customer, CustomerPipelineStage } from '#/hooks/use-customers'
 import type {
-	AccountExtras,
-	AccountKind,
+	Customer,
+	CustomerPipelineStage,
 	LeadSource,
-} from '#/pages/customers/feature/mocks/account-extras'
+} from '#/hooks/use-customers'
+import {
+	type AccountKind,
+	customerKindOf,
+	kindOf,
+} from '#/pages/customers/types'
 
 export type ContactForm = {
 	firstName: string
@@ -104,25 +108,26 @@ export function emptyAccountForm(ownerId: string | null): AccountForm {
 
 export function accountFormOf(
 	customer: Customer,
-	extras: AccountExtras,
-	kind: AccountKind,
+	stripeCustomerId: string | null,
 ): AccountForm {
 	return {
-		...emptyAccountForm(extras.ownerId),
-		kind,
+		...emptyAccountForm(customer.owner_member_id ?? null),
+		kind: kindOf(customer),
 		status: customer.status === 'PROSPECT' ? 'prospect' : 'client',
 		pipelineStage: customer.pipeline_stage,
 		name: customer.name,
 		registrationNumber: customer.registration_number ?? '',
-		vatNumber: extras.vatNumber,
-		website: extras.website,
+		vatNumber: customer.vat_number ?? '',
+		website: customer.website ?? '',
 		email: customer.email ?? '',
 		phone: customer.phone ?? '',
-		source: extras.source,
+		source: customer.lead_source ?? null,
 		paymentTerms:
-			extras.paymentTermsDays === null ? '' : String(extras.paymentTermsDays),
-		stripeCustomerId: extras.stripeCustomerId ?? '',
-		notes: extras.notes,
+			customer.payment_terms_days == null
+				? ''
+				: String(customer.payment_terms_days),
+		stripeCustomerId: stripeCustomerId ?? '',
+		notes: customer.notes ?? '',
 	}
 }
 
@@ -209,33 +214,23 @@ export function validateAccountForm(
 	return errors
 }
 
-export type FormExtras = Pick<
-	AccountExtras,
-	| 'kind'
-	| 'vatNumber'
-	| 'website'
-	| 'ownerId'
-	| 'source'
-	| 'paymentTermsDays'
-	| 'stripeCustomerId'
-	| 'notes'
->
-
 export function registrationNumberOf(form: AccountForm): string | null {
 	if (form.kind !== 'professionnel') return null
 	return form.registrationNumber.replace(/\s/g, '') || null
 }
 
-export function extrasOfForm(form: AccountForm): FormExtras {
-	const stripe = form.stripeCustomerId.trim()
+export function profileOfForm(form: AccountForm) {
 	return {
-		kind: form.kind,
-		vatNumber: form.vatNumber.trim(),
-		website: form.website.trim(),
-		ownerId: form.ownerId,
-		source: form.source,
-		paymentTermsDays: parsePaymentTerms(form.paymentTerms),
-		stripeCustomerId: stripe === '' ? null : stripe,
-		notes: form.notes.trim(),
+		kind: customerKindOf(form.kind),
+		website: form.website.trim() || null,
+		vat_number: form.vatNumber.trim() || null,
+		owner_member_id: form.ownerId,
+		lead_source: form.source,
+		notes: form.notes.trim() || null,
+		payment_terms_days: parsePaymentTerms(form.paymentTerms),
 	}
+}
+
+export function stripeCustomerIdOf(form: AccountForm): string | null {
+	return form.stripeCustomerId.trim() || null
 }

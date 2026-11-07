@@ -1,20 +1,27 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{CustomerContextId, UpdateCustomerContextCommand};
+use mestier_core::{AddressKind, CustomerContextId, UpdateCustomerContextCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    paths::CustomerContextPath, require_customer_membership, response::CustomerContextResponse,
+    default_country, paths::CustomerContextPath, require_customer_membership,
+    response::CustomerContextResponse,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateCustomerContextRequest {
     pub label: String,
+    #[serde(default)]
+    pub kind: AddressKind,
     pub address_line: Option<String>,
+    #[serde(default)]
+    pub address_line2: Option<String>,
     pub postal_code: Option<String>,
     pub city: Option<String>,
+    #[serde(default = "default_country")]
+    pub country: String,
     pub photo_key: Option<String>,
 }
 
@@ -59,9 +66,12 @@ pub async fn handler(
             actor,
             id: customer_context_id,
             label: payload.label,
+            kind: payload.kind,
             address_line: payload.address_line,
+            address_line2: payload.address_line2,
             postal_code: payload.postal_code,
             city: payload.city,
+            country: payload.country,
             photo_key: payload.photo_key,
         })
         .await?;

@@ -18,6 +18,7 @@ export namespace Schemas {
   };
   export type AddTicketBadgeRequest = { label: string; tone?: (string | null) | undefined };
   export type AddTicketEntryRequest = { body: string; kind: string };
+  export type AddressKind = "BILLING" | "SITE" | "OTHER";
   export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
   export type ApiKeyLocationDto = "header" | "query" | "cookie";
   export type RoleId = string;
@@ -376,25 +377,41 @@ export namespace Schemas {
     first_name: string;
     is_primary: boolean;
     last_name: string;
+    mobile?: (string | null) | undefined;
     phone?: (string | null) | undefined;
     role?: (string | null) | undefined;
   };
   export type CreateCustomerContextRequest = {
     address_line?: (string | null) | undefined;
+    address_line2?: (string | null) | undefined;
     city?: (string | null) | undefined;
+    country?: string | undefined;
+    kind?: AddressKind | undefined;
     label: string;
     photo_key?: (string | null) | undefined;
     postal_code?: (string | null) | undefined;
   };
+  export type CustomerContactId = string;
+  export type CustomerKind = "INDIVIDUAL" | "PROFESSIONAL";
+  export type LeadSource = "bouche_a_oreille" | "site_web" | "recommandation" | "salon" | "architecte" | "autre";
   export type CustomerPipelineStage = "NEW" | "CONTACTED" | "QUALIFIED" | "QUOTE_SENT" | "WON" | "LOST";
   export type CustomerStatus = "PROSPECT" | "CLIENT" | "ARCHIVED";
   export type CreateCustomerRequest = {
+    billing_address_id?: (null | CustomerContextId) | undefined;
+    billing_contact_id?: (null | CustomerContactId) | undefined;
     email?: (string | null) | undefined;
+    kind?: CustomerKind | undefined;
+    lead_source?: (null | LeadSource) | undefined;
     name: string;
+    notes?: (string | null) | undefined;
+    owner_member_id?: (null | MemberId) | undefined;
+    payment_terms_days?: (number | null) | undefined;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
+    vat_number?: (string | null) | undefined;
+    website?: (string | null) | undefined;
   };
   export type StarterModel = "landscaping";
   export type CreateDoeModelFromStarterRequest = { starter: StarterModel };
@@ -692,7 +709,6 @@ export namespace Schemas {
     id: CustomUnitId;
     organization_id: OrganizationId;
   };
-  export type CustomerContactId = string;
   export type CustomerContactResponse = {
     created_at: string;
     customer_id: CustomerId;
@@ -701,16 +717,20 @@ export namespace Schemas {
     id: CustomerContactId;
     is_primary: boolean;
     last_name: string;
+    mobile?: (string | null) | undefined;
     phone?: (string | null) | undefined;
     role?: (string | null) | undefined;
     updated_at: string;
   };
   export type CustomerContextResponse = {
     address_line?: (string | null) | undefined;
+    address_line2?: (string | null) | undefined;
     city?: (string | null) | undefined;
+    country: string;
     created_at: string;
     customer_id: CustomerId;
     id: CustomerContextId;
+    kind: AddressKind;
     label: string;
     photo_key?: (string | null) | undefined;
     postal_code?: (string | null) | undefined;
@@ -722,16 +742,27 @@ export namespace Schemas {
     outstanding_cents: number;
   };
   export type CustomerResponse = {
+    archived_at?: (string | null) | undefined;
+    billing_address_id?: (null | CustomerContextId) | undefined;
+    billing_contact_id?: (null | CustomerContactId) | undefined;
+    converted_at?: (string | null) | undefined;
     created_at: string;
     email?: (string | null) | undefined;
     id: CustomerId;
+    kind: CustomerKind;
+    lead_source?: (null | LeadSource) | undefined;
     name: string;
+    notes?: (string | null) | undefined;
     organization_id: OrganizationId;
+    owner_member_id?: (null | MemberId) | undefined;
+    payment_terms_days?: (number | null) | undefined;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
     updated_at: string;
+    vat_number?: (string | null) | undefined;
+    website?: (string | null) | undefined;
   };
   export type DayLogId = string;
   export type EmployeeId = string;
@@ -1848,23 +1879,36 @@ export namespace Schemas {
     first_name: string;
     is_primary: boolean;
     last_name: string;
+    mobile?: (string | null) | undefined;
     phone?: (string | null) | undefined;
     role?: (string | null) | undefined;
   };
   export type UpdateCustomerContextRequest = {
     address_line?: (string | null) | undefined;
+    address_line2?: (string | null) | undefined;
     city?: (string | null) | undefined;
+    country?: string | undefined;
+    kind?: AddressKind | undefined;
     label: string;
     photo_key?: (string | null) | undefined;
     postal_code?: (string | null) | undefined;
   };
   export type UpdateCustomerRequest = {
+    billing_address_id?: (null | CustomerContextId) | undefined;
+    billing_contact_id?: (null | CustomerContactId) | undefined;
     email?: (string | null) | undefined;
+    kind?: CustomerKind | undefined;
+    lead_source?: (null | LeadSource) | undefined;
     name: string;
+    notes?: (string | null) | undefined;
+    owner_member_id?: (null | MemberId) | undefined;
+    payment_terms_days?: (number | null) | undefined;
     phone?: (string | null) | undefined;
     pipeline_stage: CustomerPipelineStage;
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
+    vat_number?: (string | null) | undefined;
+    website?: (string | null) | undefined;
   };
   export type UpdateDoeModelRequest = {
     description?: (string | null) | undefined;
@@ -2984,6 +3028,7 @@ export namespace Endpoints {
           id: Schemas.CustomerContactId;
           is_primary: boolean;
           last_name: string;
+          mobile?: (string | null) | undefined;
           phone?: (string | null) | undefined;
           role?: (string | null) | undefined;
           updated_at: string;
@@ -3023,6 +3068,7 @@ export namespace Endpoints {
           id: Schemas.CustomerContactId;
           is_primary: boolean;
           last_name: string;
+          mobile?: (string | null) | undefined;
           phone?: (string | null) | undefined;
           role?: (string | null) | undefined;
           updated_at: string;
@@ -3047,10 +3093,13 @@ export namespace Endpoints {
       200: {
         data: {
           address_line?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
           city?: (string | null) | undefined;
+          country: string;
           created_at: string;
           customer_id: Schemas.CustomerId;
           id: Schemas.CustomerContextId;
+          kind: Schemas.AddressKind;
           label: string;
           photo_key?: (string | null) | undefined;
           postal_code?: (string | null) | undefined;
@@ -3085,10 +3134,13 @@ export namespace Endpoints {
       200: {
         data: {
           address_line?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
           city?: (string | null) | undefined;
+          country: string;
           created_at: string;
           customer_id: Schemas.CustomerId;
           id: Schemas.CustomerContextId;
+          kind: Schemas.AddressKind;
           label: string;
           photo_key?: (string | null) | undefined;
           postal_code?: (string | null) | undefined;
@@ -3113,16 +3165,27 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          archived_at?: (string | null) | undefined;
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
+          converted_at?: (string | null) | undefined;
           created_at: string;
           email?: (string | null) | undefined;
           id: Schemas.CustomerId;
+          kind: Schemas.CustomerKind;
+          lead_source?: (null | Schemas.LeadSource) | undefined;
           name: string;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
           registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
+          vat_number?: (string | null) | undefined;
+          website?: (string | null) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -3152,16 +3215,27 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
+          archived_at?: (string | null) | undefined;
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
+          converted_at?: (string | null) | undefined;
           created_at: string;
           email?: (string | null) | undefined;
           id: Schemas.CustomerId;
+          kind: Schemas.CustomerKind;
+          lead_source?: (null | Schemas.LeadSource) | undefined;
           name: string;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
           registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
+          vat_number?: (string | null) | undefined;
+          website?: (string | null) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -3170,6 +3244,7 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type get_ListCustomerContacts = {
@@ -3190,6 +3265,7 @@ export namespace Endpoints {
           id: Schemas.CustomerContactId;
           is_primary: boolean;
           last_name: string;
+          mobile?: (string | null) | undefined;
           phone?: (string | null) | undefined;
           role?: (string | null) | undefined;
           updated_at: string;
@@ -3220,6 +3296,7 @@ export namespace Endpoints {
           id: Schemas.CustomerContactId;
           is_primary: boolean;
           last_name: string;
+          mobile?: (string | null) | undefined;
           phone?: (string | null) | undefined;
           role?: (string | null) | undefined;
           updated_at: string;
@@ -3245,10 +3322,13 @@ export namespace Endpoints {
       200: {
         data: Array<{
           address_line?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
           city?: (string | null) | undefined;
+          country: string;
           created_at: string;
           customer_id: Schemas.CustomerId;
           id: Schemas.CustomerContextId;
+          kind: Schemas.AddressKind;
           label: string;
           photo_key?: (string | null) | undefined;
           postal_code?: (string | null) | undefined;
@@ -3274,10 +3354,13 @@ export namespace Endpoints {
       201: {
         data: {
           address_line?: (string | null) | undefined;
+          address_line2?: (string | null) | undefined;
           city?: (string | null) | undefined;
+          country: string;
           created_at: string;
           customer_id: Schemas.CustomerId;
           id: Schemas.CustomerContextId;
+          kind: Schemas.AddressKind;
           label: string;
           photo_key?: (string | null) | undefined;
           postal_code?: (string | null) | undefined;
@@ -5361,16 +5444,27 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
+          archived_at?: (string | null) | undefined;
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
+          converted_at?: (string | null) | undefined;
           created_at: string;
           email?: (string | null) | undefined;
           id: Schemas.CustomerId;
+          kind: Schemas.CustomerKind;
+          lead_source?: (null | Schemas.LeadSource) | undefined;
           name: string;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
           registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
+          vat_number?: (string | null) | undefined;
+          website?: (string | null) | undefined;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -5390,16 +5484,27 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
+          archived_at?: (string | null) | undefined;
+          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
+          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
+          converted_at?: (string | null) | undefined;
           created_at: string;
           email?: (string | null) | undefined;
           id: Schemas.CustomerId;
+          kind: Schemas.CustomerKind;
+          lead_source?: (null | Schemas.LeadSource) | undefined;
           name: string;
+          notes?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
           pipeline_stage: Schemas.CustomerPipelineStage;
           registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
+          vat_number?: (string | null) | undefined;
+          website?: (string | null) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -5407,6 +5512,7 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type get_ListDoeModelStarters = {

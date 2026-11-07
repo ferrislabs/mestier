@@ -6,14 +6,10 @@ import { RequirePermission } from '#/components/require-permission'
 import { RubriqueLayout } from '#/components/rubrique-layout'
 import { Button } from '#/components/ui/button'
 import type { CustomerContext } from '#/hooks/use-customers'
-import type {
-	AccountExtras,
-	AddressKind,
-} from '#/pages/customers/feature/mocks/account-extras'
 import { EMPTY_ADDRESS } from '#/pages/customers/lib/account-form'
-import { contextCountry, contextKind } from '#/pages/customers/lib/accounts'
+import { contextKind, countryLabelOf } from '#/pages/customers/lib/accounts'
 import { addressesSummary, TAB_INFO } from '#/pages/customers/lib/rubriques'
-import { ADDRESS_KIND_LABELS } from '#/pages/customers/types'
+import { ADDRESS_KIND_LABELS, type AddressKind } from '#/pages/customers/types'
 import {
 	type AddressDraft,
 	AddressFormDialog,
@@ -21,18 +17,17 @@ import {
 import { StatusBadge } from '#/pages/customers/ui/badges'
 import { RecordCard } from '#/pages/customers/ui/record-card'
 
-export function addressDraftOf(
-	context?: CustomerContext,
-	kind: AddressKind = 'site',
-	country: string = EMPTY_ADDRESS.country,
-): AddressDraft {
+export function addressDraftOf(context?: CustomerContext): AddressDraft {
 	return {
 		label: context?.label ?? '',
-		kind,
+		kind: context ? contextKind(context) : 'site',
 		address: {
 			...EMPTY_ADDRESS,
-			country,
+			country: context
+				? countryLabelOf(context.country)
+				: EMPTY_ADDRESS.country,
 			street: context?.address_line ?? '',
+			complement: context?.address_line2 ?? '',
 			postalCode: context?.postal_code ?? '',
 			city: context?.city ?? '',
 		},
@@ -42,7 +37,9 @@ export function addressDraftOf(
 
 export function formatContextAddress(context: CustomerContext): string {
 	const town = [context.postal_code, context.city].filter(Boolean).join(' ')
-	return [context.address_line, town].filter(Boolean).join(', ')
+	return [context.address_line, context.address_line2, town]
+		.filter(Boolean)
+		.join(', ')
 }
 
 interface AddressActions {
@@ -100,7 +97,7 @@ function AddressCard({
 						open={editing}
 						onOpenChange={setEditing}
 						title={`Modifier ${context.label}`}
-						initial={addressDraftOf(context, kind, country)}
+						initial={addressDraftOf(context)}
 						isEditing
 						isPending={actions.isSaving}
 						isUploadingPhoto={actions.isUploadingPhoto}
@@ -170,7 +167,6 @@ function AddressCard({
 
 export function AddressesSection({
 	contexts,
-	extras,
 	billingContextId,
 	isLoading,
 	loadError,
@@ -178,7 +174,6 @@ export function AddressesSection({
 	actions,
 }: {
 	contexts: readonly CustomerContext[]
-	extras: Pick<AccountExtras, 'addressKinds' | 'addressCountries'>
 	billingContextId: string | undefined
 	isLoading: boolean
 	loadError: string | null
@@ -237,8 +232,8 @@ export function AddressesSection({
 						<li key={context.id}>
 							<AddressCard
 								context={context}
-								kind={contextKind(context.id, extras)}
-								country={contextCountry(context.id, extras)}
+								kind={contextKind(context)}
+								country={countryLabelOf(context.country)}
 								isBilling={context.id === billingContextId}
 								actions={actions}
 							/>

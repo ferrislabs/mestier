@@ -31,16 +31,19 @@ impl<'tx> CustomerContextRepository for PgCustomerContextRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerContextRow,
             r#"
-            INSERT INTO customer_contexts (id, customer_id, label, address_line, postal_code, city, photo_key, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id, customer_id, label, address_line, postal_code, city, photo_key, deleted_at, created_at, updated_at
+            INSERT INTO customer_contexts (id, customer_id, label, kind, address_line, address_line2, postal_code, city, country, photo_key, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            RETURNING id, customer_id, label, kind, address_line, address_line2, postal_code, city, country, photo_key, deleted_at, created_at, updated_at
             "#,
             customer_context.id.0,
             customer_context.customer_id.0,
             customer_context.label,
+            customer_context.kind.as_str(),
             customer_context.address_line,
+            customer_context.address_line2,
             customer_context.postal_code,
             customer_context.city,
+            customer_context.country,
             customer_context.photo_key,
             customer_context.deleted_at,
             customer_context.created_at,
@@ -50,7 +53,7 @@ impl<'tx> CustomerContextRepository for PgCustomerContextRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(row.into())
+        row.try_into()
     }
 
     async fn find_by_id(
@@ -61,7 +64,7 @@ impl<'tx> CustomerContextRepository for PgCustomerContextRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerContextRow,
             r#"
-            SELECT id, customer_id, label, address_line, postal_code, city, photo_key, deleted_at, created_at, updated_at
+            SELECT id, customer_id, label, kind, address_line, address_line2, postal_code, city, country, photo_key, deleted_at, created_at, updated_at
             FROM customer_contexts
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -71,7 +74,7 @@ impl<'tx> CustomerContextRepository for PgCustomerContextRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(row.map(Into::into))
+        row.map(TryInto::try_into).transpose()
     }
 
     async fn list_by_customer(
@@ -84,7 +87,7 @@ impl<'tx> CustomerContextRepository for PgCustomerContextRepository<'tx> {
         let rows = sqlx::query_as!(
             CustomerContextRow,
             r#"
-            SELECT id, customer_id, label, address_line, postal_code, city, photo_key, deleted_at, created_at, updated_at
+            SELECT id, customer_id, label, kind, address_line, address_line2, postal_code, city, country, photo_key, deleted_at, created_at, updated_at
             FROM customer_contexts
             WHERE customer_id = $1 AND deleted_at IS NULL
             ORDER BY label ASC, created_at ASC
@@ -106,7 +109,12 @@ impl<'tx> CustomerContextRepository for PgCustomerContextRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok((rows.into_iter().map(Into::into).collect(), total as u64))
+        let contexts = rows
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, CoreError>>()?;
+
+        Ok((contexts, total as u64))
     }
 
     async fn update(
@@ -118,15 +126,18 @@ impl<'tx> CustomerContextRepository for PgCustomerContextRepository<'tx> {
             CustomerContextRow,
             r#"
             UPDATE customer_contexts
-            SET label = $2, address_line = $3, postal_code = $4, city = $5, photo_key = $6, updated_at = $7
+            SET label = $2, kind = $3, address_line = $4, address_line2 = $5, postal_code = $6, city = $7, country = $8, photo_key = $9, updated_at = $10
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, customer_id, label, address_line, postal_code, city, photo_key, deleted_at, created_at, updated_at
+            RETURNING id, customer_id, label, kind, address_line, address_line2, postal_code, city, country, photo_key, deleted_at, created_at, updated_at
             "#,
             customer_context.id.0,
             customer_context.label,
+            customer_context.kind.as_str(),
             customer_context.address_line,
+            customer_context.address_line2,
             customer_context.postal_code,
             customer_context.city,
+            customer_context.country,
             customer_context.photo_key,
             customer_context.updated_at,
         )
@@ -134,7 +145,9 @@ impl<'tx> CustomerContextRepository for PgCustomerContextRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        row.map(Into::into).ok_or(CoreError::NotFound)
+        row.map(TryInto::try_into)
+            .transpose()?
+            .ok_or(CoreError::NotFound)
     }
 
     async fn soft_delete(
@@ -159,6 +172,28 @@ impl<'tx> CustomerContextRepository for PgCustomerContextRepository<'tx> {
         if result.rows_affected() == 0 {
             return Err(CoreError::NotFound);
         }
+
+        sqlx::query!(
+            r#"
+            UPDATE customers
+            SET billing_address_id = (
+                    SELECT other.id
+                    FROM customer_contexts other
+                    WHERE other.customer_id = customers.id
+                      AND other.deleted_at IS NULL
+                      AND other.kind = 'BILLING'
+                    ORDER BY other.created_at ASC
+                    LIMIT 1
+                ),
+                updated_at = $2
+            WHERE billing_address_id = $1
+            "#,
+            id.0,
+            deleted_at,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
 
         Ok(())
     }

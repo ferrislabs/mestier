@@ -15,7 +15,7 @@ import {
 	OWNER_NONE,
 	type StatusFilter,
 } from '#/pages/customers/customer-list-url-state'
-import { PEOPLE } from '#/pages/customers/feature/mocks/people'
+import type { Person } from '#/pages/customers/lib/people'
 
 const STATUS_OPTIONS: readonly { value: StatusFilter; label: string }[] = [
 	{ value: 'all', label: 'Tous' },
@@ -26,9 +26,11 @@ const STATUS_OPTIONS: readonly { value: StatusFilter; label: string }[] = [
 
 export function CustomersToolbar({
 	filters,
+	people,
 	onChange,
 }: {
 	filters: ClientFilters
+	people: readonly Person[]
 	onChange: (filters: ClientFilters) => void
 }) {
 	return (
@@ -79,7 +81,7 @@ export function CustomersToolbar({
 				<SelectContent>
 					<SelectItem value={OWNER_ALL}>Tous les responsables</SelectItem>
 					<SelectItem value={OWNER_NONE}>Sans responsable</SelectItem>
-					{PEOPLE.map((person) => (
+					{people.map((person) => (
 						<SelectItem key={person.id} value={person.id}>
 							{person.name}
 						</SelectItem>

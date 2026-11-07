@@ -3,7 +3,8 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    Customer, CustomerId, OrganizationId,
+    Customer, CustomerContactId, CustomerContextId, CustomerId, LeadSource, OrganizationId,
+    PaymentTermsDays,
     domain::customer::ports::CustomerRepository,
     infrastructure::{
         customer::postgres::model::CustomerRow,
@@ -28,9 +29,9 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerRow,
             r#"
-            INSERT INTO customers (id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at
+            INSERT INTO customers (id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            RETURNING id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
             "#,
             customer.id.0,
             customer.organization_id.0,
@@ -40,6 +41,17 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
             customer.registration_number,
             customer.phone,
             customer.email,
+            customer.profile.kind.as_str(),
+            customer.profile.website,
+            customer.profile.vat_number,
+            customer.profile.owner_member_id.map(|id| id.0),
+            customer.profile.lead_source.map(LeadSource::as_str),
+            customer.profile.notes,
+            customer.profile.payment_terms.map(PaymentTermsDays::get),
+            customer.profile.billing_contact_id.map(|id| id.0),
+            customer.profile.billing_address_id.map(|id| id.0),
+            customer.converted_at,
+            customer.archived_at,
             customer.deleted_at,
             customer.created_at,
             customer.updated_at,
@@ -56,7 +68,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let row = sqlx::query_as!(
             CustomerRow,
             r#"
-            SELECT id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at
+            SELECT id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
             FROM customers
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -79,7 +91,7 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         let rows = sqlx::query_as!(
             CustomerRow,
             r#"
-            SELECT id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at
+            SELECT id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
             FROM customers
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY name ASC, created_at ASC
@@ -115,9 +127,12 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
             CustomerRow,
             r#"
             UPDATE customers
-            SET status = $2, pipeline_stage = $3, name = $4, registration_number = $5, phone = $6, email = $7, updated_at = $8
+            SET status = $2, pipeline_stage = $3, name = $4, registration_number = $5, phone = $6, email = $7,
+                kind = $8, website = $9, vat_number = $10, owner_member_id = $11, lead_source = $12, notes = $13,
+                payment_terms_days = $14, billing_contact_id = $15, billing_address_id = $16,
+                converted_at = $17, archived_at = $18, updated_at = $19
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, status, pipeline_stage, name, registration_number, phone, email, deleted_at, created_at, updated_at
+            RETURNING id, org_id, status, pipeline_stage, name, registration_number, phone, email, kind, website, vat_number, owner_member_id, lead_source, notes, payment_terms_days, billing_contact_id, billing_address_id, converted_at, archived_at, deleted_at, created_at, updated_at
             "#,
             customer.id.0,
             customer.status.as_str(),
@@ -126,6 +141,17 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
             customer.registration_number,
             customer.phone,
             customer.email,
+            customer.profile.kind.as_str(),
+            customer.profile.website,
+            customer.profile.vat_number,
+            customer.profile.owner_member_id.map(|id| id.0),
+            customer.profile.lead_source.map(LeadSource::as_str),
+            customer.profile.notes,
+            customer.profile.payment_terms.map(PaymentTermsDays::get),
+            customer.profile.billing_contact_id.map(|id| id.0),
+            customer.profile.billing_address_id.map(|id| id.0),
+            customer.converted_at,
+            customer.archived_at,
             customer.updated_at,
         )
         .fetch_optional(&mut ***tx)
@@ -135,6 +161,52 @@ impl<'tx> CustomerRepository for PgCustomerRepository<'tx> {
         row.map(TryInto::try_into)
             .transpose()?
             .ok_or(CoreError::NotFound)
+    }
+
+    async fn has_contact(
+        &mut self,
+        customer_id: CustomerId,
+        contact_id: CustomerContactId,
+    ) -> Result<bool, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let found = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM customer_contacts
+                WHERE id = $1 AND customer_id = $2 AND deleted_at IS NULL
+            ) AS "found!"
+            "#,
+            contact_id.0,
+            customer_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(found)
+    }
+
+    async fn has_address(
+        &mut self,
+        customer_id: CustomerId,
+        address_id: CustomerContextId,
+    ) -> Result<bool, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let found = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM customer_contexts
+                WHERE id = $1 AND customer_id = $2 AND deleted_at IS NULL
+            ) AS "found!"
+            "#,
+            address_id.0,
+            customer_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(found)
     }
 
     async fn soft_delete(

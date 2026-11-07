@@ -178,3 +178,4 @@ Verify (exit)
   cd apps/webapp && ./node_modules/.bin/biome check src && ./node_modules/.bin/vitest run && pnpm build
 
 Amended: 2026-11-07 B1 stored the settings on the Organization aggregate and added the handlers to handlers-organization (no new aggregate marker, no new crate); the padding goes through allocate_number of quotes and invoices; only invoices freeze the billing mentions, quotes freeze no issuer identity today.
+Amended: 2026-11-07 B2 keeps the existing 403 for an id of another organization on a customer (the membership barrier answers before the lookup); the 404 rule applies to ids nested in a body. The customer PATCH replaces every field, an absent field is cleared; the owner is checked only when it changes.

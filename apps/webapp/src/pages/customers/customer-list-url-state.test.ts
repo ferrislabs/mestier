@@ -9,10 +9,6 @@ import {
 	searchOfFilters,
 	validateClientsSearch,
 } from '#/pages/customers/customer-list-url-state'
-import {
-	type AccountExtras,
-	EMPTY_EXTRAS,
-} from '#/pages/customers/feature/mocks/account-extras'
 
 function customer(overrides: Partial<Customer>): Customer {
 	return {
@@ -23,19 +19,20 @@ function customer(overrides: Partial<Customer>): Customer {
 		phone: null,
 		status: 'CLIENT',
 		pipeline_stage: 'WON',
+		kind: 'PROFESSIONAL',
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',
 		...overrides,
 	}
 }
 
-const none = () => EMPTY_EXTRAS
+const JULIEN = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b'
 
 describe('validateClientsSearch', () => {
 	it('keeps only known statuses and owners', () => {
 		expect(
-			validateClientsSearch({ statut: 'prospect', responsable: 'julien' }),
-		).toEqual({ statut: 'prospect', responsable: 'julien' })
+			validateClientsSearch({ statut: 'prospect', responsable: JULIEN }),
+		).toEqual({ statut: 'prospect', responsable: JULIEN })
 		expect(
 			validateClientsSearch({ statut: 'bogus', responsable: 'nobody', q: ' ' }),
 		).toEqual({})
@@ -57,13 +54,13 @@ describe('filterCustomers', () => {
 
 	it('hides archived accounts by default and sorts by name', () => {
 		expect(
-			filterCustomers(list, none, DEFAULT_FILTERS).map((item) => item.id),
+			filterCustomers(list, DEFAULT_FILTERS).map((item) => item.id),
 		).toEqual(['b', 'a'])
 	})
 
 	it('shows archived accounts only on demand', () => {
 		expect(
-			filterCustomers(list, none, {
+			filterCustomers(list, {
 				...DEFAULT_FILTERS,
 				status: 'archived',
 			}).map((item) => item.id),
@@ -72,12 +69,12 @@ describe('filterCustomers', () => {
 
 	it('matches accents-insensitively on name and email', () => {
 		expect(
-			filterCustomers(list, none, { ...DEFAULT_FILTERS, query: 'eric' }).map(
+			filterCustomers(list, { ...DEFAULT_FILTERS, query: 'eric' }).map(
 				(item) => item.id,
 			),
 		).toEqual(['a'])
 		expect(
-			filterCustomers(list, none, { ...DEFAULT_FILTERS, query: 'brun.fr' }).map(
+			filterCustomers(list, { ...DEFAULT_FILTERS, query: 'brun.fr' }).map(
 				(item) => item.id,
 			),
 		).toEqual(['b'])
@@ -89,7 +86,7 @@ describe('filterCustomers', () => {
 				? { text: ['Rezé', 'Léa Duval'], phones: ['06 12 34 56 78'] }
 				: { text: [], phones: [] }
 		const ids = (query: string) =>
-			filterCustomers(list, none, { ...DEFAULT_FILTERS, query }, terms).map(
+			filterCustomers(list, { ...DEFAULT_FILTERS, query }, terms).map(
 				(item) => item.id,
 			)
 		expect(ids('reze')).toEqual(['a'])
@@ -98,19 +95,18 @@ describe('filterCustomers', () => {
 		expect(ids('nantes')).toEqual([])
 	})
 
-	it('filters on the owner kept in the extras', () => {
-		const extras = (id: string): AccountExtras => ({
-			...EMPTY_EXTRAS,
-			ownerId: id === 'a' ? 'julien' : null,
-		})
+	it('filters on the owner member of the customer', () => {
+		const owned = [
+			customer({ id: 'a', name: 'Éric Zola', owner_member_id: JULIEN }),
+			customer({ id: 'b', name: 'Agnès Brun', owner_member_id: null }),
+		]
 		expect(
-			filterCustomers(list, extras, {
-				...DEFAULT_FILTERS,
-				owner: 'julien',
-			}).map((item) => item.id),
+			filterCustomers(owned, { ...DEFAULT_FILTERS, owner: JULIEN }).map(
+				(item) => item.id,
+			),
 		).toEqual(['a'])
 		expect(
-			filterCustomers(list, extras, { ...DEFAULT_FILTERS, owner: 'none' }).map(
+			filterCustomers(owned, { ...DEFAULT_FILTERS, owner: 'none' }).map(
 				(item) => item.id,
 			),
 		).toEqual(['b'])

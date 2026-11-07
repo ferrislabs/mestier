@@ -3,7 +3,8 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    Customer, CustomerId,
+    Customer, CustomerError, CustomerField, CustomerId, CustomerOutcome, CustomerProfile,
+    CustomerStatus, MemberId, OrganizationId, RegistrationNumber,
     application::policy,
     domain::{
         customer::{
@@ -44,12 +45,56 @@ where
         }
     }
 
+    async fn refusal_of(
+        &mut self,
+        organization_id: OrganizationId,
+        customer_id: CustomerId,
+        current_owner: Option<MemberId>,
+        profile: &CustomerProfile,
+    ) -> Result<Option<CustomerError>, CoreError> {
+        if let Some(owner) = profile
+            .owner_member_id
+            .filter(|owner| Some(*owner) != current_owner)
+        {
+            let same_organization = self
+                .member_repository
+                .find_by_id(owner)
+                .await?
+                .is_some_and(|member| member.organization_id == organization_id);
+            if !same_organization {
+                return Ok(Some(CustomerError {
+                    field: CustomerField::OwnerMemberId,
+                    rule: "must be a member of the organization",
+                }));
+            }
+        }
+
+        if let Some(contact) = profile.billing_contact_id
+            && !self.repo.has_contact(customer_id, contact).await?
+        {
+            return Ok(Some(CustomerError {
+                field: CustomerField::BillingContactId,
+                rule: "must be a contact of this customer",
+            }));
+        }
+
+        if let Some(address) = profile.billing_address_id
+            && !self.repo.has_address(customer_id, address).await?
+        {
+            return Ok(Some(CustomerError {
+                field: CustomerField::BillingAddressId,
+                rule: "must be an address of this customer",
+            }));
+        }
+
+        Ok(None)
+    }
+
     pub async fn create_customer(
         &mut self,
         command: CreateCustomerCommand,
-    ) -> Result<Customer, CoreError> {
+    ) -> Result<CustomerOutcome<Customer>, CoreError> {
         validate_customer(&command.name, &command.phone, &command.email)?;
-        validate_optional("customer registration number", &command.registration_number)?;
 
         let actor = policy::enrich_for_organization(
             command.actor,
@@ -66,22 +111,37 @@ where
         )
         .await?;
 
+        let id = CustomerId(generate_uuid_v7());
+        let profile = command.profile.normalized();
+        if let Some(refusal) = self
+            .refusal_of(command.organization_id, id, None, &profile)
+            .await?
+        {
+            return Ok(Err(refusal));
+        }
+
         let now = Utc::now();
-        self.repo
-            .insert(&Customer {
-                id: CustomerId(generate_uuid_v7()),
-                organization_id: command.organization_id,
-                status: command.status,
-                pipeline_stage: command.pipeline_stage,
-                name: command.name,
-                registration_number: command.registration_number,
-                phone: command.phone,
-                email: command.email,
-                deleted_at: None,
-                created_at: now,
-                updated_at: now,
-            })
-            .await
+        let mut customer = Customer {
+            id,
+            organization_id: command.organization_id,
+            status: CustomerStatus::Prospect,
+            pipeline_stage: command.pipeline_stage,
+            name: command.name,
+            registration_number: command
+                .registration_number
+                .map(RegistrationNumber::into_inner),
+            phone: command.phone,
+            email: command.email,
+            profile,
+            converted_at: None,
+            archived_at: None,
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        };
+        customer.change_status(command.status, now);
+
+        self.repo.insert(&customer).await.map(Ok)
     }
 
     pub async fn get_customer(&mut self, id: CustomerId) -> Result<Customer, CoreError> {
@@ -102,9 +162,8 @@ where
     pub async fn update_customer(
         &mut self,
         command: UpdateCustomerCommand,
-    ) -> Result<Customer, CoreError> {
+    ) -> Result<CustomerOutcome<Customer>, CoreError> {
         validate_customer(&command.name, &command.phone, &command.email)?;
-        validate_optional("customer registration number", &command.registration_number)?;
 
         // Load first — the update carries no organization_id of its own,
         // so the row's own is the only source of authorization context.
@@ -125,15 +184,32 @@ where
         )
         .await?;
 
-        customer.status = command.status;
+        let profile = command.profile.normalized();
+        if let Some(refusal) = self
+            .refusal_of(
+                customer.organization_id,
+                customer.id,
+                customer.profile.owner_member_id,
+                &profile,
+            )
+            .await?
+        {
+            return Ok(Err(refusal));
+        }
+
+        let now = Utc::now();
+        customer.change_status(command.status, now);
         customer.pipeline_stage = command.pipeline_stage;
         customer.name = command.name;
-        customer.registration_number = command.registration_number;
+        customer.registration_number = command
+            .registration_number
+            .map(RegistrationNumber::into_inner);
         customer.phone = command.phone;
         customer.email = command.email;
-        customer.updated_at = Utc::now();
+        customer.profile = profile;
+        customer.updated_at = now;
 
-        self.repo.update(&customer).await
+        self.repo.update(&customer).await.map(Ok)
     }
 
     pub async fn soft_delete_customer(
@@ -211,6 +287,9 @@ mod tests {
             registration_number: None,
             phone: Some("+33123456789".to_owned()),
             email: Some("alice@example.com".to_owned()),
+            profile: CustomerProfile::default(),
+            converted_at: None,
+            archived_at: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -254,8 +333,10 @@ mod tests {
                 registration_number: None,
                 phone: None,
                 email: None,
+                profile: CustomerProfile::default(),
             })
             .await
+            .unwrap()
             .unwrap();
 
         assert_eq!(created.name, "Alice Dupont");
@@ -288,8 +369,10 @@ mod tests {
                 registration_number: None,
                 phone: Some("0102030405".to_owned()),
                 email: None,
+                profile: CustomerProfile::default(),
             })
             .await
+            .unwrap()
             .unwrap();
 
         assert_eq!(updated.name, "Syndic Martin");
@@ -358,6 +441,7 @@ mod tests {
                 registration_number: None,
                 phone: None,
                 email: None,
+                profile: CustomerProfile::default(),
             })
             .await
             .unwrap_err();
@@ -385,39 +469,133 @@ mod tests {
                 status: crate::CustomerStatus::Prospect,
                 pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Alice Dupont".to_owned(),
-                registration_number: Some("123 456 789".to_owned()),
+                registration_number: Some(RegistrationNumber::try_from("123 456 789").unwrap()),
                 phone: None,
                 email: None,
+                profile: CustomerProfile::default(),
             })
             .await
+            .unwrap()
             .unwrap();
 
-        assert_eq!(created.registration_number.as_deref(), Some("123 456 789"));
+        assert_eq!(created.registration_number.as_deref(), Some("123456789"));
     }
 
     #[tokio::test]
-    async fn create_customer_rejects_a_blank_registration_number() {
-        let repo = MockCustomerRepository::new();
+    async fn create_customer_with_the_status_client_sets_converted_at() {
+        let mut repo = MockCustomerRepository::new();
+        repo.expect_insert().times(1).returning(|c| {
+            let customer = c.clone();
+            Box::pin(async move { Ok(customer) })
+        });
         let member_repository = MockMemberRepository::new();
         let role_repository = MockRoleRepository::new();
-        let authz = MockAuthorizer::new();
-        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let mut authz = MockAuthorizer::new();
+        allow_once(&mut authz);
 
-        let err = service
+        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let created = service
             .create_customer(CreateCustomerCommand {
                 actor: system_actor(),
                 organization_id: OrganizationId(Uuid::new_v4()),
+                status: crate::CustomerStatus::Client,
+                pipeline_stage: crate::CustomerPipelineStage::New,
+                name: "Alice Dupont".to_owned(),
+                registration_number: None,
+                phone: None,
+                email: None,
+                profile: CustomerProfile::default(),
+            })
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(created.converted_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn update_customer_keeps_an_owner_who_left_the_organization() {
+        let id = CustomerId(Uuid::new_v4());
+        let departed = crate::MemberId(Uuid::new_v4());
+        let mut repo = MockCustomerRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let mut stored = customer(id);
+            stored.profile.owner_member_id = Some(departed);
+            Box::pin(async move { Ok(Some(stored)) })
+        });
+        repo.expect_update().times(1).returning(|c| {
+            let customer = c.clone();
+            Box::pin(async move { Ok(customer) })
+        });
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
+            .expect_find_by_id()
+            .returning(|_| Box::pin(async { Ok(None) }));
+        let role_repository = MockRoleRepository::new();
+        let mut authz = MockAuthorizer::new();
+        allow_once(&mut authz);
+
+        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let updated = service
+            .update_customer(UpdateCustomerCommand {
+                actor: system_actor(),
+                id,
+                status: crate::CustomerStatus::Client,
+                pipeline_stage: crate::CustomerPipelineStage::New,
+                name: "Alice Dupont".to_owned(),
+                registration_number: None,
+                phone: None,
+                email: None,
+                profile: CustomerProfile {
+                    owner_member_id: Some(departed),
+                    ..CustomerProfile::default()
+                },
+            })
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(updated.profile.owner_member_id, Some(departed));
+        assert_eq!(updated.status, crate::CustomerStatus::Client);
+    }
+
+    #[tokio::test]
+    async fn update_customer_refuses_a_new_owner_who_is_not_a_member() {
+        let id = CustomerId(Uuid::new_v4());
+        let stranger = crate::MemberId(Uuid::new_v4());
+        let mut repo = MockCustomerRepository::new();
+        repo.expect_find_by_id()
+            .with(eq(id))
+            .returning(move |_| Box::pin(async move { Ok(Some(customer(id))) }));
+        let mut member_repository = MockMemberRepository::new();
+        member_repository
+            .expect_find_by_id()
+            .returning(|_| Box::pin(async { Ok(None) }));
+        let role_repository = MockRoleRepository::new();
+        let mut authz = MockAuthorizer::new();
+        allow_once(&mut authz);
+
+        let mut service = CustomerService::new(repo, member_repository, role_repository, authz);
+        let refused = service
+            .update_customer(UpdateCustomerCommand {
+                actor: system_actor(),
+                id,
                 status: crate::CustomerStatus::Prospect,
                 pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Alice Dupont".to_owned(),
-                registration_number: Some(" ".to_owned()),
+                registration_number: None,
                 phone: None,
                 email: None,
+                profile: CustomerProfile {
+                    owner_member_id: Some(stranger),
+                    ..CustomerProfile::default()
+                },
             })
             .await
+            .unwrap()
             .unwrap_err();
 
-        assert!(matches!(err, CoreError::Conflict(_)));
+        assert_eq!(refused.field, CustomerField::OwnerMemberId);
     }
 
     /// The permission gate itself: a non-system actor with no membership at
@@ -449,6 +627,7 @@ mod tests {
                 registration_number: None,
                 phone: None,
                 email: None,
+                profile: CustomerProfile::default(),
             })
             .await
             .unwrap_err();
