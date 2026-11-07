@@ -16,6 +16,7 @@ import { useSyncedDraft } from '#/pages/crm-settings/ui/use-synced-draft'
 
 const FIELD_ORDER: readonly CompanyField[] = [
 	'name',
+	'capital',
 	'legalId',
 	'vatNumber',
 	'street',
@@ -24,9 +25,11 @@ const FIELD_ORDER: readonly CompanyField[] = [
 
 export function CompanySection({
 	stored,
+	error,
 	onSave,
 }: {
 	stored: Company
+	error: string | null
 	onSave: (company: Company) => Promise<void>
 }) {
 	const baseId = useId()
@@ -58,10 +61,13 @@ export function CompanySection({
 			if (first) document.getElementById(id(first))?.focus()
 			return
 		}
-		void onSave(draft).then(() => {
-			setShowErrors(false)
-			setSaved(true)
-		})
+		void onSave(draft).then(
+			() => {
+				setShowErrors(false)
+				setSaved(true)
+			},
+			() => setSaved(false),
+		)
 	}
 
 	return (
@@ -70,7 +76,7 @@ export function CompanySection({
 			title="Entreprise"
 			description="Ces mentions sont reprises sur chaque devis et facture. Elles sont figées à l’émission : les documents déjà émis ne changent pas."
 		>
-			<SettingsForm onSubmit={submit} dirty={dirty} saved={saved}>
+			<SettingsForm onSubmit={submit} dirty={dirty} saved={saved} error={error}>
 				<div className="grid gap-4 sm:grid-cols-2">
 					<TextField
 						id={id('name')}
@@ -92,7 +98,10 @@ export function CompanySection({
 						label="Capital social"
 						value={draft.capital}
 						onChange={(capital) => change({ capital })}
-						placeholder="50 000 €"
+						error={shown.fields.capital}
+						inputMode="decimal"
+						suffix="€"
+						placeholder="50000"
 					/>
 					<TextField
 						id={id('legalId')}
@@ -103,13 +112,6 @@ export function CompanySection({
 						error={shown.fields.legalId}
 						inputMode="numeric"
 						placeholder="14 chiffres"
-					/>
-					<TextField
-						id={id('registry')}
-						label="Immatriculation"
-						value={draft.registry}
-						onChange={(registry) => change({ registry })}
-						placeholder="RCS Nantes B 823 456 789"
 					/>
 					<TextField
 						id={id('vatNumber')}

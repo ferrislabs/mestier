@@ -2,7 +2,10 @@ use authz::Subject;
 
 use crate::{
     UserId,
-    domain::organization::{OrganizationId, legal_identity::VatStatus},
+    domain::organization::{
+        OrganizationId, billing_settings::BillingSettings, legal_identity::VatStatus,
+        numbering::NumberSeries,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -54,4 +57,20 @@ pub struct UpdateLegalIdentityCommand {
     /// always either debits or encaissements, never "not stated yet" — see
     /// `Organization::vat_on_debits`.
     pub vat_on_debits: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReplaceBillingSettingsCommand {
+    pub actor: Subject,
+    pub id: OrganizationId,
+    pub settings: BillingSettings,
+}
+
+#[derive(Debug, Clone)]
+pub struct SetNextNumberCommand {
+    pub actor: Subject,
+    pub id: OrganizationId,
+    pub series: NumberSeries,
+    pub year: i32,
+    pub next_number: i64,
 }

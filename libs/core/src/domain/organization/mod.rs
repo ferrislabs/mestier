@@ -2,14 +2,27 @@ use crate::UserId;
 use chrono::{DateTime, Utc};
 pub use common::OrganizationId;
 
+pub mod billing_service;
+pub mod billing_settings;
 pub mod commands;
 pub mod legal_identity;
+pub mod numbering;
 pub mod ports;
 pub mod service;
 
+pub use billing_service::{BillingSettingsService, NumberingOutcome};
+pub use billing_settings::{
+    BillingSettings, BillingSettingsError, BillingSettingsField, BillingSettingsInput,
+    DefaultVatRate, IssuerBilling, LatePenalty, NumberPadding, PaymentTermsDays, QuoteValidityDays,
+    RecoveryFeeCents,
+};
 pub use legal_identity::{
     ElectronicInvoicingFacts, LegalIdentity, MissingElectronicInvoicingFact,
     MissingLegalIdentityField, OrganizationAddress, VatStatus,
+};
+pub use numbering::{
+    CREDIT_NOTE_NUMBER_PREFIX, NumberSeries, NumberingError, SeriesNumbering, UnknownNumberSeries,
+    format_number,
 };
 
 #[derive(Debug, Clone)]

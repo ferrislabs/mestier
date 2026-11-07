@@ -4,7 +4,14 @@ use uuid::Uuid;
 
 use crate::{
     UserId,
-    domain::organization::{Organization, OrganizationId, legal_identity::VatStatus},
+    domain::organization::{
+        Organization, OrganizationId,
+        billing_settings::{
+            BillingSettings, BillingSettingsError, DefaultVatRate, LatePenalty, NumberPadding,
+            PaymentTermsDays, QuoteValidityDays, RecoveryFeeCents,
+        },
+        legal_identity::VatStatus,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -120,5 +127,45 @@ pub fn vat_status_columns(
         }
         Some(VatStatus::NotSubject { basis }) => (Some("not_subject"), None, Some(basis.as_str())),
         None => (None, None, None),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BillingSettingsRow {
+    pub payment_terms_days: i32,
+    pub quote_validity_days: i32,
+    pub default_vat_rate_bp: i32,
+    pub late_penalty: String,
+    pub recovery_fee_cents: i32,
+    pub invoice_footer: String,
+    pub number_padding: i32,
+    pub iban: Option<String>,
+    pub bic: Option<String>,
+}
+
+impl TryFrom<BillingSettingsRow> for BillingSettings {
+    type Error = CoreError;
+
+    fn try_from(row: BillingSettingsRow) -> Result<Self, Self::Error> {
+        let corrupt = |error: BillingSettingsError| {
+            CoreError::Internal(format!("invalid billing settings in database: {error}"))
+        };
+
+        Ok(Self {
+            payment_terms_days: PaymentTermsDays::try_from(i64::from(row.payment_terms_days))
+                .map_err(corrupt)?,
+            quote_validity_days: QuoteValidityDays::try_from(i64::from(row.quote_validity_days))
+                .map_err(corrupt)?,
+            default_vat_rate: DefaultVatRate::try_from(i64::from(row.default_vat_rate_bp))
+                .map_err(corrupt)?,
+            late_penalty: LatePenalty::try_from(row.late_penalty).map_err(corrupt)?,
+            recovery_fee: RecoveryFeeCents::try_from(i64::from(row.recovery_fee_cents))
+                .map_err(corrupt)?,
+            invoice_footer: row.invoice_footer,
+            number_padding: NumberPadding::try_from(i64::from(row.number_padding))
+                .map_err(corrupt)?,
+            iban: row.iban,
+            bic: row.bic,
+        })
     }
 }

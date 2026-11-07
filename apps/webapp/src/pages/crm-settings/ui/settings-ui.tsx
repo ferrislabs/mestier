@@ -14,27 +14,37 @@ import { NumberingSection } from '#/pages/crm-settings/ui/numbering-section'
 import { SettingsNav } from '#/pages/crm-settings/ui/settings-nav'
 import { StripeSection } from '#/pages/crm-settings/ui/stripe-section'
 
+export type SettingsErrors = {
+	company: string | null
+	billing: string | null
+	numbering: string | null
+}
+
 export function SettingsUI({
 	organizationSlug,
 	settings,
 	year,
 	sequenceRows,
+	errors,
 	onSaveCompany,
 	onSaveBilling,
-	onRaiseSequences,
+	onResumeSequences,
 	onReplaceSecret,
 }: {
 	organizationSlug: string
 	settings: Settings
 	year: number
 	sequenceRows: readonly SequenceRow[]
+	errors: SettingsErrors
 	onSaveCompany: (company: Company) => Promise<void>
 	onSaveBilling: (patch: BillingPatch) => Promise<void>
-	onRaiseSequences: (
-		raises: readonly { kind: SequenceKind; last: number }[],
+	onResumeSequences: (
+		resumes: readonly { kind: SequenceKind; nextNumber: number }[],
 	) => Promise<void>
 	onReplaceSecret: () => Promise<void>
 }) {
+	const invoicePrefix =
+		sequenceRows.find((row) => row.kind === 'invoice')?.prefix ?? 'FAC'
 	return (
 		<PageShell className="block">
 			<PageHeader
@@ -45,16 +55,23 @@ export function SettingsUI({
 			<div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
 				<SettingsNav />
 				<div className="grid min-w-0 content-start gap-6">
-					<CompanySection stored={settings.company} onSave={onSaveCompany} />
+					<CompanySection
+						stored={settings.company}
+						error={errors.company}
+						onSave={onSaveCompany}
+					/>
 					<BillingSection
 						settings={settings}
 						year={year}
+						invoicePrefix={invoicePrefix}
+						error={errors.billing}
 						onSave={onSaveBilling}
 					/>
 					<NumberingSection
 						rows={sequenceRows}
 						padding={settings.numberPadding}
-						onSave={onRaiseSequences}
+						error={errors.numbering}
+						onSave={onResumeSequences}
 					/>
 					<StripeSection
 						organizationSlug={organizationSlug}

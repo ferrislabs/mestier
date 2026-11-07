@@ -117,3 +117,7 @@ harness = false
 [[test]]
 name = "role_bdd"
 harness = false
+
+[[test]]
+name = "billing_bdd"
+harness = false

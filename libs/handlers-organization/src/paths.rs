@@ -21,3 +21,22 @@ pub struct OrganizationLegalIdentityPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/users/@me/organizations")]
 pub struct CurrentUserOrganizationsPath;
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/billing-settings")]
+pub struct OrganizationBillingSettingsPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/numbering")]
+pub struct OrganizationNumberingPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/numbering/{kind}")]
+pub struct OrganizationNumberingSeriesPath {
+    pub organization_id: OrganizationId,
+    pub kind: crate::numbering::NumberSeriesKind,
+}

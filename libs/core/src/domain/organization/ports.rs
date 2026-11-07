@@ -3,7 +3,7 @@ use common::CoreError;
 
 use crate::{
     UserId,
-    domain::organization::{Organization, OrganizationId},
+    domain::organization::{Organization, OrganizationId, billing_settings::BillingSettings},
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -50,4 +50,15 @@ pub trait OrganizationRepository: Send {
         id: OrganizationId,
         deleted_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn find_billing_settings(
+        &mut self,
+        id: OrganizationId,
+    ) -> impl Future<Output = Result<Option<BillingSettings>, CoreError>> + Send;
+
+    fn upsert_billing_settings(
+        &mut self,
+        id: OrganizationId,
+        settings: &BillingSettings,
+    ) -> impl Future<Output = Result<BillingSettings, CoreError>> + Send;
 }

@@ -6,9 +6,11 @@ use crate::{
     UserId,
     application::MestierUseCase,
     domain::organization::{
-        Organization, OrganizationId,
+        BillingSettings, BillingSettingsService, NumberingOutcome, Organization, OrganizationId,
+        SeriesNumbering,
         commands::{
-            CreateOrganizationCommand, UpdateLegalIdentityCommand, UpdateOrganizationCommand,
+            CreateOrganizationCommand, ReplaceBillingSettingsCommand, SetNextNumberCommand,
+            UpdateLegalIdentityCommand, UpdateOrganizationCommand,
         },
         service::OrganizationService,
     },
@@ -107,6 +109,71 @@ impl MestierUseCase {
             authz,
         );
         service.update_legal_identity(command).await
+    }
+
+    #[transactional(organization, quote, invoice, role, member, authz)]
+    pub async fn get_billing_settings(
+        &self,
+        id: OrganizationId,
+    ) -> Result<BillingSettings, CoreError> {
+        let mut service = BillingSettingsService::new(
+            organization_repository,
+            quote_repository,
+            invoice_repository,
+            role_repository,
+            member_repository,
+            authz,
+        );
+        service.get_billing_settings(id).await
+    }
+
+    #[transactional(organization, quote, invoice, role, member, authz)]
+    pub async fn replace_billing_settings(
+        &self,
+        command: ReplaceBillingSettingsCommand,
+    ) -> Result<BillingSettings, CoreError> {
+        let mut service = BillingSettingsService::new(
+            organization_repository,
+            quote_repository,
+            invoice_repository,
+            role_repository,
+            member_repository,
+            authz,
+        );
+        service.replace_billing_settings(command).await
+    }
+
+    #[transactional(organization, quote, invoice, role, member, authz)]
+    pub async fn get_numbering(
+        &self,
+        id: OrganizationId,
+        year: i32,
+    ) -> Result<Vec<SeriesNumbering>, CoreError> {
+        let mut service = BillingSettingsService::new(
+            organization_repository,
+            quote_repository,
+            invoice_repository,
+            role_repository,
+            member_repository,
+            authz,
+        );
+        service.get_numbering(id, year).await
+    }
+
+    #[transactional(organization, quote, invoice, role, member, authz)]
+    pub async fn set_next_number(
+        &self,
+        command: SetNextNumberCommand,
+    ) -> Result<NumberingOutcome, CoreError> {
+        let mut service = BillingSettingsService::new(
+            organization_repository,
+            quote_repository,
+            invoice_repository,
+            role_repository,
+            member_repository,
+            authz,
+        );
+        service.set_next_number(command).await
     }
 
     #[transactional(organization, role, member, user, authz)]

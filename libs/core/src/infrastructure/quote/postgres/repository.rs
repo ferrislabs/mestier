@@ -7,9 +7,12 @@ use sqlx::PgConnection;
 
 use crate::{
     CustomerId, OrganizationId, Quote, QuoteId, QuoteLine, QuoteStatus,
-    domain::quote::{
-        ports::QuoteRepository,
-        search::{QuoteSearch, QuoteSummary},
+    domain::{
+        organization::{billing_settings::NumberPadding, numbering::format_number},
+        quote::{
+            ports::QuoteRepository,
+            search::{QuoteSearch, QuoteSummary},
+        },
     },
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
@@ -34,6 +37,7 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         organization_id: OrganizationId,
         prefix: &str,
         year: i32,
+        padding: NumberPadding,
     ) -> Result<String, CoreError> {
         let mut tx = self.tx.lock().await;
 
@@ -61,7 +65,58 @@ impl<'tx> QuoteRepository for PgQuoteRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(format!("{prefix}-{year}-{next_number:04}"))
+        Ok(format_number(prefix, year, next_number, padding))
+    }
+
+    async fn last_assigned_number(
+        &mut self,
+        organization_id: OrganizationId,
+        year: i32,
+    ) -> Result<i32, CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        let last = sqlx::query_scalar!(
+            r#"
+            SELECT next_number
+            FROM quote_number_counters
+            WHERE organization_id = $1 AND year = $2
+            "#,
+            organization_id.0,
+            year,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(last.unwrap_or(0))
+    }
+
+    async fn raise_last_assigned_number(
+        &mut self,
+        organization_id: OrganizationId,
+        year: i32,
+        last_assigned: i32,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO quote_number_counters (organization_id, year, next_number)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (organization_id, year)
+            DO UPDATE SET
+                next_number = GREATEST(quote_number_counters.next_number, EXCLUDED.next_number),
+                updated_at = now()
+            "#,
+            organization_id.0,
+            year,
+            last_assigned,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
     }
 
     async fn insert(&mut self, quote: &Quote) -> Result<Quote, CoreError> {
@@ -453,19 +508,22 @@ mod tests {
 
         let first = with_tx(&pool, async |tx| {
             let mut repo = PgQuoteRepository::new(&tx);
-            repo.allocate_number(org_id, "DEV", 2026).await
+            repo.allocate_number(org_id, "DEV", 2026, NumberPadding::DEFAULT)
+                .await
         })
         .await
         .unwrap();
         let second = with_tx(&pool, async |tx| {
             let mut repo = PgQuoteRepository::new(&tx);
-            repo.allocate_number(org_id, "DEV", 2026).await
+            repo.allocate_number(org_id, "DEV", 2026, NumberPadding::DEFAULT)
+                .await
         })
         .await
         .unwrap();
         let different_year = with_tx(&pool, async |tx| {
             let mut repo = PgQuoteRepository::new(&tx);
-            repo.allocate_number(org_id, "DEV", 2027).await
+            repo.allocate_number(org_id, "DEV", 2027, NumberPadding::DEFAULT)
+                .await
         })
         .await
         .unwrap();
@@ -504,11 +562,13 @@ mod tests {
         let (a, b) = tokio::join!(
             with_tx(&pool_a, async |tx| {
                 let mut repo = PgQuoteRepository::new(&tx);
-                repo.allocate_number(org_id, "DEV", 2026).await
+                repo.allocate_number(org_id, "DEV", 2026, NumberPadding::DEFAULT)
+                    .await
             }),
             with_tx(&pool_b, async |tx| {
                 let mut repo = PgQuoteRepository::new(&tx);
-                repo.allocate_number(org_id, "DEV", 2026).await
+                repo.allocate_number(org_id, "DEV", 2026, NumberPadding::DEFAULT)
+                    .await
             }),
         );
 

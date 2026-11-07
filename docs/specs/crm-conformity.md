@@ -173,6 +173,8 @@ Verify (exit)
   SQLX_OFFLINE=true cargo check --workspace
   cargo clippy --workspace --all-targets -- -D warnings
   cargo test --workspace
-  cargo test -p mestier-core -- --ignored        (DATABASE_URL on mestier_crm)
+  cargo test -p mestier-core --lib -- --ignored --test-threads=1   (DATABASE_URL on mestier_crm; the cucumber harnesses reject --ignored)
   sqlx migrate run, revert, run                  (--source migrations)
   cd apps/webapp && ./node_modules/.bin/biome check src && ./node_modules/.bin/vitest run && pnpm build
+
+Amended: 2026-11-07 B1 stored the settings on the Organization aggregate and added the handlers to handlers-organization (no new aggregate marker, no new crate); the padding goes through allocate_number of quotes and invoices; only invoices freeze the billing mentions, quotes freeze no issuer identity today.

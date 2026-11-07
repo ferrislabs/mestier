@@ -144,6 +144,21 @@ pub enum InvoiceKind {
     CreditNote,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvoiceNumberSeries {
+    Invoice,
+    CreditNote,
+}
+
+impl InvoiceNumberSeries {
+    pub fn for_kind(kind: InvoiceKind) -> Self {
+        match kind {
+            InvoiceKind::CreditNote => Self::CreditNote,
+            InvoiceKind::Standard | InvoiceKind::Deposit | InvoiceKind::Final => Self::Invoice,
+        }
+    }
+}
+
 impl InvoiceKind {
     pub const ALL: [InvoiceKind; 4] = [
         InvoiceKind::Standard,

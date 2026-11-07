@@ -38,7 +38,7 @@ pub fn stubbed(store: &Store) -> MockQuoteRepository {
     // what produces `0001` rather than the stub asserting its own constant.
     let store_ref = store.clone();
     repo.expect_allocate_number()
-        .returning(move |org, prefix, year| {
+        .returning(move |org, prefix, year, _| {
             let needle = format!("{prefix}-{year}-");
             let count = quotes(&store_ref)
                 .iter()
@@ -100,6 +100,8 @@ pub fn stubbed(store: &Store) -> MockQuoteRepository {
 /// domain applies.
 pub fn stubbed_organization() -> MockOrganizationRepository {
     let mut repo = MockOrganizationRepository::new();
+    repo.expect_find_billing_settings()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_find_by_id().returning(move |id| {
         let now = Utc::now();
         let organization = Organization {

@@ -438,6 +438,7 @@ mod tests {
             contact_email: None,
             contact_phone: None,
             insurance_mention: "RC Pro n123456 - MAAF Assurances".to_owned(),
+            billing: None,
         };
 
         let customer = Customer {

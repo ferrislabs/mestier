@@ -89,6 +89,17 @@ export namespace Schemas {
   export type AvailabilityResponse = { resources: Array<AvailabilityResourceResponse> };
   export type BadgeTone = "neutral" | "brand" | "success" | "warning" | "error";
   export type BadgeResponse = { label: string; tone: BadgeTone };
+  export type BillingSettingsResponse = {
+    bic?: (string | null) | undefined;
+    default_vat_rate_bp: number;
+    iban?: (string | null) | undefined;
+    invoice_footer: string;
+    late_penalty: string;
+    number_padding: number;
+    payment_terms_days: number;
+    quote_validity_days: number;
+    recovery_fee_cents: number;
+  };
   export type BlankPageCount = number;
   export type BranchDto = "Then" | "Else" | "Each" | "After";
   export type BulkAssignTasksRequest = { assignees: Array<AssigneeRefRequest>; task_ids: Array<TaskId> };
@@ -1290,6 +1301,7 @@ export namespace Schemas {
     message_id: MessageId;
     read_at?: (string | null) | undefined;
   };
+  export type NumberSeriesKind = "QUOTE" | "INVOICE" | "CREDIT_NOTE";
   export type str = string;
   export type VatStatusResponse = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type OrganizationResponse = {
@@ -1589,6 +1601,17 @@ export namespace Schemas {
     | { day_of_month: number; frequency: "MONTHLY" };
   export type RejectInterventionRequest = Partial<{ note: string | null }>;
   export type RejectSupplierInvoiceRequest = Partial<{ notes: string | null }>;
+  export type ReplaceBillingSettingsRequest = {
+    bic?: (string | null) | undefined;
+    default_vat_rate_bp: number;
+    iban?: (string | null) | undefined;
+    invoice_footer: string;
+    late_penalty: string;
+    number_padding: number;
+    payment_terms_days: number;
+    quote_validity_days: number;
+    recovery_fee_cents: number;
+  };
   export type ReplaceLineAllocationsRequest = { allocations: Array<LineAllocationShareRequest> };
   export type ReplaceProjectTemplateTasksRequest = { tasks: Array<ProjectTemplateTaskShapeRequest> };
   export type ReplaceSupportSettingsRequest = { display_fields: Array<string> };
@@ -1659,6 +1682,15 @@ export namespace Schemas {
   };
   export type WorkflowLayoutDto = Record<string, unknown>;
   export type SaveWorkflowVersionRequest = { graph: GraphDto; layout?: (null | WorkflowLayoutDto) | undefined };
+  export type SeriesNumberingResponse = {
+    kind: NumberSeriesKind;
+    last_assigned_number: number;
+    next_number: number;
+    next_reference: string;
+    padding: number;
+    prefix: string;
+    year: number;
+  };
   export type ServiceRateResponse = {
     created_at: string;
     default_vat_rate_bp?: (number | null) | undefined;
@@ -1678,6 +1710,7 @@ export namespace Schemas {
     monthly_cost_cents?: (number | null) | undefined;
     weekly_contract_minutes: number;
   };
+  export type SetNextNumberRequest = { next_number: number };
   export type SetPresenceRequest = { status: PresenceStatus };
   export type StartOauthRequest = { redirect_uri: string; return_to: string };
   export type StartOauthResponse = { authorization_url: string };
@@ -5219,6 +5252,63 @@ export namespace Endpoints {
       422: { code: string; details: Schemas.GraphInvalidDetails; message: string; status: number };
     };
   };
+  export type get_GetOrganizationBillingSettings = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/billing-settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          bic?: (string | null) | undefined;
+          default_vat_rate_bp: number;
+          iban?: (string | null) | undefined;
+          invoice_footer: string;
+          late_penalty: string;
+          number_padding: number;
+          payment_terms_days: number;
+          quote_validity_days: number;
+          recovery_fee_cents: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_ReplaceOrganizationBillingSettings = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/billing-settings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.ReplaceBillingSettingsRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          bic?: (string | null) | undefined;
+          default_vat_rate_bp: number;
+          iban?: (string | null) | undefined;
+          invoice_footer: string;
+          late_penalty: string;
+          number_padding: number;
+          payment_terms_days: number;
+          quote_validity_days: number;
+          recovery_fee_cents: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
   export type get_ListCustomUnits = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/custom-units";
@@ -6657,6 +6747,59 @@ export namespace Endpoints {
       200: { data: { permissions: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
       401: unknown;
       403: unknown;
+    };
+  };
+  export type get_GetOrganizationNumbering = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/numbering";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          kind: Schemas.NumberSeriesKind;
+          last_assigned_number: number;
+          next_number: number;
+          next_reference: string;
+          padding: number;
+          prefix: string;
+          year: number;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_SetOrganizationNextNumber = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/numbering/{kind}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; kind: "QUOTE" | "INVOICE" | "CREDIT_NOTE" };
+
+      body: Schemas.SetNextNumberRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          kind: Schemas.NumberSeriesKind;
+          last_assigned_number: number;
+          next_number: number;
+          next_reference: string;
+          padding: number;
+          prefix: string;
+          year: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
     };
   };
   export type get_GetPlanning = {
@@ -9668,6 +9811,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.get_GetAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.get_ListWorkflows;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.get_GetWorkflow;
+    "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.get_GetOrganizationBillingSettings;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
     "/api/v1/organizations/{organization_id}/doe-model-starters": Endpoints.get_ListDoeModelStarters;
@@ -9693,6 +9837,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/maintenance/recap.pdf": Endpoints.get_ExportMaintenanceRecapPdf;
     "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
     "/api/v1/organizations/{organization_id}/members/me/permissions": Endpoints.get_GetMyPermissions;
+    "/api/v1/organizations/{organization_id}/numbering": Endpoints.get_GetOrganizationNumbering;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
@@ -9841,10 +9986,12 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}": Endpoints.put_ReplaceCollection;
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;
+    "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.put_ReplaceOrganizationBillingSettings;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
+    "/api/v1/organizations/{organization_id}/numbering/{kind}": Endpoints.put_SetOrganizationNextNumber;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.put_UpdateSupplier;
     "/api/v1/organizations/{organization_id}/support/settings": Endpoints.put_ReplaceSupportSettings;

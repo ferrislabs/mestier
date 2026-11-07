@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT last_number\n                    FROM credit_note_number_counters\n                    WHERE organization_id = $1 AND year = $2\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_number",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "26cbbdb17276db0d9d9b594f2c98feb09693877c88d896ca15ce3a9a21712e4b"
+}

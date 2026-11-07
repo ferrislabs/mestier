@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT next_number\n                    FROM invoice_number_counters\n                    WHERE organization_id = $1 AND year = $2\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "next_number",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f5e637bc6d06af57fb7571ea4430023920ef79c1a2e2b898d076c7daf21f8e58"
+}

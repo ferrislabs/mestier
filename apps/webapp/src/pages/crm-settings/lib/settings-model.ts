@@ -1,19 +1,11 @@
 import type {
 	Company,
-	CrmSettingsState,
 	SequenceKind,
-	Sequences,
 	Settings,
 	StripeEventType,
 	VatRate,
 } from '#/pages/crm-settings/types'
 import { centsToInput, parseAmount } from '#/pages/customers/lib/format'
-
-export const SEQUENCE_PREFIXES: Record<SequenceKind, string> = {
-	quote: 'D',
-	invoice: 'F',
-	creditNote: 'AV',
-}
 
 export const SEQUENCE_LABELS: Record<SequenceKind, string> = {
 	quote: 'Devis',
@@ -21,38 +13,13 @@ export const SEQUENCE_LABELS: Record<SequenceKind, string> = {
 	creditNote: 'Avoirs',
 }
 
-const SEQUENCE_KINDS: readonly SequenceKind[] = [
-	'quote',
-	'invoice',
-	'creditNote',
-]
-
 export function formatNumber(
-	kind: SequenceKind,
+	prefix: string,
 	year: number,
 	sequence: number,
 	padding: number,
 ): string {
-	return `${SEQUENCE_PREFIXES[kind]}-${year}-${String(sequence).padStart(padding, '0')}`
-}
-
-export function lastSequence(
-	sequences: Sequences,
-	kind: SequenceKind,
-	year: number,
-): number {
-	return sequences[kind][String(year)] ?? 0
-}
-
-export function raiseSequence(
-	sequences: Sequences,
-	kind: SequenceKind,
-	year: number,
-	last: number,
-): Sequences {
-	const current = sequences[kind][String(year)] ?? 0
-	if (!Number.isInteger(last) || last <= current) return sequences
-	return { ...sequences, [kind]: { ...sequences[kind], [String(year)]: last } }
+	return `${prefix}-${year}-${String(sequence).padStart(padding, '0')}`
 }
 
 export function validateCompany(company: Company): string[] {
@@ -63,6 +30,8 @@ export function validateCompany(company: Company): string[] {
 		errors.push('Le SIRET doit comporter 14 chiffres.')
 	if (!/^FR\d{2}\d{9}$/.test(company.vatNumber.replace(/\s/g, '')))
 		errors.push('Le numéro de TVA doit être au format FR + 11 chiffres.')
+	if (company.capital.trim() !== '' && parseAmount(company.capital) === null)
+		errors.push('Le capital social doit être un montant en euros.')
 	if (
 		company.address.street.trim() === '' ||
 		company.address.city.trim() === ''
@@ -123,7 +92,13 @@ export function validateSettings(
 	return errors
 }
 
-export type CompanyField = 'name' | 'legalId' | 'vatNumber' | 'street' | 'city'
+export type CompanyField =
+	| 'name'
+	| 'capital'
+	| 'legalId'
+	| 'vatNumber'
+	| 'street'
+	| 'city'
 
 export type CompanyErrors = {
 	fields: Partial<Record<CompanyField, string>>
@@ -135,6 +110,7 @@ function companyFieldOf(
 	company: Company,
 ): CompanyField | null {
 	if (message.includes('raison sociale')) return 'name'
+	if (message.includes('capital')) return 'capital'
 	if (message.includes('SIRET')) return 'legalId'
 	if (message.includes('TVA')) return 'vatNumber'
 	if (message.includes('adresse'))
@@ -270,28 +246,9 @@ export type SequenceRow = {
 	next: string
 }
 
-export function sequenceRows(
-	state: CrmSettingsState,
-	year: number,
-): SequenceRow[] {
-	const padding = state.settings.numberPadding
-	return SEQUENCE_KINDS.map((kind) => {
-		const last = lastSequence(state.sequences, kind, year)
-		return {
-			kind,
-			label: SEQUENCE_LABELS[kind],
-			prefix: SEQUENCE_PREFIXES[kind],
-			year,
-			last,
-			lastNumber: last > 0 ? formatNumber(kind, year, last, padding) : null,
-			next: formatNumber(kind, year, last + 1, padding),
-		}
-	})
-}
-
 export type ResumeResult = {
 	error: string | null
-	last: number | null
+	nextNumber: number | null
 	preview: string | null
 }
 
@@ -300,24 +257,25 @@ export function evaluateResume(
 	input: string,
 	padding: number,
 ): ResumeResult {
-	if (input.trim() === '') return { error: null, last: null, preview: null }
+	if (input.trim() === '')
+		return { error: null, nextNumber: null, preview: null }
 	const wanted = wholeNumber(input)
 	if (wanted === null || !Number.isSafeInteger(wanted))
 		return {
 			error: 'Saisis un nombre entier, par exemple 120.',
-			last: null,
+			nextNumber: null,
 			preview: null,
 		}
 	if (wanted <= row.last + 1)
 		return {
 			error: `Le prochain numéro est déjà ${row.next} : un compteur ne peut qu’avancer, jamais reculer.`,
-			last: null,
+			nextNumber: null,
 			preview: null,
 		}
 	return {
 		error: null,
-		last: wanted - 1,
-		preview: formatNumber(row.kind, row.year, wanted, padding),
+		nextNumber: wanted,
+		preview: formatNumber(row.prefix, row.year, wanted, padding),
 	}
 }
 

@@ -5,18 +5,16 @@ import {
 	evaluateBilling,
 	evaluateResume,
 	formatNumber,
-	raiseSequence,
-	sequenceRows,
+	type SequenceRow,
 	validateSecret,
 } from '#/pages/crm-settings/lib/settings-model'
-import type { Company, CrmSettingsState } from '#/pages/crm-settings/types'
+import type { Company, Settings } from '#/pages/crm-settings/types'
 
 const company: Company = {
 	name: 'Duval',
 	legalForm: '',
 	capital: '',
 	legalId: '823 456 789 00019',
-	registry: '',
 	vatNumber: 'FR12823456789',
 	address: {
 		street: '1 rue X',
@@ -32,25 +30,38 @@ const company: Company = {
 	insurance: '',
 }
 
-const state: CrmSettingsState = {
-	settings: {
-		company,
-		paymentTermsDays: 30,
-		quoteValidityDays: 30,
-		defaultVatRate: 20,
-		latePenalty: 'trois fois le taux légal',
-		recoveryFee: 4000,
-		invoiceFooter: '',
-		numberPadding: 3,
-		stripeEndpoint: 'https://example.test/hook',
-		stripeSecretSet: true,
-	},
-	sequences: { quote: { '2026': 9 }, invoice: {}, creditNote: {} },
+const settings: Settings = {
+	company,
+	paymentTermsDays: 30,
+	quoteValidityDays: 30,
+	defaultVatRate: 20,
+	latePenalty: 'trois fois le taux légal',
+	recoveryFee: 4000,
+	invoiceFooter: '',
+	numberPadding: 3,
+	stripeEndpoint: 'https://example.test/hook',
+	stripeSecretSet: true,
+}
+
+const quoteRow: SequenceRow = {
+	kind: 'quote',
+	label: 'Devis',
+	prefix: 'DEV',
+	year: 2026,
+	last: 9,
+	lastNumber: 'DEV-2026-009',
+	next: 'DEV-2026-010',
 }
 
 describe('companyErrors', () => {
 	it('accepts a complete company', () => {
 		expect(companyErrors(company)).toEqual({ fields: {}, other: [] })
+	})
+
+	it('refuses a capital that is not an amount', () => {
+		const errors = companyErrors({ ...company, capital: 'beaucoup' })
+		expect(Object.keys(errors.fields)).toEqual(['capital'])
+		expect(companyErrors({ ...company, capital: '50 000' }).fields).toEqual({})
 	})
 
 	it('points at the offending fields', () => {
@@ -72,7 +83,7 @@ describe('companyErrors', () => {
 
 describe('evaluateBilling', () => {
 	it('turns the form into a patch', () => {
-		const evaluation = evaluateBilling(billingFormOf(state.settings))
+		const evaluation = evaluateBilling(billingFormOf(settings))
 		expect(evaluation.errors).toEqual({})
 		expect(evaluation.patch?.recoveryFee).toBe(4000)
 		expect(evaluation.patch?.paymentTermsDays).toBe(30)
@@ -80,7 +91,7 @@ describe('evaluateBilling', () => {
 
 	it('reports every invalid field and no patch', () => {
 		const evaluation = evaluateBilling({
-			...billingFormOf(state.settings),
+			...billingFormOf(settings),
 			paymentTermsDays: '90',
 			quoteValidityDays: 'x',
 			recoveryFee: 'abc',
@@ -99,37 +110,25 @@ describe('evaluateBilling', () => {
 })
 
 describe('numbering', () => {
-	it('formats numbers and lists the next one per series', () => {
-		expect(formatNumber('invoice', 2026, 7, 3)).toBe('F-2026-007')
-		const rows = sequenceRows(state, 2026)
-		expect(rows.find((row) => row.kind === 'quote')).toMatchObject({
-			lastNumber: 'D-2026-009',
-			next: 'D-2026-010',
-		})
-		expect(rows.find((row) => row.kind === 'creditNote')?.lastNumber).toBeNull()
+	it('formats a number from the prefix of the series', () => {
+		expect(formatNumber('FAC', 2026, 7, 3)).toBe('FAC-2026-007')
+		expect(formatNumber('AV', 2026, 7, 5)).toBe('AV-2026-00007')
+		expect(formatNumber('DEV', 2026, 1234, 2)).toBe('DEV-2026-1234')
 	})
 
 	it('only lets a counter move forward', () => {
-		const quote = sequenceRows(state, 2026)[0]
-		if (!quote) throw new Error('missing row')
-		expect(evaluateResume(quote, '', 3)).toEqual({
+		expect(evaluateResume(quoteRow, '', 3)).toEqual({
 			error: null,
-			last: null,
+			nextNumber: null,
 			preview: null,
 		})
-		expect(evaluateResume(quote, 'abc', 3).error).toBeDefined()
-		expect(evaluateResume(quote, '10', 3).error).toContain('D-2026-010')
-		expect(evaluateResume(quote, '120', 3)).toEqual({
+		expect(evaluateResume(quoteRow, 'abc', 3).error).toBeDefined()
+		expect(evaluateResume(quoteRow, '10', 3).error).toContain('DEV-2026-010')
+		expect(evaluateResume(quoteRow, '120', 3)).toEqual({
 			error: null,
-			last: 119,
-			preview: 'D-2026-120',
+			nextNumber: 120,
+			preview: 'DEV-2026-120',
 		})
-		expect(raiseSequence(state.sequences, 'quote', 2026, 5)).toBe(
-			state.sequences,
-		)
-		expect(
-			raiseSequence(state.sequences, 'quote', 2026, 119).quote['2026'],
-		).toBe(119)
 	})
 })
 

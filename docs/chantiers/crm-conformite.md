@@ -30,7 +30,7 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 
 | Lot | Contenu | Dépend de | État |
 |---|---|---|---|
-| B1 | Réglages d'organisation : IBAN, BIC, pénalités, indemnité de recouvrement, pied de facture, padding, validité des devis, délai de paiement, TVA par défaut, compteur d'avoirs | – | à faire |
+| B1 | Réglages d'organisation : IBAN, BIC, pénalités, indemnité de recouvrement, pied de facture, padding, validité des devis, délai de paiement, TVA par défaut, compteur d'avoirs | – | PR ouverte |
 | B2 | Client : type, site web, TVA, responsable, source, notes, délai de paiement, contact et adresse de facturation, dates de conversion et d'archivage, SIRET. Contact : mobile. Adresse : type, pays | – | à faire |
 | B3 | Opportunités (`deal`) + migration depuis `pipeline_stage` | B2 | à faire |
 | B4 | Devis : validité, acompte, motif de refus, signataire, responsable, opportunité, notes, remise et fréquence par ligne, révisions, « remplacé » | B3 | à faire |
@@ -55,6 +55,13 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 - B5 : `quote_id` sur `CreateInvoiceRequest` et déduction des acomptes de la facture complète, côté serveur ; date d'émission choisie ; solde par facture dans la liste (colonne « Reste dû », filtre « À rembourser »).
 - B7 : ville et contact principal dans la liste des clients (aujourd'hui 2 requêtes par client, jusqu'à 100 par page) ; « en retard » exact (aujourd'hui TTC des factures échues plafonné par l'encours, calculé côté front, contraire à la règle du dépôt).
 - B4 : le devis d'origine passe « Remplacé » dès la création de la révision (mock) ; le prototype le fait à l'envoi.
+
+## Reports issus de B1
+- B2 et B6 : migrer les pages customers, catalog et stripe de `useCrmSettings()` (shim dans `crm-settings/feature/mocks/settings.ts`) vers `#/hooks/use-billing-settings`, puis réduire le shim à Stripe seul.
+- Le champ « Immatriculation » (RCS) a été retiré du formulaire Entreprise : aucune colonne backend. À décider : une colonne dans un lot ultérieur.
+- Le formulaire Entreprise écrase une organisation non assujettie à la TVA en « assujettie » (il exige un numéro de TVA). Comportement du prototype, à arbitrer.
+- Antérieur à B1 : `quote_number_counters.next_number` et `invoice_number_counters.next_number` contiennent le dernier numéro attribué ; le seed de la migration quote (`MAX+1`) saute un numéro.
+- `cargo test -p mestier-core -- --ignored` échoue sur les harnais cucumber (`unexpected argument '--ignored'`), comme avant B1 : utiliser `--lib -- --ignored --test-threads=1`.
 
 ## À vérifier au lot concerné
 - Sémantique de `POST /invoices/{id}/cancel` et d'un montant négatif sur un paiement (B5, remboursement).

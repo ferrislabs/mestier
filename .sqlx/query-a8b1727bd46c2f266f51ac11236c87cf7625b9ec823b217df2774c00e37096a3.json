@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO credit_note_number_counters (organization_id, year, last_number)\n                    VALUES ($1, $2, 1)\n                    ON CONFLICT (organization_id, year)\n                    DO UPDATE SET\n                        last_number = credit_note_number_counters.last_number + 1,\n                        updated_at = now()\n                    RETURNING last_number\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_number",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a8b1727bd46c2f266f51ac11236c87cf7625b9ec823b217df2774c00e37096a3"
+}

@@ -40,12 +40,14 @@ export function SettingsForm({
 	dirty,
 	saved,
 	savedLabel = 'Modifications enregistrées.',
+	error = null,
 	children,
 }: {
 	onSubmit: (event: FormEvent) => void
 	dirty: boolean
 	saved: boolean
 	savedLabel?: string
+	error?: string | null
 	children: ReactNode
 }) {
 	const status = saved
@@ -55,7 +57,14 @@ export function SettingsForm({
 			: ''
 	return (
 		<form onSubmit={onSubmit} noValidate>
-			<div className="grid gap-4 px-5 py-5">{children}</div>
+			<div className="grid gap-4 px-5 py-5">
+				{children}
+				{error && (
+					<p role="alert" className="text-[13px] text-state-alert">
+						{error}
+					</p>
+				)}
+			</div>
 			<div className="flex items-center justify-between gap-3 border-t px-5 py-3">
 				<output className="text-[13px] text-muted-foreground">{status}</output>
 				<Button type="submit" size="sm" disabled={!dirty}>

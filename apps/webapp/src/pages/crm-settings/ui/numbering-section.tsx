@@ -32,12 +32,14 @@ const NO_INPUTS: Inputs = { quote: '', invoice: '', creditNote: '' }
 export function NumberingSection({
 	rows,
 	padding,
+	error,
 	onSave,
 }: {
 	rows: readonly SequenceRow[]
 	padding: number
+	error: string | null
 	onSave: (
-		raises: readonly { kind: SequenceKind; last: number }[],
+		resumes: readonly { kind: SequenceKind; nextNumber: number }[],
 	) => Promise<void>
 }) {
 	const baseId = useId()
@@ -62,13 +64,18 @@ export function NumberingSection({
 			if (first) document.getElementById(`${baseId}-${first.row.kind}`)?.focus()
 			return
 		}
-		const raises = results.flatMap(({ row, result }) =>
-			result.last === null ? [] : [{ kind: row.kind, last: result.last }],
+		const resumes = results.flatMap(({ row, result }) =>
+			result.nextNumber === null
+				? []
+				: [{ kind: row.kind, nextNumber: result.nextNumber }],
 		)
-		void onSave(raises).then(() => {
-			setInputs(NO_INPUTS)
-			setSaved(true)
-		})
+		void onSave(resumes).then(
+			() => {
+				setInputs(NO_INPUTS)
+				setSaved(true)
+			},
+			() => setSaved(false),
+		)
 	}
 
 	return (
@@ -82,6 +89,7 @@ export function NumberingSection({
 				dirty={dirty}
 				saved={saved}
 				savedLabel="Compteurs mis à jour."
+				error={error}
 			>
 				<div className="overflow-hidden rounded-md border">
 					<Table>
