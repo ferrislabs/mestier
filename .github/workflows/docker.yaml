@@ -212,6 +212,38 @@ jobs:
       - name: test
         run: pnpm test
 
+  # Compiles the whole Rust workspace once per platform, in parallel with the
+  # checks above, and leaves the result in the GitHub Actions cache. The
+  # `build` jobs below then only assemble images from that cache: no image is
+  # pushed before the checks pass, but nothing waits for them to compile.
+  build-rust:
+    name: build-rust (${{ matrix.runner.platform }})
+    runs-on: ${{ matrix.runner.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - name: ubuntu-24.04
+            platform: linux/amd64
+          - name: ubuntu-24.04-arm
+            platform: linux/arm64
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+
+      - name: set up buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: build workspace
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: rust-prebuild
+          platforms: ${{ matrix.runner.platform }}
+          cache-from: type=gha,scope=rust-${{ runner.arch }}
+          cache-to: type=gha,mode=max,scope=rust-${{ runner.arch }}
+          outputs: type=cacheonly
+
   # Whether this run should push images at all. Centralised here rather than
   # repeated in every job/step `if:` below — a job-level `if:` can't read the
   # `env` context, only `needs`, so this has to be a job with an output.
@@ -231,7 +263,7 @@ jobs:
         run: echo "push=true" >> "$GITHUB_OUTPUT"
 
   build:
-    needs: [rust-check, integration, webapp, should-push]
+    needs: [rust-check, integration, webapp, should-push, build-rust]
     runs-on: ${{ matrix.runner.name }}
     strategy:
       matrix:
@@ -249,16 +281,8 @@ jobs:
       - name: checkout
         uses: actions/checkout@v5
 
-      - name: set up builx
+      - name: set up buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: cache layers
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/.buildx-cache
-          key: buildx-${{ runner.arch }}-${{ matrix.target }}-${{ github.sha }}
-          restore-keys: |
-            buildx-${{ runner.arch }}-${{ matrix.target }}-
 
       - name: get image metadata
         id: meta
@@ -283,8 +307,10 @@ jobs:
           platforms: ${{ matrix.runner.platform }}
           tags: ghcr.io/ferrislabs/mestier-${{ matrix.target }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
-          cache-to: type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max
+          # The Rust images read what `build-rust` cached and write nothing:
+          # only the webapp image has layers of its own worth keeping.
+          cache-from: type=gha,scope=${{ matrix.target == 'webapp' && format('webapp-{0}', runner.arch) || format('rust-{0}', runner.arch) }}
+          cache-to: ${{ matrix.target == 'webapp' && format('type=gha,mode=max,scope=webapp-{0}', runner.arch) || '' }}
           outputs: type=image,push-by-digest=true,name-canonical=true,push=${{ needs.should-push.outputs.push }}
 
       - name: prepare digest
@@ -303,13 +329,6 @@ jobs:
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
-
-      # https://github.com/docker/build-push-action/issues/252
-      # https://github.com/moby/buildkit/issues/1896
-      - name: move cache
-        run: |
-          rm -rf ${{ runner.temp }}/.buildx-cache
-          mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
 
   push-manifest:
     if: needs.should-push.outputs.push == 'true'
