@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 
 const INVOICES_PATH = '/api/v1/organizations/{organization_id}/invoices'
+const LEDGER_PATH = '/api/v1/organizations/{organization_id}/ledger'
 const OUTSTANDING_PATH =
 	'/api/v1/organizations/{organization_id}/invoices/outstanding'
 const INVOICE_PATH = '/api/v1/invoices/{invoice_id}'
@@ -124,10 +125,16 @@ function invalidateInvoicesList(
 	queryClient: ReturnType<typeof useQueryClient>,
 	organizationId?: string,
 ) {
-	return queryClient.invalidateQueries({
-		predicate: (query) =>
-			isOrganizationQuery(INVOICES_PATH, query.queryKey, organizationId),
-	})
+	return Promise.all([
+		queryClient.invalidateQueries({
+			predicate: (query) =>
+				isOrganizationQuery(INVOICES_PATH, query.queryKey, organizationId),
+		}),
+		queryClient.invalidateQueries({
+			predicate: (query) =>
+				isOrganizationQuery(LEDGER_PATH, query.queryKey, organizationId),
+		}),
+	])
 }
 
 function invalidateOutstanding(

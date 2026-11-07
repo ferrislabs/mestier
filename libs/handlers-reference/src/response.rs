@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    CustomUnit, CustomUnitId, Employee, EmployeeId, Equipment, EquipmentId, MemberId,
-    OrganizationId, Product, ProductId, ServiceRate, ServiceRateId, SupplierId,
+    BillingFrequency, CustomUnit, CustomUnitId, Employee, EmployeeId, Equipment, EquipmentId,
+    MemberId, OrganizationId, Product, ProductId, ServiceRate, ServiceRateId, SupplierId,
     salaried_hourly_rate_cents,
 };
 use serde::Serialize;
@@ -88,6 +88,13 @@ pub struct ServiceRateResponse {
     pub rate_cents: i32,
     pub default_vat_rate_bp: Option<i32>,
     pub description: Option<String>,
+    pub category: String,
+    pub billing_frequency: BillingFrequency,
+    pub cost_cents: Option<i32>,
+    pub archived_at: Option<DateTime<Utc>>,
+    pub usage_count: i64,
+    pub quote_usage_count: i64,
+    pub invoice_usage_count: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -102,6 +109,13 @@ impl From<ServiceRate> for ServiceRateResponse {
             rate_cents: value.rate_cents,
             default_vat_rate_bp: value.default_vat_rate_bp,
             description: value.description,
+            category: value.catalog.category,
+            billing_frequency: value.catalog.billing_frequency,
+            cost_cents: value.catalog.cost_cents,
+            archived_at: value.catalog.archived_at,
+            usage_count: value.usage.total(),
+            quote_usage_count: value.usage.quote_lines,
+            invoice_usage_count: value.usage.invoice_lines,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }
@@ -123,6 +137,13 @@ pub struct ProductResponse {
     pub manufacturer: Option<String>,
     pub technical_specs: Option<String>,
     pub datasheet_keys: Vec<String>,
+    pub category: String,
+    pub billing_frequency: BillingFrequency,
+    pub cost_cents: Option<i32>,
+    pub archived_at: Option<DateTime<Utc>>,
+    pub usage_count: i64,
+    pub quote_usage_count: i64,
+    pub invoice_usage_count: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -143,6 +164,13 @@ impl From<Product> for ProductResponse {
             manufacturer: value.manufacturer,
             technical_specs: value.technical_specs,
             datasheet_keys: value.datasheet_keys,
+            category: value.catalog.category,
+            billing_frequency: value.catalog.billing_frequency,
+            cost_cents: value.catalog.cost_cents,
+            archived_at: value.catalog.archived_at,
+            usage_count: value.usage.total(),
+            quote_usage_count: value.usage.quote_lines,
+            invoice_usage_count: value.usage.invoice_lines,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }

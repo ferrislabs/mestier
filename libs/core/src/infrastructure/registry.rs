@@ -21,10 +21,14 @@ pub mod domain {
     pub struct Employee;
     pub struct EmployeeCostBasis;
     pub struct Equipment;
+    pub struct Expense;
+    pub struct ExpenseCategory;
     pub struct EventDispatch;
     pub struct EventLog;
     pub struct Invitation;
     pub struct Invoice;
+    pub struct Ledger;
+    pub struct Receipt;
     pub struct MaintenanceContract;
     pub struct MaintenanceIntervention;
     pub struct SupportApiKey;

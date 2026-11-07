@@ -24,6 +24,7 @@ import {
 } from '#/components/ui/table'
 import { formatUnitLong } from '#/lib/units'
 import { cn } from '#/lib/utils'
+import type { CatalogExtras } from '#/pages/catalog/catalog-model'
 import {
 	CATALOG_KIND_LABELS,
 	type CatalogRow,
@@ -35,7 +36,6 @@ import {
 	marginTone,
 	usageLabel,
 } from '#/pages/catalog/catalog-model'
-import type { CatalogExtras } from '#/pages/catalog/feature/mocks/catalog-extras'
 import { formatVatRate } from '#/pages/crm-settings/types'
 import { StatusBadge } from '#/pages/customers/ui/badges'
 import { Money } from '#/pages/customers/ui/money'

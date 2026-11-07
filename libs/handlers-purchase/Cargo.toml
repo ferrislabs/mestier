@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 handlers = { workspace = true }
+common = { workspace = true }
 mestier-core = { workspace = true }
 auth = { workspace = true }
 
@@ -18,6 +19,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
+uuid = { workspace = true }
 
 # The end-to-end suite drives the real router over a real socket, so it needs
 # the bootstrap crates the binary uses, not just this crate's own dependencies.
@@ -30,7 +32,6 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
-uuid = { workspace = true }
 
 [[test]]
 name = "http_e2e"

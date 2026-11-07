@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT p.id AS \"id!\", p.paid_on AS \"date!\", p.amount_cents::bigint AS \"amount_cents!\",\n                p.method AS \"method!\", p.reference AS \"reference?\", p.note AS \"note?\",\n                p.invoice_id AS \"invoice_id?\", i.number AS \"invoice_number?\",\n                i.customer_id AS \"customer_id?\", c.name AS \"customer_name?\"\n            FROM invoice_payments p\n            JOIN invoices i ON i.id = p.invoice_id AND i.org_id = p.org_id\n            JOIN customers c ON c.id = i.customer_id\n            WHERE p.org_id = $1 AND p.deleted_at IS NULL AND i.deleted_at IS NULL\n            UNION ALL\n            SELECT u.id, u.paid_on, u.amount_cents::bigint, u.method, u.reference, u.note,\n                NULL::uuid, NULL::text, u.customer_id, c.name\n            FROM unallocated_payments u\n            LEFT JOIN customers c ON c.id = u.customer_id\n            WHERE u.org_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "date!",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 2,
+        "name": "amount_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "method!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "reference?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "note?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "invoice_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "invoice_number?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "customer_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "customer_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "022aa7ee8eb0d3ebf354358e19e1fc1da1d700705f67de37fca9c2298d9dc6d0"
+}

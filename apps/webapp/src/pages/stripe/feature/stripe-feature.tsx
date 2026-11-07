@@ -1,6 +1,6 @@
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomers } from '#/hooks/use-customers'
-import { useCrmSettings } from '#/pages/crm-settings/feature/mocks/settings'
+import { useStripeSettings } from '#/pages/crm-settings/feature/mocks/settings'
 import { useSaveStripeCustomerId } from '#/pages/customers/feature/mocks/stripe-customer-ids'
 import { useNotice } from '#/pages/customers/feature/use-notice'
 import { todayIso } from '#/pages/customers/lib/format'
@@ -21,7 +21,7 @@ import {
 	stripeToReview,
 } from '#/pages/stripe/lib/stripe-model'
 import { StripeUI } from '#/pages/stripe/ui/stripe-ui'
-import { useLedger } from '#/pages/treasury/feature/mocks/ledger'
+import { useOpenInvoices } from '#/pages/treasury/feature/use-open-invoices'
 
 interface StripeFeatureProps {
 	search: StripeSearch
@@ -32,8 +32,8 @@ export function StripeFeature({ search, onSearchChange }: StripeFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 	const notice = useNotice()
 	const events = useStripeEvents().data
-	const settings = useCrmSettings().data.settings
-	const ledger = useLedger().data
+	const settings = useStripeSettings(activeOrganization.slug)
+	const openInvoices = useOpenInvoices(activeOrganization.id)
 	const customers = useCustomers(activeOrganization.id, {
 		page: 1,
 		perPage: 100,
@@ -60,10 +60,10 @@ export function StripeFeature({ search, onSearchChange }: StripeFeatureProps) {
 			customers={(customers.data?.data ?? []).filter(
 				(customer) => customer.status !== 'ARCHIVED',
 			)}
-			openInvoices={ledger.openInvoices}
+			openInvoices={openInvoices}
 			onSimulate={(scenario) => {
 				void simulate
-					.mutateAsync(scenario, ledger.openInvoices[0]?.label ?? null)
+					.mutateAsync(scenario, openInvoices[0]?.label ?? null)
 					.then((created) => notice.show(simulationNotice(scenario, created)))
 			}}
 			onLink={(event, customer) => {

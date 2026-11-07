@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { Supplier } from '#/hooks/use-suppliers'
-import { EMPTY_SUPPLIER_EXTRAS } from '#/pages/suppliers/feature/mocks/supplier-extras'
 import {
 	addressFromText,
 	addressText,
@@ -8,6 +7,7 @@ import {
 	emptyAddress,
 	emptyContact,
 	emptySupplierValues,
+	extrasOfSupplier,
 	extrasOfValues,
 	firstAddressLine,
 	supplierFormErrors,
@@ -15,6 +15,7 @@ import {
 	validateSupplierName,
 } from '#/pages/suppliers/lib/supplier-form'
 import type { SupplierFormValues } from '#/pages/suppliers/types'
+import { EMPTY_SUPPLIER_EXTRAS } from '#/pages/suppliers/types'
 
 function supplier(overrides: Partial<Supplier>): Supplier {
 	return {
@@ -135,6 +136,12 @@ describe('buildSupplierRequest', () => {
 			address: null,
 			phone: null,
 			email: null,
+			iban: null,
+			payment_terms_days: null,
+			default_category_id: null,
+			notes: null,
+			contacts: [],
+			addresses: [],
 		})
 	})
 
@@ -166,6 +173,127 @@ describe('buildSupplierRequest', () => {
 			phone: '0102030405',
 			address: '12 rue des Lilas\n44000 Nantes',
 		})
+	})
+})
+
+describe('buildSupplierRequest profile', () => {
+	it('sends the IBAN, the terms, the category, the notes, the contacts and the typed addresses', () => {
+		const request = buildSupplierRequest(
+			filled({
+				iban: ' FR76 3000 ',
+				paymentTermsDays: '45',
+				defaultCategoryId: 'c1',
+				notes: ' Livraison le mardi ',
+				contacts: [
+					{
+						...emptyContact('c1'),
+						firstName: 'Jean',
+						lastName: 'Bernard',
+						role: 'Commercial',
+						mobile: '0600000000',
+					},
+				],
+				addresses: [
+					{
+						...emptyAddress('a1'),
+						kind: 'site',
+						street: '2 rue B',
+						complement: 'Bât. 3',
+						postalCode: '44800',
+						city: 'Saint-Herblain',
+					},
+				],
+			}),
+		)
+
+		expect(request).toMatchObject({
+			iban: 'FR76 3000',
+			payment_terms_days: 45,
+			default_category_id: 'c1',
+			notes: 'Livraison le mardi',
+			contacts: [
+				{
+					first_name: 'Jean',
+					last_name: 'Bernard',
+					role: 'Commercial',
+					email: '',
+					phone: '',
+					mobile: '0600000000',
+				},
+			],
+			addresses: [
+				{
+					kind: 'SITE',
+					line2: 'Bât. 3',
+					postal_code: '44800',
+					city: 'Saint-Herblain',
+					country: 'France',
+				},
+			],
+		})
+	})
+})
+
+describe('extrasOfSupplier', () => {
+	it('reads the profile, the typed addresses and the archive state from the API', () => {
+		const extras = extrasOfSupplier(
+			supplier({
+				iban: 'FR76',
+				payment_terms_days: 30,
+				default_category_id: 'c1',
+				notes: 'RAS',
+				archived_at: '2026-11-02T00:00:00Z',
+				contacts: [
+					{
+						id: 'k1',
+						first_name: 'Jean',
+						last_name: 'Bernard',
+						role: '',
+						email: 'j@b.fr',
+						phone: '',
+						mobile: '06',
+					},
+				],
+				addresses: [
+					{
+						id: 'a1',
+						kind: 'BILLING',
+						label: 'Siège',
+						street: '1 rue A',
+						line2: 'Bât. 1',
+						postal_code: '44000',
+						city: 'Nantes',
+						country: 'France',
+					},
+				],
+			}),
+		)
+
+		expect(extras).toMatchObject({
+			iban: 'FR76',
+			paymentTermsDays: 30,
+			defaultCategoryId: 'c1',
+			notes: 'RAS',
+			archived: true,
+		})
+		expect(extras.contacts?.[0]).toMatchObject({
+			firstName: 'Jean',
+			mobile: '06',
+		})
+		expect(extras.addresses?.[0]).toMatchObject({
+			kind: 'billing',
+			complement: 'Bât. 1',
+			postalCode: '44000',
+		})
+	})
+
+	it('falls back to null contacts and addresses when none are stored', () => {
+		const extras = extrasOfSupplier(supplier({ contacts: [], addresses: [] }))
+
+		expect(extras.contacts).toBeNull()
+		expect(extras.addresses).toBeNull()
+		expect(extras.archived).toBe(false)
+		expect(extras.iban).toBe('')
 	})
 })
 

@@ -7,9 +7,12 @@ use uuid::Uuid;
 
 use crate::{OrganizationId, SupplierId};
 
+pub mod catalog;
 pub mod commands;
 pub mod ports;
 pub mod service;
+
+pub use catalog::{CatalogProfile, CatalogProfileInput, CatalogUsage};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct ProductId(pub Uuid);
@@ -53,6 +56,8 @@ pub struct Product {
     /// The supplier's own documents (PDF or image), inserted after the
     /// supply sheet in a DOE.
     pub datasheet_keys: Vec<String>,
+    pub catalog: CatalogProfile,
+    pub usage: CatalogUsage,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

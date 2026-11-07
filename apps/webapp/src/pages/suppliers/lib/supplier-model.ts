@@ -1,9 +1,11 @@
 import type { Supplier } from '#/hooks/use-suppliers'
 import { normalizeText } from '#/pages/catalog/catalog-model'
 import { addDays } from '#/pages/customers/lib/format'
-import { EMPTY_SUPPLIER_EXTRAS } from '#/pages/suppliers/feature/mocks/supplier-extras'
 import { contactName } from '#/pages/suppliers/lib/supplier-form'
-import type { SupplierExtras } from '#/pages/suppliers/types'
+import {
+	EMPTY_SUPPLIER_EXTRAS,
+	type SupplierExtras,
+} from '#/pages/suppliers/types'
 import { expenseState, expenseTotal } from '#/pages/treasury/lib/ledger-model'
 import type { Expense, ExpenseCategory } from '#/pages/treasury/types'
 
@@ -42,7 +44,7 @@ function rowOf(
 	const since = addDays(today, -365)
 	const mine = expenses.filter((expense) => expense.supplierId === supplier.id)
 	const unpaid = mine.filter((expense) => {
-		const state = expenseState(expense, today)
+		const state = expenseState(expense)
 		return state === 'to_pay' || state === 'overdue'
 	})
 	const contact = extras.contacts?.at(0)
@@ -57,9 +59,7 @@ function rowOf(
 			.filter((expense) => expense.date >= since)
 			.reduce((sum, expense) => sum + expenseTotal(expense), 0),
 		toPay: unpaid.reduce((sum, expense) => sum + expenseTotal(expense), 0),
-		overdue: unpaid.some(
-			(expense) => expenseState(expense, today) === 'overdue',
-		),
+		overdue: unpaid.some((expense) => expenseState(expense) === 'overdue'),
 	}
 }
 

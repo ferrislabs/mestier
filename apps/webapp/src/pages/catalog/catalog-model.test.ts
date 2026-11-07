@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import type { Product, ServiceRate } from '#/hooks/use-reference-catalog'
 import {
 	bpOfVatRate,
+	type CatalogExtras,
 	type CatalogRow,
+	catalogRows,
 	catalogSummary,
-	catalogUsage,
 	DEFAULT_FILTERS,
+	EMPTY_CATALOG_EXTRAS,
 	emptyForm,
 	evaluateForm,
 	filterCatalog,
@@ -14,14 +17,9 @@ import {
 	marginTone,
 	searchOf,
 	usageLabel,
-	usageOf,
 	validateCatalogSearch,
 	vatRateOfBp,
 } from '#/pages/catalog/catalog-model'
-import {
-	type CatalogExtras,
-	EMPTY_CATALOG_EXTRAS,
-} from '#/pages/catalog/feature/mocks/catalog-extras'
 
 function row(overrides: Partial<CatalogRow>): CatalogRow {
 	return {
@@ -33,6 +31,8 @@ function row(overrides: Partial<CatalogRow>): CatalogRow {
 		unit: 'UNIT',
 		unitPriceCents: 52000,
 		vatRate: 10,
+		extras: EMPTY_CATALOG_EXTRAS,
+		usage: { quotes: 0, invoices: 0, total: 0 },
 		product: null,
 		serviceRate: null,
 		...overrides,
@@ -167,22 +167,69 @@ describe('hasSameReference', () => {
 	})
 })
 
-describe('catalog usage', () => {
-	it('counts the quote and invoice lines that use each item', () => {
-		const usage = catalogUsage({
-			quoteLines: ['a', 'a', 'b', null],
-			invoiceLines: ['a', null],
+const API_FIELDS = {
+	organization_id: 'o1',
+	created_at: '2026-11-01T00:00:00Z',
+	updated_at: '2026-11-01T00:00:00Z',
+	category: 'Gros œuvre',
+	billing_frequency: 'MONTHLY',
+	cost_cents: 31000,
+	archived_at: null,
+	usage_count: 3,
+	quote_usage_count: 2,
+	invoice_usage_count: 1,
+} as const
+
+describe('catalogRows', () => {
+	it('carries the catalogue fields and the usage computed by the API', () => {
+		const product: Product = {
+			...API_FIELDS,
+			id: 'p1',
+			name: 'Béton',
+			sku: 'B-1',
+			unit: 'M3',
+			unit_price_cents: 52000,
+			default_vat_rate_bp: 2000,
+			description: null,
+			photo_keys: [],
+			datasheet_keys: [],
+		}
+		const serviceRate: ServiceRate = {
+			...API_FIELDS,
+			id: 's1',
+			label: 'Pose',
+			unit: 'HOUR',
+			rate_cents: 5500,
+			default_vat_rate_bp: null,
+			description: null,
+			archived_at: '2026-11-02T00:00:00Z',
+			cost_cents: null,
+			billing_frequency: 'ONE_SHOT',
+			usage_count: 0,
+			quote_usage_count: 0,
+			invoice_usage_count: 0,
+		}
+
+		const [first, second] = catalogRows([product], [serviceRate])
+
+		expect(first?.extras).toEqual({
+			category: 'Gros œuvre',
+			cost: 31000,
+			frequency: 'monthly',
+			archived: false,
 		})
-		expect(usageOf(usage, 'a')).toEqual({ quotes: 2, invoices: 1, total: 3 })
-		expect(usageOf(usage, 'b')).toEqual({ quotes: 1, invoices: 0, total: 1 })
+		expect(first?.usage).toEqual({ quotes: 2, invoices: 1, total: 3 })
+		expect(second?.extras).toEqual({
+			category: 'Gros œuvre',
+			cost: null,
+			frequency: 'one_shot',
+			archived: true,
+		})
+		expect(second?.usage).toEqual({ quotes: 0, invoices: 0, total: 0 })
 	})
+})
 
-	it('reports an unknown item as never used', () => {
-		expect(
-			usageOf(catalogUsage({ quoteLines: [], invoiceLines: [] }), 'zzz'),
-		).toEqual({ quotes: 0, invoices: 0, total: 0 })
-	})
-
+describe('usageLabel', () => {
 	it('describes the usage in French', () => {
 		expect(usageLabel({ quotes: 0, invoices: 0, total: 0 })).toEqual({
 			main: 'Jamais utilisé',

@@ -1,10 +1,24 @@
+import type { Schemas } from '#/api/api.client'
 import type { Supplier } from '#/hooks/use-suppliers'
 import type {
+	AddressKind,
 	SupplierAddress,
 	SupplierContact,
 	SupplierExtras,
 	SupplierFormValues,
 } from '#/pages/suppliers/types'
+
+const ADDRESS_KIND_OF_API: Record<Schemas.AddressKind, AddressKind> = {
+	BILLING: 'billing',
+	SITE: 'site',
+	OTHER: 'other',
+}
+
+const API_OF_ADDRESS_KIND: Record<AddressKind, Schemas.AddressKind> = {
+	billing: 'BILLING',
+	site: 'SITE',
+	other: 'OTHER',
+}
 
 const TERMS = /^\d{1,3}$/
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -147,6 +161,41 @@ export function supplierValuesOf(
 	}
 }
 
+export function extrasOfSupplier(supplier: Supplier): SupplierExtras {
+	return {
+		iban: supplier.iban ?? '',
+		defaultCategoryId: supplier.default_category_id ?? null,
+		paymentTermsDays: supplier.payment_terms_days ?? null,
+		notes: supplier.notes ?? '',
+		archived: supplier.archived_at != null,
+		contacts:
+			supplier.contacts.length > 0
+				? supplier.contacts.map((contact) => ({
+						id: contact.id,
+						firstName: contact.first_name,
+						lastName: contact.last_name,
+						role: contact.role,
+						email: contact.email,
+						phone: contact.phone,
+						mobile: contact.mobile,
+					}))
+				: null,
+		addresses:
+			supplier.addresses.length > 0
+				? supplier.addresses.map((address) => ({
+						id: address.id,
+						label: address.label,
+						kind: ADDRESS_KIND_OF_API[address.kind],
+						street: address.street,
+						complement: address.line2,
+						postalCode: address.postal_code,
+						city: address.city,
+						country: address.country,
+					}))
+				: null,
+	}
+}
+
 export function supplierFormErrors(values: SupplierFormValues): string[] {
 	const errors: string[] = []
 	const nameError = validateSupplierName(values.name)
@@ -171,6 +220,7 @@ function optional(value: string): string | null {
 
 export function buildSupplierRequest(values: SupplierFormValues) {
 	const address = values.addresses.find((item) => !isAddressEmpty(item))
+	const extras = extrasOfValues(values)
 	return {
 		name: values.name.trim(),
 		registration_number: optional(values.registrationNumber.replace(/\s/g, '')),
@@ -182,6 +232,27 @@ export function buildSupplierRequest(values: SupplierFormValues) {
 		email: optional(
 			values.contacts.find((item) => item.email.trim() !== '')?.email ?? '',
 		),
+		iban: optional(extras.iban),
+		payment_terms_days: extras.paymentTermsDays,
+		default_category_id: extras.defaultCategoryId,
+		notes: optional(extras.notes),
+		contacts: (extras.contacts ?? []).map((contact) => ({
+			first_name: contact.firstName,
+			last_name: contact.lastName,
+			role: contact.role,
+			email: contact.email,
+			phone: contact.phone,
+			mobile: contact.mobile,
+		})),
+		addresses: (extras.addresses ?? []).map((item) => ({
+			kind: API_OF_ADDRESS_KIND[item.kind],
+			label: item.label,
+			street: item.street,
+			line2: item.complement,
+			postal_code: item.postalCode,
+			city: item.city,
+			country: item.country,
+		})),
 	}
 }
 

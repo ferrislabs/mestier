@@ -14,6 +14,7 @@
 //! ```
 
 mod crm_b5;
+mod crm_b6;
 mod harness;
 mod issuer;
 

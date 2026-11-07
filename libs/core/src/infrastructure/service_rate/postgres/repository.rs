@@ -28,9 +28,10 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
         let row = sqlx::query_as!(
             ServiceRateRow,
             r#"
-            INSERT INTO service_rates (id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, deleted_at, created_at, updated_at
+            INSERT INTO service_rates (id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, category, billing_frequency, cost_cents, archived_at, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, category, billing_frequency, cost_cents, archived_at, deleted_at, created_at, updated_at,
+                (SELECT COUNT(*) FROM quote_lines ql JOIN quotes q ON q.id = ql.quote_id WHERE ql.service_rate_id = service_rates.id AND ql.deleted_at IS NULL AND q.deleted_at IS NULL) AS "quote_usage_count!", (SELECT COUNT(*) FROM invoice_lines il JOIN invoices i ON i.id = il.invoice_id WHERE il.service_rate_id = service_rates.id AND il.deleted_at IS NULL AND i.deleted_at IS NULL) AS "invoice_usage_count!"
             "#,
             service_rate.id.0,
             service_rate.organization_id.0,
@@ -39,6 +40,10 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
             service_rate.rate_cents,
             service_rate.default_vat_rate_bp,
             service_rate.description,
+            service_rate.catalog.category,
+            service_rate.catalog.billing_frequency.as_str(),
+            service_rate.catalog.cost_cents,
+            service_rate.catalog.archived_at,
             service_rate.deleted_at,
             service_rate.created_at,
             service_rate.updated_at,
@@ -55,7 +60,8 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
         let row = sqlx::query_as!(
             ServiceRateRow,
             r#"
-            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, deleted_at, created_at, updated_at
+            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, category, billing_frequency, cost_cents, archived_at, deleted_at, created_at, updated_at,
+                (SELECT COUNT(*) FROM quote_lines ql JOIN quotes q ON q.id = ql.quote_id WHERE ql.service_rate_id = service_rates.id AND ql.deleted_at IS NULL AND q.deleted_at IS NULL) AS "quote_usage_count!", (SELECT COUNT(*) FROM invoice_lines il JOIN invoices i ON i.id = il.invoice_id WHERE il.service_rate_id = service_rates.id AND il.deleted_at IS NULL AND i.deleted_at IS NULL) AS "invoice_usage_count!"
             FROM service_rates
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -78,7 +84,8 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
         let rows = sqlx::query_as!(
             ServiceRateRow,
             r#"
-            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, deleted_at, created_at, updated_at
+            SELECT id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, category, billing_frequency, cost_cents, archived_at, deleted_at, created_at, updated_at,
+                (SELECT COUNT(*) FROM quote_lines ql JOIN quotes q ON q.id = ql.quote_id WHERE ql.service_rate_id = service_rates.id AND ql.deleted_at IS NULL AND q.deleted_at IS NULL) AS "quote_usage_count!", (SELECT COUNT(*) FROM invoice_lines il JOIN invoices i ON i.id = il.invoice_id WHERE il.service_rate_id = service_rates.id AND il.deleted_at IS NULL AND i.deleted_at IS NULL) AS "invoice_usage_count!"
             FROM service_rates
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY label ASC, created_at ASC
@@ -114,9 +121,10 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
             ServiceRateRow,
             r#"
             UPDATE service_rates
-            SET label = $2, unit = $3, rate_cents = $4, default_vat_rate_bp = $5, description = $6, updated_at = $7
+            SET label = $2, unit = $3, rate_cents = $4, default_vat_rate_bp = $5, description = $6, category = $7, billing_frequency = $8, cost_cents = $9, archived_at = $10, updated_at = $11
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, deleted_at, created_at, updated_at
+            RETURNING id, org_id, label, unit, rate_cents, default_vat_rate_bp, description, category, billing_frequency, cost_cents, archived_at, deleted_at, created_at, updated_at,
+                (SELECT COUNT(*) FROM quote_lines ql JOIN quotes q ON q.id = ql.quote_id WHERE ql.service_rate_id = service_rates.id AND ql.deleted_at IS NULL AND q.deleted_at IS NULL) AS "quote_usage_count!", (SELECT COUNT(*) FROM invoice_lines il JOIN invoices i ON i.id = il.invoice_id WHERE il.service_rate_id = service_rates.id AND il.deleted_at IS NULL AND i.deleted_at IS NULL) AS "invoice_usage_count!"
             "#,
             service_rate.id.0,
             service_rate.label,
@@ -124,6 +132,10 @@ impl<'tx> ServiceRateRepository for PgServiceRateRepository<'tx> {
             service_rate.rate_cents,
             service_rate.default_vat_rate_bp,
             service_rate.description,
+            service_rate.catalog.category,
+            service_rate.catalog.billing_frequency.as_str(),
+            service_rate.catalog.cost_cents,
+            service_rate.catalog.archived_at,
             service_rate.updated_at,
         )
         .fetch_optional(&mut ***tx)

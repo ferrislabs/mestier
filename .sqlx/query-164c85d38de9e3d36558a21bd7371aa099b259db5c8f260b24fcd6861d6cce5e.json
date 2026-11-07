@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE expenses\n                SET status = 'PAID', paid_on = $2, method = $3, updated_at = $4\n                WHERE id = $1 AND status = 'TO_PAY' AND advanced_by_member_id IS NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "164c85d38de9e3d36558a21bd7371aa099b259db5c8f260b24fcd6861d6cce5e"
+}

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { Supplier } from '#/hooks/use-suppliers'
-import { EMPTY_SUPPLIER_EXTRAS } from '#/pages/suppliers/feature/mocks/supplier-extras'
 import { emptyContact } from '#/pages/suppliers/lib/supplier-form'
 import {
 	formatLegalId,
@@ -8,6 +7,7 @@ import {
 	supplierTotals,
 } from '#/pages/suppliers/lib/supplier-model'
 import type { SupplierExtras } from '#/pages/suppliers/types'
+import { EMPTY_SUPPLIER_EXTRAS } from '#/pages/suppliers/types'
 import type { Expense, ExpenseCategory } from '#/pages/treasury/types'
 
 const TODAY = '2026-11-05'
@@ -24,7 +24,7 @@ function supplier(id: string, name: string, patch: Partial<Supplier> = {}) {
 }
 
 function expense(patch: Partial<Expense>): Expense {
-	return {
+	const base = {
 		id: 'x',
 		date: '2026-10-01',
 		label: 'Achat',
@@ -43,8 +43,18 @@ function expense(patch: Partial<Expense>): Expense {
 		customerId: null,
 		customerName: '',
 		proofName: null,
+		total: 1200,
+		state: 'to_pay' as const,
+		daysLate: 0,
 		note: '',
 		...patch,
+	}
+	const paid = base.paid
+	const overdue = base.dueDate !== null && base.dueDate < TODAY
+	return {
+		...base,
+		total: patch.total ?? base.amountHt + base.vatAmount,
+		state: patch.state ?? (paid ? 'paid' : overdue ? 'overdue' : 'to_pay'),
 	}
 }
 

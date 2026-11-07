@@ -54,3 +54,13 @@ export interface SupplierFormValues {
 	contacts: SupplierContact[]
 	addresses: SupplierAddress[]
 }
+
+export const EMPTY_SUPPLIER_EXTRAS: SupplierExtras = {
+	iban: '',
+	defaultCategoryId: null,
+	paymentTermsDays: null,
+	notes: '',
+	archived: false,
+	contacts: null,
+	addresses: null,
+}

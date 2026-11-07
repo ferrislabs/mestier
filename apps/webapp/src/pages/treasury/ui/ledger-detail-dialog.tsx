@@ -20,10 +20,11 @@ import {
 	SelectValue,
 } from '#/components/ui/select'
 import { buildOrgPath } from '#/modules/org-path'
-import { findPerson } from '#/pages/customers/feature/mocks/people'
 import { formatDate } from '#/pages/customers/lib/format'
+import { findPerson, type Person } from '#/pages/customers/lib/people'
 import { StatusBadge } from '#/pages/customers/ui/badges'
 import { Money } from '#/pages/customers/ui/money'
+import { proofLabel } from '#/pages/treasury/lib/ledger-api'
 import {
 	canMarkPaid,
 	canReimburse,
@@ -61,6 +62,7 @@ const EMPTY = <span className="text-muted-foreground">—</span>
 
 export interface LedgerDetailActions {
 	today: string
+	people: readonly Person[]
 	onEditExpense: (expense: Expense) => void
 	onDeleteExpense: (expense: Expense) => void
 	onMarkPaid: (expense: Expense, paidAt: string, method: PaymentMethod) => void
@@ -198,8 +200,8 @@ function ExpenseDetail({
 	const [paidAt, setPaidAt] = useState(today)
 	const [method, setMethod] = useState<PaymentMethod>('transfer')
 	const category = categories.find((item) => item.id === expense.categoryId)
-	const advancer = findPerson(expense.advancedById)
-	const display = expenseState(expense, today)
+	const advancer = findPerson(actions.people, expense.advancedById)
+	const display = expenseState(expense)
 	const paidErrors = validatePaidDate(expense, paidAt, today)
 
 	function pay() {
@@ -255,7 +257,7 @@ function ExpenseDetail({
 						organizationSlug={organizationSlug}
 					/>
 				</Row>
-				<Row label="Justificatif">{expense.proofName ?? EMPTY}</Row>
+				<Row label="Justificatif">{proofLabel(expense.proofName) ?? EMPTY}</Row>
 				{expense.note && (
 					<div className="sm:col-span-2">
 						<Row label="Note">{expense.note}</Row>

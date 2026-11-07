@@ -4,6 +4,10 @@ import type { Schemas } from '#/api/api.client'
 const SUPPLIERS_PATH = '/api/v1/organizations/{organization_id}/suppliers'
 const SUPPLIER_PATH =
 	'/api/v1/organizations/{organization_id}/suppliers/{supplier_id}'
+const SUPPLIER_ARCHIVE_PATH =
+	'/api/v1/organizations/{organization_id}/suppliers/{supplier_id}/archive'
+const SUPPLIER_RESTORE_PATH =
+	'/api/v1/organizations/{organization_id}/suppliers/{supplier_id}/restore'
 
 export type Supplier = Schemas.SupplierResponse
 export type SupplierPayload = Schemas.CreateSupplierRequest
@@ -36,9 +40,14 @@ function useSupplierInvalidation() {
 
 	return () =>
 		queryClient.invalidateQueries({
-			predicate: (query) =>
-				query.queryKey.includes(SUPPLIERS_PATH) ||
-				query.queryKey.includes(SUPPLIER_PATH),
+			predicate: (query) => {
+				const meta = query.queryKey[0]
+				const id =
+					typeof meta === 'object' && meta !== null
+						? (meta as { _id?: unknown })._id
+						: undefined
+				return id === SUPPLIERS_PATH || id === SUPPLIER_PATH
+			},
 		})
 }
 
@@ -58,6 +67,30 @@ export function useUpdateSupplier() {
 
 	return useMutation({
 		...window.tanstackApi.mutation('put', SUPPLIER_PATH).mutationOptions,
+		onSuccess: async () => {
+			await invalidate()
+		},
+	})
+}
+
+export function useArchiveSupplier() {
+	const invalidate = useSupplierInvalidation()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', SUPPLIER_ARCHIVE_PATH)
+			.mutationOptions,
+		onSuccess: async () => {
+			await invalidate()
+		},
+	})
+}
+
+export function useRestoreSupplier() {
+	const invalidate = useSupplierInvalidation()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', SUPPLIER_RESTORE_PATH)
+			.mutationOptions,
 		onSuccess: async () => {
 			await invalidate()
 		},

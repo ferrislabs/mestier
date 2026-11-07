@@ -14,3 +14,17 @@ pub struct SupplierPath {
     pub organization_id: OrganizationId,
     pub supplier_id: SupplierId,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/suppliers/{supplier_id}/archive")]
+pub struct SupplierArchivePath {
+    pub organization_id: OrganizationId,
+    pub supplier_id: SupplierId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/suppliers/{supplier_id}/restore")]
+pub struct SupplierRestorePath {
+    pub organization_id: OrganizationId,
+    pub supplier_id: SupplierId,
+}

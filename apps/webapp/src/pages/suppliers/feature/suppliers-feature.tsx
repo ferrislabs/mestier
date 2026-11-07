@@ -2,22 +2,20 @@ import { useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import {
+	useArchiveSupplier,
 	useCreateSupplier,
+	useRestoreSupplier,
 	useSuppliers,
 	useUpdateSupplier,
 } from '#/hooks/use-suppliers'
+import { useExpenseCategories, useExpenses } from '#/hooks/use-treasury'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { useNotice } from '#/pages/customers/feature/use-notice'
 import { todayIso } from '#/pages/customers/lib/format'
 import {
-	EMPTY_SUPPLIER_EXTRAS,
-	useSaveSupplierExtras,
-	useSupplierExtrasMap,
-} from '#/pages/suppliers/feature/mocks/supplier-extras'
-import {
 	buildSupplierRequest,
 	emptySupplierValues,
-	extrasOfValues,
+	extrasOfSupplier,
 	supplierValuesOf,
 } from '#/pages/suppliers/lib/supplier-form'
 import {
@@ -28,7 +26,7 @@ import {
 import type { SupplierFormValues } from '#/pages/suppliers/types'
 import { SupplierFormDialog } from '#/pages/suppliers/ui/supplier-form-dialog'
 import { SuppliersList } from '#/pages/suppliers/ui/suppliers-list'
-import { useLedger } from '#/pages/treasury/feature/mocks/ledger'
+import { categoryOf, expenseOf } from '#/pages/treasury/lib/ledger-api'
 
 interface SuppliersFeatureProps {
 	archived?: boolean
@@ -64,23 +62,42 @@ function SuppliersWorkspace({
 	const suppliers = useSuppliers(organizationId)
 	const createSupplier = useCreateSupplier()
 	const updateSupplier = useUpdateSupplier()
-	const extras = useSupplierExtrasMap()
-	const saveExtras = useSaveSupplierExtras()
-	const ledger = useLedger()
+	const archiveSupplier = useArchiveSupplier()
+	const restoreSupplier = useRestoreSupplier()
+	const expenseRows = useExpenses(organizationId).data?.data
+	const categoryRows = useExpenseCategories(organizationId).data?.data
 
 	const all = suppliers.data?.data
 	const today = todayIso()
+	const expenses = useMemo(
+		() => (expenseRows ?? []).map(expenseOf),
+		[expenseRows],
+	)
+	const categories = useMemo(
+		() => (categoryRows ?? []).map(categoryOf),
+		[categoryRows],
+	)
+	const extras = useMemo(
+		() =>
+			Object.fromEntries(
+				(all ?? []).map((supplier) => [
+					supplier.id,
+					extrasOfSupplier(supplier),
+				]),
+			),
+		[all],
+	)
 	const rows = useMemo(
 		() =>
 			supplierRows({
 				suppliers: all ?? [],
 				extras,
-				expenses: ledger.data.expenses,
-				categories: ledger.data.categories,
+				expenses,
+				categories,
 				today,
 				filters: { archived, query },
 			}),
-		[all, extras, ledger.data, today, archived, query],
+		[all, extras, expenses, categories, today, archived, query],
 	)
 	const totals = useMemo(() => supplierTotals(rows), [rows])
 	const mutationError = createSupplier.error ?? updateSupplier.error
@@ -88,29 +105,31 @@ function SuppliersWorkspace({
 
 	async function save(values: SupplierFormValues) {
 		const body = buildSupplierRequest(values)
-		const patch = extrasOfValues(values)
 		if (draft?.row) {
 			const supplierId = draft.row.supplier.id
 			await updateSupplier.mutateAsync({
 				path: { organization_id: organizationId, supplier_id: supplierId },
 				body,
 			})
-			saveExtras.mutate(supplierId, patch)
 			notice.show('Fournisseur mis à jour.')
 		} else {
-			const created = await createSupplier.mutateAsync({
+			await createSupplier.mutateAsync({
 				path: { organization_id: organizationId },
 				body,
 			})
-			saveExtras.mutate(created.data.id, patch)
 			notice.show('Fournisseur créé.')
 		}
 		setDraft(null)
 	}
 
-	function toggleArchive(row: SupplierRow) {
+	async function toggleArchive(row: SupplierRow) {
 		const archive = !row.extras.archived
-		saveExtras.mutate(row.supplier.id, { archived: archive })
+		const path = {
+			organization_id: organizationId,
+			supplier_id: row.supplier.id,
+		}
+		if (archive) await archiveSupplier.mutateAsync({ path })
+		else await restoreSupplier.mutateAsync({ path })
 		notice.show(archive ? 'Fournisseur archivé.' : 'Fournisseur réactivé.')
 		setDraft(null)
 	}
@@ -147,13 +166,10 @@ function SuppliersWorkspace({
 					editingName={draft.row?.supplier.name ?? null}
 					initialValues={
 						draft.row
-							? supplierValuesOf(
-									draft.row.supplier,
-									extras[draft.row.supplier.id] ?? EMPTY_SUPPLIER_EXTRAS,
-								)
+							? supplierValuesOf(draft.row.supplier, draft.row.extras)
 							: emptySupplierValues()
 					}
-					categories={ledger.data.categories}
+					categories={categories}
 					archived={draft.row ? draft.row.extras.archived : null}
 					toPay={draft.row?.toPay ?? 0}
 					isPending={createSupplier.isPending || updateSupplier.isPending}
@@ -163,7 +179,7 @@ function SuppliersWorkspace({
 					}}
 					onSubmit={(values) => void save(values).catch(() => undefined)}
 					onToggleArchive={() => {
-						if (draft.row) toggleArchive(draft.row)
+						if (draft.row) void toggleArchive(draft.row).catch(() => undefined)
 					}}
 				/>
 			) : null}

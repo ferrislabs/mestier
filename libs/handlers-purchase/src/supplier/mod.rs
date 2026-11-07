@@ -3,10 +3,12 @@ use axum_extra::routing::RouterExt;
 use handlers::{ApiError, AppState};
 use mestier_core::{OrganizationId, Supplier, SupplierId};
 
+pub mod archive;
 pub mod create;
 pub mod get_one;
 pub mod list;
 pub mod paths;
+pub mod profile;
 pub mod response;
 pub mod update;
 
@@ -29,4 +31,6 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(create::handler)
         .typed_get(get_one::handler)
         .typed_put(update::handler)
+        .typed_post(archive::archive_handler)
+        .typed_post(archive::restore_handler)
 }

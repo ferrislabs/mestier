@@ -268,6 +268,13 @@ impl App {
     /// fail this cleanup — swallowing the error is the same choice
     /// `handlers-quote`'s own harness makes.
     pub async fn cleanup(&self) {
+        for table in ["expenses", "unallocated_payments", "expense_categories"] {
+            let _ = sqlx::query(&format!("DELETE FROM {table} WHERE org_id = $1"))
+                .bind(self.organization_id)
+                .execute(&self.pool)
+                .await;
+        }
+
         let _ = sqlx::query("DELETE FROM organizations WHERE id = $1")
             .bind(self.organization_id)
             .execute(&self.pool)

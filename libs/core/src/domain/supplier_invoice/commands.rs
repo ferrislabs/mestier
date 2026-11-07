@@ -131,6 +131,7 @@ pub struct CreateSupplierCommand {
     pub address: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
+    pub profile: super::SupplierProfileInput,
 }
 
 #[derive(Debug, Clone)]
@@ -143,4 +144,5 @@ pub struct UpdateSupplierCommand {
     pub address: Option<String>,
     pub phone: Option<String>,
     pub email: Option<String>,
+    pub profile: super::SupplierProfileInput,
 }

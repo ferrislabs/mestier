@@ -2,7 +2,7 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    OrganizationId, Product, ProductId, SupplierId,
+    CatalogProfileInput, CatalogUsage, OrganizationId, Product, ProductId, SupplierId,
     domain::product::{
         commands::{CreateProductCommand, UpdateProductCommand},
         ports::ProductRepository,
@@ -56,6 +56,7 @@ where
             .await?;
 
         let now = Utc::now();
+        let catalog = CatalogProfileInput::resolve(command.catalog, None, now)?;
         self.repo
             .insert(&Product {
                 id: ProductId(generate_uuid_v7()),
@@ -71,6 +72,8 @@ where
                 manufacturer: normalize_optional(command.manufacturer),
                 technical_specs: normalize_optional(command.technical_specs),
                 datasheet_keys: command.datasheet_keys,
+                catalog,
+                usage: CatalogUsage::default(),
                 deleted_at: None,
                 created_at: now,
                 updated_at: now,
@@ -105,6 +108,9 @@ where
         validate_datasheet_keys(&command.datasheet_keys)?;
 
         let mut product = self.get_product(command.id).await?;
+        let now = Utc::now();
+        product.catalog =
+            CatalogProfileInput::resolve(command.catalog, Some(&product.catalog), now)?;
         self.ensure_supplier(product.organization_id, command.supplier_id)
             .await?;
         product.name = command.name;
@@ -118,7 +124,7 @@ where
         product.manufacturer = normalize_optional(command.manufacturer);
         product.technical_specs = normalize_optional(command.technical_specs);
         product.datasheet_keys = command.datasheet_keys;
-        product.updated_at = Utc::now();
+        product.updated_at = now;
 
         self.repo.update(&product).await
     }
@@ -220,6 +226,7 @@ mod tests {
             manufacturer: Some("  Pépinières Martin ".to_owned()),
             technical_specs: Some("   ".to_owned()),
             datasheet_keys: vec!["sheets/rosier.pdf".to_owned()],
+            catalog: None,
         }
     }
 
@@ -234,6 +241,7 @@ mod tests {
             address: None,
             phone: None,
             email: None,
+            profile: Default::default(),
             deleted_at: None,
             created_at: now,
             updated_at: now,
@@ -322,5 +330,143 @@ mod tests {
         let result = service.create_product(command).await;
 
         assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn create_stores_category_frequency_cost_and_archive_state() {
+        let mut service = ProductService::new(echoing_products(), MockSupplierRepository::new());
+        let mut command = create_command(None);
+        command.catalog = Some(crate::CatalogProfileInput {
+            category: "  Plantes  ".to_owned(),
+            billing_frequency: crate::BillingFrequency::Monthly,
+            cost_cents: Some(800),
+            archived: true,
+        });
+
+        let product = service.create_product(command).await.unwrap();
+
+        assert_eq!(product.catalog.category, "Plantes");
+        assert_eq!(
+            product.catalog.billing_frequency,
+            crate::BillingFrequency::Monthly
+        );
+        assert_eq!(product.catalog.cost_cents, Some(800));
+        assert!(product.catalog.archived_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn create_without_catalog_data_uses_the_defaults() {
+        let mut service = ProductService::new(echoing_products(), MockSupplierRepository::new());
+
+        let product = service.create_product(create_command(None)).await.unwrap();
+
+        assert_eq!(product.catalog, crate::CatalogProfile::default());
+        assert_eq!(product.catalog.cost_cents, None);
+    }
+
+    #[tokio::test]
+    async fn a_negative_cost_is_refused() {
+        let mut service = ProductService::new(echoing_products(), MockSupplierRepository::new());
+        let mut command = create_command(None);
+        command.catalog = Some(crate::CatalogProfileInput {
+            cost_cents: Some(-1),
+            ..Default::default()
+        });
+
+        let result = service.create_product(command).await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn a_negative_price_is_refused() {
+        let mut service = ProductService::new(echoing_products(), MockSupplierRepository::new());
+        let mut command = create_command(None);
+        command.unit_price_cents = -1;
+
+        let result = service.create_product(command).await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn update_without_catalog_data_keeps_the_stored_ones_and_archiving_keeps_the_first_date()
+    {
+        let organization_id = OrganizationId(generate_uuid_v7());
+        let archived_at = Utc::now() - chrono::Duration::days(3);
+        let mut stored = Product {
+            id: ProductId(generate_uuid_v7()),
+            organization_id,
+            name: "Rosier".to_owned(),
+            sku: None,
+            unit: "u".to_owned(),
+            unit_price_cents: 1200,
+            default_vat_rate_bp: None,
+            description: None,
+            photo_keys: vec![],
+            supplier_id: None,
+            manufacturer: None,
+            technical_specs: None,
+            datasheet_keys: vec![],
+            catalog: crate::CatalogProfile {
+                category: "Plantes".to_owned(),
+                billing_frequency: crate::BillingFrequency::Yearly,
+                cost_cents: Some(500),
+                archived_at: Some(archived_at),
+            },
+            usage: Default::default(),
+            deleted_at: None,
+            created_at: archived_at,
+            updated_at: archived_at,
+        };
+        let id = stored.id;
+        let mut repo = MockProductRepository::new();
+        let found = stored.clone();
+        repo.expect_find_by_id().returning(move |_| {
+            let product = found.clone();
+            Box::pin(async move { Ok(Some(product)) })
+        });
+        repo.expect_update().returning(|product| {
+            let product = product.clone();
+            Box::pin(async move { Ok(product) })
+        });
+        let mut service = ProductService::new(repo, MockSupplierRepository::new());
+        let update = |catalog| UpdateProductCommand {
+            actor: authz::Subject::system(),
+            id,
+            name: "Rosier".to_owned(),
+            sku: None,
+            unit: "u".to_owned(),
+            unit_price_cents: 1500,
+            default_vat_rate_bp: None,
+            description: None,
+            photo_keys: vec![],
+            supplier_id: None,
+            manufacturer: None,
+            technical_specs: None,
+            datasheet_keys: vec![],
+            catalog,
+        };
+
+        let kept = service.update_product(update(None)).await.unwrap();
+        let rearchived = service
+            .update_product(update(Some(crate::CatalogProfileInput {
+                category: "Plantes".to_owned(),
+                billing_frequency: crate::BillingFrequency::Yearly,
+                cost_cents: Some(500),
+                archived: true,
+            })))
+            .await
+            .unwrap();
+        let restored = service
+            .update_product(update(Some(crate::CatalogProfileInput::default())))
+            .await
+            .unwrap();
+
+        stored.unit_price_cents = 1500;
+        assert_eq!(kept.catalog, stored.catalog);
+        assert_eq!(rearchived.catalog.archived_at, Some(archived_at));
+        assert_eq!(restored.catalog.archived_at, None);
+        assert_eq!(restored.catalog.cost_cents, None);
     }
 }

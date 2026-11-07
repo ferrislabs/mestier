@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 use rust_decimal::Decimal;
 
@@ -32,11 +32,16 @@ pub trait SupplierRepository: Send {
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Supplier>, u64), CoreError>> + Send;
 
-    /// Rewrites `name`, `registration_number`, `vat_number`, `address`,
-    /// `phone`, `email` and `updated_at`.
     fn update(
         &mut self,
         supplier: &Supplier,
+    ) -> impl Future<Output = Result<Supplier, CoreError>> + Send;
+
+    fn set_archived(
+        &mut self,
+        id: SupplierId,
+        archived_at: Option<DateTime<Utc>>,
+        updated_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<Supplier, CoreError>> + Send;
 }
 

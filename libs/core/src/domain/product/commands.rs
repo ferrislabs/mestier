@@ -18,6 +18,7 @@ pub struct CreateProductCommand {
     pub manufacturer: Option<String>,
     pub technical_specs: Option<String>,
     pub datasheet_keys: Vec<String>,
+    pub catalog: Option<crate::CatalogProfileInput>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,4 +39,5 @@ pub struct UpdateProductCommand {
     pub manufacturer: Option<String>,
     pub technical_specs: Option<String>,
     pub datasheet_keys: Vec<String>,
+    pub catalog: Option<crate::CatalogProfileInput>,
 }

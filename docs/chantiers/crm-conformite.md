@@ -35,16 +35,16 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 | B3 | Opportunités (`deal`) + migration depuis `pipeline_stage` | B2 | PR ouverte |
 | B4 | Devis : validité, acompte, motif de refus, signataire, responsable, opportunité, notes, remise et fréquence par ligne, révisions, « remplacé » | B3 | PR ouverte |
 | B5 | Factures : titre, délai de paiement, mentions légales, note interne, envoi et relance, création depuis un devis, suppression de brouillon, date d'émission, mode de règlement typé, remboursement | B1, B4 | fait, à relire |
-| B6 | Dépenses et catégories, journal, fournisseurs enrichis, catalogue enrichi | B1 | à faire |
+| B6 | Dépenses et catégories, journal, fournisseurs enrichis, catalogue enrichi | B1 | fait, à relire |
 | B7 | Indicateurs : CA 12 mois, encours en retard, dernière activité | B3, B5, B6 | à faire |
 
 ## Mocks front à remplacer
 - `pages/deals/feature/mocks/{deals-store,deal-quotes}.ts` : B3 (amorcé depuis `pipeline_stage`).
 - `pages/quotes/feature/mocks/quote-extras.ts` : B4 (responsable, validité, acompte, notes, remise et fréquence par ligne, signataire, motif de refus, révisions, lien opportunité).
-- `pages/suppliers/feature/mocks/supplier-extras.ts`, `pages/catalog/feature/mocks/{catalog-extras,catalog-usage}.ts` : B6.
+- `pages/suppliers/feature/mocks/supplier-extras.ts`, `pages/catalog/feature/mocks/{catalog-extras,catalog-usage}.ts` : B6, supprimés.
 - `pages/customers/feature/mocks/account-extras.ts` : B2.
 - `pages/crm-settings/feature/mocks/settings.ts` : B1.
-- `pages/treasury/feature/mocks/ledger.ts` : B6.
+- `pages/treasury/feature/mocks/ledger.ts` : B6, supprimé.
 - `pages/catalog/feature/mocks/catalog-extras.ts` : B6.
 - `pages/stripe/feature/mocks/stripe-events.ts` et réglages Stripe : restent.
 
@@ -97,11 +97,22 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 - Les e-mails d'envoi et de relance ne partent pas : le lot enregistre l'événement et `sent_at`.
 - Le montant d'un acompte de projet (`issue_deposit`) et le solde (`issue_final_invoice`) restent des lignes forfaitaires sans ventilation de TVA, comme avant.
 
+## Reports issus de B6
+- Les recettes sans facture vivent dans `unallocated_payments`, pas dans `invoice_payments` : l'affectation enregistre un vrai paiement de facture puis supprime la ligne. Un paiement Stripe n'existe pas dans le journal réel (l'origine « Stripe » n'est plus affichée que par le mock Stripe).
+- Les neuf catégories par défaut sont créées à la première lecture d'une organisation qui n'en a aucune. Deux premières lectures simultanées peuvent se heurter à l'index unique (409).
+- Aucun écran de gestion des catégories : l'API les crée, renomme et supprime, le front ne les expose pas.
+- Le journal renvoie toutes les écritures sans pagination ; le filtre par type, catégorie, statut et texte reste côté front.
+- Calculs restants côté front, hors périmètre du spec : le préremplissage de la TVA d'une dépense à partir d'un taux et l'aperçu du total du formulaire, `toCollect` (somme de l'encours par client) et les cumuls par fournisseur de `supplier-model.ts` (dépensé sur 12 mois, à payer).
+- Le justificatif d'une dépense est téléversé par `/files` et seule sa clé est conservée ; le détail affiche le nom du fichier, sans lien de téléchargement.
+- `useCrmSettings` a disparu, le shim `crm-settings/feature/mocks/settings.ts` ne garde que Stripe. `people.ts` (mock) est supprimé, la Trésorerie lit les vrais membres.
+- Les actions d'automatisation `mestier.achats.*` et `mestier.referentiel.*` n'exposent pas les nouveaux champs ; `update_supplier` conserve le profil existant et `update_product` / `update_service_rate` gardent les champs de catalogue.
+- Un fournisseur dont le numéro d'immatriculation déjà stocké est invalide se lit sans erreur, sa modification est refusée tant qu'il n'est pas corrigé.
+
 ## À vérifier au lot concerné
 - `POST /invoices/{id}/cancel` : conservé tel quel (statut `CANCELLED`, sans avoir) ; un montant négatif sur un paiement est un remboursement (B5).
 - `registry` (RCS/RM) couvert par `registration_number` ? (B1).
-- TVA des recettes codée à 20 % en dur dans `pages/treasury/feature/ledger-feature.tsx:140` (B6).
-- Lien entre `cost` du catalogue et `cost_basis` de `handlers-reference` (B6).
+- TVA des recettes codée à 20 % en dur : supprimée en B6, la TVA du journal vient de `GET /ledger`.
+- Lien entre `cost` du catalogue et `cost_basis` de `handlers-reference` : aucun, `cost_basis` est le coût horaire d'un salarié (B6).
 
 ## Partition F2 à F6 (écrivains uniques)
 - F2 : `pages/customers` hors pipeline. Propriétaire de `types.ts` et `feature/mocks/account-extras.ts`.
