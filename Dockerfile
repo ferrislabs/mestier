@@ -1,15 +1,25 @@
-FROM rust:1.95.0-bookworm AS chef
+# cargo-chef ships prebuilt in this image: no more `cargo install` on a cache miss.
+FROM lukemathwalker/cargo-chef:0.1.77-rust-1.95.0-bookworm AS chef
 
 WORKDIR /usr/local/src/mestier
 
-RUN cargo install cargo-chef --version 0.1.77 --locked && \
-    cargo install sqlx-cli --version 0.8.6 --no-default-features --features postgres --locked
+# --- sqlx-cli: its own stage, so it never sits on the path of the workspace
+# build. Only the `api` image pulls it in.
+FROM rust:1.95.0-bookworm AS sqlx-cli
+
+RUN cargo install sqlx-cli --version 0.8.6 --no-default-features --features postgres --locked
 
 # --- Plan: extract a recipe of the workspace dependency graph ----------
-# Only Cargo.toml / Cargo.lock changes invalidate this layer.
+# Only the Rust inputs are copied: a change under apps/webapp, docs or deploy
+# must not invalidate anything below.
 FROM chef AS planner
 
-COPY . .
+COPY Cargo.toml Cargo.lock ./
+COPY apps/api apps/api
+COPY apps/mcp-gateway apps/mcp-gateway
+COPY apps/mcp-server apps/mcp-server
+COPY apps/seed-demo apps/seed-demo
+COPY libs libs
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Cook: build every dependency from the recipe ----------------------
@@ -21,8 +31,26 @@ COPY --from=planner /usr/local/src/mestier/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 # --- Build the actual workspace binaries -------------------------------
-COPY . .
+# The CI builds this stage once per platform (`build-rust`) and every Rust
+# image reuses it from the cache. Keep the inputs in sync with the planner.
+COPY Cargo.toml Cargo.lock ./
+COPY apps/api apps/api
+COPY apps/mcp-gateway apps/mcp-gateway
+COPY apps/mcp-server apps/mcp-server
+COPY apps/seed-demo apps/seed-demo
+COPY libs libs
+COPY migrations migrations
+COPY .sqlx .sqlx
 RUN cargo build --release
+
+# --- CI warm-up target -------------------------------------------------
+# Never shipped. It pulls in every expensive stage (workspace build and
+# sqlx-cli) so a single `build-rust` job per platform fills one cache scope
+# that all the Rust images then read.
+FROM scratch AS rust-prebuild
+
+COPY --from=builder /usr/local/src/mestier/target/release/api /api
+COPY --from=sqlx-cli /usr/local/cargo/bin/sqlx /sqlx
 
 FROM debian:bookworm-slim AS runtime
 
@@ -51,7 +79,7 @@ FROM runtime AS api
 COPY --from=builder /usr/local/src/mestier/target/release/api /usr/local/bin/api
 COPY --from=builder /usr/local/src/mestier/target/release/seed-demo /usr/local/bin/seed-demo
 COPY --from=builder /usr/local/src/mestier/migrations /usr/local/mestier/migrations
-COPY --from=builder /usr/local/cargo/bin/sqlx /usr/local/bin/
+COPY --from=sqlx-cli /usr/local/cargo/bin/sqlx /usr/local/bin/
 
 EXPOSE 80
 
