@@ -17,7 +17,7 @@ import { ConfirmDialog } from '#/components/confirm-dialog'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import type { Invoice } from '#/hooks/use-invoices'
-import type { creditNoteLines } from '#/pages/invoices/lib/credit-note-request'
+import type { CreditNoteRequest } from '#/pages/invoices/lib/credit-note-request'
 import {
 	ACTION_LABELS,
 	type ActionState,
@@ -62,10 +62,9 @@ interface InvoiceActionsBarProps {
 	onDeleteDraft: () => void
 	onRefund: (values: PaymentValues) => Promise<boolean>
 	onRecordPayment: (values: PaymentValues) => Promise<boolean>
-	onIssueCreditNote: (request: {
-		reason: string
-		lines: ReturnType<typeof creditNoteLines>
-	}) => Promise<boolean>
+	onIssueCreditNote: (
+		request: { reason: string } & CreditNoteRequest,
+	) => Promise<boolean>
 	onSend: () => Promise<string>
 	onRemind: () => Promise<string>
 	onDownloadPdf: () => void

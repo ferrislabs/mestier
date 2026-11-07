@@ -530,6 +530,10 @@ async fn reverting_the_migration_turns_superseded_quotes_back_into_sent_ones() {
             .await?;
 
         let mut guard = tx.lock().await;
+        sqlx::raw_sql("ALTER TABLE invoices DROP CONSTRAINT IF EXISTS fk_invoices_quote")
+            .execute(&mut ***guard)
+            .await
+            .unwrap();
         sqlx::raw_sql(DOWN).execute(&mut ***guard).await.unwrap();
         let status: String = sqlx::query_scalar("SELECT status::text FROM quotes WHERE id = $1")
             .bind(superseded.id.0)

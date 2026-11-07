@@ -13,6 +13,7 @@
 //! cargo test -p handlers-invoice --test http_e2e -- --ignored
 //! ```
 
+mod crm_b5;
 mod harness;
 mod issuer;
 
@@ -31,7 +32,6 @@ async fn create_draft(app: &harness::App, project_id: Option<uuid::Uuid>) -> Val
             "project_id": project_id,
             "customer_id": app.customer_id,
             "customer_context_id": app.customer_context_id,
-            "due_at": null,
             "notes": null,
             "operation_nature": null,
             "delivery_address": null,
@@ -57,7 +57,6 @@ async fn create_single_line_draft(app: &harness::App, unit_price_cents: i32) -> 
             "project_id": null,
             "customer_id": app.customer_id,
             "customer_context_id": app.customer_context_id,
-            "due_at": null,
             "notes": null,
             "operation_nature": null,
             "delivery_address": null,
@@ -126,7 +125,6 @@ async fn a_member_without_manage_invoices_is_refused_creating_an_invoice() {
             "project_id": null,
             "customer_id": app.customer_id,
             "customer_context_id": app.customer_context_id,
-            "due_at": null,
             "notes": null,
             "operation_nature": null,
             "delivery_address": null,
@@ -163,7 +161,6 @@ async fn an_unauthenticated_call_is_turned_away() {
             "project_id": null,
             "customer_id": app.customer_id,
             "customer_context_id": app.customer_context_id,
-            "due_at": null,
             "notes": null,
             "operation_nature": null,
             "delivery_address": null,
@@ -236,7 +233,6 @@ async fn a_draft_invoice_is_priced_persisted_listed_and_patched() {
             "project_id": null,
             "customer_id": app.customer_id,
             "customer_context_id": app.customer_context_id,
-            "due_at": null,
             "notes": "Revu a la baisse",
             "operation_nature": null,
             "delivery_address": null,
@@ -287,7 +283,6 @@ async fn issuing_an_invoice_allocates_a_number_and_locks_it_from_further_edits()
             "project_id": null,
             "customer_id": app.customer_id,
             "customer_context_id": app.customer_context_id,
-            "due_at": null,
             "notes": null,
             "operation_nature": null,
             "delivery_address": null,
@@ -327,7 +322,6 @@ async fn a_deposit_and_a_final_invoice_bill_a_project_against_its_quote() {
         .bearer_auth(&app.token)
         .json(&json!({
             "percentage_bp": 3000,
-            "due_at": null,
             "notes": null,
             "allow_exceeding_total": false
         }))
@@ -431,10 +425,9 @@ async fn recording_payments_changes_the_status_the_next_read_derives() {
         .json(&json!({
             "amount_cents": 10_000,
             "paid_on": paid_on,
-            "method": "bank_transfer",
+            "method": "TRANSFER",
             "reference": null,
-            "note": null,
-            "allow_exceeding_total": false
+            "note": null
         }))
         .send()
         .await
@@ -467,10 +460,9 @@ async fn recording_payments_changes_the_status_the_next_read_derives() {
         .json(&json!({
             "amount_cents": 10_000,
             "paid_on": paid_on,
-            "method": "bank_transfer",
+            "method": "TRANSFER",
             "reference": null,
-            "note": null,
-            "allow_exceeding_total": false
+            "note": null
         }))
         .send()
         .await
@@ -567,11 +559,11 @@ async fn a_credit_note_corrects_an_issued_invoice_over_http() {
         .post(format!("{}/credit-notes", app.invoice_url(&invoice_id)))
         .bearer_auth(&app.token)
         .json(&json!({
+            "reason": "Geste commercial",
             "lines": [
-                { "label": "Remise geste commercial", "quantity": "1", "unit_price_cents": 10_000 }
+                { "source_line_id": created["data"]["lines"][0]["id"], "quantity": "1" }
             ],
-            "notes": "Geste commercial",
-            "allow_exceeding_invoice_total": false
+            "notes": "Geste commercial"
         }))
         .send()
         .await
@@ -587,7 +579,7 @@ async fn a_credit_note_corrects_an_issued_invoice_over_http() {
     );
     assert_eq!(
         credit_note["data"]["net_cents"],
-        json!(10_000),
+        json!(30_000),
         "{credit_note}"
     );
     assert_eq!(
@@ -716,6 +708,7 @@ async fn pdf_export_renders_once_the_legal_identity_is_complete() {
 #[ignore = "requires live postgres and redis"]
 async fn facturx_export_refuses_a_customer_with_no_siren() {
     let app = harness::start().await;
+    app.make_customer_an_individual().await;
     let created = create_single_line_draft(&app, 10_000).await;
     let invoice_id = created["data"]["id"].as_str().expect("an id").to_owned();
     issue(&app, &invoice_id).await;

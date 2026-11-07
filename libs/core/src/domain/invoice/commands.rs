@@ -1,11 +1,12 @@
 use authz::Subject;
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use common::UserId;
 use rust_decimal::Decimal;
 
 use crate::{
-    CustomerContextId, CustomerId, InvoiceId, InvoiceKind, InvoicePaymentId, OperationNature,
-    OrganizationAddress, OrganizationId, ProjectId,
+    CustomerContextId, CustomerId, InvoiceId, InvoiceKind, InvoiceLineId, InvoicePaymentId,
+    OperationNature, OrganizationAddress, OrganizationId, PaymentMethod, ProductId, ProjectId,
+    QuoteId, ServiceRateId,
 };
 
 /// Issues any draft invoice, whatever `InvoiceKind` built it — a manually
@@ -20,6 +21,7 @@ use crate::{
 pub struct IssueInvoiceCommand {
     pub id: InvoiceId,
     pub actor: Subject,
+    pub issued_on: Option<NaiveDate>,
     /// Refuses issuing when it would push the project's issued total past
     /// the quote, unless the caller explicitly says this is fine: a
     /// deliberate over-bill happens, the artisan should not have to lie to
@@ -43,7 +45,7 @@ pub struct IssueDepositCommand {
     pub actor: Subject,
     /// Basis points of the quote's net total, e.g. 3000 = 30%.
     pub percentage_bp: i32,
-    pub due_at: Option<DateTime<Utc>>,
+    pub payment_terms_days: Option<i64>,
     pub notes: Option<String>,
     pub allow_exceeding_total: bool,
 }
@@ -56,7 +58,7 @@ pub struct IssueDepositCommand {
 pub struct IssueFinalInvoiceCommand {
     pub project_id: ProjectId,
     pub actor: Subject,
-    pub due_at: Option<DateTime<Utc>>,
+    pub payment_terms_days: Option<i64>,
     pub notes: Option<String>,
     pub allow_exceeding_total: bool,
 }
@@ -67,6 +69,28 @@ pub struct InvoiceLineCommand {
     pub quantity: Decimal,
     pub unit_price_cents: i32,
     pub vat_rate_basis_points: Option<i32>,
+    pub discount_percent: Decimal,
+    pub product_id: Option<ProductId>,
+    pub service_rate_id: Option<ServiceRateId>,
+}
+
+impl InvoiceLineCommand {
+    pub fn plain(
+        label: String,
+        quantity: Decimal,
+        unit_price_cents: i32,
+        vat_rate_basis_points: Option<i32>,
+    ) -> Self {
+        Self {
+            label,
+            quantity,
+            unit_price_cents,
+            vat_rate_basis_points,
+            discount_percent: Decimal::ZERO,
+            product_id: None,
+            service_rate_id: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -77,7 +101,9 @@ pub struct CreateInvoiceCommand {
     pub project_id: Option<ProjectId>,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
-    pub due_at: Option<DateTime<Utc>>,
+    pub title: String,
+    pub payment_terms_days: Option<i64>,
+    pub legal_notice: Option<String>,
     pub notes: Option<String>,
     pub operation_nature: Option<OperationNature>,
     pub delivery_address: Option<OrganizationAddress>,
@@ -91,7 +117,9 @@ pub struct UpdateInvoiceCommand {
     pub project_id: Option<ProjectId>,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
-    pub due_at: Option<DateTime<Utc>>,
+    pub title: Option<String>,
+    pub payment_terms_days: Option<i64>,
+    pub legal_notice: Option<String>,
     pub notes: Option<String>,
     pub operation_nature: Option<OperationNature>,
     pub delivery_address: Option<OrganizationAddress>,
@@ -108,13 +136,21 @@ pub struct UpdateInvoiceCommand {
 pub struct IssueCreditNoteCommand {
     pub source_invoice_id: InvoiceId,
     pub actor: Subject,
-    pub lines: Vec<InvoiceLineCommand>,
+    pub reason: String,
+    pub request: CreditRequest,
     pub notes: Option<String>,
-    /// Refuses when the sum of this credit note and every other
-    /// non-draft, non-cancelled credit note already issued against the
-    /// same source would exceed the source invoice's net_cents, unless
-    /// the caller explicitly says this is fine.
-    pub allow_exceeding_invoice_total: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreditLineRequest {
+    pub source_line_id: InvoiceLineId,
+    pub quantity: Decimal,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CreditRequest {
+    Full,
+    Lines(Vec<CreditLineRequest>),
 }
 
 /// Cancels an invoice, draft or issued. Never used to reach `Issued`,
@@ -138,14 +174,10 @@ pub struct RecordInvoicePaymentCommand {
     pub actor: Subject,
     pub amount_cents: i32,
     pub paid_on: NaiveDate,
-    pub method: String,
+    pub method: PaymentMethod,
     pub reference: Option<String>,
     pub note: Option<String>,
     pub recorded_by: UserId,
-    /// Refuses when this payment would push the recorded total past the
-    /// invoice's gross amount net of credit notes, unless explicitly
-    /// allowed — mirrors `allow_exceeding_total` on the issuing commands.
-    pub allow_exceeding_total: bool,
 }
 
 /// Soft-deletes a recorded payment, keeping who and when as its audit
@@ -159,4 +191,39 @@ pub struct DeleteInvoicePaymentCommand {
     pub id: InvoicePaymentId,
     pub actor: Subject,
     pub deleted_by: UserId,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum QuoteInvoiceMode {
+    Full,
+    Deposit { percent: Decimal },
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateInvoiceFromQuoteCommand {
+    pub quote_id: QuoteId,
+    pub actor: Subject,
+    pub mode: QuoteInvoiceMode,
+}
+
+#[derive(Debug, Clone)]
+pub struct SendInvoiceCommand {
+    pub id: InvoiceId,
+    pub actor: Subject,
+    pub recorded_by: UserId,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemindInvoiceCommand {
+    pub id: InvoiceId,
+    pub actor: Subject,
+    pub recorded_by: UserId,
+}
+
+#[derive(Debug, Clone)]
+pub struct NoteInvoiceCommand {
+    pub id: InvoiceId,
+    pub actor: Subject,
+    pub recorded_by: UserId,
+    pub note: String,
 }

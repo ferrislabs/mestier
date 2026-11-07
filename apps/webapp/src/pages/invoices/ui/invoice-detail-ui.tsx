@@ -6,11 +6,13 @@ import type {
 	InvoiceBalance,
 	InvoicePayment,
 } from '#/hooks/use-invoices'
-import type { InvoiceActivityRecord } from '#/pages/invoices/feature/mocks/invoice-activity'
-import type { RefundRecord } from '#/pages/invoices/feature/mocks/invoice-extras'
-import type { creditNoteLines } from '#/pages/invoices/lib/credit-note-request'
+import type { CreditNoteRequest } from '#/pages/invoices/lib/credit-note-request'
 import type { InvoiceActions } from '#/pages/invoices/lib/invoice-actions'
-import type { PaymentValues } from '#/pages/invoices/lib/payment-form'
+import type { InvoiceActivity } from '#/pages/invoices/lib/invoice-document'
+import type {
+	PaymentValues,
+	RefundRecord,
+} from '#/pages/invoices/lib/payment-form'
 import {
 	customerDisplayName,
 	type InvoiceDisplayState,
@@ -64,7 +66,7 @@ interface InvoiceDetailUIProps {
 	paymentsLoading: boolean
 	creditNotes: Invoice[]
 	creditNotesLoading: boolean
-	activity: InvoiceActivityRecord
+	activity: InvoiceActivity
 	paper: PaperDocument
 	history: HistoryEntry[]
 	totals: DocTotals
@@ -97,10 +99,9 @@ interface InvoiceDetailUIProps {
 	onRefund: (values: PaymentValues) => Promise<boolean>
 	onRecordPayment: (values: PaymentValues) => Promise<boolean>
 	onDeletePayment: (paymentId: string) => void
-	onIssueCreditNote: (request: {
-		reason: string
-		lines: ReturnType<typeof creditNoteLines>
-	}) => Promise<boolean>
+	onIssueCreditNote: (
+		request: { reason: string } & CreditNoteRequest,
+	) => Promise<boolean>
 	onSend: () => Promise<string>
 	onRemind: () => Promise<string>
 	onSaveNote: (text: string) => void

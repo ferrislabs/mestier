@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDaysIso, isIsoDate } from './iso-date'
+import { addDaysIso, daysBetweenIso, isIsoDate } from './iso-date'
 
 describe('isIsoDate', () => {
 	it('accepts real calendar days only', () => {
@@ -16,5 +16,15 @@ describe('addDaysIso', () => {
 		expect(addDaysIso('2026-06-10', 30)).toBe('2026-07-10')
 		expect(addDaysIso('2026-12-20', 15)).toBe('2027-01-04')
 		expect(addDaysIso('2026-06-10', 0)).toBe('2026-06-10')
+	})
+})
+
+describe('daysBetweenIso', () => {
+	it('counts calendar days between two days, negative when the end is earlier', () => {
+		expect(daysBetweenIso('2026-06-10', '2026-07-10')).toBe(30)
+		expect(daysBetweenIso('2026-12-20', '2027-01-04')).toBe(15)
+		expect(daysBetweenIso('2026-06-10', '2026-06-10')).toBe(0)
+		expect(daysBetweenIso('2026-06-10', '2026-06-01')).toBe(-9)
+		expect(daysBetweenIso('2026-06-10', 'x')).toBeNull()
 	})
 })

@@ -8,23 +8,20 @@ import {
 	useCustomerContexts,
 	useCustomers,
 } from '#/hooks/use-customers'
-import { useCreateInvoice, useInvoices } from '#/hooks/use-invoices'
+import {
+	useCreateInvoice,
+	useCreateInvoiceFromQuote,
+	useQuoteInvoicing,
+} from '#/hooks/use-invoices'
 import { type Project, useProjects } from '#/hooks/use-projects'
 import { useQuote } from '#/hooks/use-quotes'
 import { buildOrgPath } from '#/modules/org-path'
-import { setQuoteLink } from '#/pages/invoices/feature/mocks/invoice-extras'
-import { useInvoiceExtras } from '#/pages/invoices/feature/use-invoice-extras'
 import {
-	activeQuoteLinks,
-	DEFAULT_PAYMENT_TERMS_DAYS,
-	depositLines,
-	fullInvoiceLines,
-	paymentTermsDueDate,
-	quoteInvoicing,
+	parseTerms,
+	quoteInvoicingView,
 	readNewInvoiceSearch,
 } from '#/pages/invoices/lib/invoice-new'
 import type { NewInvoiceFormValues } from '#/pages/invoices/lib/new-invoice-form'
-import { todayDate } from '#/pages/invoices/lib/payment-form'
 import {
 	emptyInvoiceLine,
 	eurosToCents,
@@ -104,14 +101,15 @@ function InvoiceFromQuoteWorkspace({
 	const navigate = useNavigate()
 	const quote = useQuote(quoteId)
 	const customers = useCustomers(organizationId)
-	const invoices = useInvoices(organizationId, { page: 1, perPage: 100 })
-	const extras = useInvoiceExtras()
-	const createInvoice = useCreateInvoice(organizationId)
+	const invoicing = useQuoteInvoicing(quoteId)
+	const createFromQuote = useCreateInvoiceFromQuote(organizationId)
 
-	if (quote.isLoading) return <DetailLoading label="Chargement du devis…" />
+	if (quote.isLoading || invoicing.isLoading) {
+		return <DetailLoading label="Chargement du devis…" />
+	}
 
 	const source = quote.data?.data
-	if (!source) {
+	if (!source || !invoicing.data) {
 		return (
 			<NotFoundState
 				title="Ce devis est introuvable"
@@ -126,63 +124,30 @@ function InvoiceFromQuoteWorkspace({
 		)
 	}
 
-	const loaded = invoices.data?.data ?? []
-	const byId = new Map(loaded.map((invoice) => [invoice.id, invoice]))
-	const links = activeQuoteLinks({
-		quoteId: source.id,
-		links: extras.quoteLinks,
-		hiddenIds: extras.hiddenDrafts,
-		statusById: new Map(loaded.map((invoice) => [invoice.id, invoice.status])),
-	})
-	const info = quoteInvoicing(source, links)
+	const info = quoteInvoicingView(invoicing.data.data)
 	const deposits: DepositRow[] = [
 		...info.deposits.issued,
 		...info.deposits.drafts,
-	].map((link) => {
-		const invoice = byId.get(link.invoiceId)
-		const draft = link.status === 'DRAFT'
-		return {
-			invoiceId: link.invoiceId,
-			label: draft
-				? 'Acompte en brouillon'
-				: (invoice?.number ?? invoiceKindLabel('DEPOSIT')),
-			draft,
-			issuedAt: invoice?.issued_at ?? null,
-			grossCents: invoice?.gross_cents ?? null,
-		}
-	})
-	const existing = info.existingInvoiceId
-		? byId.get(info.existingInvoiceId)
-		: undefined
+	].map((link) => ({
+		invoiceId: link.invoiceId,
+		label: link.draft
+			? 'Acompte en brouillon'
+			: (link.number ?? invoiceKindLabel('DEPOSIT')),
+		draft: link.draft,
+		issuedAt: link.issuedAt,
+		grossCents: link.grossCents,
+	}))
 	const customer = customers.data?.data.find(
 		(item) => item.id === source.customer_id,
 	)
 
 	const create = async (request: QuoteInvoiceRequest) => {
-		const dueDay = paymentTermsDueDate(
-			todayDate(),
-			String(DEFAULT_PAYMENT_TERMS_DAYS),
-		)
-		const created = await createInvoice.mutateAsync({
-			path: { organization_id: organizationId },
-			body: {
-				kind: 'STANDARD',
-				project_id: null,
-				customer_id: source.customer_id,
-				customer_context_id: source.customer_context_id,
-				due_at: dueDay ? new Date(dueDay).toISOString() : null,
-				notes: null,
-				operation_nature: null,
-				lines:
-					request.kind === 'full'
-						? fullInvoiceLines(source)
-						: depositLines(source, request.percent),
-			},
-		})
-		setQuoteLink(created.data.id, {
-			quoteId: source.id,
-			kind: request.kind,
-			percent: request.kind === 'full' ? 100 : request.percent,
+		const created = await createFromQuote.mutateAsync({
+			path: { quote_id: source.id },
+			body:
+				request.kind === 'full'
+					? { mode: 'FULL' }
+					: { mode: 'DEPOSIT', percent: String(request.percent) },
 		})
 		await navigate({
 			to: buildOrgPath(organizationSlug, '/crm/factures/$invoiceId'),
@@ -197,10 +162,10 @@ function InvoiceFromQuoteWorkspace({
 			customerName={customer ? customer.name.trim() : null}
 			info={info}
 			deposits={deposits}
-			existingInvoiceLabel={existing?.number ?? null}
+			existingInvoiceLabel={info.existingInvoiceNumber}
 			preferred={preferred}
-			isCreating={createInvoice.isPending}
-			error={createInvoice.error?.message ?? null}
+			isCreating={createFromQuote.isPending}
+			error={createFromQuote.error?.message ?? null}
 			onSubmit={(request) => void create(request).catch(() => undefined)}
 		/>
 	)
@@ -228,8 +193,9 @@ function InvoiceNewWorkspace({
 			projectId: '',
 			customerId: clientId ?? '',
 			customerContextId: '',
-			dueAt: '',
-			termsDays: String(DEFAULT_PAYMENT_TERMS_DAYS),
+			title: '',
+			termsDays: '',
+			legalNotice: '',
 			notes: '',
 			operationNature: '',
 			lines: [emptyInvoiceLine()],
@@ -242,7 +208,8 @@ function InvoiceNewWorkspace({
 					project_id: value.projectId || null,
 					customer_id: value.customerId,
 					customer_context_id: value.customerContextId,
-					due_at: dueAtOf(value.termsDays),
+					title: value.title.trim(),
+					payment_terms_days: parseTerms(value.termsDays),
 					notes: value.notes.trim() || null,
 					operation_nature: value.operationNature || null,
 					lines: value.lines.map((line) => ({
@@ -251,6 +218,9 @@ function InvoiceNewWorkspace({
 						unit_price_cents: eurosToCents(line.unitPrice),
 						vat_rate_basis_points:
 							line.vatRateBp === '' ? null : Number(line.vatRateBp),
+						discount_percent: line.discountPercent,
+						product_id: line.productId,
+						service_rate_id: line.serviceRateId,
 					})),
 				},
 			})
@@ -283,11 +253,6 @@ function InvoiceNewWorkspace({
 			)}
 		</form.Subscribe>
 	)
-}
-
-function dueAtOf(termsDays: string): string | null {
-	const day = paymentTermsDueDate(todayDate(), termsDays)
-	return day ? new Date(day).toISOString() : null
 }
 
 interface InvoiceFormApi {

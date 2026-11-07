@@ -441,6 +441,9 @@ export function InvoiceListUI({
 								<TableHead scope="col" className="text-right">
 									Total TTC
 								</TableHead>
+								<TableHead scope="col" className="text-right">
+									Reste dû
+								</TableHead>
 								<TableHead scope="col" className="pr-4 pl-6">
 									État
 								</TableHead>
@@ -499,7 +502,7 @@ export function InvoiceListUI({
 											)}
 										</TableCell>
 										<TableCell className="tabular whitespace-nowrap max-lg:hidden">
-											{formatDocumentDate(invoice.issued_at)}
+											{formatDocumentDate(invoice.issued_on)}
 										</TableCell>
 										<TableCell>
 											{state === 'draft' ? (
@@ -507,7 +510,7 @@ export function InvoiceListUI({
 											) : (
 												<span className="grid">
 													<span className="tabular whitespace-nowrap">
-														{formatDocumentDate(invoice.due_at)}
+														{formatDocumentDate(invoice.due_on)}
 													</span>
 													{open && (
 														<span
@@ -518,7 +521,7 @@ export function InvoiceListUI({
 																	: 'text-muted-foreground',
 															)}
 														>
-															{dueLabel(invoice.due_at)}
+															{dueLabel(invoice.due_on)}
 														</span>
 													)}
 												</span>
@@ -526,6 +529,19 @@ export function InvoiceListUI({
 										</TableCell>
 										<TableCell className="text-right">
 											<Money cents={invoice.gross_cents} />
+										</TableCell>
+										<TableCell className="text-right">
+											{state === 'draft' ? (
+												<Dash />
+											) : (
+												<Money
+													cents={invoice.balance_cents}
+													className={cn(
+														state === 'refund_due' && 'text-state-today',
+														state === 'overdue' && 'text-state-alert',
+													)}
+												/>
+											)}
 										</TableCell>
 										<TableCell className="pr-4 pl-6">
 											<InvoiceStateBadge state={state} />
@@ -579,7 +595,7 @@ const INVOICE_SORT_OPTIONS: DataViewSortOption<Invoice>[] = [
 	{
 		value: 'due-asc',
 		label: 'Échéance la plus proche',
-		compare: (a, b) => dateValue(a.due_at) - dateValue(b.due_at),
+		compare: (a, b) => dateValue(a.due_on) - dateValue(b.due_on),
 	},
 ]
 

@@ -13,9 +13,14 @@ import type {
 } from '#/hooks/use-invoices'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
-import type { InvoiceActivityRecord } from '#/pages/invoices/feature/mocks/invoice-activity'
-import type { RefundRecord } from '#/pages/invoices/feature/mocks/invoice-extras'
-import { creditNoteKindLabel } from '#/pages/invoices/lib/invoice-document'
+import {
+	creditNoteKindLabel,
+	type InvoiceActivity,
+} from '#/pages/invoices/lib/invoice-document'
+import {
+	PAYMENT_METHOD_LABELS,
+	type RefundRecord,
+} from '#/pages/invoices/lib/payment-form'
 import {
 	customerDisplayName,
 	type InvoiceDisplayState,
@@ -107,7 +112,7 @@ function PaymentItem({
 				</span>
 			</div>
 			<p className="text-muted-foreground text-xs">
-				{payment.method}
+				{PAYMENT_METHOD_LABELS[payment.method]}
 				{payment.reference && ` · ${payment.reference}`}
 			</p>
 			{payment.note && <p className="text-xs">{payment.note}</p>}
@@ -128,7 +133,7 @@ function RefundItem({ refund }: { refund: RefundRecord }) {
 				/>
 			</div>
 			<p className="text-muted-foreground text-xs">
-				Remboursement · {refund.method}
+				Remboursement · {PAYMENT_METHOD_LABELS[refund.method]}
 				{refund.reference && ` · ${refund.reference}`}
 			</p>
 			{refund.note && <p className="text-xs">{refund.note}</p>}
@@ -142,7 +147,7 @@ function InternalNote({
 	onSave,
 }: {
 	invoiceId: string
-	activity: InvoiceActivityRecord
+	activity: InvoiceActivity
 	onSave: (text: string) => void
 }) {
 	const id = `internal-note-${invoiceId}`
@@ -222,7 +227,7 @@ interface SidebarProps {
 	customer: Customer | undefined
 	project: { id: string; name: string } | null
 	displayState: InvoiceDisplayState
-	activity: InvoiceActivityRecord
+	activity: InvoiceActivity
 	history: HistoryEntry[]
 	quote: { id: string; reference: string | null } | null
 	onSaveNote: (text: string) => void
@@ -390,7 +395,7 @@ export function IssuedSidebar({
 								<p className="text-muted-foreground text-xs">
 									{formatDocumentDate(note.issued_at ?? note.created_at)}
 									{' · '}
-									{creditNoteKindLabel(note, invoice)}
+									{creditNoteKindLabel(note)}
 								</p>
 								{note.notes && (
 									<p className="line-clamp-2 text-xs">{note.notes}</p>

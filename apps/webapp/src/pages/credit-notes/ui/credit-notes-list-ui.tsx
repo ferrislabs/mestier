@@ -206,7 +206,7 @@ export function CreditNotesListUI({
 										)}
 									</TableCell>
 									<TableCell className="max-w-72 truncate text-muted-foreground max-xl:hidden">
-										{row.note.notes ?? '—'}
+										{row.note.reason ?? '—'}
 									</TableCell>
 									<TableCell>
 										<DocBadge

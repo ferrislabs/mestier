@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Button } from '#/components/ui/button'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomerContexts, useCustomers } from '#/hooks/use-customers'
-import { useInvoice, useInvoiceBalance } from '#/hooks/use-invoices'
+import { useInvoice } from '#/hooks/use-invoices'
 import { downloadAuthenticatedFile } from '#/lib/download-file'
 import { buildOrgPath } from '#/modules/org-path'
 import { CreditNoteDetailUI } from '#/pages/credit-notes/ui/credit-note-detail-ui'
@@ -28,10 +28,6 @@ export function CreditNoteDetailFeature({
 	const { activeOrganization } = useActiveOrganization()
 	const note = useInvoice(creditNoteId)
 	const source = useInvoice(
-		note.data?.data.source_invoice_id ?? '',
-		Boolean(note.data?.data.source_invoice_id),
-	)
-	const balance = useInvoiceBalance(
 		note.data?.data.source_invoice_id ?? '',
 		Boolean(note.data?.data.source_invoice_id),
 	)
@@ -110,17 +106,10 @@ export function CreditNoteDetailFeature({
 		<CreditNoteDetailUI
 			note={creditNote}
 			source={sourceInvoice}
-			sourceState={
-				sourceInvoice
-					? invoiceDisplayState(
-							sourceInvoice,
-							balance.data?.data.remaining_cents ?? null,
-						)
-					: null
-			}
-			sourceRemainingCents={balance.data?.data.remaining_cents ?? null}
+			sourceState={sourceInvoice ? invoiceDisplayState(sourceInvoice) : null}
+			sourceRemainingCents={sourceInvoice?.balance_cents ?? null}
 			customer={customer}
-			kindLabel={creditNoteKindLabel(creditNote, sourceInvoice)}
+			kindLabel={creditNoteKindLabel(creditNote)}
 			paper={buildInvoicePaper({
 				invoice: creditNote,
 				customer,

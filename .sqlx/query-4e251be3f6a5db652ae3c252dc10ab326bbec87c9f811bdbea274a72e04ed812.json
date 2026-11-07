@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, org_id, invoice_id, label, quantity, unit_price_cents, vat_rate_basis_points, position, deleted_at, created_at, updated_at\n        FROM invoice_lines\n        WHERE invoice_id = $1 AND deleted_at IS NULL\n        ORDER BY position ASC, id ASC\n        ",
+  "query": "\n        SELECT id, org_id, invoice_id, label, quantity, unit_price_cents, vat_rate_basis_points,\n               discount_percent, product_id, service_rate_id, source_line_id,\n               position, deleted_at, created_at, updated_at\n        FROM invoice_lines\n        WHERE invoice_id = $1 AND deleted_at IS NULL\n        ORDER BY position ASC, id ASC\n        ",
   "describe": {
     "columns": [
       {
@@ -40,21 +40,41 @@
       },
       {
         "ordinal": 7,
+        "name": "discount_percent",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "product_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "service_rate_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "source_line_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
         "name": "position",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 12,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 13,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 14,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -74,9 +94,13 @@
       true,
       false,
       true,
+      true,
+      true,
+      false,
+      true,
       false,
       false
     ]
   },
-  "hash": "63d8948ffc9e3a5dcf8defb4313169005be7d2085bf0eff471f9286612d13cdf"
+  "hash": "4e251be3f6a5db652ae3c252dc10ab326bbec87c9f811bdbea274a72e04ed812"
 }

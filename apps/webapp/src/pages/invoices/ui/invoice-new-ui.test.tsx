@@ -51,12 +51,13 @@ function values(
 	overrides: Partial<NewInvoiceFormValues> = {},
 ): NewInvoiceFormValues {
 	return {
+		title: '',
+		legalNotice: '',
 		termsDays: '30',
 		kind: 'STANDARD',
 		projectId: '',
 		customerId: '',
 		customerContextId: '',
-		dueAt: '',
 		notes: '',
 		operationNature: '',
 		lines: [emptyInvoiceLine()],

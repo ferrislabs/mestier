@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity,\n                document_format, document_file_key, document_mime_type, document_generated_at,\n                source_invoice_id,\n                deleted_at, created_at, updated_at\n            FROM invoices\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            SELECT\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity,\n                document_format, document_file_key, document_mime_type, document_generated_at,\n                source_invoice_id,\n                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,\n                issued_on, reason, full_cancellation,\n                deleted_at, created_at, updated_at\n            FROM invoices\n            WHERE org_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -135,16 +135,61 @@
       },
       {
         "ordinal": 26,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 27,
+        "name": "payment_terms_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 28,
+        "name": "legal_notice",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 29,
+        "name": "internal_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 30,
+        "name": "sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 31,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 32,
+        "name": "issued_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 33,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 34,
+        "name": "full_cancellation",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 35,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 27,
+        "ordinal": 36,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 28,
+        "ordinal": 37,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -183,10 +228,19 @@
       true,
       true,
       true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "8dc6e5c5ec5bab8c5f2224ed02e7f7b190124934067da8b9ebc6b7bf2781cb50"
+  "hash": "939c87cfd90ea77d0e9c1f5288dfd1e45a7a8babbd43ce446779c9b876bc0440"
 }

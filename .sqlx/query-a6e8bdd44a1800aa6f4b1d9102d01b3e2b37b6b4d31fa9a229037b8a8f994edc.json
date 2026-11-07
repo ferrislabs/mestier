@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE invoices\n            SET document_format = $2,\n                document_file_key = $3,\n                document_mime_type = $4,\n                document_generated_at = $5,\n                updated_at = $6\n            WHERE id = $1 AND deleted_at IS NULL AND document_file_key IS NULL\n            RETURNING\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity,\n                document_format, document_file_key, document_mime_type, document_generated_at,\n                source_invoice_id,\n                deleted_at, created_at, updated_at\n            ",
+  "query": "\n            UPDATE invoices\n            SET project_id = $2,\n                customer_id = $3,\n                customer_context_id = $4,\n                notes = $5,\n                operation_nature = CAST($6 AS text)::invoice_operation_nature,\n                delivery_address_line1 = $7,\n                delivery_address_line2 = $8,\n                delivery_address_postal_code = $9,\n                delivery_address_city = $10,\n                delivery_address_country = $11,\n                net_cents = $12,\n                vat_breakdown = $13,\n                gross_cents = $14,\n                title = $15,\n                payment_terms_days = $16,\n                legal_notice = $17,\n                updated_at = $18\n            WHERE id = $1 AND deleted_at IS NULL AND status = 'DRAFT'\n            RETURNING\n                id, org_id, number, kind::text AS \"kind!\", project_id, customer_id,\n                customer_context_id, status::text AS \"status!\", issued_at, due_at, notes,\n                operation_nature::text,\n                delivery_address_line1, delivery_address_line2, delivery_address_postal_code,\n                delivery_address_city, delivery_address_country,\n                net_cents, vat_breakdown, gross_cents, issuer_identity,\n                document_format, document_file_key, document_mime_type, document_generated_at,\n                source_invoice_id,\n                title, payment_terms_days, legal_notice, internal_note, sent_at, quote_id,\n                issued_on, reason, full_cancellation,\n                deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -135,16 +135,61 @@
       },
       {
         "ordinal": 26,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 27,
+        "name": "payment_terms_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 28,
+        "name": "legal_notice",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 29,
+        "name": "internal_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 30,
+        "name": "sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 31,
+        "name": "quote_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 32,
+        "name": "issued_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 33,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 34,
+        "name": "full_cancellation",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 35,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 27,
+        "ordinal": 36,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 28,
+        "ordinal": 37,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -152,10 +197,22 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
         "Text",
         "Text",
         "Text",
-        "Timestamptz",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Jsonb",
+        "Int4",
+        "Text",
+        "Int4",
+        "Text",
         "Timestamptz"
       ]
     },
@@ -186,10 +243,19 @@
       true,
       true,
       true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "7161c54af14e3359569317ef896c47b11706d6d45f8101b29609bc71ed159a8f"
+  "hash": "a6e8bdd44a1800aa6f4b1d9102d01b3e2b37b6b4d31fa9a229037b8a8f994edc"
 }

@@ -1,27 +1,56 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
+use std::str::FromStr;
+
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{InvoiceId, IssueCreditNoteCommand};
+use mestier_core::{
+    CreditLineRequest, CreditRequest, InvoiceId, InvoiceLineId, IssueCreditNoteCommand,
+};
+use rust_decimal::Decimal;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    invoice::create::{InvoiceLineRequest, into_line_commands},
-    paths::InvoiceCreditNotesPath,
-    require_invoice_membership,
+    invoice_error::InvoiceFailure, paths::InvoiceCreditNotesPath, require_invoice_membership,
     response::InvoiceResponse,
 };
 
-/// `source_invoice_id` is never part of this body: it comes from the path,
-/// same rule as the command it builds (`IssueCreditNoteCommand`'s own doc:
-/// a credit note's counterparty cannot differ from the invoice it
-/// corrects).
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreditLineBody {
+    pub source_line_id: InvoiceLineId,
+    pub quantity: String,
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct IssueCreditNoteRequest {
-    pub lines: Vec<InvoiceLineRequest>,
-    pub notes: Option<String>,
+    pub reason: String,
     #[serde(default)]
-    pub allow_exceeding_invoice_total: bool,
+    pub full: bool,
+    #[serde(default)]
+    pub lines: Vec<CreditLineBody>,
+    pub notes: Option<String>,
+}
+
+fn credit_request(payload: &IssueCreditNoteRequest) -> Result<CreditRequest, ApiError> {
+    if payload.full {
+        return Ok(CreditRequest::Full);
+    }
+
+    payload
+        .lines
+        .iter()
+        .map(|line| {
+            Decimal::from_str(&line.quantity)
+                .map(|quantity| CreditLineRequest {
+                    source_line_id: line.source_line_id,
+                    quantity,
+                })
+                .map_err(|_| {
+                    ApiError::Validation("credit line quantity must be decimal".to_owned())
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(CreditRequest::Lines)
 }
 
 #[utoipa::path(
@@ -39,7 +68,8 @@ pub struct IssueCreditNoteRequest {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Source invoice not found"),
-        (status = 409, description = "The source invoice cannot be credited, or crediting it would exceed its net total"),
+        (status = 409, description = "The source invoice is not issued (E_CONFLICT)"),
+        (status = 422, description = "A rule refused the credit note: reason required, E_CREDIT_EXCEEDS_REMAINING, E_INVOICE_DATE_RANGE"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -48,9 +78,10 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<IssueCreditNoteRequest>,
-) -> Result<Response<InvoiceResponse>, ApiError> {
+) -> Result<Response<InvoiceResponse>, InvoiceFailure> {
     require_invoice_membership(&state, &identity, invoice_id).await?;
     let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
+    let request = credit_request(&payload)?;
 
     let credit_note = state
         .usecase
@@ -58,11 +89,11 @@ pub async fn handler(
         .issue_credit_note(IssueCreditNoteCommand {
             source_invoice_id: invoice_id,
             actor,
-            lines: into_line_commands(payload.lines)?,
+            reason: payload.reason,
+            request,
             notes: payload.notes,
-            allow_exceeding_invoice_total: payload.allow_exceeding_invoice_total,
         })
-        .await?;
+        .await??;
 
     Ok(Response::Created(credit_note.into()))
 }

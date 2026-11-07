@@ -26,3 +26,14 @@ export function addDaysIso(value: string, days: number): string {
 		.toISOString()
 		.slice(0, 10)
 }
+
+export function daysBetweenIso(from: string, to: string): number | null {
+	const start = parts(from)
+	const end = parts(to)
+	if (!start || !end) return null
+	return Math.round(
+		(Date.UTC(end[0], end[1] - 1, end[2]) -
+			Date.UTC(start[0], start[1] - 1, start[2])) /
+			86_400_000,
+	)
+}

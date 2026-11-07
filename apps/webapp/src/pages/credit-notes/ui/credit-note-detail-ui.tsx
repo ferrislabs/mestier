@@ -173,7 +173,7 @@ export function CreditNoteDetailUI({
 			</SideSection>
 			<SideSection title="Motif">
 				<p className="whitespace-pre-line text-sm">
-					{note.notes ?? 'Aucun motif renseigné.'}
+					{note.reason ?? 'Aucun motif renseigné.'}
 				</p>
 				<p className="text-muted-foreground text-xs">
 					{kindLabel}

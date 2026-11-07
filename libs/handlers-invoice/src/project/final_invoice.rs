@@ -1,18 +1,19 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use chrono::{DateTime, Utc};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{AppState, DataEnvelope, Response};
 use mestier_core::{IssueFinalInvoiceCommand, ProjectId};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    paths::ProjectInvoiceFinalPath, require_project_membership, response::InvoiceResponse,
+    invoice_error::InvoiceFailure, paths::ProjectInvoiceFinalPath, require_project_membership,
+    response::InvoiceResponse,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct IssueFinalInvoiceRequest {
-    pub due_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub payment_terms_days: Option<i64>,
     pub notes: Option<String>,
     #[serde(default)]
     pub allow_exceeding_total: bool,
@@ -46,7 +47,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<IssueFinalInvoiceRequest>,
-) -> Result<Response<InvoiceResponse>, ApiError> {
+) -> Result<Response<InvoiceResponse>, InvoiceFailure> {
     require_project_membership(&state, &identity, project_id).await?;
     let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
 
@@ -56,11 +57,11 @@ pub async fn handler(
         .issue_final_invoice(IssueFinalInvoiceCommand {
             project_id,
             actor,
-            due_at: payload.due_at,
+            payment_terms_days: payload.payment_terms_days,
             notes: payload.notes,
             allow_exceeding_total: payload.allow_exceeding_total,
         })
-        .await?;
+        .await??;
 
     Ok(Response::Created(invoice.into()))
 }

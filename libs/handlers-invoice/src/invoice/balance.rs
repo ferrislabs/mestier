@@ -1,17 +1,10 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{InvoiceId, InvoiceStatus};
+use mestier_core::InvoiceId;
 
 use crate::{paths::InvoiceBalancePath, require_view_invoices, response::InvoiceBalanceResponse};
 
-/// "What remains" — computed here, in Rust, before the JSON is built
-/// (CLAUDE.md: every price calculation lives in the backend, never
-/// recomputed in the browser). `credited_cents` filters out draft and
-/// cancelled credit notes the same way `InvoiceService::sum_already_issued_
-/// cents` does; `paid_cents` sums every payment `list_invoice_payments`
-/// returns, which is already only the non-deleted ones (see the query
-/// backing `payment::list::handler`).
 #[utoipa::path(
     get,
     path = "/api/v1/invoices/{invoice_id}/balance",
@@ -36,30 +29,12 @@ pub async fn handler(
     let invoice = state.usecase.get_invoice(invoice_id).await?;
     require_view_invoices(&state, &identity, invoice.organization_id).await?;
 
-    let credit_notes = state.usecase.get_invoice_credit_notes(invoice_id).await?;
-    let credited_cents: i64 = credit_notes
-        .into_iter()
-        .filter(|credit_note| {
-            !matches!(
-                credit_note.status,
-                InvoiceStatus::Draft | InvoiceStatus::Cancelled
-            )
-        })
-        .map(|credit_note| i64::from(credit_note.gross_cents))
-        .sum();
-
-    let payments = state.usecase.list_invoice_payments(invoice_id).await?;
-    let paid_cents: i64 = payments
-        .into_iter()
-        .map(|payment| i64::from(payment.amount_cents))
-        .sum();
-
-    let remaining_cents = i64::from(invoice.gross_cents) - credited_cents - paid_cents;
+    let settlement = invoice.derived.settlement;
 
     Ok(Response::OK(InvoiceBalanceResponse {
         gross_cents: invoice.gross_cents,
-        credited_cents,
-        paid_cents,
-        remaining_cents,
+        credited_cents: settlement.credited_cents,
+        paid_cents: settlement.paid_cents,
+        remaining_cents: settlement.balance_cents,
     }))
 }

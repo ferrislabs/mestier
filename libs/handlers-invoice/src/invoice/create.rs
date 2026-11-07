@@ -2,19 +2,18 @@ use std::str::FromStr;
 
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use chrono::{DateTime, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response};
 use mestier_core::{
     CreateInvoiceCommand, CustomerContextId, CustomerId, InvoiceKind, InvoiceLineCommand,
-    OperationNature, OrganizationAddress, ProjectId,
+    OperationNature, OrganizationAddress, ProductId, ProjectId, ServiceRateId,
 };
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    paths::OrganizationInvoicesPath, require_invoice_project, require_invoice_targets,
-    require_org_membership, response::InvoiceResponse,
+    invoice_error::InvoiceFailure, paths::OrganizationInvoicesPath, require_invoice_project,
+    require_invoice_targets, require_org_membership, response::InvoiceResponse,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -45,6 +44,12 @@ pub struct InvoiceLineRequest {
     pub unit_price_cents: i32,
     #[serde(default)]
     pub vat_rate_basis_points: Option<i32>,
+    #[serde(default)]
+    pub discount_percent: Option<String>,
+    #[serde(default)]
+    pub product_id: Option<ProductId>,
+    #[serde(default)]
+    pub service_rate_id: Option<ServiceRateId>,
 }
 
 impl TryFrom<InvoiceLineRequest> for InvoiceLineCommand {
@@ -55,11 +60,23 @@ impl TryFrom<InvoiceLineRequest> for InvoiceLineCommand {
             ApiError::Validation("invoice line quantity must be decimal".to_owned())
         })?;
 
+        let discount_percent = value
+            .discount_percent
+            .map(|text| Decimal::from_str(&text))
+            .transpose()
+            .map_err(|_| {
+                ApiError::Validation("invoice line discount_percent must be decimal".to_owned())
+            })?
+            .unwrap_or(Decimal::ZERO);
+
         Ok(Self {
             label: value.label,
             quantity,
             unit_price_cents: value.unit_price_cents,
             vat_rate_basis_points: value.vat_rate_basis_points,
+            discount_percent,
+            product_id: value.product_id,
+            service_rate_id: value.service_rate_id,
         })
     }
 }
@@ -76,7 +93,12 @@ pub struct CreateInvoiceRequest {
     pub project_id: Option<ProjectId>,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
-    pub due_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub payment_terms_days: Option<i64>,
+    #[serde(default)]
+    pub legal_notice: Option<String>,
     pub notes: Option<String>,
     pub operation_nature: Option<OperationNature>,
     pub delivery_address: Option<DeliveryAddressRequest>,
@@ -98,6 +120,7 @@ pub struct CreateInvoiceRequest {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 409, description = "Invoice conflict"),
+        (status = 422, description = "A rule refused the invoice, the field is named in details"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -106,7 +129,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<CreateInvoiceRequest>,
-) -> Result<Response<InvoiceResponse>, ApiError> {
+) -> Result<Response<InvoiceResponse>, InvoiceFailure> {
     require_org_membership(&state, &identity, path.organization_id).await?;
     let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
     require_invoice_targets(
@@ -130,13 +153,15 @@ pub async fn handler(
             project_id: payload.project_id,
             customer_id: payload.customer_id,
             customer_context_id: payload.customer_context_id,
-            due_at: payload.due_at,
+            title: payload.title,
+            payment_terms_days: payload.payment_terms_days,
+            legal_notice: payload.legal_notice,
             notes: payload.notes,
             operation_nature: payload.operation_nature,
             delivery_address: payload.delivery_address.map(OrganizationAddress::from),
             lines: into_line_commands(payload.lines)?,
         })
-        .await?;
+        .await??;
 
     Ok(Response::Created(invoice.into()))
 }

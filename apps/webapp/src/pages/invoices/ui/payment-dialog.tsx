@@ -18,8 +18,10 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
+import type { PaymentMethod } from '#/hooks/use-invoices'
 import {
 	initialPaymentValues,
+	PAYMENT_METHOD_LABELS,
 	PAYMENT_METHODS,
 	type PaymentMode,
 	type PaymentValues,
@@ -124,7 +126,9 @@ function PaymentForm({
 				<FormField id={id('method')} label="Moyen de paiement" required>
 					<Select
 						value={values.method}
-						onValueChange={(method) => change({ method })}
+						onValueChange={(method) =>
+							change({ method: method as PaymentMethod })
+						}
 					>
 						<SelectTrigger id={id('method')} className="w-full">
 							<SelectValue />
@@ -132,7 +136,7 @@ function PaymentForm({
 						<SelectContent>
 							{PAYMENT_METHODS.map((method) => (
 								<SelectItem key={method} value={method}>
-									{method}
+									{PAYMENT_METHOD_LABELS[method]}
 								</SelectItem>
 							))}
 						</SelectContent>

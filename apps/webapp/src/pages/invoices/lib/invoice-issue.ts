@@ -3,22 +3,22 @@ import { isIsoDate } from '#/pages/invoices/lib/iso-date'
 import { formatDocumentDate } from '#/pages/quotes/lib/doc-format'
 
 export function lastIssuedDate(
-	invoices: readonly Pick<Invoice, 'kind' | 'status' | 'issued_at'>[],
+	invoices: readonly Pick<Invoice, 'kind' | 'status' | 'issued_on'>[],
 ): string | null {
 	const days = invoices
 		.filter(
 			(invoice) =>
 				invoice.kind !== 'CREDIT_NOTE' &&
 				invoice.status !== 'DRAFT' &&
-				invoice.issued_at != null,
+				invoice.issued_on != null,
 		)
-		.map((invoice) => (invoice.issued_at as string).slice(0, 10))
+		.map((invoice) => invoice.issued_on as string)
 		.sort()
 	return days.at(-1) ?? null
 }
 
 export function issueDateBounds(
-	invoices: readonly Pick<Invoice, 'kind' | 'status' | 'issued_at'>[],
+	invoices: readonly Pick<Invoice, 'kind' | 'status' | 'issued_on'>[],
 	today: string,
 ): { min: string | null; max: string } {
 	return { min: lastIssuedDate(invoices), max: today }

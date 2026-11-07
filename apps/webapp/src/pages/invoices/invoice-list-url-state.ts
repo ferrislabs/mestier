@@ -12,6 +12,7 @@ export const INVOICE_FILTER_OPTIONS: DataViewOption[] = [
 	{ value: 'paid', label: 'Payées' },
 	{ value: 'draft', label: 'Brouillons' },
 	{ value: 'cancelled', label: 'Annulées' },
+	{ value: 'refund_due', label: 'À rembourser' },
 ]
 
 export const DEFAULT_INVOICE_LIST_STATE: DataViewUrlState = {

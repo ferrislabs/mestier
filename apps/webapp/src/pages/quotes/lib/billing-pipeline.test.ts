@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Schemas } from '#/api/api.client'
+import { invoiceFixture } from '#/pages/invoices/test-support/invoice-fixture'
 import { computeBillingPipelineSteps } from '#/pages/quotes/lib/billing-pipeline'
 
 function project(
@@ -19,21 +20,17 @@ function project(
 function invoice(
 	overrides: Partial<Schemas.InvoiceResponse> = {},
 ): Schemas.InvoiceResponse {
-	return {
+	return invoiceFixture({
 		id: 'invoice-1' as Schemas.InvoiceId,
 		organization_id: 'org-1' as Schemas.OrganizationId,
 		customer_id: 'customer-1' as Schemas.CustomerId,
 		customer_context_id: 'context-1' as Schemas.CustomerContextId,
-		kind: 'STANDARD',
-		status: 'ISSUED',
-		lines: [],
 		net_cents: 10_000,
 		gross_cents: 10_000,
-		vat_breakdown: [],
 		created_at: '2026-09-01T00:00:00Z',
 		updated_at: '2026-09-01T00:00:00Z',
 		...overrides,
-	}
+	})
 }
 
 describe('computeBillingPipelineSteps', () => {

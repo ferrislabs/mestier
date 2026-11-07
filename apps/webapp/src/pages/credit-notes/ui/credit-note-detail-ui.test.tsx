@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Customer } from '#/hooks/use-customers'
 import type { Invoice } from '#/hooks/use-invoices'
 import type { Organization } from '#/hooks/use-organizations'
+import { invoiceFixture } from '#/pages/invoices/test-support/invoice-fixture'
 import type { PaperDocument } from '#/pages/quotes/ui/doc/document-paper'
 import { renderWithRouter } from '#/test/render-with-router'
 import { wrapWithPermissions } from '#/test/with-permissions'
@@ -23,23 +24,7 @@ const ORGANIZATION: Organization = {
 }
 
 function invoice(overrides: Partial<Invoice> = {}): Invoice {
-	return {
-		id: 'invoice-1',
-		organization_id: 'org-1',
-		customer_id: 'customer-1',
-		customer_context_id: 'context-1',
-		kind: 'STANDARD',
-		status: 'ISSUED',
-		number: 'FAC-001',
-		gross_cents: 12000,
-		net_cents: 10000,
-		lines: [],
-		vat_breakdown: [],
-		issued_at: '2026-06-02T09:00:00Z',
-		created_at: '2026-06-01T09:00:00Z',
-		updated_at: '2026-06-02T09:00:00Z',
-		...overrides,
-	}
+	return invoiceFixture(overrides)
 }
 
 const PAPER: PaperDocument = {
@@ -88,7 +73,7 @@ function baseProps() {
 			number: 'AV-001',
 			source_invoice_id: 'invoice-1',
 			gross_cents: 3000,
-			notes: 'Taux de TVA erroné',
+			reason: 'Taux de TVA erroné',
 		}),
 		source: invoice() as Invoice | undefined,
 		sourceState: 'unpaid' as const,

@@ -1,51 +1,42 @@
 import { describe, expect, it } from 'vitest'
 import type { InvoiceLine } from '#/hooks/use-invoices'
+import { lineFixture } from '#/pages/invoices/test-support/invoice-fixture'
 import {
 	creditConsequence,
 	creditConsequenceText,
 	creditLineIssue,
 	creditNoteErrors,
-	creditNoteLines,
+	creditNoteRequest,
 	creditPreviewNetCents,
 	creditPreviewTotals,
 	fillAll,
 } from './credit-note-request'
 
 function line(overrides: Partial<InvoiceLine> = {}): InvoiceLine {
-	return {
-		id: 'line-1',
-		invoice_id: 'invoice-1',
-		organization_id: 'org-1',
+	return lineFixture({
 		label: 'Pose de parquet',
-		position: 0,
 		quantity: '4',
 		unit_price_cents: 4500,
 		vat_rate_basis_points: 2000,
-		created_at: '2026-01-01T00:00:00Z',
-		updated_at: '2026-01-01T00:00:00Z',
 		...overrides,
-	}
+	})
 }
 
-describe('creditNoteLines', () => {
-	it('credits every line in full for a total cancellation', () => {
-		expect(creditNoteLines([line()], 'total', {})).toEqual([
-			{
-				label: 'Pose de parquet',
-				quantity: '4',
-				unit_price_cents: 4500,
-				vat_rate_basis_points: 2000,
-			},
-		])
+describe('creditNoteRequest', () => {
+	it('asks the server to credit what remains for a total cancellation', () => {
+		expect(creditNoteRequest([line()], 'total', {})).toEqual({
+			full: true,
+			lines: [],
+		})
 	})
 
-	it('only credits the quantities typed for a partial correction', () => {
+	it('only credits the quantities typed for a partial correction, by source line', () => {
 		const lines = [line(), line({ id: 'line-2', label: 'Plinthes' })]
 
-		const request = creditNoteLines(lines, 'partial', { 'line-2': '1,5' })
-
-		expect(request).toHaveLength(1)
-		expect(request[0]).toMatchObject({ label: 'Plinthes', quantity: '1.5' })
+		expect(creditNoteRequest(lines, 'partial', { 'line-2': '1,5' })).toEqual({
+			full: false,
+			lines: [{ source_line_id: 'line-2', quantity: '1.5' }],
+		})
 	})
 })
 

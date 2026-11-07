@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                i.id AS \"invoice_id!\",\n                COALESCE((\n                    SELECT SUM(p.amount_cents)\n                    FROM invoice_payments p\n                    WHERE p.invoice_id = i.id AND p.deleted_at IS NULL\n                ), 0)::BIGINT AS \"paid_cents!\",\n                COALESCE((\n                    SELECT SUM(c.gross_cents)\n                    FROM invoices c\n                    WHERE c.source_invoice_id = i.id AND c.deleted_at IS NULL\n                        AND c.status NOT IN ('DRAFT', 'CANCELLED')\n                ), 0)::BIGINT AS \"credited_cents!\"\n            FROM invoices i\n            WHERE i.id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "invoice_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "paid_cents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "credited_cents!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "aea11ed7855122410b3abe77b6d83abed493f3f26d403aec17cc4a98c00be78a"
+}

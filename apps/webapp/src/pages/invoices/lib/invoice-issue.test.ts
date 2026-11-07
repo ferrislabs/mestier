@@ -10,11 +10,11 @@ const TODAY = '2026-06-10'
 
 function invoice(
 	overrides: Partial<Invoice>,
-): Pick<Invoice, 'kind' | 'status' | 'issued_at'> {
+): Pick<Invoice, 'kind' | 'status' | 'issued_on'> {
 	return {
 		kind: 'STANDARD',
 		status: 'ISSUED',
-		issued_at: '2026-05-02T08:00:00Z',
+		issued_on: '2026-05-02',
 		...overrides,
 	}
 }
@@ -23,10 +23,10 @@ describe('lastIssuedDate', () => {
 	it('is the latest issue day of the invoices, credit notes and drafts aside', () => {
 		expect(
 			lastIssuedDate([
-				invoice({ issued_at: '2026-05-02T08:00:00Z' }),
-				invoice({ issued_at: '2026-05-20T08:00:00Z', status: 'PAID' }),
-				invoice({ issued_at: '2026-06-01T08:00:00Z', kind: 'CREDIT_NOTE' }),
-				invoice({ status: 'DRAFT', issued_at: null }),
+				invoice({ issued_on: '2026-05-02' }),
+				invoice({ issued_on: '2026-05-20', status: 'PAID' }),
+				invoice({ issued_on: '2026-06-01', kind: 'CREDIT_NOTE' }),
+				invoice({ status: 'DRAFT', issued_on: null }),
 			]),
 		).toBe('2026-05-20')
 	})
@@ -34,7 +34,7 @@ describe('lastIssuedDate', () => {
 	it('is null when nothing was issued yet', () => {
 		expect(lastIssuedDate([])).toBeNull()
 		expect(
-			lastIssuedDate([invoice({ status: 'DRAFT', issued_at: null })]),
+			lastIssuedDate([invoice({ status: 'DRAFT', issued_on: null })]),
 		).toBeNull()
 	})
 })

@@ -11,7 +11,6 @@ import { buildOrgPath } from '#/modules/org-path'
 import {
 	defaultDepositPercent,
 	depositPercentError,
-	depositPreviewCents,
 	formatPercent,
 	initialQuoteMode,
 	parsePercent,
@@ -261,16 +260,6 @@ export function InvoiceFromQuoteUI({
 												<span aria-hidden>%</span>
 											</div>
 										</FormField>
-										{percentError === null && parsed !== null && (
-											<output className="text-sm">
-												Soit{' '}
-												<Money
-													cents={depositPreviewCents(quote, parsed)}
-													className="font-medium"
-												/>{' '}
-												TTC (aperçu).
-											</output>
-										)}
 									</div>
 								)}
 							</OptionCard>
@@ -287,9 +276,8 @@ export function InvoiceFromQuoteUI({
 									<div className="grid gap-1 text-sm">
 										{info.deposits.issued.length > 0 && (
 											<p>
-												Les acomptes déjà émis ne sont pas déduits
-												automatiquement : ajoute une ligne de déduction dans le
-												brouillon.
+												Les acomptes déjà émis sont déduits automatiquement, par
+												taux de TVA.
 											</p>
 										)}
 										{info.deposits.drafts.length > 0 && (

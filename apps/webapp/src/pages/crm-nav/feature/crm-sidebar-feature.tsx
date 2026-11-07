@@ -44,7 +44,6 @@ export function CrmSidebarFeature() {
 		permission === null || granted.includes(permission)
 
 	const invoiceRows = invoices.data?.data ?? []
-	const now = new Date()
 
 	return (
 		<CrmSidebar
@@ -63,7 +62,7 @@ export function CrmSidebarFeature() {
 					? invoiceRows.filter(
 							(invoice) =>
 								invoice.kind !== 'CREDIT_NOTE' &&
-								invoiceDisplayState(invoice, null, now) === 'overdue',
+								invoiceDisplayState(invoice) === 'overdue',
 						).length
 					: undefined,
 				creditNotes: invoices.data

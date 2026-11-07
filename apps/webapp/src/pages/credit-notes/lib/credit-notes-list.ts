@@ -31,7 +31,7 @@ export function creditNoteRows(
 				source,
 				sourceLabel: source ? (source.number ?? 'Brouillon') : '—',
 				customerName: customer ? customerDisplayName(customer) : '',
-				kindLabel: creditNoteKindLabel(note, source),
+				kindLabel: creditNoteKindLabel(note),
 				totalCents: note.gross_cents,
 			}
 		})
@@ -53,7 +53,7 @@ export function filterCreditNoteRows(
 			row.note.number ?? '',
 			row.sourceLabel,
 			row.customerName,
-			row.note.notes ?? '',
+			row.note.reason ?? '',
 		]
 			.map(normalizeText)
 			.join('\n')

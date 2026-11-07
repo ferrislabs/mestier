@@ -1,13 +1,14 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use chrono::NaiveDate;
-use handlers::{ApiError, AppState, DataEnvelope, Response};
-use mestier_core::{InvoiceId, RecordInvoicePaymentCommand};
+use handlers::{AppState, DataEnvelope, Response};
+use mestier_core::{InvoiceId, PaymentMethod, RecordInvoicePaymentCommand};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    paths::InvoicePaymentsPath, require_invoice_membership, response::InvoicePaymentResponse,
+    invoice_error::InvoiceFailure, paths::InvoicePaymentsPath, require_invoice_membership,
+    response::InvoicePaymentResponse,
 };
 
 /// `recorded_by` is never a request field — it comes from `handlers::
@@ -17,11 +18,9 @@ use crate::{
 pub struct RecordInvoicePaymentRequest {
     pub amount_cents: i32,
     pub paid_on: NaiveDate,
-    pub method: String,
+    pub method: PaymentMethod,
     pub reference: Option<String>,
     pub note: Option<String>,
-    #[serde(default)]
-    pub allow_exceeding_total: bool,
 }
 
 #[utoipa::path(
@@ -39,7 +38,8 @@ pub struct RecordInvoicePaymentRequest {
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Invoice not found"),
-        (status = 409, description = "The invoice is not issued, or this payment would exceed its gross total net of credit notes"),
+        (status = 409, description = "The invoice is not issued (E_CONFLICT)"),
+        (status = 422, description = "A rule refused the payment: E_PAYMENT_EXCEEDS_BALANCE, E_REFUND_EXCEEDS_COLLECTED, a zero amount or a future date"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -48,7 +48,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Json(payload): Json<RecordInvoicePaymentRequest>,
-) -> Result<Response<InvoicePaymentResponse>, ApiError> {
+) -> Result<Response<InvoicePaymentResponse>, InvoiceFailure> {
     require_invoice_membership(&state, &identity, invoice_id).await?;
     let (user_id, actor) = handlers::resolve_actor(&state, &identity).await?;
 
@@ -64,9 +64,8 @@ pub async fn handler(
             reference: payload.reference,
             note: payload.note,
             recorded_by: user_id,
-            allow_exceeding_total: payload.allow_exceeding_total,
         })
-        .await?;
+        .await??;
 
     Ok(Response::Created(payment.into()))
 }

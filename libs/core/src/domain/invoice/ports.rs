@@ -1,11 +1,11 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::{CoreError, UserId};
 
 use crate::{
     Customer, CustomerOutstandingBalance, DraftInvoice, ElectronicInvoicingFacts,
-    GeneratedInvoiceDocument, Invoice, InvoiceId, InvoiceNumberSeries, InvoicePayment,
-    InvoicePaymentId, InvoiceStatus, LegalIdentity, OrganizationId, ProjectId,
-    domain::organization::billing_settings::NumberPadding,
+    GeneratedInvoiceDocument, Invoice, InvoiceCollection, InvoiceEvent, InvoiceId,
+    InvoiceNumberSeries, InvoicePayment, InvoicePaymentId, InvoiceStatus, LegalIdentity,
+    OrganizationId, ProjectId, QuoteId, domain::organization::billing_settings::NumberPadding,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -101,14 +101,62 @@ pub trait InvoiceRepository: Send {
     /// `update_draft`, which by design cannot leave `Draft`. Only ever
     /// called against a row still `Draft`; the implementation's `WHERE`
     /// clause enforces that independently of the service-level check.
+    #[allow(clippy::too_many_arguments)]
     fn issue(
         &mut self,
         id: InvoiceId,
         number: String,
         issued_at: DateTime<Utc>,
+        issued_on: NaiveDate,
+        due_at: Option<DateTime<Utc>>,
         issuer_identity: &LegalIdentity,
         updated_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<Invoice, CoreError>> + Send;
+
+    fn last_issued_on(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Option<NaiveDate>, CoreError>> + Send;
+
+    fn last_credit_note_on(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Option<NaiveDate>, CoreError>> + Send;
+
+    fn list_by_quote(
+        &mut self,
+        quote_id: QuoteId,
+    ) -> impl Future<Output = Result<Vec<Invoice>, CoreError>> + Send;
+
+    fn collections(
+        &mut self,
+        invoice_ids: &[InvoiceId],
+    ) -> impl Future<Output = Result<Vec<InvoiceCollection>, CoreError>> + Send;
+
+    fn list_events(
+        &mut self,
+        invoice_id: InvoiceId,
+    ) -> impl Future<Output = Result<Vec<InvoiceEvent>, CoreError>> + Send;
+
+    fn insert_event(
+        &mut self,
+        organization_id: OrganizationId,
+        invoice_id: InvoiceId,
+        event: &InvoiceEvent,
+    ) -> impl Future<Output = Result<InvoiceEvent, CoreError>> + Send;
+
+    fn mark_sent(
+        &mut self,
+        id: InvoiceId,
+        sent_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn set_internal_note(
+        &mut self,
+        id: InvoiceId,
+        note: &str,
+        updated_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     /// Records the one file a [`DocumentFormat`] adapter generated for this
     /// invoice (#342) — set at most once. `Err(CoreError::Conflict)` when

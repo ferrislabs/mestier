@@ -78,7 +78,7 @@ async fn an_invoice_is_created_read_listed_and_balanced() {
     assert_eq!(got["id"], created["id"]);
     assert_eq!(listed.as_array().unwrap().len(), 1);
     assert_same_shape(&balance, "mestier.invoice.balance");
-    assert_eq!(balance["remaining_cents"], 100000);
+    assert_eq!(balance["remaining_cents"], 0);
     assert_eq!(payments, json!([]));
     assert!(outstanding.is_array());
 }
@@ -128,7 +128,10 @@ async fn an_invoice_or_project_of_another_organization_fails_with_a_named_error(
         ),
         (
             "mestier.invoice.issue_credit_note",
-            vec![("invoice_id", invoice.clone()), ("lines", lines())],
+            vec![
+                ("invoice_id", invoice.clone()),
+                ("reason", json!("Erreur de facturation")),
+            ],
         ),
         (
             "mestier.invoice.project_billing_summary",
@@ -234,7 +237,12 @@ async fn issued_invoice(
     .execute(pool)
     .await
     .unwrap();
-    let customer = world_support::customer(pool, org).await;
+    let customer = world_support::customer_billed_in_nantes(pool, org).await;
+    sqlx::query("UPDATE customers SET registration_number = '12345678901234' WHERE id = $1")
+        .bind(customer.id)
+        .execute(pool)
+        .await
+        .unwrap();
     let created = produced(
         run(
             registry,
@@ -282,7 +290,7 @@ async fn a_payment_is_recorded_by_the_system_user_listed_and_deleted() {
                 ("invoice_id", invoice["id"].clone()),
                 ("amount_cents", json!(40000)),
                 ("paid_on", json!("2026-01-15")),
-                ("method", json!("virement")),
+                ("method", json!("TRANSFER")),
             ]),
         )
         .await,
@@ -332,7 +340,7 @@ async fn a_payment_of_another_organization_fails_with_a_named_error_and_nothing_
                 ("invoice_id", invoice["id"].clone()),
                 ("amount_cents", json!(1000)),
                 ("paid_on", json!("2026-01-15")),
-                ("method", json!("virement")),
+                ("method", json!("TRANSFER")),
             ]),
         )
         .await,
@@ -346,7 +354,7 @@ async fn a_payment_of_another_organization_fails_with_a_named_error_and_nothing_
             ("invoice_id", invoice["id"].clone()),
             ("amount_cents", json!(1000)),
             ("paid_on", json!("2026-01-15")),
-            ("method", json!("virement")),
+            ("method", json!("TRANSFER")),
         ]),
     )
     .await;

@@ -1,7 +1,7 @@
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Invoice, InvoiceKind, InvoicePayment } from '#/hooks/use-invoices'
 import type { Organization } from '#/hooks/use-organizations'
-import type { RefundInput } from '#/pages/invoices/lib/payment-form'
+import { PAYMENT_METHOD_LABELS } from '#/pages/invoices/lib/payment-form'
 import {
 	centsToEuros,
 	invoiceKindLabel,
@@ -70,9 +70,9 @@ export function buildInvoicePaper(input: {
 		draft: invoice.status === 'DRAFT',
 		heading: invoiceHeading(invoice.kind),
 		number: invoice.number ?? null,
-		title: '',
-		issueDate: invoice.issued_at ?? null,
-		dueDate: invoice.due_at ?? null,
+		title: invoice.title,
+		issueDate: invoice.issued_on ?? null,
+		dueDate: invoice.due_on ?? null,
 		issuer: paperIssuer(organization),
 		recipient: paperRecipient(input.customer, input.context),
 		lines: invoice.lines.map((line) =>
@@ -88,6 +88,9 @@ export function buildInvoicePaper(input: {
 					quantity: line.quantity,
 					unitPrice: centsToEuros(line.unit_price_cents),
 					vatRateBp: '',
+					discountPercent: line.discount_percent,
+					productId: null,
+					serviceRateId: null,
 				}),
 			}),
 		),
@@ -99,31 +102,50 @@ export function buildInvoicePaper(input: {
 			invoice.kind === 'CREDIT_NOTE'
 				? null
 				: paymentTermsLine(
-						invoice.issued_at ?? invoice.created_at,
-						invoice.due_at,
+						invoice.issued_on ?? invoice.created_at,
+						invoice.due_on,
 					),
+			invoice.kind === 'CREDIT_NOTE' ? null : invoice.legal_notice,
 			invoice.notes,
 		]
 			.filter(Boolean)
 			.join('\n'),
 		reference: input.reference ?? null,
-		reason: invoice.kind === 'CREDIT_NOTE' ? (invoice.notes ?? '') : '',
+		reason: invoice.kind === 'CREDIT_NOTE' ? (invoice.reason ?? '') : '',
 	}
 }
 
 export interface InvoiceActivity {
 	sentAt: string | null
 	reminders: readonly string[]
+	internalNote: string
+}
+
+export function invoiceActivity(
+	invoice: Pick<Invoice, 'sent_at' | 'internal_note' | 'events'>,
+): InvoiceActivity {
+	return {
+		sentAt: invoice.sent_at ?? null,
+		reminders: invoice.events
+			.filter((event) => event.kind === 'REMINDER')
+			.map((event) => event.at),
+		internalNote: invoice.internal_note ?? '',
+	}
+}
+
+function formatCents(cents: number): string {
+	return new Intl.NumberFormat('fr-FR', {
+		style: 'currency',
+		currency: 'EUR',
+	}).format(cents / 100)
 }
 
 export function buildInvoiceHistory(input: {
 	invoice: Invoice
 	payments: readonly InvoicePayment[]
 	creditNotes: readonly Invoice[]
-	activity: InvoiceActivity
-	refunds?: readonly (RefundInput & { id: string })[]
 }): HistoryEntry[] {
-	const { invoice, activity } = input
+	const { invoice } = input
 	const entries: HistoryEntry[] = [
 		{
 			id: 'created',
@@ -148,41 +170,21 @@ export function buildInvoiceHistory(input: {
 			detail: 'Facture annulée',
 			at: invoice.updated_at,
 		})
-	if (activity.sentAt)
+	for (const event of invoice.events) {
 		entries.push({
-			id: 'sent',
-			kind: 'sent',
-			detail: 'Facture envoyée au client',
-			at: activity.sentAt,
+			id: `event-${event.id}`,
+			kind: event.kind === 'SENT' ? 'sent' : 'note',
+			detail: event.detail,
+			at: event.at,
 		})
-	activity.reminders.forEach((at, index) => {
-		entries.push({
-			id: `reminder-${index}`,
-			kind: 'note',
-			detail: 'Relance enregistrée',
-			at,
-		})
-	})
+	}
 	for (const payment of input.payments) {
+		const refund = payment.amount_cents < 0
 		entries.push({
 			id: `payment-${payment.id}`,
 			kind: 'payment',
-			detail: `Paiement de ${new Intl.NumberFormat('fr-FR', {
-				style: 'currency',
-				currency: 'EUR',
-			}).format(payment.amount_cents / 100)} enregistré (${payment.method})`,
+			detail: `${refund ? 'Remboursement' : 'Paiement'} de ${formatCents(Math.abs(payment.amount_cents))} enregistré (${PAYMENT_METHOD_LABELS[payment.method]})`,
 			at: payment.created_at,
-		})
-	}
-	for (const refund of input.refunds ?? []) {
-		entries.push({
-			id: `refund-${refund.id}`,
-			kind: 'payment',
-			detail: `Remboursement de ${new Intl.NumberFormat('fr-FR', {
-				style: 'currency',
-				currency: 'EUR',
-			}).format(refund.amountCents / 100)} enregistré (${refund.method})`,
-			at: `${refund.date}T12:00:00`,
 		})
 	}
 	for (const note of input.creditNotes) {
@@ -197,10 +199,7 @@ export function buildInvoiceHistory(input: {
 }
 
 export function creditNoteKindLabel(
-	note: Pick<Invoice, 'gross_cents'>,
-	source: Pick<Invoice, 'gross_cents'> | undefined,
+	note: Pick<Invoice, 'full_cancellation'>,
 ): string {
-	return source && note.gross_cents >= source.gross_cents
-		? 'Annulation totale'
-		: 'Correction partielle'
+	return note.full_cancellation ? 'Annulation totale' : 'Correction partielle'
 }

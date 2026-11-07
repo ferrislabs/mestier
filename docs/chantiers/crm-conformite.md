@@ -34,18 +34,16 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 | B2 | Client : type, site web, TVA, responsable, source, notes, délai de paiement, contact et adresse de facturation, dates de conversion et d'archivage, SIRET. Contact : mobile. Adresse : type, pays | – | PR ouverte |
 | B3 | Opportunités (`deal`) + migration depuis `pipeline_stage` | B2 | PR ouverte |
 | B4 | Devis : validité, acompte, motif de refus, signataire, responsable, opportunité, notes, remise et fréquence par ligne, révisions, « remplacé » | B3 | PR ouverte |
-| B5 | Factures : titre, délai de paiement, mentions légales, note interne, envoi et relance, création depuis un devis, suppression de brouillon, date d'émission, mode de règlement typé, remboursement | B1, B4 | à faire |
+| B5 | Factures : titre, délai de paiement, mentions légales, note interne, envoi et relance, création depuis un devis, suppression de brouillon, date d'émission, mode de règlement typé, remboursement | B1, B4 | fait, à relire |
 | B6 | Dépenses et catégories, journal, fournisseurs enrichis, catalogue enrichi | B1 | à faire |
 | B7 | Indicateurs : CA 12 mois, encours en retard, dernière activité | B3, B5, B6 | à faire |
 
 ## Mocks front à remplacer
 - `pages/deals/feature/mocks/{deals-store,deal-quotes}.ts` : B3 (amorcé depuis `pipeline_stage`).
 - `pages/quotes/feature/mocks/quote-extras.ts` : B4 (responsable, validité, acompte, notes, remise et fréquence par ligne, signataire, motif de refus, révisions, lien opportunité).
-- `pages/invoices/feature/mocks/invoice-extras.ts` et `invoice-activity.ts` : B5.
 - `pages/suppliers/feature/mocks/supplier-extras.ts`, `pages/catalog/feature/mocks/{catalog-extras,catalog-usage}.ts` : B6.
 - `pages/customers/feature/mocks/account-extras.ts` : B2.
 - `pages/crm-settings/feature/mocks/settings.ts` : B1.
-- `pages/invoices/feature/mocks/invoice-activity.ts` (envoi, relance, note interne) : B5.
 - `pages/treasury/feature/mocks/ledger.ts` : B6.
 - `pages/catalog/feature/mocks/catalog-extras.ts` : B6.
 - `pages/stripe/feature/mocks/stripe-events.ts` et réglages Stripe : restent.
@@ -88,8 +86,19 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 - `tsc --noEmit` : 43 erreurs, hors périmètre, antérieures à B2.
 - Vérification de B4 allégée (clippy, tests Rust, migration, Biome, vitest) ; les tests de base et l'e2e ont été lancés par l'agent (810 et 19/19).
 
+## Reports issus de B5
+- Les avoirs se créent par ligne source et quantité (ou `full`), avec un motif obligatoire ; `allow_exceeding_total`, `allow_exceeding_invoice_total` et `due_at` ont disparu des requêtes, le délai de paiement les remplace (le formulaire du projet convertit sa date d'échéance en jours).
+- Les actions d'automatisation `mestier.invoice.*` suivent : `issue_credit_note` prend `reason` et des `lines` optionnelles, `record_payment` prend un `method` typé, `due_at` est retiré. Un workflow existant qui passe encore l'un de ces champs n'est pas migré. Non vérifié : la validation du graphe rejette-t-elle une clé inconnue ?
+- Les moyens de règlement déjà saisis en texte libre sont migrés vers `TRANSFER`, le texte saisi est ajouté à la note du paiement.
+- `status` reste la lecture historique (une facture entièrement créditée et non payée reste `ISSUED`) ; l'état affiché vient de `display_state`.
+- Le PDF de facture rend désormais la remise de ligne et les mentions légales ; ses caractères non ASCII sortent en `?` comme tout le reste du texte du PDF.
+- `lastIssuedDate` (borne de la date d'émission du dialogue) est toujours calculée côté front sur la page chargée ; le serveur refuse de toute façon (`E_INVOICE_DATE_RANGE`).
+- Restent calculés côté front, hors périmètre B5 : l'aperçu de l'avoir (`credit-note-request.ts`) et le total d'une ligne de brouillon (`invoiceLineTotalCents`, désormais avec remise et arrondi moitié éloignée de zéro). L'aperçu du montant d'un acompte a été retiré.
+- Les e-mails d'envoi et de relance ne partent pas : le lot enregistre l'événement et `sent_at`.
+- Le montant d'un acompte de projet (`issue_deposit`) et le solde (`issue_final_invoice`) restent des lignes forfaitaires sans ventilation de TVA, comme avant.
+
 ## À vérifier au lot concerné
-- Sémantique de `POST /invoices/{id}/cancel` et d'un montant négatif sur un paiement (B5, remboursement).
+- `POST /invoices/{id}/cancel` : conservé tel quel (statut `CANCELLED`, sans avoir) ; un montant négatif sur un paiement est un remboursement (B5).
 - `registry` (RCS/RM) couvert par `registration_number` ? (B1).
 - TVA des recettes codée à 20 % en dur dans `pages/treasury/feature/ledger-feature.tsx:140` (B6).
 - Lien entre `cost` du catalogue et `cost_basis` de `handlers-reference` (B6).

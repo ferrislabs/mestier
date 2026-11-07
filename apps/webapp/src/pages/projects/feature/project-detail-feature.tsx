@@ -30,6 +30,8 @@ import {
 import { useProfitability } from '#/hooks/use-reporting'
 import { useProjectSupplierCosts } from '#/hooks/use-supplier-invoices'
 import { buildOrgPath } from '#/modules/org-path'
+import { daysBetweenIso } from '#/pages/invoices/lib/iso-date'
+import { todayDate } from '#/pages/invoices/lib/payment-form'
 import { eurosToCents } from '#/pages/invoices/types'
 import { computeWindow } from '#/pages/planning/lib/window'
 import { todayIsoDate } from '#/pages/planning/types'
@@ -204,13 +206,17 @@ function ProjectDetailWorkspace({
 			params: { invoiceId },
 		})
 
-	const dueAtIso = () => (dueAt ? new Date(dueAt).toISOString() : null)
+	const paymentTermsDays = () =>
+		dueAt ? daysBetweenIso(todayDate(), dueAt) : null
 
 	const confirmRemaining = async () => {
 		if (!hasQuote || !hasPinnedAddress) return
 		const invoice = await issueFinal.mutateAsync({
 			path: { project_id: project.id },
-			body: { due_at: dueAtIso(), notes: notes.trim() || null },
+			body: {
+				payment_terms_days: paymentTermsDays(),
+				notes: notes.trim() || null,
+			},
 		})
 		await goToInvoice(invoice.data.id)
 	}
@@ -221,7 +227,7 @@ function ProjectDetailWorkspace({
 			path: { project_id: project.id },
 			body: {
 				percentage_bp: percentageBp,
-				due_at: dueAtIso(),
+				payment_terms_days: paymentTermsDays(),
 				notes: notes.trim() || null,
 			},
 		})
@@ -250,7 +256,7 @@ function ProjectDetailWorkspace({
 				project_id: project.id,
 				customer_id: project.customer_id,
 				customer_context_id: freeCustomerContextId,
-				due_at: dueAtIso(),
+				payment_terms_days: paymentTermsDays(),
 				notes: notes.trim() || null,
 				operation_nature: null,
 				lines: [

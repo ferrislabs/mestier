@@ -1,4 +1,4 @@
-import type { InvoiceLine, InvoiceLinePayload } from '#/hooks/use-invoices'
+import type { InvoiceLine } from '#/hooks/use-invoices'
 import {
 	centsToEuros,
 	formatMoney,
@@ -68,6 +68,9 @@ export function creditPreviewNetCents(
 				quantity: String(quantity),
 				unitPrice: centsToEuros(line.unit_price_cents),
 				vatRateBp: '',
+				discountPercent: line.discount_percent,
+				productId: null,
+				serviceRateId: null,
 			})
 		)
 	}, 0)
@@ -88,23 +91,27 @@ export function creditNoteErrors(
 	return errors
 }
 
-export function creditNoteLines(
+export interface CreditNoteRequest {
+	full: boolean
+	lines: { source_line_id: string; quantity: string }[]
+}
+
+export function creditNoteRequest(
 	lines: readonly InvoiceLine[],
 	mode: CreditMode,
 	inputs: QuantityInputs,
-): InvoiceLinePayload[] {
-	return lines.flatMap((line) => {
-		const quantity = creditedQuantity(line, mode, inputs)
-		if (!(quantity > 0)) return []
-		return [
-			{
-				label: line.label,
-				quantity: String(quantity),
-				unit_price_cents: line.unit_price_cents,
-				vat_rate_basis_points: line.vat_rate_basis_points ?? null,
-			},
-		]
-	})
+): CreditNoteRequest {
+	if (mode === 'total') return { full: true, lines: [] }
+
+	return {
+		full: false,
+		lines: lines.flatMap((line) => {
+			const quantity = creditedQuantity(line, mode, inputs)
+			return quantity > 0
+				? [{ source_line_id: line.id, quantity: String(quantity) }]
+				: []
+		}),
+	}
 }
 
 export interface CreditPreviewTotals {

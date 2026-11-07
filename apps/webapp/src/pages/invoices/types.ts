@@ -18,6 +18,9 @@ export interface InvoiceLineFormValues {
 	 * read by the server when the organization is subject to VAT, same rule
 	 * as `QuoteLineFormValues.vatRateBp`. */
 	vatRateBp: string
+	discountPercent: string
+	productId: string | null
+	serviceRateId: string | null
 }
 
 export function emptyInvoiceLine(clientId = 'line-1'): InvoiceLineFormValues {
@@ -27,6 +30,9 @@ export function emptyInvoiceLine(clientId = 'line-1'): InvoiceLineFormValues {
 		quantity: '1',
 		unitPrice: '',
 		vatRateBp: '',
+		discountPercent: '0',
+		productId: null,
+		serviceRateId: null,
 	}
 }
 
@@ -35,7 +41,9 @@ export interface InvoiceFormValues {
 	projectId: string
 	customerId: string
 	customerContextId: string
-	dueAt: string
+	title: string
+	termsDays: string
+	legalNotice: string
 	notes: string
 	operationNature: OperationNature | ''
 	lines: InvoiceLineFormValues[]
@@ -123,83 +131,58 @@ export const INVOICE_STATE_LABELS: Record<InvoiceDisplayState, string> = {
 	refund_due: 'À rembourser',
 }
 
+const DISPLAY_STATES: Record<
+	NonNullable<Invoice['display_state']>,
+	InvoiceDisplayState
+> = {
+	DRAFT: 'draft',
+	UNPAID: 'unpaid',
+	PARTIAL: 'partial',
+	OVERDUE: 'overdue',
+	PAID: 'paid',
+	CANCELLED: 'cancelled',
+	REFUND_DUE: 'refund_due',
+}
+
 /**
- * The state an invoice reads as in the list and on its page. Every input is a
- * field the backend already computed (`status`, `due_at`, the balance's
- * `remaining_cents`): this only picks a label, it never recomputes money.
- * `remainingCents` is optional because the list has no per-invoice balance.
+ * The state an invoice reads as in the list and on its page: the backend
+ * decides it (draft, refund due, cancelled, paid, overdue, partial, unpaid),
+ * this only maps the wire value to the label key.
  */
 export function invoiceDisplayState(
-	invoice: Pick<Invoice, 'status' | 'due_at'>,
-	remainingCents?: number | null,
-	now: Date = new Date(),
+	invoice: Pick<Invoice, 'display_state'>,
 ): InvoiceDisplayState {
-	if (invoice.status === 'DRAFT') return 'draft'
-	if (invoice.status === 'CANCELLED') return 'cancelled'
-	if (remainingCents != null && remainingCents < 0) return 'refund_due'
-	if (invoice.status === 'PAID') return 'paid'
-	if (isInvoiceOverdue({ status: 'ISSUED', due_at: invoice.due_at }, now)) {
-		return 'overdue'
-	}
-	return invoice.status === 'PARTIALLY_PAID' ? 'partial' : 'unpaid'
+	return DISPLAY_STATES[invoice.display_state]
 }
 
-/**
- * "An overdue invoice reads as overdue in the list, not only on its own
- * page" (#321) — a pure date comparison over fields the backend already
- * computed (`status`, `due_at`), not a recomputation of any amount, so this
- * is safe to run client-side.
- */
-export function isInvoiceOverdue(
-	invoice: Pick<Invoice, 'status' | 'due_at'>,
-	now: Date = new Date(),
-): boolean {
-	return (
-		invoice.status === 'ISSUED' &&
-		invoice.due_at != null &&
-		new Date(invoice.due_at) < now
-	)
-}
-
-/**
- * A hand-typed decimal, split into digits and scale: `"12,50"` becomes
- * `{ digits: 1250n, scale: 2 }`. `null` when there is nothing usable to read.
- *
- * Copied from `pages/quotes/types.ts` rather than imported: the backend rule
- * it mirrors (`rust_decimal`'s banker's rounding) is shared, but the two
- * pages' form-value types are not, and `parseDecimal`/`scaleTo` are not
- * exported from that module.
- */
 function parseDecimal(value: string): { digits: bigint; scale: number } | null {
 	const normalized = value.replace(',', '.').trim()
-	if (!/^\d*\.?\d*$/.test(normalized) || normalized === '.' || !normalized) {
+	if (!/^-?\d*\.?\d*$/.test(normalized) || normalized === '.' || !normalized) {
 		return null
 	}
 
-	const [whole = '', fraction = ''] = normalized.split('.')
+	const negative = normalized.startsWith('-')
+	const [whole = '', fraction = ''] = normalized.replace('-', '').split('.')
 	const digits = `${whole}${fraction}`
 	if (!digits) return null
 
-	return { digits: BigInt(digits), scale: fraction.length }
+	return {
+		digits: negative ? -BigInt(digits) : BigInt(digits),
+		scale: fraction.length,
+	}
 }
 
-/**
- * Restates `digits × 10^-scale` at `targetScale`, rounding halves to even —
- * see `pages/quotes/types.ts`'s `scaleTo` for the full rationale.
- */
 function scaleTo(digits: bigint, scale: number, targetScale: number): bigint {
 	if (scale <= targetScale) {
 		return digits * 10n ** BigInt(targetScale - scale)
 	}
 
 	const divisor = 10n ** BigInt(scale - targetScale)
-	const quotient = digits / divisor
-	const doubled = (digits % divisor) * 2n
-
-	if (doubled > divisor) return quotient + 1n
-	if (doubled < divisor) return quotient
-	// Exactly a half: land on the even neighbour.
-	return quotient % 2n === 0n ? quotient : quotient + 1n
+	const magnitude = digits < 0n ? -digits : digits
+	const quotient = magnitude / divisor
+	const rounded =
+		(magnitude % divisor) * 2n >= divisor ? quotient + 1n : quotient
+	return digits < 0n ? -rounded : rounded
 }
 
 export function centsToEuros(cents: number): string {
@@ -213,19 +196,25 @@ export function eurosToCents(value: string): number {
 	return Number(scaleTo(parsed.digits, parsed.scale, 2))
 }
 
-/**
- * The line's total, to the cent, computed the way the backend computes it —
- * see `pages/quotes/types.ts`'s `quoteLineTotalCents` for the full
- * rationale; this is the same arithmetic over the invoice line's own
- * (smaller) set of fields.
- */
 export function invoiceLineTotalCents(line: InvoiceLineFormValues): number {
 	const quantity = parseDecimal(line.quantity)
 	if (!quantity || quantity.digits === 0n) return 0
 
 	const unitPriceCents = BigInt(eurosToCents(line.unitPrice))
+	const discount = parseDecimal(line.discountPercent) ?? {
+		digits: 0n,
+		scale: 0,
+	}
+	const remaining = 100n * 10n ** BigInt(discount.scale) - discount.digits
+	if (remaining < 0n) return 0
 
-	return Number(scaleTo(quantity.digits * unitPriceCents, quantity.scale, 0))
+	return Number(
+		scaleTo(
+			quantity.digits * unitPriceCents * remaining,
+			quantity.scale + discount.scale + 2,
+			0,
+		),
+	)
 }
 
 export function invoiceLineSummary(line: InvoiceLineFormValues): string {

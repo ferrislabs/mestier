@@ -17,6 +17,14 @@ const KINDS: &[SelectOption] = &[
     SelectOption::new("CREDIT_NOTE", "Avoir"),
 ];
 
+const METHODS: &[SelectOption] = &[
+    SelectOption::new("CARD", "Carte bancaire"),
+    SelectOption::new("TRANSFER", "Virement"),
+    SelectOption::new("CHECK", "Chèque"),
+    SelectOption::new("CASH", "Espèces"),
+    SelectOption::new("DIRECT_DEBIT", "Prélèvement"),
+];
+
 const NATURES: &[SelectOption] = &[
     SelectOption::new("GOODS", "Biens"),
     SelectOption::new("SERVICES", "Services"),
@@ -24,6 +32,8 @@ const NATURES: &[SelectOption] = &[
 ];
 
 const LINES_LABEL: &str = "Lignes (label, quantity, unit_price_cents, vat_rate_basis_points)";
+const CREDIT_LINES_LABEL: &str =
+    "Lignes à créditer (source_line_id, quantity), toutes les lignes restantes si absent";
 const ADDRESS_LABEL: &str = "Adresse de livraison (line1, line2, postal_code, city, country)";
 
 const INVOICE_FIELDS: &[Field] = &[Field::text("invoice_id", "Facture", true)];
@@ -42,7 +52,6 @@ const CREATE_FIELDS: &[Field] = &[
     Field::text("project_id", "Projet", false),
     Field::text("customer_id", "Client", true),
     Field::text("customer_context_id", "Lieu du client", true),
-    Field::text("due_at", "Échéance (date et heure RFC 3339)", false),
     Field::text("notes", "Notes", false),
     Field::select("operation_nature", "Nature de l’opération", false, NATURES),
     Field::json("delivery_address", ADDRESS_LABEL, false),
@@ -54,7 +63,6 @@ const UPDATE_FIELDS: &[Field] = &[
     Field::text("project_id", "Projet", false),
     Field::text("customer_id", "Client", true),
     Field::text("customer_context_id", "Lieu du client", true),
-    Field::text("due_at", "Échéance (date et heure RFC 3339)", false),
     Field::text("notes", "Notes", false),
     Field::select("operation_nature", "Nature de l’opération", false, NATURES),
     Field::json("delivery_address", ADDRESS_LABEL, false),
@@ -63,6 +71,7 @@ const UPDATE_FIELDS: &[Field] = &[
 
 const ISSUE_FIELDS: &[Field] = &[
     Field::text("invoice_id", "Facture", true),
+    Field::text("issued_on", "Date d’émission (AAAA-MM-JJ)", false),
     Field::boolean(
         "allow_exceeding_total",
         "Autoriser un dépassement du total du devis",
@@ -72,13 +81,9 @@ const ISSUE_FIELDS: &[Field] = &[
 
 const CREDIT_NOTE_FIELDS: &[Field] = &[
     Field::text("invoice_id", "Facture d’origine", true),
-    Field::json("lines", LINES_LABEL, true),
+    Field::text("reason", "Motif de l’avoir", true),
+    Field::json("lines", CREDIT_LINES_LABEL, false),
     Field::text("notes", "Notes", false),
-    Field::boolean(
-        "allow_exceeding_invoice_total",
-        "Autoriser un dépassement du total de la facture",
-        false,
-    ),
 ];
 
 const DEPOSIT_FIELDS: &[Field] = &[
@@ -88,7 +93,6 @@ const DEPOSIT_FIELDS: &[Field] = &[
         "Pourcentage du devis en points de base (3000 = 30 %)",
         true,
     ),
-    Field::text("due_at", "Échéance (date et heure RFC 3339)", false),
     Field::text("notes", "Notes", false),
     Field::boolean(
         "allow_exceeding_total",
@@ -99,7 +103,6 @@ const DEPOSIT_FIELDS: &[Field] = &[
 
 const FINAL_FIELDS: &[Field] = &[
     Field::text("project_id", "Projet", true),
-    Field::text("due_at", "Échéance (date et heure RFC 3339)", false),
     Field::text("notes", "Notes", false),
     Field::boolean(
         "allow_exceeding_total",
@@ -138,11 +141,28 @@ fn invoice_sample() -> Value {
             "quantity": "10",
             "unit_price_cents": 10000,
             "vat_rate_basis_points": 2000,
+            "discount_percent": "0",
+            "product_id": NIL,
+            "service_rate_id": NIL,
+            "source_line_id": NIL,
             "position": 0,
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
         }],
         "source_invoice_id": NIL,
+        "title": "Rénovation de la salle de bain",
+        "payment_terms_days": 30,
+        "legal_notice": "Pénalités de retard : trois fois le taux d’intérêt légal.",
+        "internal_note": "Client à relancer par téléphone.",
+        "sent_at": "2026-01-02T00:00:00Z",
+        "quote_id": NIL,
+        "issued_on": "2026-01-01",
+        "reason": "Erreur de facturation",
+        "full_cancellation": false,
+        "paid_cents": 40000,
+        "credited_cents": 0,
+        "balance_cents": 80000,
+        "display_state": "PARTIAL",
         "created_at": "2026-01-01T00:00:00Z",
         "updated_at": "2026-01-01T00:00:00Z",
     })
@@ -150,16 +170,15 @@ fn invoice_sample() -> Value {
 
 const RECORD_PAYMENT_FIELDS: &[Field] = &[
     Field::text("invoice_id", "Facture", true),
-    Field::number("amount_cents", "Montant en centimes", true),
+    Field::number(
+        "amount_cents",
+        "Montant en centimes (négatif pour un remboursement)",
+        true,
+    ),
     Field::text("paid_on", "Date du paiement (AAAA-MM-JJ)", true),
-    Field::text("method", "Moyen de paiement", true),
+    Field::select("method", "Moyen de paiement", true, METHODS),
     Field::text("reference", "Référence", false),
     Field::text("note", "Note", false),
-    Field::boolean(
-        "allow_exceeding_total",
-        "Autoriser un dépassement du total",
-        false,
-    ),
 ];
 
 const DELETE_PAYMENT_FIELDS: &[Field] = &[Field::text("payment_id", "Paiement", true)];
@@ -170,7 +189,7 @@ fn payment_sample() -> Value {
         "invoice_id": NIL,
         "amount_cents": 40000,
         "paid_on": "2026-01-15",
-        "method": "virement",
+        "method": "TRANSFER",
         "reference": null,
         "note": null,
         "recorded_by": NIL,
@@ -203,7 +222,7 @@ fn payments_sample() -> Value {
         "invoice_id": NIL,
         "amount_cents": 40000,
         "paid_on": "2026-01-15",
-        "method": "virement",
+        "method": "TRANSFER",
         "reference": null,
         "note": null,
         "recorded_by": NIL,
