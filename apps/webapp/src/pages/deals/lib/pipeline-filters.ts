@@ -1,5 +1,4 @@
 import type { Customer } from '#/hooks/use-customers'
-import { PEOPLE } from '#/pages/customers/feature/mocks/people'
 import { LEAD_SOURCES } from '#/pages/customers/types'
 import type {
 	Deal,
@@ -46,7 +45,7 @@ function findClosed(value: unknown): Exclude<ClosedFilter, 'tous'> | undefined {
 }
 
 function findOwner(value: unknown): string | undefined {
-	return PEOPLE.find((person) => person.id === value)?.id
+	return typeof value === 'string' && value !== '' ? value : undefined
 }
 
 export function parseSearch(raw: Record<string, unknown>): PipelineSearch {

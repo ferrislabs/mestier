@@ -3,7 +3,7 @@ use common::CoreError;
 
 use super::search::{QuoteSearch, QuoteSummary};
 use crate::{
-    OrganizationId, Quote, QuoteId, QuoteStatus,
+    DealId, OrganizationId, Quote, QuoteId, QuoteStatus,
     domain::organization::billing_settings::NumberPadding,
 };
 
@@ -44,6 +44,7 @@ pub trait QuoteRepository: Send {
     fn list_by_organization(
         &mut self,
         organization_id: OrganizationId,
+        deal_id: Option<DealId>,
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Quote>, u64), CoreError>> + Send;

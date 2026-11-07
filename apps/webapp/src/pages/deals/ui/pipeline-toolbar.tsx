@@ -9,7 +9,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { PEOPLE } from '#/pages/customers/feature/mocks/people'
+import type { Person } from '#/pages/customers/lib/people'
 import { LEAD_SOURCE_LABELS, LEAD_SOURCES } from '#/pages/customers/types'
 import {
 	ALL,
@@ -52,11 +52,13 @@ function Check({
 
 export function PipelineToolbar({
 	filters,
+	people,
 	canReset,
 	onChange,
 	onReset,
 }: {
 	filters: DealFilters
+	people: readonly Person[]
 	canReset: boolean
 	onChange: (patch: Partial<DealFilters>) => void
 	onReset: () => void
@@ -89,7 +91,7 @@ export function PipelineToolbar({
 				</SelectTrigger>
 				<SelectContent>
 					<SelectItem value={ALL}>Tous les responsables</SelectItem>
-					{PEOPLE.map((person) => (
+					{people.map((person) => (
 						<SelectItem key={person.id} value={person.id}>
 							{person.name}
 						</SelectItem>

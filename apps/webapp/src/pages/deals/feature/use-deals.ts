@@ -1,41 +1,40 @@
 import { useMemo } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { type Customer, useCustomers } from '#/hooks/use-customers'
 import {
-	type Customer,
-	useCustomers,
-	useUpdateCustomer,
-} from '#/hooks/use-customers'
+	useCreateDeal,
+	useDealList,
+	useDealSummary,
+	useDeleteDeal,
+	useMoveDeal,
+	useUpdateDeal,
+} from '#/hooks/use-deals'
+import { useQuotes } from '#/hooks/use-quotes'
 import { mutationErrorMessage } from '#/lib/api-error'
-import { todayIso } from '#/pages/customers/lib/format'
-import { customerBody } from '#/pages/customers/types'
 import {
-	type DealsSnapshot,
-	readDeals,
-	usePersistedDeals,
-	writeDeals,
-} from '#/pages/deals/feature/mocks/deals-store'
-import { seedConversions, seedDeals } from '#/pages/deals/lib/deal-seed'
+	apiOfStage,
+	dealBodyOfDraft,
+	dealOfApi,
+	dealQuoteOfApi,
+	EMPTY_SUMMARY,
+	summaryOfApi,
+} from '#/pages/deals/lib/deal-api'
 import type {
 	Deal,
-	DealContext,
 	DealDraft,
 	DealQuote,
 	DealStage,
 } from '#/pages/deals/lib/deal-types'
-import {
-	createDeal,
-	deleteDeal,
-	moveDeal,
-	updateDeal,
-} from '#/pages/deals/lib/pipeline'
 import { conversionNotice } from '#/pages/deals/lib/pipeline-filters'
 
 export type { Deal, DealDraft, DealQuote, DealStage }
 
 const NO_CUSTOMERS: readonly Customer[] = []
 
-function contextNow(): DealContext {
-	return { today: todayIso(), newId: () => crypto.randomUUID() }
+function dealQuotesOf(
+	rows: ReturnType<typeof useQuotes>['data'],
+): readonly DealQuote[] {
+	return (rows?.data ?? []).flatMap((quote) => dealQuoteOfApi(quote) ?? [])
 }
 
 export function useDeals() {
@@ -45,91 +44,105 @@ export function useDeals() {
 		page: 1,
 		perPage: 100,
 	})
-	const updateCustomer = useUpdateCustomer()
-	const persisted = usePersistedDeals(organizationId)
-	const rows = customersQuery.data?.data
-	const customers = rows ?? NO_CUSTOMERS
-	const seeded = useMemo<DealsSnapshot | null>(
-		() =>
-			rows
-				? { deals: seedDeals(rows), conversions: seedConversions(rows) }
-				: null,
+	const dealsQuery = useDealList(organizationId)
+	const summaryQuery = useDealSummary(organizationId)
+	const quotesQuery = useQuotes(organizationId)
+	const createDeal = useCreateDeal(organizationId)
+	const updateDeal = useUpdateDeal(organizationId)
+	const moveDeal = useMoveDeal(organizationId)
+	const deleteDeal = useDeleteDeal(organizationId)
+	const customers = customersQuery.data?.data ?? NO_CUSTOMERS
+	const rows = dealsQuery.data?.data
+	const deals = useMemo<readonly Deal[]>(
+		() => (rows ?? []).map(dealOfApi),
 		[rows],
 	)
-	const snapshot = persisted ?? seeded
-
-	function commit(change: (current: DealsSnapshot) => DealsSnapshot) {
-		const current = readDeals(organizationId) ?? seeded
-		if (current) writeDeals(organizationId, change(current))
-	}
+	const summaryRow = summaryQuery.data?.data
+	const summary = useMemo(
+		() => (summaryRow ? summaryOfApi(summaryRow) : EMPTY_SUMMARY),
+		[summaryRow],
+	)
+	const quoteRows = quotesQuery.data
+	const quotes = useMemo(() => dealQuotesOf(quoteRows), [quoteRows])
 
 	return {
-		deals: snapshot?.deals ?? [],
-		conversions: snapshot?.conversions ?? {},
+		deals,
 		customers,
-		isLoading: customersQuery.isLoading,
+		quotes,
+		summary,
+		isLoading: customersQuery.isLoading || dealsQuery.isLoading,
 		error:
 			mutationErrorMessage(customersQuery.error) ??
-			mutationErrorMessage(updateCustomer.error),
-		retry: () => void customersQuery.refetch(),
+			mutationErrorMessage(dealsQuery.error) ??
+			mutationErrorMessage(createDeal.error) ??
+			mutationErrorMessage(updateDeal.error) ??
+			mutationErrorMessage(moveDeal.error) ??
+			mutationErrorMessage(deleteDeal.error),
+		retry() {
+			void customersQuery.refetch()
+			void dealsQuery.refetch()
+			void summaryQuery.refetch()
+		},
 		create(draft: DealDraft) {
-			commit((current) => ({
-				...current,
-				deals: createDeal(current.deals, contextNow(), draft),
-			}))
+			createDeal.mutate({
+				path: { organization_id: organizationId },
+				body: dealBodyOfDraft(draft),
+			})
 		},
 		update(dealId: string, draft: DealDraft) {
-			commit((current) => ({
-				...current,
-				deals: updateDeal(current.deals, dealId, draft),
-			}))
-		},
-		move(dealId: string, stage: DealStage, lostReason = ''): string | null {
-			const context = contextNow()
-			const deal = snapshot?.deals.find((item) => item.id === dealId)
-			const customer = customers.find((item) => item.id === deal?.customerId)
-			commit((current) => {
-				const deals = moveDeal(
-					current.deals,
-					context,
-					dealId,
-					stage,
-					lostReason,
-				)
-				const converted =
-					deals !== current.deals && stage === 'won' && deal !== undefined
-				return {
-					deals,
-					conversions:
-						converted && customer?.status === 'PROSPECT'
-							? { ...current.conversions, [deal.customerId]: context.today }
-							: current.conversions,
-				}
+			updateDeal.mutate({
+				path: { deal_id: dealId },
+				body: dealBodyOfDraft(draft),
 			})
-			if (stage === 'won' && customer?.status === 'PROSPECT')
-				updateCustomer.mutate({
-					path: { customer_id: customer.id },
-					body: customerBody(customer, {
-						status: 'CLIENT',
-						pipeline_stage: 'WON',
-					}),
-				})
-			return conversionNotice(customer, stage)
 		},
-		remove(dealId: string, quotes: readonly DealQuote[]) {
-			commit((current) => ({
-				...current,
-				deals: deleteDeal(current.deals, dealId, quotes),
-			}))
+		move(
+			dealId: string,
+			stage: DealStage,
+			lostReason: string,
+			onMoved: (notice: string | null) => void,
+		) {
+			const deal = deals.find((item) => item.id === dealId)
+			const customer = customers.find((item) => item.id === deal?.customerId)
+			moveDeal.mutate(
+				{
+					path: { deal_id: dealId },
+					body: {
+						stage: apiOfStage(stage),
+						lost_reason: stage === 'lost' ? lostReason : null,
+					},
+				},
+				{ onSuccess: () => onMoved(conversionNotice(customer, stage)) },
+			)
+		},
+		remove(dealId: string) {
+			deleteDeal.mutate({ path: { deal_id: dealId } })
 		},
 	}
 }
 
 export function useDealsByCustomer(customerId: string) {
-	const { deals, isLoading, create } = useDeals()
+	const { activeOrganization } = useActiveOrganization()
+	const organizationId = activeOrganization?.id ?? ''
+	const dealsQuery = useDealList(organizationId, {
+		page: 1,
+		perPage: 100,
+		customerId,
+	})
+	const createDeal = useCreateDeal(organizationId)
+	const rows = dealsQuery.data?.data
+	const deals = useMemo<readonly Deal[]>(
+		() => (rows ?? []).map(dealOfApi),
+		[rows],
+	)
+
 	return {
-		deals: deals.filter((deal) => deal.customerId === customerId),
-		isLoading,
-		create,
+		deals,
+		isLoading: dealsQuery.isLoading,
+		create(draft: DealDraft) {
+			createDeal.mutate({
+				path: { organization_id: organizationId },
+				body: dealBodyOfDraft(draft),
+			})
+		},
 	}
 }

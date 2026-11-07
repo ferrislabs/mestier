@@ -19,7 +19,6 @@ import {
 import { useOutstandingByCustomer } from '#/hooks/use-invoices'
 import { useQuotes } from '#/hooks/use-quotes'
 import { mutationErrorMessage } from '#/lib/api-error'
-import { CURRENT_PERSON_ID } from '#/pages/customers/feature/mocks/people'
 import {
 	useSaveStripeCustomerId,
 	useStripeCustomerId,
@@ -96,7 +95,7 @@ export function CustomerEditFeature({
 	const stripeCustomerId = useStripeCustomerId(customerId)
 	const settings = useBillingSettings(organizationId)
 	const saveStripeCustomerId = useSaveStripeCustomerId()
-	const { people } = useOrganizationPeople(organizationId)
+	const { people, currentPersonId } = useOrganizationPeople(organizationId)
 	const updateCustomer = useUpdateCustomer()
 	const createContact = useCreateCustomerContact()
 	const updateContact = useUpdateCustomerContact()
@@ -197,7 +196,7 @@ export function CustomerEditFeature({
 	const convert = async () => {
 		await updateCustomer.mutateAsync({
 			path: { customer_id: customer.id },
-			body: customerBody(customer, { status: 'CLIENT', pipeline_stage: 'WON' }),
+			body: customerBody(customer, { status: 'CLIENT' }),
 		})
 	}
 
@@ -391,7 +390,8 @@ export function CustomerEditFeature({
 										open={creatingDeal}
 										onOpenChange={setCreatingDeal}
 										customers={[customer]}
-										defaultOwnerId={CURRENT_PERSON_ID}
+										people={people}
+										defaultOwnerId={currentPersonId ?? ''}
 										organizationSlug={organizationSlug}
 										onCreate={customerDeals.create}
 										trigger={

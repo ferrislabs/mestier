@@ -2,9 +2,8 @@ use auth::Identity;
 use axum::{Extension, Json, extract::State};
 use handlers::{AppState, DataEnvelope, Response};
 use mestier_core::{
-    CreateCustomerCommand, CustomerContactId, CustomerContextId, CustomerKind,
-    CustomerPipelineStage, CustomerProfile, CustomerStatus, LeadSource, MemberId,
-    RegistrationNumber, payment_terms_of,
+    CreateCustomerCommand, CustomerContactId, CustomerContextId, CustomerKind, CustomerProfile,
+    CustomerStatus, LeadSource, MemberId, RegistrationNumber, payment_terms_of,
 };
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -17,7 +16,6 @@ use crate::{
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateCustomerRequest {
     pub status: CustomerStatus,
-    pub pipeline_stage: CustomerPipelineStage,
     pub name: String,
     #[serde(default)]
     pub registration_number: Option<String>,
@@ -83,7 +81,6 @@ pub async fn handler(
             actor,
             organization_id: path.organization_id,
             status: payload.status,
-            pipeline_stage: payload.pipeline_stage,
             name: payload.name,
             registration_number,
             phone: payload.phone,

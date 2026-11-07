@@ -3,6 +3,7 @@ import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import type { Customer } from '#/hooks/use-customers'
+import type { Person } from '#/pages/customers/lib/people'
 import type {
 	Deal,
 	DealDraft,
@@ -26,6 +27,7 @@ import { PipelineToolbar } from '#/pages/deals/ui/pipeline-toolbar'
 export function PipelineUI({
 	deals,
 	customers,
+	people,
 	quotes,
 	summary,
 	filters,
@@ -56,6 +58,7 @@ export function PipelineUI({
 }: {
 	deals: readonly Deal[]
 	customers: readonly Customer[]
+	people: readonly Person[]
 	quotes: readonly DealQuote[]
 	summary: PipelineSummary
 	filters: DealFilters
@@ -96,6 +99,7 @@ export function PipelineUI({
 							open={creating}
 							onOpenChange={onCreatingChange}
 							customers={customers}
+							people={people}
 							defaultOwnerId={defaultOwnerId}
 							organizationSlug={organizationSlug}
 							onCreate={onCreate}
@@ -111,6 +115,7 @@ export function PipelineUI({
 			<PipelineStats summary={summary} />
 			<PipelineToolbar
 				filters={filters}
+				people={people}
 				canReset={canReset}
 				onChange={onFiltersChange}
 				onReset={onReset}
@@ -145,6 +150,7 @@ export function PipelineUI({
 				deals={deals}
 				stages={visibleStages(filters.closed)}
 				customers={customers}
+				people={people}
 				quotes={quotes}
 				today={today}
 				organizationSlug={organizationSlug}
@@ -158,6 +164,7 @@ export function PipelineUI({
 					key={selected.id}
 					deal={selected}
 					customers={customers}
+					people={people}
 					quotes={dealQuotes(quotes, selected.id)}
 					organizationSlug={organizationSlug}
 					canManage={canManage}

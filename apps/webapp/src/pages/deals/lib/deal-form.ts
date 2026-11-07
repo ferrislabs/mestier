@@ -1,5 +1,5 @@
-import { PEOPLE } from '#/pages/customers/feature/mocks/people'
 import { centsToInput, parseAmount } from '#/pages/customers/lib/format'
+import type { Person } from '#/pages/customers/lib/people'
 import { LEAD_SOURCES } from '#/pages/customers/types'
 import type { Deal, DealDraft } from '#/pages/deals/lib/deal-types'
 import { validateDealDraft } from '#/pages/deals/lib/pipeline'
@@ -83,7 +83,10 @@ function fieldOf(message: string): DealFormField {
 	return 'customerId'
 }
 
-export function buildDraft(form: DealForm): DealFormResult {
+export function buildDraft(
+	form: DealForm,
+	people: readonly Pick<Person, 'id'>[],
+): DealFormResult {
 	const errors: DealFormErrors = {}
 	const rawAmount = form.amount.trim()
 	const parsed = rawAmount === '' ? 0 : parseAmount(rawAmount)
@@ -97,7 +100,7 @@ export function buildDraft(form: DealForm): DealFormResult {
 		title: form.title.trim(),
 		amount: parsed ?? 0,
 		expectedCloseDate,
-		ownerId: PEOPLE.find((person) => person.id === form.ownerId)?.id ?? null,
+		ownerId: people.find((person) => person.id === form.ownerId)?.id ?? null,
 		source: LEAD_SOURCES.find((source) => source === form.source) ?? null,
 		notes: form.notes.trim(),
 	}

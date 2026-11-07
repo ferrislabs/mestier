@@ -78,11 +78,14 @@ impl MestierUseCase {
     pub async fn list_quotes(
         &self,
         organization_id: OrganizationId,
+        deal_id: Option<crate::DealId>,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Quote>, u64), CoreError> {
         let mut service = QuoteService::new(quote_repository, emitter);
-        service.list_quotes(organization_id, limit, offset).await
+        service
+            .list_quotes(organization_id, deal_id, limit, offset)
+            .await
     }
 
     /// `actor` — see `create_quote`'s own doc. A bare `command.id` never

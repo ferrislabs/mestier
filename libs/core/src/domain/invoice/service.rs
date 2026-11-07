@@ -2283,6 +2283,7 @@ mod tests {
             title: "Chantier".to_owned(),
             customer_id,
             customer_context_id,
+            deal_id: None,
             status: QuoteStatus::Accepted,
             net_cents,
             vat_breakdown: Vec::new(),

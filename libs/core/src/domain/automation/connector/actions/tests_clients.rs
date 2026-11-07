@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use super::*;
-use crate::{CustomerPipelineStage, CustomerStatus};
+use crate::CustomerStatus;
 
 #[test]
 fn the_hand_written_customer_connector_is_not_generated_again() {
@@ -23,9 +23,5 @@ fn the_select_options_are_the_ones_the_domain_parses() {
     for option in STATUSES {
         assert!(CustomerStatus::from_str(option.value).is_ok());
     }
-    for option in STAGES {
-        assert!(CustomerPipelineStage::from_str(option.value).is_ok());
-    }
     assert_eq!(STATUSES.len(), 3);
-    assert_eq!(STAGES.len(), 6);
 }

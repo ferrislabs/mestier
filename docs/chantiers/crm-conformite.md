@@ -32,7 +32,7 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 |---|---|---|---|
 | B1 | Réglages d'organisation : IBAN, BIC, pénalités, indemnité de recouvrement, pied de facture, padding, validité des devis, délai de paiement, TVA par défaut, compteur d'avoirs | – | PR ouverte |
 | B2 | Client : type, site web, TVA, responsable, source, notes, délai de paiement, contact et adresse de facturation, dates de conversion et d'archivage, SIRET. Contact : mobile. Adresse : type, pays | – | PR ouverte |
-| B3 | Opportunités (`deal`) + migration depuis `pipeline_stage` | B2 | à faire |
+| B3 | Opportunités (`deal`) + migration depuis `pipeline_stage` | B2 | PR ouverte |
 | B4 | Devis : validité, acompte, motif de refus, signataire, responsable, opportunité, notes, remise et fréquence par ligne, révisions, « remplacé » | B3 | à faire |
 | B5 | Factures : titre, délai de paiement, mentions légales, note interne, envoi et relance, création depuis un devis, suppression de brouillon, date d'émission, mode de règlement typé, remboursement | B1, B4 | à faire |
 | B6 | Dépenses et catégories, journal, fournisseurs enrichis, catalogue enrichi | B1 | à faire |
@@ -70,6 +70,15 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 - Une valeur `registration_number` déjà stockée et invalide (ni 9 ni 14 chiffres) se lit sans erreur, mais la modification de la fiche est refusée tant qu'elle n'est pas corrigée.
 - Un id client d'une autre organisation répond 403 (barrière d'appartenance existante), pas 404 comme le spec le fixe. Spec amendé : le comportement existant est gardé.
 - Les deux requêtes par client de la liste (`use-customer-directory`) restent : B7.
+
+## Reports issus de B3
+- `people.ts` n'est plus utilisé que par `pages/treasury` : à remplacer par les vrais membres en B6.
+- Le pipeline charge au plus 100 opportunités et 100 devis, sans pagination.
+- Le connecteur d'automatisation `update_customer` perd son champ `pipeline_stage` ; les workflows existants gardent la clé dans leur config sans effet. Non vérifié : la validation du graphe rejette-t-elle une clé inconnue ?
+- Le `down` de B3 supprime toute la table `deals`, y compris les opportunités créées après la migration.
+- `DealQuoteStatus` du front gagne `cancelled` ; B4 y ajoute `superseded`.
+- `tsc --noEmit` passe de 43 à 48 erreurs, toutes dans des fixtures de tests (`quote-new-ui.test.tsx`, `quote-edit-ui.test.tsx`) auxquelles manquent les champs client de B2. À corriger quand B4 touche ces tests.
+- Le bloc de sortie de B3 a été interrompu par un disque plein (`target/debug/incremental`, 21 Go, supprimé) ; relancé en entier par l'orchestrateur.
 
 ## À vérifier au lot concerné
 - Sémantique de `POST /invoices/{id}/cancel` et d'un montant négatif sur un paiement (B5, remboursement).

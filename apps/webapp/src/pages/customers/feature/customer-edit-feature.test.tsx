@@ -36,7 +36,6 @@ const CUSTOMER: Customer = {
 	organization_id: 'org-1',
 	name: 'Boulangerie Lemoine',
 	status: 'PROSPECT',
-	pipeline_stage: 'NEW',
 	kind: 'PROFESSIONAL',
 	registration_number: '12345678900012',
 	email: 'contact@lemoine.fr',
@@ -242,7 +241,6 @@ describe('CustomerEditFeature', () => {
 				path: { customer_id: 'c-1' },
 				body: {
 					status: 'CLIENT',
-					pipeline_stage: 'WON',
 					name: 'Boulangerie Lemoine',
 					registration_number: '12345678900012',
 					email: 'contact@lemoine.fr',

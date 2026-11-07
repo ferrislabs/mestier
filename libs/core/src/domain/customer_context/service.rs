@@ -257,7 +257,6 @@ mod tests {
             id,
             organization_id: OrganizationId(Uuid::new_v4()),
             status: crate::CustomerStatus::Prospect,
-            pipeline_stage: crate::CustomerPipelineStage::New,
             name: "Alice Dupont".to_owned(),
             registration_number: None,
             phone: None,

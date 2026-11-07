@@ -6,8 +6,17 @@ use axum::{
 use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
 };
+use mestier_core::DealId;
+use serde::Deserialize;
+use utoipa::IntoParams;
 
 use crate::{paths::QuotesPath, require_view_quotes, response::QuoteResponse};
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct QuoteListFilter {
+    deal_id: Option<DealId>,
+}
 
 #[utoipa::path(
     get,
@@ -17,6 +26,7 @@ use crate::{paths::QuotesPath, require_view_quotes, response::QuoteResponse};
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
         PaginationParams,
+        QuoteListFilter,
     ),
     responses(
         (status = 200, description = "Paginated list of quotes", body = inline(DataEnvelope<Vec<QuoteResponse>>)),
@@ -30,6 +40,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Query(pagination): Query<PaginationParams>,
+    Query(filter): Query<QuoteListFilter>,
 ) -> Result<Response<QuoteResponse>, ApiError> {
     require_view_quotes(&state, &identity, path.organization_id).await?;
 
@@ -38,7 +49,7 @@ pub async fn handler(
     let offset = pagination.offset();
     let (quotes, total) = state
         .usecase
-        .list_quotes(path.organization_id, per_page, offset)
+        .list_quotes(path.organization_id, filter.deal_id, per_page, offset)
         .await?;
     let items: Vec<QuoteResponse> = quotes.into_iter().map(QuoteResponse::from).collect();
     let is_empty = items.is_empty();

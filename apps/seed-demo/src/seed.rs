@@ -7,10 +7,10 @@ use iam::{
 };
 use mestier_core::{
     AddressKind, AssigneeRef, CreateCustomerCommand, CreateCustomerContextCommand,
-    CreateOrganizationCommand, CreateProjectCommand, CreateQuoteCommand, CreateTaskCommand,
-    CreateUserCommand, Customer, CustomerError, CustomerPipelineStage, CustomerProfile,
-    CustomerStatus, EventHub, MestierUseCase, PatchTaskCommand, QuoteLineCommand, ServiceRateUnit,
-    default_authorizer,
+    CreateDealCommand, CreateOrganizationCommand, CreateProjectCommand, CreateQuoteCommand,
+    CreateTaskCommand, CreateUserCommand, Customer, CustomerError, CustomerProfile, CustomerStatus,
+    DealError, DealStageName, EventHub, MestierUseCase, MoveDealCommand, PatchTaskCommand,
+    QuoteLineCommand, ServiceRateUnit, default_authorizer,
 };
 use rust_decimal::Decimal;
 use sqlx::postgres::PgPoolOptions;
@@ -187,6 +187,44 @@ fn accepted(outcome: Result<Customer, CustomerError>) -> Result<Customer, SeedEr
     outcome.map_err(|refusal| SeedError::Core(CoreError::Conflict(refusal.to_string())))
 }
 
+async fn seed_deal(
+    usecase: &MestierUseCase,
+    actor: &Subject,
+    organization_id: common::OrganizationId,
+    customer: &Customer,
+    title: &str,
+    stage: DealStageName,
+) -> Result<(), SeedError> {
+    let refused = |refusal: DealError| SeedError::Core(CoreError::Conflict(refusal.to_string()));
+    let deal = usecase
+        .create_deal(CreateDealCommand {
+            actor: actor.clone(),
+            organization_id,
+            customer_id: customer.id,
+            title: title.to_owned(),
+            amount_cents: 1_250_000,
+            expected_close_date: None,
+            owner_member_id: None,
+            source: None,
+            notes: None,
+        })
+        .await?
+        .map_err(refused)?;
+    if stage != DealStageName::New {
+        usecase
+            .move_deal(MoveDealCommand {
+                actor: actor.clone(),
+                id: deal.id,
+                stage,
+                lost_reason: None,
+            })
+            .await?
+            .map_err(refused)?;
+    }
+
+    Ok(())
+}
+
 async fn seed_demo_data(
     usecase: &MestierUseCase,
     actor: Subject,
@@ -199,7 +237,6 @@ async fn seed_demo_data(
                 actor: actor.clone(),
                 organization_id,
                 status: CustomerStatus::Client,
-                pipeline_stage: CustomerPipelineStage::Won,
                 name: "Menuiserie Bertrand".to_owned(),
                 registration_number: None,
                 phone: Some("+33 6 12 34 56 78".to_owned()),
@@ -209,13 +246,12 @@ async fn seed_demo_data(
             .await?,
     )?;
 
-    accepted(
+    let renovation = accepted(
         usecase
             .create_customer(CreateCustomerCommand {
                 actor: actor.clone(),
                 organization_id,
                 status: CustomerStatus::Prospect,
-                pipeline_stage: CustomerPipelineStage::QuoteSent,
                 name: "Rénovation Lefèvre".to_owned(),
                 registration_number: None,
                 phone: Some("+33 6 98 76 54 32".to_owned()),
@@ -225,13 +261,12 @@ async fn seed_demo_data(
             .await?,
     )?;
 
-    accepted(
+    let roofing = accepted(
         usecase
             .create_customer(CreateCustomerCommand {
                 actor: actor.clone(),
                 organization_id,
                 status: CustomerStatus::Prospect,
-                pipeline_stage: CustomerPipelineStage::New,
                 name: "Toiture Morel".to_owned(),
                 registration_number: None,
                 phone: None,
@@ -240,6 +275,34 @@ async fn seed_demo_data(
             })
             .await?,
     )?;
+
+    seed_deal(
+        usecase,
+        &actor,
+        organization_id,
+        &customer,
+        "Pose de la cuisine",
+        DealStageName::Won,
+    )
+    .await?;
+    seed_deal(
+        usecase,
+        &actor,
+        organization_id,
+        &renovation,
+        "Rénovation de la maison",
+        DealStageName::QuoteSent,
+    )
+    .await?;
+    seed_deal(
+        usecase,
+        &actor,
+        organization_id,
+        &roofing,
+        "Réfection de la toiture",
+        DealStageName::New,
+    )
+    .await?;
 
     let context = usecase
         .create_customer_context(CreateCustomerContextCommand {
@@ -367,6 +430,7 @@ async fn seed_demo_data(
                 title: "Devis rénovation cuisine".to_owned(),
                 customer_id: customer.id,
                 customer_context_id: context.id,
+                deal_id: None,
                 lines: vec![
                     QuoteLineCommand {
                         service_rate_id: None,

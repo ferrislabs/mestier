@@ -58,6 +58,7 @@ async fn an_existing_quote(world: &mut QuoteWorld, title: String, status: String
         title,
         customer_id: world.customer_id(),
         customer_context_id: world.customer_context_id(),
+        deal_id: None,
         status,
         net_cents: 87_500,
         vat_breakdown: Vec::new(),
@@ -94,6 +95,7 @@ async fn the_artisan_creates_a_quote(world: &mut QuoteWorld, step: &Step, title:
         title,
         customer_id: world.customer_id(),
         customer_context_id: world.customer_context_id(),
+        deal_id: None,
         lines: quote_lines(step),
     };
 

@@ -6,7 +6,7 @@ use std::{
 use mestier_core::{
     Customer, CustomerContact, CustomerContext, CustomerId, Member, MemberId,
     MockCustomerContactRepository, MockCustomerContextRepository, MockCustomerRepository,
-    MockMemberRepository, MockRoleRepository,
+    MockDealRepository, MockMemberRepository, MockRoleRepository,
 };
 
 #[derive(Debug, Default)]
@@ -115,4 +115,11 @@ pub fn members(store: &Store) -> MockMemberRepository {
 
 pub fn roles() -> MockRoleRepository {
     MockRoleRepository::new()
+}
+
+pub fn deals() -> MockDealRepository {
+    let mut repo = MockDealRepository::new();
+    repo.expect_lose_open_of_customer()
+        .returning(|_, _, _| Box::pin(async { Ok(0) }));
+    repo
 }

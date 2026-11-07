@@ -423,8 +423,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        ContractStatus, Customer, CustomerContext, CustomerContextId, CustomerId,
-        CustomerPipelineStage, CustomerStatus, IntervalDays, Member,
+        ContractStatus, Customer, CustomerContext, CustomerContextId, CustomerId, CustomerStatus,
+        IntervalDays, Member,
         domain::{
             customer::ports::MockCustomerRepository,
             customer_context::ports::MockCustomerContextRepository,
@@ -490,7 +490,6 @@ mod tests {
                 id: self.customer_id,
                 organization_id: self.organization_id,
                 status: CustomerStatus::Client,
-                pipeline_stage: CustomerPipelineStage::Won,
                 name: "GAUME".to_owned(),
                 registration_number: None,
                 phone: None,

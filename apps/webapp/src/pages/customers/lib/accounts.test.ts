@@ -29,7 +29,6 @@ function customerFixture(overrides: Partial<Customer>): Customer {
 		organization_id: 'org',
 		name: 'Boulangerie Lemoine',
 		status: 'CLIENT',
-		pipeline_stage: 'WON',
 		kind: 'PROFESSIONAL',
 		created_at: '2026-01-01T00:00:00Z',
 		updated_at: '2026-01-01T00:00:00Z',

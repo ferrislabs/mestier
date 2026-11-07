@@ -14,7 +14,6 @@ const customer: Customer = {
 	organization_id: 'org',
 	name: 'Boulangerie Lemoine',
 	status: 'PROSPECT',
-	pipeline_stage: 'NEW',
 	kind: 'PROFESSIONAL',
 	registration_number: '12345678900012',
 	email: 'a@b.fr',
@@ -51,7 +50,6 @@ describe('customerBody', () => {
 	it('carries every field of the customer, the API replaces them all', () => {
 		expect(customerBody(customer)).toEqual({
 			status: 'PROSPECT',
-			pipeline_stage: 'NEW',
 			name: 'Boulangerie Lemoine',
 			registration_number: '12345678900012',
 			email: 'a@b.fr',

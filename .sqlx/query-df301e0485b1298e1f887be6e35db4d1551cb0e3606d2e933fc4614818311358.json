@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE quotes\n            SET status = CAST($2 AS text)::quote_status,\n                reference = COALESCE($3, reference),\n                updated_at = $4\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO quotes (id, org_id, reference, title, customer_id, customer_context_id, deal_id, status, net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, CAST($8 AS text)::quote_status, $9, $10, $11, $12, $13, $14)\n            RETURNING id, org_id, reference, title, customer_id, customer_context_id, deal_id, status::text AS \"status!\", net_cents, vat_breakdown, gross_cents, deleted_at, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -35,36 +35,41 @@
       },
       {
         "ordinal": 6,
+        "name": "deal_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
         "name": "status!",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "net_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "vat_breakdown",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "gross_cents",
         "type_info": "Int4"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -72,8 +77,18 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Uuid",
         "Text",
         "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4",
+        "Jsonb",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz",
         "Timestamptz"
       ]
     },
@@ -84,6 +99,7 @@
       false,
       false,
       false,
+      true,
       null,
       false,
       false,
@@ -93,5 +109,5 @@
       false
     ]
   },
-  "hash": "9fd98535527d6743f26c94cb8bb87c11b15b942fef650c7cebb1599c383203de"
+  "hash": "df301e0485b1298e1f887be6e35db4d1551cb0e3606d2e933fc4614818311358"
 }

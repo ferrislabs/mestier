@@ -13,8 +13,8 @@ import {
 import type { Customer } from '#/hooks/use-customers'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
-import { findPerson } from '#/pages/customers/feature/mocks/people'
 import { formatShortDate } from '#/pages/customers/lib/format'
+import { findPerson, type Person } from '#/pages/customers/lib/people'
 import { accountStatusOf, LEAD_SOURCE_LABELS } from '#/pages/customers/types'
 import { hueOf, NameAvatar, PersonAvatar } from '#/pages/customers/ui/avatars'
 import { Money } from '#/pages/customers/ui/money'
@@ -33,6 +33,7 @@ export function DealCard({
 	deal,
 	customer,
 	quotes,
+	people,
 	today,
 	organizationSlug,
 	canManage,
@@ -44,6 +45,7 @@ export function DealCard({
 	deal: Deal
 	customer: Customer | undefined
 	quotes: readonly DealQuote[]
+	people: readonly Person[]
 	today: IsoDate
 	organizationSlug: string
 	canManage: boolean
@@ -54,7 +56,7 @@ export function DealCard({
 }) {
 	const overdue = isOverdue(deal, today)
 	const latest = latestQuote(quotes)
-	const person = findPerson(deal.ownerId)
+	const person = findPerson(people, deal.ownerId)
 	return (
 		<article
 			data-flip-id={deal.id}

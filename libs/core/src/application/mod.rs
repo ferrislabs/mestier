@@ -31,6 +31,7 @@ pub mod custom_unit;
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
+pub mod deal;
 pub mod discord_category;
 pub mod discord_channel;
 pub mod discord_message;
@@ -500,7 +501,6 @@ mod tests {
                 actor: authz::Subject::system(),
                 organization_id: org_id,
                 status: crate::CustomerStatus::Prospect,
-                pipeline_stage: crate::CustomerPipelineStage::New,
                 name: "Automation depth customer".to_string(),
                 registration_number: None,
                 phone: None,
@@ -537,6 +537,7 @@ mod tests {
                     title: "Automated quote".to_string(),
                     customer_id: customer.id,
                     customer_context_id: context.id,
+                    deal_id: None,
                     lines: Vec::new(),
                 },
                 authz::Subject::system(),

@@ -12,13 +12,14 @@ use crate::{
 };
 
 impl MestierUseCase {
-    #[transactional(customer, role, member, authz)]
+    #[transactional(customer, deal, role, member, authz)]
     pub async fn create_customer(
         &self,
         command: CreateCustomerCommand,
     ) -> Result<CustomerOutcome<Customer>, CoreError> {
         let mut service = CustomerService::new(
             customer_repository,
+            deal_repository,
             member_repository,
             role_repository,
             authz,
@@ -26,10 +27,11 @@ impl MestierUseCase {
         service.create_customer(command).await
     }
 
-    #[transactional(customer, role, member, authz)]
+    #[transactional(customer, deal, role, member, authz)]
     pub async fn get_customer(&self, id: CustomerId) -> Result<Customer, CoreError> {
         let mut service = CustomerService::new(
             customer_repository,
+            deal_repository,
             member_repository,
             role_repository,
             authz,
@@ -37,7 +39,7 @@ impl MestierUseCase {
         service.get_customer(id).await
     }
 
-    #[transactional(customer, role, member, authz)]
+    #[transactional(customer, deal, role, member, authz)]
     pub async fn list_customers(
         &self,
         organization_id: OrganizationId,
@@ -46,6 +48,7 @@ impl MestierUseCase {
     ) -> Result<(Vec<Customer>, u64), CoreError> {
         let mut service = CustomerService::new(
             customer_repository,
+            deal_repository,
             member_repository,
             role_repository,
             authz,
@@ -53,13 +56,14 @@ impl MestierUseCase {
         service.list_customers(organization_id, limit, offset).await
     }
 
-    #[transactional(customer, role, member, authz)]
+    #[transactional(customer, deal, role, member, authz)]
     pub async fn update_customer(
         &self,
         command: UpdateCustomerCommand,
     ) -> Result<CustomerOutcome<Customer>, CoreError> {
         let mut service = CustomerService::new(
             customer_repository,
+            deal_repository,
             member_repository,
             role_repository,
             authz,
@@ -67,7 +71,7 @@ impl MestierUseCase {
         service.update_customer(command).await
     }
 
-    #[transactional(customer, role, member, authz)]
+    #[transactional(customer, deal, role, member, authz)]
     pub async fn soft_delete_customer(
         &self,
         id: CustomerId,
@@ -75,6 +79,7 @@ impl MestierUseCase {
     ) -> Result<(), CoreError> {
         let mut service = CustomerService::new(
             customer_repository,
+            deal_repository,
             member_repository,
             role_repository,
             authz,

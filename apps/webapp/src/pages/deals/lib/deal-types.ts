@@ -25,6 +25,7 @@ export type Deal = {
 	source: LeadSource | null
 	lostReason: string
 	notes: string
+	quoteCount: number
 	createdAt: IsoDate
 	stageChangedAt: IsoDate
 	closedAt: IsoDate | null
@@ -46,6 +47,7 @@ export type DealQuoteStatus =
 	| 'sent'
 	| 'accepted'
 	| 'declined'
+	| 'cancelled'
 	| 'superseded'
 
 export type DealQuote = {
@@ -57,10 +59,3 @@ export type DealQuote = {
 	subtotal: Cents
 	createdAt: IsoDate
 }
-
-export type DealContext = {
-	today: IsoDate
-	newId: () => string
-}
-
-export type Conversions = Readonly<Record<string, IsoDate>>

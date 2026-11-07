@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use crate::{
     AddressKind, Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId,
-    CustomerId, CustomerKind, CustomerPipelineStage, CustomerProfile, CustomerStatus, LeadSource,
-    MemberId, OrganizationId, PaymentTermsDays,
+    CustomerId, CustomerKind, CustomerProfile, CustomerStatus, LeadSource, MemberId,
+    OrganizationId, PaymentTermsDays,
     application::test_support::dev_pool,
     domain::{
         customer::ports::CustomerRepository, customer_contact::ports::CustomerContactRepository,
@@ -73,7 +73,6 @@ fn customer(organization_id: OrganizationId, name: &str) -> Customer {
         id: CustomerId(generate_uuid_v7()),
         organization_id,
         status: CustomerStatus::Prospect,
-        pipeline_stage: CustomerPipelineStage::New,
         name: name.to_owned(),
         registration_number: None,
         phone: None,

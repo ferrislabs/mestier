@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CustomerContextId, CustomerId, OrganizationId, ServiceRateId};
+use crate::{CustomerContextId, CustomerId, DealId, OrganizationId, ServiceRateId};
 
 pub mod commands;
 pub mod ports;
@@ -149,6 +149,7 @@ pub struct Quote {
     pub title: String,
     pub customer_id: CustomerId,
     pub customer_context_id: CustomerContextId,
+    pub deal_id: Option<DealId>,
     pub status: QuoteStatus,
     /// Sum of the lines, before VAT.
     pub net_cents: i32,

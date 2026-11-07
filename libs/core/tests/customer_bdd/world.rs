@@ -5,13 +5,15 @@ use chrono::{DateTime, Utc};
 use mestier_core::{
     CustomerContactService, CustomerContextService, CustomerError, CustomerId, CustomerService,
     MockCustomerContactRepository, MockCustomerContextRepository, MockCustomerRepository,
-    MockMemberRepository, MockRoleRepository, OrganizationId, RegistrationNumber,
+    MockDealRepository, MockMemberRepository, MockRoleRepository, OrganizationId,
+    RegistrationNumber,
 };
 
 use crate::repository::{self, Store};
 
 pub type Customers = CustomerService<
     MockCustomerRepository,
+    MockDealRepository,
     MockMemberRepository,
     MockRoleRepository,
     MockAuthorizer,
@@ -58,6 +60,7 @@ impl CustomerWorld {
     pub fn customers(&self) -> Customers {
         CustomerService::new(
             repository::customers(&self.store),
+            repository::deals(),
             repository::members(&self.store),
             repository::roles(),
             allow_all(),

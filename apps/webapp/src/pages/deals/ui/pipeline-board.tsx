@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import type { Customer } from '#/hooks/use-customers'
 import { cn } from '#/lib/utils'
+import type { Person } from '#/pages/customers/lib/people'
 import { Money } from '#/pages/customers/ui/money'
 import type {
 	Deal,
@@ -33,6 +34,7 @@ export function PipelineBoard({
 	stages,
 	customers,
 	quotes,
+	people,
 	today,
 	organizationSlug,
 	canManage,
@@ -44,6 +46,7 @@ export function PipelineBoard({
 	stages: readonly DealStage[]
 	customers: readonly Customer[]
 	quotes: readonly DealQuote[]
+	people: readonly Person[]
 	today: IsoDate
 	organizationSlug: string
 	canManage: boolean
@@ -118,6 +121,7 @@ export function PipelineBoard({
 											(customer) => customer.id === deal.customerId,
 										)}
 										quotes={dealQuotes(quotes, deal.id)}
+										people={people}
 										today={today}
 										organizationSlug={organizationSlug}
 										canManage={canManage}

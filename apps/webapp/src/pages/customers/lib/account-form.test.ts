@@ -82,10 +82,6 @@ describe('validateAccountForm', () => {
 		).toEqual({})
 	})
 
-	it('keeps the default pipeline stage on a new account', () => {
-		expect(emptyAccountForm(null).pipelineStage).toBe('NEW')
-	})
-
 	it('checks payment terms and the Stripe customer id', () => {
 		const form = {
 			...emptyAccountForm(null),
@@ -168,7 +164,6 @@ describe('accountFormOf', () => {
 		organization_id: 'org',
 		name: 'Boulangerie Lemoine',
 		status: 'CLIENT',
-		pipeline_stage: 'WON',
 		kind: 'INDIVIDUAL',
 		registration_number: null,
 		vat_number: 'FR123',

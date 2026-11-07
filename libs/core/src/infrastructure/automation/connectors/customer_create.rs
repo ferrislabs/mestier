@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::application::MestierUseCase;
 use crate::domain::automation::run::{Connector, ConnectorInput, ConnectorOutcome};
 use crate::domain::customer::commands::CreateCustomerCommand;
-use crate::{CustomerPipelineStage, CustomerProfile, CustomerStatus};
+use crate::{CustomerProfile, CustomerStatus};
 
 /// `mestier.customer.create`: the one internal connector the run engine
 /// (#200) proves itself against. It calls the existing `create_customer` use
@@ -54,7 +54,6 @@ impl Connector for CustomerCreateConnector {
                 actor: authz::Subject::system(),
                 organization_id: input.org_id,
                 status: CustomerStatus::Prospect,
-                pipeline_stage: CustomerPipelineStage::New,
                 name: name.to_string(),
                 registration_number: None,
                 phone,

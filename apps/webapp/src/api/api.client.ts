@@ -394,7 +394,6 @@ export namespace Schemas {
   export type CustomerContactId = string;
   export type CustomerKind = "INDIVIDUAL" | "PROFESSIONAL";
   export type LeadSource = "bouche_a_oreille" | "site_web" | "recommandation" | "salon" | "architecte" | "autre";
-  export type CustomerPipelineStage = "NEW" | "CONTACTED" | "QUALIFIED" | "QUOTE_SENT" | "WON" | "LOST";
   export type CustomerStatus = "PROSPECT" | "CLIENT" | "ARCHIVED";
   export type CreateCustomerRequest = {
     billing_address_id?: (null | CustomerContextId) | undefined;
@@ -407,11 +406,19 @@ export namespace Schemas {
     owner_member_id?: (null | MemberId) | undefined;
     payment_terms_days?: (number | null) | undefined;
     phone?: (string | null) | undefined;
-    pipeline_stage: CustomerPipelineStage;
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
     vat_number?: (string | null) | undefined;
     website?: (string | null) | undefined;
+  };
+  export type CreateDealRequest = {
+    amount_cents?: number | undefined;
+    customer_id: CustomerId;
+    expected_close_date?: (string | null) | undefined;
+    notes?: (string | null) | undefined;
+    owner_member_id?: (null | MemberId) | undefined;
+    source?: (null | LeadSource) | undefined;
+    title: string;
   };
   export type StarterModel = "landscaping";
   export type CreateDoeModelFromStarterRequest = { starter: StarterModel };
@@ -559,6 +566,7 @@ export namespace Schemas {
     name: string;
     tasks?: Array<PlannedTaskRequest> | undefined;
   };
+  export type DealId = string;
   export type ServiceRateId = string;
   export type QuoteLineRequest = {
     label: string;
@@ -573,6 +581,7 @@ export namespace Schemas {
   export type CreateQuoteRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    deal_id?: (null | DealId) | undefined;
     lines: Array<QuoteLineRequest>;
     title: string;
   };
@@ -757,7 +766,6 @@ export namespace Schemas {
     owner_member_id?: (null | MemberId) | undefined;
     payment_terms_days?: (number | null) | undefined;
     phone?: (string | null) | undefined;
-    pipeline_stage: CustomerPipelineStage;
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
     updated_at: string;
@@ -772,6 +780,35 @@ export namespace Schemas {
     id: DayLogId;
     organization_id: OrganizationId;
     work_date: string;
+  };
+  export type DealStageName = "NEW" | "VISIT" | "QUOTE_SENT" | "NEGOTIATION" | "WON" | "LOST";
+  export type DealResponse = {
+    amount_cents: number;
+    closed_at?: (string | null) | undefined;
+    created_at: string;
+    customer_id: CustomerId;
+    expected_close_date?: (string | null) | undefined;
+    id: DealId;
+    lost_reason?: (string | null) | undefined;
+    notes?: (string | null) | undefined;
+    organization_id: OrganizationId;
+    owner_member_id?: (null | MemberId) | undefined;
+    quote_count: number;
+    source?: (null | LeadSource) | undefined;
+    stage: DealStageName;
+    stage_changed_at: string;
+    title: string;
+  };
+  export type StageTotalResponse = { amount_cents: number; count: number; stage: DealStageName };
+  export type DealSummaryResponse = {
+    conversions: number;
+    lost_count: number;
+    open_amount_cents: number;
+    open_count: number;
+    stages: Array<StageTotalResponse>;
+    win_rate?: (number | null) | undefined;
+    won_amount_cents: number;
+    won_count: number;
   };
   export type DeclareTimeEntryRequest = { ended_at: string; started_at: string; task_id: TaskId };
   export type DeleteScopeRequest = "THIS_OCCURRENCE" | "THIS_AND_FOLLOWING";
@@ -1321,6 +1358,7 @@ export namespace Schemas {
     reactions: Array<ReactionCountResponse>;
   };
   export type MinuteIntervalResponse = { ends_minute: number; starts_minute: number };
+  export type MoveDealRequest = { lost_reason?: (string | null) | undefined; stage: DealStageName };
   export type MyPermissionsResponse = { permissions: Array<string> };
   export type NodePositionDto = { x: number; y: number };
   export type NotificationId = string;
@@ -1586,6 +1624,7 @@ export namespace Schemas {
     created_at: string;
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    deal_id?: (null | DealId) | undefined;
     gross_cents: number;
     id: QuoteId;
     lines: Array<QuoteLineResponse>;
@@ -1904,11 +1943,19 @@ export namespace Schemas {
     owner_member_id?: (null | MemberId) | undefined;
     payment_terms_days?: (number | null) | undefined;
     phone?: (string | null) | undefined;
-    pipeline_stage: CustomerPipelineStage;
     registration_number?: (string | null) | undefined;
     status: CustomerStatus;
     vat_number?: (string | null) | undefined;
     website?: (string | null) | undefined;
+  };
+  export type UpdateDealRequest = {
+    amount_cents: number;
+    customer_id: CustomerId;
+    expected_close_date?: (string | null) | undefined;
+    notes?: (string | null) | undefined;
+    owner_member_id?: (null | MemberId) | undefined;
+    source?: (null | LeadSource) | undefined;
+    title: string;
   };
   export type UpdateDoeModelRequest = {
     description?: (string | null) | undefined;
@@ -1989,6 +2036,7 @@ export namespace Schemas {
   export type UpdateQuoteRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
+    deal_id?: (null | DealId) | undefined;
     lines: Array<QuoteLineRequest>;
     status: QuoteStatus;
     title: string;
@@ -3180,7 +3228,6 @@ export namespace Endpoints {
           owner_member_id?: (null | Schemas.MemberId) | undefined;
           payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
-          pipeline_stage: Schemas.CustomerPipelineStage;
           registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
@@ -3230,7 +3277,6 @@ export namespace Endpoints {
           owner_member_id?: (null | Schemas.MemberId) | undefined;
           payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
-          pipeline_stage: Schemas.CustomerPipelineStage;
           registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
@@ -3373,6 +3419,120 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+    };
+  };
+  export type get_GetDeal = {
+    method: "GET";
+    path: "/api/v1/deals/{deal_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { deal_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          amount_cents: number;
+          closed_at?: (string | null) | undefined;
+          created_at: string;
+          customer_id: Schemas.CustomerId;
+          expected_close_date?: (string | null) | undefined;
+          id: Schemas.DealId;
+          lost_reason?: (string | null) | undefined;
+          notes?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          quote_count: number;
+          source?: (null | Schemas.LeadSource) | undefined;
+          stage: Schemas.DealStageName;
+          stage_changed_at: string;
+          title: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteDeal = {
+    method: "DELETE";
+    path: "/api/v1/deals/{deal_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { deal_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateDeal = {
+    method: "PATCH";
+    path: "/api/v1/deals/{deal_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { deal_id: string };
+
+      body: Schemas.UpdateDealRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          amount_cents: number;
+          closed_at?: (string | null) | undefined;
+          created_at: string;
+          customer_id: Schemas.CustomerId;
+          expected_close_date?: (string | null) | undefined;
+          id: Schemas.DealId;
+          lost_reason?: (string | null) | undefined;
+          notes?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          quote_count: number;
+          source?: (null | Schemas.LeadSource) | undefined;
+          stage: Schemas.DealStageName;
+          stage_changed_at: string;
+          title: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_MoveDealStage = {
+    method: "POST";
+    path: "/api/v1/deals/{deal_id}/stage";
+    requestFormat: "json";
+    parameters: {
+      path: { deal_id: string };
+
+      body: Schemas.MoveDealRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          amount_cents: number;
+          closed_at?: (string | null) | undefined;
+          created_at: string;
+          customer_id: Schemas.CustomerId;
+          expected_close_date?: (string | null) | undefined;
+          id: Schemas.DealId;
+          lost_reason?: (string | null) | undefined;
+          notes?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          quote_count: number;
+          source?: (null | Schemas.LeadSource) | undefined;
+          stage: Schemas.DealStageName;
+          stage_changed_at: string;
+          title: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
     };
   };
   export type get_ListEmployeeCostBases = {
@@ -5459,7 +5619,6 @@ export namespace Endpoints {
           owner_member_id?: (null | Schemas.MemberId) | undefined;
           payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
-          pipeline_stage: Schemas.CustomerPipelineStage;
           registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
@@ -5499,7 +5658,6 @@ export namespace Endpoints {
           owner_member_id?: (null | Schemas.MemberId) | undefined;
           payment_terms_days?: (number | null) | undefined;
           phone?: (string | null) | undefined;
-          pipeline_stage: Schemas.CustomerPipelineStage;
           registration_number?: (string | null) | undefined;
           status: Schemas.CustomerStatus;
           updated_at: string;
@@ -5513,6 +5671,106 @@ export namespace Endpoints {
       403: unknown;
       409: unknown;
       422: unknown;
+    };
+  };
+  export type get_ListDeals = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/deals";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{
+        page: number;
+        per_page: number;
+        customer_id: string;
+        stage: "NEW" | "VISIT" | "QUOTE_SENT" | "NEGOTIATION" | "WON" | "LOST";
+        q: string;
+      }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          amount_cents: number;
+          closed_at?: (string | null) | undefined;
+          created_at: string;
+          customer_id: Schemas.CustomerId;
+          expected_close_date?: (string | null) | undefined;
+          id: Schemas.DealId;
+          lost_reason?: (string | null) | undefined;
+          notes?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          quote_count: number;
+          source?: (null | Schemas.LeadSource) | undefined;
+          stage: Schemas.DealStageName;
+          stage_changed_at: string;
+          title: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateDeal = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/deals";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateDealRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          amount_cents: number;
+          closed_at?: (string | null) | undefined;
+          created_at: string;
+          customer_id: Schemas.CustomerId;
+          expected_close_date?: (string | null) | undefined;
+          id: Schemas.DealId;
+          lost_reason?: (string | null) | undefined;
+          notes?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          owner_member_id?: (null | Schemas.MemberId) | undefined;
+          quote_count: number;
+          source?: (null | Schemas.LeadSource) | undefined;
+          stage: Schemas.DealStageName;
+          stage_changed_at: string;
+          title: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetDealSummary = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/deals/summary";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          conversions: number;
+          lost_count: number;
+          open_amount_cents: number;
+          open_count: number;
+          stages: Array<Schemas.StageTotalResponse>;
+          win_rate?: (number | null) | undefined;
+          won_amount_cents: number;
+          won_count: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
     };
   };
   export type get_ListDoeModelStarters = {
@@ -7504,7 +7762,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/quotes";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ page: number; per_page: number }>;
+      query: Partial<{ page: number; per_page: number; deal_id: string }>;
       path: { organization_id: string };
     };
     responses: {
@@ -7513,6 +7771,7 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          deal_id?: (null | Schemas.DealId) | undefined;
           gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
@@ -7545,6 +7804,7 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          deal_id?: (null | Schemas.DealId) | undefined;
           gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
@@ -9065,6 +9325,7 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          deal_id?: (null | Schemas.DealId) | undefined;
           gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
@@ -9107,6 +9368,7 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          deal_id?: (null | Schemas.DealId) | undefined;
           gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
@@ -9189,6 +9451,7 @@ export namespace Endpoints {
           created_at: string;
           customer_context_id: Schemas.CustomerContextId;
           customer_id: Schemas.CustomerId;
+          deal_id?: (null | Schemas.DealId) | undefined;
           gross_cents: number;
           id: Schemas.QuoteId;
           lines: Array<Schemas.QuoteLineResponse>;
@@ -9808,6 +10071,7 @@ export type EndpointByMethod = {
     "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.patch_UpdateCustomerContact;
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.patch_UpdateCustomerContext;
     "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
+    "/api/v1/deals/{deal_id}": Endpoints.patch_UpdateDeal;
     "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
     "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.patch_AmendAssignmentReport;
     "/api/v1/invoices/{invoice_id}": Endpoints.patch_UpdateInvoice;
@@ -9845,6 +10109,7 @@ export type EndpointByMethod = {
     "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.delete_DeleteCustomerContact;
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.delete_DeleteCustomerContext;
     "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
+    "/api/v1/deals/{deal_id}": Endpoints.delete_DeleteDeal;
     "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
     "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.delete_WithdrawAssignmentReport;
     "/api/v1/invitations/{invitation_id}": Endpoints.delete_RevokeInvitation;
@@ -9890,6 +10155,7 @@ export type EndpointByMethod = {
     "/api/v1/customers/{customer_id}": Endpoints.get_GetCustomer;
     "/api/v1/customers/{customer_id}/contacts": Endpoints.get_ListCustomerContacts;
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.get_ListCustomerContexts;
+    "/api/v1/deals/{deal_id}": Endpoints.get_GetDeal;
     "/api/v1/employees/{employee_id}/cost-bases": Endpoints.get_ListEmployeeCostBases;
     "/api/v1/equipment/{equipment_id}": Endpoints.get_GetEquipment;
     "/api/v1/files/url": Endpoints.get_GetFileUrl;
@@ -9920,6 +10186,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.get_GetOrganizationBillingSettings;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
+    "/api/v1/organizations/{organization_id}/deals": Endpoints.get_ListDeals;
+    "/api/v1/organizations/{organization_id}/deals/summary": Endpoints.get_GetDealSummary;
     "/api/v1/organizations/{organization_id}/doe-model-starters": Endpoints.get_ListDoeModelStarters;
     "/api/v1/organizations/{organization_id}/doe-models": Endpoints.get_ListDoeModels;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.get_GetDoeModel;
@@ -9997,6 +10265,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/webhooks/{webhook_id}/{token}": Endpoints.post_ExecuteWebhook;
     "/api/v1/customers/{customer_id}/contacts": Endpoints.post_CreateCustomerContact;
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.post_CreateCustomerContext;
+    "/api/v1/deals/{deal_id}/stage": Endpoints.post_MoveDealStage;
     "/api/v1/employees/{employee_id}/cost-bases": Endpoints.post_SetEmployeeCostBasis;
     "/api/v1/field/time-entries/{time_entry_id}/photos": Endpoints.post_AttachTimeEntryPhoto;
     "/api/v1/field/time-entries/{time_entry_id}/recover": Endpoints.post_RecoverTimeEntry;
@@ -10023,6 +10292,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.post_CreateCustomUnit;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
+    "/api/v1/organizations/{organization_id}/deals": Endpoints.post_CreateDeal;
     "/api/v1/organizations/{organization_id}/doe-models": Endpoints.post_CreateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-models/from-starter": Endpoints.post_CreateDoeModelFromStarter;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}/restore": Endpoints.post_RestoreDoeModel;

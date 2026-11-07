@@ -1,8 +1,4 @@
-import type {
-	Customer,
-	CustomerPipelineStage,
-	LeadSource,
-} from '#/hooks/use-customers'
+import type { Customer, LeadSource } from '#/hooks/use-customers'
 import {
 	type AccountKind,
 	customerKindOf,
@@ -29,7 +25,6 @@ export type AddressForm = {
 export type AccountForm = {
 	kind: AccountKind
 	status: 'prospect' | 'client'
-	pipelineStage: CustomerPipelineStage
 	name: string
 	registrationNumber: string
 	vatNumber: string
@@ -89,7 +84,6 @@ export function emptyAccountForm(ownerId: string | null): AccountForm {
 	return {
 		kind: 'professionnel',
 		status: 'prospect',
-		pipelineStage: 'NEW',
 		name: '',
 		registrationNumber: '',
 		vatNumber: '',
@@ -114,7 +108,6 @@ export function accountFormOf(
 		...emptyAccountForm(customer.owner_member_id ?? null),
 		kind: kindOf(customer),
 		status: customer.status === 'PROSPECT' ? 'prospect' : 'client',
-		pipelineStage: customer.pipeline_stage,
 		name: customer.name,
 		registrationNumber: customer.registration_number ?? '',
 		vatNumber: customer.vat_number ?? '',

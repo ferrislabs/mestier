@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
+import { invalidateDealQueries } from '#/hooks/use-deals'
 
 const CUSTOMERS_PATH = '/api/v1/organizations/{organization_id}/customers'
 const CUSTOMER_PATH = '/api/v1/customers/{customer_id}'
@@ -147,6 +148,7 @@ export function useUpdateCustomer() {
 		onSuccess: async (response) => {
 			const customer = response.data
 			await Promise.all([
+				invalidateDealQueries(queryClient, customer.organization_id),
 				queryClient.invalidateQueries({
 					predicate: (query) =>
 						isCustomerListQuery(query.queryKey, customer.organization_id),
@@ -308,7 +310,6 @@ export function useUploadFile() {
 
 export type Customer = Schemas.CustomerResponse
 export type CustomerPayload = Schemas.CreateCustomerRequest
-export type CustomerPipelineStage = Schemas.CustomerPipelineStage
 export type CustomerStatus = Schemas.CustomerStatus
 export type CustomerKind = Schemas.CustomerKind
 export type AddressKind = Schemas.AddressKind

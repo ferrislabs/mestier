@@ -455,9 +455,9 @@ mod tests {
             ElectronicInvoicingFacts, LegalIdentity, OrganizationAddress, VatStatus,
         };
         use crate::{
-            Customer, CustomerContextId, CustomerId, CustomerPipelineStage, CustomerStatus,
-            Invoice, InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId, InvoiceStatus,
-            InvoiceVatBreakdownLine, OrganizationId,
+            Customer, CustomerContextId, CustomerId, CustomerStatus, Invoice, InvoiceId,
+            InvoiceKind, InvoiceLine, InvoiceLineId, InvoiceStatus, InvoiceVatBreakdownLine,
+            OrganizationId,
         };
 
         let now = Utc.with_ymd_and_hms(2026, 1, 31, 10, 0, 0).unwrap();
@@ -489,7 +489,6 @@ mod tests {
             id: CustomerId(uuid::Uuid::new_v4()),
             organization_id,
             status: CustomerStatus::Client,
-            pipeline_stage: CustomerPipelineStage::Won,
             name: "Buyer SAS".to_owned(),
             registration_number: Some("987654321".to_owned()),
             phone: None,

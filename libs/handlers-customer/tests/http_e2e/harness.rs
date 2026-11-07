@@ -136,9 +136,22 @@ impl App {
         )
     }
 
+    pub fn deals_url(&self, suffix: &str) -> String {
+        format!(
+            "{}/api/v1/organizations/{}/deals{suffix}",
+            self.base_url, self.organization_id
+        )
+    }
+
+    pub fn deal_url(&self, deal_id: Uuid, suffix: &str) -> String {
+        format!("{}/api/v1/deals/{deal_id}{suffix}", self.base_url)
+    }
+
     /// Removes the fixture, child rows first.
     pub async fn cleanup(&self) {
         for statement in [
+            "DELETE FROM quotes WHERE org_id = $1",
+            "DELETE FROM deals WHERE org_id = $1",
             "UPDATE customers SET billing_contact_id = NULL, billing_address_id = NULL WHERE org_id = $1",
             "DELETE FROM customer_contexts WHERE customer_id IN (SELECT id FROM customers WHERE org_id = $1)",
             "DELETE FROM customer_contacts WHERE customer_id IN (SELECT id FROM customers WHERE org_id = $1)",

@@ -1,8 +1,8 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
     AddressKind, Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId,
-    CustomerId, CustomerKind, CustomerPipelineStage, CustomerStatus, LeadSource, MemberId,
-    OrganizationId,
+    CustomerId, CustomerKind, CustomerStatus, Deal, DealId, DealStageName, LeadSource, MemberId,
+    OrganizationId, PipelineSummary,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -12,7 +12,6 @@ pub struct CustomerResponse {
     pub id: CustomerId,
     pub organization_id: OrganizationId,
     pub status: CustomerStatus,
-    pub pipeline_stage: CustomerPipelineStage,
     pub name: String,
     pub registration_number: Option<String>,
     pub phone: Option<String>,
@@ -38,7 +37,6 @@ impl From<Customer> for CustomerResponse {
             id: value.id,
             organization_id: value.organization_id,
             status: value.status,
-            pipeline_stage: value.pipeline_stage,
             name: value.name,
             registration_number: value.registration_number,
             phone: value.phone,
@@ -124,6 +122,92 @@ impl From<CustomerContext> for CustomerContextResponse {
             photo_key: value.photo_key,
             created_at: value.created_at,
             updated_at: value.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct DealResponse {
+    pub id: DealId,
+    pub organization_id: OrganizationId,
+    pub customer_id: CustomerId,
+    pub title: String,
+    pub amount_cents: i64,
+    pub stage: DealStageName,
+    pub expected_close_date: Option<NaiveDate>,
+    pub owner_member_id: Option<MemberId>,
+    pub source: Option<LeadSource>,
+    pub lost_reason: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub stage_changed_at: DateTime<Utc>,
+    pub closed_at: Option<DateTime<Utc>>,
+    pub quote_count: i64,
+}
+
+impl From<Deal> for DealResponse {
+    fn from(value: Deal) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            customer_id: value.customer_id,
+            title: value.title.into_inner(),
+            amount_cents: value.amount.get(),
+            stage: value.stage.name(),
+            expected_close_date: value.expected_close_date,
+            owner_member_id: value.owner_member_id,
+            source: value.source,
+            lost_reason: value
+                .stage
+                .lost_reason()
+                .map(|reason| reason.as_str().to_owned()),
+            notes: value.notes,
+            created_at: value.created_at,
+            stage_changed_at: value.stage_changed_at,
+            closed_at: value.closed_at,
+            quote_count: value.quote_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct StageTotalResponse {
+    pub stage: DealStageName,
+    pub count: i64,
+    pub amount_cents: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct DealSummaryResponse {
+    pub open_count: i64,
+    pub open_amount_cents: i64,
+    pub stages: Vec<StageTotalResponse>,
+    pub won_count: i64,
+    pub lost_count: i64,
+    pub won_amount_cents: i64,
+    pub win_rate: Option<u8>,
+    pub conversions: i64,
+}
+
+impl From<PipelineSummary> for DealSummaryResponse {
+    fn from(value: PipelineSummary) -> Self {
+        Self {
+            open_count: value.open_count,
+            open_amount_cents: value.open_amount_cents,
+            stages: value
+                .stages
+                .into_iter()
+                .map(|total| StageTotalResponse {
+                    stage: total.stage,
+                    count: total.count,
+                    amount_cents: total.amount_cents,
+                })
+                .collect(),
+            won_count: value.won_count,
+            lost_count: value.lost_count,
+            won_amount_cents: value.won_amount_cents,
+            win_rate: value.win_rate,
+            conversions: value.conversions,
         }
     }
 }

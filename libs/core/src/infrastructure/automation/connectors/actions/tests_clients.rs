@@ -134,7 +134,6 @@ async fn contacts_contexts_and_customers_are_written_in_the_run_organization() {
             &config(&[
                 ("customer_id", target.clone()),
                 ("status", json!("CLIENT")),
-                ("pipeline_stage", json!("WON")),
                 ("name", json!("Claire Fontaine SARL")),
             ]),
         )
@@ -189,7 +188,7 @@ async fn contacts_contexts_and_customers_are_written_in_the_run_organization() {
         .await,
     );
 
-    assert_eq!(updated["pipeline_stage"], "WON");
+    assert_eq!(updated["status"], "CLIENT");
     assert_same_shape(&updated, "mestier.customer.update");
     assert_same_shape(&contact, "mestier.customer_contact.create");
     assert_eq!(renamed["first_name"], "Pauline");
@@ -221,7 +220,6 @@ async fn an_object_of_another_organization_fails_with_a_named_error_and_nothing_
             vec![
                 ("customer_id", target.clone()),
                 ("status", json!("ARCHIVED")),
-                ("pipeline_stage", json!("LOST")),
                 ("name", json!("Intrus")),
             ],
         ),

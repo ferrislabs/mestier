@@ -36,7 +36,7 @@ describe('search params', () => {
 		expect(
 			parseSearch({
 				q: '',
-				responsable: 'inconnu',
+				responsable: '',
 				source: 'telepathie',
 				termine: 'tous',
 			}),

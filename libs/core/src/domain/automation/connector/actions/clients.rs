@@ -16,15 +16,6 @@ pub(super) const STATUSES: &[SelectOption] = &[
     SelectOption::new("ARCHIVED", "Archivé"),
 ];
 
-pub(super) const STAGES: &[SelectOption] = &[
-    SelectOption::new("NEW", "Nouveau"),
-    SelectOption::new("CONTACTED", "Contacté"),
-    SelectOption::new("QUALIFIED", "Qualifié"),
-    SelectOption::new("QUOTE_SENT", "Devis envoyé"),
-    SelectOption::new("WON", "Gagné"),
-    SelectOption::new("LOST", "Perdu"),
-];
-
 const PAGE_FIELDS: &[Field] = &[
     Field::number("limit", "Nombre maximum de résultats", false),
     Field::number("offset", "Décalage", false),
@@ -41,7 +32,6 @@ const CUSTOMER_PAGE_FIELDS: &[Field] = &[
 const UPDATE_CUSTOMER_FIELDS: &[Field] = &[
     Field::text("customer_id", "Client", true),
     Field::select("status", "Statut", true, STATUSES),
-    Field::select("pipeline_stage", "Étape du parcours", true, STAGES),
     Field::text("name", "Nom", true),
     Field::text("registration_number", "Numéro d’immatriculation", false),
     Field::text("phone", "Téléphone", false),
@@ -95,7 +85,6 @@ fn customer_sample() -> Value {
         "id": NIL,
         "organization_id": NIL,
         "status": "PROSPECT",
-        "pipeline_stage": "NEW",
         "name": "Claire Fontaine",
         "registration_number": null,
         "phone": null,

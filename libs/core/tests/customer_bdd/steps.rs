@@ -4,9 +4,8 @@ use cucumber::{given, then, when};
 use mestier_core::{
     AddressKind, CreateCustomerCommand, CreateCustomerContactCommand, CreateCustomerContextCommand,
     Customer, CustomerContact, CustomerContactId, CustomerContext, CustomerContextId,
-    CustomerError, CustomerId, CustomerKind, CustomerPipelineStage, CustomerProfile,
-    CustomerStatus, LeadSource, Member, MemberId, OrganizationId, RegistrationNumber,
-    UpdateCustomerCommand, payment_terms_of,
+    CustomerError, CustomerId, CustomerKind, CustomerProfile, CustomerStatus, LeadSource, Member,
+    MemberId, OrganizationId, RegistrationNumber, UpdateCustomerCommand, payment_terms_of,
 };
 
 use crate::{repository, world::CustomerWorld};
@@ -63,7 +62,6 @@ async fn create(
         actor: world.actor(),
         organization_id: world.organization_id(),
         status,
-        pipeline_stage: CustomerPipelineStage::New,
         name: name.to_owned(),
         registration_number: None,
         phone: None,
@@ -95,7 +93,6 @@ async fn update(
         actor: world.actor(),
         id,
         status: status.unwrap_or(current.status),
-        pipeline_stage: current.pipeline_stage,
         name: current.name,
         registration_number: current
             .registration_number
