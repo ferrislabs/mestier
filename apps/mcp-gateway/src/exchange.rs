@@ -167,15 +167,21 @@ impl FerrisKeyExchanger {
                 request = request.basic_auth(&self.client_id, Some(&self.client_secret));
             }
         }
-        let response = request
-            .form(&form)
-            .send()
-            .await
-            .and_then(|r| r.error_for_status())
-            .map_err(|error| {
-                warn!(%error, "token endpoint call failed");
-                ExchangeError
-            })?;
+        let grant = form
+            .iter()
+            .find_map(|(key, value)| (*key == "grant_type").then_some(*value))
+            .unwrap_or_default()
+            .to_owned();
+        let response = request.form(&form).send().await.map_err(|error| {
+            warn!(%error, %grant, "token endpoint unreachable");
+            ExchangeError
+        })?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            warn!(%status, %grant, %body, "token endpoint call failed");
+            return Err(ExchangeError);
+        }
         response.json().await.map_err(|error| {
             warn!(%error, "token endpoint answer unreadable");
             ExchangeError
