@@ -74,7 +74,7 @@ export function CreditNotesListUI({
 			<PageHeader
 				className="mb-6"
 				title="Avoirs"
-				description="Un avoir se crée depuis la facture concernée : ouvre une facture émise, puis « Émettre un avoir »."
+				description="Un avoir se crée depuis la facture concernée : ouvre une facture émise, puis « Émettre un avoir » ou « Annuler la facture »."
 			/>
 			{error ? (
 				<div
@@ -172,7 +172,7 @@ export function CreditNotesListUI({
 										<Link
 											to={buildOrgPath(
 												activeOrganization.slug,
-												'/crm/credit-notes/$creditNoteId',
+												'/crm/avoirs/$creditNoteId',
 											)}
 											params={{ creditNoteId: row.note.id }}
 											className="font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset"

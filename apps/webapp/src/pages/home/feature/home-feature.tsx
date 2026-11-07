@@ -60,7 +60,7 @@ export function HomeFeature() {
 		previousPeriod,
 	)
 	// Default page size, same as every other caller of these hooks — so the
-	// query key matches whatever `/crm/customers`, `/crm/quotes`, `/planning`
+	// query key matches whatever `/crm/clients`, `/crm/devis`, `/planning`
 	// or `/invoices` already cached, rather than forcing a fresh fetch just for
 	// a homepage counter or search entry.
 	const customers = useCustomers(activeOrganizationId)
@@ -129,7 +129,7 @@ export function HomeFeature() {
 				label: customer.name,
 				to: buildOrgPath(
 					activeOrganization.slug,
-					`/crm/customers/${customer.id}`,
+					`/crm/clients/${customer.id}`,
 				),
 			})),
 		},
@@ -139,7 +139,7 @@ export function HomeFeature() {
 				id: quote.id,
 				label: quote.title,
 				sublabel: quote.reference ?? undefined,
-				to: buildOrgPath(activeOrganization.slug, `/crm/quotes/${quote.id}`),
+				to: buildOrgPath(activeOrganization.slug, `/crm/devis/${quote.id}`),
 			})),
 		},
 		{
@@ -157,7 +157,7 @@ export function HomeFeature() {
 				label: invoice.number ?? 'Facture sans numéro',
 				to: buildOrgPath(
 					activeOrganization.slug,
-					`/crm/invoices/${invoice.id}`,
+					`/crm/factures/${invoice.id}`,
 				),
 			})),
 		},

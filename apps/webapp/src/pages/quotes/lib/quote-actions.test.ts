@@ -1,33 +1,64 @@
 import { describe, expect, it } from 'vitest'
 import { availableQuoteActions } from './quote-actions'
+import type { QuoteDisplayStatus } from './quote-status'
+
+const ALL: QuoteDisplayStatus[] = [
+	'draft',
+	'sent',
+	'accepted',
+	'declined',
+	'cancelled',
+	'superseded',
+	'expired',
+]
 
 describe('availableQuoteActions', () => {
 	it('lets a draft be sent first', () => {
-		expect(availableQuoteActions('DRAFT')[0]).toBe('send')
+		expect(availableQuoteActions('draft')[0]).toBe('send')
 	})
 
-	it('lets a sent quote be answered', () => {
-		const actions = availableQuoteActions('SENT')
+	it('lets a sent quote be answered or revised', () => {
+		const actions = availableQuoteActions('sent')
 
 		expect(actions).toContain('accept')
 		expect(actions).toContain('decline')
+		expect(actions).toContain('revise')
 		expect(actions).not.toContain('send')
 	})
 
-	it('turns an accepted quote into a project', () => {
-		expect(availableQuoteActions('ACCEPTED')[0]).toBe('project')
+	it('refuses an answer once the quote has expired, but allows a revision', () => {
+		const actions = availableQuoteActions('expired')
+
+		expect(actions).not.toContain('accept')
+		expect(actions).not.toContain('decline')
+		expect(actions).toContain('revise')
+	})
+
+	it('turns an accepted quote into a project, then invoices it', () => {
+		const actions = availableQuoteActions('accepted')
+
+		expect(actions[0]).toBe('project')
+		expect(actions).toContain('invoice')
+	})
+
+	it('offers a revision of a declined quote', () => {
+		expect(availableQuoteActions('declined')).toContain('revise')
+	})
+
+	it('does not revise a replaced quote again', () => {
+		expect(availableQuoteActions('superseded')).not.toContain('revise')
 	})
 
 	it('can always be duplicated and deleted', () => {
-		for (const status of [
-			'DRAFT',
-			'SENT',
-			'ACCEPTED',
-			'DECLINED',
-			'CANCELLED',
-		] as const) {
+		for (const status of ALL) {
 			expect(availableQuoteActions(status)).toContain('duplicate')
 			expect(availableQuoteActions(status)).toContain('delete')
+		}
+	})
+
+	it('only invoices an accepted quote', () => {
+		for (const status of ALL.filter((item) => item !== 'accepted')) {
+			expect(availableQuoteActions(status)).not.toContain('invoice')
 		}
 	})
 })

@@ -3,7 +3,13 @@ import { useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useCustomers } from '#/hooks/use-customers'
 import { useDeleteQuote, useQuotes } from '#/hooks/use-quotes'
-import { getQuoteListUrlState } from '#/pages/quotes/quote-list-url-state'
+import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
+import { useQuoteExtrasOf } from '#/pages/quotes/feature/mocks/quote-extras'
+import { toIsoDate } from '#/pages/quotes/lib/quote-status'
+import {
+	getQuoteListUrlState,
+	readQuoteClientParam,
+} from '#/pages/quotes/quote-list-url-state'
 import { QuoteListUI } from '#/pages/quotes/ui/quote-list-ui'
 
 export function QuoteListFeature() {
@@ -53,6 +59,21 @@ function QuoteListWorkspace({
 	const [quotePageSize, setQuotePageSize] = useState(
 		initialQuoteListState.pageSize,
 	)
+	const [clientFilter, setClientFilter] = useState(readQuoteClientParam)
+	const [today] = useState(() => toIsoDate(new Date()))
+	const extrasOf = useQuoteExtrasOf()
+	const catalog = useReferenceCatalog(organizationId, {
+		members: true,
+		employeeProfiles: false,
+		equipment: false,
+		serviceRates: false,
+		products: false,
+		customUnits: false,
+	})
+	const owners = (catalog.members.data?.data ?? []).map((member) => ({
+		id: member.id,
+		name: member.display_name,
+	}))
 	const customers = useCustomers(organizationId)
 	const quotes = useQuotes(organizationId, {
 		page: quotePage,
@@ -66,6 +87,16 @@ function QuoteListWorkspace({
 			organizationName={organizationName}
 			customers={customers.data?.data ?? []}
 			quotes={quotes.data?.data ?? []}
+			owners={owners}
+			extrasOf={extrasOf}
+			today={today}
+			clientFilter={clientFilter}
+			onClearClientFilter={() => {
+				setClientFilter(null)
+				const url = new URL(window.location.href)
+				url.searchParams.delete('client')
+				window.history.replaceState(window.history.state, '', url)
+			}}
 			quotesPagination={quotes.data?.pagination ?? null}
 			quotePage={quotePage}
 			quotePageSize={quotePageSize}

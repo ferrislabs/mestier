@@ -1,4 +1,4 @@
-import { Image, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Image, Pencil, Plus, Star, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import { EmptyState } from '#/components/empty-state'
@@ -6,8 +6,14 @@ import { RequirePermission } from '#/components/require-permission'
 import { RubriqueLayout } from '#/components/rubrique-layout'
 import { Button } from '#/components/ui/button'
 import type { CustomerContext } from '#/hooks/use-customers'
+import type {
+	AccountExtras,
+	AddressKind,
+} from '#/pages/customers/feature/mocks/account-extras'
 import { EMPTY_ADDRESS } from '#/pages/customers/lib/account-form'
+import { contextCountry, contextKind } from '#/pages/customers/lib/accounts'
 import { addressesSummary, TAB_INFO } from '#/pages/customers/lib/rubriques'
+import { ADDRESS_KIND_LABELS } from '#/pages/customers/types'
 import {
 	type AddressDraft,
 	AddressFormDialog,
@@ -15,11 +21,17 @@ import {
 import { StatusBadge } from '#/pages/customers/ui/badges'
 import { RecordCard } from '#/pages/customers/ui/record-card'
 
-export function addressDraftOf(context?: CustomerContext): AddressDraft {
+export function addressDraftOf(
+	context?: CustomerContext,
+	kind: AddressKind = 'site',
+	country: string = EMPTY_ADDRESS.country,
+): AddressDraft {
 	return {
 		label: context?.label ?? '',
+		kind,
 		address: {
 			...EMPTY_ADDRESS,
+			country,
 			street: context?.address_line ?? '',
 			postalCode: context?.postal_code ?? '',
 			city: context?.city ?? '',
@@ -43,14 +55,21 @@ interface AddressActions {
 		context: CustomerContext | null,
 		draft: AddressDraft,
 	) => Promise<void>
+	onMakeBilling: (context: CustomerContext) => void
 	onDelete: (context: CustomerContext) => void
 }
 
 function AddressCard({
 	context,
+	kind,
+	country,
+	isBilling,
 	actions,
 }: {
 	context: CustomerContext
+	kind: AddressKind
+	country: string
+	isBilling: boolean
 	actions: AddressActions
 }) {
 	const [editing, setEditing] = useState(false)
@@ -59,13 +78,21 @@ function AddressCard({
 	return (
 		<RecordCard
 			title={context.label}
+			subtitle={ADDRESS_KIND_LABELS[kind]}
 			badges={
-				context.photo_key && (
-					<StatusBadge tone="neutral">
-						<Image className="size-3" aria-hidden />
-						Photo
-					</StatusBadge>
-				)
+				<>
+					{isBilling && (
+						<StatusBadge tone="info">
+							Adresse de facturation par défaut
+						</StatusBadge>
+					)}
+					{context.photo_key && (
+						<StatusBadge tone="neutral">
+							<Image className="size-3" aria-hidden />
+							Photo
+						</StatusBadge>
+					)}
+				</>
 			}
 			actions={
 				<RequirePermission permission="MANAGE_CUSTOMERS">
@@ -73,7 +100,7 @@ function AddressCard({
 						open={editing}
 						onOpenChange={setEditing}
 						title={`Modifier ${context.label}`}
-						initial={addressDraftOf(context)}
+						initial={addressDraftOf(context, kind, country)}
 						isEditing
 						isPending={actions.isSaving}
 						isUploadingPhoto={actions.isUploadingPhoto}
@@ -90,6 +117,16 @@ function AddressCard({
 							</Button>
 						}
 					/>
+					{!isBilling && (
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() => actions.onMakeBilling(context)}
+						>
+							<Star aria-hidden /> Définir comme adresse de facturation
+							<span className="sr-only"> : {context.label}</span>
+						</Button>
+					)}
 					<Button
 						variant="ghost"
 						size="sm"
@@ -123,6 +160,9 @@ function AddressCard({
 						Aucune adresse renseignée
 					</span>
 				)}
+				{formatted && country && (
+					<span className="text-muted-foreground">{country}</span>
+				)}
 			</address>
 		</RecordCard>
 	)
@@ -130,12 +170,16 @@ function AddressCard({
 
 export function AddressesSection({
 	contexts,
+	extras,
+	billingContextId,
 	isLoading,
 	loadError,
 	onRetry,
 	actions,
 }: {
 	contexts: readonly CustomerContext[]
+	extras: Pick<AccountExtras, 'addressKinds' | 'addressCountries'>
+	billingContextId: string | undefined
 	isLoading: boolean
 	loadError: string | null
 	onRetry: () => void
@@ -146,7 +190,7 @@ export function AddressesSection({
 	return (
 		<RubriqueLayout
 			title={TAB_INFO.adresses.label}
-			description={`${addressesSummary(count)}. Siège, chantiers et autres lieux associés au client.`}
+			description={`${addressesSummary(count)}. L’adresse de facturation par défaut est reprise sur les devis et les factures.`}
 			actions={
 				<RequirePermission permission="MANAGE_CUSTOMERS">
 					<AddressFormDialog
@@ -191,7 +235,13 @@ export function AddressesSection({
 				<ul className="grid gap-3">
 					{contexts.map((context) => (
 						<li key={context.id}>
-							<AddressCard context={context} actions={actions} />
+							<AddressCard
+								context={context}
+								kind={contextKind(context.id, extras)}
+								country={contextCountry(context.id, extras)}
+								isBilling={context.id === billingContextId}
+								actions={actions}
+							/>
 						</li>
 					))}
 				</ul>

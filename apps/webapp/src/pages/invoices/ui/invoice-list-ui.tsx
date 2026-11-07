@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Plus, RefreshCw, Search } from 'lucide-react'
+import { Plus, RefreshCw, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
 	DataViewPagination,
@@ -34,6 +34,7 @@ import {
 } from '#/pages/invoices/invoice-list-url-state'
 import {
 	computeInvoiceTiles,
+	invoiceMatchesAccount,
 	invoiceMatchesSearch,
 	invoiceStateCounts,
 	matchesStateFilter,
@@ -64,6 +65,8 @@ interface InvoiceListUIProps {
 	 * reduction over numbers the backend already computed, not a
 	 * recomputation of the underlying money. `null` while it is loading. */
 	outstandingTotalCents: number | null
+	customerFilterId?: string | null
+	onClearCustomerFilter?: () => void
 	error?: string | null
 	isLoading?: boolean
 	onRetry?: () => void
@@ -100,6 +103,8 @@ export function InvoiceListUI({
 	invoicePage,
 	invoicePageSize,
 	outstandingTotalCents,
+	customerFilterId = null,
+	onClearCustomerFilter,
 	error,
 	isLoading,
 	onRetry,
@@ -121,8 +126,13 @@ export function InvoiceListUI({
 			: 'created-desc',
 	)
 	const documents = useMemo(
-		() => invoices.filter((invoice) => invoice.kind !== 'CREDIT_NOTE'),
-		[invoices],
+		() =>
+			invoices.filter(
+				(invoice) =>
+					invoice.kind !== 'CREDIT_NOTE' &&
+					invoiceMatchesAccount(invoice, customerFilterId),
+			),
+		[invoices, customerFilterId],
 	)
 	const tiles = useMemo(
 		() => computeInvoiceTiles(documents, outstandingTotalCents),
@@ -208,7 +218,13 @@ export function InvoiceListUI({
 		return () => window.removeEventListener('popstate', syncFromUrl)
 	}, [onInvoicePageChange, onInvoicePageSizeChange])
 
-	const filtered = invoiceSearch.trim() !== '' || invoiceStatusFilter !== 'all'
+	const filtered =
+		invoiceSearch.trim() !== '' ||
+		invoiceStatusFilter !== 'all' ||
+		customerFilterId !== null
+	const filteredCustomer = customers.find(
+		(item) => item.id === customerFilterId,
+	)
 	const noInvoices = documents.length === 0 && !filtered
 
 	const resetInvoiceDataView = () => {
@@ -225,7 +241,7 @@ export function InvoiceListUI({
 
 	const newInvoiceLink = (
 		<Button size="sm" asChild>
-			<Link to={buildOrgPath(organizationSlug, '/crm/invoices/new')}>
+			<Link to={buildOrgPath(organizationSlug, '/crm/factures/nouvelle')}>
 				<Plus aria-hidden /> Nouvelle facture
 			</Link>
 		</Button>
@@ -360,6 +376,25 @@ export function InvoiceListUI({
 						))}
 					</ToggleGroup>
 				</div>
+				{customerFilterId !== null && (
+					<span className="inline-flex h-8 items-center gap-1 rounded-md border bg-card pr-1 pl-2.5 text-sm">
+						<span className="text-muted-foreground">Client :</span>
+						<span className="max-w-48 truncate font-medium">
+							{filteredCustomer
+								? customerDisplayName(filteredCustomer)
+								: 'Inconnu'}
+						</span>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-xs"
+							aria-label="Retirer le filtre client"
+							onClick={onClearCustomerFilter}
+						>
+							<X aria-hidden />
+						</Button>
+					</span>
+				)}
 			</div>
 
 			{isLoading ? (
@@ -430,7 +465,7 @@ export function InvoiceListUI({
 											<Link
 												to={buildOrgPath(
 													organizationSlug,
-													'/crm/invoices/$invoiceId',
+													'/crm/factures/$invoiceId',
 												)}
 												params={{ invoiceId: invoice.id }}
 												className="flex items-center gap-2 font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset"

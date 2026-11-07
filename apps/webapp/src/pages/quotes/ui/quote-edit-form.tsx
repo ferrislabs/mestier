@@ -4,6 +4,7 @@ import { Input } from '#/components/ui/input'
 import type { CatalogItem } from '#/hooks/use-catalog-items'
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import { buildOrgPath } from '#/modules/org-path'
+import { canChangeClient } from '#/pages/quotes/lib/quote-draft'
 import {
 	type QuoteFormValues,
 	type QuoteLineFormValues,
@@ -13,6 +14,10 @@ import { BillingAddressField } from '#/pages/quotes/ui/billing-address-field'
 import { CustomerPicker } from '#/pages/quotes/ui/doc/customer-picker'
 import { LinesEditor } from '#/pages/quotes/ui/doc/lines-editor'
 import { FormCard, LockBanner } from '#/pages/quotes/ui/doc/primitives'
+import {
+	type QuoteOwner,
+	QuoteTermsFields,
+} from '#/pages/quotes/ui/quote-terms-fields'
 
 interface QuoteEditFormProps {
 	organizationSlug: string
@@ -24,6 +29,7 @@ interface QuoteEditFormProps {
 	photoUrls: Record<string, string | undefined>
 	vatEnabled: boolean
 	customUnits: string[]
+	owners: readonly QuoteOwner[]
 	isLoading: boolean
 	isUploading: boolean
 	onChange: (patch: Partial<QuoteFormValues>) => void
@@ -46,6 +52,7 @@ export function QuoteEditForm({
 	photoUrls,
 	vatEnabled,
 	customUnits,
+	owners,
 	isLoading,
 	isUploading,
 	onChange,
@@ -58,6 +65,7 @@ export function QuoteEditForm({
 	onUploadLinePhoto,
 }: QuoteEditFormProps) {
 	const hasCustomer = values.customerId !== ''
+	const clientLocked = hasCustomer && !canChangeClient(values.lines)
 	const noAddress = hasCustomer && !isLoading && customerContexts.length === 0
 	return (
 		<div className="grid gap-5">
@@ -70,12 +78,17 @@ export function QuoteEditForm({
 					id={`${idPrefix}-customer`}
 					label="Client"
 					required
-					hint="Changer de client réinitialise l’adresse de facturation."
+					hint={
+						clientLocked
+							? 'Le client est verrouillé tant que le devis contient des lignes.'
+							: 'Changer de client réinitialise l’adresse de facturation.'
+					}
 				>
 					<CustomerPicker
 						id={`${idPrefix}-customer`}
 						customers={customers}
 						value={hasCustomer ? values.customerId : null}
+						disabled={clientLocked}
 						onChange={(customerId) => onChange({ customerId })}
 					/>
 				</FormField>
@@ -84,10 +97,7 @@ export function QuoteEditForm({
 						<p>
 							Le devis ne pourra pas être envoyé sans adresse de facturation.{' '}
 							<Link
-								to={buildOrgPath(
-									organizationSlug,
-									'/crm/customers/$customerId',
-								)}
+								to={buildOrgPath(organizationSlug, '/crm/clients/$customerId')}
 								params={{ customerId: values.customerId }}
 								className="rounded-sm font-medium text-foreground underline underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							>
@@ -122,6 +132,12 @@ export function QuoteEditForm({
 						onChange={(event) => onChange({ title: event.target.value })}
 					/>
 				</FormField>
+				<QuoteTermsFields
+					idPrefix={idPrefix}
+					values={values}
+					owners={owners}
+					onChange={onChange}
+				/>
 			</FormCard>
 
 			<section
@@ -136,7 +152,8 @@ export function QuoteEditForm({
 						Lignes
 					</h2>
 					<p className="mt-0.5 text-muted-foreground text-sm">
-						Les montants sont en euros hors taxes.
+						Les montants sont en euros hors taxes. La remise et la fréquence
+						sont indicatives : elles ne modifient pas encore les totaux.
 					</p>
 				</div>
 				<LinesEditor

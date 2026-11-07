@@ -56,7 +56,7 @@ export namespace CustomerEditUI {
 						Il n’existe pas ou l’adresse n’est plus valide.
 					</p>
 					<Button variant="outline" size="sm" className="mt-4" asChild>
-						<Link to={buildOrgPath(organizationSlug, '/crm/customers')}>
+						<Link to={buildOrgPath(organizationSlug, '/crm/clients')}>
 							<ArrowLeft aria-hidden /> Retour aux clients
 						</Link>
 					</Button>

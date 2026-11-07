@@ -8,6 +8,7 @@ import type {
 import type {
 	AccountExtras,
 	AccountKind,
+	AddressKind,
 	LeadSource,
 } from '#/pages/customers/feature/mocks/account-extras'
 
@@ -17,7 +18,7 @@ export interface CustomerFormValues {
 	/** Legal or full name — a customer is an entity, not a person. */
 	name: string
 	/**
-	 * The customer's own SIREN (or equivalent) — required on an invoice
+	 * The customer's own SIRET (or equivalent) — required on an invoice
 	 * transmitted electronically once the customer is itself VAT-subject,
 	 * per the reform effective 1 September 2026.
 	 */
@@ -150,6 +151,14 @@ export const ACCOUNT_KIND_LABELS: Record<AccountKind, string> = {
 	particulier: 'Particulier',
 	professionnel: 'Professionnel',
 }
+
+export const ADDRESS_KIND_LABELS: Record<AddressKind, string> = {
+	billing: 'Facturation',
+	site: 'Chantier',
+	other: 'Autre',
+}
+
+export const ADDRESS_KINDS = Object.keys(ADDRESS_KIND_LABELS) as AddressKind[]
 
 export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
 	bouche_a_oreille: 'Bouche-à-oreille',

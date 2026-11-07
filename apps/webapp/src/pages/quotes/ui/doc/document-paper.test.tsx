@@ -131,4 +131,62 @@ describe('DocumentPaper', () => {
 		expect(screen.queryByRole('columnheader', { name: 'TVA' })).toBeNull()
 		expect(screen.getByText('TVA non applicable')).toBeDefined()
 	})
+
+	it('prints the validity date of a quote when it has one', () => {
+		render(<DocumentPaper document={paper({ validUntil: '2026-12-01' })} />)
+
+		expect(screen.getByText('Valable jusqu’au')).toBeDefined()
+		expect(screen.getByText('1 déc. 2026')).toBeDefined()
+	})
+
+	it('prints no validity row for a document that does not carry one', () => {
+		render(<DocumentPaper document={paper()} />)
+
+		expect(screen.queryByText('Valable jusqu’au')).toBeNull()
+	})
+
+	it('prints the site address', () => {
+		render(
+			<DocumentPaper
+				document={paper({
+					siteAddressLines: ['Chantier Lyon', '5 rue des Forges'],
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('Adresse du chantier')).toBeDefined()
+		expect(screen.getByText('Chantier Lyon')).toBeDefined()
+	})
+
+	it('adds a discount column and the frequency under the unit price', () => {
+		const line = paper().lines[0]
+		if (!line) throw new Error('fixture')
+		render(
+			<DocumentPaper
+				document={paper({
+					lines: [{ ...line, discountPercent: 10, frequency: 'monthly' }],
+				})}
+			/>,
+		)
+
+		expect(screen.getByRole('columnheader', { name: 'Remise' })).toBeDefined()
+		expect(screen.getByText('10 %')).toBeDefined()
+		expect(screen.getByText('/ mois')).toBeDefined()
+	})
+
+	it('keeps the discount column and hides the VAT one for an organization not subject to VAT', () => {
+		const line = paper().lines[0]
+		if (!line) throw new Error('fixture')
+		render(
+			<DocumentPaper
+				document={paper({
+					showVat: false,
+					lines: [{ ...line, discountPercent: 0 }],
+				})}
+			/>,
+		)
+
+		expect(screen.getByRole('columnheader', { name: 'Remise' })).toBeDefined()
+		expect(screen.queryByRole('columnheader', { name: 'TVA' })).toBeNull()
+	})
 })

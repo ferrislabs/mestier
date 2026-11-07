@@ -39,7 +39,7 @@ function routePath(to: string): string {
 
 describe('moduleLandingPath', () => {
 	it("returns the module's first navigable section", () => {
-		expect(moduleLandingPath('crm')).toBe('/crm/customers')
+		expect(moduleLandingPath('crm')).toBe('/crm/clients')
 	})
 
 	it('stops at the basePath when the module has an overview', () => {
@@ -121,7 +121,7 @@ describe('module routability', () => {
 				(section) => section.to,
 			) ?? []
 
-		expect(sectionsOf('crm')).toContain('/crm/catalog')
+		expect(sectionsOf('crm')).toContain('/crm/catalogue')
 		expect(sectionsOf('hr')).toContain('/hr/equipment')
 		expect(sectionsOf('settings')).toEqual(['/settings'])
 	})

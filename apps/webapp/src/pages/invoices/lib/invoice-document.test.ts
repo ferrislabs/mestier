@@ -4,6 +4,7 @@ import {
 	buildInvoiceHistory,
 	creditNoteKindLabel,
 	invoiceHeading,
+	paymentTermsLine,
 	savedInvoiceTotals,
 } from './invoice-document'
 
@@ -98,6 +99,55 @@ describe('buildInvoiceHistory', () => {
 		})
 
 		expect(entries.map((entry) => entry.kind)).toEqual(['created'])
+	})
+})
+
+describe('paymentTermsLine', () => {
+	it('states payment on receipt when the delay is zero', () => {
+		expect(
+			paymentTermsLine('2026-06-02T09:00:00Z', '2026-06-02T00:00:00Z'),
+		).toBe('Paiement à réception de la facture.')
+	})
+
+	it('states the delay in days otherwise', () => {
+		expect(
+			paymentTermsLine('2026-06-02T09:00:00Z', '2026-07-02T00:00:00Z'),
+		).toBe('Délai de paiement : 30 jours.')
+		expect(
+			paymentTermsLine('2026-06-02T09:00:00Z', '2026-06-03T00:00:00Z'),
+		).toBe('Délai de paiement : 1 jour.')
+	})
+
+	it('says nothing without a due date or when it precedes the issue', () => {
+		expect(paymentTermsLine('2026-06-02T09:00:00Z', null)).toBeNull()
+		expect(
+			paymentTermsLine('2026-06-02T09:00:00Z', '2026-05-01T00:00:00Z'),
+		).toBeNull()
+	})
+})
+
+describe('refund history', () => {
+	it('lists a mock refund among the payments', () => {
+		const entries = buildInvoiceHistory({
+			invoice: invoice(),
+			payments: [],
+			creditNotes: [],
+			activity: EMPTY_ACTIVITY,
+			refunds: [
+				{
+					id: 'refund-1',
+					date: '2026-06-09',
+					amountCents: 3000,
+					method: 'Virement',
+					reference: '',
+					note: '',
+				},
+			],
+		})
+
+		expect(
+			entries.find((entry) => entry.id === 'refund-refund-1')?.detail,
+		).toContain('Remboursement')
 	})
 })
 

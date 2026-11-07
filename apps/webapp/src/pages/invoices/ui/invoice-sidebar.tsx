@@ -14,6 +14,7 @@ import type {
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import type { InvoiceActivityRecord } from '#/pages/invoices/feature/mocks/invoice-activity'
+import type { RefundRecord } from '#/pages/invoices/feature/mocks/invoice-extras'
 import { creditNoteKindLabel } from '#/pages/invoices/lib/invoice-document'
 import {
 	customerDisplayName,
@@ -27,7 +28,11 @@ import {
 } from '#/pages/quotes/lib/doc-format'
 import { DocBadge, InvoiceStateBadge } from '#/pages/quotes/ui/doc/badges'
 import { SideSection } from '#/pages/quotes/ui/doc/detail-shell'
-import { AccountLink, CreditNoteLink } from '#/pages/quotes/ui/doc/doc-links'
+import {
+	AccountLink,
+	CreditNoteLink,
+	QuoteLink,
+} from '#/pages/quotes/ui/doc/doc-links'
 import {
 	type HistoryEntry,
 	HistoryList,
@@ -110,6 +115,27 @@ function PaymentItem({
 	)
 }
 
+function RefundItem({ refund }: { refund: RefundRecord }) {
+	return (
+		<li className="grid gap-0.5 rounded-md border bg-background px-3 py-2 text-sm">
+			<div className="flex items-baseline justify-between gap-3">
+				<time dateTime={refund.date} className="font-medium">
+					{formatDocumentDate(refund.date)}
+				</time>
+				<Money
+					cents={-refund.amountCents}
+					className="font-medium text-state-today"
+				/>
+			</div>
+			<p className="text-muted-foreground text-xs">
+				Remboursement · {refund.method}
+				{refund.reference && ` · ${refund.reference}`}
+			</p>
+			{refund.note && <p className="text-xs">{refund.note}</p>}
+		</li>
+	)
+}
+
 function InternalNote({
 	invoiceId,
 	activity,
@@ -148,10 +174,12 @@ function Links({
 	invoice,
 	customer,
 	project,
+	quote,
 }: {
 	invoice: Invoice
 	customer: Customer | undefined
 	project: { id: string; name: string } | null
+	quote: { id: string; reference: string | null } | null
 }) {
 	const { activeOrganization } = useActiveOrganization()
 	return (
@@ -166,6 +194,13 @@ function Links({
 						<span className="text-muted-foreground">Client inconnu</span>
 					)}
 				</Row>
+				{quote && (
+					<Row label="Devis d’origine">
+						<QuoteLink quoteId={quote.id} className="font-medium">
+							{quote.reference ?? 'Devis'}
+						</QuoteLink>
+					</Row>
+				)}
 				{invoice.project_id && project && (
 					<Row label="Projet">
 						<Link
@@ -189,11 +224,14 @@ interface SidebarProps {
 	displayState: InvoiceDisplayState
 	activity: InvoiceActivityRecord
 	history: HistoryEntry[]
+	quote: { id: string; reference: string | null } | null
 	onSaveNote: (text: string) => void
 }
 
 interface IssuedSidebarProps extends SidebarProps {
 	balance: InvoiceBalance | undefined
+	remainingCents: number | null
+	refunds: RefundRecord[]
 	payments: InvoicePayment[]
 	paymentsLoading: boolean
 	creditNotes: Invoice[]
@@ -209,7 +247,10 @@ export function IssuedSidebar({
 	displayState,
 	activity,
 	history,
+	quote,
 	balance,
+	remainingCents,
+	refunds,
 	payments,
 	paymentsLoading,
 	creditNotes,
@@ -218,7 +259,8 @@ export function IssuedSidebar({
 	onDeletePayment,
 	onSaveNote,
 }: IssuedSidebarProps) {
-	const remaining = balance?.remaining_cents ?? null
+	const remaining = remainingCents
+	const refunded = refunds.reduce((sum, refund) => sum + refund.amountCents, 0)
 	const credited = balance?.credited_cents ?? 0
 	const paid = balance?.paid_cents ?? 0
 	const orderedPayments = [...payments].sort(
@@ -257,6 +299,11 @@ export function IssuedSidebar({
 						<Row label="Payé">
 							<Money cents={paid} />
 						</Row>
+						{refunded > 0 && (
+							<Row label="Remboursé">
+								<Money cents={-refunded} signed />
+							</Row>
+						)}
 						<Row
 							label={
 								remaining !== null && remaining < 0
@@ -290,10 +337,10 @@ export function IssuedSidebar({
 					<p className="text-muted-foreground text-sm">Chargement…</p>
 				)}
 			</SideSection>
-			<SideSection title={`Paiements (${payments.length})`}>
+			<SideSection title={`Paiements (${payments.length + refunds.length})`}>
 				{paymentsLoading ? (
 					<p className="text-muted-foreground text-sm">Chargement…</p>
-				) : orderedPayments.length === 0 ? (
+				) : orderedPayments.length === 0 && refunds.length === 0 ? (
 					<p className="text-muted-foreground text-sm">
 						Aucun paiement enregistré.
 					</p>
@@ -306,6 +353,9 @@ export function IssuedSidebar({
 								deleting={isDeletingPayment}
 								onDelete={onDeletePayment}
 							/>
+						))}
+						{refunds.map((refund) => (
+							<RefundItem key={refund.id} refund={refund} />
 						))}
 					</ul>
 				)}
@@ -350,7 +400,12 @@ export function IssuedSidebar({
 					</ul>
 				)}
 			</SideSection>
-			<Links invoice={invoice} customer={customer} project={project} />
+			<Links
+				invoice={invoice}
+				customer={customer}
+				project={project}
+				quote={quote}
+			/>
 			<InternalNote
 				key={activity.internalNote}
 				invoiceId={invoice.id}
@@ -371,6 +426,7 @@ export function DraftSidebar({
 	displayState,
 	activity,
 	history,
+	quote,
 	onSaveNote,
 }: SidebarProps) {
 	return (
@@ -385,7 +441,12 @@ export function DraftSidebar({
 					factures.
 				</p>
 			</SideSection>
-			<Links invoice={invoice} customer={customer} project={project} />
+			<Links
+				invoice={invoice}
+				customer={customer}
+				project={project}
+				quote={quote}
+			/>
 			<InternalNote
 				key={activity.internalNote}
 				invoiceId={invoice.id}

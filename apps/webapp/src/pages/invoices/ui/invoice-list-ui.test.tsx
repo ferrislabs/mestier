@@ -70,6 +70,8 @@ function baseProps() {
 		invoicePage: 1,
 		invoicePageSize: 10,
 		outstandingTotalCents: 42000 as number | null,
+		customerFilterId: null as string | null,
+		onClearCustomerFilter: vi.fn(),
 		isLoading: false,
 		error: null as string | null,
 		onRetry: vi.fn(),
@@ -180,5 +182,24 @@ describe('InvoiceListUI', () => {
 		)
 		await user.click(screen.getByRole('button', { name: 'Réessayer' }))
 		expect(props.onRetry).toHaveBeenCalled()
+	})
+
+	it('narrows the list to one customer and offers to lift the filter', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		props.invoices = [
+			...props.invoices,
+			invoice({ id: 'invoice-9', number: 'FAC-009', customer_id: 'other' }),
+		]
+		props.customerFilterId = 'customer-1'
+		await renderUi(props)
+
+		expect(screen.getByRole('link', { name: 'FAC-001' })).toBeDefined()
+		expect(screen.queryByRole('link', { name: 'FAC-009' })).toBeNull()
+		expect(screen.getByText('Client :')).toBeDefined()
+		await user.click(
+			screen.getByRole('button', { name: 'Retirer le filtre client' }),
+		)
+		expect(props.onClearCustomerFilter).toHaveBeenCalled()
 	})
 })

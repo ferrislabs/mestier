@@ -44,7 +44,7 @@ export function CustomersToolbar({
 					onChange={(event) =>
 						onChange({ ...filters, query: event.target.value })
 					}
-					placeholder="Rechercher un nom, un e-mail, un téléphone"
+					placeholder="Rechercher un nom, une ville, un contact"
 					aria-label="Rechercher un client"
 					className="h-8 bg-card pl-8"
 				/>

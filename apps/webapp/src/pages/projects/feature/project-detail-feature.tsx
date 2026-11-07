@@ -200,7 +200,7 @@ function ProjectDetailWorkspace({
 
 	const goToInvoice = (invoiceId: string) =>
 		navigate({
-			to: buildOrgPath(organizationSlug, '/crm/invoices/$invoiceId'),
+			to: buildOrgPath(organizationSlug, '/crm/factures/$invoiceId'),
 			params: { invoiceId },
 		})
 

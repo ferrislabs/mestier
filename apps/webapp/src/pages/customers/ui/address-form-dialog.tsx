@@ -13,16 +13,26 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '#/components/ui/select'
+import type { AddressKind } from '#/pages/customers/feature/mocks/account-extras'
+import {
 	type AddressForm,
 	isAddressEmpty,
 	validateAddressForm,
 } from '#/pages/customers/lib/account-form'
+import { ADDRESS_KIND_LABELS, ADDRESS_KINDS } from '#/pages/customers/types'
 import { AddressFields } from '#/pages/customers/ui/address-fields'
 import { FormErrors } from '#/pages/customers/ui/form-section'
 import { useFormBinding } from '#/pages/customers/ui/use-form-binding'
 
 export interface AddressDraft {
 	label: string
+	kind: AddressKind
 	address: AddressForm
 	photoKey: string
 }
@@ -115,7 +125,6 @@ function AddressFormBody({
 					label="Libellé"
 					required
 					hint="Par exemple : Siège, Chantier Rezé."
-					className="sm:col-span-2"
 				>
 					<Input
 						id={`${baseId}-label`}
@@ -125,6 +134,26 @@ function AddressFormBody({
 						}
 						autoComplete="off"
 					/>
+				</FormField>
+				<FormField id={`${baseId}-kind`} label="Type">
+					<Select
+						value={draft.kind}
+						onValueChange={(value) => {
+							const kind = ADDRESS_KINDS.find((item) => item === value)
+							if (kind) setDraft({ ...draft, kind })
+						}}
+					>
+						<SelectTrigger id={`${baseId}-kind`} className="w-full">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{ADDRESS_KINDS.map((kind) => (
+								<SelectItem key={kind} value={kind}>
+									{ADDRESS_KIND_LABELS[kind]}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
 				</FormField>
 				<AddressFields
 					value={draft.address}

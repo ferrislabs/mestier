@@ -1,30 +1,55 @@
 import { useForm } from '@tanstack/react-form'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { AlertCircle } from 'lucide-react'
+import { Button } from '#/components/ui/button'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type Customer,
 	useCustomerContexts,
 	useCustomers,
 } from '#/hooks/use-customers'
-import { useCreateInvoice } from '#/hooks/use-invoices'
+import { useCreateInvoice, useInvoices } from '#/hooks/use-invoices'
 import { type Project, useProjects } from '#/hooks/use-projects'
+import { useQuote } from '#/hooks/use-quotes'
 import { buildOrgPath } from '#/modules/org-path'
+import { setQuoteLink } from '#/pages/invoices/feature/mocks/invoice-extras'
+import { useInvoiceExtras } from '#/pages/invoices/feature/use-invoice-extras'
+import {
+	activeQuoteLinks,
+	DEFAULT_PAYMENT_TERMS_DAYS,
+	depositLines,
+	fullInvoiceLines,
+	paymentTermsDueDate,
+	quoteInvoicing,
+	readNewInvoiceSearch,
+} from '#/pages/invoices/lib/invoice-new'
+import type { NewInvoiceFormValues } from '#/pages/invoices/lib/new-invoice-form'
+import { todayDate } from '#/pages/invoices/lib/payment-form'
 import {
 	emptyInvoiceLine,
 	eurosToCents,
-	type InvoiceFormValues,
 	type InvoiceLineFormValues,
+	invoiceKindLabel,
 } from '#/pages/invoices/types'
+import {
+	type DepositRow,
+	InvoiceFromQuoteUI,
+	type QuoteInvoiceRequest,
+} from '#/pages/invoices/ui/invoice-from-quote-ui'
 import { InvoiceNewUI } from '#/pages/invoices/ui/invoice-new-ui'
 import {
 	duplicateItem,
 	moveItem,
 	newLineId,
 } from '#/pages/quotes/lib/doc-lines'
+import {
+	DetailLoading,
+	NotFoundState,
+} from '#/pages/quotes/ui/doc/detail-shell'
 
 export function InvoiceNewFeature() {
 	const { activeOrganization } = useActiveOrganization()
+	const search = readNewInvoiceSearch(window.location.search)
 
 	if (!activeOrganization) {
 		return (
@@ -42,12 +67,141 @@ export function InvoiceNewFeature() {
 		)
 	}
 
+	if (search.quoteId) {
+		return (
+			<InvoiceFromQuoteWorkspace
+				key={`${activeOrganization.id}:${search.quoteId}`}
+				organizationId={activeOrganization.id}
+				organizationSlug={activeOrganization.slug}
+				quoteId={search.quoteId}
+				preferred={search.mode}
+			/>
+		)
+	}
+
 	return (
 		<InvoiceNewWorkspace
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
 			organizationSlug={activeOrganization.slug}
 			vatEnabled={activeOrganization.vat_status?.type === 'subject'}
+			clientId={search.clientId}
+		/>
+	)
+}
+
+function InvoiceFromQuoteWorkspace({
+	organizationId,
+	organizationSlug,
+	quoteId,
+	preferred,
+}: {
+	organizationId: string
+	organizationSlug: string
+	quoteId: string
+	preferred: 'acompte' | 'complete' | undefined
+}) {
+	const navigate = useNavigate()
+	const quote = useQuote(quoteId)
+	const customers = useCustomers(organizationId)
+	const invoices = useInvoices(organizationId, { page: 1, perPage: 100 })
+	const extras = useInvoiceExtras()
+	const createInvoice = useCreateInvoice(organizationId)
+
+	if (quote.isLoading) return <DetailLoading label="Chargement du devis…" />
+
+	const source = quote.data?.data
+	if (!source) {
+		return (
+			<NotFoundState
+				title="Ce devis est introuvable"
+				hint="Il n’existe pas ou l’adresse n’est plus valide."
+			>
+				<Button variant="outline" size="sm" asChild>
+					<Link to={buildOrgPath(organizationSlug, '/crm/devis')}>
+						Voir les devis
+					</Link>
+				</Button>
+			</NotFoundState>
+		)
+	}
+
+	const loaded = invoices.data?.data ?? []
+	const byId = new Map(loaded.map((invoice) => [invoice.id, invoice]))
+	const links = activeQuoteLinks({
+		quoteId: source.id,
+		links: extras.quoteLinks,
+		hiddenIds: extras.hiddenDrafts,
+		statusById: new Map(loaded.map((invoice) => [invoice.id, invoice.status])),
+	})
+	const info = quoteInvoicing(source, links)
+	const deposits: DepositRow[] = [
+		...info.deposits.issued,
+		...info.deposits.drafts,
+	].map((link) => {
+		const invoice = byId.get(link.invoiceId)
+		const draft = link.status === 'DRAFT'
+		return {
+			invoiceId: link.invoiceId,
+			label: draft
+				? 'Acompte en brouillon'
+				: (invoice?.number ?? invoiceKindLabel('DEPOSIT')),
+			draft,
+			issuedAt: invoice?.issued_at ?? null,
+			grossCents: invoice?.gross_cents ?? null,
+		}
+	})
+	const existing = info.existingInvoiceId
+		? byId.get(info.existingInvoiceId)
+		: undefined
+	const customer = customers.data?.data.find(
+		(item) => item.id === source.customer_id,
+	)
+
+	const create = async (request: QuoteInvoiceRequest) => {
+		const dueDay = paymentTermsDueDate(
+			todayDate(),
+			String(DEFAULT_PAYMENT_TERMS_DAYS),
+		)
+		const created = await createInvoice.mutateAsync({
+			path: { organization_id: organizationId },
+			body: {
+				kind: 'STANDARD',
+				project_id: null,
+				customer_id: source.customer_id,
+				customer_context_id: source.customer_context_id,
+				due_at: dueDay ? new Date(dueDay).toISOString() : null,
+				notes: null,
+				operation_nature: null,
+				lines:
+					request.kind === 'full'
+						? fullInvoiceLines(source)
+						: depositLines(source, request.percent),
+			},
+		})
+		setQuoteLink(created.data.id, {
+			quoteId: source.id,
+			kind: request.kind,
+			percent: request.kind === 'full' ? 100 : request.percent,
+		})
+		await navigate({
+			to: buildOrgPath(organizationSlug, '/crm/factures/$invoiceId'),
+			params: { invoiceId: created.data.id },
+		})
+	}
+
+	return (
+		<InvoiceFromQuoteUI
+			organizationSlug={organizationSlug}
+			quote={source}
+			customerName={customer ? customer.name.trim() : null}
+			info={info}
+			deposits={deposits}
+			existingInvoiceLabel={existing?.number ?? null}
+			preferred={preferred}
+			isCreating={createInvoice.isPending}
+			error={createInvoice.error?.message ?? null}
+			onSubmit={(request) => void create(request).catch(() => undefined)}
 		/>
 	)
 }
@@ -56,10 +210,12 @@ function InvoiceNewWorkspace({
 	organizationId,
 	organizationSlug,
 	vatEnabled,
+	clientId,
 }: {
 	organizationId: string
 	organizationSlug: string
 	vatEnabled: boolean
+	clientId: string | undefined
 }) {
 	const navigate = useNavigate()
 	const customers = useCustomers(organizationId)
@@ -70,13 +226,14 @@ function InvoiceNewWorkspace({
 		defaultValues: {
 			kind: 'STANDARD',
 			projectId: '',
-			customerId: '',
+			customerId: clientId ?? '',
 			customerContextId: '',
 			dueAt: '',
+			termsDays: String(DEFAULT_PAYMENT_TERMS_DAYS),
 			notes: '',
 			operationNature: '',
 			lines: [emptyInvoiceLine()],
-		} satisfies InvoiceFormValues,
+		} satisfies NewInvoiceFormValues,
 		onSubmit: async ({ value }) => {
 			const invoice = await createInvoice.mutateAsync({
 				path: { organization_id: organizationId },
@@ -85,7 +242,7 @@ function InvoiceNewWorkspace({
 					project_id: value.projectId || null,
 					customer_id: value.customerId,
 					customer_context_id: value.customerContextId,
-					due_at: value.dueAt ? new Date(value.dueAt).toISOString() : null,
+					due_at: dueAtOf(value.termsDays),
 					notes: value.notes.trim() || null,
 					operation_nature: value.operationNature || null,
 					lines: value.lines.map((line) => ({
@@ -102,7 +259,7 @@ function InvoiceNewWorkspace({
 			// `QuoteNewFeature`: the next thing an artisan does — issue it,
 			// record a payment, export the PDF — lives on that page.
 			await navigate({
-				to: buildOrgPath(organizationSlug, '/crm/invoices/$invoiceId'),
+				to: buildOrgPath(organizationSlug, '/crm/factures/$invoiceId'),
 				params: { invoiceId: invoice.data.id },
 			})
 		},
@@ -128,18 +285,23 @@ function InvoiceNewWorkspace({
 	)
 }
 
+function dueAtOf(termsDays: string): string | null {
+	const day = paymentTermsDueDate(todayDate(), termsDays)
+	return day ? new Date(day).toISOString() : null
+}
+
 interface InvoiceFormApi {
-	state: { values: InvoiceFormValues }
+	state: { values: NewInvoiceFormValues }
 	setFieldValue: (
-		field: keyof InvoiceFormValues,
-		value: InvoiceFormValues[keyof InvoiceFormValues],
+		field: keyof NewInvoiceFormValues,
+		value: NewInvoiceFormValues[keyof NewInvoiceFormValues],
 	) => void
 	handleSubmit: () => void | Promise<void>
 }
 
 interface InvoiceNewFormProps {
 	organizationSlug: string
-	values: InvoiceFormValues
+	values: NewInvoiceFormValues
 	form: InvoiceFormApi
 	customers: Customer[]
 	projects: Project[]
@@ -168,7 +330,7 @@ function InvoiceNewForm({
 		Boolean(values.customerId),
 	)
 
-	const updateValues = (patch: Partial<InvoiceFormValues>) => {
+	const updateValues = (patch: Partial<NewInvoiceFormValues>) => {
 		if (patch.kind !== undefined) form.setFieldValue('kind', patch.kind)
 		if (patch.projectId !== undefined) {
 			form.setFieldValue('projectId', patch.projectId)
@@ -182,7 +344,9 @@ function InvoiceNewForm({
 		if (patch.customerContextId !== undefined) {
 			form.setFieldValue('customerContextId', patch.customerContextId)
 		}
-		if (patch.dueAt !== undefined) form.setFieldValue('dueAt', patch.dueAt)
+		if (patch.termsDays !== undefined) {
+			form.setFieldValue('termsDays', patch.termsDays)
+		}
 		if (patch.notes !== undefined) form.setFieldValue('notes', patch.notes)
 		if (patch.operationNature !== undefined) {
 			form.setFieldValue('operationNature', patch.operationNature)

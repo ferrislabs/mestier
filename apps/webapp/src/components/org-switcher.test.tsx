@@ -107,7 +107,7 @@ async function renderSwitcher(createOrganization: (body: unknown) => unknown) {
 		<Providers>
 			<OrgSwitcher />
 		</Providers>,
-		'/o/paysages-bonnal/crm/customers',
+		'/o/paysages-bonnal/crm/clients',
 	)
 
 	return { ...rendered, ...api }
@@ -179,7 +179,7 @@ describe('OrgSwitcher', () => {
 
 		await waitFor(() => {
 			expect(router.state.location.pathname).toBe(
-				'/o/duval-renovation/crm/customers',
+				'/o/duval-renovation/crm/clients',
 			)
 		})
 		expect(
@@ -196,7 +196,7 @@ describe('OrgSwitcher', () => {
 		)
 
 		expect(router.state.location.pathname).toBe(
-			'/o/paysages-bonnal/crm/customers',
+			'/o/paysages-bonnal/crm/clients',
 		)
 	})
 

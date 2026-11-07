@@ -1,5 +1,6 @@
 import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { Organization } from '#/hooks/use-organizations'
+import type { BillingFrequency } from '#/pages/quotes/lib/billing-frequency'
 import { postalAddressLines } from '#/pages/quotes/lib/doc-format'
 import { formatCents } from '#/pages/quotes/types'
 import type {
@@ -67,6 +68,8 @@ export function paperLine(input: {
 	unitPriceCents: number
 	vatRateBp: number | null
 	totalCents: number
+	discountPercent?: number
+	frequency?: BillingFrequency
 }): PaperLine {
 	return {
 		id: input.id,
@@ -77,5 +80,9 @@ export function paperLine(input: {
 		unitPriceCents: input.unitPriceCents,
 		vatRateBp: input.vatRateBp,
 		totalCents: input.totalCents,
+		...(input.discountPercent !== undefined
+			? { discountPercent: input.discountPercent }
+			: {}),
+		...(input.frequency !== undefined ? { frequency: input.frequency } : {}),
 	}
 }

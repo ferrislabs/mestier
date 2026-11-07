@@ -12,34 +12,46 @@ import {
 	TableHeader,
 	TableRow,
 } from '#/components/ui/table'
-import type { Supplier } from '#/hooks/use-suppliers'
+import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { cn } from '#/lib/utils'
 import { hueOf, NameAvatar } from '#/pages/customers/ui/avatars'
+import { Money } from '#/pages/customers/ui/money'
 import { Notice } from '#/pages/customers/ui/notice'
 import { SearchBox } from '#/pages/customers/ui/search-box'
-import { formatLegalId } from '#/pages/suppliers/lib/suppliers-search'
-import { firstAddressLine } from '#/pages/suppliers/types'
+import { StatTile } from '#/pages/customers/ui/stat-tile'
+import {
+	formatLegalId,
+	type SupplierRow,
+} from '#/pages/suppliers/lib/supplier-model'
+import { CategoryChip } from '#/pages/treasury/ui/category-chip'
 
 const DASH = <span className="text-muted-foreground">—</span>
 
 export interface SuppliersListProps {
-	suppliers: Supplier[]
+	rows: readonly SupplierRow[]
+	totals: { spend12m: number; toPay: number; overdue: boolean }
 	totalSuppliers: number
 	query: string
 	onQueryChange: (query: string) => void
+	archived: boolean
+	onArchivedChange: (archived: boolean) => void
 	isLoading: boolean
 	error: string | null
 	canManage: boolean
 	notice: string | null
 	onDismissNotice: () => void
 	onCreate: () => void
-	onEdit: (supplier: Supplier) => void
+	onEdit: (row: SupplierRow) => void
 }
 
 export function SuppliersList({
-	suppliers,
+	rows,
+	totals,
 	totalSuppliers,
 	query,
 	onQueryChange,
+	archived,
+	onArchivedChange,
 	isLoading,
 	error,
 	canManage,
@@ -65,13 +77,43 @@ export function SuppliersList({
 				}
 			/>
 			<Notice message={notice} onDismiss={onDismissNotice} />
+			<div className="mb-4 grid gap-3 sm:grid-cols-2">
+				<StatTile
+					label="Dépenses 12 mois"
+					value={<Money cents={totals.spend12m} />}
+					hint="Montants TTC"
+				/>
+				<StatTile
+					label="À payer"
+					value={<Money cents={totals.toPay} />}
+					tone={totals.overdue ? 'alert' : 'default'}
+					hint={
+						totals.overdue
+							? 'Dont des échéances dépassées'
+							: 'Dépenses à régler et en retard'
+					}
+				/>
+			</div>
 			<div className="mb-3 flex flex-wrap items-center gap-2">
 				<SearchBox
 					value={query}
 					onChange={onQueryChange}
 					label="Rechercher un fournisseur"
-					placeholder="Nom, SIRET, e-mail, adresse"
+					placeholder="Nom, SIRET, contact, catégorie"
 				/>
+				<ToggleGroup
+					type="single"
+					variant="outline"
+					size="sm"
+					value={archived ? 'archived' : 'active'}
+					onValueChange={(value) => {
+						if (value) onArchivedChange(value === 'archived')
+					}}
+					aria-label="Filtrer par statut"
+				>
+					<ToggleGroupItem value="active">Actifs</ToggleGroupItem>
+					<ToggleGroupItem value="archived">Archivés</ToggleGroupItem>
+				</ToggleGroup>
 			</div>
 			{error ? (
 				<div className="mb-3 rounded-lg border border-state-alert/30 bg-state-alert/8 px-4 py-3 text-[13px] font-medium text-state-alert">
@@ -82,20 +124,24 @@ export function SuppliersList({
 				<div className="rounded-lg border bg-card px-6 py-12 text-center text-[13px] text-muted-foreground">
 					Chargement des fournisseurs…
 				</div>
-			) : suppliers.length === 0 ? (
+			) : rows.length === 0 ? (
 				<EmptyState
 					title={
 						searching
 							? 'Aucun fournisseur ne correspond à cette recherche'
-							: 'Aucun fournisseur pour le moment'
+							: archived
+								? 'Aucun fournisseur archivé'
+								: 'Aucun fournisseur pour le moment'
 					}
 					hint={
 						searching
 							? 'Essaie un autre nom ou un autre SIRET.'
-							: 'Ajoute ton premier fournisseur pour le rattacher aux produits du catalogue.'
+							: archived
+								? 'Les fournisseurs que tu archives apparaissent ici.'
+								: 'Ajoute ton premier fournisseur pour le rattacher aux produits du catalogue.'
 					}
 				>
-					{!searching && totalSuppliers === 0 && (
+					{!searching && !archived && totalSuppliers === 0 && (
 						<RequirePermission permission="MANAGE_REFERENCE">
 							<Button onClick={onCreate}>
 								<Plus aria-hidden />
@@ -111,13 +157,22 @@ export function SuppliersList({
 							<TableRow className="hover:bg-transparent">
 								<TableHead className="pl-4">Fournisseur</TableHead>
 								<TableHead className="max-2xl:hidden">SIRET</TableHead>
-								<TableHead className="max-lg:hidden">Contact</TableHead>
-								<TableHead className="pr-4 max-md:hidden">Adresse</TableHead>
+								<TableHead className="max-lg:hidden">
+									Contact principal
+								</TableHead>
+								<TableHead className="max-md:hidden">
+									Catégorie par défaut
+								</TableHead>
+								<TableHead className="max-xl:hidden">Délai</TableHead>
+								<TableHead className="text-right">Dépenses 12 mois</TableHead>
+								<TableHead className="pr-4 text-right">À payer</TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{suppliers.map((supplier) => {
+							{rows.map((row) => {
+								const supplier = row.supplier
 								const legalId = supplier.registration_number ?? ''
+								const terms = row.extras.paymentTermsDays
 								return (
 									<TableRow
 										key={supplier.id}
@@ -134,7 +189,7 @@ export function SuppliersList({
 													{canManage ? (
 														<button
 															type="button"
-															onClick={() => onEdit(supplier)}
+															onClick={() => onEdit(row)}
 															className="block max-w-full truncate rounded-sm text-left font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset"
 														>
 															{supplier.name}
@@ -162,14 +217,14 @@ export function SuppliersList({
 											{legalId !== '' ? formatLegalId(legalId) : DASH}
 										</TableCell>
 										<TableCell className="max-lg:hidden">
-											{supplier.email || supplier.phone ? (
+											{row.contact !== '' || row.contactEmail !== '' ? (
 												<>
 													<span className="block max-w-44 truncate">
-														{supplier.email || supplier.phone}
+														{row.contact || row.contactEmail}
 													</span>
-													{supplier.email && supplier.phone && (
+													{row.contact !== '' && row.contactEmail !== '' && (
 														<span className="block max-w-44 truncate text-[12px] text-muted-foreground">
-															{supplier.phone}
+															{row.contactEmail}
 														</span>
 													)}
 												</>
@@ -177,8 +232,33 @@ export function SuppliersList({
 												DASH
 											)}
 										</TableCell>
-										<TableCell className="pr-4 max-md:hidden">
-											{firstAddressLine(supplier.address) || DASH}
+										<TableCell className="max-md:hidden">
+											<CategoryChip category={row.category ?? undefined} />
+										</TableCell>
+										<TableCell className="max-xl:hidden">
+											{terms === null ? DASH : `${terms} jours`}
+										</TableCell>
+										<TableCell className="text-right">
+											{row.spend12m > 0 ? <Money cents={row.spend12m} /> : DASH}
+										</TableCell>
+										<TableCell
+											className={cn(
+												'pr-4 text-right font-medium',
+												row.overdue && 'text-state-alert',
+											)}
+										>
+											{row.toPay > 0 ? (
+												<>
+													<Money cents={row.toPay} />
+													{row.overdue && (
+														<span className="block font-normal text-[12px]">
+															dont des échéances dépassées
+														</span>
+													)}
+												</>
+											) : (
+												DASH
+											)}
 										</TableCell>
 									</TableRow>
 								)

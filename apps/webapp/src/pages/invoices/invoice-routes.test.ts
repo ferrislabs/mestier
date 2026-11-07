@@ -21,20 +21,20 @@ describe('invoice routes', () => {
 	 * `pages/quotes/quote-routes.test.ts` guards against for quotes.
 	 */
 	it('composing an invoice resolves to its own page, not to an invoice named "new"', () => {
-		expect(routeIdFor('/o/acme/crm/invoices/new')).toBe(
-			'/_app/o/$organizationSlug/crm/invoices/new',
+		expect(routeIdFor('/o/acme/crm/factures/nouvelle')).toBe(
+			'/_app/o/$organizationSlug/crm/factures/nouvelle',
 		)
 	})
 
 	it('an invoice id still resolves to the invoice page', () => {
 		expect(
-			routeIdFor('/o/acme/crm/invoices/01a00bfc-4d73-7930-818d-7af9fb1cb50f'),
-		).toBe('/_app/o/$organizationSlug/crm/invoices/$invoiceId')
+			routeIdFor('/o/acme/crm/factures/01a00bfc-4d73-7930-818d-7af9fb1cb50f'),
+		).toBe('/_app/o/$organizationSlug/crm/factures/$invoiceId')
 	})
 
 	it('the invoice list keeps its own route', () => {
-		expect(routeIdFor('/o/acme/crm/invoices')).toBe(
-			'/_app/o/$organizationSlug/crm/invoices/',
+		expect(routeIdFor('/o/acme/crm/factures')).toBe(
+			'/_app/o/$organizationSlug/crm/factures/',
 		)
 	})
 })

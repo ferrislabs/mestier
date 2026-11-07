@@ -11,28 +11,42 @@ import {
 	useInvoiceBalance,
 	useInvoiceCreditNotes,
 	useInvoicePayments,
+	useInvoices,
 	useIssueCreditNote,
 	useIssueInvoice,
 	useRecordPayment,
 	useUpdateInvoice,
 } from '#/hooks/use-invoices'
 import { useProject } from '#/hooks/use-projects'
+import { useQuote } from '#/hooks/use-quotes'
 import { downloadAuthenticatedFile } from '#/lib/download-file'
 import { buildOrgPath } from '#/modules/org-path'
+import {
+	hideDraft,
+	recordRefund,
+	setIssueDate,
+} from '#/pages/invoices/feature/mocks/invoice-extras'
 import {
 	useInvoiceActivity,
 	useRemindInvoice,
 	useSaveInvoiceNote,
 	useSendInvoice,
 } from '#/pages/invoices/feature/use-invoice-activity'
+import { useInvoiceExtras } from '#/pages/invoices/feature/use-invoice-extras'
 import { invoiceActions } from '#/pages/invoices/lib/invoice-actions'
 import {
 	buildInvoiceHistory,
 	buildInvoicePaper,
 	savedInvoiceTotals,
 } from '#/pages/invoices/lib/invoice-document'
+import { issueDateBounds } from '#/pages/invoices/lib/invoice-issue'
 import { isValidInvoiceLine } from '#/pages/invoices/lib/new-invoice-form'
-import { paymentRequest } from '#/pages/invoices/lib/payment-form'
+import {
+	effectiveRemainingCents,
+	paymentRequest,
+	refundRecord,
+	todayDate,
+} from '#/pages/invoices/lib/payment-form'
 import {
 	centsToEuros,
 	emptyInvoiceLine,
@@ -79,7 +93,7 @@ export function InvoiceDetailFeature({
 			<DetailError
 				title="Impossible de charger la facture"
 				message={invoice.error.message}
-				backTo="/crm/invoices"
+				backTo="/crm/factures"
 				backLabel="Retour aux factures"
 				onRetry={() => void invoice.refetch()}
 			/>
@@ -93,7 +107,7 @@ export function InvoiceDetailFeature({
 				hint="Aucune facture ne correspond à cet identifiant, ou l’adresse n’est plus valide."
 			>
 				<Button variant="outline" size="sm" asChild>
-					<Link to={buildOrgPath(activeOrganization.slug, '/crm/invoices')}>
+					<Link to={buildOrgPath(activeOrganization.slug, '/crm/factures')}>
 						Retour aux factures
 					</Link>
 				</Button>
@@ -106,7 +120,7 @@ export function InvoiceDetailFeature({
 			<Navigate
 				to={buildOrgPath(
 					activeOrganization.slug,
-					`/crm/credit-notes/${invoice.data.data.id}`,
+					`/crm/avoirs/${invoice.data.data.id}`,
 				)}
 				replace
 			/>
@@ -158,6 +172,13 @@ function InvoiceDetailWorkspace({
 	const sendInvoice = useSendInvoice(invoice.id)
 	const remindInvoice = useRemindInvoice(invoice.id)
 	const saveNote = useSaveInvoiceNote(invoice.id)
+	const extras = useInvoiceExtras()
+	const allInvoices = useInvoices(invoice.organization_id, {
+		page: 1,
+		perPage: 100,
+	})
+	const quoteLink = extras.quoteLinks[invoice.id]
+	const linkedQuote = useQuote(quoteLink?.quoteId ?? '', Boolean(quoteLink))
 	const [isDownloading, setIsDownloading] = useState(false)
 	const [downloadError, setDownloadError] = useState<string | null>(null)
 
@@ -293,7 +314,11 @@ function InvoiceDetailWorkspace({
 			: undefined
 	const creditNoteList = creditNotes.data?.data ?? []
 	const paymentList = payments.data?.data ?? []
-	const remainingCents = balance.data?.data.remaining_cents ?? null
+	const refunds = extras.refunds[invoice.id] ?? []
+	const remainingCents = effectiveRemainingCents(
+		balance.data?.data.remaining_cents ?? null,
+		refunds.reduce((sum, refund) => sum + refund.amountCents, 0),
+	)
 	const displayState = invoiceDisplayState(invoice, remainingCents)
 	const actions = invoiceActions({
 		status: invoice.status,
@@ -333,6 +358,17 @@ function InvoiceDetailWorkspace({
 			displayState={displayState}
 			actions={actions}
 			balance={balance.data?.data}
+			remainingCents={remainingCents}
+			refunds={refunds}
+			quote={
+				quoteLink
+					? {
+							id: quoteLink.quoteId,
+							reference: linkedQuote.data?.data.reference ?? null,
+						}
+					: null
+			}
+			issueBounds={issueDateBounds(allInvoices.data?.data ?? [], todayDate())}
 			payments={paymentList}
 			paymentsLoading={payments.isLoading}
 			creditNotes={creditNoteList}
@@ -349,6 +385,7 @@ function InvoiceDetailWorkspace({
 				payments: paymentList,
 				creditNotes: creditNoteList,
 				activity: activity.data,
+				refunds,
 			})}
 			totals={savedInvoiceTotals(invoice)}
 			vatNotice={
@@ -378,14 +415,26 @@ function InvoiceDetailWorkspace({
 			onDuplicateLine={duplicateLine}
 			onRemoveLine={removeLine}
 			onSave={() => void saveInvoice()}
-			onIssue={() =>
-				attempt(() =>
+			onIssue={async (issueDate) => {
+				const issued = await attempt(() =>
 					issueInvoice.mutateAsync({
 						path: { invoice_id: invoice.id },
 						body: {},
 					}),
 				)
-			}
+				if (issued) setIssueDate(invoice.id, issueDate)
+				return issued
+			}}
+			onDeleteDraft={() => {
+				hideDraft(invoice.id)
+				void navigate({
+					to: buildOrgPath(activeOrganization.slug, '/crm/factures'),
+				})
+			}}
+			onRefund={async (refundValues) => {
+				recordRefund(invoice.id, refundRecord(refundValues))
+				return true
+			}}
 			onCancel={() =>
 				attempt(() =>
 					cancelInvoice.mutateAsync({ path: { invoice_id: invoice.id } }),
@@ -415,7 +464,7 @@ function InvoiceDetailWorkspace({
 					await navigate({
 						to: buildOrgPath(
 							activeOrganization.slug,
-							'/crm/credit-notes/$creditNoteId',
+							'/crm/avoirs/$creditNoteId',
 						),
 						params: { creditNoteId: created.data.id },
 					})

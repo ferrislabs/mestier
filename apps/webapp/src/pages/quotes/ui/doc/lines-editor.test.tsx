@@ -33,6 +33,8 @@ function line(
 		vatRateBp: '',
 		notes: '',
 		photoKeys: [],
+		discountPercent: '',
+		frequency: 'one_shot',
 		...overrides,
 	}
 }
@@ -215,5 +217,60 @@ describe('lineProblems', () => {
 	it('flags a quantity that is not positive', () => {
 		expect(lineProblems(line({ quantity: '0' })).quantity).toBe(true)
 		expect(lineProblems(line({ quantity: 'abc' })).quantity).toBe(true)
+	})
+
+	it('has no discount or frequency column on a document without them', () => {
+		const { lines: _lines, totalOf: _totalOf, ...rest } = baseProps()
+		render(
+			<LinesEditor
+				{...rest}
+				lines={[
+					{
+						clientId: 'line-1',
+						label: 'Taille de haie',
+						quantity: '1',
+						unitPrice: '10',
+						vatRateBp: '',
+					},
+				]}
+				totalOf={() => 1000}
+			/>,
+		)
+
+		expect(screen.queryByText('Remise %')).toBeNull()
+		expect(screen.queryByText('Facturation')).toBeNull()
+	})
+
+	it('reports a typed discount', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		render(<LinesEditor {...props} />)
+
+		expect(screen.getByText('Remise %')).toBeDefined()
+		await user.type(
+			screen.getByRole('textbox', { name: 'Remise en pourcentage, ligne 1' }),
+			'5',
+		)
+
+		expect(props.onPatch).toHaveBeenCalledWith(0, { discountPercent: '5' })
+	})
+
+	it('offers the four billing frequencies', async () => {
+		const user = userEvent.setup()
+		const props = baseProps()
+		render(<LinesEditor {...props} />)
+
+		await user.click(
+			screen.getByRole('combobox', {
+				name: 'Fréquence de facturation, ligne 1',
+			}),
+		)
+
+		expect(
+			screen.getAllByRole('option').map((option) => option.textContent),
+		).toEqual(['Ponctuel', 'Mensuel', 'Trimestriel', 'Annuel'])
+		await user.click(screen.getByRole('option', { name: 'Mensuel' }))
+
+		expect(props.onPatch).toHaveBeenCalledWith(0, { frequency: 'monthly' })
 	})
 })

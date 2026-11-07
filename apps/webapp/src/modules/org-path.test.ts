@@ -3,9 +3,7 @@ import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 
 describe('buildOrgPath', () => {
 	it('prefixes a module path with the tenant', () => {
-		expect(buildOrgPath('dupont', '/crm/customers')).toBe(
-			'/o/dupont/crm/customers',
-		)
+		expect(buildOrgPath('dupont', '/crm/clients')).toBe('/o/dupont/crm/clients')
 	})
 
 	it('leaves no trailing slash on the organization root', () => {
@@ -13,17 +11,17 @@ describe('buildOrgPath', () => {
 	})
 
 	it('keeps the router parameter segments', () => {
-		expect(buildOrgPath('dupont', '/crm/quotes/$quoteId')).toBe(
-			'/o/dupont/crm/quotes/$quoteId',
+		expect(buildOrgPath('dupont', '/crm/devis/$quoteId')).toBe(
+			'/o/dupont/crm/devis/$quoteId',
 		)
 	})
 })
 
 describe('splitOrgPath', () => {
 	it('splits the tenant off the module path', () => {
-		expect(splitOrgPath('/o/dupont/crm/customers')).toEqual({
+		expect(splitOrgPath('/o/dupont/crm/clients')).toEqual({
 			organizationSlug: 'dupont',
-			path: '/crm/customers',
+			path: '/crm/clients',
 		})
 	})
 

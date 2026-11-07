@@ -10,7 +10,7 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import { MODULES } from '#/modules/registry'
-import type { ModuleSection } from '#/modules/types'
+import type { AppModule, ModuleSection } from '#/modules/types'
 import { renderWithRouter } from '#/test/render-with-router'
 
 const ORGANIZATION = { id: 'org-1', name: 'Dupont', slug: 'dupont' }
@@ -120,48 +120,53 @@ function crmModule() {
 	return module
 }
 
+let crmSidebar: AppModule['sidebar']
+
 beforeEach(() => {
 	crmModule().sections.push(announcedSectionFixture)
+	crmSidebar = crmModule().sidebar
+	crmModule().sidebar = undefined
 })
 
 afterEach(() => {
 	const sections = crmModule().sections
 	const index = sections.indexOf(announcedSectionFixture)
 	if (index !== -1) sections.splice(index, 1)
+	crmModule().sidebar = crmSidebar
 })
 
 describe('ModuleNav', () => {
 	it("lists the active module's sections", async () => {
-		await renderNav('/o/dupont/crm/customers')
+		await renderNav('/o/dupont/crm/clients')
 
-		for (const label of ['Comptes', 'Pipeline', 'Devis', 'Factures']) {
+		for (const label of ['Clients', 'Pipeline', 'Devis', 'Factures']) {
 			expect(screen.getByText(label)).toBeDefined()
 		}
 	})
 
 	it("does not expose other modules' sections", async () => {
-		await renderNav('/o/dupont/crm/customers')
+		await renderNav('/o/dupont/crm/clients')
 
 		expect(screen.queryByText('Employés')).toBeNull()
 		expect(screen.queryByText('Vue équipe')).toBeNull()
 	})
 
 	it('prefixes every section link with the tenant', async () => {
-		await renderNav('/o/dupont/crm/customers')
+		await renderNav('/o/dupont/crm/clients')
 
 		const lien = screen.getByRole('link', { name: /Pipeline/ })
-		expect(lien.getAttribute('href')).toBe('/o/dupont/crm/customers/pipeline')
+		expect(lien.getAttribute('href')).toBe('/o/dupont/crm/pipeline')
 	})
 
 	it('marks the current section', async () => {
-		await renderNav('/o/dupont/crm/customers/pipeline')
+		await renderNav('/o/dupont/crm/pipeline')
 
 		const courant = await screen.findByRole('link', { current: 'page' })
 		expect(courant.textContent).toContain('Pipeline')
 	})
 
 	it('exposes no link for an announced section, but keeps it focusable', async () => {
-		await renderNav('/o/dupont/crm/customers')
+		await renderNav('/o/dupont/crm/clients')
 
 		const liens = screen.getAllByRole('link').map((lien) => lien.textContent)
 		expect(liens.some((texte) => texte?.includes('Section annoncée'))).toBe(
@@ -173,7 +178,7 @@ describe('ModuleNav', () => {
 	})
 
 	it('starts the nav list right under the primary action, without an extra top padding or a gap between its blocks', async () => {
-		const { container } = await renderNav('/o/dupont/crm/customers')
+		const { container } = await renderNav('/o/dupont/crm/clients')
 
 		const corps = container.querySelector('[data-slot="sidebar-content"]')
 		const classes = corps?.className.split(' ') ?? []
@@ -186,7 +191,7 @@ describe('ModuleNav', () => {
 	})
 
 	it('draws the right edge of the sidebar with the nav border over the nav background', async () => {
-		const { container } = await renderNav('/o/dupont/crm/customers')
+		const { container } = await renderNav('/o/dupont/crm/clients')
 
 		const bord = container.querySelector('[data-slot="sidebar-container"]')
 		const classes = bord?.className.split(' ') ?? []
@@ -197,14 +202,14 @@ describe('ModuleNav', () => {
 	})
 
 	it('keeps the foot of the nav for the account menu alone', async () => {
-		const { container } = await renderNav('/o/dupont/crm/customers')
+		const { container } = await renderNav('/o/dupont/crm/clients')
 
 		const pied = container.querySelector('[data-slot="sidebar-footer"]')
 		const corps = container.querySelector('[data-slot="sidebar-content"]')
 
 		expect(pied?.textContent).not.toContain('Paramètres')
 		expect(pied?.querySelectorAll('a, button')).toHaveLength(0)
-		expect(corps?.textContent).toContain('Comptes')
+		expect(corps?.textContent).toContain('Clients')
 		expect(corps?.textContent).not.toContain('Paramètres')
 	})
 
@@ -228,7 +233,7 @@ describe('ModuleNav', () => {
 
 	it('offers no collapse button, the sidebar keeps its keyboard shortcut', async () => {
 		const user = userEvent.setup()
-		const { container } = await renderNav('/o/dupont/crm/customers')
+		const { container } = await renderNav('/o/dupont/crm/clients')
 
 		expect(screen.queryByRole('button', { name: 'Réduire' })).toBeNull()
 		expect(screen.queryByRole('button', { name: 'Agrandir' })).toBeNull()
@@ -251,7 +256,7 @@ describe('ModuleNav', () => {
 	})
 
 	it('shows no primary action on a module that defines none', async () => {
-		await renderNav('/o/dupont/crm/customers')
+		await renderNav('/o/dupont/crm/clients')
 
 		expect(screen.queryByRole('link', { name: 'Nouveau projet' })).toBeNull()
 	})

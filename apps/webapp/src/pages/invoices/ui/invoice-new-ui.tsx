@@ -17,13 +17,14 @@ import type { Customer, CustomerContext } from '#/hooks/use-customers'
 import type { InvoiceKind, OperationNature } from '#/hooks/use-invoices'
 import type { Project } from '#/hooks/use-projects'
 import { buildOrgPath } from '#/modules/org-path'
+import { MAX_PAYMENT_TERMS_DAYS } from '#/pages/invoices/lib/invoice-new'
 import {
 	firstInvalidInvoiceFieldId,
 	NEW_INVOICE_FIELD_IDS,
+	type NewInvoiceFormValues,
 	validateNewInvoice,
 } from '#/pages/invoices/lib/new-invoice-form'
 import {
-	type InvoiceFormValues,
 	type InvoiceLineFormValues,
 	invoiceLineTotalCents,
 	operationNatureLabel,
@@ -71,7 +72,7 @@ const NO_VALUE = 'none'
 
 interface InvoiceNewUIProps {
 	organizationSlug: string
-	values: InvoiceFormValues
+	values: NewInvoiceFormValues
 	customers: Customer[]
 	customerContexts: CustomerContext[]
 	projects: Project[]
@@ -79,7 +80,7 @@ interface InvoiceNewUIProps {
 	isCreating: boolean
 	isCustomerContextsLoading: boolean
 	vatEnabled: boolean
-	onChange: (patch: Partial<InvoiceFormValues>) => void
+	onChange: (patch: Partial<NewInvoiceFormValues>) => void
 	onLineChange: (index: number, patch: Partial<InvoiceLineFormValues>) => void
 	onAddLine: () => string
 	onMoveLine: (index: number, delta: -1 | 1) => void
@@ -131,7 +132,7 @@ export function InvoiceNewUI({
 	return (
 		<PageShell className="max-w-5xl gap-0">
 			<div className="mb-3">
-				<BackLink to="/crm/invoices" label="Factures" />
+				<BackLink to="/crm/factures" label="Factures" />
 			</div>
 			<PageHeader
 				className="mb-6"
@@ -222,12 +223,23 @@ export function InvoiceNewUI({
 									</SelectContent>
 								</Select>
 							</FormField>
-							<FormField id={`${baseId}-due`} label="Échéance">
+							<FormField
+								id={NEW_INVOICE_FIELD_IDS.terms}
+								label="Délai de paiement (jours)"
+								required
+								error={errors.terms}
+								hint={`De 0 à ${MAX_PAYMENT_TERMS_DAYS} jours : 0 pour un paiement à réception.`}
+							>
 								<Input
-									id={`${baseId}-due`}
-									type="date"
-									value={values.dueAt}
-									onChange={(event) => onChange({ dueAt: event.target.value })}
+									id={NEW_INVOICE_FIELD_IDS.terms}
+									inputMode="numeric"
+									autoComplete="off"
+									value={values.termsDays}
+									aria-invalid={errors.terms !== undefined || undefined}
+									onChange={(event) =>
+										onChange({ termsDays: event.target.value })
+									}
+									className="w-28 text-right tabular-nums"
 								/>
 							</FormField>
 							<FormField id={`${baseId}-nature`} label="Nature de l’opération">
@@ -323,7 +335,7 @@ export function InvoiceNewUI({
 				)}
 				<div className="flex flex-wrap justify-end gap-2 border-t pt-4">
 					<Button variant="outline" asChild>
-						<Link to={buildOrgPath(organizationSlug, '/crm/invoices')}>
+						<Link to={buildOrgPath(organizationSlug, '/crm/factures')}>
 							Annuler
 						</Link>
 					</Button>

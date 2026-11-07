@@ -18,6 +18,7 @@ import {
 	monthlyTrend,
 	parseLedgerSearch,
 	paymentFormErrors,
+	receiptVat,
 	summarizeLedger,
 	validatePaidDate,
 	vatSummary,
@@ -228,5 +229,16 @@ describe('forms', () => {
 		expect(
 			paymentFormErrors({ ...values, invoiceId: null }, TODAY, () => null),
 		).toHaveLength(1)
+	})
+
+	it('extracts the VAT of a receipt from the invoice rate', () => {
+		expect(receiptVat(12000, 20)).toBe(2000)
+		expect(receiptVat(11000, 10)).toBe(1000)
+		expect(receiptVat(10000, 0)).toBe(0)
+		expect(receiptVat(-12000, 20)).toBe(-2000)
+	})
+
+	it('falls back to the default rate without an invoice rate', () => {
+		expect(receiptVat(12000, null)).toBe(2000)
 	})
 })

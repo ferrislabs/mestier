@@ -3,6 +3,7 @@ import {
 	bpOfVatRate,
 	type CatalogRow,
 	catalogSummary,
+	catalogUsage,
 	DEFAULT_FILTERS,
 	emptyForm,
 	evaluateForm,
@@ -12,6 +13,8 @@ import {
 	marginOf,
 	marginTone,
 	searchOf,
+	usageLabel,
+	usageOf,
 	validateCatalogSearch,
 	vatRateOfBp,
 } from '#/pages/catalog/catalog-model'
@@ -161,5 +164,36 @@ describe('hasSameReference', () => {
 		expect(hasSameReference(rows, ' fen-1 ', null)).toBe(true)
 		expect(hasSameReference(rows, 'fen-1', 'a')).toBe(false)
 		expect(hasSameReference(rows, '', null)).toBe(false)
+	})
+})
+
+describe('catalog usage', () => {
+	it('counts the quote and invoice lines that use each item', () => {
+		const usage = catalogUsage({
+			quoteLines: ['a', 'a', 'b', null],
+			invoiceLines: ['a', null],
+		})
+		expect(usageOf(usage, 'a')).toEqual({ quotes: 2, invoices: 1, total: 3 })
+		expect(usageOf(usage, 'b')).toEqual({ quotes: 1, invoices: 0, total: 1 })
+	})
+
+	it('reports an unknown item as never used', () => {
+		expect(
+			usageOf(catalogUsage({ quoteLines: [], invoiceLines: [] }), 'zzz'),
+		).toEqual({ quotes: 0, invoices: 0, total: 0 })
+	})
+
+	it('describes the usage in French', () => {
+		expect(usageLabel({ quotes: 0, invoices: 0, total: 0 })).toEqual({
+			main: 'Jamais utilisé',
+			detail: null,
+		})
+		expect(usageLabel({ quotes: 1, invoices: 0, total: 1 })).toEqual({
+			main: '1 ligne',
+			detail: '1 en devis, 0 en factures',
+		})
+		expect(usageLabel({ quotes: 2, invoices: 1, total: 3 }).main).toBe(
+			'3 lignes',
+		)
 	})
 })

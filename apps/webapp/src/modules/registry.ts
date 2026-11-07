@@ -46,6 +46,7 @@ import {
 	newWorkflowPath,
 	workflowsPath,
 } from '#/pages/automation/lib/automation-paths'
+import { CrmSidebarFeature } from '#/pages/crm-nav/feature/crm-sidebar-feature'
 import { ProjetSidebarFeature } from '#/pages/projet/feature/projet-sidebar-feature'
 
 export const MODULES: AppModule[] = [
@@ -84,12 +85,13 @@ export const MODULES: AppModule[] = [
 		basePath: '/crm',
 		status: 'available',
 		hasOverview: false,
-		primaryAction: { label: 'Nouveau devis', to: '/crm/quotes/new' },
+		sidebar: CrmSidebarFeature,
+		primaryAction: { label: 'Nouveau devis', to: '/crm/devis/nouveau' },
 		sections: [
 			{
 				id: 'customers',
-				label: 'Comptes',
-				to: '/crm/customers',
+				label: 'Clients',
+				to: '/crm/clients',
 				icon: Users,
 				exact: true,
 				requiredPermission: 'VIEW_CUSTOMERS',
@@ -97,42 +99,42 @@ export const MODULES: AppModule[] = [
 			{
 				id: 'pipeline',
 				label: 'Pipeline',
-				to: '/crm/customers/pipeline',
+				to: '/crm/pipeline',
 				icon: KanbanSquare,
 				requiredPermission: 'VIEW_CUSTOMERS',
 			},
 			{
 				id: 'quotes',
 				label: 'Devis',
-				to: '/crm/quotes',
+				to: '/crm/devis',
 				icon: FileText,
 				requiredPermission: 'VIEW_QUOTES',
 			},
 			{
 				id: 'invoices',
 				label: 'Factures',
-				to: '/crm/invoices',
+				to: '/crm/factures',
 				icon: Receipt,
 				requiredPermission: 'VIEW_INVOICES',
 			},
 			{
 				id: 'catalog',
 				label: 'Catalogue',
-				to: '/crm/catalog',
+				to: '/crm/catalogue',
 				icon: Boxes,
 				requiredPermission: 'MANAGE_REFERENCE',
 			},
 			{
 				id: 'credit-notes',
 				label: 'Avoirs',
-				to: '/crm/credit-notes',
+				to: '/crm/avoirs',
 				icon: FileMinus,
 				requiredPermission: 'VIEW_INVOICES',
 			},
 			{
 				id: 'treasury',
 				label: 'Trésorerie',
-				to: '/crm/treasury',
+				to: '/crm/tresorerie',
 				icon: Landmark,
 				requiredPermission: 'VIEW_INVOICES',
 			},
@@ -144,9 +146,15 @@ export const MODULES: AppModule[] = [
 				requiredPermission: 'VIEW_INVOICES',
 			},
 			{
+				id: 'suppliers',
+				label: 'Fournisseurs',
+				to: '/crm/fournisseurs',
+				icon: Truck,
+			},
+			{
 				id: 'crm-settings',
 				label: 'Réglages',
-				to: '/crm/settings',
+				to: '/crm/reglages',
 				icon: Settings2,
 				requiredPermission: 'MANAGE_ORG',
 			},
@@ -438,7 +446,7 @@ export const MODULES: AppModule[] = [
 		label: 'Achats',
 		icon: ShoppingCart,
 		hue: 40,
-		description: 'Factures et fournisseurs',
+		description: 'Factures fournisseurs',
 		basePath: '/purchase',
 		status: 'available',
 		hasOverview: false,
@@ -448,12 +456,6 @@ export const MODULES: AppModule[] = [
 				label: 'Factures fournisseurs',
 				to: '/purchase/supplier-invoices',
 				icon: FileWarning,
-			},
-			{
-				id: 'suppliers',
-				label: 'Fournisseurs',
-				to: '/purchase/suppliers',
-				icon: Truck,
 			},
 		],
 	},

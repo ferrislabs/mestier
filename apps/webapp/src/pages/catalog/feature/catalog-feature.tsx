@@ -28,12 +28,14 @@ import {
 	filterCatalog,
 	formOf,
 	hasSameReference,
+	usageOf,
 } from '#/pages/catalog/catalog-model'
 import {
 	EMPTY_CATALOG_EXTRAS,
 	useCatalogExtrasMap,
 	useSaveCatalogExtras,
 } from '#/pages/catalog/feature/mocks/catalog-extras'
+import { useCatalogUsageMap } from '#/pages/catalog/feature/mocks/catalog-usage'
 import { ProductTechnicalSheetField } from '#/pages/catalog/feature/product-technical-sheet-field'
 import { buildProductRequest } from '#/pages/catalog/lib/product-request'
 import type { CatalogEditor } from '#/pages/catalog/ui/catalog-form-dialog'
@@ -104,6 +106,7 @@ function CatalogWorkspace({
 	const canManage = useHasPermission('MANAGE_REFERENCE')
 	const extras = useCatalogExtrasMap()
 	const saveExtras = useSaveCatalogExtras()
+	const usage = useCatalogUsageMap()
 	const settings = useCrmSettings()
 	const [query, setQuery] = useState(filters.query)
 	const [editor, setEditor] = useState<CatalogEditor>({ mode: 'create' })
@@ -230,6 +233,7 @@ function CatalogWorkspace({
 				onFiltersChange(next)
 			}}
 			extrasOf={extrasOf}
+			usageOf={(itemId) => usageOf(usage, itemId)}
 			canManage={canManage}
 			isLoading={catalog.serviceRates.isLoading || catalog.products.isLoading}
 			error={

@@ -1,5 +1,12 @@
 import { Link } from '@tanstack/react-router'
-import { MoreHorizontal, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import {
+	MoreHorizontal,
+	Plus,
+	RefreshCw,
+	Search,
+	Trash2,
+	X,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
 	DataViewPagination,
@@ -28,6 +35,13 @@ import {
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { Input } from '#/components/ui/input'
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '#/components/ui/select'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import {
 	Table,
@@ -47,6 +61,20 @@ import {
 	normalizeText,
 	plural,
 } from '#/pages/quotes/lib/doc-format'
+import type { QuoteExtras } from '#/pages/quotes/lib/quote-extras'
+import {
+	matchesClient,
+	matchesOwner,
+	matchesStatus,
+	OWNER_ALL,
+	OWNER_NONE,
+	type QuoteStatusFilter,
+} from '#/pages/quotes/lib/quote-filter'
+import {
+	QUOTE_DISPLAY_LABELS,
+	type QuoteDisplayStatus,
+	quoteDisplayStatus,
+} from '#/pages/quotes/lib/quote-status'
 import { computeQuoteTiles } from '#/pages/quotes/lib/quote-tiles'
 import {
 	getQuoteListUrlState,
@@ -59,17 +87,22 @@ import {
 	customerDisplayName,
 	formatCents,
 	quoteReferenceLabel,
-	quoteStatusLabel,
 } from '#/pages/quotes/types'
 import { QuoteStatusBadge } from '#/pages/quotes/ui/doc/badges'
 import { AccountLink } from '#/pages/quotes/ui/doc/doc-links'
 import { Money, StatTile } from '#/pages/quotes/ui/doc/primitives'
+import type { QuoteOwner } from '#/pages/quotes/ui/quote-terms-fields'
 
 interface QuoteListUIProps {
 	organizationSlug: string
 	organizationName: string
 	customers: Customer[]
 	quotes: Quote[]
+	owners: readonly QuoteOwner[]
+	extrasOf: (quoteId: string) => QuoteExtras
+	today: string
+	clientFilter?: string | null
+	onClearClientFilter?: () => void
 	quotesPagination?: PaginationMetadata | null
 	quotePage: number
 	quotePageSize: number
@@ -84,7 +117,10 @@ interface QuoteListUIProps {
 
 const STATUS_TOGGLES = QUOTE_FILTER_OPTIONS.map((option) => ({
 	value: option.value,
-	label: option.value === 'all' ? 'Tous' : quoteStatusLabel(option.value),
+	label:
+		option.value === 'all'
+			? 'Tous'
+			: QUOTE_DISPLAY_LABELS[option.value as Exclude<QuoteStatusFilter, 'all'>],
 }))
 
 function Dash() {
@@ -92,6 +128,34 @@ function Dash() {
 		<span className="text-muted-foreground">
 			<span aria-hidden>—</span>
 			<span className="sr-only">Non renseigné</span>
+		</span>
+	)
+}
+
+function customerNameOf(
+	customers: readonly Customer[],
+	customerId: string,
+): string | null {
+	const customer = customers.find((item) => item.id === customerId)
+	return customer ? customerDisplayName(customer) : null
+}
+
+function ValidityCell({
+	validUntil,
+	expired,
+}: {
+	validUntil: string | null
+	expired: boolean
+}) {
+	if (!validUntil) return <Dash />
+	return (
+		<span
+			className={cn(
+				expired ? 'font-medium text-state-alert' : 'text-muted-foreground',
+			)}
+		>
+			{formatDocumentDate(validUntil)}
+			{expired ? ' (expiré)' : ''}
 		</span>
 	)
 }
@@ -112,6 +176,11 @@ export function QuoteListUI({
 	organizationSlug,
 	customers,
 	quotes,
+	owners,
+	extrasOf,
+	today,
+	clientFilter = null,
+	onClearClientFilter,
 	quotesPagination,
 	quotePage,
 	quotePageSize,
@@ -136,7 +205,22 @@ export function QuoteListUI({
 			? initialQuoteListState.sort
 			: 'created-desc',
 	)
-	const tiles = useMemo(() => computeQuoteTiles(quotes), [quotes])
+	const [ownerFilter, setOwnerFilter] = useState(OWNER_ALL)
+	const tiles = useMemo(
+		() => computeQuoteTiles(quotes, { today, extrasOf }),
+		[quotes, today, extrasOf],
+	)
+	const scopedQuotes = useMemo(
+		() =>
+			quotes.filter(
+				(quote) =>
+					matchesOwner(extrasOf(quote.id).ownerId, ownerFilter) &&
+					matchesClient(quote.customer_id, clientFilter),
+			),
+		[quotes, extrasOf, ownerFilter, clientFilter],
+	)
+	const displayOf = (quote: Quote) =>
+		quoteDisplayStatus(quote.status, extrasOf(quote.id), today)
 
 	const quotePaginationView = getPaginationViewModel(
 		quotesPagination,
@@ -146,12 +230,13 @@ export function QuoteListUI({
 	)
 
 	const quoteDataView = useDataView({
-		data: quotes,
+		data: scopedQuotes,
 		search: quoteSearch,
 		searchPredicate: (quote, query) =>
-			quoteMatchesSearch(quote, query, customers),
+			quoteMatchesSearch(quote, query, customers, displayOf(quote)),
 		filter: quoteStatusFilter,
-		filterPredicate: quoteMatchesStatusFilter,
+		filterPredicate: (quote, filter) =>
+			matchesStatus(displayOf(quote), filter as QuoteStatusFilter),
 		sort: quoteSort,
 		sortOptions: QUOTE_SORT_OPTIONS,
 		page: quotePage,
@@ -199,13 +284,19 @@ export function QuoteListUI({
 	const isDeletingSelectedQuote =
 		Boolean(quoteToDelete) && deletingQuoteId === quoteToDelete?.id
 
-	const filtered = quoteSearch.trim() !== '' || quoteStatusFilter !== 'all'
+	const filtered =
+		quoteSearch.trim() !== '' ||
+		quoteStatusFilter !== 'all' ||
+		ownerFilter !== OWNER_ALL ||
+		clientFilter !== null
 	const noQuotes = (quotesPagination?.total ?? quotes.length) === 0 && !filtered
 
 	const resetQuoteDataView = () => {
 		setQuoteSearch('')
 		setQuoteStatusFilter('all')
 		setQuoteSort('created-desc')
+		setOwnerFilter(OWNER_ALL)
+		onClearClientFilter?.()
 		onQuotePageChange(1)
 	}
 
@@ -216,7 +307,7 @@ export function QuoteListUI({
 
 	const newQuoteLink = (
 		<Button size="sm" asChild>
-			<Link to={buildOrgPath(organizationSlug, '/crm/quotes/new')}>
+			<Link to={buildOrgPath(organizationSlug, '/crm/devis/nouveau')}>
 				<Plus aria-hidden /> Nouveau devis
 			</Link>
 		</Button>
@@ -276,8 +367,8 @@ export function QuoteListUI({
 							<Money cents={tiles.pending.netCents} /> HT
 						</>
 					}
-					pressed={quoteStatusFilter === 'SENT'}
-					onClick={() => toggleStatus('SENT')}
+					pressed={quoteStatusFilter === 'sent'}
+					onClick={() => toggleStatus('sent')}
 				/>
 				<StatTile
 					label="Acceptés"
@@ -287,8 +378,8 @@ export function QuoteListUI({
 							<Money cents={tiles.accepted.netCents} /> HT
 						</>
 					}
-					pressed={quoteStatusFilter === 'ACCEPTED'}
-					onClick={() => toggleStatus('ACCEPTED')}
+					pressed={quoteStatusFilter === 'accepted'}
+					onClick={() => toggleStatus('accepted')}
 				/>
 				<StatTile
 					label="Taux d’acceptation"
@@ -308,8 +399,8 @@ export function QuoteListUI({
 					label="Brouillons"
 					value={tiles.drafts}
 					hint="À finaliser et envoyer"
-					pressed={quoteStatusFilter === 'DRAFT'}
-					onClick={() => toggleStatus('DRAFT')}
+					pressed={quoteStatusFilter === 'draft'}
+					onClick={() => toggleStatus('draft')}
 				/>
 			</section>
 
@@ -351,6 +442,42 @@ export function QuoteListUI({
 						</ToggleGroupItem>
 					))}
 				</ToggleGroup>
+				<Select
+					value={ownerFilter}
+					onValueChange={(owner) => {
+						setOwnerFilter(owner)
+						onQuotePageChange(1)
+					}}
+				>
+					<SelectTrigger
+						size="sm"
+						className="w-52 bg-card"
+						aria-label="Filtrer par responsable"
+					>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value={OWNER_ALL}>Tous les responsables</SelectItem>
+						<SelectItem value={OWNER_NONE}>Sans responsable</SelectItem>
+						{owners.map((owner) => (
+							<SelectItem key={owner.id} value={owner.id}>
+								{owner.name}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				{clientFilter !== null && (
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={onClearClientFilter}
+						aria-label="Retirer le filtre client"
+					>
+						Client : {customerNameOf(customers, clientFilter) ?? 'introuvable'}
+						<X aria-hidden />
+					</Button>
+				)}
 			</div>
 
 			{isLoading ? (
@@ -391,6 +518,7 @@ export function QuoteListUI({
 								<TableHead>Objet</TableHead>
 								<TableHead>Client</TableHead>
 								<TableHead className="max-lg:hidden">Émission</TableHead>
+								<TableHead className="max-xl:hidden">Validité</TableHead>
 								<TableHead className="text-right">Total HT</TableHead>
 								<TableHead className="text-right max-md:hidden">
 									Total TTC
@@ -417,7 +545,7 @@ export function QuoteListUI({
 											<Link
 												to={buildOrgPath(
 													organizationSlug,
-													'/crm/quotes/$quoteId',
+													'/crm/devis/$quoteId',
 												)}
 												params={{ quoteId: quote.id }}
 												className={cn(
@@ -448,6 +576,12 @@ export function QuoteListUI({
 										<TableCell className="whitespace-nowrap text-muted-foreground max-lg:hidden">
 											{formatDocumentDate(quote.created_at)}
 										</TableCell>
+										<TableCell className="whitespace-nowrap max-xl:hidden">
+											<ValidityCell
+												validUntil={extrasOf(quote.id).validUntil}
+												expired={displayOf(quote) === 'expired'}
+											/>
+										</TableCell>
 										<TableCell className="text-right">
 											<Money cents={quote.net_cents} />
 										</TableCell>
@@ -455,7 +589,7 @@ export function QuoteListUI({
 											<Money cents={quote.gross_cents} />
 										</TableCell>
 										<TableCell className="pr-4">
-											<QuoteStatusBadge status={quote.status} />
+											<QuoteStatusBadge status={displayOf(quote)} />
 										</TableCell>
 										{onQuoteDelete ? (
 											<TableCell className="relative z-10 pr-2">
@@ -478,7 +612,7 @@ export function QuoteListUI({
 																<Link
 																	to={buildOrgPath(
 																		organizationSlug,
-																		'/crm/quotes/$quoteId',
+																		'/crm/devis/$quoteId',
 																	)}
 																	params={{ quoteId: quote.id }}
 																>
@@ -592,6 +726,7 @@ function quoteMatchesSearch(
 	quote: Quote,
 	query: string,
 	customers: Customer[],
+	display: QuoteDisplayStatus,
 ): boolean {
 	const customer = customers.find((item) => item.id === quote.customer_id)
 	const customerName = customer
@@ -602,15 +737,10 @@ function quoteMatchesSearch(
 		quote.id.toLowerCase().includes(wanted) ||
 		normalizeText(quote.reference ?? '').includes(wanted) ||
 		normalizeText(quote.title).includes(wanted) ||
-		normalizeText(quoteStatusLabel(quote.status)).includes(wanted) ||
+		normalizeText(QUOTE_DISPLAY_LABELS[display]).includes(wanted) ||
 		formatCents(quote.gross_cents).toLowerCase().includes(wanted) ||
 		customerName.includes(wanted)
 	)
-}
-
-function quoteMatchesStatusFilter(quote: Quote, filter: string): boolean {
-	if (filter === 'all') return true
-	return quote.status === filter
 }
 
 function dateValue(value: string): number {

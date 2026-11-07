@@ -12,11 +12,9 @@ import {
 } from '#/pages/customers/customer-list-url-state'
 import type { AccountExtras } from '#/pages/customers/feature/mocks/account-extras'
 import type { AccountForm } from '#/pages/customers/lib/account-form'
+import type { CustomerListData } from '#/pages/customers/lib/accounts'
 import { CustomerCreateDialog } from '#/pages/customers/ui/customer-create-dialog'
-import {
-	CustomersTable,
-	type Outstanding,
-} from '#/pages/customers/ui/customers-table'
+import { CustomersTable } from '#/pages/customers/ui/customers-table'
 import { CustomersToolbar } from '#/pages/customers/ui/customers-toolbar'
 
 interface CustomerListUIProps {
@@ -26,9 +24,8 @@ interface CustomerListUIProps {
 	filters: ClientFilters
 	onFiltersChange: (filters: ClientFilters) => void
 	extrasOf: (customerId: string) => AccountExtras
-	outstandingOf: (customerId: string) => Outstanding | undefined
+	dataOf: (customerId: string) => CustomerListData
 	organizationSlug: string
-	now: number
 	error: string | null
 	isLoading: boolean
 	onRetry: () => void
@@ -58,9 +55,8 @@ export function CustomerListUI({
 	filters,
 	onFiltersChange,
 	extrasOf,
-	outstandingOf,
+	dataOf,
 	organizationSlug,
-	now,
 	error,
 	isLoading,
 	onRetry,
@@ -155,8 +151,7 @@ export function CustomerListUI({
 					organizationSlug={organizationSlug}
 					customers={customers}
 					extrasOf={extrasOf}
-					outstandingOf={outstandingOf}
-					now={now}
+					dataOf={dataOf}
 				/>
 			)}
 			{!isLoading && pagination.pageCount > 1 ? (

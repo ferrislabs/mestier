@@ -29,6 +29,7 @@ import {
 	monthlyTrend,
 	type PaymentFormValues,
 	payables,
+	receiptVat,
 	summarizeLedger,
 	vatSummary,
 } from '#/pages/treasury/lib/ledger-model'
@@ -137,7 +138,7 @@ export function LedgerFeature({ search, onSearchChange }: LedgerFeatureProps) {
 		await recordReceipt.mutateAsync({
 			date: values.date,
 			amount,
-			vatAmount: Math.round((amount * 20) / 120),
+			vatAmount: receiptVat(amount, invoice?.vatRate ?? null),
 			method: values.method,
 			customerId: customer?.id ?? null,
 			customerName: customer?.name ?? invoice?.customerName ?? '',

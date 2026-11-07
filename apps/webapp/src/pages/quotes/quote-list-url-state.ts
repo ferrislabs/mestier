@@ -4,15 +4,15 @@ import {
 	readDataViewUrlState,
 	writeDataViewUrlState,
 } from '#/components/data-view'
+import { STATUS_FILTERS } from '#/pages/quotes/lib/quote-filter'
+import { QUOTE_DISPLAY_LABELS } from '#/pages/quotes/lib/quote-status'
 
-export const QUOTE_FILTER_OPTIONS: DataViewOption[] = [
-	{ value: 'all', label: 'Tous les statuts' },
-	{ value: 'DRAFT', label: 'Brouillons' },
-	{ value: 'SENT', label: 'Envoyés' },
-	{ value: 'ACCEPTED', label: 'Acceptés' },
-	{ value: 'DECLINED', label: 'Refusés' },
-	{ value: 'CANCELLED', label: 'Annulés' },
-]
+export const QUOTE_FILTER_OPTIONS: DataViewOption[] = STATUS_FILTERS.map(
+	(status) => ({
+		value: status,
+		label: status === 'all' ? 'Tous les statuts' : QUOTE_DISPLAY_LABELS[status],
+	}),
+)
 
 export const DEFAULT_QUOTE_LIST_STATE: DataViewUrlState = {
 	search: '',
@@ -48,3 +48,15 @@ const QUOTE_SORT_VALUES = [
 	'total-desc',
 	'total-asc',
 ]
+
+export function readQuoteClientParam(): string | null {
+	if (typeof window === 'undefined') return null
+	const client = new URLSearchParams(window.location.search).get('client')
+	return client && client.trim() !== '' ? client : null
+}
+
+export function readQuoteDealParam(): string | null {
+	if (typeof window === 'undefined') return null
+	const deal = new URLSearchParams(window.location.search).get('opportunite')
+	return deal && deal.trim() !== '' ? deal : null
+}

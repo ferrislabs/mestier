@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react'
 import { cn } from '#/lib/utils'
+import {
+	type BillingFrequency,
+	FREQUENCY_SUFFIX,
+} from '#/pages/quotes/lib/billing-frequency'
 import { formatDocumentDate, formatSiret } from '#/pages/quotes/lib/doc-format'
 import { formatUnit, formatVatRateBp } from '#/pages/quotes/types'
 import { Money } from '#/pages/quotes/ui/doc/primitives'
@@ -35,6 +39,8 @@ export interface PaperLine {
 	unitPriceCents: number
 	vatRateBp: number | null
 	totalCents: number
+	discountPercent?: number
+	frequency?: BillingFrequency
 }
 
 export interface PaperDocument {
@@ -45,6 +51,8 @@ export interface PaperDocument {
 	title: string
 	issueDate: string | null
 	dueDate: string | null
+	validUntil?: string | null
+	siteAddressLines?: readonly string[]
 	issuer: PaperIssuer
 	recipient: PaperRecipient
 	lines: readonly PaperLine[]
@@ -123,6 +131,9 @@ function TitleBlock({ document }: { document: PaperDocument }) {
 				{document.kind === 'invoice' && (
 					<DateRow label="Échéance" date={document.dueDate} />
 				)}
+				{document.kind === 'quote' && document.validUntil !== undefined && (
+					<DateRow label="Valable jusqu’au" date={document.validUntil} />
+				)}
 			</dl>
 		</div>
 	)
@@ -155,6 +166,21 @@ function RecipientBlock({ recipient }: { recipient: PaperRecipient }) {
 	)
 }
 
+function SiteBlock({ lines }: { lines: readonly string[] }) {
+	return (
+		<div className="min-w-48">
+			<Caption>Adresse du chantier</Caption>
+			<div className="space-y-0.5">
+				<Lines lines={lines} />
+			</div>
+		</div>
+	)
+}
+
+function formatPercent(value: number): string {
+	return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(value)} %`
+}
+
 function Amount({ cents, className }: { cents: number; className?: string }) {
 	return (
 		<Money
@@ -169,7 +195,11 @@ const HEAD =
 
 function LinesTable({ document }: { document: PaperDocument }) {
 	const showUnit = document.lines.some((line) => line.unit !== null)
-	const columns = 4 + (showUnit ? 1 : 0) + (document.showVat ? 1 : 0)
+	const showDiscount = document.lines.some(
+		(line) => line.discountPercent !== undefined,
+	)
+	const columns =
+		4 + (showUnit ? 1 : 0) + (showDiscount ? 1 : 0) + (document.showVat ? 1 : 0)
 	return (
 		<div className="overflow-x-auto">
 			<table className="w-full min-w-[34rem] border-collapse text-left">
@@ -190,6 +220,11 @@ function LinesTable({ document }: { document: PaperDocument }) {
 						<th scope="col" className={cn(HEAD, 'text-right')}>
 							PU HT
 						</th>
+						{showDiscount && (
+							<th scope="col" className={cn(HEAD, 'text-right')}>
+								Remise
+							</th>
+						)}
 						{document.showVat && (
 							<th scope="col" className={cn(HEAD, 'text-right')}>
 								TVA
@@ -229,7 +264,19 @@ function LinesTable({ document }: { document: PaperDocument }) {
 							)}
 							<td className="px-2 py-2 text-right">
 								<Amount cents={line.unitPriceCents} />
+								{line.frequency && line.frequency !== 'one_shot' && (
+									<span className="block text-[11px] text-zinc-500">
+										{FREQUENCY_SUFFIX[line.frequency]}
+									</span>
+								)}
 							</td>
+							{showDiscount && (
+								<td className="tabular px-2 py-2 text-right text-zinc-600">
+									{line.discountPercent
+										? formatPercent(line.discountPercent)
+										: '—'}
+								</td>
+							)}
 							{document.showVat && (
 								<td className="tabular whitespace-nowrap px-2 py-2 text-right text-zinc-600">
 									{line.vatRateBp === null
@@ -305,7 +352,11 @@ export function DocumentPaper({
 			</header>
 
 			<div className="flex flex-wrap items-start justify-between gap-4">
-				<span />
+				{document.siteAddressLines && document.siteAddressLines.length > 0 ? (
+					<SiteBlock lines={document.siteAddressLines} />
+				) : (
+					<span />
+				)}
 				<RecipientBlock recipient={document.recipient} />
 			</div>
 

@@ -1,5 +1,9 @@
 import type { InvoiceLine, InvoiceLinePayload } from '#/hooks/use-invoices'
-import { centsToEuros, invoiceLineTotalCents } from '#/pages/invoices/types'
+import {
+	centsToEuros,
+	formatMoney,
+	invoiceLineTotalCents,
+} from '#/pages/invoices/types'
 
 export type CreditMode = 'total' | 'partial'
 
@@ -101,4 +105,58 @@ export function creditNoteLines(
 			},
 		]
 	})
+}
+
+export interface CreditPreviewTotals {
+	netCents: number
+	vatCents: number
+	grossCents: number
+}
+
+export function creditPreviewTotals(
+	lines: readonly InvoiceLine[],
+	mode: CreditMode,
+	inputs: QuantityInputs,
+): CreditPreviewTotals {
+	const bases = new Map<number, number>()
+	for (const line of lines) {
+		const net = creditPreviewNetCents([line], mode, inputs)
+		const rate = line.vat_rate_basis_points ?? 0
+		bases.set(rate, (bases.get(rate) ?? 0) + net)
+	}
+	let netCents = 0
+	let vatCents = 0
+	for (const [rate, net] of bases) {
+		netCents += net
+		vatCents += Math.round((net * rate) / 10000)
+	}
+	return { netCents, vatCents, grossCents: netCents + vatCents }
+}
+
+export interface CreditConsequence {
+	kind: 'none' | 'reduces' | 'settles' | 'refund'
+	after: number
+}
+
+export function creditConsequence(
+	balanceCents: number,
+	creditCents: number,
+): CreditConsequence {
+	if (!(creditCents > 0)) return { kind: 'none', after: balanceCents }
+	const after = balanceCents - creditCents
+	if (after < 0) return { kind: 'refund', after }
+	return { kind: after === 0 ? 'settles' : 'reduces', after }
+}
+
+export function creditConsequenceText(
+	balanceCents: number,
+	creditCents: number,
+): string | null {
+	const consequence = creditConsequence(balanceCents, creditCents)
+	if (consequence.kind === 'none') return null
+	if (consequence.kind === 'settles')
+		return 'Avec cet avoir, il ne reste plus rien à encaisser sur la facture.'
+	if (consequence.kind === 'reduces')
+		return `Le reste dû passera de ${formatMoney(balanceCents)} à ${formatMoney(consequence.after)}.`
+	return `Le client aura payé trop : ${formatMoney(-consequence.after)} seront à lui rembourser.`
 }

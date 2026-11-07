@@ -22,7 +22,7 @@ export const TAB_INFO: Record<
 	},
 	activite: {
 		label: 'Activité',
-		description: 'Opportunité, devis, factures et encours.',
+		description: 'Opportunités, devis, factures, avoirs et paiements.',
 	},
 }
 
@@ -51,10 +51,10 @@ export function validateClientSearch(raw: Record<string, unknown>): {
 	return isClientTab(raw.onglet) ? { onglet: raw.onglet } : {}
 }
 
-export function formatSiren(registrationNumber: string): string {
+export function formatSiret(registrationNumber: string): string {
 	const digits = registrationNumber.replace(/\s/g, '')
-	if (!/^\d{9}$/.test(digits)) return registrationNumber
-	return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`
+	if (!/^(\d{14}|\d{9})$/.test(digits)) return registrationNumber
+	return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`.trim()
 }
 
 export function identitySummary(
@@ -67,8 +67,8 @@ export function identitySummary(
 		kind === 'particulier'
 			? 'Particulier'
 			: registration === ''
-				? 'SIREN non renseigné'
-				: `SIREN ${formatSiren(registration)}`
+				? 'SIRET non renseigné'
+				: `SIRET ${formatSiret(registration)}`
 	const city = contexts.find((context) => context.city?.trim())?.city?.trim()
 	return city ? `${identity} · ${city}` : identity
 }
