@@ -158,6 +158,8 @@ mod tests {
             execution: ExecutionMode::PerItem,
             output_example: Value::Null,
             output_mirrors_field: None,
+            group: None,
+            description: None,
             sample_output: sample,
         }
     }

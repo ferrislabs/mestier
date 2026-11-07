@@ -688,6 +688,7 @@ fn descriptors() -> Vec<ConnectorDescriptor> {
     all.extend(collection_descriptors());
     all.extend(odoo_descriptors());
     all.extend(task_recurrence_descriptors());
+    all.extend(super::action::action_descriptors());
     all
 }
 
@@ -707,6 +708,8 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::Once,
             output_example: json!({ "item": "…", "index": 0 }),
             output_mirrors_field: None,
+            group: None,
+            description: None,
             sample_output: json!({ "items": ["…"] }),
         },
         ConnectorDescriptor {
@@ -720,6 +723,8 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "matched": true }),
             output_mirrors_field: None,
+            group: None,
+            description: None,
             sample_output: json!({ "matched": true }),
         },
         ConnectorDescriptor {
@@ -733,6 +738,8 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::Once,
             output_example: json!({ "customer_id": "…", "retry_limit": 3 }),
             output_mirrors_field: Some("variables"),
+            group: None,
+            description: None,
             sample_output: json!({ "customer_id": "…", "retry_limit": 3 }),
         },
         ConnectorDescriptor {
@@ -750,6 +757,8 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
                 "resume_at": "2026-01-01T00:00:00Z",
             }),
             output_mirrors_field: None,
+            group: None,
+            description: None,
             sample_output: json!({
                 "duration": 2,
                 "unit": "days",
@@ -767,6 +776,8 @@ fn flow_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::Once,
             output_example: json!({ "id": "…" }),
             output_mirrors_field: None,
+            group: None,
+            description: None,
             sample_output: json!([{ "id": "…" }]),
         },
     ]
@@ -787,6 +798,8 @@ fn customer_descriptors() -> Vec<ConnectorDescriptor> {
         execution: ExecutionMode::PerItem,
         output_example: json!({ "id": "…", "name": "…" }),
         output_mirrors_field: None,
+        group: Some("Clients"),
+        description: None,
         sample_output: json!({ "id": "00000000-0000-0000-0000-000000000000", "name": "…" }),
     }]
 }
@@ -804,6 +817,8 @@ fn support_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "ticket_id": "…", "assignee_member_id": "…" }),
             output_mirrors_field: None,
+            group: Some("Support"),
+            description: None,
             sample_output: json!({
                 "ticket_id": "00000000-0000-0000-0000-000000000000",
                 "assignee_member_id": "00000000-0000-0000-0000-000000000000",
@@ -820,6 +835,8 @@ fn support_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "ticket_id": "…", "label": "High", "tone": "neutral" }),
             output_mirrors_field: None,
+            group: Some("Support"),
+            description: None,
             sample_output: json!({
                 "ticket_id": "00000000-0000-0000-0000-000000000000",
                 "label": "High",
@@ -842,6 +859,8 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "ticket_id": "…", "note_id": "…" }),
             output_mirrors_field: None,
+            group: Some("Support"),
+            description: None,
             sample_output: json!({
                 "ticket_id": "00000000-0000-0000-0000-000000000000",
                 "note_id": "00000000-0000-0000-0000-000000000000",
@@ -868,6 +887,8 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
                 "updated_at": "2026-01-01T00:00:00Z",
             }),
             output_mirrors_field: None,
+            group: Some("Devis"),
+            description: None,
             sample_output: json!([{
                 "id": "00000000-0000-0000-0000-000000000000",
                 "reference": "DV-2026-0001",
@@ -891,6 +912,8 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "project_id": "…", "name": "…", "quote_id": "…" }),
             output_mirrors_field: None,
+            group: Some("Planning"),
+            description: None,
             sample_output: json!({
                 "project_id": "00000000-0000-0000-0000-000000000000",
                 "name": "Rénovation de la salle de bain",
@@ -908,6 +931,8 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "message_id": "…", "channel_id": "…" }),
             output_mirrors_field: None,
+            group: Some("Discussions"),
+            description: None,
             sample_output: json!({
                 "message_id": "00000000-0000-0000-0000-000000000000",
                 "channel_id": "00000000-0000-0000-0000-000000000000",
@@ -931,6 +956,8 @@ fn smtp_descriptors() -> Vec<ConnectorDescriptor> {
             "accepted": ["claire.fontaine@fontaine-immo.fr"],
         }),
         output_mirrors_field: None,
+        group: None,
+        description: None,
         sample_output: json!({
             "message_id": "<8f2c1d@duval.fr>",
             "accepted": ["claire.fontaine@fontaine-immo.fr"],
@@ -959,6 +986,8 @@ fn http_descriptors() -> Vec<ConnectorDescriptor> {
             "body": {},
         }),
         output_mirrors_field: None,
+        group: None,
+        description: None,
         sample_output: json!({ "status": 200, "headers": {}, "body": {} }),
     }]
 }
@@ -979,6 +1008,8 @@ fn collection_descriptors() -> Vec<ConnectorDescriptor> {
             "body": {},
         }),
         output_mirrors_field: None,
+        group: None,
+        description: None,
         sample_output: json!({ "status": 200, "headers": {}, "body": {} }),
     }]
 }
@@ -1000,6 +1031,8 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "id": 42 }),
             output_mirrors_field: None,
+            group: None,
+            description: None,
             sample_output: json!({ "id": 42 }),
         },
         ConnectorDescriptor {
@@ -1013,6 +1046,8 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "id": 42, "updated": true }),
             output_mirrors_field: None,
+            group: None,
+            description: None,
             sample_output: json!({ "id": 42, "updated": true }),
         },
         ConnectorDescriptor {
@@ -1026,6 +1061,8 @@ fn odoo_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "id": 99 }),
             output_mirrors_field: None,
+            group: None,
+            description: None,
             sample_output: json!({ "id": 99 }),
         },
     ]
@@ -1053,6 +1090,8 @@ fn task_recurrence_descriptors() -> Vec<ConnectorDescriptor> {
         execution: ExecutionMode::PerItem,
         output_example: json!({ "materialized": 0 }),
         output_mirrors_field: None,
+        group: None,
+        description: None,
         sample_output: json!({ "materialized": 0 }),
     }]
 }
@@ -1076,6 +1115,8 @@ mod tests {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "index": 0 }),
             output_mirrors_field: None,
+            group: None,
+            description: None,
             sample_output: json!({ "index": 0 }),
         }
     }
@@ -1520,7 +1561,13 @@ mod tests {
         let catalogue = connector_catalogue();
 
         for descriptor in catalogue.descriptors() {
-            let is_list = matches!(descriptor.kind, "flow.merge" | "mestier.quote.search");
+            let is_list =
+                if crate::domain::automation::connector::find_action(descriptor.kind).is_some() {
+                    descriptor.sample_output.is_array()
+                } else {
+                    matches!(descriptor.kind, "flow.merge" | "mestier.quote.search")
+                        || descriptor.kind.contains(".list_")
+                };
             assert_eq!(
                 descriptor.sample_output.is_array(),
                 is_list,

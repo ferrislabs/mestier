@@ -23,7 +23,13 @@ export interface CreatorKind {
 	description: string
 	icon: LucideIcon
 	hue: number
+	group: string | null
 	source: CreatorSource
+}
+
+export interface CreatorKindGroup {
+	label: string | null
+	kinds: CreatorKind[]
 }
 
 export interface CreatorCategory {
@@ -35,6 +41,7 @@ export interface CreatorCategory {
 }
 
 export const TRIGGERS_CATEGORY_ID: CategoryId = 'triggers'
+export const ACTIONS_CATEGORY_ID: CategoryId = 'actions'
 export const COLLECTIONS_CATEGORY_ID: CategoryId = 'collections'
 
 interface RankedKind {
@@ -57,6 +64,7 @@ function rankedKind(
 			description: copy.description,
 			icon: copy.icon,
 			hue: copy.hue,
+			group: descriptor.group ?? null,
 			source: { type: 'connector', descriptor },
 		},
 	}
@@ -87,6 +95,7 @@ function triggerKinds(): CreatorKind[] {
 			description: copy.description,
 			icon: copy.icon,
 			hue: copy.hue,
+			group: null,
 			source: { type: 'trigger', kind: NEW_TRIGGER_KINDS[kind]() },
 		}
 	})
@@ -138,6 +147,36 @@ export function allCategories(
 	return [triggersCategory(), ...creatorCategories(descriptors)]
 }
 
+export function groupCreatorKinds(
+	kinds: readonly CreatorKind[],
+): CreatorKindGroup[] {
+	const byGroup = new Map<string | null, CreatorKind[]>()
+	for (const kind of kinds) {
+		const bucket = byGroup.get(kind.group)
+		if (bucket) bucket.push(kind)
+		else byGroup.set(kind.group, [kind])
+	}
+	return [...byGroup]
+		.map(([label, grouped]) => ({
+			label,
+			kinds: grouped.sort(
+				(a, b) =>
+					a.label.localeCompare(b.label, 'fr') || a.id.localeCompare(b.id),
+			),
+		}))
+		.sort((a, b) =>
+			a.label === null
+				? -1
+				: b.label === null
+					? 1
+					: a.label.localeCompare(b.label, 'fr'),
+		)
+}
+
+function searchHaystack(kind: CreatorKind): string {
+	return normalizeText(`${kind.label} ${kind.description} ${kind.group ?? ''}`)
+}
+
 export function searchCreatorKinds(
 	categories: readonly CreatorCategory[],
 	query: string,
@@ -147,9 +186,7 @@ export function searchCreatorKinds(
 		.map((category) => ({
 			...category,
 			kinds: category.kinds.filter(
-				(kind) =>
-					needle === '' ||
-					normalizeText(`${kind.label} ${kind.description}`).includes(needle),
+				(kind) => needle === '' || searchHaystack(kind).includes(needle),
 			),
 		}))
 		.filter((category) => category.kinds.length > 0)

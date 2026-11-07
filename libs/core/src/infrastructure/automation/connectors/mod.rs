@@ -5,6 +5,7 @@
 //! `domain::automation::connector::catalogue` by an anti-drift test in
 //! `registry`.
 
+pub(crate) mod actions;
 mod chat_post_message;
 mod collection_operation;
 mod customer_create;

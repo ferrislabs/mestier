@@ -4,6 +4,7 @@ import {
 	allCategories,
 	COLLECTIONS_CATEGORY_ID,
 	creatorCategories,
+	groupCreatorKinds,
 	searchCreatorKinds,
 	TRIGGERS_CATEGORY_ID,
 	triggersCategory,
@@ -404,5 +405,114 @@ describe('allCategories', () => {
 			'Logique',
 			'Outils',
 		])
+	})
+})
+
+function grouped(
+	kind: string,
+	label: string,
+	group: string | null,
+): Schemas.ConnectorDescriptorResponse {
+	return { ...descriptor(kind, 'mestier', label), group }
+}
+
+const GENERATED = [
+	grouped('mestier.invoice.send', 'Envoyer une facture', 'Factures'),
+	grouped('mestier.support.close_ticket', 'Clôturer un ticket', 'Support'),
+	grouped('mestier.doe.generate', 'Générer un DOE', 'DOE'),
+	{
+		...grouped('mestier.invoice.cancel', 'Annuler une facture', 'Factures'),
+		description: 'Annule une facture émise',
+	},
+	grouped('mestier.stray.thing', 'Chose isolée', null),
+]
+
+describe('groupCreatorKinds', () => {
+	it('sorts the groups alphabetically and the actions by label inside each', () => {
+		const [actions] = creatorCategories(GENERATED)
+		const groups = groupCreatorKinds(actions.kinds)
+
+		expect(groups.map((group) => group.label)).toEqual([
+			null,
+			'DOE',
+			'Factures',
+			'Support',
+		])
+		expect(
+			groups.map((group) => group.kinds.map((kind) => kind.label)),
+		).toEqual([
+			['Chose isolée'],
+			['Générer un DOE'],
+			['Annuler une facture', 'Envoyer une facture'],
+			['Clôturer un ticket'],
+		])
+	})
+
+	it('does not depend on the order the server answers in', () => {
+		const forward = creatorCategories(GENERATED)[0].kinds
+		const backward = creatorCategories([...GENERATED].reverse())[0].kinds
+
+		expect(groupCreatorKinds(backward)).toEqual(groupCreatorKinds(forward))
+	})
+
+	it('keeps the group of each kind and the historical copy of the seven actions', () => {
+		const [actions] = creatorCategories([
+			grouped('mestier.support.assign_ticket', 'Assigner', 'Support'),
+		])
+
+		expect(actions.kinds[0]).toMatchObject({
+			label: 'Assigner un ticket',
+			description: 'Assigne un ticket à un membre de l’équipe',
+			group: 'Support',
+		})
+	})
+})
+
+describe('searchCreatorKinds — across the groups', () => {
+	const categories = allCategories(GENERATED)
+	const labels = (query: string) =>
+		searchCreatorKinds(categories, query).flatMap((category) =>
+			category.kinds.map((kind) => kind.label),
+		)
+
+	it('finds an action by its label in any group', () => {
+		expect(labels('doe')).toEqual(['Générer un DOE'])
+	})
+
+	it('finds every action of a group by the name of the group', () => {
+		expect(labels('factures')).toEqual([
+			'Annuler une facture',
+			'Envoyer une facture',
+		])
+	})
+
+	it('finds an action by the description the server gives it', () => {
+		expect(labels('annule')).toEqual(['Annuler une facture'])
+	})
+})
+
+describe('creatorCategories — the server description', () => {
+	it('uses it as the row description of a generated action', () => {
+		const [actions] = creatorCategories([
+			{
+				...grouped('mestier.invoice.send', 'Envoyer une facture', 'Factures'),
+				description: 'Envoie une facture au client',
+			},
+		])
+
+		expect(actions.kinds[0].description).toBe('Envoie une facture au client')
+	})
+
+	it('keeps the hand-written copy over the server description', () => {
+		const [actions] = creatorCategories([
+			{
+				...grouped('mestier.note.add', 'Ajouter', 'Support'),
+				description: 'autre',
+			},
+		])
+
+		expect(actions.kinds[0].description).toBe(
+			'Ajoute une note interne sur un ticket',
+		)
 	})
 })

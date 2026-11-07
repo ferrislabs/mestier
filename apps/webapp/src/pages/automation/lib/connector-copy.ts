@@ -3,28 +3,38 @@ import {
 	BadgeCheck,
 	Boxes,
 	CalendarClock,
+	CalendarDays,
 	CalendarSync,
+	ChartColumn,
 	Contact,
+	Database,
 	FileSearch,
+	FileText,
+	FolderArchive,
 	FolderPlus,
 	GitBranch,
 	Globe,
 	Library,
+	LifeBuoy,
 	type LucideIcon,
 	Mail,
+	MapPin,
 	Merge,
 	MessageSquare,
 	MousePointerClick,
 	ReceiptText,
 	Repeat,
+	ShoppingCart,
 	SlidersHorizontal,
 	Split,
+	Sprout,
 	StickyNote,
 	Timer,
 	UserCheck,
 	UserCog,
 	UserPlus,
 	UserRoundPlus,
+	Users,
 	Webhook,
 	Wrench,
 	Zap,
@@ -351,9 +361,27 @@ const FALLBACK_CATEGORY_BY_FAMILY: Record<string, CategoryId> = {
 	flow: 'flow',
 }
 
+export const GROUP_APPEARANCE: Record<
+	string,
+	{ icon: LucideIcon; hue: number }
+> = {
+	Achats: { icon: ShoppingCart, hue: 40 },
+	Clients: { icon: Users, hue: 120 },
+	Devis: { icon: FileText, hue: 235 },
+	Discussions: { icon: MessageSquare, hue: 300 },
+	DOE: { icon: FolderArchive, hue: 15 },
+	Entretien: { icon: Sprout, hue: 100 },
+	Factures: { icon: ReceiptText, hue: 330 },
+	Planning: { icon: CalendarDays, hue: 255 },
+	Rapports: { icon: ChartColumn, hue: 185 },
+	Référentiel: { icon: Database, hue: 210 },
+	Support: { icon: LifeBuoy, hue: 30 },
+	Terrain: { icon: MapPin, hue: 65 },
+}
+
 const FALLBACK_SUBTITLE = 'Connecteur'
-const FALLBACK_ICON = Wrench
-const FALLBACK_HUE = 220
+export const FALLBACK_ICON = Wrench
+export const FALLBACK_HUE = 220
 const FALLBACK_ORDER = 50
 
 export function categoryCopy(id: CategoryId): CategoryCopy {
@@ -376,14 +404,18 @@ export function describeConnector(descriptor: {
 	kind: string
 	family: string
 	label: string
+	group?: string | null
+	description?: string | null
 }): ConnectorCopy {
+	const group = descriptor.group ?? null
+	const appearance = group === null ? undefined : GROUP_APPEARANCE[group]
 	return (
 		CONNECTORS[descriptor.kind] ?? {
 			label: descriptor.label,
-			subtitle: FALLBACK_SUBTITLE,
-			description: '',
-			icon: FALLBACK_ICON,
-			hue: FALLBACK_HUE,
+			subtitle: group ?? FALLBACK_SUBTITLE,
+			description: descriptor.description ?? '',
+			icon: appearance?.icon ?? FALLBACK_ICON,
+			hue: appearance?.hue ?? FALLBACK_HUE,
 			category: FALLBACK_CATEGORY_BY_FAMILY[descriptor.family] ?? 'core',
 			order: FALLBACK_ORDER,
 			internal: false,

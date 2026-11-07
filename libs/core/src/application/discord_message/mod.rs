@@ -67,6 +67,16 @@ impl MestierUseCase {
     }
 
     #[transactional(message, events)]
+    pub async fn edit_system_message(
+        &self,
+        id: MessageId,
+        content: String,
+    ) -> Result<Message, CoreError> {
+        let mut service = MessageService::new(message_repository, &events);
+        service.edit_system_message(id, content).await
+    }
+
+    #[transactional(message, events)]
     pub async fn delete_message(&self, id: MessageId) -> Result<(), CoreError> {
         let mut service = MessageService::new(message_repository, &events);
         service.delete_message(id).await?;

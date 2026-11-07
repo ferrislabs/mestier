@@ -19,6 +19,10 @@ impl<'tx> PgUserRepository<'tx> {
     pub fn new(tx: &SharedTx<'tx>) -> Self {
         Self { tx: tx.clone() }
     }
+
+    pub(super) fn tx(&self) -> &SharedTx<'tx> {
+        &self.tx
+    }
 }
 
 impl<'tx> UserRepository for PgUserRepository<'tx> {

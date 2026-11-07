@@ -20,6 +20,58 @@ pub struct Field {
     pub visible_when: Option<VisibleWhen>,
 }
 
+impl Field {
+    const fn expression(
+        name: &'static str,
+        label: &'static str,
+        required: bool,
+        kind: FieldKind,
+    ) -> Self {
+        Self {
+            name,
+            label,
+            required,
+            kind,
+            expression: true,
+            secret: false,
+            visible_when: None,
+        }
+    }
+
+    pub const fn text(name: &'static str, label: &'static str, required: bool) -> Self {
+        Self::expression(name, label, required, FieldKind::Text)
+    }
+
+    pub const fn number(name: &'static str, label: &'static str, required: bool) -> Self {
+        Self::expression(name, label, required, FieldKind::Number)
+    }
+
+    pub const fn boolean(name: &'static str, label: &'static str, required: bool) -> Self {
+        Self::expression(name, label, required, FieldKind::Bool)
+    }
+
+    pub const fn json(name: &'static str, label: &'static str, required: bool) -> Self {
+        Self::expression(name, label, required, FieldKind::Json)
+    }
+
+    pub const fn select(
+        name: &'static str,
+        label: &'static str,
+        required: bool,
+        options: &'static [SelectOption],
+    ) -> Self {
+        Self {
+            name,
+            label,
+            required,
+            kind: FieldKind::Select { options },
+            expression: false,
+            secret: false,
+            visible_when: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum FieldKind {
     Text,
@@ -40,4 +92,10 @@ pub struct SelectOption {
 pub struct VisibleWhen {
     pub field: &'static str,
     pub any_of: &'static [&'static str],
+}
+
+impl SelectOption {
+    pub const fn new(value: &'static str, label: &'static str) -> Self {
+        Self { value, label }
+    }
 }

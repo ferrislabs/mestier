@@ -20,6 +20,7 @@ import {
 	operationPreset,
 } from '#/pages/automation/lib/collection-node'
 import {
+	ACTIONS_CATEGORY_ID,
 	allCategories,
 	COLLECTIONS_CATEGORY_ID,
 	type CreatorKind,
@@ -28,6 +29,7 @@ import {
 	TRIGGERS_CATEGORY_ID,
 	triggersCategory,
 } from '#/pages/automation/lib/creator'
+import { creatorDomains } from '#/pages/automation/lib/creator-domains'
 import {
 	collectionOperations,
 	searchOperations,
@@ -64,6 +66,7 @@ export function NodeCreatorFeature({
 	const [categoryId, setCategoryId] = useState<string | null>(
 		startsOnTriggers ? TRIGGERS_CATEGORY_ID : null,
 	)
+	const [groupId, setGroupId] = useState<string | null>(null)
 	const [collectionId, setCollectionId] = useState<string | null>(null)
 
 	const operationDescriptor = descriptors.find(
@@ -95,6 +98,9 @@ export function NodeCreatorFeature({
 		categoryId === TRIGGERS_CATEGORY_ID
 			? triggersCategory()
 			: (categories.find((item) => item.id === categoryId) ?? null)
+	const domains =
+		category?.id === ACTIONS_CATEGORY_ID ? creatorDomains(category.kinds) : null
+	const domain = domains?.find((item) => item.id === groupId) ?? null
 	const summary = summaryList.find((item) => item.id === collectionId)
 	const collection = known.find((item) => item.id === collectionId)
 	const atTriggerRoot = startsOnTriggers && categoryId === TRIGGERS_CATEGORY_ID
@@ -133,31 +139,38 @@ export function NodeCreatorFeature({
 								: 'ready',
 						failure: collectionLoadErrorMessage(summaries.error),
 					}
-				: category
-					? { type: 'kinds', kinds: category.kinds }
-					: {
-							type: 'categories',
-							categories,
-							triggerEntry: triggersCategory(),
-						}
+				: domain
+					? { type: 'kinds', kinds: domain.kinds }
+					: domains
+						? { type: 'domains', domains }
+						: category
+							? { type: 'kinds', kinds: category.kinds }
+							: {
+									type: 'categories',
+									categories,
+									triggerEntry: triggersCategory(),
+								}
 
 	const title = atTriggerRoot
 		? 'Qu’est-ce qui déclenche ce workflow ?'
 		: collectionId
 			? (collection?.title ?? summary?.title ?? 'Collection')
-			: (category?.label ?? 'Que doit-il se passer ensuite ?')
+			: (domain?.label ?? category?.label ?? 'Que doit-il se passer ensuite ?')
 
 	const description = atTriggerRoot
 		? 'Un déclencheur démarre le workflow. Vous pourrez en ajouter d’autres.'
 		: collectionId
 			? (collection?.baseUrl ?? summary?.baseUrl)
-			: category?.description
+			: (domain?.description ?? category?.description)
 
 	const goBack = collectionId
 		? () => setCollectionId(null)
-		: category && !atTriggerRoot
-			? () => setCategoryId(null)
-			: undefined
+		: domain
+			? () => setGroupId(null)
+			: category && !atTriggerRoot
+				? () => setCategoryId(null)
+				: undefined
+	const backLabel = domain ? 'Revenir aux domaines' : undefined
 
 	function pickKind(kind: CreatorKind) {
 		if (kind.source.type === 'trigger') {
@@ -172,12 +185,18 @@ export function NodeCreatorFeature({
 			title={title}
 			description={description}
 			onBack={goBack}
+			backLabel={backLabel}
 			query={query}
 			onQueryChange={setQuery}
 			view={view}
 			onPickCategory={(picked) => {
 				setQuery('')
+				setGroupId(null)
 				setCategoryId(picked.id)
+			}}
+			onPickDomain={(picked) => {
+				setQuery('')
+				setGroupId(picked.id)
 			}}
 			onPickKind={pickKind}
 			onPickCollection={(id) => {

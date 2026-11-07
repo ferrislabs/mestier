@@ -3,9 +3,10 @@ import { type ReactNode, useEffect, useRef } from 'react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import type { CollectionOperation } from '#/pages/automation/lib/collections'
-import type {
-	CreatorCategory,
-	CreatorKind,
+import {
+	type CreatorCategory,
+	type CreatorKind,
+	groupCreatorKinds,
 } from '#/pages/automation/lib/creator'
 import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
 import { MethodBadge } from '#/pages/automation/ui/method-badge'
@@ -16,6 +17,7 @@ export type NodeCreatorView =
 			categories: readonly CreatorCategory[]
 			triggerEntry: CreatorCategory
 	  }
+	| { type: 'domains'; domains: readonly CreatorCategory[] }
 	| { type: 'kinds'; kinds: readonly CreatorKind[] }
 	| {
 			type: 'collections'
@@ -106,22 +108,39 @@ function KindRow({ kind, onPick }: { kind: CreatorKind; onPick: () => void }) {
 			<KindIconTile icon={kind.icon} hue={kind.hue} size="sm" />
 			<span className="min-w-0 flex-1">
 				<span className="block truncate font-medium text-sm">{kind.label}</span>
-				<span className="block text-muted-foreground text-xs leading-snug">
-					{kind.description}
-				</span>
+				{kind.description !== '' && (
+					<span className="block text-muted-foreground text-xs leading-snug">
+						{kind.description}
+					</span>
+				)}
 			</span>
 		</button>
 	)
+}
+
+function KindList({
+	kinds,
+	renderKind,
+}: {
+	kinds: readonly CreatorKind[]
+	renderKind: (kind: CreatorKind) => ReactNode
+}) {
+	const ordered = kinds.some((kind) => kind.group !== null)
+		? groupCreatorKinds(kinds).flatMap((group) => group.kinds)
+		: kinds
+	return <ul>{ordered.map(renderKind)}</ul>
 }
 
 export function NodeCreatorPanel({
 	title,
 	description,
 	onBack,
+	backLabel = 'Revenir aux catégories',
 	query,
 	onQueryChange,
 	view,
 	onPickCategory,
+	onPickDomain,
 	onPickKind,
 	onPickCollection,
 	onPickOperation,
@@ -131,10 +150,12 @@ export function NodeCreatorPanel({
 	title: string
 	description?: string
 	onBack?: () => void
+	backLabel?: string
 	query: string
 	onQueryChange: (query: string) => void
 	view: NodeCreatorView
 	onPickCategory: (category: CreatorCategory) => void
+	onPickDomain: (domain: CreatorCategory) => void
 	onPickKind: (kind: CreatorKind) => void
 	onPickCollection: (collectionId: string) => void
 	onPickOperation: (entry: OperationEntry) => void
@@ -188,7 +209,7 @@ export function NodeCreatorPanel({
 						variant="ghost"
 						size="icon-sm"
 						onClick={onBack}
-						aria-label="Revenir aux catégories"
+						aria-label={backLabel}
 					>
 						<ArrowLeft />
 					</Button>
@@ -248,7 +269,21 @@ export function NodeCreatorPanel({
 						/>
 					</>
 				)}
-				{view.type === 'kinds' && <ul>{view.kinds.map(renderKind)}</ul>}
+				{view.type === 'domains' && (
+					<ul>
+						{view.domains.map((domain) => (
+							<li key={domain.id}>
+								<CategoryRow
+									category={domain}
+									onPick={() => onPickDomain(domain)}
+								/>
+							</li>
+						))}
+					</ul>
+				)}
+				{view.type === 'kinds' && (
+					<KindList kinds={view.kinds} renderKind={renderKind} />
+				)}
 				{view.type === 'collections' &&
 					(view.status === 'loading' ? (
 						<Notice>Chargement des collections…</Notice>
@@ -325,7 +360,7 @@ export function NodeCreatorPanel({
 									<h3 className="px-3 pt-2 pb-1 font-medium text-muted-foreground text-xs">
 										{group.label}
 									</h3>
-									<ul>{group.kinds.map(renderKind)}</ul>
+									<KindList kinds={group.kinds} renderKind={renderKind} />
 								</section>
 							))}
 							{view.operations.length > 0 && (

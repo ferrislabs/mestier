@@ -7,6 +7,7 @@ use crate::{
     domain::user::{
         commands::{CreateUserCommand, UpsertUserBySubCommand},
         service::UserService,
+        system::SystemUserService,
     },
 };
 
@@ -41,6 +42,16 @@ impl MestierUseCase {
     /// One query for every account behind a page of member seats — the
     /// list-route counterpart of [`Self::find_user_by_id`].
     #[transactional(user)]
+    pub async fn system_user(&self) -> Result<User, CoreError> {
+        let mut service = SystemUserService::new(user_repository);
+        service.ensure().await
+    }
+
+    pub async fn system_user_id(&self) -> Result<UserId, CoreError> {
+        self.system_user().await.map(|user| user.id)
+    }
+
+    #[transactional(user)]
     pub async fn list_users_by_ids(&self, ids: &[UserId]) -> Result<Vec<User>, CoreError> {
         let mut service = UserService::new(user_repository);
         service.list_by_ids(ids).await
@@ -67,3 +78,6 @@ impl MestierUseCase {
         service.list().await
     }
 }
+
+#[cfg(test)]
+mod tests_system;

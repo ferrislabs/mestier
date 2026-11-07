@@ -4,6 +4,7 @@ pub use common::UserId;
 pub mod commands;
 pub mod ports;
 pub mod service;
+pub mod system;
 
 #[derive(Debug, Clone)]
 pub struct User {
