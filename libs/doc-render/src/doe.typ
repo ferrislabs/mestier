@@ -95,30 +95,24 @@
   #if style.logo_key != none {
     align(logo_align, picture(style.logo_key, ..logo_box, fit: "contain"))
   }
-  #v(if doc.cover_photo_key != none { 1.2cm } else { 2.5cm })
+  #v(1cm)
   #if doc.place != none {
     text(14pt, fill: muted, doc.place)
-    parbreak()
-  }
-  #titled(32pt, weight: "bold", doc.title)
-  #if doc.lot != none {
-    parbreak()
-    text(16pt, doc.lot)
-  }
-  // The photo takes whatever height the cover has left, so the cover stays
-  // one page whatever the logo size and title length.
-  #if doc.cover_photo_key != none {
-    v(0.8cm)
-    block(width: 100%, height: 1fr, clip: true, radius: 2pt,
-      picture(doc.cover_photo_key, width: 100%, height: 100%, fit: "cover"))
     v(0.4cm)
-  } else {
-    v(1.2cm)
   }
-  #block(width: 100%, fill: primary, inset: (x: 14pt, y: 16pt))[
-    #align(center, titled(on_primary, weight: "bold", size: 17pt, style.cover_title))
+  // The frame carries the document's name, then the DOE title.
+  #block(width: 100%, fill: primary, inset: (x: 14pt, y: 18pt))[
+    #align(center)[
+      #titled(on_primary, weight: "bold", size: 15pt, style.cover_title)
+      #v(8pt)
+      #titled(on_primary, weight: "bold", size: 26pt, doc.title)
+      #if doc.lot != none {
+        v(6pt)
+        text(on_primary, size: 15pt, doc.lot)
+      }
+    ]
   ]
-  #v(1cm)
+  #v(0.8cm)
   #grid(
     columns: (auto, 1fr),
     row-gutter: 8pt,
@@ -127,7 +121,16 @@
     text(weight: "bold")[Rédacteur], dash(doc.author),
     text(weight: "bold")[Indice], doc.revision,
   )
-  #v(if doc.cover_photo_key != none { 0.8cm } else { 1fr })
+  // The photo takes whatever height the cover has left, so the cover stays
+  // one page whatever the logo size and title length.
+  #if doc.cover_photo_key != none {
+    v(0.8cm)
+    block(width: 100%, height: 1fr, clip: true, radius: 2pt,
+      picture(doc.cover_photo_key, width: 100%, height: 100%, fit: "cover"))
+    v(0.8cm)
+  } else {
+    v(1fr)
+  }
   #if contractor != none { party_block(contractor) }
 ]
 
