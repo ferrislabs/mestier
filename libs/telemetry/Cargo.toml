@@ -1,0 +1,16 @@
+[package]
+name = "telemetry"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+args = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+opentelemetry = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-appender-tracing = { workspace = true }

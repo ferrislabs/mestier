@@ -259,7 +259,10 @@ mcpGateway:
     MCP_GATEWAY_EXCHANGE_AUDIENCE: "mestier-api"
     MCP_GATEWAY_PDP_URL: ""
     MCP_GATEWAY_UPSTREAM_URL: ""
-    RUST_LOG: "info"
+    LOG_FILTER: "info"
+    # -- Set to "true", with OTLP_ENDPOINT and METRICS_ENDPOINT pointing at an
+    # OTLP/gRPC collector, to export traces, metrics and logs.
+    ACTIVE_OBSERVABILITY: "false"
 
   # -- Secret holding the gateway's FerrisKey client secret under the key
   # MCP_GATEWAY_EXCHANGE_CLIENT_SECRET. Create it out of band.
@@ -290,7 +293,10 @@ mcpServer:
   env:
     # -- Left empty, the chart points it at the release's own api Service.
     MCP_SERVER_API_URL: ""
-    RUST_LOG: "info"
+    LOG_FILTER: "info"
+    # -- Set to "true", with OTLP_ENDPOINT and METRICS_ENDPOINT pointing at an
+    # OTLP/gRPC collector, to export traces, metrics and logs.
+    ACTIVE_OBSERVABILITY: "false"
 
 cerbos:
   enabled: false

@@ -134,17 +134,13 @@ dependencies = [
  "handlers-reporting",
  "handlers-support",
  "http 1.4.0",
- "opentelemetry",
- "opentelemetry-appender-tracing",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
  "serde_json",
  "server",
+ "telemetry",
  "thiserror 2.0.18",
  "tokio",
  "tower-http",
  "tracing",
- "tracing-opentelemetry",
  "tracing-subscriber",
  "utoipa",
  "utoipa-scalar",
@@ -4623,6 +4619,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 name = "mcp-gateway"
 version = "0.1.0"
 dependencies = [
+ "args",
  "axum",
  "bytes",
  "clap",
@@ -4633,10 +4630,10 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "telemetry",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "url",
 ]
 
@@ -4644,6 +4641,7 @@ dependencies = [
 name = "mcp-server"
 version = "0.1.0"
 dependencies = [
+ "args",
  "axum",
  "base64 0.22.1",
  "clap",
@@ -4653,9 +4651,9 @@ dependencies = [
  "rmcp",
  "serde",
  "serde_json",
+ "telemetry",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 
@@ -7540,6 +7538,21 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
+name = "telemetry"
+version = "0.1.0"
+dependencies = [
+ "args",
+ "opentelemetry",
+ "opentelemetry-appender-tracing",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "thiserror 2.0.18",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "tempfile"

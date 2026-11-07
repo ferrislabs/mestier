@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use args::{log::LogArgs, observability::ObservabilityArgs};
 use clap::Parser;
 use mcp_server::{ApiClient, FilePolicy, router_with};
 
@@ -21,14 +22,16 @@ struct Args {
         default_value = "oaiusercontent.com,openai.com,chatgpt.com"
     )]
     file_hosts: Vec<String>,
+    #[command(flatten)]
+    log: LogArgs,
+    #[command(flatten)]
+    observability: ObservabilityArgs,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
     let args = Args::parse();
+    telemetry::init(&args.log, "mestier-mcp-server", &args.observability)?;
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
     tracing::info!(listen = %args.listen, api = %args.api_url, "mcp-server started");
     axum::serve(
