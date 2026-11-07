@@ -309,6 +309,7 @@ export function useUploadFile() {
 }
 
 export type Customer = Schemas.CustomerResponse
+export type CustomerListItem = Schemas.CustomerListItemResponse
 export type CustomerPayload = Schemas.CreateCustomerRequest
 export type CustomerStatus = Schemas.CustomerStatus
 export type CustomerKind = Schemas.CustomerKind

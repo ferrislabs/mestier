@@ -8,10 +8,15 @@ use uuid::Uuid;
 use crate::OrganizationId;
 
 pub mod commands;
+pub mod directory;
 pub mod ports;
 pub mod profile;
 pub mod service;
 
+pub use directory::{
+    CustomerDirectoryEntry, CustomerIndicators, CustomerInvoiceFact, CustomerListRow,
+    PrimaryContact,
+};
 pub use profile::{
     CustomerError, CustomerField, CustomerKind, CustomerOutcome, CustomerProfile, LeadSource,
     RegistrationNumber, payment_terms_of, siren_of,

@@ -79,9 +79,9 @@ describe('filterCustomers', () => {
 		).toEqual(['b'])
 	})
 
-	it('matches on the city, contacts and phones of the directory', () => {
-		const terms = (id: string) =>
-			id === 'a'
+	it('matches on the city, contacts and phones of the row', () => {
+		const terms = (item: { id: string }) =>
+			item.id === 'a'
 				? { text: ['Rezé', 'Léa Duval'], phones: ['06 12 34 56 78'] }
 				: { text: [], phones: [] }
 		const ids = (query: string) =>

@@ -1,14 +1,16 @@
 use authz::{Authorizer, Resource, Subject};
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    Customer, CustomerError, CustomerField, CustomerId, CustomerOutcome, CustomerProfile,
-    CustomerStatus, LostReason, MemberId, OrganizationId, RegistrationNumber,
+    Customer, CustomerError, CustomerField, CustomerId, CustomerInvoiceFact, CustomerListRow,
+    CustomerOutcome, CustomerProfile, CustomerStatus, LostReason, MemberId, OrganizationId,
+    RegistrationNumber,
     application::policy,
     domain::{
         customer::{
             commands::{CreateCustomerCommand, UpdateCustomerCommand},
+            directory::indicators_of,
             ports::CustomerRepository,
         },
         deal::ports::DealRepository,
@@ -161,6 +163,48 @@ where
         self.repo
             .list_by_organization(organization_id, limit, offset)
             .await
+    }
+
+    pub async fn list_customer_rows(
+        &mut self,
+        organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+        today: NaiveDate,
+    ) -> Result<(Vec<CustomerListRow>, u64), CoreError> {
+        let (customers, total) = self
+            .repo
+            .list_by_organization(organization_id, limit, offset)
+            .await?;
+        let ids: Vec<CustomerId> = customers.iter().map(|customer| customer.id).collect();
+        let entries = self.repo.directory(organization_id, &ids).await?;
+        let facts = self.repo.invoice_facts(organization_id, &ids).await?;
+
+        let rows = customers
+            .into_iter()
+            .map(|customer| {
+                let entry = entries
+                    .iter()
+                    .find(|entry| entry.customer_id == customer.id);
+                let own: Vec<CustomerInvoiceFact> = facts
+                    .iter()
+                    .filter(|fact| fact.customer_id == customer.id)
+                    .cloned()
+                    .collect();
+                let indicators = indicators_of(&own, today);
+                let last_quote_at = entry.and_then(|entry| entry.last_quote_at);
+                CustomerListRow {
+                    city: entry.and_then(|entry| entry.city.clone()),
+                    primary_contact: entry.and_then(|entry| entry.primary_contact.clone()),
+                    revenue_12m_cents: indicators.revenue_12m_cents,
+                    overdue_cents: indicators.overdue_cents,
+                    last_activity_at: indicators.last_invoice_at.max(last_quote_at),
+                    customer,
+                }
+            })
+            .collect();
+
+        Ok((rows, total))
     }
 
     pub async fn update_customer(
@@ -399,6 +443,85 @@ mod tests {
         assert_eq!(updated.name, "Syndic Martin");
         assert_eq!(updated.status, crate::CustomerStatus::Client);
         assert_eq!(updated.phone.as_deref(), Some("0102030405"));
+    }
+
+    #[tokio::test]
+    async fn list_customer_rows_joins_the_directory_and_the_indicators_of_each_customer() {
+        use crate::{
+            CustomerDirectoryEntry, CustomerInvoiceFact, InvoiceKind, InvoiceStatus, PrimaryContact,
+        };
+        use chrono::TimeZone;
+
+        let org_id = OrganizationId(Uuid::new_v4());
+        let busy = CustomerId(Uuid::new_v4());
+        let quiet = CustomerId(Uuid::new_v4());
+        let today = NaiveDate::from_ymd_opt(2026, 11, 7).unwrap();
+        let quote_at = Utc.with_ymd_and_hms(2026, 10, 20, 8, 0, 0).unwrap();
+        let invoice_at = Utc.with_ymd_and_hms(2026, 9, 1, 8, 0, 0).unwrap();
+        let mut repo = MockCustomerRepository::new();
+        repo.expect_list_by_organization()
+            .with(eq(org_id), eq(10), eq(0))
+            .returning(move |_, _, _| {
+                Box::pin(async move { Ok((vec![customer(busy), customer(quiet)], 2)) })
+            });
+        repo.expect_directory().times(1).returning(move |_, _| {
+            Box::pin(async move {
+                Ok(vec![CustomerDirectoryEntry {
+                    customer_id: busy,
+                    city: Some("Lyon".to_owned()),
+                    primary_contact: Some(PrimaryContact {
+                        first_name: "Marc".to_owned(),
+                        last_name: "Lemoine".to_owned(),
+                        role: None,
+                        email: None,
+                        phone: None,
+                        mobile: None,
+                    }),
+                    last_quote_at: Some(quote_at),
+                }])
+            })
+        });
+        repo.expect_invoice_facts().times(1).returning(move |_, _| {
+            Box::pin(async move {
+                Ok(vec![CustomerInvoiceFact {
+                    customer_id: busy,
+                    kind: InvoiceKind::Standard,
+                    status: InvoiceStatus::Issued,
+                    gross_cents: 12_000,
+                    net_cents: 10_000,
+                    issued_at: invoice_at,
+                    issued_on: invoice_at.date_naive(),
+                    due_on: Some(NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()),
+                    paid_cents: 2_000,
+                    credited_cents: 0,
+                }])
+            })
+        });
+
+        let mut service = CustomerService::new(
+            repo,
+            MockDealRepository::new(),
+            MockMemberRepository::new(),
+            MockRoleRepository::new(),
+            MockAuthorizer::new(),
+        );
+        let (rows, total) = service
+            .list_customer_rows(org_id, 10, 0, today)
+            .await
+            .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(rows[0].customer.id, busy);
+        assert_eq!(rows[0].city.as_deref(), Some("Lyon"));
+        assert_eq!(rows[0].revenue_12m_cents, 10_000);
+        assert_eq!(rows[0].overdue_cents, 10_000);
+        assert_eq!(rows[0].last_activity_at, Some(quote_at));
+        assert_eq!(rows[1].customer.id, quiet);
+        assert_eq!(rows[1].city, None);
+        assert_eq!(rows[1].primary_contact, None);
+        assert_eq!(rows[1].revenue_12m_cents, 0);
+        assert_eq!(rows[1].overdue_cents, 0);
+        assert_eq!(rows[1].last_activity_at, None);
     }
 
     #[tokio::test]

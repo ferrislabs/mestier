@@ -813,11 +813,6 @@ export namespace Schemas {
     postal_code?: (string | null) | undefined;
     updated_at: string;
   };
-  export type CustomerOutstandingBalanceResponse = {
-    customer_id: CustomerId;
-    oldest_due_at?: (string | null) | undefined;
-    outstanding_cents: number;
-  };
   export type CustomerResponse = {
     archived_at?: (string | null) | undefined;
     billing_address_id?: (null | CustomerContextId) | undefined;
@@ -839,6 +834,26 @@ export namespace Schemas {
     updated_at: string;
     vat_number?: (string | null) | undefined;
     website?: (string | null) | undefined;
+  };
+  export type PrimaryContactResponse = {
+    email?: (string | null) | undefined;
+    first_name: string;
+    last_name: string;
+    mobile?: (string | null) | undefined;
+    phone?: (string | null) | undefined;
+    role?: (string | null) | undefined;
+  };
+  export type CustomerListItemResponse = CustomerResponse & {
+    city?: (string | null) | undefined;
+    last_activity_at?: (string | null) | undefined;
+    overdue_cents: number;
+    primary_contact?: (null | PrimaryContactResponse) | undefined;
+    revenue_12m_cents: number;
+  };
+  export type CustomerOutstandingBalanceResponse = {
+    customer_id: CustomerId;
+    oldest_due_at?: (string | null) | undefined;
+    outstanding_cents: number;
   };
   export type DayLogId = string;
   export type EmployeeId = string;
@@ -6432,28 +6447,15 @@ export namespace Endpoints {
     };
     responses: {
       200: {
-        data: Array<{
-          archived_at?: (string | null) | undefined;
-          billing_address_id?: (null | Schemas.CustomerContextId) | undefined;
-          billing_contact_id?: (null | Schemas.CustomerContactId) | undefined;
-          converted_at?: (string | null) | undefined;
-          created_at: string;
-          email?: (string | null) | undefined;
-          id: Schemas.CustomerId;
-          kind: Schemas.CustomerKind;
-          lead_source?: (null | Schemas.LeadSource) | undefined;
-          name: string;
-          notes?: (string | null) | undefined;
-          organization_id: Schemas.OrganizationId;
-          owner_member_id?: (null | Schemas.MemberId) | undefined;
-          payment_terms_days?: (number | null) | undefined;
-          phone?: (string | null) | undefined;
-          registration_number?: (string | null) | undefined;
-          status: Schemas.CustomerStatus;
-          updated_at: string;
-          vat_number?: (string | null) | undefined;
-          website?: (string | null) | undefined;
-        }>;
+        data: Array<
+          Schemas.CustomerResponse & {
+            city?: (string | null) | undefined;
+            last_activity_at?: (string | null) | undefined;
+            overdue_cents: number;
+            primary_contact?: (null | Schemas.PrimaryContactResponse) | undefined;
+            revenue_12m_cents: number;
+          }
+        >;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       401: unknown;

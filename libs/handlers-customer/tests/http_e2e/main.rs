@@ -966,3 +966,144 @@ async fn archiving_a_customer_loses_its_open_deals_over_http() {
 
     app.cleanup().await;
 }
+
+async fn seed_list_invoice(
+    app: &harness::App,
+    kind: &str,
+    gross_cents: i32,
+    net_cents: i32,
+    issued_days_ago: i64,
+    due_in_days: i64,
+    source: Option<uuid::Uuid>,
+) -> uuid::Uuid {
+    let id = uuid::Uuid::now_v7();
+    let issued_at = chrono::Utc::now() - chrono::Duration::days(issued_days_ago);
+    let due_at = chrono::Utc::now() + chrono::Duration::days(due_in_days);
+    sqlx::query(
+        "INSERT INTO invoices (id, org_id, number, kind, customer_id, customer_context_id, status, issued_at, issued_on, due_at, net_cents, gross_cents, issuer_identity, source_invoice_id, reason) VALUES ($1, $2, $3, $4::invoice_kind, $5, $6, 'ISSUED'::invoice_status, $7, $8, $9, $10, $11, '{}'::jsonb, $12, $13)",
+    )
+    .bind(id)
+    .bind(app.organization_id)
+    .bind(format!("N-{id}"))
+    .bind(kind)
+    .bind(app.customer_id)
+    .bind(app.customer_context_id)
+    .bind(issued_at)
+    .bind(issued_at.date_naive())
+    .bind(due_at)
+    .bind(net_cents)
+    .bind(gross_cents)
+    .bind(source)
+    .bind((kind == "CREDIT_NOTE").then_some("Erreur"))
+    .execute(&app.pool)
+    .await
+    .expect("seed the invoice");
+    id
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn the_customer_list_carries_the_read_model_of_each_row_in_one_request() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+
+    sqlx::query("UPDATE customer_contexts SET city = $2 WHERE id = $1")
+        .bind(app.customer_context_id)
+        .bind("Nantes")
+        .execute(&app.pool)
+        .await
+        .unwrap();
+    let late = seed_list_invoice(&app, "STANDARD", 12_000, 10_000, 40, -10, None).await;
+    let current = seed_list_invoice(&app, "STANDARD", 6_000, 5_000, 10, 20, None).await;
+    seed_list_invoice(&app, "STANDARD", 8_400, 7_000, 400, -370, None).await;
+    seed_list_invoice(&app, "CREDIT_NOTE", 1_200, 1_000, 5, 0, Some(current)).await;
+    sqlx::query(
+        "INSERT INTO invoice_payments (id, org_id, invoice_id, amount_cents, paid_on, method, recorded_by) VALUES ($1, $2, $3, 2000, CURRENT_DATE, 'TRANSFER', (SELECT owner_id FROM organizations WHERE id = $2))",
+    )
+    .bind(uuid::Uuid::now_v7())
+    .bind(app.organization_id)
+    .bind(late)
+    .execute(&app.pool)
+    .await
+    .unwrap();
+    let quote_at = chrono::Utc::now() - chrono::Duration::days(3);
+    sqlx::query(
+        "INSERT INTO quotes (id, org_id, customer_id, customer_context_id, status, net_cents, gross_cents, title, created_at) VALUES ($1, $2, $3, $4, 'DRAFT'::quote_status, 0, 0, 'Devis', $5)",
+    )
+    .bind(uuid::Uuid::now_v7())
+    .bind(app.organization_id)
+    .bind(app.customer_id)
+    .bind(app.customer_context_id)
+    .bind(quote_at)
+    .execute(&app.pool)
+    .await
+    .unwrap();
+    let empty: serde_json::Value = create_customer(
+        &app,
+        &client,
+        serde_json::json!({ "status": "PROSPECT", "name": "Aaa Empty", "phone": null, "email": null }),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    let empty_id = id_of(&empty).to_string();
+
+    let list: serde_json::Value = client
+        .get(app.url(""))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let rows = list["data"].as_array().expect("a page of customers");
+    assert_eq!(rows.len(), 2, "{list}");
+    assert_eq!(rows[0]["id"], empty_id, "{list}");
+    assert_eq!(rows[0]["city"], serde_json::Value::Null, "{list}");
+    assert_eq!(
+        rows[0]["primary_contact"],
+        serde_json::Value::Null,
+        "{list}"
+    );
+    assert_eq!(rows[0]["revenue_12m_cents"], 0, "{list}");
+    assert_eq!(rows[0]["overdue_cents"], 0, "{list}");
+    assert_eq!(
+        rows[0]["last_activity_at"],
+        serde_json::Value::Null,
+        "{list}"
+    );
+
+    let row = &rows[1];
+    assert_eq!(row["id"], app.customer_id.to_string(), "{list}");
+    assert_eq!(row["name"], "Duval Masonry", "{list}");
+    assert_eq!(row["city"], "Nantes", "{list}");
+    assert_eq!(row["primary_contact"]["first_name"], "Jean", "{list}");
+    assert_eq!(row["primary_contact"]["last_name"], "Duval", "{list}");
+    assert_eq!(row["revenue_12m_cents"], 14_000, "{list}");
+    assert_eq!(row["overdue_cents"], 10_000 + 8_400, "{list}");
+    let last: chrono::DateTime<chrono::Utc> =
+        row["last_activity_at"].as_str().unwrap().parse().unwrap();
+    assert_eq!(
+        last.timestamp_micros(),
+        quote_at.timestamp_micros(),
+        "{list}"
+    );
+    assert_eq!(list["pagination"]["total"], 2, "{list}");
+
+    let page: serde_json::Value = client
+        .get(format!("{}?page=2&per_page=1", app.url("")))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let rows = page["data"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{page}");
+    assert_eq!(rows[0]["overdue_cents"], 10_000 + 8_400, "{page}");
+
+    app.cleanup().await;
+}

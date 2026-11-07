@@ -36,7 +36,7 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 | B4 | Devis : validité, acompte, motif de refus, signataire, responsable, opportunité, notes, remise et fréquence par ligne, révisions, « remplacé » | B3 | PR ouverte |
 | B5 | Factures : titre, délai de paiement, mentions légales, note interne, envoi et relance, création depuis un devis, suppression de brouillon, date d'émission, mode de règlement typé, remboursement | B1, B4 | fait, à relire |
 | B6 | Dépenses et catégories, journal, fournisseurs enrichis, catalogue enrichi | B1 | fait, à relire |
-| B7 | Indicateurs : CA 12 mois, encours en retard, dernière activité | B3, B5, B6 | à faire |
+| B7 | Indicateurs : CA 12 mois, encours en retard, dernière activité | B3, B5, B6 | PR ouverte |
 
 ## Mocks front à remplacer
 - `pages/deals/feature/mocks/{deals-store,deal-quotes}.ts` : B3 (amorcé depuis `pipeline_stage`).
@@ -107,6 +107,15 @@ Branches : `backend/crm-b1-settings` sur `feature/crm-front`, puis `backend/crm-
 - `useCrmSettings` a disparu, le shim `crm-settings/feature/mocks/settings.ts` ne garde que Stripe. `people.ts` (mock) est supprimé, la Trésorerie lit les vrais membres.
 - Les actions d'automatisation `mestier.achats.*` et `mestier.referentiel.*` n'exposent pas les nouveaux champs ; `update_supplier` conserve le profil existant et `update_product` / `update_service_rate` gardent les champs de catalogue.
 - Un fournisseur dont le numéro d'immatriculation déjà stocké est invalide se lit sans erreur, sa modification est refusée tant qu'il n'est pas corrigé.
+
+## Reports issus de B7
+- La liste des clients (`GET customers`) porte `city`, `primary_contact`, `revenue_12m_cents`, `overdue_cents`, `last_activity_at` ; les deux requêtes par client de `use-customer-directory` (fichier supprimé) ont disparu, ainsi que `useAllInvoices`, `useQuotes` et `customerStats` dans la liste. Aucune migration, aucun index ajouté (`idx_invoices_customer_id` et `idx_quotes_customer_id` existent).
+- La recherche de la liste ne porte plus que sur la ville et le contact principal (nom, rôle, e-mail, téléphones) ; elle portait avant sur tous les contacts et toutes les adresses du client, et reste appliquée à la page chargée.
+- « En retard » vient des règles B5 (`display_state` OVERDUE, solde exact, non plafonné par l'encours). Le CA 12 mois est hors taxes (prototype `stats.ts`).
+- La dernière activité compte les devis (date de création, le devis n'a pas de date d'envoi) et les factures émises ; les paiements et opportunités du prototype ne comptent pas (spec).
+- Reste calculé côté front : `lib/stats.ts` (`customerStats`, dont le « en retard » plafonné par l'encours) sert encore à la fiche client (`customer-edit-feature.tsx`), hors périmètre de la liste ; `useOutstandingByCustomer` (encours) reste une requête unique pour toute l'organisation.
+- Le tri par nom reste côté front sur la page chargée, comme avant.
+- La liste d'automatisation `mestier.customer.list` garde `list_customers` (sans indicateurs).
 
 ## À vérifier au lot concerné
 - `POST /invoices/{id}/cancel` : conservé tel quel (statut `CANCELLED`, sans avoir) ; un montant négatif sur un paiement est un remboursement (B5).
