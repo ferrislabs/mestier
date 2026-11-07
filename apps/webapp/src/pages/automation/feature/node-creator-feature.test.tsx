@@ -188,6 +188,13 @@ function descriptorOf(
 	}
 }
 
+function inGroup(
+	descriptor: Schemas.ConnectorDescriptorResponse,
+	group: string,
+): Schemas.ConnectorDescriptorResponse {
+	return { ...descriptor, group }
+}
+
 const CATALOGUE: Schemas.ConnectorDescriptorResponse[] = [
 	descriptorOf('odoo.create_invoice', 'odoo', 'Créer une facture Odoo'),
 	HTTP_DESCRIPTOR,
@@ -198,16 +205,34 @@ const CATALOGUE: Schemas.ConnectorDescriptorResponse[] = [
 		'mestier',
 		'Étendre l’horizon de récurrence',
 	),
-	descriptorOf('mestier.support.add_badge', 'mestier', 'Ajouter un badge'),
-	descriptorOf('mestier.customer.create', 'mestier', 'Créer un client'),
-	descriptorOf('mestier.project.create', 'mestier', 'Créer un projet'),
-	descriptorOf(
-		'mestier.chat.post_message',
-		'mestier',
-		'Publier dans un canal Discussions',
+	inGroup(
+		descriptorOf('mestier.support.add_badge', 'mestier', 'Ajouter un badge'),
+		'Support',
 	),
-	descriptorOf('mestier.quote.search', 'mestier', 'Rechercher des devis'),
-	descriptorOf('mestier.note.add', 'mestier', 'Ajouter une note'),
+	inGroup(
+		descriptorOf('mestier.customer.create', 'mestier', 'Créer un client'),
+		'Clients',
+	),
+	inGroup(
+		descriptorOf('mestier.project.create', 'mestier', 'Créer un projet'),
+		'Planning',
+	),
+	inGroup(
+		descriptorOf(
+			'mestier.chat.post_message',
+			'mestier',
+			'Publier dans un canal Discussions',
+		),
+		'Discussions',
+	),
+	inGroup(
+		descriptorOf('mestier.quote.search', 'mestier', 'Rechercher des devis'),
+		'Devis',
+	),
+	inGroup(
+		descriptorOf('mestier.note.add', 'mestier', 'Ajouter une note'),
+		'Support',
+	),
 	descriptorOf('flow.wait', 'flow', 'Attendre'),
 	descriptorOf('flow.merge', 'flow', 'Fusionner'),
 	descriptorOf('smtp.send', 'smtp', 'E-mail SMTP'),
@@ -327,12 +352,21 @@ describe('NodeCreatorFeature — the catalogue it offers', () => {
 		)
 
 		expect(rowsOf(panel)).toEqual([
+			'ClientsClients, contacts et contextes',
+			'DevisCréer, suivre et planifier des devis',
+			'DiscussionsCanaux, fils, messages et permissions',
+			'PlanningProjets, tâches, modèles, récurrences et rythmes de travail',
+			'SupportTickets, brouillons, badges et notes',
+		])
+		await user.click(within(panel).getByRole('button', { name: /Planning/ }))
+		expect(rowsOf(panel)).toEqual([
 			'Créer un projetCrée un projet de chantier à partir d’un devis',
-			'Publier dans un canal DiscussionsEnvoie un message dans un canal Discussions',
+		])
+		await user.click(within(panel).getByRole('button', { name: /Revenir/ }))
+		await user.click(within(panel).getByRole('button', { name: /Support/ }))
+		expect(rowsOf(panel)).toEqual([
 			'Ajouter un badge au ticketAjoute un badge de couleur à un ticket',
-			'Rechercher des devisRecherche des devis selon leur statut et leur ancienneté',
 			'Ajouter une noteAjoute une note interne sur un ticket',
-			'Créer un clientCrée un client dans Mestier',
 		])
 	})
 
@@ -698,7 +732,7 @@ describe('NodeCreatorFeature — the generated Mestier actions', () => {
 		},
 	]
 
-	it('lists every generated action at once, grouped in order, with its description', async () => {
+	it('opens a sub-menu of domains, sorted, instead of the flat list of actions', async () => {
 		const user = userEvent.setup()
 		const { panel } = await renderCreator({ descriptors: GROUPED })
 
@@ -706,12 +740,62 @@ describe('NodeCreatorFeature — the generated Mestier actions', () => {
 			within(panel).getByRole('button', { name: /Actions Mestier/ }),
 		)
 
-		expect(within(panel).queryAllByRole('heading', { level: 4 })).toEqual([])
+		expect(
+			within(panel).getByRole('heading', { name: 'Actions Mestier' }),
+		).toBeDefined()
 		expect(rowsOf(panel)).toEqual([
-			'Générer un DOE',
+			'DOEDossiers et modèles d’ouvrages exécutés',
+			'FacturesÉmettre, suivre et encaisser des factures',
+		])
+	})
+
+	it('lists the actions of the domain picked, titled after it, and goes back to the domains', async () => {
+		const user = userEvent.setup()
+		const { panel } = await renderCreator({ descriptors: GROUPED })
+
+		await user.click(
+			within(panel).getByRole('button', { name: /Actions Mestier/ }),
+		)
+		await user.click(within(panel).getByRole('button', { name: /Factures/ }))
+
+		expect(
+			within(panel).getByRole('heading', { name: 'Factures' }),
+		).toBeDefined()
+		expect(rowsOf(panel)).toEqual([
 			'Annuler une facture',
 			'Envoyer une facture',
 		])
+
+		await user.click(
+			within(panel).getByRole('button', { name: 'Revenir aux domaines' }),
+		)
+		expect(
+			within(panel).getByRole('heading', { name: 'Actions Mestier' }),
+		).toBeDefined()
+		expect(rowsOf(panel)).toHaveLength(2)
+
+		await user.click(
+			within(panel).getByRole('button', { name: 'Revenir aux catégories' }),
+		)
+		expect(rowsOf(panel)[0]).toMatch(/^Actions Mestier/)
+	})
+
+	it('creates the node of an action picked in its domain', async () => {
+		const user = userEvent.setup()
+		const { panel, onCreate } = await renderCreator({ descriptors: GROUPED })
+
+		await user.click(
+			within(panel).getByRole('button', { name: /Actions Mestier/ }),
+		)
+		await user.click(within(panel).getByRole('button', { name: /DOE/ }))
+		await user.click(
+			within(panel).getByRole('button', { name: /Générer un DOE/ }),
+		)
+
+		expect(onCreate).toHaveBeenCalledWith({
+			type: 'connector',
+			descriptor: GROUPED[2],
+		})
 	})
 
 	it('searches across every group', async () => {
@@ -724,6 +808,25 @@ describe('NodeCreatorFeature — the generated Mestier actions', () => {
 		)
 
 		expect(rowsOf(panel)).toEqual(['Générer un DOE'])
+	})
+
+	it('keeps the search flat across the domains, even from inside one', async () => {
+		const user = userEvent.setup()
+		const { panel } = await renderCreator({ descriptors: GROUPED })
+
+		await user.click(
+			within(panel).getByRole('button', { name: /Actions Mestier/ }),
+		)
+		await user.click(within(panel).getByRole('button', { name: /DOE/ }))
+		await user.type(
+			within(panel).getByRole('searchbox', { name: 'Rechercher un nœud' }),
+			'facture',
+		)
+
+		expect(rowsOf(panel)).toEqual([
+			'Annuler une facture',
+			'Envoyer une facture',
+		])
 	})
 
 	it('creates the node of a generated action', async () => {

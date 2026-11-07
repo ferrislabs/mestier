@@ -361,7 +361,10 @@ const FALLBACK_CATEGORY_BY_FAMILY: Record<string, CategoryId> = {
 	flow: 'flow',
 }
 
-const GROUP_APPEARANCE: Record<string, { icon: LucideIcon; hue: number }> = {
+export const GROUP_APPEARANCE: Record<
+	string,
+	{ icon: LucideIcon; hue: number }
+> = {
 	Achats: { icon: ShoppingCart, hue: 40 },
 	Clients: { icon: Users, hue: 120 },
 	Devis: { icon: FileText, hue: 235 },
@@ -377,8 +380,8 @@ const GROUP_APPEARANCE: Record<string, { icon: LucideIcon; hue: number }> = {
 }
 
 const FALLBACK_SUBTITLE = 'Connecteur'
-const FALLBACK_ICON = Wrench
-const FALLBACK_HUE = 220
+export const FALLBACK_ICON = Wrench
+export const FALLBACK_HUE = 220
 const FALLBACK_ORDER = 50
 
 export function categoryCopy(id: CategoryId): CategoryCopy {

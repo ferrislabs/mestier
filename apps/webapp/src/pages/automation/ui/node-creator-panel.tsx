@@ -17,6 +17,7 @@ export type NodeCreatorView =
 			categories: readonly CreatorCategory[]
 			triggerEntry: CreatorCategory
 	  }
+	| { type: 'domains'; domains: readonly CreatorCategory[] }
 	| { type: 'kinds'; kinds: readonly CreatorKind[] }
 	| {
 			type: 'collections'
@@ -134,10 +135,12 @@ export function NodeCreatorPanel({
 	title,
 	description,
 	onBack,
+	backLabel = 'Revenir aux catégories',
 	query,
 	onQueryChange,
 	view,
 	onPickCategory,
+	onPickDomain,
 	onPickKind,
 	onPickCollection,
 	onPickOperation,
@@ -147,10 +150,12 @@ export function NodeCreatorPanel({
 	title: string
 	description?: string
 	onBack?: () => void
+	backLabel?: string
 	query: string
 	onQueryChange: (query: string) => void
 	view: NodeCreatorView
 	onPickCategory: (category: CreatorCategory) => void
+	onPickDomain: (domain: CreatorCategory) => void
 	onPickKind: (kind: CreatorKind) => void
 	onPickCollection: (collectionId: string) => void
 	onPickOperation: (entry: OperationEntry) => void
@@ -204,7 +209,7 @@ export function NodeCreatorPanel({
 						variant="ghost"
 						size="icon-sm"
 						onClick={onBack}
-						aria-label="Revenir aux catégories"
+						aria-label={backLabel}
 					>
 						<ArrowLeft />
 					</Button>
@@ -263,6 +268,18 @@ export function NodeCreatorPanel({
 							onPick={() => onPickCategory(view.triggerEntry)}
 						/>
 					</>
+				)}
+				{view.type === 'domains' && (
+					<ul>
+						{view.domains.map((domain) => (
+							<li key={domain.id}>
+								<CategoryRow
+									category={domain}
+									onPick={() => onPickDomain(domain)}
+								/>
+							</li>
+						))}
+					</ul>
 				)}
 				{view.type === 'kinds' && (
 					<KindList kinds={view.kinds} renderKind={renderKind} />

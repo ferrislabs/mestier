@@ -41,6 +41,7 @@ export interface CreatorCategory {
 }
 
 export const TRIGGERS_CATEGORY_ID: CategoryId = 'triggers'
+export const ACTIONS_CATEGORY_ID: CategoryId = 'actions'
 export const COLLECTIONS_CATEGORY_ID: CategoryId = 'collections'
 
 interface RankedKind {

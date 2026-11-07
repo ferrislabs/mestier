@@ -798,7 +798,7 @@ fn customer_descriptors() -> Vec<ConnectorDescriptor> {
         execution: ExecutionMode::PerItem,
         output_example: json!({ "id": "…", "name": "…" }),
         output_mirrors_field: None,
-        group: None,
+        group: Some("Clients"),
         description: None,
         sample_output: json!({ "id": "00000000-0000-0000-0000-000000000000", "name": "…" }),
     }]
@@ -887,7 +887,7 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
                 "updated_at": "2026-01-01T00:00:00Z",
             }),
             output_mirrors_field: None,
-            group: None,
+            group: Some("Devis"),
             description: None,
             sample_output: json!([{
                 "id": "00000000-0000-0000-0000-000000000000",
@@ -912,7 +912,7 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "project_id": "…", "name": "…", "quote_id": "…" }),
             output_mirrors_field: None,
-            group: None,
+            group: Some("Planning"),
             description: None,
             sample_output: json!({
                 "project_id": "00000000-0000-0000-0000-000000000000",
@@ -931,7 +931,7 @@ fn workspace_descriptors() -> Vec<ConnectorDescriptor> {
             execution: ExecutionMode::PerItem,
             output_example: json!({ "message_id": "…", "channel_id": "…" }),
             output_mirrors_field: None,
-            group: None,
+            group: Some("Discussions"),
             description: None,
             sample_output: json!({
                 "message_id": "00000000-0000-0000-0000-000000000000",
