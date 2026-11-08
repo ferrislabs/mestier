@@ -319,8 +319,8 @@ pub use domain::{
         UpdateMemberCommand,
     },
     member_profile::commands::{
-        ArchiveMemberCommand, GetMemberProfileCommand, PutMemberProfileCommand,
-        RestoreMemberCommand,
+        ArchiveMemberCommand, GetMemberProfileCommand, ListMemberProfilesCommand,
+        PutMemberProfileCommand, RestoreMemberCommand,
     },
     organization::commands::{
         CreateOrganizationCommand, ReplaceBillingSettingsCommand, SetNextNumberCommand,

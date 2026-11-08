@@ -7,8 +7,8 @@ use crate::{
     domain::member_profile::{
         MemberProfileService,
         commands::{
-            ArchiveMemberCommand, GetMemberProfileCommand, PutMemberProfileCommand,
-            RestoreMemberCommand,
+            ArchiveMemberCommand, GetMemberProfileCommand, ListMemberProfilesCommand,
+            PutMemberProfileCommand, RestoreMemberCommand,
         },
     },
 };
@@ -26,6 +26,20 @@ impl MestierUseCase {
             authz,
         );
         service.get_profile(command).await
+    }
+
+    #[transactional(member_profile, member, role, authz)]
+    pub async fn list_member_profiles(
+        &self,
+        command: ListMemberProfilesCommand,
+    ) -> Result<Vec<MemberProfile>, CoreError> {
+        let mut service = MemberProfileService::new(
+            member_profile_repository,
+            member_repository,
+            role_repository,
+            authz,
+        );
+        service.list_profiles(command).await
     }
 
     #[transactional(member_profile, member, role, authz)]

@@ -217,6 +217,7 @@ impl Modify for SecurityAddon {
         reference::employee::list::handler,
         reference::employee::upsert_profile::handler,
         reference::employee::remove_profile::handler,
+        reference::member_profile::list_profiles,
         reference::member_profile::get_profile,
         reference::member_profile::put_profile,
         reference::member_profile::archive,

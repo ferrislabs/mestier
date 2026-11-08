@@ -7,8 +7,8 @@ use common::CoreError;
 use super::{
     MemberProfile, MemberProfileError, MemberProfileOutcome,
     commands::{
-        ArchiveMemberCommand, GetMemberProfileCommand, PutMemberProfileCommand,
-        RestoreMemberCommand,
+        ArchiveMemberCommand, GetMemberProfileCommand, ListMemberProfilesCommand,
+        PutMemberProfileCommand, RestoreMemberCommand,
     },
     ports::MemberProfileRepository,
 };
@@ -56,6 +56,16 @@ where
     ) -> Result<MemberProfile, CoreError> {
         self.enrich(command.actor, command.organization_id).await?;
         self.load_or_empty(command.organization_id, command.member_id)
+            .await
+    }
+
+    pub async fn list_profiles(
+        &mut self,
+        command: ListMemberProfilesCommand,
+    ) -> Result<Vec<MemberProfile>, CoreError> {
+        self.enrich(command.actor, command.organization_id).await?;
+        self.profiles
+            .list_by_organization(command.organization_id)
             .await
     }
 

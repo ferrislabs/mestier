@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT member_id, org_id, work_email, personal_email, mobile, landline, street,\n                   complement, postal_code, city, country, job_title, manager_member_id,\n                   work_permit_end_date, archived_at, created_at, updated_at\n            FROM member_hr_profiles\n            WHERE org_id = $1\n            ORDER BY created_at, member_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "work_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "personal_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mobile",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "landline",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "street",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "complement",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "postal_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "city",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "job_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "manager_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "work_permit_end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 14,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "7ad9801549e88089e8b7c876370b3f99d198c1895c89d9990e6d39520e350cb6"
+}

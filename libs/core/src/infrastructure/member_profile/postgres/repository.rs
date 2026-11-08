@@ -2,7 +2,7 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    MemberId, MemberProfile,
+    MemberId, MemberProfile, OrganizationId,
     domain::member_profile::ports::MemberProfileRepository,
     infrastructure::{
         member_profile::postgres::model::MemberProfileRow,
@@ -43,6 +43,30 @@ impl<'tx> MemberProfileRepository for PgMemberProfileRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         row.map(MemberProfile::try_from).transpose()
+    }
+
+    async fn list_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<MemberProfile>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            MemberProfileRow,
+            r#"
+            SELECT member_id, org_id, work_email, personal_email, mobile, landline, street,
+                   complement, postal_code, city, country, job_title, manager_member_id,
+                   work_permit_end_date, archived_at, created_at, updated_at
+            FROM member_hr_profiles
+            WHERE org_id = $1
+            ORDER BY created_at, member_id
+            "#,
+            organization_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(MemberProfile::try_from).collect()
     }
 
     async fn upsert(&mut self, profile: &MemberProfile) -> Result<MemberProfile, CoreError> {

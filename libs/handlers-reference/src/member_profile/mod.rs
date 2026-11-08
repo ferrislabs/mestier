@@ -9,8 +9,9 @@ use chrono::{DateTime, NaiveDate, Utc};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use http::StatusCode;
 use mestier_core::{
-    ArchiveMemberCommand, GetMemberProfileCommand, MemberId, MemberProfile, MemberProfileError,
-    MemberProfileInput, OrganizationId, PutMemberProfileCommand, RestoreMemberCommand,
+    ArchiveMemberCommand, GetMemberProfileCommand, ListMemberProfilesCommand, MemberId,
+    MemberProfile, MemberProfileError, MemberProfileInput, OrganizationId, PutMemberProfileCommand,
+    RestoreMemberCommand,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -18,10 +19,17 @@ use utoipa::ToSchema;
 
 pub fn router(_state: &AppState) -> Router<AppState> {
     Router::new()
+        .typed_get(list_profiles)
         .typed_get(get_profile)
         .typed_put(put_profile)
         .typed_post(archive)
         .typed_post(restore)
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/member-profiles")]
+pub struct MemberProfilesPath {
+    pub organization_id: OrganizationId,
 }
 
 #[derive(TypedPath, Deserialize)]
@@ -185,6 +193,37 @@ impl IntoResponse for ProfileFailure {
             }
         }
     }
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/organizations/{organization_id}/member-profiles",
+    operation_id = "listMemberProfiles",
+    tag = super::TAG,
+    params(("organization_id" = OrganizationId, Path, description = "Organization identifier")),
+    responses(
+        (status = 200, description = "Every HR profile written in the organization, members without one are absent", body = inline(DataEnvelope<Vec<MemberProfileResponse>>)),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_profiles(
+    path: MemberProfilesPath,
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+) -> Result<Response<Vec<MemberProfileResponse>>, ApiError> {
+    let (user_id, actor) = resolve_actor(&state, &identity).await?;
+    let profiles = state
+        .usecase
+        .acting_as(user_id)
+        .list_member_profiles(ListMemberProfilesCommand {
+            actor,
+            organization_id: path.organization_id,
+        })
+        .await?;
+
+    Ok(Response::OK(profiles.into_iter().map(Into::into).collect()))
 }
 
 #[utoipa::path(

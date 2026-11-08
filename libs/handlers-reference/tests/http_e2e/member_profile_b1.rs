@@ -191,3 +191,41 @@ async fn spec_rh_1_4_a_member_of_another_organization_answers_not_found() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_rh_1_5_the_list_returns_the_profiles_of_the_organization_only() {
+    let app = harness::start().await;
+    let member = colleague(&app).await;
+    let foreign = other_member(&app).await;
+    let (status, _) = call(
+        &app,
+        &app.token,
+        reqwest::Method::PUT,
+        &path(&app, member, "profile"),
+        Some(json!({ "job_title": "Chef" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    sqlx::query(
+        "INSERT INTO member_hr_profiles (member_id, org_id) SELECT id, organization_id FROM organization_members WHERE id = $1",
+    )
+    .bind(foreign)
+    .execute(&app.pool)
+    .await
+    .expect("seed a foreign profile");
+
+    let list = format!("/organizations/{}/member-profiles", app.organization_id);
+    let (status, body) = call(&app, &app.token, reqwest::Method::GET, &list, None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let ids: Vec<&str> = body["data"]
+        .as_array()
+        .expect("a list")
+        .iter()
+        .map(|profile| profile["member_id"].as_str().unwrap_or_default())
+        .collect();
+    assert!(ids.contains(&member.to_string().as_str()), "{body}");
+    assert!(!ids.contains(&foreign.to_string().as_str()), "{body}");
+
+    app.cleanup().await;
+}

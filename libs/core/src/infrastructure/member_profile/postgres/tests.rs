@@ -161,3 +161,27 @@ async fn spec_rh_1_3_an_archived_member_leaves_the_planning_roster_and_keeps_its
     })
     .await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn spec_rh_1_5_listing_returns_only_the_profiles_of_the_organization() {
+    run(async |tx| {
+        let org = seed_organization(&tx).await;
+        let other = seed_organization(&tx).await;
+        let profiled = seed_member(&tx, org).await;
+        let _bare = seed_member(&tx, org).await;
+        let stranger = seed_member(&tx, other).await;
+        let mut repo = PgMemberProfileRepository::new(&tx);
+        repo.upsert(&MemberProfile::empty(profiled, org, Utc::now()).archived(Utc::now()))
+            .await?;
+        repo.upsert(&MemberProfile::empty(stranger, other, Utc::now()))
+            .await?;
+
+        let listed = repo.list_by_organization(org).await?;
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].member_id, profiled);
+        assert!(listed[0].archived_at.is_some());
+        Ok(())
+    })
+    .await;
+}

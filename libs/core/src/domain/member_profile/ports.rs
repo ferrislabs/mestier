@@ -1,6 +1,6 @@
 use common::CoreError;
 
-use crate::{MemberId, MemberProfile};
+use crate::{MemberId, MemberProfile, OrganizationId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait MemberProfileRepository: Send {
@@ -8,6 +8,11 @@ pub trait MemberProfileRepository: Send {
         &mut self,
         member_id: MemberId,
     ) -> impl Future<Output = Result<Option<MemberProfile>, CoreError>> + Send;
+
+    fn list_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<MemberProfile>, CoreError>> + Send;
 
     fn upsert(
         &mut self,

@@ -27,6 +27,12 @@ pub struct GetMemberProfileCommand {
 }
 
 #[derive(Debug, Clone)]
+pub struct ListMemberProfilesCommand {
+    pub actor: Subject,
+    pub organization_id: OrganizationId,
+}
+
+#[derive(Debug, Clone)]
 pub struct PutMemberProfileCommand {
     pub actor: Subject,
     pub organization_id: OrganizationId,
