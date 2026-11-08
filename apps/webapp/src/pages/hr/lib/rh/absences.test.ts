@@ -1,11 +1,11 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	absenceDays,
 	teamConflicts,
 	validateAbsence,
 } from '#/pages/hr/lib/rh/absences'
 import type { AbsenceDraft } from '#/pages/hr/lib/rh/types'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 const member = (id: string) => {

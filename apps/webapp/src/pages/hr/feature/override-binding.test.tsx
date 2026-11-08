@@ -2,15 +2,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
-import { getRhState, resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import type { ContractRecord } from '#/pages/hr/lib/rh/member-wire'
 import type { DayOverrideRecord } from '#/pages/hr/lib/rh/override-wire'
+import type { RhState } from '#/pages/hr/lib/rh/types'
 import { renderWithRouter } from '#/test/render-with-router'
 import {
 	ABSENCE_TYPES_PATH,
@@ -31,6 +31,28 @@ import {
 } from '#/test/rh-override-fixtures'
 import { MemberDetailFeature } from './member-detail-feature'
 import { PlanningFeature, type PlanningView } from './planning-feature'
+
+const composed = vi.hoisted(() => ({ latest: null as RhState | null }))
+
+vi.mock('#/pages/hr/lib/rh/compose', async (importOriginal) => {
+	const original =
+		await importOriginal<typeof import('#/pages/hr/lib/rh/compose')>()
+	return {
+		...original,
+		composeRhState: (
+			sources: Parameters<typeof original.composeRhState>[0],
+		) => {
+			const state = original.composeRhState(sources)
+			composed.latest = state
+			return state
+		},
+	}
+})
+
+function getRhState(): RhState {
+	if (!composed.latest) throw new Error('no state composed yet')
+	return composed.latest
+}
 
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
 const PROFILES_PATH = '/api/v1/organizations/{organization_id}/member-profiles'
@@ -252,7 +274,6 @@ function setDates(dialog: HTMLElement, from: string, to: string) {
 
 describe('day overrides and the planning feed bound to the API', () => {
 	beforeEach(() => {
-		resetRhStore()
 		overrides = []
 		contracts = []
 		writes = []
@@ -260,10 +281,7 @@ describe('day overrides and the planning feed bound to the API', () => {
 		refuse = null
 		feedForbidden = false
 		permissions = ['MANAGE_PLANNING']
-	})
-
-	afterEach(() => {
-		resetRhStore()
+		composed.latest = null
 	})
 
 	it('spec_rh_5_4 the planning screen reads the feed for its visible period, not the store', async () => {

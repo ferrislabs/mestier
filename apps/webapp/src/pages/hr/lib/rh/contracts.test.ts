@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	contractOn,
 	contractTrail,
@@ -14,6 +13,7 @@ import {
 import { contractErrors, upcomingDeadlines } from '#/pages/hr/lib/rh/members'
 import { isEmployedOn, resolveDay } from '#/pages/hr/lib/rh/planning'
 import type { ContractDraft } from '#/pages/hr/lib/rh/types'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 const member = (id: string) => {

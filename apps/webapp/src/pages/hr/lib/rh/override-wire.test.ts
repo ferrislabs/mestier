@@ -1,5 +1,4 @@
 import { expect, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	mergeOverridePeriods,
 	overlayOverrides,
@@ -9,6 +8,7 @@ import {
 } from '#/pages/hr/lib/rh/override-wire'
 import type { DayOverride } from '#/pages/hr/lib/rh/types'
 import { overrideRecord } from '#/test/rh-override-fixtures'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const UNPROCESSABLE = (field: string) => ({
 	status: 422,

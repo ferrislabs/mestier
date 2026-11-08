@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import { activeSidebarEntries, ENTRY } from '#/pages/rh-nav/lib/sidebar-active'
 import { sidebarCounts } from '#/pages/rh-nav/lib/sidebar-counts'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const ME = 'baptiste'
 

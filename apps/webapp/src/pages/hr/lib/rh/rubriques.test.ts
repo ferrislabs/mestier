@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	absenceLists,
 	contractsSummary,
@@ -10,6 +9,7 @@ import {
 	scheduleSummary,
 } from '#/pages/hr/lib/rh/rubriques'
 import type { Member } from '#/pages/hr/lib/rh/types'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 const TODAY = '2026-11-04'

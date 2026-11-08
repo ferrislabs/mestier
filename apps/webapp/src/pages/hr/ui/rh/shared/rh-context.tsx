@@ -2,11 +2,11 @@ import { createContext, type ReactNode, useContext } from 'react'
 import { buildOrgPath } from '#/modules/org-path'
 import type { DayPlan } from '#/pages/hr/lib/rh/day-planning'
 import type { ProfileFields } from '#/pages/hr/lib/rh/member-profile'
+import type { OverridePeriod } from '#/pages/hr/lib/rh/override-wire'
 import type { AccountSettingsDraft } from '#/pages/hr/lib/rh/rights-model'
 import type {
 	AbsenceDraft,
 	AbsenceTypeDraft,
-	ActionContext,
 	AdjustmentDraft,
 	ContractDraft,
 	DayOverride,
@@ -17,10 +17,6 @@ import type {
 	RhState,
 	SurchargeDraft,
 } from '#/pages/hr/lib/rh/types'
-
-export type RhUpdate = (
-	update: (current: RhState, context: ActionContext) => RhState,
-) => Promise<void>
 
 export interface RhProfileActions {
 	save: (memberId: string, fields: ProfileFields) => Promise<void>
@@ -93,7 +89,6 @@ export interface RhOverrideActions {
 
 export interface RhContextValue {
 	state: RhState
-	update: RhUpdate
 	profiles: RhProfileActions
 	contracts: RhContractActions
 	documents: RhDocumentActions
@@ -103,6 +98,7 @@ export interface RhContextValue {
 	extras: RhExtraActions
 	surcharges: RhSurchargeActions
 	overrides: RhOverrideActions
+	setOverridePeriod: (period: OverridePeriod) => void
 	actorId: string
 	organizationId: string
 	organizationSlug: string
@@ -130,8 +126,8 @@ export function useRhState(): RhState {
 	return useRhContext().state
 }
 
-export function useRhUpdate(): RhUpdate {
-	return useRhContext().update
+export function useRhOverridePeriods(): (period: OverridePeriod) => void {
+	return useRhContext().setOverridePeriod
 }
 
 export function useRhProfileActions(): RhProfileActions {

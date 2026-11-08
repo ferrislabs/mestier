@@ -3,11 +3,10 @@ import {
 	useDeleteDayOverride,
 	usePutDayOverride,
 } from '#/hooks/use-day-overrides'
-import { getRhState } from '#/pages/hr/feature/mocks/rh-store'
 import { daysInRange } from '#/pages/hr/lib/rh/dates'
 import { type DayPlan, planDates } from '#/pages/hr/lib/rh/day-planning'
 import { overrideRequestOf } from '#/pages/hr/lib/rh/override-wire'
-import type { DayOverride } from '#/pages/hr/lib/rh/types'
+import type { DayOverride, RhState } from '#/pages/hr/lib/rh/types'
 import type { RhOverrideActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
 function overrideOfPlan(plan: DayPlan, date: string): DayOverride {
@@ -23,7 +22,10 @@ function overrideOfPlan(plan: DayPlan, date: string): DayOverride {
 	}
 }
 
-export function useOverrideActions(organizationId: string): RhOverrideActions {
+export function useOverrideActions(
+	organizationId: string,
+	getState: () => RhState,
+): RhOverrideActions {
 	const put = usePutDayOverride()
 	const remove = useDeleteDayOverride()
 	const putAsync = put.mutateAsync
@@ -56,7 +58,7 @@ export function useOverrideActions(organizationId: string): RhOverrideActions {
 			},
 			clearRange: async (memberId, startDate, endDate) => {
 				const planned = new Set(
-					getRhState()
+					getState()
 						.overrides.filter((override) => override.memberId === memberId)
 						.map((override) => override.date),
 				)
@@ -66,5 +68,5 @@ export function useOverrideActions(organizationId: string): RhOverrideActions {
 				}
 			},
 		}
-	}, [organizationId, putAsync, removeAsync])
+	}, [organizationId, getState, putAsync, removeAsync])
 }

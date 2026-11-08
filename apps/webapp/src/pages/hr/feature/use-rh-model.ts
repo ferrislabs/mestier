@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { useAuth } from 'react-oidc-context'
 import { useAbsenceTypes } from '#/hooks/use-absence-types'
 import { useAbsences } from '#/hooks/use-absences'
 import { useExtraPeriods } from '#/hooks/use-extra-periods'
@@ -10,23 +11,6 @@ import { useMemberProfiles } from '#/hooks/use-member-profiles'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { useSurcharges } from '#/hooks/use-surcharges'
 import { isForbiddenError } from '#/lib/api-error'
-import type { RealMember } from '#/pages/hr/feature/mocks/rh-binding'
-import {
-	bindRhMembers,
-	getRhActorId,
-	memberKey,
-	setAbsences,
-	setAbsenceTypes,
-	setExtraPeriods,
-	setLeaveAccounts,
-	setLeaveAdjustments,
-	setMemberContracts,
-	setMemberDocuments,
-	setMemberProfiles,
-	setSurcharges,
-	updateRh,
-	useRhSnapshot,
-} from '#/pages/hr/feature/mocks/rh-store'
 import {
 	useAbsenceActions,
 	useAbsenceTypeActions,
@@ -42,6 +26,12 @@ import {
 import { useLeaveActions } from '#/pages/hr/feature/use-leave-actions'
 import { useOverrideActions } from '#/pages/hr/feature/use-override-actions'
 import { useProfileActions } from '#/pages/hr/feature/use-profile-actions'
+import {
+	actorIdOf,
+	composeRhState,
+	type RealMember,
+} from '#/pages/hr/lib/rh/compose'
+import { type OverridePeriod, periodKey } from '#/pages/hr/lib/rh/override-wire'
 import type { RhState } from '#/pages/hr/lib/rh/types'
 import type { RhContextValue } from '#/pages/hr/ui/rh/shared/rh-context'
 
@@ -71,7 +61,25 @@ export function useRhModel(
 	const profilesQuery = useMemberProfiles(organizationId)
 	const contractsQuery = useMemberContracts(organizationId)
 	const documentsQuery = useMemberDocuments(organizationId)
-	const profiles = useProfileActions(organizationId)
+	const stateRef = useRef<RhState | null>(null)
+	const getState = useCallback((): RhState => {
+		if (!stateRef.current) throw new Error('RhState indisponible')
+		return stateRef.current
+	}, [])
+	const [periods, setPeriods] = useState<ReadonlyMap<string, OverridePeriod>>(
+		new Map(),
+	)
+	const setOverridePeriod = useCallback((period: OverridePeriod) => {
+		setPeriods((current) => {
+			const next = new Map(current)
+			const key = periodKey(period.memberId, period.from, period.to)
+			next.delete(key)
+			next.set(key, period)
+			return next
+		})
+	}, [])
+	const auth = useAuth()
+	const profiles = useProfileActions(organizationId, getState)
 	const contracts = useContractActions(organizationId)
 	const documents = useDocumentActions(organizationId)
 	const absenceActions = useAbsenceActions(organizationId)
@@ -79,9 +87,7 @@ export function useRhModel(
 	const leaveActions = useLeaveActions(organizationId)
 	const extraActions = useExtraActions(organizationId)
 	const surchargeActions = useSurchargeActions(organizationId)
-	const overrideActions = useOverrideActions(organizationId)
-	const snapshot = useRhSnapshot()
-
+	const overrideActions = useOverrideActions(organizationId, getState)
 	const memberRows = catalog.members.data?.data
 	const members = useMemo<RealMember[]>(
 		() =>
@@ -125,69 +131,50 @@ export function useRhModel(
 	const documentsRestricted = isForbiddenError(documentsQuery.error)
 	const documentsLoaded = documentsQuery.isSuccess || documentsRestricted
 
-	useEffect(() => {
-		if (membersLoaded) bindRhMembers(members)
-	}, [membersLoaded, members])
+	const state = useMemo(
+		() =>
+			composeRhState({
+				members,
+				profiles: profileRows ?? [],
+				contracts: contractRows ?? [],
+				documents: documentRows ?? [],
+				absenceTypes: typeRows ?? [],
+				absences: absenceRows ?? [],
+				accounts: accountRows ?? [],
+				adjustments: adjustmentRows ?? [],
+				surcharges: surchargeRows ?? [],
+				extras: extraRows ?? [],
+				overridePeriods: [...periods.values()],
+			}),
+		[
+			members,
+			profileRows,
+			contractRows,
+			documentRows,
+			typeRows,
+			absenceRows,
+			accountRows,
+			adjustmentRows,
+			surchargeRows,
+			extraRows,
+			periods,
+		],
+	)
+	stateRef.current = state
+	const actorId = actorIdOf(members, auth?.user?.profile?.email)
 
-	useEffect(() => {
-		if (absencesLoaded) setAbsences(absenceRows ?? [])
-	}, [absencesLoaded, absenceRows])
-
-	useEffect(() => {
-		if (typesLoaded) setAbsenceTypes(typeRows ?? [])
-	}, [typesLoaded, typeRows])
-
-	useEffect(() => {
-		if (accountsLoaded) setLeaveAccounts(accountRows ?? [])
-	}, [accountsLoaded, accountRows])
-
-	useEffect(() => {
-		if (adjustmentsLoaded) setLeaveAdjustments(adjustmentRows ?? [])
-	}, [adjustmentsLoaded, adjustmentRows])
-
-	useEffect(() => {
-		if (surchargesLoaded) setSurcharges(surchargeRows ?? [])
-	}, [surchargesLoaded, surchargeRows])
-
-	useEffect(() => {
-		if (extrasLoaded) setExtraPeriods(extraRows ?? [])
-	}, [extrasLoaded, extraRows])
-
-	useEffect(() => {
-		if (profilesLoaded) setMemberProfiles(profileRows ?? [])
-	}, [profilesLoaded, profileRows])
-
-	useEffect(() => {
-		if (contractsLoaded) setMemberContracts(contractRows ?? [])
-	}, [contractsLoaded, contractRows])
-
-	useEffect(() => {
-		if (documentsLoaded) setMemberDocuments(documentRows ?? [])
-	}, [documentsLoaded, documentRows])
-
-	const isBound = membersLoaded && snapshot.boundKey === memberKey(members)
 	return {
 		isLoading:
-			catalog.members.isLoading ||
-			profilesQuery.isLoading ||
-			contractsQuery.isLoading ||
-			documentsQuery.isLoading ||
-			absencesQuery.isLoading ||
-			typesQuery.isLoading ||
-			accountsQuery.isLoading ||
-			adjustmentsQuery.isLoading ||
-			surchargesQuery.isLoading ||
-			extrasQuery.isLoading ||
-			!isBound ||
-			!snapshot.profilesLoaded ||
-			!snapshot.contractsLoaded ||
-			!snapshot.documentsLoaded ||
-			!snapshot.absencesLoaded ||
-			!snapshot.typesLoaded ||
-			!snapshot.accountsLoaded ||
-			!snapshot.adjustmentsLoaded ||
-			!snapshot.surchargesLoaded ||
-			!snapshot.extrasLoaded,
+			!membersLoaded ||
+			!profilesLoaded ||
+			!contractsLoaded ||
+			!documentsLoaded ||
+			!absencesLoaded ||
+			!typesLoaded ||
+			!accountsLoaded ||
+			!adjustmentsLoaded ||
+			!surchargesLoaded ||
+			!extrasLoaded,
 		error:
 			catalog.members.error?.message ??
 			(profilesRestricted ? null : profilesQuery.error?.message) ??
@@ -200,10 +187,9 @@ export function useRhModel(
 			(surchargesRestricted ? null : surchargesQuery.error?.message) ??
 			(extrasRestricted ? null : extrasQuery.error?.message) ??
 			null,
-		state: snapshot.state,
+		state,
 		context: {
-			state: snapshot.state,
-			update: updateRh,
+			state,
 			profiles,
 			contracts,
 			documents,
@@ -213,7 +199,8 @@ export function useRhModel(
 			extras: extraActions,
 			surcharges: surchargeActions,
 			overrides: overrideActions,
-			actorId: getRhActorId(),
+			setOverridePeriod,
+			actorId,
 			organizationId,
 			organizationSlug,
 		},

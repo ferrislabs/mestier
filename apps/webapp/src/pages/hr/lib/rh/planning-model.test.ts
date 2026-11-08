@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import { extrasOn } from '#/pages/hr/lib/rh/extra'
 import {
 	activePlanningMembers,
@@ -33,6 +32,7 @@ import {
 	tooltipLines,
 	typeIndex,
 } from '#/pages/hr/lib/rh/planning-model'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 const types = typeIndex(state.absenceTypes)

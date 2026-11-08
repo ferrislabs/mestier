@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	emptyProfileFields,
 	overlayProfiles,
@@ -8,6 +7,7 @@ import {
 	profileRequestOf,
 } from '#/pages/hr/lib/rh/member-profile'
 import { EMPTY_ADDRESS } from '#/pages/hr/lib/rh/members'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 

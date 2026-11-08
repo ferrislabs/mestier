@@ -1,8 +1,8 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import { weekly } from '#/pages/hr/lib/rh/contract-schedule'
 import { todayStatus } from '#/pages/hr/lib/rh/today-status'
 import type { Member, RhState } from '#/pages/hr/lib/rh/types'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 

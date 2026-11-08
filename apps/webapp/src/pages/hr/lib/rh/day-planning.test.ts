@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	clearPlanning,
 	type DayPlan,
@@ -10,6 +9,7 @@ import {
 } from '#/pages/hr/lib/rh/day-planning'
 import { presenceOn, resolveDay } from '#/pages/hr/lib/rh/planning'
 import type { ActionContext } from '#/pages/hr/lib/rh/types'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 const member = (id: string) => {

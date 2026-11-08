@@ -1,13 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
-import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import type {
 	LeaveAccountRecord,
 	LeaveAdjustmentRecord,
@@ -214,7 +213,6 @@ async function openAlix() {
 
 describe('leave accounts and adjustments bound to the API', () => {
 	beforeEach(() => {
-		resetRhStore()
 		accounts = structuredClone(DEFAULT_ACCOUNT_RECORDS)
 		adjustments = []
 		writes = []
@@ -223,10 +221,6 @@ describe('leave accounts and adjustments bound to the API', () => {
 		permissions = ['MANAGE_REFERENCE', 'MANAGE_PLANNING']
 		accountReads = 0
 		adjustmentReads = 0
-	})
-
-	afterEach(() => {
-		resetRhStore()
 	})
 
 	it('spec_rh_4_5 reads the accounts and the adjustments from the API', async () => {

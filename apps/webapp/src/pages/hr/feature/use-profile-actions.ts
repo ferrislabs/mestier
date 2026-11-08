@@ -5,7 +5,6 @@ import {
 	usePutMemberProfile,
 	useRestoreMember,
 } from '#/hooks/use-member-profiles'
-import { getRhState } from '#/pages/hr/feature/mocks/rh-store'
 import { todayIso } from '#/pages/hr/lib/rh/dates'
 import {
 	type ProfileFields,
@@ -15,9 +14,13 @@ import {
 	findMemberById,
 	upcomingPendingAbsenceIds,
 } from '#/pages/hr/lib/rh/members'
+import type { RhState } from '#/pages/hr/lib/rh/types'
 import type { RhProfileActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
-export function useProfileActions(organizationId: string): RhProfileActions {
+export function useProfileActions(
+	organizationId: string,
+	getState: () => RhState,
+): RhProfileActions {
 	const put = usePutMemberProfile()
 	const archive = useArchiveMember()
 	const restore = useRestoreMember()
@@ -41,13 +44,13 @@ export function useProfileActions(organizationId: string): RhProfileActions {
 		return {
 			save,
 			archive: async (memberId: string) => {
-				const archived = findMemberById(getRhState(), memberId)
+				const archived = findMemberById(getState(), memberId)
 				await archiveAsync({
 					path: path(memberId),
 					body: { reassign_reports_to: archived?.managerId ?? null },
 				})
 				const pending = upcomingPendingAbsenceIds(
-					getRhState(),
+					getState(),
 					memberId,
 					todayIso(),
 				)
@@ -66,5 +69,12 @@ export function useProfileActions(organizationId: string): RhProfileActions {
 				await restoreAsync({ path: path(memberId) })
 			},
 		}
-	}, [organizationId, putAsync, archiveAsync, restoreAsync, cancelAsync])
+	}, [
+		organizationId,
+		getState,
+		putAsync,
+		archiveAsync,
+		restoreAsync,
+		cancelAsync,
+	])
 }

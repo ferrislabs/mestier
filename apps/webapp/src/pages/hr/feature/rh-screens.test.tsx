@@ -1,13 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
-import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import { renderWithRouter } from '#/test/render-with-router'
 import {
 	ABSENCE_TYPES_PATH,
@@ -141,13 +140,7 @@ function renderScreen(ui: ReactNode, absences: unknown[] = []) {
 }
 
 describe('RH screens over the real members', () => {
-	beforeEach(() => {
-		resetRhStore()
-	})
-
-	afterEach(() => {
-		resetRhStore()
-	})
+	beforeEach(() => {})
 
 	it('rights: lists the real members in the balances table', async () => {
 		await renderScreen(

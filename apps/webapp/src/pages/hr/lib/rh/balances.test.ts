@@ -1,6 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
-import { addAdjustment } from '#/pages/hr/lib/rh/balance-fixtures'
 import {
 	acquiredAt,
 	computeBalance,
@@ -8,6 +6,8 @@ import {
 	periodOf,
 	validateAdjustment,
 } from '#/pages/hr/lib/rh/balances'
+import { addAdjustment } from '#/test/rh-balance-reducers'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 const member = (id: string) => {

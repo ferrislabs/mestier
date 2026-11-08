@@ -1,4 +1,3 @@
-// MOCK: rh — no backend endpoint yet. Replace with the HR domain API (leave accounts, absence requests, overtime declarations, day planning). Contracts are bound to the API through the store overlay; the contracts below only serve fixtures.
 import { NO_SCHEDULE, weekly } from '#/pages/hr/lib/rh/contract-schedule'
 import { daysInRange, weekdayOf } from '#/pages/hr/lib/rh/dates'
 import { isHoliday } from '#/pages/hr/lib/rh/holidays'
@@ -18,8 +17,6 @@ import type {
 	WeekSchedule,
 	WorkDay,
 } from '#/pages/hr/lib/rh/types'
-
-export const CURRENT_MEMBER_ID = 'baptiste'
 
 const FULL_DAY: WorkDay = { start: '08:00', end: '17:00', lunch: DEFAULT_LUNCH }
 const SHORT_DAY: WorkDay = {
@@ -948,31 +945,4 @@ export const INITIAL_RH_STATE: RhState = {
 	overrides: OVERRIDES,
 	surcharges: SURCHARGES,
 	extras: EXTRAS,
-}
-
-export function defaultMember(fields: {
-	id: string
-	firstName: string
-	lastName: string
-	workEmail: string
-}): Member {
-	return member({
-		id: fields.id,
-		firstName: fields.firstName,
-		lastName: fields.lastName,
-		jobTitle: '',
-		hue: hueOf(fields.id),
-		contracts: [
-			contract(`c-${fields.id}-1`, { type: 'cdi', startDate: '2024-01-01' }),
-		],
-		managerId: null,
-		workEmail: fields.workEmail,
-		mobile: '',
-	})
-}
-
-function hueOf(id: string): number {
-	let hash = 0
-	for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) % 360
-	return hash
 }

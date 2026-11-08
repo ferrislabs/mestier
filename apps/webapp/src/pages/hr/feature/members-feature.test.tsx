@@ -10,7 +10,6 @@ import {
 import type { Organization } from '#/hooks/use-organizations'
 import type { Role } from '#/hooks/use-roles'
 import { MembersFeature } from '#/pages/hr/feature/members-feature'
-import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import { renderWithRouter } from '#/test/render-with-router'
 import {
 	ABSENCE_TYPES_PATH,
@@ -251,9 +250,7 @@ function renderFeature(handlers: FakeApiHandlers = {}) {
 	).then((result) => ({ ...result, calls }))
 }
 
-beforeEach(() => {
-	resetRhStore()
-})
+beforeEach(() => {})
 
 describe('MembersFeature — invite gesture', () => {
 	afterEach(() => {
