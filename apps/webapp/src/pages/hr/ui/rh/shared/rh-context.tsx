@@ -2,6 +2,8 @@ import { createContext, type ReactNode, useContext } from 'react'
 import { buildOrgPath } from '#/modules/org-path'
 import type { ProfileFields } from '#/pages/hr/lib/rh/member-profile'
 import type {
+	AbsenceDraft,
+	AbsenceTypeDraft,
 	ActionContext,
 	ContractDraft,
 	DocumentKind,
@@ -33,12 +35,27 @@ export interface RhDocumentActions {
 	remove: (memberId: string, documentId: string) => Promise<void>
 }
 
+export interface RhAbsenceActions {
+	create: (draft: AbsenceDraft, proof: File | null) => Promise<void>
+	approve: (absenceId: string) => Promise<void>
+	reject: (absenceId: string, comment: string) => Promise<void>
+	cancel: (absenceId: string) => Promise<void>
+}
+
+export interface RhAbsenceTypeActions {
+	save: (typeId: string | null, draft: AbsenceTypeDraft) => Promise<void>
+	archive: (typeId: string) => Promise<void>
+	restore: (typeId: string) => Promise<void>
+}
+
 export interface RhContextValue {
 	state: RhState
 	update: RhUpdate
 	profiles: RhProfileActions
 	contracts: RhContractActions
 	documents: RhDocumentActions
+	absences: RhAbsenceActions
+	absenceTypes: RhAbsenceTypeActions
 	actorId: string
 	organizationSlug: string
 }
@@ -79,6 +96,14 @@ export function useRhContractActions(): RhContractActions {
 
 export function useRhDocumentActions(): RhDocumentActions {
 	return useRhContext().documents
+}
+
+export function useRhAbsenceActions(): RhAbsenceActions {
+	return useRhContext().absences
+}
+
+export function useRhAbsenceTypeActions(): RhAbsenceTypeActions {
+	return useRhContext().absenceTypes
 }
 
 export function useRhActorId(): string {

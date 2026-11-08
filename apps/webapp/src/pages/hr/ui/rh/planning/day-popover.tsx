@@ -1,5 +1,6 @@
 import { AlarmClockPlus, CalendarPlus, RotateCcw } from 'lucide-react'
 import { useId, useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
@@ -316,21 +317,23 @@ export function DayPopoverBody({
 				{extras.length > 0 && <ExtraList extras={extras} />}
 				{!inactive && (
 					<div className="flex flex-wrap gap-2">
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							onClick={() => {
-								onClose()
-								onRequestAbsence({
-									memberId: member.id,
-									startDate: status.date,
-								})
-							}}
-						>
-							<CalendarPlus />
-							Poser une absence
-						</Button>
+						<RequirePermission permission="MANAGE_REFERENCE">
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={() => {
+									onClose()
+									onRequestAbsence({
+										memberId: member.id,
+										startDate: status.date,
+									})
+								}}
+							>
+								<CalendarPlus />
+								Poser une absence
+							</Button>
+						</RequirePermission>
 						<Button
 							type="button"
 							variant="outline"

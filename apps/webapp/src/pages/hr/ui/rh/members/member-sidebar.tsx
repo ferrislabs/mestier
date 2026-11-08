@@ -99,14 +99,16 @@ export function MemberSidebar({
 				</div>
 				<div className="mt-3 flex flex-wrap items-center gap-2">
 					{!archived && (
-						<Button variant="outline" size="sm" asChild>
-							<Link
-								to={orgPath('/rh/absences/nouvelle')}
-								search={{ membre: member.id }}
-							>
-								<CalendarPlus aria-hidden /> Poser une absence
-							</Link>
-						</Button>
+						<RequirePermission permission="MANAGE_REFERENCE">
+							<Button variant="outline" size="sm" asChild>
+								<Link
+									to={orgPath('/rh/absences/nouvelle')}
+									search={{ membre: member.id }}
+								>
+									<CalendarPlus aria-hidden /> Poser une absence
+								</Link>
+							</Button>
+						</RequirePermission>
 					)}
 					<RequirePermission permission="MANAGE_MEMBERS">
 						{archived ? (

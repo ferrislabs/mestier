@@ -9,7 +9,7 @@ import { formatDaysCompact, parseIso, toIso } from '#/pages/hr/lib/rh/dates'
 import { fullName } from '#/pages/hr/lib/rh/members'
 import type {
 	Absence,
-	AbsenceDraft,
+	AbsenceSpanInput,
 	AbsenceStatus,
 	CountMode,
 	DayPart,
@@ -174,7 +174,7 @@ export type BalanceImpact = {
 
 export function balanceImpact(
 	state: RhState,
-	span: AbsenceDraft,
+	span: AbsenceSpanInput,
 	today: IsoDate,
 	alreadyCounted: boolean,
 ): BalanceImpact | null {

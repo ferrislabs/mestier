@@ -1,5 +1,6 @@
 import { ChevronRight, Plus } from 'lucide-react'
 import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Table,
@@ -9,24 +10,35 @@ import {
 	TableHeader,
 	TableRow,
 } from '#/components/ui/table'
-import { setAbsenceTypeArchived, typeUsage } from '#/pages/hr/lib/rh/absences'
+import { mutationErrorMessage } from '#/lib/api-error'
+import { typeUsage } from '#/pages/hr/lib/rh/absences'
 import { countModeOption } from '#/pages/hr/lib/rh/absences-view'
 import type { AbsenceType, RhState } from '#/pages/hr/lib/rh/types'
 import { AbsenceTypeDialog } from '#/pages/hr/ui/rh/absences/absence-type-dialog'
-import { useRhState, useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import {
+	useRhAbsenceTypeActions,
+	useRhState,
+} from '#/pages/hr/ui/rh/shared/rh-context'
 import { TypeDot } from '#/pages/hr/ui/rh/shared/type-chip'
 
 type EditorState = { type: AbsenceType | null; open: boolean }
 
 export function AbsenceTypesTab() {
-	const updateRh = useRhUpdate()
+	const actions = useRhAbsenceTypeActions()
 	const state = useRhState()
+	const [error, setError] = useState<string | null>(null)
 	const [editor, setEditor] = useState<EditorState>({ type: null, open: false })
 	const active = state.absenceTypes.filter((type) => !type.archived)
 	const archived = state.absenceTypes.filter((type) => type.archived)
 
-	function archive(type: AbsenceType, value: boolean) {
-		updateRh((current) => setAbsenceTypeArchived(current, type.id, value))
+	async function archive(type: AbsenceType, value: boolean) {
+		setError(null)
+		try {
+			if (value) await actions.archive(type.id)
+			else await actions.restore(type.id)
+		} catch (failure) {
+			setError(mutationErrorMessage(failure))
+		}
 	}
 
 	return (
@@ -41,15 +53,22 @@ export function AbsenceTypesTab() {
 						circuit de validation.
 					</p>
 				</div>
-				<Button
-					type="button"
-					size="sm"
-					onClick={() => setEditor({ type: null, open: true })}
-				>
-					<Plus />
-					Nouveau motif
-				</Button>
+				<RequirePermission permission="MANAGE_REFERENCE">
+					<Button
+						type="button"
+						size="sm"
+						onClick={() => setEditor({ type: null, open: true })}
+					>
+						<Plus />
+						Nouveau motif
+					</Button>
+				</RequirePermission>
 			</div>
+			{error && (
+				<p role="alert" className="mb-3 text-sm text-state-alert">
+					{error}
+				</p>
+			)}
 			{active.length === 0 ? (
 				<div className="rounded-lg border border-dashed bg-card px-6 py-12 text-center">
 					<p className="font-medium">Aucun motif actif.</p>
@@ -62,7 +81,7 @@ export function AbsenceTypesTab() {
 					state={state}
 					types={active}
 					onEdit={(type) => setEditor({ type, open: true })}
-					onToggle={archive}
+					onToggle={(type, value) => void archive(type, value)}
 				/>
 			)}
 			{archived.length > 0 && (
@@ -79,7 +98,7 @@ export function AbsenceTypesTab() {
 							state={state}
 							types={archived}
 							onEdit={(type) => setEditor({ type, open: true })}
-							onToggle={archive}
+							onToggle={(type, value) => void archive(type, value)}
 						/>
 					</div>
 				</details>
@@ -156,25 +175,27 @@ function TypesTable({
 								</TableCell>
 								<TableCell className="pr-3 text-right">
 									<div className="flex justify-end gap-1">
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											aria-label={`Modifier le motif ${type.name}`}
-											onClick={() => onEdit(type)}
-										>
-											Modifier
-										</Button>
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											className="text-muted-foreground"
-											aria-label={`${type.archived ? 'Réactiver' : 'Archiver'} le motif ${type.name}`}
-											onClick={() => onToggle(type, !type.archived)}
-										>
-											{type.archived ? 'Réactiver' : 'Archiver'}
-										</Button>
+										<RequirePermission permission="MANAGE_REFERENCE">
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												aria-label={`Modifier le motif ${type.name}`}
+												onClick={() => onEdit(type)}
+											>
+												Modifier
+											</Button>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="text-muted-foreground"
+												aria-label={`${type.archived ? 'Réactiver' : 'Archiver'} le motif ${type.name}`}
+												onClick={() => onToggle(type, !type.archived)}
+											>
+												{type.archived ? 'Réactiver' : 'Archiver'}
+											</Button>
+										</RequirePermission>
 									</div>
 								</TableCell>
 							</TableRow>

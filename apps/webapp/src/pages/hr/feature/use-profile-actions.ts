@@ -1,17 +1,19 @@
 import { useMemo } from 'react'
+import { useCancelAbsence } from '#/hooks/use-absences'
 import {
 	useArchiveMember,
 	usePutMemberProfile,
 	useRestoreMember,
 } from '#/hooks/use-member-profiles'
-import { getRhState, updateRh } from '#/pages/hr/feature/mocks/rh-store'
+import { getRhState } from '#/pages/hr/feature/mocks/rh-store'
+import { todayIso } from '#/pages/hr/lib/rh/dates'
 import {
 	type ProfileFields,
 	profileRequestOf,
 } from '#/pages/hr/lib/rh/member-profile'
 import {
-	cancelUpcomingAbsences,
 	findMemberById,
+	upcomingPendingAbsenceIds,
 } from '#/pages/hr/lib/rh/members'
 import type { RhProfileActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
@@ -19,9 +21,11 @@ export function useProfileActions(organizationId: string): RhProfileActions {
 	const put = usePutMemberProfile()
 	const archive = useArchiveMember()
 	const restore = useRestoreMember()
+	const cancel = useCancelAbsence()
 	const putAsync = put.mutateAsync
 	const archiveAsync = archive.mutateAsync
 	const restoreAsync = restore.mutateAsync
+	const cancelAsync = cancel.mutateAsync
 
 	return useMemo(() => {
 		const path = (memberId: string) => ({
@@ -42,13 +46,25 @@ export function useProfileActions(organizationId: string): RhProfileActions {
 					path: path(memberId),
 					body: { reassign_reports_to: archived?.managerId ?? null },
 				})
-				await updateRh((current, context) =>
-					cancelUpcomingAbsences(current, context, memberId),
+				const pending = upcomingPendingAbsenceIds(
+					getRhState(),
+					memberId,
+					todayIso(),
+				)
+				await Promise.allSettled(
+					pending.map((absenceId) =>
+						cancelAsync({
+							path: {
+								organization_id: organizationId,
+								absence_id: absenceId,
+							},
+						}),
+					),
 				)
 			},
 			restore: async (memberId: string) => {
 				await restoreAsync({ path: path(memberId) })
 			},
 		}
-	}, [organizationId, putAsync, archiveAsync, restoreAsync])
+	}, [organizationId, putAsync, archiveAsync, restoreAsync, cancelAsync])
 }

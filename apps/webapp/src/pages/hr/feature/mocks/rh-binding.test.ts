@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-	bindSeed,
-	isRealAbsenceId,
-	kindOfType,
-	realAbsenceId,
-	realAbsenceToAbsence,
-	reconcileMembers,
-	renameMembers,
-} from './rh-binding'
+import { bindSeed, reconcileMembers, renameMembers } from './rh-binding'
 import { INITIAL_RH_STATE } from './rh-seed'
 
 const REAL = [
@@ -109,48 +101,5 @@ describe('renameMembers', () => {
 
 		expect(next.members[0]?.lastName).toBe('Renamed')
 		expect(next.members[0]?.firstName).toBe('Alix')
-	})
-})
-
-describe('real absences', () => {
-	const values = {
-		memberId: 'u-1',
-		kind: 'SICK' as const,
-		allDay: true,
-		range: { from: '2026-11-02', to: '2026-11-04' },
-		startTime: '08:00',
-		endTime: '18:00',
-		note: 'Grippe',
-	}
-
-	it('maps a real absence to an approved absence tagged as real', () => {
-		const absence = realAbsenceToAbsence('abc', values)
-
-		expect(isRealAbsenceId(absence.id)).toBe(true)
-		expect(realAbsenceId(absence.id)).toBe('abc')
-		expect(absence.typeId).toBe('maladie')
-		expect(absence.status).toBe('approved')
-		expect(absence.startPart).toBe('morning')
-		expect(absence.endPart).toBe('afternoon')
-		expect(absence.comment).toBe('Grippe')
-	})
-
-	it('derives half days from the times of a partial absence', () => {
-		const absence = realAbsenceToAbsence('abc', {
-			...values,
-			allDay: false,
-			startTime: '13:00',
-			endTime: '12:00',
-		})
-
-		expect(absence.startPart).toBe('afternoon')
-		expect(absence.endPart).toBe('morning')
-	})
-
-	it('maps absence types back to a real kind', () => {
-		expect(kindOfType('maladie')).toBe('SICK')
-		expect(kindOfType('intemperies')).toBe('UNAVAILABLE')
-		expect(kindOfType('cp')).toBe('LEAVE')
-		expect(kindOfType('rtt')).toBe('LEAVE')
 	})
 })

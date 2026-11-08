@@ -1,5 +1,7 @@
 import { Check, Paperclip, X } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
+import { useFileUrls } from '#/hooks/use-file-url'
 import {
 	absenceDays,
 	findMember,
@@ -73,6 +75,7 @@ function PendingCard({
 	onApprove: (absence: Absence) => void
 	onReject: (absence: Absence) => void
 }) {
+	const [proofLink] = useFileUrls(absence.proofKey ? [absence.proofKey] : [])
 	const member = findMember(state, absence.memberId)
 	const type = findType(state, absence.typeId)
 	if (!member || !type) return null
@@ -110,11 +113,28 @@ function PendingCard({
 							{absence.comment}
 						</p>
 					)}
-					{absence.proofName && (
+					{absence.proofKey ? (
 						<p className="flex items-center gap-1.5 text-[13px]">
 							<Paperclip className="size-3.5 text-muted-foreground" />
-							{absence.proofName}
+							{proofLink?.url ? (
+								<a
+									href={proofLink.url}
+									target="_blank"
+									rel="noreferrer"
+									className="underline underline-offset-2"
+								>
+									Justificatif joint
+								</a>
+							) : (
+								'Justificatif joint'
+							)}
 						</p>
+					) : (
+						type.needsProof && (
+							<p className="text-[13px] text-muted-foreground">
+								Justificatif attendu, aucun fichier joint.
+							</p>
+						)
 					)}
 				</div>
 				<aside
@@ -137,27 +157,29 @@ function PendingCard({
 					)}
 				</aside>
 			</div>
-			<div className="flex justify-end gap-2 border-t bg-muted/20 px-4 py-2.5">
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					aria-label={`Refuser la demande de ${name}`}
-					onClick={() => onReject(absence)}
-				>
-					<X />
-					Refuser
-				</Button>
-				<Button
-					type="button"
-					size="sm"
-					aria-label={`Valider la demande de ${name}`}
-					onClick={() => onApprove(absence)}
-				>
-					<Check />
-					Valider
-				</Button>
-			</div>
+			<RequirePermission permission="MANAGE_PLANNING">
+				<div className="flex justify-end gap-2 border-t bg-muted/20 px-4 py-2.5">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						aria-label={`Refuser la demande de ${name}`}
+						onClick={() => onReject(absence)}
+					>
+						<X />
+						Refuser
+					</Button>
+					<Button
+						type="button"
+						size="sm"
+						aria-label={`Valider la demande de ${name}`}
+						onClick={() => onApprove(absence)}
+					>
+						<Check />
+						Valider
+					</Button>
+				</div>
+			</RequirePermission>
 		</li>
 	)
 }

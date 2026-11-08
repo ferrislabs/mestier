@@ -8,11 +8,17 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
+import type { AbsenceRecord } from '#/pages/hr/lib/rh/absence-wire'
 import { renderWithRouter } from '#/test/render-with-router'
+import {
+	ABSENCE_TYPES_PATH,
+	ABSENCES_PATH,
+	absenceRecord,
+	DEFAULT_TYPE_RECORDS,
+} from '#/test/rh-absence-fixtures'
 import { MemberDetailFeature } from './member-detail-feature'
 
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
-const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
 const PROFILES_PATH = '/api/v1/organizations/{organization_id}/member-profiles'
 const CONTRACTS_PATH =
 	'/api/v1/organizations/{organization_id}/member-contracts'
@@ -96,6 +102,7 @@ interface Write {
 }
 
 let profiles: Profile[]
+let absences: AbsenceRecord[]
 let writes: Write[]
 let refuse: { status: number; message: string } | null
 let profilesForbidden: boolean
@@ -113,7 +120,10 @@ function installFakeApi() {
 					queryFn: async () => {
 						if (path === MEMBERS_PATH)
 							return { data: MEMBERS, pagination: null }
-						if (path === ABSENCES_PATH) return { data: [], pagination: null }
+						if (path === ABSENCE_TYPES_PATH)
+							return { data: DEFAULT_TYPE_RECORDS, pagination: null }
+						if (path === ABSENCES_PATH)
+							return { data: structuredClone(absences), pagination: null }
 						if (path === CONTRACTS_PATH || path === DOCUMENTS_PATH)
 							return { data: [], pagination: null }
 						if (path === PROFILES_PATH && profilesForbidden)
@@ -206,6 +216,7 @@ describe('member profile bound to the API', () => {
 		resetRhStore()
 		profiles = []
 		writes = []
+		absences = []
 		refuse = null
 		profilesForbidden = false
 		permissions = ['MANAGE_MEMBERS']
@@ -336,6 +347,40 @@ describe('member profile bound to the API', () => {
 		expect(writes[0]?.params).toMatchObject({
 			path: { organization_id: 'org-1', member_id: 'u-2' },
 			body: { reassign_reports_to: 'u-1' },
+		})
+	})
+
+	it('spec_rh_3_9 archiving a member cancels their upcoming pending requests through the API', async () => {
+		const user = userEvent.setup()
+		profiles = [profile('u-2')]
+		absences = [
+			absenceRecord('a-future', 'u-2', 't-cp', {
+				start_date: '2099-03-02',
+				end_date: '2099-03-03',
+			}),
+			absenceRecord('a-approved', 'u-2', 't-cp', {
+				status: 'APPROVED',
+				start_date: '2099-04-02',
+				end_date: '2099-04-03',
+			}),
+			absenceRecord('a-other', 'u-1', 't-cp', {
+				start_date: '2099-03-02',
+				end_date: '2099-03-03',
+			}),
+		]
+		await renderDetail('u-2')
+		await screen.findByRole('heading', { name: 'Bao Tran' })
+
+		await user.click(await screen.findByRole('button', { name: /Archiver/ }))
+		const dialog = await screen.findByRole('dialog')
+		await user.click(within(dialog).getByRole('button', { name: 'Archiver' }))
+
+		await waitFor(() => expect(writes).toHaveLength(2))
+		expect(writes[0]?.path.endsWith('/archive')).toBe(true)
+		expect(writes[1]?.path.endsWith('/cancel')).toBe(true)
+		expect(writes[1]?.params.path).toEqual({
+			organization_id: 'org-1',
+			absence_id: 'a-future',
 		})
 	})
 

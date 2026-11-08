@@ -1,33 +1,34 @@
 import { useEffect, useMemo } from 'react'
+import { useAbsenceTypes } from '#/hooks/use-absence-types'
 import { useAbsences } from '#/hooks/use-absences'
 import { useMemberContracts } from '#/hooks/use-member-contracts'
 import { useMemberDocuments } from '#/hooks/use-member-documents'
 import { useMemberProfiles } from '#/hooks/use-member-profiles'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { isForbiddenError } from '#/lib/api-error'
-import {
-	type RealMember,
-	realAbsenceToAbsence,
-} from '#/pages/hr/feature/mocks/rh-binding'
+import type { RealMember } from '#/pages/hr/feature/mocks/rh-binding'
 import {
 	bindRhMembers,
 	getRhActorId,
 	memberKey,
+	setAbsences,
+	setAbsenceTypes,
 	setMemberContracts,
 	setMemberDocuments,
 	setMemberProfiles,
-	setRealAbsences,
 	updateRh,
 	useRhSnapshot,
 } from '#/pages/hr/feature/mocks/rh-store'
+import {
+	useAbsenceActions,
+	useAbsenceTypeActions,
+} from '#/pages/hr/feature/use-absence-actions'
 import {
 	useContractActions,
 	useDocumentActions,
 } from '#/pages/hr/feature/use-contract-actions'
 import { useProfileActions } from '#/pages/hr/feature/use-profile-actions'
-import { absenceToDraft } from '#/pages/hr/lib/absences'
 import type { RhState } from '#/pages/hr/lib/rh/types'
-import { browserTimeZone } from '#/pages/hr/types'
 import type { RhContextValue } from '#/pages/hr/ui/rh/shared/rh-context'
 
 export interface RhModel {
@@ -48,12 +49,15 @@ export function useRhModel(
 		products: false,
 	})
 	const absencesQuery = useAbsences(organizationId)
+	const typesQuery = useAbsenceTypes(organizationId)
 	const profilesQuery = useMemberProfiles(organizationId)
 	const contractsQuery = useMemberContracts(organizationId)
 	const documentsQuery = useMemberDocuments(organizationId)
 	const profiles = useProfileActions(organizationId)
 	const contracts = useContractActions(organizationId)
 	const documents = useDocumentActions(organizationId)
+	const absenceActions = useAbsenceActions(organizationId)
+	const absenceTypeActions = useAbsenceTypeActions(organizationId)
 	const snapshot = useRhSnapshot()
 
 	const memberRows = catalog.members.data?.data
@@ -68,18 +72,13 @@ export function useRhModel(
 		[memberRows],
 	)
 	const absenceRows = absencesQuery.data?.data
-	const absences = useMemo(() => {
-		const timeZone = browserTimeZone()
-		return (absenceRows ?? []).map((absence) =>
-			realAbsenceToAbsence(
-				absence.id,
-				absenceToDraft({ ...absence, absence_kind: absence.kind }, timeZone),
-			),
-		)
-	}, [absenceRows])
+	const absencesRestricted = isForbiddenError(absencesQuery.error)
+	const absencesLoaded = absencesQuery.isSuccess || absencesRestricted
+	const typeRows = typesQuery.data?.data
+	const typesRestricted = isForbiddenError(typesQuery.error)
+	const typesLoaded = typesQuery.isSuccess || typesRestricted
 
 	const membersLoaded = catalog.members.isSuccess
-	const absencesLoaded = absencesQuery.isSuccess
 	const profileRows = profilesQuery.data?.data
 	const profilesRestricted = isForbiddenError(profilesQuery.error)
 	const profilesLoaded = profilesQuery.isSuccess || profilesRestricted
@@ -96,8 +95,12 @@ export function useRhModel(
 	}, [membersLoaded, members])
 
 	useEffect(() => {
-		if (absencesLoaded) setRealAbsences(absences)
-	}, [absencesLoaded, absences])
+		if (absencesLoaded) setAbsences(absenceRows ?? [])
+	}, [absencesLoaded, absenceRows])
+
+	useEffect(() => {
+		if (typesLoaded) setAbsenceTypes(typeRows ?? [])
+	}, [typesLoaded, typeRows])
 
 	useEffect(() => {
 		if (profilesLoaded) setMemberProfiles(profileRows ?? [])
@@ -118,15 +121,21 @@ export function useRhModel(
 			profilesQuery.isLoading ||
 			contractsQuery.isLoading ||
 			documentsQuery.isLoading ||
+			absencesQuery.isLoading ||
+			typesQuery.isLoading ||
 			!isBound ||
 			!snapshot.profilesLoaded ||
 			!snapshot.contractsLoaded ||
-			!snapshot.documentsLoaded,
+			!snapshot.documentsLoaded ||
+			!snapshot.absencesLoaded ||
+			!snapshot.typesLoaded,
 		error:
 			catalog.members.error?.message ??
 			(profilesRestricted ? null : profilesQuery.error?.message) ??
 			(contractsRestricted ? null : contractsQuery.error?.message) ??
 			(documentsRestricted ? null : documentsQuery.error?.message) ??
+			(absencesRestricted ? null : absencesQuery.error?.message) ??
+			(typesRestricted ? null : typesQuery.error?.message) ??
 			null,
 		state: snapshot.state,
 		context: {
@@ -135,6 +144,8 @@ export function useRhModel(
 			profiles,
 			contracts,
 			documents,
+			absences: absenceActions,
+			absenceTypes: absenceTypeActions,
 			actorId: getRhActorId(),
 			organizationSlug,
 		},

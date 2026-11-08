@@ -183,21 +183,19 @@ export function currentSchedule(
 	return currentContract(member, today).schedule
 }
 
-export function cancelUpcomingAbsences(
+export function upcomingPendingAbsenceIds(
 	state: RhState,
-	context: ActionContext,
 	memberId: string,
-): RhState {
-	return {
-		...state,
-		absences: state.absences.map((absence) =>
-			absence.memberId === memberId &&
-			absence.status === 'pending' &&
-			absence.startDate > context.today
-				? { ...absence, status: 'cancelled' }
-				: absence,
-		),
-	}
+	today: IsoDate,
+): string[] {
+	return state.absences
+		.filter(
+			(absence) =>
+				absence.memberId === memberId &&
+				absence.status === 'pending' &&
+				absence.startDate > today,
+		)
+		.map((absence) => absence.id)
 }
 
 export type DeadlineKind = 'trial' | 'contract_end' | 'work_permit'

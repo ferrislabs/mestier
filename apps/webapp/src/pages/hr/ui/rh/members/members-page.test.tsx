@@ -27,6 +27,19 @@ const NO_CONTRACT_ACTIONS = {
 	remove: async () => {},
 }
 
+const NO_ABSENCE_ACTIONS = {
+	create: async () => {},
+	approve: async () => {},
+	reject: async () => {},
+	cancel: async () => {},
+}
+
+const NO_ABSENCE_TYPE_ACTIONS = {
+	save: async () => {},
+	archive: async () => {},
+	restore: async () => {},
+}
+
 const NO_DOCUMENT_ACTIONS = {
 	add: async () => {},
 	remove: async () => {},
@@ -123,6 +136,8 @@ function render(page: MembersPageProps, permissions = ['MANAGE_MEMBERS']) {
 							profiles: NO_PROFILE_ACTIONS,
 							contracts: NO_CONTRACT_ACTIONS,
 							documents: NO_DOCUMENT_ACTIONS,
+							absences: NO_ABSENCE_ACTIONS,
+							absenceTypes: NO_ABSENCE_TYPE_ACTIONS,
 							actorId: SEED_MEMBER.id,
 							organizationSlug: 'atelier-bois',
 						}}

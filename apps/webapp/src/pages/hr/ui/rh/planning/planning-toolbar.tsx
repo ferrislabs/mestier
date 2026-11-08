@@ -1,4 +1,5 @@
 import { CalendarPlus, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
@@ -87,10 +88,12 @@ export function PlanningToolbar({
 					<ToggleGroupItem value="week">Semaine</ToggleGroupItem>
 					<ToggleGroupItem value="month">Mois</ToggleGroupItem>
 				</ToggleGroup>
-				<Button type="button" size="sm" onClick={onRequestAbsence}>
-					<CalendarPlus />
-					Poser une absence
-				</Button>
+				<RequirePermission permission="MANAGE_REFERENCE">
+					<Button type="button" size="sm" onClick={onRequestAbsence}>
+						<CalendarPlus />
+						Poser une absence
+					</Button>
+				</RequirePermission>
 			</div>
 		</header>
 	)

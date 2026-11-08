@@ -12,6 +12,11 @@ import type { Role } from '#/hooks/use-roles'
 import { MembersFeature } from '#/pages/hr/feature/members-feature'
 import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import { renderWithRouter } from '#/test/render-with-router'
+import {
+	ABSENCE_TYPES_PATH,
+	ABSENCES_PATH,
+	DEFAULT_TYPE_RECORDS,
+} from '#/test/rh-absence-fixtures'
 
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
 const EMPLOYEE_PROFILES_PATH =
@@ -116,6 +121,12 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 								})
 							}
 							return { data: [], pagination: null }
+						}
+						if (path === ABSENCES_PATH) {
+							return { data: [], pagination: null }
+						}
+						if (path === ABSENCE_TYPES_PATH) {
+							return { data: DEFAULT_TYPE_RECORDS, pagination: null }
 						}
 						if (
 							path === PROFILES_PATH ||

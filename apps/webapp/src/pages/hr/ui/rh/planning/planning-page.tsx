@@ -4,12 +4,7 @@ import type {
 	PlanningView,
 	TypeIndex,
 } from '#/pages/hr/lib/rh/planning-model'
-import type {
-	AbsenceDraft,
-	IsoDate,
-	Member,
-	RhState,
-} from '#/pages/hr/lib/rh/types'
+import type { IsoDate, Member, RhState } from '#/pages/hr/lib/rh/types'
 import { AbsenceFormDialog } from '#/pages/hr/ui/rh/absences/absence-form-dialog'
 import { ExtraFormDialog } from '#/pages/hr/ui/rh/extra/extra-form-dialog'
 import { MonthGrid } from '#/pages/hr/ui/rh/planning/month-grid'
@@ -35,7 +30,6 @@ export interface PlanningPageProps {
 	onViewChange: (view: PlanningView) => void
 	absenceDialog: { open: boolean; initial?: AbsenceInitial }
 	onAbsenceDialogChange: (open: boolean, initial?: AbsenceInitial) => void
-	onSubmitAbsence: (draft: AbsenceDraft) => void
 	extraDialog: { open: boolean; initial?: ExtraInitial }
 	onExtraDialogChange: (open: boolean, initial?: ExtraInitial) => void
 }
@@ -57,7 +51,6 @@ export function PlanningPage({
 	onViewChange,
 	absenceDialog,
 	onAbsenceDialogChange,
-	onSubmitAbsence,
 	extraDialog,
 	onExtraDialogChange,
 }: PlanningPageProps) {
@@ -95,7 +88,6 @@ export function PlanningPage({
 					onAbsenceDialogChange(open, absenceDialog.initial)
 				}
 				initial={absenceDialog.initial}
-				onSubmit={onSubmitAbsence}
 			/>
 			<ExtraFormDialog
 				open={extraDialog.open}

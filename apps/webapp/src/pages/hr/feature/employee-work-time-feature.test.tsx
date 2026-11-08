@@ -391,6 +391,7 @@ describe('EmployeeWorkTimeFeature — absences', () => {
 			starts_at: '2026-08-10T00:00:00Z',
 			ends_at: '2026-08-11T00:00:00Z',
 			note: 'Vacances',
+			status: 'APPROVED',
 			created_at: '2026-08-01T00:00:00Z',
 			updated_at: '2026-08-01T00:00:00Z',
 			...overrides,

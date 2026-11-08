@@ -3,18 +3,57 @@ export namespace Schemas {
   export type AbsenceId = string;
   export type AbsenceKind = "LEAVE" | "SICK" | "UNAVAILABLE";
   export type MemberId = string;
+  export type DayPart = "MORNING" | "AFTERNOON";
   export type OrganizationId = string;
+  export type AbsenceStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  export type AbsenceTypeId = string;
   export type AbsenceResponse = {
     all_day: boolean;
     created_at: string;
+    created_by_member_id?: (null | MemberId) | undefined;
+    decided_at?: (string | null) | undefined;
+    decided_by_member_id?: (null | MemberId) | undefined;
+    decision_comment?: (string | null) | undefined;
+    end_date: string;
+    end_part: DayPart;
     ends_at: string;
     id: AbsenceId;
     kind: AbsenceKind;
     member_id: MemberId;
     note?: (string | null) | undefined;
     organization_id: OrganizationId;
+    proof_file_key?: (string | null) | undefined;
+    start_date: string;
+    start_part: DayPart;
     starts_at: string;
+    status: AbsenceStatus;
+    type_id: AbsenceTypeId;
     updated_at: string;
+  };
+  export type CountMode = "WORKING" | "WORKABLE" | "CALENDAR";
+  export type AbsenceTypeRequest = {
+    account_id?: (string | null) | undefined;
+    count_mode: CountMode;
+    hue: number;
+    kind: AbsenceKind;
+    name: string;
+    needs_approval: boolean;
+    needs_proof: boolean;
+    paid: boolean;
+  };
+  export type AbsenceTypeResponse = {
+    account_id?: (string | null) | undefined;
+    archived_at?: (string | null) | undefined;
+    count_mode: CountMode;
+    created_at: string;
+    hue: number;
+    id: AbsenceTypeId;
+    kind: AbsenceKind;
+    name: string;
+    needs_approval: boolean;
+    needs_proof: boolean;
+    organization_id: OrganizationId;
+    paid: boolean;
   };
   export type DocumentKind = "CONTRACT" | "IDENTITY" | "DIPLOMA" | "MEDICAL" | "OTHER";
   export type AddMemberDocumentRequest = { file_key: string; kind: DocumentKind; name: string };
@@ -365,11 +404,17 @@ export namespace Schemas {
   };
   export type CreateAbsenceRequest = {
     all_day?: boolean | undefined;
-    ends_at: string;
-    kind: AbsenceKind;
+    end_date?: (string | null) | undefined;
+    end_part?: (null | DayPart) | undefined;
+    ends_at?: (string | null) | undefined;
+    kind?: (null | AbsenceKind) | undefined;
     member_id: MemberId;
     note?: (string | null) | undefined;
-    starts_at: string;
+    proof_file_key?: (string | null) | undefined;
+    start_date?: (string | null) | undefined;
+    start_part?: (null | DayPart) | undefined;
+    starts_at?: (string | null) | undefined;
+    type_id?: (null | AbsenceTypeId) | undefined;
   };
   export type CreateCategoryRequest = { name: string; position: number };
   export type CreateChannelRequest = {
@@ -2049,6 +2094,7 @@ export namespace Schemas {
     | { frequency: "DAILY" }
     | { frequency: "WEEKLY"; weekdays: Array<number> }
     | { day_of_month: number; frequency: "MONTHLY" };
+  export type RejectAbsenceRequest = { comment: string };
   export type RejectInterventionRequest = Partial<{ note: string | null }>;
   export type RejectSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type ReplaceBillingSettingsRequest = {
@@ -2311,6 +2357,7 @@ export namespace Schemas {
     ends_at: string | null;
     kind: null | AbsenceKind;
     note: string | null;
+    proof_file_key: string | null;
     starts_at: string | null;
   }>;
   export type UpdateCategoryRequest = { name: string; position: number };
@@ -5521,6 +5568,160 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListAbsenceTypes = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/absence-types";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          account_id?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          count_mode: Schemas.CountMode;
+          created_at: string;
+          hue: number;
+          id: Schemas.AbsenceTypeId;
+          kind: Schemas.AbsenceKind;
+          name: string;
+          needs_approval: boolean;
+          needs_proof: boolean;
+          organization_id: Schemas.OrganizationId;
+          paid: boolean;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateAbsenceType = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/absence-types";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.AbsenceTypeRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          account_id?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          count_mode: Schemas.CountMode;
+          created_at: string;
+          hue: number;
+          id: Schemas.AbsenceTypeId;
+          kind: Schemas.AbsenceKind;
+          name: string;
+          needs_approval: boolean;
+          needs_proof: boolean;
+          organization_id: Schemas.OrganizationId;
+          paid: boolean;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type put_UpdateAbsenceType = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/absence-types/{absence_type_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; absence_type_id: string };
+
+      body: Schemas.AbsenceTypeRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          account_id?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          count_mode: Schemas.CountMode;
+          created_at: string;
+          hue: number;
+          id: Schemas.AbsenceTypeId;
+          kind: Schemas.AbsenceKind;
+          name: string;
+          needs_approval: boolean;
+          needs_proof: boolean;
+          organization_id: Schemas.OrganizationId;
+          paid: boolean;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_ArchiveAbsenceType = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/absence-types/{absence_type_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; absence_type_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          account_id?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          count_mode: Schemas.CountMode;
+          created_at: string;
+          hue: number;
+          id: Schemas.AbsenceTypeId;
+          kind: Schemas.AbsenceKind;
+          name: string;
+          needs_approval: boolean;
+          needs_proof: boolean;
+          organization_id: Schemas.OrganizationId;
+          paid: boolean;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_RestoreAbsenceType = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/absence-types/{absence_type_id}/restore";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; absence_type_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          account_id?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          count_mode: Schemas.CountMode;
+          created_at: string;
+          hue: number;
+          id: Schemas.AbsenceTypeId;
+          kind: Schemas.AbsenceKind;
+          name: string;
+          needs_approval: boolean;
+          needs_proof: boolean;
+          organization_id: Schemas.OrganizationId;
+          paid: boolean;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_ListAbsences = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/absences";
@@ -5534,13 +5735,24 @@ export namespace Endpoints {
         data: Array<{
           all_day: boolean;
           created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end_date: string;
+          end_part: Schemas.DayPart;
           ends_at: string;
           id: Schemas.AbsenceId;
           kind: Schemas.AbsenceKind;
           member_id: Schemas.MemberId;
           note?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          proof_file_key?: (string | null) | undefined;
+          start_date: string;
+          start_part: Schemas.DayPart;
           starts_at: string;
+          status: Schemas.AbsenceStatus;
+          type_id: Schemas.AbsenceTypeId;
           updated_at: string;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -5563,13 +5775,24 @@ export namespace Endpoints {
         data: {
           all_day: boolean;
           created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end_date: string;
+          end_part: Schemas.DayPart;
           ends_at: string;
           id: Schemas.AbsenceId;
           kind: Schemas.AbsenceKind;
           member_id: Schemas.MemberId;
           note?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          proof_file_key?: (string | null) | undefined;
+          start_date: string;
+          start_part: Schemas.DayPart;
           starts_at: string;
+          status: Schemas.AbsenceStatus;
+          type_id: Schemas.AbsenceTypeId;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -5577,7 +5800,9 @@ export namespace Endpoints {
       400: unknown;
       401: unknown;
       403: unknown;
+      404: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type delete_DeleteAbsence = {
@@ -5603,13 +5828,24 @@ export namespace Endpoints {
         data: {
           all_day: boolean;
           created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end_date: string;
+          end_part: Schemas.DayPart;
           ends_at: string;
           id: Schemas.AbsenceId;
           kind: Schemas.AbsenceKind;
           member_id: Schemas.MemberId;
           note?: (string | null) | undefined;
           organization_id: Schemas.OrganizationId;
+          proof_file_key?: (string | null) | undefined;
+          start_date: string;
+          start_part: Schemas.DayPart;
           starts_at: string;
+          status: Schemas.AbsenceStatus;
+          type_id: Schemas.AbsenceTypeId;
           updated_at: string;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
@@ -5619,6 +5855,128 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+    };
+  };
+  export type post_ApproveAbsence = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/absences/{absence_id}/approve";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; absence_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          all_day: boolean;
+          created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end_date: string;
+          end_part: Schemas.DayPart;
+          ends_at: string;
+          id: Schemas.AbsenceId;
+          kind: Schemas.AbsenceKind;
+          member_id: Schemas.MemberId;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          proof_file_key?: (string | null) | undefined;
+          start_date: string;
+          start_part: Schemas.DayPart;
+          starts_at: string;
+          status: Schemas.AbsenceStatus;
+          type_id: Schemas.AbsenceTypeId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_CancelAbsence = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/absences/{absence_id}/cancel";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; absence_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          all_day: boolean;
+          created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end_date: string;
+          end_part: Schemas.DayPart;
+          ends_at: string;
+          id: Schemas.AbsenceId;
+          kind: Schemas.AbsenceKind;
+          member_id: Schemas.MemberId;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          proof_file_key?: (string | null) | undefined;
+          start_date: string;
+          start_part: Schemas.DayPart;
+          starts_at: string;
+          status: Schemas.AbsenceStatus;
+          type_id: Schemas.AbsenceTypeId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_RejectAbsence = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/absences/{absence_id}/reject";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; absence_id: string };
+
+      body: Schemas.RejectAbsenceRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          all_day: boolean;
+          created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end_date: string;
+          end_part: Schemas.DayPart;
+          ends_at: string;
+          id: Schemas.AbsenceId;
+          kind: Schemas.AbsenceKind;
+          member_id: Schemas.MemberId;
+          note?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          proof_file_key?: (string | null) | undefined;
+          start_date: string;
+          start_part: Schemas.DayPart;
+          starts_at: string;
+          status: Schemas.AbsenceStatus;
+          type_id: Schemas.AbsenceTypeId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
     };
   };
   export type get_ListAssignmentReports = {
@@ -12105,6 +12463,7 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}/work-time": Endpoints.get_GetWorkTime;
     "/api/v1/organizations": Endpoints.get_ListOrganizations;
     "/api/v1/organizations/{organization_id}": Endpoints.get_GetOrganization;
+    "/api/v1/organizations/{organization_id}/absence-types": Endpoints.get_ListAbsenceTypes;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.get_ListAbsences;
     "/api/v1/organizations/{organization_id}/assignment-reports": Endpoints.get_ListAssignmentReports;
     "/api/v1/organizations/{organization_id}/automation/collections": Endpoints.get_ListCollections;
@@ -12228,7 +12587,13 @@ export type EndpointByMethod = {
     "/api/v1/invoices/{invoice_id}/send": Endpoints.post_SendInvoice;
     "/api/v1/members/{member_id}/roles": Endpoints.post_AssignRole;
     "/api/v1/organizations": Endpoints.post_CreateOrganization;
+    "/api/v1/organizations/{organization_id}/absence-types": Endpoints.post_CreateAbsenceType;
+    "/api/v1/organizations/{organization_id}/absence-types/{absence_type_id}/archive": Endpoints.post_ArchiveAbsenceType;
+    "/api/v1/organizations/{organization_id}/absence-types/{absence_type_id}/restore": Endpoints.post_RestoreAbsenceType;
     "/api/v1/organizations/{organization_id}/absences": Endpoints.post_CreateAbsence;
+    "/api/v1/organizations/{organization_id}/absences/{absence_id}/approve": Endpoints.post_ApproveAbsence;
+    "/api/v1/organizations/{organization_id}/absences/{absence_id}/cancel": Endpoints.post_CancelAbsence;
+    "/api/v1/organizations/{organization_id}/absences/{absence_id}/reject": Endpoints.post_RejectAbsence;
     "/api/v1/organizations/{organization_id}/automation/collections": Endpoints.post_ImportCollection;
     "/api/v1/organizations/{organization_id}/automation/credentials": Endpoints.post_CreateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}/oauth/disconnect": Endpoints.post_DisconnectAutomationCredentialOauth;
@@ -12321,6 +12686,7 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}/employee-profile": Endpoints.put_UpsertEmployeeProfile;
     "/api/v1/members/{member_id}/rhythm": Endpoints.put_PutRhythm;
     "/api/v1/members/{member_id}/work-slots": Endpoints.put_PutWorkSlots;
+    "/api/v1/organizations/{organization_id}/absence-types/{absence_type_id}": Endpoints.put_UpdateAbsenceType;
     "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}": Endpoints.put_ReplaceCollection;
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;

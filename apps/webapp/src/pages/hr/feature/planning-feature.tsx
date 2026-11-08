@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { todayIso } from '#/pages/hr/lib/rh/dates'
 import { activePlanningMembers } from '#/pages/hr/lib/rh/planning'
 import {
@@ -16,7 +15,6 @@ import type { IsoDate } from '#/pages/hr/lib/rh/types'
 import { PlanningPage } from '#/pages/hr/ui/rh/planning/planning-page'
 import { useRhState } from '#/pages/hr/ui/rh/shared/rh-context'
 import { RhScreen } from './rh-screen'
-import { useSubmitAbsence } from './use-absence-submit'
 
 export type { PlanningView } from '#/pages/hr/lib/rh/planning-model'
 
@@ -46,8 +44,6 @@ interface ExtraDialogState {
 
 function PlanningScreen({ view, date, onChange }: PlanningFeatureProps) {
 	const state = useRhState()
-	const { activeOrganization } = useActiveOrganization()
-	const absenceSubmit = useSubmitAbsence(activeOrganization.id)
 	const [query, setQuery] = useState('')
 	const [absenceDialog, setAbsenceDialog] = useState<AbsenceDialogState>({
 		open: false,
@@ -83,7 +79,6 @@ function PlanningScreen({ view, date, onChange }: PlanningFeatureProps) {
 			onAbsenceDialogChange={(open, initial) =>
 				setAbsenceDialog({ open, initial })
 			}
-			onSubmitAbsence={(draft) => void absenceSubmit.submit(draft)}
 			extraDialog={extraDialog}
 			onExtraDialogChange={(open, initial) => setExtraDialog({ open, initial })}
 		/>
