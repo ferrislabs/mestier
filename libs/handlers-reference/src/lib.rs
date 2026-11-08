@@ -8,13 +8,18 @@ pub mod cost_basis;
 pub mod custom_unit;
 pub mod employee;
 pub mod equipment;
+pub mod member_contract;
+pub mod member_document;
 pub mod member_profile;
 pub mod paths;
 pub mod product;
 pub mod response;
 pub mod service_rate;
 
-pub use mestier_core::ServiceRateUnit;
+pub use mestier_core::{
+    BlockInput, ContractType, DocumentKind, LunchInput, ScheduleInput, ScheduleUnit,
+    ServiceRateUnit, WorkDayInput,
+};
 
 pub const TAG: &str = "reference";
 
@@ -47,6 +52,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(custom_unit::create::handler)
         .merge(absence::router(state))
         .merge(member_profile::router(state))
+        .merge(member_contract::router(state))
+        .merge(member_document::router(state))
         .merge(cost_basis::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))

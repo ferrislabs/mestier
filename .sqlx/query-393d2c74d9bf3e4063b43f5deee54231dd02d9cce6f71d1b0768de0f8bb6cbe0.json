@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, member_id, name, kind, file_key, added_at\n            FROM member_documents\n            WHERE org_id = $1 AND id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "added_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "393d2c74d9bf3e4063b43f5deee54231dd02d9cce6f71d1b0768de0f8bb6cbe0"
+}
