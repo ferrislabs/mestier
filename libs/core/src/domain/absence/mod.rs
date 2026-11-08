@@ -154,7 +154,7 @@ impl Absence {
             start_part: span.start_part(),
             end_date: span.end_date(),
             end_part: span.end_part(),
-            status: if needs_approval {
+            status: if needs_approval || (absence_type.needs_proof && proof_file_key.is_none()) {
                 AbsenceStatus::Pending
             } else {
                 AbsenceStatus::Approved

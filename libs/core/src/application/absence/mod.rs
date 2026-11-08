@@ -3,11 +3,12 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    Absence, AbsenceId, AbsenceOutcome, OrganizationId,
+    Absence, AbsenceError, AbsenceId, AbsenceOutcome, OrganizationId,
     application::{MestierUseCase, organization::resolve_timezone, policy},
     domain::absence::{
         commands::{
-            CreateAbsenceCommand, DecideAbsenceCommand, PatchAbsenceCommand, RejectAbsenceCommand,
+            CreateAbsenceCommand, DecideAbsenceCommand, ListAbsencesCommand, PatchAbsenceCommand,
+            RejectAbsenceCommand,
         },
         service::AbsenceService,
     },
@@ -40,23 +41,78 @@ impl MestierUseCase {
             &mut role_repository,
         )
         .await?;
-        policy::require(
+        let creator = policy::subject_member_id(&actor);
+        let privileged = policy::holds(
             &authz,
             &actor,
             "reference.manage",
             Resource::new("organization", command.organization_id.0.to_string()),
         )
         .await?;
+        if !privileged {
+            if creator != Some(command.member_id) {
+                return Err(CoreError::Forbidden {
+                    reason: Some("a member can only request an absence for themselves".to_owned()),
+                });
+            }
+            if command.type_id.is_none() {
+                return Ok(Err(AbsenceError::TypeRequired));
+            }
+        }
 
         let timezone =
             resolve_timezone(&mut organization_repository, command.organization_id).await?;
-        let creator = policy::subject_member_id(&actor);
         let mut service = AbsenceService::new(
             absence_repository,
             absence_type_repository,
             leave_account_repository,
         );
         service.create_absence(command, creator, timezone).await
+    }
+
+    #[transactional(absence, absence_type, leave_account, role, member, authz)]
+    pub async fn list_absences_for(
+        &self,
+        command: ListAbsencesCommand,
+    ) -> Result<(Vec<Absence>, u64), CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+
+        let actor = policy::enrich_for_organization(
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        let resource = Resource::new("organization", command.organization_id.0.to_string());
+        let organization_wide = policy::holds(&authz, &actor, "planning.manage", resource.clone())
+            .await?
+            || policy::holds(&authz, &actor, "reference.manage", resource).await?;
+        let scope = policy::own_scope(&actor, command.member_id, organization_wide)?;
+
+        let mut service = AbsenceService::new(
+            absence_repository,
+            absence_type_repository,
+            leave_account_repository,
+        );
+        match scope {
+            Some(member_id) => {
+                service
+                    .list_absences_of_member(
+                        command.organization_id,
+                        member_id,
+                        command.limit,
+                        command.offset,
+                    )
+                    .await
+            }
+            None => {
+                service
+                    .list_absences(command.organization_id, command.limit, command.offset)
+                    .await
+            }
+        }
     }
 
     #[transactional(absence, absence_type, leave_account)]

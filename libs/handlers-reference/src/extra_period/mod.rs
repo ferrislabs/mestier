@@ -69,7 +69,7 @@ pub struct ExtraPeriodsQuery {
 
 #[derive(Debug, Deserialize, ToSchema)]
 #[schema(
-    description = "Hours worked outside the schedule. With a surcharge_id the rate is copied from that surcharge and rate_bp is ignored; without one the free rate_bp is kept (0 when absent). approve records the period as approved by the caller at once."
+    description = "Hours worked outside the schedule. With a surcharge_id the rate is copied from that surcharge and rate_bp is ignored; without one the free rate_bp is kept (0 when absent). approve records the period as approved by the caller at once; it is ignored for a caller without planning management, whose own declaration is always pending."
 )]
 pub struct CreateExtraPeriodRequest {
     pub member_id: MemberId,
@@ -206,9 +206,9 @@ impl IntoResponse for ExtraPeriodFailure {
         PaginationParams,
     ),
     responses(
-        (status = 200, description = "Paginated extra periods, latest date first, optionally of one member, one status or a date window", body = inline(DataEnvelope<Vec<ExtraPeriodResponse>>)),
+        (status = 200, description = "Paginated extra periods, latest date first, optionally of one member, one status or a date window; a caller without planning management only gets their own", body = inline(DataEnvelope<Vec<ExtraPeriodResponse>>)),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Needs planning management"),
+        (status = 403, description = "Another member's periods need planning management"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -255,7 +255,7 @@ pub async fn list_extra_periods(
     responses(
         (status = 201, description = "Period declared, pending unless approved at once", body = inline(DataEnvelope<ExtraPeriodResponse>)),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Needs planning management"),
+        (status = 403, description = "Declaring for another member needs planning management"),
         (status = 422, description = "The period is refused, the field is named in details"),
     ),
     security(("bearer_auth" = []))

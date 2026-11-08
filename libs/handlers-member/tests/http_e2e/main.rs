@@ -444,3 +444,64 @@ async fn unassigning_a_role_removes_it_from_the_members_role_ids() {
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_rh_7_1_members_me_returns_the_callers_seat_and_not_found_without_one() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+    let path = format!("/organizations/{}/members/me", app.organization_id);
+
+    let seat: uuid::Uuid = sqlx::query_scalar(
+        "SELECT id FROM organization_members WHERE organization_id = $1 AND last_name = 'No Role'",
+    )
+    .bind(app.organization_id)
+    .fetch_one(&app.pool)
+    .await
+    .expect("the restricted member's seat");
+
+    let own = client
+        .get(app.url(&path))
+        .bearer_auth(&app.restricted_token)
+        .send()
+        .await
+        .expect("the api answers");
+    assert_eq!(own.status(), 200);
+    let own: serde_json::Value = own.json().await.expect("the answer is json");
+    assert_eq!(own["data"]["member_id"], serde_json::json!(seat), "{own}");
+    assert_eq!(
+        own["data"]["organization_id"],
+        serde_json::json!(app.organization_id),
+        "{own}"
+    );
+
+    let stranger = uuid::Uuid::now_v7();
+    let sub = format!("sub-member-stranger-{stranger}");
+    sqlx::query(
+        "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(stranger)
+    .bind(format!("stranger-{stranger}@example.com"))
+    .bind(format!("stranger-{stranger}"))
+    .bind("Stranger")
+    .bind(&sub)
+    .execute(&app.pool)
+    .await
+    .expect("seed a user with no seat");
+    let missing = client
+        .get(app.url(&path))
+        .bearer_auth(issuer::mint(&sub))
+        .send()
+        .await
+        .expect("the api answers");
+    assert_eq!(missing.status(), 404);
+    let body: serde_json::Value = missing.json().await.expect("the answer is json");
+    assert_eq!(body["code"], "E_RESOURCE_NOT_FOUND", "{body}");
+
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(stranger)
+        .execute(&app.pool)
+        .await
+        .expect("clear the stranger");
+    app.cleanup().await;
+}

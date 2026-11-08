@@ -5,6 +5,7 @@ import {
 	buildExtraDraft,
 	CUSTOM_RATE,
 	canCancel,
+	canCancelOwn,
 	dayCaption,
 	describeBonus,
 	describeEquivalent,
@@ -386,4 +387,22 @@ test('le champ fautif d’une majoration est désigné', () => {
 	assert.equal(faultyField('Nuit', 201, true), 'rate')
 	assert.equal(faultyField('Nuit', 25, true), 'name')
 	assert.equal(faultyField('Nuit', 25, false), null)
+})
+
+test('spec_rh_7_6 le créateur annule sa propre déclaration en attente, pas celle d’un autre ni une déclaration tranchée', () => {
+	const own = extraOf({ createdById: 'me', date: '2026-12-01' })
+	assert.equal(canCancelOwn(own, 'me', '2026-11-04'), true)
+	assert.equal(
+		canCancelOwn({ ...own, createdById: 'other' }, 'me', '2026-11-04'),
+		false,
+	)
+	assert.equal(
+		canCancelOwn({ ...own, status: 'approved' }, 'me', '2026-11-04'),
+		false,
+	)
+	assert.equal(
+		canCancelOwn({ ...own, date: '2026-10-01' }, 'me', '2026-11-04'),
+		false,
+	)
+	assert.equal(canCancelOwn(own, '', '2026-11-04'), false)
 })

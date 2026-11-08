@@ -46,6 +46,13 @@ pub struct MemberRolePath {
     pub role_id: RoleId,
 }
 
+/// The caller's own seat in one organization — `me`, never a member id.
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/members/me")]
+pub struct MyMemberPath {
+    pub organization_id: OrganizationId,
+}
+
 /// The caller's own aggregated permissions in one organization (#307) —
 /// `me`, never a member id, because a caller must never be able to read
 /// anyone else's bits through this route by supplying a different id.

@@ -25,15 +25,22 @@ impl MestierUseCase {
     ) -> Result<(Vec<ExtraPeriod>, u64), CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
-        require_permission(
+        let actor = policy::enrich_for_organization(
             command.actor,
             command.organization_id,
-            "planning.manage",
             &mut member_repository,
             &mut role_repository,
-            &authz,
         )
         .await?;
+        let organization_wide = policy::holds(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", command.organization_id.0.to_string()),
+        )
+        .await?;
+        let mut filter = command.filter;
+        filter.member_id = policy::own_scope(&actor, filter.member_id, organization_wide)?;
 
         let mut service = ExtraPeriodService::new(
             extra_period_repository,
@@ -43,7 +50,7 @@ impl MestierUseCase {
         service
             .list(
                 command.organization_id,
-                &command.filter,
+                &filter,
                 command.limit,
                 command.offset,
             )
@@ -57,15 +64,31 @@ impl MestierUseCase {
     ) -> Result<ExtraPeriodOutcome<ExtraPeriod>, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
-        let actor = require_permission(
+        let actor = policy::enrich_for_organization(
             command.actor,
             command.organization_id,
-            "planning.manage",
             &mut member_repository,
             &mut role_repository,
-            &authz,
         )
         .await?;
+        let creator = policy::subject_member_id(&actor);
+        let privileged = policy::holds(
+            &authz,
+            &actor,
+            "planning.manage",
+            Resource::new("organization", command.organization_id.0.to_string()),
+        )
+        .await?;
+        let mut draft = command.draft;
+        if !privileged {
+            if creator != Some(draft.member_id) {
+                return Err(CoreError::Forbidden {
+                    reason: Some("a member can only declare hours for themselves".to_owned()),
+                });
+            }
+            draft.approve = false;
+            draft.rate_bp = None;
+        }
 
         let mut service = ExtraPeriodService::new(
             extra_period_repository,
@@ -73,11 +96,7 @@ impl MestierUseCase {
             member_repository,
         );
         service
-            .create(
-                command.organization_id,
-                &command.draft,
-                policy::subject_member_id(&actor),
-            )
+            .create(command.organization_id, &draft, creator)
             .await
     }
 

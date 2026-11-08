@@ -15,6 +15,7 @@ import {
 	absenceRecord,
 	DEFAULT_TYPE_RECORDS,
 } from '#/test/rh-absence-fixtures'
+import { MY_MEMBER_PATH, myMemberResponse } from '#/test/rh-current-member'
 import { EXTRAS_PATH, SURCHARGES_PATH } from '#/test/rh-extra-fixtures'
 import {
 	DEFAULT_ACCOUNT_RECORDS,
@@ -135,6 +136,7 @@ function installFakeApi() {
 							throw Object.assign(new Error('Forbidden'), { status: 403 })
 						if (path === PROFILES_PATH)
 							return { data: structuredClone(profiles), pagination: null }
+						if (path === MY_MEMBER_PATH) return myMemberResponse()
 						if (path === PERMISSIONS_PATH)
 							return {
 								data: { permissions },

@@ -97,7 +97,7 @@ impl CreateAbsenceRequest {
         (status = 201, description = "Absence created, PENDING when its type needs approval", body = inline(DataEnvelope<AbsenceResponse>)),
         (status = 400, description = "Validation failed"),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Forbidden"),
+        (status = 403, description = "Requesting for another member needs reference management"),
         (status = 404, description = "Member or absence type not found in the organization"),
         (status = 409, description = "Absence conflict"),
         (status = 422, description = "The absence is refused, the field is named in details"),

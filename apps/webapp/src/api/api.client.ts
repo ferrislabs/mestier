@@ -1789,6 +1789,7 @@ export namespace Schemas {
   };
   export type MinuteIntervalResponse = { ends_minute: number; starts_minute: number };
   export type MoveDealRequest = { lost_reason?: (string | null) | undefined; stage: DealStageName };
+  export type MyMemberResponse = { display_name: string; member_id: MemberId; organization_id: OrganizationId };
   export type MyPermissionsResponse = { permissions: Array<string> };
   export type NodePositionDto = { x: number; y: number };
   export type NoteInvoiceRequest = { note: string };
@@ -5845,7 +5846,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/absences";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ page: number; per_page: number }>;
+      query: Partial<{ member_id: string; page: number; per_page: number }>;
       path: { organization_id: string };
     };
     responses: {
@@ -9212,6 +9213,22 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       409: unknown;
+    };
+  };
+  export type get_GetMyMember = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/members/me";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: { display_name: string; member_id: Schemas.MemberId; organization_id: Schemas.OrganizationId };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      404: unknown;
     };
   };
   export type get_GetMyPermissions = {
@@ -13241,6 +13258,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/member-documents": Endpoints.get_ListMemberDocuments;
     "/api/v1/organizations/{organization_id}/member-profiles": Endpoints.get_ListMemberProfiles;
     "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
+    "/api/v1/organizations/{organization_id}/members/me": Endpoints.get_GetMyMember;
     "/api/v1/organizations/{organization_id}/members/me/permissions": Endpoints.get_GetMyPermissions;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts": Endpoints.get_ListMemberContracts;
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.get_GetMemberProfile;

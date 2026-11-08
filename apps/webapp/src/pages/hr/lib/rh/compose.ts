@@ -95,13 +95,6 @@ export function composeRhState(sources: RhSources): RhState {
 	return overlayOverrides(state, sources.overridePeriods)
 }
 
-export function actorIdOf(
-	members: readonly RealMember[],
-	email: string | null | undefined,
-): string {
-	const wanted = email?.trim().toLowerCase()
-	const own = wanted
-		? members.find((member) => member.email.trim().toLowerCase() === wanted)
-		: undefined
-	return own?.id ?? members[0]?.id ?? ''
+export function actorIdOf(currentMemberId: string | null | undefined): string {
+	return currentMemberId ?? ''
 }

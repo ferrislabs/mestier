@@ -1,6 +1,5 @@
 import { Ban, Check, MoreHorizontal, Search, X } from 'lucide-react'
 import { useState } from 'react'
-import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	DropdownMenu,
@@ -31,6 +30,7 @@ import { useHasPermission } from '#/hooks/use-permissions'
 import { absenceDays, findMember, findType } from '#/pages/hr/lib/rh/absences'
 import {
 	canCancel,
+	canCancelOwn,
 	filterHistory,
 	formatDayCount,
 	HISTORY_ALL,
@@ -45,6 +45,11 @@ import {
 	STATUS_LABELS,
 } from '#/pages/hr/ui/rh/shared/absence-status-badge'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
+import {
+	CanRequest,
+	useOwnRequestsOnly,
+} from '#/pages/hr/ui/rh/shared/request-access'
+import { useRhActorId } from '#/pages/hr/ui/rh/shared/rh-context'
 import { TypeChip, TypeDot } from '#/pages/hr/ui/rh/shared/type-chip'
 
 const DEFAULT_FILTERS: HistoryFilters = {
@@ -84,6 +89,7 @@ export function HistorySection({
 	onCancel: (absence: Absence) => void
 	onCreate: () => void
 }) {
+	const mine = useOwnRequestsOnly('absence')
 	const [local, setLocal] = useState({ query: '', typeId: HISTORY_ALL })
 	const filters: HistoryFilters = { ...local, status, memberId }
 	function setFilters(next: HistoryFilters) {
@@ -114,22 +120,24 @@ export function HistorySection({
 				</span>
 			</div>
 			<div className="mb-3 flex flex-wrap items-center gap-2">
-				<div className="relative w-full max-w-60">
-					<Search
-						className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-						aria-hidden
-					/>
-					<Input
-						type="search"
-						value={filters.query}
-						onChange={(event) =>
-							setFilters({ ...filters, query: event.target.value })
-						}
-						placeholder="Rechercher un membre"
-						aria-label="Rechercher un membre"
-						className="h-8 bg-card pl-8"
-					/>
-				</div>
+				{!mine && (
+					<div className="relative w-full max-w-60">
+						<Search
+							className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+							aria-hidden
+						/>
+						<Input
+							type="search"
+							value={filters.query}
+							onChange={(event) =>
+								setFilters({ ...filters, query: event.target.value })
+							}
+							placeholder="Rechercher un membre"
+							aria-label="Rechercher un membre"
+							className="h-8 bg-card pl-8"
+						/>
+					</div>
+				)}
 				<ToggleGroup
 					type="single"
 					variant="outline"
@@ -150,28 +158,30 @@ export function HistorySection({
 						</ToggleGroupItem>
 					))}
 				</ToggleGroup>
-				<Select
-					value={filters.memberId}
-					onValueChange={(memberId) => setFilters({ ...filters, memberId })}
-				>
-					<SelectTrigger
-						size="sm"
-						aria-label="Filtrer par membre"
-						className="min-w-44 bg-card"
+				{!mine && (
+					<Select
+						value={filters.memberId}
+						onValueChange={(memberId) => setFilters({ ...filters, memberId })}
 					>
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value={HISTORY_ALL}>Tous les membres</SelectItem>
-						<SelectSeparator />
-						{members.map((member) => (
-							<SelectItem key={member.id} value={member.id}>
-								<MemberAvatar member={member} size="sm" />
-								{fullName(member)}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+						<SelectTrigger
+							size="sm"
+							aria-label="Filtrer par membre"
+							className="min-w-44 bg-card"
+						>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value={HISTORY_ALL}>Tous les membres</SelectItem>
+							<SelectSeparator />
+							{members.map((member) => (
+								<SelectItem key={member.id} value={member.id}>
+									<MemberAvatar member={member} size="sm" />
+									{fullName(member)}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				)}
 				<Select
 					value={filters.typeId}
 					onValueChange={(typeId) => setFilters({ ...filters, typeId })}
@@ -205,7 +215,9 @@ export function HistorySection({
 					<p className="mt-1 text-[13px] text-muted-foreground">
 						{filtered
 							? 'Élargis la recherche ou retire un filtre.'
-							: 'Les absences posées par l’équipe apparaîtront ici.'}
+							: mine
+								? 'Tes demandes apparaîtront ici dès que tu en feras une.'
+								: 'Les absences posées par l’équipe apparaîtront ici.'}
 					</p>
 					<div className="mt-4 flex justify-center">
 						{filtered ? (
@@ -218,11 +230,11 @@ export function HistorySection({
 								Réinitialiser les filtres
 							</Button>
 						) : (
-							<RequirePermission permission="MANAGE_REFERENCE">
+							<CanRequest kind="absence">
 								<Button type="button" size="sm" onClick={onCreate}>
 									Poser une absence
 								</Button>
-							</RequirePermission>
+							</CanRequest>
 						)}
 					</div>
 				</div>
@@ -278,6 +290,7 @@ function HistoryRow({
 	onCancel: (absence: Absence) => void
 }) {
 	const canDecide = useHasPermission('MANAGE_PLANNING')
+	const actorId = useRhActorId()
 	const member = findMember(state, absence.memberId)
 	const type = findType(state, absence.typeId)
 	if (!member || !type) return null
@@ -286,7 +299,9 @@ function HistoryRow({
 	const decider = findMember(state, absence.decidedById)
 	const pending = absence.status === 'pending'
 	const decidable = pending && canDecide
-	const cancellable = canDecide && canCancel(absence, today)
+	const cancellable =
+		(canDecide && canCancel(absence, today)) ||
+		canCancelOwn(absence, actorId, today)
 	return (
 		<TableRow>
 			<TableCell className="py-2.5 pl-4">

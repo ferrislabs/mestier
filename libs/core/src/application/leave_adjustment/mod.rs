@@ -1,3 +1,4 @@
+use authz::Resource;
 use common::CoreError;
 use mestier_macros::transactional;
 
@@ -23,30 +24,18 @@ impl MestierUseCase {
     ) -> Result<Vec<LeaveAdjustment>, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
-        match require_permission(
-            command.actor.clone(),
+        let actor = policy::enrich_for_organization(
+            command.actor,
             command.organization_id,
-            "planning.manage",
             &mut member_repository,
             &mut role_repository,
-            &authz,
         )
-        .await
-        {
-            Ok(_) => {}
-            Err(CoreError::Forbidden { .. }) => {
-                require_permission(
-                    command.actor,
-                    command.organization_id,
-                    "reference.manage",
-                    &mut member_repository,
-                    &mut role_repository,
-                    &authz,
-                )
-                .await?;
-            }
-            Err(other) => return Err(other),
-        }
+        .await?;
+        let resource = Resource::new("organization", command.organization_id.0.to_string());
+        let organization_wide = policy::holds(&authz, &actor, "planning.manage", resource.clone())
+            .await?
+            || policy::holds(&authz, &actor, "reference.manage", resource).await?;
+        let member_id = policy::own_scope(&actor, command.member_id, organization_wide)?;
 
         let mut service = LeaveAdjustmentService::new(
             leave_adjustment_repository,
@@ -54,11 +43,7 @@ impl MestierUseCase {
             member_repository,
         );
         service
-            .list(
-                command.organization_id,
-                command.member_id,
-                command.account_id,
-            )
+            .list(command.organization_id, member_id, command.account_id)
             .await
     }
 

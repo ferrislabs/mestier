@@ -449,7 +449,12 @@ async fn extra_periods_are_filtered_paginated_and_read_with_planning_management(
     .await;
     assert_eq!(first_page["data"][0]["date"], json!("2026-11-14"));
 
-    let (status, _) = get(&app, &app.restricted_token, &extras_path(&app)).await;
+    let (status, _) = get(
+        &app,
+        &app.restricted_token,
+        &format!("{}?member_id={member}", extras_path(&app)),
+    )
+    .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 
     app.cleanup().await;

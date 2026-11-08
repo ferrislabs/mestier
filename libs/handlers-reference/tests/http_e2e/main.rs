@@ -14,6 +14,7 @@ mod issuer;
 mod leave_b4;
 mod member_contract_b2;
 mod member_profile_b1;
+mod self_service_b7;
 
 use chrono::{Duration, NaiveDate, Utc};
 

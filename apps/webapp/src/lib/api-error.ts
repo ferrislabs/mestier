@@ -33,3 +33,12 @@ export function mutationErrorMessage(error: unknown): string | null {
 	}
 	return error instanceof Error ? error.message : 'Une erreur est survenue.'
 }
+
+export function isNotFoundError(error: unknown): boolean {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'status' in error &&
+		(error as { status?: unknown }).status === 404
+	)
+}

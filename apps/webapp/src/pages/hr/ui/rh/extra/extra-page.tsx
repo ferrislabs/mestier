@@ -1,5 +1,4 @@
 import { Plus } from 'lucide-react'
-import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
@@ -18,6 +17,10 @@ import { MonthSummary } from '#/pages/hr/ui/rh/extra/month-summary'
 import { PendingExtras } from '#/pages/hr/ui/rh/extra/pending-extras'
 import { RejectDialog } from '#/pages/hr/ui/rh/extra/reject-dialog'
 import { SurchargesTab } from '#/pages/hr/ui/rh/extra/surcharges-tab'
+import {
+	CanRequest,
+	useOwnRequestsOnly,
+} from '#/pages/hr/ui/rh/shared/request-access'
 
 export type ExtraTab = 'declarations' | 'majorations'
 
@@ -71,18 +74,19 @@ export function ExtraPage({
 	saveError,
 	notice,
 }: ExtraPageProps) {
+	const mine = useOwnRequestsOnly('extra')
 	return (
 		<PageShell className="block">
 			<PageHeader
 				className="mb-6"
-				title="Heures extra"
+				title={mine ? 'Mes demandes' : 'Heures extra'}
 				description={
 					pending.length > 0
-						? `${pending.length} déclaration${pending.length > 1 ? 's' : ''} à valider`
+						? `${pending.length} déclaration${pending.length > 1 ? 's' : ''} ${mine ? 'en attente de validation' : 'à valider'}`
 						: 'Aucune déclaration en attente.'
 				}
 				actions={
-					<RequirePermission permission="MANAGE_PLANNING">
+					<CanRequest kind="extra">
 						<Button
 							type="button"
 							size="sm"
@@ -91,7 +95,7 @@ export function ExtraPage({
 							<Plus />
 							Déclarer des heures
 						</Button>
-					</RequirePermission>
+					</CanRequest>
 				}
 			/>
 			{saveError ? (
@@ -123,7 +127,7 @@ export function ExtraPage({
 						today={today}
 						onMonthChange={onMonthChange}
 					/>
-					{pending.length > 0 && (
+					{pending.length > 0 && !mine && (
 						<PendingExtras
 							state={state}
 							requests={pending}

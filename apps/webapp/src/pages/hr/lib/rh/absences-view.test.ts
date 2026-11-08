@@ -2,6 +2,7 @@ import { assert, test } from 'vitest'
 import {
 	balanceImpact,
 	canCancel,
+	canCancelOwn,
 	countModeOption,
 	describeDateRange,
 	describeSpan,
@@ -304,4 +305,24 @@ test('seuls les quatre statuts connus sont acceptés comme filtre d’URL', () =
 	assert.equal(isAbsenceStatus('all'), false)
 	assert.equal(isAbsenceStatus(undefined), false)
 	assert.equal(isAbsenceStatus(3), false)
+})
+
+test('spec_rh_7_6 le créateur annule sa propre demande en attente, pas celle d’un autre ni une demande tranchée', () => {
+	const own = {
+		...state.absences[0],
+		createdById: 'me',
+		status: 'pending',
+		endDate: '2026-12-01',
+	} as const
+	assert.equal(canCancelOwn(own, 'me', TODAY), true)
+	assert.equal(
+		canCancelOwn({ ...own, createdById: 'other' }, 'me', TODAY),
+		false,
+	)
+	assert.equal(canCancelOwn({ ...own, status: 'approved' }, 'me', TODAY), false)
+	assert.equal(
+		canCancelOwn({ ...own, endDate: '2026-10-01' }, 'me', TODAY),
+		false,
+	)
+	assert.equal(canCancelOwn({ ...own, createdById: '' }, '', TODAY), false)
 })

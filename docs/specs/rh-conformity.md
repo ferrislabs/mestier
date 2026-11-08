@@ -55,6 +55,8 @@ Design
   B5  Day overrides and planning feed. Table `day_overrides` (org_id, member_id, date, kind WORK|OFF, start, end, lunch_start, lunch_end, note) unique on (member_id, date). Endpoints: list by period, upsert, delete. A single `GET /organizations/{id}/hr/planning-feed?from=&to=` returns members, active contracts, absences, overrides of the period so the planning page makes one call (period at most 62 days else 422; members carry an `archived` flag and no hue, absence types are included). An override carries `kind`, `start`, `end`, `lunch {start,end}` and `note`. proto:planning.ts, day-planning.ts.
   B6  Surcharges and extra hours. Tables `surcharges` (id, org_id, name, rate_bp >= 0, kind OVERTIME|SUNDAY|HOLIDAY|NIGHT|OTHER, archived_at) and `extra_periods` (id, org_id, member_id, date, start, end, lunch_start, lunch_end, reason, surcharge_id nullable, rate_bp, status, created_by, decided_by, decided_at, decision_comment). The rate is copied from the surcharge at creation. Defaults (the prototype list): heures supplémentaires 25 %, au-delà de 8 h 50 %, dimanche 100 %, jour férié 100 %, nuit 25 %. Endpoints: surcharges CRUD and archive, extras list, create, approve, reject, cancel. proto:extra.ts, extra-view.ts.
 
+  B7  Self-service and gaps left by B1 to B6. `GET /organizations/{id}/members/me` returns the caller's member id (404 when the caller holds no seat). A member without MANAGE_REFERENCE or MANAGE_PLANNING may create an absence or an extra period for themselves only (never for another member, never pre-approved: the status follows the type and the extra is always PENDING), cancel their own PENDING absence or extra, and list their own absences, extras, adjustments and the leave accounts. The webapp reads the actor from `members/me`, shows "Mes demandes" and fetches every page of the absence and extra lists instead of one page of 100. proto:absences.ts, decision-context.tsx.
+
 Acceptance (Gherkin)
   F1
   @spec-rh-f1-1   Scenario: the RH module lives at /rh with membres, planning, absences, heures extra, droits et RTT, plus the kept Temps de travail and Matériel
@@ -104,6 +106,13 @@ Acceptance (Gherkin)
   @spec-rh-6-3    Scenario: approve and reject follow the absence rules (single decision, comment on reject)
   @spec-rh-6-4    Scenario: end not after start is refused
   @spec-rh-6-5    Scenario: the extra screen reads surcharges and periods from the API
+  B7
+  @spec-rh-7-1    Scenario: members/me returns the caller's member id and answers not found for a caller with no seat
+  @spec-rh-7-2    Scenario: a member without the planning bits creates an absence or an extra for themselves, and is refused for another member
+  @spec-rh-7-3    Scenario: a self-created extra is PENDING whatever the request says, a self-created absence follows its type
+  @spec-rh-7-4    Scenario: a member cancels their own PENDING request and cannot cancel another member's or a decided one
+  @spec-rh-7-5    Scenario: a member lists only their own absences, extras and adjustments, and every leave account
+  @spec-rh-7-6    Scenario: the webapp reads the actor from members/me and loads every page of absences and extras
   Final
   @spec-rh-9-1    Scenario: `rh-store`, `rh-seed` and `rh-binding` are deleted and nothing under pages/hr imports them
 

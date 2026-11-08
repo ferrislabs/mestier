@@ -1,6 +1,5 @@
 import { Link } from '@tanstack/react-router'
 import { Plus } from 'lucide-react'
-import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
 import { formatMonth, formatShort } from '#/pages/hr/lib/rh/dates'
@@ -15,6 +14,7 @@ import { recentExtras, totalLabel } from '#/pages/hr/lib/rh/extra-summary'
 import type { IsoDate, Member, RhState } from '#/pages/hr/lib/rh/types'
 import { DetailCard, EmptyNote } from '#/pages/hr/ui/rh/members/detail-card'
 import { AbsenceStatusBadge } from '#/pages/hr/ui/rh/shared/absence-status-badge'
+import { CanRequest } from '#/pages/hr/ui/rh/shared/request-access'
 import { useRhOrgPath } from '#/pages/hr/ui/rh/shared/rh-context'
 
 function Figure({
@@ -50,13 +50,13 @@ export function ExtraCard({
 	const recent = recentExtras(state, member.id)
 	const archived = member.status === 'archived'
 	const declare = !archived && (
-		<RequirePermission permission="MANAGE_PLANNING">
+		<CanRequest kind="extra" memberId={member.id}>
 			<Button variant="outline" size="sm" asChild>
 				<Link to={orgPath('/rh/extra/nouvelle')} search={{ membre: member.id }}>
 					<Plus aria-hidden /> Déclarer des heures
 				</Link>
 			</Button>
-		</RequirePermission>
+		</CanRequest>
 	)
 	return (
 		<DetailCard

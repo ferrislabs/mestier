@@ -50,6 +50,7 @@ import {
 	TeamConflictList,
 } from '#/pages/hr/ui/rh/absences/decision-context'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
+import { useCanRequestForOthers } from '#/pages/hr/ui/rh/shared/request-access'
 import {
 	useRhAbsenceActions,
 	useRhActorId,
@@ -95,12 +96,18 @@ function AbsenceForm({
 	const baseId = useId()
 	const proofRef = useRef<HTMLInputElement>(null)
 	const today = todayIso()
-	const members = state.members.filter((member) => member.status === 'active')
+	const forOthers = useCanRequestForOthers('absence')
+	const activeMembers = state.members.filter(
+		(member) => member.status === 'active',
+	)
+	const members = activeMembers.filter(
+		(member) => forOthers || member.id === actorId,
+	)
 	const types = state.absenceTypes.filter((type) => !type.archived)
-	const [draft, setDraft] = useState<AbsenceDraft>(() => {
+	const [stored, setDraft] = useState<AbsenceDraft>(() => {
 		const startDate = resolveStartDate(initial?.startDate, today)
 		return {
-			memberId: members.some((member) => member.id === initial?.memberId)
+			memberId: activeMembers.some((member) => member.id === initial?.memberId)
 				? (initial?.memberId ?? actorId)
 				: actorId,
 			typeId: types[0]?.id ?? '',
@@ -113,6 +120,7 @@ function AbsenceForm({
 		}
 	})
 
+	const draft = forOthers ? stored : { ...stored, memberId: actorId }
 	const member = findMember(state, draft.memberId)
 	const type = findType(state, draft.typeId)
 	const hasDates = draft.startDate !== '' && draft.endDate !== ''
@@ -204,7 +212,8 @@ function AbsenceForm({
 							<Label htmlFor={memberId}>Membre</Label>
 							<Select
 								value={draft.memberId}
-								onValueChange={(value) => patch({ memberId: value })}
+								onValueChange={(value) => value && patch({ memberId: value })}
+								disabled={!forOthers}
 							>
 								<SelectTrigger id={memberId} className="w-full">
 									<SelectValue />

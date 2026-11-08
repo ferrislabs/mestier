@@ -211,6 +211,19 @@ export function canCancel(extra: ExtraPeriod, today: IsoDate): boolean {
 	return isActiveExtra(extra) && extra.date >= today
 }
 
+export function canCancelOwn(
+	extra: ExtraPeriod,
+	actorId: string,
+	today: IsoDate,
+): boolean {
+	return (
+		actorId !== '' &&
+		extra.createdById === actorId &&
+		extra.status === 'pending' &&
+		extra.date >= today
+	)
+}
+
 export function sortPending(extras: readonly ExtraPeriod[]): ExtraPeriod[] {
 	return [...extras].sort(
 		(left, right) =>

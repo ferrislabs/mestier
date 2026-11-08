@@ -17,6 +17,7 @@ import {
 	ABSENCES_PATH,
 	DEFAULT_TYPE_RECORDS,
 } from '#/test/rh-absence-fixtures'
+import { MY_MEMBER_PATH, myMemberResponse } from '#/test/rh-current-member'
 import { EXTRAS_PATH, SURCHARGES_PATH } from '#/test/rh-extra-fixtures'
 import {
 	DEFAULT_ACCOUNT_RECORDS,
@@ -139,6 +140,7 @@ function installFakeApi() {
 							const key = (p.query as { key: string }).key
 							return { data: { url: `https://files.test/${key}` } }
 						}
+						if (path === MY_MEMBER_PATH) return myMemberResponse()
 						if (path === PERMISSIONS_PATH)
 							return { data: { permissions }, pagination: null }
 						if (path === LEAVE_ACCOUNTS_PATH)

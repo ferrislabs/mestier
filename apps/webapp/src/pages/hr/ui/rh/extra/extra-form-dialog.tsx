@@ -38,6 +38,7 @@ import { ExtraRecap } from '#/pages/hr/ui/rh/extra/extra-recap'
 import { MajorationFields } from '#/pages/hr/ui/rh/extra/majoration-fields'
 import { SwitchRow } from '#/pages/hr/ui/rh/extra/switch-row'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
+import { useCanRequestForOthers } from '#/pages/hr/ui/rh/shared/request-access'
 import {
 	useRhActorId,
 	useRhExtraActions,
@@ -79,12 +80,16 @@ function ExtraFormBody({
 	const actorId = useRhActorId()
 	const state = useRhState()
 	const baseId = useId()
-	const members = activePlanningMembers(state)
+	const forOthers = useCanRequestForOthers('extra')
+	const activeMembers = activePlanningMembers(state)
+	const members = activeMembers.filter(
+		(member) => forOthers || member.id === actorId,
+	)
 	const surcharges = state.surcharges.filter((surcharge) => !surcharge.archived)
-	const [form, setForm] = useState<ExtraForm>(() => {
+	const [stored, setForm] = useState<ExtraForm>(() => {
 		const date = resolveDate(initial?.date, todayIso())
 		return {
-			memberId: members.some((member) => member.id === initial?.memberId)
+			memberId: activeMembers.some((member) => member.id === initial?.memberId)
 				? (initial?.memberId ?? actorId)
 				: actorId,
 			date,
@@ -103,6 +108,7 @@ function ExtraFormBody({
 	const [reasonTouched, setReasonTouched] = useState(false)
 	const [majorationTouched, setMajorationTouched] = useState(false)
 
+	const form = forOthers ? stored : { ...stored, memberId: actorId }
 	const draft = buildExtraDraft(state, form)
 	const errors = validateExtra(state, draft)
 	const message = errors[0]
@@ -158,7 +164,7 @@ function ExtraFormBody({
 		setIsPending(true)
 		setFailure(null)
 		try {
-			await actions.create(draft, approve)
+			await actions.create(draft, approve && forOthers)
 			onClose()
 		} catch (error) {
 			setFailure(extraFailureOf(error))
@@ -197,7 +203,8 @@ function ExtraFormBody({
 							<Label htmlFor={memberId}>Membre</Label>
 							<Select
 								value={form.memberId}
-								onValueChange={(value) => patch({ memberId: value })}
+								onValueChange={(value) => value && patch({ memberId: value })}
+								disabled={!forOthers}
 							>
 								<SelectTrigger id={memberId} className="w-full">
 									<SelectValue />
@@ -317,12 +324,14 @@ function ExtraFormBody({
 						invalid={rateInvalid}
 						onChange={changeMajoration}
 					/>
-					<SwitchRow
-						label="Valider immédiatement"
-						help="Sinon, la déclaration reste à valider."
-						checked={approve}
-						onChange={setApprove}
-					/>
+					{forOthers && (
+						<SwitchRow
+							label="Valider immédiatement"
+							help="Sinon, la déclaration reste à valider."
+							checked={approve}
+							onChange={setApprove}
+						/>
+					)}
 					{failure && (
 						<div id={errorId} role="alert">
 							<p className="flex items-start gap-2 text-sm text-state-alert">
@@ -350,7 +359,7 @@ function ExtraFormBody({
 							</p>
 						))}
 				</div>
-				<ExtraRecap draft={draft} approve={approve} />
+				<ExtraRecap draft={draft} approve={approve && forOthers} />
 			</div>
 			<DialogFooter>
 				<Button type="button" variant="outline" onClick={onClose}>

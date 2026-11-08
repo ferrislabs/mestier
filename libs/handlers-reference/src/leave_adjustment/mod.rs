@@ -151,9 +151,9 @@ impl IntoResponse for LeaveAdjustmentFailure {
         LeaveAdjustmentFilter,
     ),
     responses(
-        (status = 200, description = "Every adjustment of the organization, oldest first, optionally of one member or one account", body = inline(DataEnvelope<Vec<LeaveAdjustmentResponse>>)),
+        (status = 200, description = "Every adjustment of the organization for a planning or reference manager, otherwise only the caller's own; oldest first, optionally of one account", body = inline(DataEnvelope<Vec<LeaveAdjustmentResponse>>)),
         (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Balances are personal: needs planning or reference management"),
+        (status = 403, description = "Another member's adjustments need planning or reference management"),
     ),
     security(("bearer_auth" = []))
 )]

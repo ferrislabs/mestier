@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
+import {
+	fetchAllPages,
+	LIST_PAGE_SIZE,
+	readListPage,
+} from '#/hooks/fetch-all-pages'
 import { isForbiddenError } from '#/lib/api-error'
 
 const EXTRAS_PATH = '/api/v1/organizations/{organization_id}/extra-periods'
@@ -9,8 +14,6 @@ const REJECT_PATH =
 	'/api/v1/organizations/{organization_id}/extra-periods/{period_id}/reject'
 const CANCEL_PATH =
 	'/api/v1/organizations/{organization_id}/extra-periods/{period_id}/cancel'
-
-const EXTRAS_LIST_PER_PAGE = 100
 
 interface QueryKeyMeta {
 	_id?: unknown
@@ -29,14 +32,25 @@ function invalidateExtraReads(queryClient: ReturnType<typeof useQueryClient>) {
 	})
 }
 
+function extrasPage(organizationId: string, page: number) {
+	return window.tanstackApi.get(EXTRAS_PATH, {
+		path: { organization_id: organizationId },
+		query: { page, per_page: LIST_PAGE_SIZE },
+	}).queryOptions
+}
+
 export function useExtraPeriods(organizationId: string, enabled = true) {
 	return useQuery({
-		...window.tanstackApi.get(EXTRAS_PATH, {
-			path: { organization_id: organizationId },
-			query: { per_page: EXTRAS_LIST_PER_PAGE },
-		}).queryOptions,
+		queryKey: extrasPage(organizationId, 1).queryKey,
+		queryFn: (context) =>
+			fetchAllPages<Schemas.ExtraPeriodResponse>((page) =>
+				readListPage<Schemas.ExtraPeriodResponse>(
+					extrasPage(organizationId, page),
+					context,
+				),
+			),
 		enabled: enabled && Boolean(organizationId),
-		retry: (failures: number, error: unknown) =>
+		retry: (failures: number, error: Error) =>
 			!isForbiddenError(error) && failures < 3,
 	})
 }
