@@ -40,11 +40,19 @@ pub struct PutMemberProfileCommand {
     pub input: MemberProfileInput,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReportsPolicy {
+    #[default]
+    Keep,
+    ReassignTo(Option<MemberId>),
+}
+
 #[derive(Debug, Clone)]
 pub struct ArchiveMemberCommand {
     pub actor: Subject,
     pub organization_id: OrganizationId,
     pub member_id: MemberId,
+    pub reports: ReportsPolicy,
 }
 
 #[derive(Debug, Clone)]

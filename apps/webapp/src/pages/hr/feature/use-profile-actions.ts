@@ -5,13 +5,14 @@ import {
 	useRestoreMember,
 } from '#/hooks/use-member-profiles'
 import { getRhState, updateRh } from '#/pages/hr/feature/mocks/rh-store'
-import { fieldsOf } from '#/pages/hr/lib/rh/member-draft'
 import {
 	type ProfileFields,
 	profileRequestOf,
-	reassignedReports,
 } from '#/pages/hr/lib/rh/member-profile'
-import { cancelUpcomingAbsences } from '#/pages/hr/lib/rh/members'
+import {
+	cancelUpcomingAbsences,
+	findMemberById,
+} from '#/pages/hr/lib/rh/members'
 import type { RhProfileActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
 export function useProfileActions(organizationId: string): RhProfileActions {
@@ -36,12 +37,11 @@ export function useProfileActions(organizationId: string): RhProfileActions {
 		return {
 			save,
 			archive: async (memberId: string) => {
-				const state = getRhState()
-				const reports = reassignedReports(state, memberId)
-				await archiveAsync({ path: path(memberId) })
-				for (const { member, managerId } of reports) {
-					await save(member.id, { ...fieldsOf(member), managerId })
-				}
+				const archived = findMemberById(getRhState(), memberId)
+				await archiveAsync({
+					path: path(memberId),
+					body: { reassign_reports_to: archived?.managerId ?? null },
+				})
 				await updateRh((current, context) =>
 					cancelUpcomingAbsences(current, context, memberId),
 				)

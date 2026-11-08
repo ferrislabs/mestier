@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useAbsences } from '#/hooks/use-absences'
 import { useMemberProfiles } from '#/hooks/use-member-profiles'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
+import { isForbiddenError } from '#/lib/api-error'
 import {
 	type RealMember,
 	realAbsenceToAbsence,
@@ -68,7 +69,8 @@ export function useRhModel(
 	const membersLoaded = catalog.members.isSuccess
 	const absencesLoaded = absencesQuery.isSuccess
 	const profileRows = profilesQuery.data?.data
-	const profilesLoaded = profilesQuery.isSuccess
+	const profilesRestricted = isForbiddenError(profilesQuery.error)
+	const profilesLoaded = profilesQuery.isSuccess || profilesRestricted
 
 	useEffect(() => {
 		if (membersLoaded) bindRhMembers(members)
@@ -90,7 +92,9 @@ export function useRhModel(
 			!isBound ||
 			!snapshot.profilesLoaded,
 		error:
-			catalog.members.error?.message ?? profilesQuery.error?.message ?? null,
+			catalog.members.error?.message ??
+			(profilesRestricted ? null : profilesQuery.error?.message) ??
+			null,
 		state: snapshot.state,
 		context: {
 			state: snapshot.state,

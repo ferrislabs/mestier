@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use authz::{Decision, MockAuthorizer, Subject};
 use chrono::{NaiveDate, Utc};
@@ -7,7 +10,9 @@ use common::{CoreError, generate_uuid_v7};
 use super::{
     ContactEmail, MemberProfile, MemberProfileError, MemberProfileInput, MemberProfileService,
     PhoneNumber, PostalCode,
-    commands::{ArchiveMemberCommand, GetMemberProfileCommand, PutMemberProfileCommand},
+    commands::{
+        ArchiveMemberCommand, GetMemberProfileCommand, PutMemberProfileCommand, ReportsPolicy,
+    },
     ports::MockMemberProfileRepository,
 };
 use crate::{Member, MemberId, MockMemberRepository, MockRoleRepository, OrganizationId};
@@ -42,15 +47,19 @@ struct World {
     profiles: HashMap<MemberId, MemberProfile>,
 }
 
+type Service = MemberProfileService<
+    MockMemberProfileRepository,
+    MockMemberRepository,
+    MockRoleRepository,
+    MockAuthorizer,
+>;
+
 impl World {
-    fn service(
-        self,
-    ) -> MemberProfileService<
-        MockMemberProfileRepository,
-        MockMemberRepository,
-        MockRoleRepository,
-        MockAuthorizer,
-    > {
+    fn service(self) -> Service {
+        self.recording().0
+    }
+
+    fn recording(self) -> (Service, Arc<Mutex<Vec<MemberProfile>>>) {
         let mut members = MockMemberRepository::new();
         let known = self.members;
         members.expect_find_by_id().returning(move |id| {
@@ -63,11 +72,21 @@ impl World {
             let found = stored.get(&id).cloned();
             Box::pin(async move { Ok(found) })
         });
-        profiles.expect_upsert().returning(|profile| {
+        let listed: Vec<MemberProfile> = self.profiles.values().cloned().collect();
+        profiles.expect_list_by_organization().returning(move |_| {
+            let all = listed.clone();
+            Box::pin(async move { Ok(all) })
+        });
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&log);
+        profiles.expect_upsert().returning(move |profile| {
             let saved = profile.clone();
+            sink.lock().expect("log").push(saved.clone());
             Box::pin(async move { Ok(saved) })
         });
-        MemberProfileService::new(profiles, members, MockRoleRepository::new(), allow_all())
+        let service =
+            MemberProfileService::new(profiles, members, MockRoleRepository::new(), allow_all());
+        (service, log)
     }
 }
 
@@ -290,8 +309,10 @@ async fn spec_rh_1_3_archiving_sets_archived_at_and_restoring_clears_it() {
             actor: Subject::system(),
             organization_id: org,
             member_id: id,
+            reports: ReportsPolicy::Keep,
         })
         .await
+        .unwrap()
         .unwrap();
     assert!(archived.archived_at.is_some());
 
@@ -320,4 +341,108 @@ async fn spec_rh_1_4_a_member_of_another_organization_answers_not_found() {
         .await;
 
     assert!(matches!(result, Err(CoreError::NotFound)));
+}
+
+fn archive_with(org: OrganizationId, id: MemberId, reports: ReportsPolicy) -> ArchiveMemberCommand {
+    ArchiveMemberCommand {
+        actor: Subject::system(),
+        organization_id: org,
+        member_id: id,
+        reports,
+    }
+}
+
+#[tokio::test]
+async fn spec_rh_1_3_archiving_can_move_the_active_reports_to_a_new_manager() {
+    let org = OrganizationId(generate_uuid_v7());
+    let (boss, archived, report, gone) = (member_id(), member_id(), member_id(), member_id());
+    let mut former = managed_by(gone, org, archived).1;
+    former.archived_at = Some(Utc::now());
+    let (mut service, log) = World {
+        members: vec![
+            member(boss, org),
+            member(archived, org),
+            member(report, org),
+            member(gone, org),
+        ],
+        profiles: HashMap::from([managed_by(report, org, archived), (gone, former)]),
+    }
+    .recording();
+
+    let saved = service
+        .archive(archive_with(
+            org,
+            archived,
+            ReportsPolicy::ReassignTo(Some(boss)),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(saved.archived_at.is_some());
+    let log = log.lock().unwrap();
+    let moved: Vec<MemberId> = log
+        .iter()
+        .filter(|profile| profile.manager_member_id == Some(boss))
+        .map(|profile| profile.member_id)
+        .collect();
+    assert_eq!(moved, vec![report]);
+    assert_eq!(log.len(), 2);
+}
+
+#[tokio::test]
+async fn spec_rh_1_3_a_refused_reassignment_writes_nothing() {
+    let org = OrganizationId(generate_uuid_v7());
+    let other = OrganizationId(generate_uuid_v7());
+    let (archived, report, stranger) = (member_id(), member_id(), member_id());
+    let world = || World {
+        members: vec![
+            member(archived, org),
+            member(report, org),
+            member(stranger, other),
+        ],
+        profiles: HashMap::from([managed_by(report, org, archived)]),
+    };
+
+    for (target, refusal) in [
+        (archived, MemberProfileError::ManagerIsSelf),
+        (stranger, MemberProfileError::ManagerNotInOrganization),
+        (report, MemberProfileError::ManagerCycle),
+    ] {
+        let (mut service, log) = world().recording();
+        let outcome = service
+            .archive(archive_with(
+                org,
+                archived,
+                ReportsPolicy::ReassignTo(Some(target)),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(outcome, Err(refusal));
+        assert!(log.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn spec_rh_1_3_reassigning_to_nobody_clears_the_manager_of_the_reports() {
+    let org = OrganizationId(generate_uuid_v7());
+    let (archived, report) = (member_id(), member_id());
+    let (mut service, log) = World {
+        members: vec![member(archived, org), member(report, org)],
+        profiles: HashMap::from([managed_by(report, org, archived)]),
+    }
+    .recording();
+
+    service
+        .archive(archive_with(org, archived, ReportsPolicy::ReassignTo(None)))
+        .await
+        .unwrap()
+        .unwrap();
+
+    let log = log.lock().unwrap();
+    let moved = log
+        .iter()
+        .find(|profile| profile.member_id == report)
+        .unwrap();
+    assert_eq!(moved.manager_member_id, None);
 }

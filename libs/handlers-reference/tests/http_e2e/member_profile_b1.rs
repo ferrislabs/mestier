@@ -106,6 +106,15 @@ async fn spec_rh_1_1_a_member_without_profile_reads_defaults_and_a_put_creates_i
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = call(
+        &app,
+        &app.restricted_token,
+        reqwest::Method::GET,
+        &profile,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 
     app.cleanup().await;
 }
@@ -226,6 +235,115 @@ async fn spec_rh_1_5_the_list_returns_the_profiles_of_the_organization_only() {
         .collect();
     assert!(ids.contains(&member.to_string().as_str()), "{body}");
     assert!(!ids.contains(&foreign.to_string().as_str()), "{body}");
+
+    let (status, _) = call(
+        &app,
+        &app.restricted_token,
+        reqwest::Method::GET,
+        &list,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    app.cleanup().await;
+}
+
+async fn manager_of(app: &App, member: Uuid) -> Option<Uuid> {
+    sqlx::query_scalar("SELECT manager_member_id FROM member_hr_profiles WHERE member_id = $1")
+        .bind(member)
+        .fetch_optional(&app.pool)
+        .await
+        .expect("read the manager")
+        .flatten()
+}
+
+async fn archived(app: &App, member: Uuid) -> bool {
+    sqlx::query_scalar::<_, bool>(
+        "SELECT COALESCE((SELECT archived_at IS NOT NULL FROM member_hr_profiles WHERE member_id = $1), false)",
+    )
+    .bind(member)
+    .fetch_one(&app.pool)
+    .await
+    .expect("read the archive flag")
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_rh_1_3_archiving_moves_the_reports_in_the_same_transaction() {
+    let app = harness::start().await;
+    let boss = colleague(&app).await;
+    let leaving = colleague(&app).await;
+    let report = colleague(&app).await;
+    for (member, manager) in [(leaving, boss), (report, leaving)] {
+        let (status, body) = call(
+            &app,
+            &app.token,
+            reqwest::Method::PUT,
+            &path(&app, member, "profile"),
+            Some(json!({ "manager_member_id": manager })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    let (status, body) = call(
+        &app,
+        &app.token,
+        reqwest::Method::POST,
+        &path(&app, leaving, "archive"),
+        Some(json!({ "reassign_reports_to": boss })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(manager_of(&app, report).await, Some(boss));
+    assert!(archived(&app, leaving).await);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_rh_1_3_a_refused_reassignment_leaves_everything_unchanged() {
+    let app = harness::start().await;
+    let leaving = colleague(&app).await;
+    let report = colleague(&app).await;
+    let foreign = other_member(&app).await;
+    let (status, body) = call(
+        &app,
+        &app.token,
+        reqwest::Method::PUT,
+        &path(&app, report, "profile"),
+        Some(json!({ "manager_member_id": leaving })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    for target in [foreign, report] {
+        let (status, body) = call(
+            &app,
+            &app.token,
+            reqwest::Method::POST,
+            &path(&app, leaving, "archive"),
+            Some(json!({ "reassign_reports_to": target })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        assert_eq!(body["details"]["field"], json!("manager_member_id"));
+        assert_eq!(manager_of(&app, report).await, Some(leaving));
+        assert!(!archived(&app, leaving).await);
+    }
+
+    let (status, _) = call(
+        &app,
+        &app.token,
+        reqwest::Method::POST,
+        &path(&app, leaving, "archive"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(manager_of(&app, report).await, Some(leaving));
 
     app.cleanup().await;
 }

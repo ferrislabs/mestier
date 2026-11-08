@@ -320,7 +320,7 @@ pub use domain::{
     },
     member_profile::commands::{
         ArchiveMemberCommand, GetMemberProfileCommand, ListMemberProfilesCommand,
-        PutMemberProfileCommand, RestoreMemberCommand,
+        PutMemberProfileCommand, ReportsPolicy, RestoreMemberCommand,
     },
     organization::commands::{
         CreateOrganizationCommand, ReplaceBillingSettingsCommand, SetNextNumberCommand,

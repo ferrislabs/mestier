@@ -8,7 +8,7 @@ use super::{
     MemberProfile, MemberProfileError, MemberProfileOutcome,
     commands::{
         ArchiveMemberCommand, GetMemberProfileCommand, ListMemberProfilesCommand,
-        PutMemberProfileCommand, RestoreMemberCommand,
+        PutMemberProfileCommand, ReportsPolicy, RestoreMemberCommand,
     },
     ports::MemberProfileRepository,
 };
@@ -54,7 +54,9 @@ where
         &mut self,
         command: GetMemberProfileCommand,
     ) -> Result<MemberProfile, CoreError> {
-        self.enrich(command.actor, command.organization_id).await?;
+        let actor = self.enrich(command.actor, command.organization_id).await?;
+        self.authorize_manage(&actor, command.organization_id)
+            .await?;
         self.load_or_empty(command.organization_id, command.member_id)
             .await
     }
@@ -63,7 +65,9 @@ where
         &mut self,
         command: ListMemberProfilesCommand,
     ) -> Result<Vec<MemberProfile>, CoreError> {
-        self.enrich(command.actor, command.organization_id).await?;
+        let actor = self.enrich(command.actor, command.organization_id).await?;
+        self.authorize_manage(&actor, command.organization_id)
+            .await?;
         self.profiles
             .list_by_organization(command.organization_id)
             .await
@@ -74,7 +78,7 @@ where
         command: PutMemberProfileCommand,
     ) -> Result<MemberProfileOutcome<MemberProfile>, CoreError> {
         let actor = self.enrich(command.actor, command.organization_id).await?;
-        self.authorize_write(&actor, command.organization_id)
+        self.authorize_manage(&actor, command.organization_id)
             .await?;
         let current = self
             .load_or_empty(command.organization_id, command.member_id)
@@ -98,15 +102,44 @@ where
     pub async fn archive(
         &mut self,
         command: ArchiveMemberCommand,
-    ) -> Result<MemberProfile, CoreError> {
+    ) -> Result<MemberProfileOutcome<MemberProfile>, CoreError> {
         let actor = self.enrich(command.actor, command.organization_id).await?;
-        self.authorize_write(&actor, command.organization_id)
+        self.authorize_manage(&actor, command.organization_id)
             .await?;
         let current = self
             .load_or_empty(command.organization_id, command.member_id)
             .await?;
+        let now = Utc::now();
 
-        self.profiles.upsert(&current.archived(Utc::now())).await
+        if let ReportsPolicy::ReassignTo(target) = command.reports {
+            if let Some(manager) = target
+                && let Some(refusal) = self
+                    .manager_refusal(command.organization_id, command.member_id, manager)
+                    .await?
+            {
+                return Ok(Err(refusal));
+            }
+            let reports: Vec<MemberProfile> = self
+                .profiles
+                .list_by_organization(command.organization_id)
+                .await?
+                .into_iter()
+                .filter(|profile| {
+                    profile.manager_member_id == Some(command.member_id)
+                        && profile.archived_at.is_none()
+                })
+                .collect();
+            for report in reports {
+                let moved = MemberProfile {
+                    manager_member_id: target,
+                    updated_at: now,
+                    ..report
+                };
+                self.profiles.upsert(&moved).await?;
+            }
+        }
+
+        self.profiles.upsert(&current.archived(now)).await.map(Ok)
     }
 
     pub async fn restore(
@@ -114,7 +147,7 @@ where
         command: RestoreMemberCommand,
     ) -> Result<MemberProfile, CoreError> {
         let actor = self.enrich(command.actor, command.organization_id).await?;
-        self.authorize_write(&actor, command.organization_id)
+        self.authorize_manage(&actor, command.organization_id)
             .await?;
         let current = self
             .load_or_empty(command.organization_id, command.member_id)
@@ -132,7 +165,7 @@ where
             .await
     }
 
-    async fn authorize_write(
+    async fn authorize_manage(
         &self,
         actor: &Subject,
         organization_id: OrganizationId,

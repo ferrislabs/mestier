@@ -623,6 +623,7 @@ impl Modify for SecurityAddon {
         member::response::MemberRoleIdsResponse,
         reference::employee::upsert_profile::UpsertEmployeeProfileRequest,
         reference::member_profile::PutMemberProfileRequest,
+        reference::member_profile::ArchiveMemberRequest,
         reference::member_profile::PostalAddressBody,
         reference::member_profile::MemberProfileResponse,
         reference::member_profile::MemberProfileAddressResponse,

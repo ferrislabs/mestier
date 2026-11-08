@@ -94,6 +94,8 @@ interface Write {
 let profiles: Profile[]
 let writes: Write[]
 let refuse: { status: number; message: string } | null
+let profilesForbidden: boolean
+let permissions: string[]
 
 function installFakeApi() {
 	const fakeApi = {
@@ -108,11 +110,13 @@ function installFakeApi() {
 						if (path === MEMBERS_PATH)
 							return { data: MEMBERS, pagination: null }
 						if (path === ABSENCES_PATH) return { data: [], pagination: null }
+						if (path === PROFILES_PATH && profilesForbidden)
+							throw Object.assign(new Error('Forbidden'), { status: 403 })
 						if (path === PROFILES_PATH)
 							return { data: structuredClone(profiles), pagination: null }
 						if (path === PERMISSIONS_PATH)
 							return {
-								data: { permissions: ['MANAGE_MEMBERS'] },
+								data: { permissions },
 								pagination: null,
 							}
 						throw new Error(`unmocked GET ${path}`)
@@ -197,6 +201,8 @@ describe('member profile bound to the API', () => {
 		profiles = []
 		writes = []
 		refuse = null
+		profilesForbidden = false
+		permissions = ['MANAGE_MEMBERS']
 	})
 
 	afterEach(() => {
@@ -305,7 +311,7 @@ describe('member profile bound to the API', () => {
 		)
 		await waitFor(() => expect(screen.queryByText('Archivé')).toBeNull())
 	})
-	it('spec_rh_1_5 moves the direct reports to the manager of the archived member', async () => {
+	it('spec_rh_1_5 archives in one call that reassigns the direct reports', async () => {
 		const user = userEvent.setup()
 		profiles = [
 			profile('u-1'),
@@ -319,17 +325,42 @@ describe('member profile bound to the API', () => {
 		const dialog = await screen.findByRole('dialog')
 		await user.click(within(dialog).getByRole('button', { name: 'Archiver' }))
 
-		await waitFor(() =>
-			expect(
-				writes.some(
-					(write) =>
-						write.path.endsWith('/profile') &&
-						write.params.path?.member_id === 'u-3',
-				),
-			).toBe(true),
-		)
-		const moved = writes.find((write) => write.params.path?.member_id === 'u-3')
-		expect(moved?.params.body?.manager_member_id).toBe('u-1')
+		await waitFor(() => expect(writes).toHaveLength(1))
 		expect(writes[0]?.path.endsWith('/archive')).toBe(true)
+		expect(writes[0]?.params).toMatchObject({
+			path: { organization_id: 'org-1', member_id: 'u-2' },
+			body: { reassign_reports_to: 'u-1' },
+		})
+	})
+
+	it('spec_rh_1_5 falls back to defaults, read-only, when the profile list is forbidden', async () => {
+		profilesForbidden = true
+		permissions = ['VIEW_PLANNING']
+
+		await renderDetail('u-2')
+
+		expect(
+			await screen.findByRole('heading', { name: 'Bao Tran' }),
+		).toBeDefined()
+		expect(screen.getByText('Poste non renseigné')).toBeDefined()
+		expect(screen.queryByRole('button', { name: /Archiver/ })).toBeNull()
+		expect(screen.queryByRole('button', { name: /Modifier/ })).toBeNull()
+	})
+
+	it('spec_rh_1_5 hides edit, archive and restore without MANAGE_MEMBERS', async () => {
+		profiles = [
+			profile('u-2'),
+			profile('u-3', { archived_at: '2026-11-01T00:00:00Z' }),
+		]
+		permissions = ['VIEW_PLANNING']
+
+		await renderDetail('u-3')
+
+		expect(
+			await screen.findByRole('heading', { name: 'Cleo Dupont' }),
+		).toBeDefined()
+		expect(await screen.findByText('Archivé')).toBeDefined()
+		expect(screen.queryByRole('button', { name: /Réactiver/ })).toBeNull()
+		expect(screen.queryByRole('button', { name: /Modifier/ })).toBeNull()
 	})
 })

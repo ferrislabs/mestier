@@ -11,7 +11,7 @@ use http::StatusCode;
 use mestier_core::{
     ArchiveMemberCommand, GetMemberProfileCommand, ListMemberProfilesCommand, MemberId,
     MemberProfile, MemberProfileError, MemberProfileInput, OrganizationId, PutMemberProfileCommand,
-    RestoreMemberCommand,
+    ReportsPolicy, RestoreMemberCommand,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -65,6 +65,22 @@ pub struct PostalAddressBody {
     pub city: Option<String>,
     #[serde(default)]
     pub country: Option<String>,
+}
+
+fn present<'de, D>(deserializer: D) -> Result<Option<Option<MemberId>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<MemberId>::deserialize(deserializer).map(Some)
+}
+
+#[derive(Debug, Default, Deserialize, ToSchema)]
+pub struct ArchiveMemberRequest {
+    /// When the key is present, every active direct report of the archived
+    /// member moves to this member (or to nobody when null), atomically.
+    #[schema(value_type = Option<MemberId>)]
+    #[serde(default, deserialize_with = "present")]
+    pub reassign_reports_to: Option<Option<MemberId>>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -312,11 +328,13 @@ pub async fn put_profile(
         ("organization_id" = OrganizationId, Path, description = "Organization identifier"),
         ("member_id" = MemberId, Path, description = "Member identifier"),
     ),
+    request_body(content = ArchiveMemberRequest, description = "Optional, reassigns the direct reports in the same transaction"),
     responses(
         (status = 200, description = "Member archived, history kept", body = inline(DataEnvelope<MemberProfileResponse>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Member not found in the organization"),
+        (status = 422, description = "The reassignment target is refused, the field is named in details"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -324,8 +342,12 @@ pub async fn archive(
     path: ArchiveMemberPath,
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
-) -> Result<Response<MemberProfileResponse>, ApiError> {
+    body: Option<Json<ArchiveMemberRequest>>,
+) -> Result<Response<MemberProfileResponse>, ProfileFailure> {
     let (user_id, actor) = resolve_actor(&state, &identity).await?;
+    let reports = body
+        .and_then(|Json(request)| request.reassign_reports_to)
+        .map_or(ReportsPolicy::Keep, ReportsPolicy::ReassignTo);
     let profile = state
         .usecase
         .acting_as(user_id)
@@ -333,8 +355,10 @@ pub async fn archive(
             actor,
             organization_id: path.organization_id,
             member_id: path.member_id,
+            reports,
         })
-        .await?;
+        .await
+        .map_err(ApiError::from)??;
 
     Ok(Response::OK(profile.into()))
 }

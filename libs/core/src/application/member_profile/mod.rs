@@ -60,7 +60,7 @@ impl MestierUseCase {
     pub async fn archive_member(
         &self,
         command: ArchiveMemberCommand,
-    ) -> Result<MemberProfile, CoreError> {
+    ) -> Result<MemberProfileOutcome<MemberProfile>, CoreError> {
         let mut service = MemberProfileService::new(
             member_profile_repository,
             member_repository,

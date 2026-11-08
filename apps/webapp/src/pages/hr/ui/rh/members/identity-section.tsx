@@ -1,5 +1,6 @@
 import { Mail, Pencil, Phone } from 'lucide-react'
 import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { RubriqueLayout } from '#/components/rubrique-layout'
 import { Button } from '#/components/ui/button'
 import { formatFull } from '#/pages/hr/lib/rh/dates'
@@ -183,17 +184,19 @@ export function IdentitySection({
 			title="Identité"
 			description="Coordonnées, adresse, poste et rattachement."
 			actions={
-				<MemberFormDialog
-					open={editing}
-					onOpenChange={setEditing}
-					member={member}
-					onRename={onRename}
-					trigger={
-						<Button variant="outline" size="sm">
-							<Pencil aria-hidden /> Modifier
-						</Button>
-					}
-				/>
+				<RequirePermission permission="MANAGE_MEMBERS">
+					<MemberFormDialog
+						open={editing}
+						onOpenChange={setEditing}
+						member={member}
+						onRename={onRename}
+						trigger={
+							<Button variant="outline" size="sm">
+								<Pencil aria-hidden /> Modifier
+							</Button>
+						}
+					/>
+				</RequirePermission>
 			}
 		>
 			<IdentityBlock member={member} />

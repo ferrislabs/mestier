@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
+import { isForbiddenError } from '#/lib/api-error'
 
 const PROFILES_PATH = '/api/v1/organizations/{organization_id}/member-profiles'
 const PROFILE_PATH =
@@ -37,6 +38,8 @@ export function useMemberProfiles(organizationId: string, enabled = true) {
 			path: { organization_id: organizationId },
 		}).queryOptions,
 		enabled: enabled && Boolean(organizationId),
+		retry: (failures: number, error: unknown) =>
+			!isForbiddenError(error) && failures < 3,
 	})
 }
 

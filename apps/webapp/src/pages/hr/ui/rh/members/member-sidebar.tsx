@@ -109,30 +109,32 @@ export function MemberSidebar({
 							</Link>
 						</Button>
 					)}
-					{archived ? (
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={pending}
-							onClick={() => void run(() => profiles.restore(member.id))}
-						>
-							<ArchiveRestore aria-hidden /> Réactiver
-						</Button>
-					) : (
-						<ArchiveDialog
-							state={state}
-							member={member}
-							today={today}
-							open={archiving}
-							onOpenChange={setArchiving}
-							onConfirm={() => void run(() => profiles.archive(member.id))}
-							trigger={
-								<Button variant="outline" size="sm" disabled={pending}>
-									<Archive aria-hidden /> Archiver
-								</Button>
-							}
-						/>
-					)}
+					<RequirePermission permission="MANAGE_MEMBERS">
+						{archived ? (
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={pending}
+								onClick={() => void run(() => profiles.restore(member.id))}
+							>
+								<ArchiveRestore aria-hidden /> Réactiver
+							</Button>
+						) : (
+							<ArchiveDialog
+								state={state}
+								member={member}
+								today={today}
+								open={archiving}
+								onOpenChange={setArchiving}
+								onConfirm={() => void run(() => profiles.archive(member.id))}
+								trigger={
+									<Button variant="outline" size="sm" disabled={pending}>
+										<Archive aria-hidden /> Archiver
+									</Button>
+								}
+							/>
+						)}
+					</RequirePermission>
 				</div>
 				{error && (
 					<p role="alert" className="mt-2 text-[12px] text-state-alert">

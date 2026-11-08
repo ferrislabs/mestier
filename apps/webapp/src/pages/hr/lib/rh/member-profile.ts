@@ -141,18 +141,3 @@ export function overlayProfiles(
 		),
 	}
 }
-
-export type ReassignedReport = { member: Member; managerId: string | null }
-
-export function reassignedReports(
-	state: RhState,
-	memberId: string,
-): ReassignedReport[] {
-	const archived = state.members.find((member) => member.id === memberId)
-	if (!archived) return []
-	return state.members
-		.filter(
-			(member) => member.managerId === memberId && member.status === 'active',
-		)
-		.map((member) => ({ member, managerId: archived.managerId }))
-}

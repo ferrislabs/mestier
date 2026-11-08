@@ -6,7 +6,6 @@ import {
 	type ProfileRecord,
 	profileFieldsOf,
 	profileRequestOf,
-	reassignedReports,
 } from '#/pages/hr/lib/rh/member-profile'
 import { EMPTY_ADDRESS } from '#/pages/hr/lib/rh/members'
 
@@ -134,16 +133,4 @@ test('profileFieldsOf et profileRequestOf font l’aller-retour', () => {
 	assert.equal(body.manager_member_id, source.manager_member_id)
 	assert.equal(body.work_permit_end_date, source.work_permit_end_date)
 	assert.equal(body.address?.postal_code, '75011')
-})
-
-test('reassignedReports rattache les subordonnés actifs au responsable de l’archivé', () => {
-	const changes = reassignedReports(state, 'julien')
-	const manon = changes.find((change) => change.member.id === 'manon')
-	assert.ok(manon)
-	assert.equal(manon.managerId, 'baptiste')
-	assert.ok(
-		changes.every((change) => change.member.managerId === 'julien'),
-		'only direct reports move',
-	)
-	assert.deepEqual(reassignedReports(state, 'nobody'), [])
 })

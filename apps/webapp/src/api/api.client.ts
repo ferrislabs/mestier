@@ -23,6 +23,7 @@ export namespace Schemas {
   export type AllocateReceiptRequest = { invoice_id: InvoiceId };
   export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
   export type ApiKeyLocationDto = "header" | "query" | "cookie";
+  export type ArchiveMemberRequest = Partial<{ reassign_reports_to: null | MemberId }>;
   export type RoleId = string;
   export type AssignRoleRequest = { role_id: RoleId };
   export type AssignTicketRequest = Partial<{ member_id: null | MemberId }>;
@@ -8226,6 +8227,8 @@ export namespace Endpoints {
     requestFormat: "json";
     parameters: {
       path: { organization_id: string; member_id: string };
+
+      body: Schemas.ArchiveMemberRequest;
     };
     responses: {
       200: {
@@ -8247,6 +8250,7 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       404: unknown;
+      422: unknown;
     };
   };
   export type get_GetMemberProfile = {
