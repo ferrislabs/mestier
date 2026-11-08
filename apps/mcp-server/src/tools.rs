@@ -480,7 +480,11 @@ impl MestierTools {
         Self {
             api,
             files,
-            tool_router: Self::tool_router(),
+            tool_router: Self::tool_router()
+                + Self::crm_router()
+                + Self::quote_router()
+                + Self::planning_router()
+                + Self::reference_router(),
         }
     }
 
@@ -492,7 +496,11 @@ impl MestierTools {
             .collect()
     }
 
-    fn session<'a>(&'a self, parts: &'a Parts, tool: &str) -> Result<Session<'a>, CallToolResult> {
+    pub(crate) fn session<'a>(
+        &'a self,
+        parts: &'a Parts,
+        tool: &str,
+    ) -> Result<Session<'a>, CallToolResult> {
         let Some(token) = bearer(parts) else {
             return Err(failure(&Fault::new("jeton d'accès absent")));
         };
@@ -506,7 +514,7 @@ impl MestierTools {
     }
 }
 
-fn finish(outcome: Result<CallToolResult, Fault>) -> CallToolResult {
+pub(crate) fn finish(outcome: Result<CallToolResult, Fault>) -> CallToolResult {
     outcome.unwrap_or_else(|fault| failure(&fault))
 }
 
@@ -524,7 +532,7 @@ fn failure(fault: &Fault) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(fault.to_string())])
 }
 
-fn json_result(value: &Value) -> CallToolResult {
+pub(crate) fn json_result(value: &Value) -> CallToolResult {
     CallToolResult::success(vec![ContentBlock::text(value.to_string())])
 }
 
@@ -535,7 +543,7 @@ fn file_param_meta() -> MetaObject {
     meta
 }
 
-fn paging(args: &ListArgs) -> Paging {
+pub(crate) fn paging(args: &ListArgs) -> Paging {
     Paging {
         page: args.page,
         per_page: args.per_page,

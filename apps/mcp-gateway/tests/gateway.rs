@@ -347,7 +347,11 @@ async fn the_metadata_document_names_the_resource_and_the_realm() {
             json!([
                 "mestier.read",
                 "mestier.doe.write",
-                "mestier.maintenance.write"
+                "mestier.maintenance.write",
+                "mestier.crm.write",
+                "mestier.quote.write",
+                "mestier.planning.write",
+                "mestier.reference.write"
             ])
         );
         assert_eq!(doc["bearer_methods_supported"], json!(["header"]));

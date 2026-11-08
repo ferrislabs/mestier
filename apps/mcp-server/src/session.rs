@@ -154,6 +154,44 @@ impl<'a> Session<'a> {
             .await
     }
 
+    pub async fn list_filtered(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        paging: Paging,
+        filter: Vec<(&'static str, String)>,
+    ) -> Result<Value, Fault> {
+        let org = self.organization_id(organization).await?;
+        let mut query = paging.query();
+        query.extend(filter);
+        self.api
+            .get(
+                self.token,
+                &format!("organizations/{org}/{collection}"),
+                &query,
+            )
+            .await
+    }
+
+    /// The children of a resource addressed by a global id, for example the
+    /// contacts of a customer, once the customer is known to be ours.
+    pub async fn get_global_children(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        id: &str,
+        children: &str,
+    ) -> Result<Value, Fault> {
+        let id = uuid(id)?;
+        let org = self.organization_id(organization).await?;
+        self.owned(&org, collection, &id, None).await?;
+        let body = self
+            .api
+            .get(self.token, &format!("{collection}/{id}/{children}"), &[])
+            .await?;
+        Ok(body["data"].clone())
+    }
+
     pub async fn get_scoped(
         &self,
         organization: Option<&str>,
@@ -192,6 +230,257 @@ impl<'a> Session<'a> {
             }
             _ => Ok(data),
         }
+    }
+
+    /// Reads a resource addressed by a global id and refuses it unless it
+    /// belongs to the chosen organization. Writes go through this first: the
+    /// URL of these endpoints carries no organization.
+    async fn owned(
+        &self,
+        org: &str,
+        collection: &str,
+        id: &str,
+        via: Option<(&str, &str)>,
+    ) -> Result<Value, Fault> {
+        let body = self
+            .api
+            .get(self.token, &format!("{collection}/{id}"), &[])
+            .await?;
+        let data = body["data"].clone();
+        let (parent, parent_id) = match via {
+            None => (None, data["organization_id"].as_str().map(str::to_owned)),
+            Some((parent, key)) => (Some(parent), data[key].as_str().map(str::to_owned)),
+        };
+        let Some(parent_id) = parent_id else {
+            return Err(Fault::new("ressource sans organisation"));
+        };
+        match parent {
+            None if parent_id == org => Ok(data),
+            None => Err(Fault::new("ressource introuvable dans cette organisation")),
+            Some(parent) => {
+                let owner = self
+                    .api
+                    .get(self.token, &format!("{parent}/{parent_id}"), &[])
+                    .await?;
+                if owner["data"]["organization_id"].as_str() == Some(org) {
+                    Ok(data)
+                } else {
+                    Err(Fault::new("ressource introuvable dans cette organisation"))
+                }
+            }
+        }
+    }
+
+    pub async fn create_in_org(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        body: &Value,
+    ) -> Result<Value, Fault> {
+        let org = self.organization_id(organization).await?;
+        let body = self
+            .api
+            .post(
+                self.token,
+                &format!("organizations/{org}/{collection}"),
+                body,
+            )
+            .await?;
+        Ok(body["data"].clone())
+    }
+
+    /// `POST {collection}/{id}/{action}` on a resource of the organization.
+    pub async fn post_owned(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        id: &str,
+        action: &str,
+        body: &Value,
+    ) -> Result<Value, Fault> {
+        let id = uuid(id)?;
+        let org = self.organization_id(organization).await?;
+        self.owned(&org, collection, &id, None).await?;
+        let body = self
+            .api
+            .post(self.token, &format!("{collection}/{id}/{action}"), body)
+            .await?;
+        Ok(body["data"].clone())
+    }
+
+    /// A read of an organization path, for example `planning`.
+    pub async fn get_in_org(
+        &self,
+        organization: Option<&str>,
+        path: &str,
+        query: &[(&str, String)],
+    ) -> Result<Value, Fault> {
+        let org = self.organization_id(organization).await?;
+        let body = self
+            .api
+            .get(self.token, &format!("organizations/{org}/{path}"), query)
+            .await?;
+        Ok(body["data"].clone())
+    }
+
+    /// `PATCH` on an organization path whose resource the API itself scopes.
+    pub async fn patch_in_org(
+        &self,
+        organization: Option<&str>,
+        path: &str,
+        body: &Value,
+    ) -> Result<Value, Fault> {
+        let org = self.organization_id(organization).await?;
+        let body = self
+            .api
+            .patch(self.token, &format!("organizations/{org}/{path}"), body)
+            .await?;
+        Ok(body["data"].clone())
+    }
+
+    /// Read-merge-write for a resource addressed under its organization,
+    /// sent with `PATCH`.
+    pub async fn update_in_org(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        id: &str,
+        keys: &[&str],
+        patch: Map<String, Value>,
+    ) -> Result<Value, Fault> {
+        self.merge_in_org(organization, collection, id, keys, patch, false)
+            .await
+    }
+
+    /// Same, for an endpoint that replaces the resource with `PUT`.
+    pub async fn replace_in_org(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        id: &str,
+        keys: &[&str],
+        patch: Map<String, Value>,
+    ) -> Result<Value, Fault> {
+        self.merge_in_org(organization, collection, id, keys, patch, true)
+            .await
+    }
+
+    async fn merge_in_org(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        id: &str,
+        keys: &[&str],
+        patch: Map<String, Value>,
+        put: bool,
+    ) -> Result<Value, Fault> {
+        let id = uuid(id)?;
+        let org = self.organization_id(organization).await?;
+        let path = format!("organizations/{org}/{collection}/{id}");
+        let current = self.api.get(self.token, &path, &[]).await?;
+        let mut body = Map::new();
+        for key in keys {
+            body.insert((*key).to_owned(), current["data"][*key].clone());
+        }
+        body.extend(patch);
+        let body = Value::Object(body);
+        let sent = if put {
+            self.api.put(self.token, &path, &body).await?
+        } else {
+            self.api.patch(self.token, &path, &body).await?
+        };
+        Ok(sent["data"].clone())
+    }
+
+    /// `PATCH {collection}/{id}/{action}` on a resource of the organization.
+    pub async fn patch_owned(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        id: &str,
+        action: &str,
+        body: &Value,
+    ) -> Result<Value, Fault> {
+        let id = uuid(id)?;
+        let org = self.organization_id(organization).await?;
+        self.owned(&org, collection, &id, None).await?;
+        let body = self
+            .api
+            .patch(self.token, &format!("{collection}/{id}/{action}"), body)
+            .await?;
+        Ok(body["data"].clone())
+    }
+
+    /// Update by read-merge-write: the API replaces the whole resource, so
+    /// the fields the caller leaves out are carried over from the current
+    /// state. `via` names the parent (collection, foreign key) when the
+    /// resource has no `organization_id` of its own.
+    pub async fn update_owned(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        id: &str,
+        via: Option<(&str, &str)>,
+        keys: &[&str],
+        patch: Map<String, Value>,
+    ) -> Result<Value, Fault> {
+        self.update_owned_with(organization, collection, id, via, keys, |_| Ok(patch))
+            .await
+    }
+
+    /// Same, when the overlay depends on the current state.
+    pub async fn update_owned_with<F>(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        id: &str,
+        via: Option<(&str, &str)>,
+        keys: &[&str],
+        overlay: F,
+    ) -> Result<Value, Fault>
+    where
+        F: FnOnce(&Value) -> Result<Map<String, Value>, Fault>,
+    {
+        let id = uuid(id)?;
+        let org = self.organization_id(organization).await?;
+        let current = self.owned(&org, collection, &id, via).await?;
+        let mut body = Map::new();
+        for key in keys {
+            body.insert((*key).to_owned(), current[*key].clone());
+        }
+        body.extend(overlay(&current)?);
+        let body = self
+            .api
+            .patch(
+                self.token,
+                &format!("{collection}/{id}"),
+                &Value::Object(body),
+            )
+            .await?;
+        Ok(body["data"].clone())
+    }
+
+    /// The PDF of a resource addressed by a global id, for example a quote.
+    pub async fn export_owned_pdf(
+        &self,
+        organization: Option<&str>,
+        collection: &str,
+        id: &str,
+    ) -> Result<PdfOutcome, Fault> {
+        let id = uuid(id)?;
+        let org = self.organization_id(organization).await?;
+        self.owned(&org, collection, &id, None).await?;
+        let bytes = self
+            .api
+            .get_bytes(self.token, &format!("{collection}/{id}/pdf"), MAX_PDF_BYTES)
+            .await?;
+        Ok(match bytes {
+            Some(bytes) => PdfOutcome::Pdf {
+                bytes,
+                uri: format!("mestier://organizations/{org}/{collection}/{id}.pdf"),
+            },
+            None => PdfOutcome::TooLarge,
+        })
     }
 
     pub async fn search_products(
@@ -662,7 +951,7 @@ fn array(value: &Value) -> Vec<Value> {
     value.as_array().cloned().unwrap_or_default()
 }
 
-fn uuid(raw: &str) -> Result<String, Fault> {
+pub(crate) fn uuid(raw: &str) -> Result<String, Fault> {
     Uuid::parse_str(raw)
         .map(|id| id.to_string())
         .map_err(|_| Fault::new(format!("identifiant invalide : « {raw} »")))

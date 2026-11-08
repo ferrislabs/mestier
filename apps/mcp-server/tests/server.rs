@@ -31,6 +31,17 @@ const SUPPLY: &str = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 const CONTRACT: &str = "f1111111-1111-4111-8111-111111111111";
 const CUSTOMER: &str = "f2222222-2222-4222-8222-222222222222";
 const SITE: &str = "f3333333-3333-4333-8333-333333333333";
+const OWN_CUSTOMER: &str = "e1111111-1111-4111-8111-111111111111";
+const FOREIGN_CUSTOMER: &str = "e2222222-2222-4222-8222-222222222222";
+const OWN_CONTACT: &str = "e3333333-3333-4333-8333-333333333333";
+const FOREIGN_CONTACT: &str = "e4444444-4444-4444-8444-444444444444";
+const OWN_DEAL: &str = "e5555555-5555-4555-8555-555555555555";
+const FOREIGN_DEAL: &str = "e6666666-6666-4666-8666-666666666666";
+const OWN_QUOTE: &str = "d1111111-1111-4111-8111-111111111111";
+const FOREIGN_QUOTE: &str = "d2222222-2222-4222-8222-222222222222";
+const TASK: &str = "c1111111-1111-4111-8111-111111111111";
+const OWN_SUPPLIER: &str = "b1111111-1111-4111-8111-111111111111";
+const OWN_PRODUCT: &str = "b3333333-3333-4333-8333-333333333333";
 const UPDATED_AT: &str = "2026-10-10T08:00:00Z";
 const JPEG: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, b'J', b'F', b'I', b'F'];
 
@@ -150,6 +161,181 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
     }
     let path = path.trim_start_matches("/api/v1/");
     match (&parts.method, path) {
+        (&Method::GET, p) if p == format!("customers/{OWN_CUSTOMER}") => Json(json!({"data": {
+            "id": OWN_CUSTOMER, "organization_id": ORG_A, "status": "PROSPECT", "name": "Dupont",
+            "registration_number": null, "phone": "0102030405", "email": null, "kind": "INDIVIDUAL",
+            "website": null, "vat_number": null, "owner_member_id": null, "lead_source": null,
+            "notes": "à rappeler", "payment_terms_days": 30, "billing_contact_id": null,
+            "billing_address_id": null, "updated_at": UPDATED_AT
+        }}))
+        .into_response(),
+        (&Method::GET, p) if p == format!("customers/{FOREIGN_CUSTOMER}") => Json(json!({"data": {
+            "id": FOREIGN_CUSTOMER, "organization_id": ORG_B, "name": "Autre"
+        }}))
+        .into_response(),
+        (&Method::GET, p) if p == format!("customers/{OWN_CUSTOMER}/contacts") => {
+            Json(json!({"data": [{"id": OWN_CONTACT, "first_name": "Ana"}], "meta": {}})).into_response()
+        }
+        (&Method::PATCH, p) if p == format!("customers/{OWN_CUSTOMER}") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": sent})).into_response()
+        }
+        (&Method::POST, p) if p == format!("customers/{OWN_CUSTOMER}/contacts") => {
+            (StatusCode::CREATED, Json(json!({"data": {"id": OWN_CONTACT}}))).into_response()
+        }
+        (&Method::GET, p) if p == format!("customer-contacts/{OWN_CONTACT}") => Json(json!({"data": {
+            "id": OWN_CONTACT, "customer_id": OWN_CUSTOMER, "first_name": "Ana", "last_name": "Roy",
+            "role": null, "phone": null, "mobile": null, "email": null, "is_primary": false
+        }}))
+        .into_response(),
+        (&Method::GET, p) if p == format!("customer-contacts/{FOREIGN_CONTACT}") => Json(json!({"data": {
+            "id": FOREIGN_CONTACT, "customer_id": FOREIGN_CUSTOMER, "first_name": "Bob"
+        }}))
+        .into_response(),
+        (&Method::PATCH, p) if p == format!("customer-contacts/{OWN_CONTACT}") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": sent})).into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/customers") => {
+            let mut sent: Value = serde_json::from_slice(&bytes).unwrap();
+            sent["id"] = json!(OWN_CUSTOMER);
+            (StatusCode::CREATED, Json(json!({"data": sent}))).into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/deals") => {
+            let mut sent: Value = serde_json::from_slice(&bytes).unwrap();
+            sent["id"] = json!(OWN_DEAL);
+            (StatusCode::CREATED, Json(json!({"data": sent}))).into_response()
+        }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/deals") => {
+            Json(json!({"data": [], "meta": {"next_page": null}})).into_response()
+        }
+        (&Method::GET, p) if p == format!("deals/{OWN_DEAL}") => Json(json!({"data": {
+            "id": OWN_DEAL, "organization_id": ORG_A, "customer_id": OWN_CUSTOMER, "title": "Terrasse",
+            "amount_cents": 500000, "stage": "NEW", "expected_close_date": null,
+            "owner_member_id": null, "source": null, "notes": null
+        }}))
+        .into_response(),
+        (&Method::GET, p) if p == format!("deals/{FOREIGN_DEAL}") => Json(json!({"data": {
+            "id": FOREIGN_DEAL, "organization_id": ORG_B, "title": "Autre"
+        }}))
+        .into_response(),
+        (&Method::PATCH, p) if p == format!("deals/{OWN_DEAL}") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": sent})).into_response()
+        }
+        (&Method::POST, p) if p == format!("deals/{OWN_DEAL}/stage") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": sent})).into_response()
+        }
+        (&Method::GET, p) if p == format!("quotes/{OWN_QUOTE}") => Json(json!({"data": {
+            "id": OWN_QUOTE, "organization_id": ORG_A, "title": "Terrasse",
+            "customer_id": OWN_CUSTOMER, "customer_context_id": SITE, "deal_id": null,
+            "status": "DRAFT", "valid_until": null, "deposit_percent": "30",
+            "owner_member_id": null, "notes": null, "billing_contact_id": null,
+            "billing_address_id": null, "net_cents": 1000, "reference": "D-1",
+            "lines": [{
+                "id": "d3333333-3333-4333-8333-333333333333", "organization_id": ORG_A,
+                "quote_id": OWN_QUOTE, "service_rate_id": null, "product_id": null,
+                "label": "Dalles", "quantity": "10", "unit": "m2", "unit_price_cents": 5000,
+                "vat_rate_bp": 2000, "discount_percent": "0", "billing_frequency": "ONE_TIME",
+                "net_cents": 50000, "notes": null, "photo_keys": []
+            }]
+        }}))
+        .into_response(),
+        (&Method::GET, p) if p == format!("quotes/{FOREIGN_QUOTE}") => Json(json!({"data": {
+            "id": FOREIGN_QUOTE, "organization_id": ORG_B
+        }}))
+        .into_response(),
+        (&Method::PATCH, p) if p == format!("quotes/{OWN_QUOTE}") || p == format!("quotes/{OWN_QUOTE}/status") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": sent})).into_response()
+        }
+        (&Method::POST, p) if p == format!("quotes/{OWN_QUOTE}/revision") => {
+            (StatusCode::CREATED, Json(json!({"data": {"id": FOREIGN_QUOTE}}))).into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/quotes") => {
+            let mut sent: Value = serde_json::from_slice(&bytes).unwrap();
+            sent["id"] = json!(OWN_QUOTE);
+            (StatusCode::CREATED, Json(json!({"data": sent}))).into_response()
+        }
+        (&Method::GET, p) if p == format!("quotes/{OWN_QUOTE}/pdf") => (
+            [(header::CONTENT_TYPE, "application/pdf")],
+            b"%PDF-1.4 devis".to_vec(),
+        )
+            .into_response(),
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/tasks") => {
+            Json(json!({"data": [], "meta": {"next_page": null}})).into_response()
+        }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/planning") => {
+            Json(json!({"data": {"resources": [], "entries": []}})).into_response()
+        }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/projects/{PROJECT}") => {
+            Json(json!({"data": {
+                "id": PROJECT, "name": "Chantier", "customer_id": OWN_CUSTOMER,
+                "customer_context_id": null, "quote_id": null, "archived_at": null
+            }}))
+            .into_response()
+        }
+        (&Method::PATCH, p) if p == format!("organizations/{ORG_A}/projects/{PROJECT}")
+            || p == format!("organizations/{ORG_A}/tasks/{TASK}") =>
+        {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": sent})).into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/projects")
+            || p == format!("organizations/{ORG_A}/tasks")
+            || p == format!("organizations/{ORG_A}/tasks/{TASK}/comments") =>
+        {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            (StatusCode::CREATED, Json(json!({"data": sent}))).into_response()
+        }
+        (&Method::GET, p) if p == format!("products/{OWN_PRODUCT}") => Json(json!({"data": {
+            "id": OWN_PRODUCT, "organization_id": ORG_A, "name": "Banc", "sku": "B1", "unit": "u",
+            "unit_price_cents": 10000, "default_vat_rate_bp": 2000, "description": null,
+            "photo_keys": ["p/1.jpg"], "supplier_id": null, "manufacturer": "ACME",
+            "technical_specs": null, "datasheet_keys": [], "category": "Mobilier",
+            "billing_frequency": "ONE_TIME", "cost_cents": 6000, "archived_at": "2026-01-01T00:00:00Z",
+            "usage_count": 3
+        }}))
+        .into_response(),
+        (&Method::PATCH, p) if p == format!("products/{OWN_PRODUCT}") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": sent})).into_response()
+        }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/suppliers/{OWN_SUPPLIER}") => {
+            Json(json!({"data": {
+                "id": OWN_SUPPLIER, "organization_id": ORG_A, "name": "Brico", "registration_number": null,
+                "vat_number": null, "address": null, "phone": "0400", "email": null, "iban": null,
+                "payment_terms_days": 30, "default_category_id": null, "notes": null,
+                "archived_at": null,
+                "contacts": [{"id": "b2222222-2222-4222-8222-222222222222", "first_name": "Luc",
+                              "last_name": "Roy", "role": "", "email": "", "phone": "", "mobile": ""}],
+                "addresses": []
+            }}))
+            .into_response()
+        }
+        (&Method::PUT, p) if p == format!("organizations/{ORG_A}/suppliers/{OWN_SUPPLIER}") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": sent})).into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/products")
+            || p == format!("organizations/{ORG_A}/suppliers") =>
+        {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            (StatusCode::CREATED, Json(json!({"data": sent}))).into_response()
+        }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/invoices/outstanding")
+            || p == format!("organizations/{ORG_A}/reporting/profitability")
+            || p == format!("organizations/{ORG_A}/reporting/worked-hours") =>
+        {
+            Json(json!({"data": []})).into_response()
+        }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/suppliers")
+            || p == format!("organizations/{ORG_A}/supplier-invoices")
+            || p == format!("organizations/{ORG_A}/expenses") =>
+        {
+            Json(json!({"data": [], "meta": {"next_page": null}})).into_response()
+        }
         (&Method::GET, "users/@me/organizations") => {
             let data = if token == "solo" {
                 vec![org(ORG_A, "acme")]
@@ -1397,4 +1583,624 @@ async fn the_maintenance_tools_call_three_routes_and_no_other() {
             ),
         ]
     );
+}
+
+fn writes(fake: &Fake) -> Vec<Seen> {
+    fake.seen()
+        .into_iter()
+        .filter(|s| ["POST", "PUT", "PATCH"].contains(&s.method.as_str()))
+        .collect()
+}
+
+#[tokio::test]
+async fn update_customer_keeps_the_fields_it_was_not_given() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "t",
+        "update_customer",
+        json!({"organization": "acme", "customer_id": OWN_CUSTOMER, "status": "CLIENT", "email": "a@b.fr"}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let sent = &writes(&fake)[0];
+    assert_eq!(sent.method, "PATCH");
+    assert_eq!(sent.path, format!("/api/v1/customers/{OWN_CUSTOMER}"));
+    assert_eq!(sent.body["status"], "CLIENT");
+    assert_eq!(sent.body["email"], "a@b.fr");
+    assert_eq!(sent.body["name"], "Dupont");
+    assert_eq!(sent.body["phone"], "0102030405");
+    assert_eq!(sent.body["payment_terms_days"], 30);
+    assert!(sent.body.get("updated_at").is_none());
+    assert!(sent.body.get("organization_id").is_none());
+}
+
+#[tokio::test]
+async fn a_customer_of_another_organization_is_never_written() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "t",
+        "update_customer",
+        json!({"organization": "acme", "customer_id": FOREIGN_CUSTOMER, "name": "X"}),
+    )
+    .await;
+    assert_eq!(result["isError"], json!(true));
+    assert!(text(&result).contains("introuvable dans cette organisation"));
+    assert!(writes(&fake).is_empty());
+}
+
+#[tokio::test]
+async fn create_customer_posts_the_given_fields_to_the_organization() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "create_customer",
+        json!({"organization": "acme", "name": "Martin", "status": "PROSPECT", "lead_source": "SITE_WEB_X"}),
+    )
+    .await;
+    assert!(
+        writes(&fake).is_empty(),
+        "an unknown lead source is refused"
+    );
+
+    let result = call(
+        &mcp,
+        "t",
+        "create_customer",
+        json!({"organization": "acme", "name": "Martin", "status": "PROSPECT",
+               "kind": "PROFESSIONAL", "lead_source": "site_web"}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let sent = &writes(&fake)[0];
+    assert_eq!(
+        sent.path,
+        format!("/api/v1/organizations/{ORG_A}/customers")
+    );
+    assert_eq!(
+        sent.body,
+        json!({"name": "Martin", "status": "PROSPECT", "kind": "PROFESSIONAL", "lead_source": "site_web"})
+    );
+}
+
+#[tokio::test]
+async fn a_contact_is_added_under_a_customer_of_the_organization_only() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "create_customer_contact",
+        json!({"organization": "acme", "customer_id": FOREIGN_CUSTOMER, "first_name": "A", "last_name": "B"}),
+    )
+    .await;
+    assert!(writes(&fake).is_empty());
+
+    call(
+        &mcp,
+        "t",
+        "create_customer_contact",
+        json!({"organization": "acme", "customer_id": OWN_CUSTOMER, "first_name": "Ana", "last_name": "Roy"}),
+    )
+    .await;
+    let sent = &writes(&fake)[0];
+    assert_eq!(
+        sent.path,
+        format!("/api/v1/customers/{OWN_CUSTOMER}/contacts")
+    );
+    assert_eq!(
+        sent.body,
+        json!({"first_name": "Ana", "last_name": "Roy", "is_primary": false})
+    );
+}
+
+#[tokio::test]
+async fn a_contact_is_updated_through_its_customer_ownership() {
+    let (mcp, fake) = start().await;
+    let refused = call(
+        &mcp,
+        "t",
+        "update_customer_contact",
+        json!({"organization": "acme", "contact_id": FOREIGN_CONTACT, "role": "Gérant"}),
+    )
+    .await;
+    assert_eq!(refused["isError"], json!(true));
+    assert!(writes(&fake).is_empty());
+
+    call(
+        &mcp,
+        "t",
+        "update_customer_contact",
+        json!({"organization": "acme", "contact_id": OWN_CONTACT, "role": "Gérant"}),
+    )
+    .await;
+    let sent = &writes(&fake)[0];
+    assert_eq!(
+        sent.path,
+        format!("/api/v1/customer-contacts/{OWN_CONTACT}")
+    );
+    assert_eq!(sent.body["role"], "Gérant");
+    assert_eq!(sent.body["last_name"], "Roy");
+    assert_eq!(sent.body["is_primary"], false);
+}
+
+#[tokio::test]
+async fn get_customer_returns_the_contacts_and_refuses_a_foreign_customer() {
+    let (mcp, _) = start().await;
+    let own = call(
+        &mcp,
+        "t",
+        "get_customer",
+        json!({"organization": "acme", "customer_id": OWN_CUSTOMER}),
+    )
+    .await;
+    let body: Value = serde_json::from_str(&text(&own)).unwrap();
+    assert_eq!(body["contacts"][0]["id"], OWN_CONTACT);
+
+    let foreign = call(
+        &mcp,
+        "t",
+        "get_customer",
+        json!({"organization": "acme", "customer_id": FOREIGN_CUSTOMER}),
+    )
+    .await;
+    assert_eq!(foreign["isError"], json!(true));
+}
+
+#[tokio::test]
+async fn deals_are_listed_filtered_created_updated_and_moved() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "list_deals",
+        json!({"organization": "acme", "stage": "QUOTE_SENT", "customer_id": OWN_CUSTOMER, "query": "terrasse"}),
+    )
+    .await;
+    let list = fake.seen().pop().unwrap();
+    assert!(list.query.contains("stage=QUOTE_SENT"), "{}", list.query);
+    assert!(list.query.contains(&format!("customer_id={OWN_CUSTOMER}")));
+    assert!(list.query.contains("q=terrasse"));
+
+    call(
+        &mcp,
+        "t",
+        "create_deal",
+        json!({"organization": "acme", "customer_id": OWN_CUSTOMER, "title": "Terrasse", "amount_cents": 500000}),
+    )
+    .await;
+    call(
+        &mcp,
+        "t",
+        "update_deal",
+        json!({"organization": "acme", "deal_id": OWN_DEAL, "notes": "visite faite"}),
+    )
+    .await;
+    call(
+        &mcp,
+        "t",
+        "move_deal_stage",
+        json!({"organization": "acme", "deal_id": OWN_DEAL, "stage": "LOST", "lost_reason": "trop cher"}),
+    )
+    .await;
+    let sent = writes(&fake);
+    assert_eq!(sent[0].path, format!("/api/v1/organizations/{ORG_A}/deals"));
+    assert_eq!(sent[1].method, "PATCH");
+    assert_eq!(sent[1].body["title"], "Terrasse");
+    assert_eq!(sent[1].body["amount_cents"], 500000);
+    assert_eq!(sent[1].body["notes"], "visite faite");
+    assert_eq!(sent[2].path, format!("/api/v1/deals/{OWN_DEAL}/stage"));
+    assert_eq!(
+        sent[2].body,
+        json!({"stage": "LOST", "lost_reason": "trop cher"})
+    );
+
+    let foreign = call(
+        &mcp,
+        "t",
+        "move_deal_stage",
+        json!({"organization": "acme", "deal_id": FOREIGN_DEAL, "stage": "WON"}),
+    )
+    .await;
+    assert_eq!(foreign["isError"], json!(true));
+    assert_eq!(writes(&fake).len(), 3);
+}
+
+#[tokio::test]
+async fn a_quote_is_created_with_its_lines() {
+    let (mcp, fake) = start().await;
+    let empty = call(
+        &mcp,
+        "t",
+        "create_quote",
+        json!({"organization": "acme", "title": "T", "customer_id": OWN_CUSTOMER,
+               "customer_context_id": SITE, "lines": []}),
+    )
+    .await;
+    assert_eq!(empty["isError"], json!(true));
+    assert!(writes(&fake).is_empty());
+
+    call(
+        &mcp,
+        "t",
+        "create_quote",
+        json!({"organization": "acme", "title": "Terrasse", "customer_id": OWN_CUSTOMER,
+               "customer_context_id": SITE, "deposit_percent": "30",
+               "lines": [{"label": "Dalles", "quantity": "10", "unit": "m2", "unit_price_cents": 5000}]}),
+    )
+    .await;
+    let sent = &writes(&fake)[0];
+    assert_eq!(sent.path, format!("/api/v1/organizations/{ORG_A}/quotes"));
+    assert_eq!(sent.body["deposit_percent"], "30");
+    assert_eq!(sent.body["lines"][0]["label"], "Dalles");
+    assert_eq!(sent.body["lines"][0]["photo_keys"], json!([]));
+    assert!(sent.body["lines"][0].get("vat_rate_bp").is_none());
+}
+
+#[tokio::test]
+async fn updating_a_quote_keeps_its_lines_unless_given_new_ones() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "update_quote",
+        json!({"organization": "acme", "quote_id": OWN_QUOTE, "notes": "à valider"}),
+    )
+    .await;
+    let kept = &writes(&fake)[0];
+    assert_eq!(kept.method, "PATCH");
+    assert_eq!(kept.body["notes"], "à valider");
+    assert_eq!(kept.body["status"], "DRAFT");
+    assert_eq!(kept.body["title"], "Terrasse");
+    assert_eq!(kept.body["lines"][0]["label"], "Dalles");
+    assert_eq!(kept.body["lines"][0]["quantity"], "10");
+    assert!(kept.body["lines"][0].get("id").is_none());
+    assert!(kept.body["lines"][0].get("net_cents").is_none());
+
+    call(
+        &mcp,
+        "t",
+        "update_quote",
+        json!({"organization": "acme", "quote_id": OWN_QUOTE,
+               "lines": [{"label": "Gravier", "quantity": "2", "unit": "u", "unit_price_cents": 900}]}),
+    )
+    .await;
+    let replaced = &writes(&fake)[1];
+    assert_eq!(replaced.body["lines"].as_array().unwrap().len(), 1);
+    assert_eq!(replaced.body["lines"][0]["label"], "Gravier");
+
+    let foreign = call(
+        &mcp,
+        "t",
+        "update_quote",
+        json!({"organization": "acme", "quote_id": FOREIGN_QUOTE, "notes": "x"}),
+    )
+    .await;
+    assert_eq!(foreign["isError"], json!(true));
+    assert_eq!(writes(&fake).len(), 2);
+}
+
+#[tokio::test]
+async fn a_quote_status_can_only_be_sent_declined_or_cancelled() {
+    let (mcp, fake) = start().await;
+    for refused in ["ACCEPTED", "SUPERSEDED", "DRAFT", "WHATEVER"] {
+        call(
+            &mcp,
+            "t",
+            "set_quote_status",
+            json!({"organization": "acme", "quote_id": OWN_QUOTE, "status": refused}),
+        )
+        .await;
+    }
+    assert!(writes(&fake).is_empty());
+
+    call(
+        &mcp,
+        "t",
+        "set_quote_status",
+        json!({"organization": "acme", "quote_id": OWN_QUOTE, "status": "DECLINED", "decline_reason": "trop cher"}),
+    )
+    .await;
+    let sent = &writes(&fake)[0];
+    assert_eq!(sent.path, format!("/api/v1/quotes/{OWN_QUOTE}/status"));
+    assert_eq!(
+        sent.body,
+        json!({"status": "DECLINED", "decline_reason": "trop cher"})
+    );
+}
+
+#[tokio::test]
+async fn a_revision_and_a_pdf_are_refused_for_a_foreign_quote() {
+    let (mcp, fake) = start().await;
+    let revision = call(
+        &mcp,
+        "t",
+        "create_quote_revision",
+        json!({"organization": "acme", "quote_id": FOREIGN_QUOTE}),
+    )
+    .await;
+    assert_eq!(revision["isError"], json!(true));
+    let pdf = call(
+        &mcp,
+        "t",
+        "export_quote_pdf",
+        json!({"organization": "acme", "quote_id": FOREIGN_QUOTE}),
+    )
+    .await;
+    assert_eq!(pdf["isError"], json!(true));
+    assert!(writes(&fake).is_empty());
+
+    call(
+        &mcp,
+        "t",
+        "create_quote_revision",
+        json!({"organization": "acme", "quote_id": OWN_QUOTE}),
+    )
+    .await;
+    assert_eq!(
+        writes(&fake)[0].path,
+        format!("/api/v1/quotes/{OWN_QUOTE}/revision")
+    );
+
+    let own = call(
+        &mcp,
+        "t",
+        "export_quote_pdf",
+        json!({"organization": "acme", "quote_id": OWN_QUOTE}),
+    )
+    .await;
+    assert_eq!(
+        own["content"][0]["resource"]["mimeType"], "application/pdf",
+        "{own}"
+    );
+}
+
+#[tokio::test]
+async fn tasks_are_listed_with_their_filters() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "list_tasks",
+        json!({"organization": "acme", "status": ["BACKLOG", "IN_PROGRESS"], "project_id": PROJECT,
+               "query": "toiture", "unscheduled": true}),
+    )
+    .await;
+    let query = fake.seen().pop().unwrap().query;
+    assert!(query.contains("status=BACKLOG"), "{query}");
+    assert!(query.contains("status=IN_PROGRESS"), "{query}");
+    assert!(query.contains(&format!("project_id={PROJECT}")));
+    assert!(query.contains("q=toiture"));
+    assert!(query.contains("unscheduled=true"));
+}
+
+#[tokio::test]
+async fn a_task_is_created_with_an_explicit_blocks_availability() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "create_task",
+        json!({"organization": "acme", "title": "Poser les dalles"}),
+    )
+    .await;
+    assert!(writes(&fake).is_empty(), "blocks_availability is required");
+
+    call(
+        &mcp,
+        "t",
+        "create_task",
+        json!({"organization": "acme", "title": "Poser les dalles", "blocks_availability": true,
+               "status": "BACKLOG", "project_id": PROJECT}),
+    )
+    .await;
+    let sent = &writes(&fake)[0];
+    assert_eq!(sent.path, format!("/api/v1/organizations/{ORG_A}/tasks"));
+    assert_eq!(sent.body["blocks_availability"], true);
+    assert_eq!(sent.body["status"], "BACKLOG");
+    assert_eq!(sent.body["all_day"], false);
+}
+
+#[tokio::test]
+async fn a_task_patch_carries_only_the_given_fields() {
+    let (mcp, fake) = start().await;
+    let nothing = call(
+        &mcp,
+        "t",
+        "update_task",
+        json!({"organization": "acme", "task_id": TASK}),
+    )
+    .await;
+    assert_eq!(nothing["isError"], json!(true));
+    assert!(writes(&fake).is_empty());
+
+    call(
+        &mcp,
+        "t",
+        "update_task",
+        json!({"organization": "acme", "task_id": TASK, "status": "DONE",
+               "assignee_member_ids": [OWN_CUSTOMER]}),
+    )
+    .await;
+    let sent = &writes(&fake)[0];
+    assert_eq!(sent.method, "PATCH");
+    assert_eq!(
+        sent.body,
+        json!({"status": "DONE", "assignees": [{"member_id": OWN_CUSTOMER}]})
+    );
+}
+
+#[tokio::test]
+async fn a_project_update_keeps_the_links_it_was_not_given() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "update_project",
+        json!({"organization": "acme", "project_id": PROJECT, "name": "Chantier Vichy"}),
+    )
+    .await;
+    let sent = &writes(&fake)[0];
+    assert_eq!(
+        sent.path,
+        format!("/api/v1/organizations/{ORG_A}/projects/{PROJECT}")
+    );
+    assert_eq!(
+        sent.body,
+        json!({"name": "Chantier Vichy", "customer_id": OWN_CUSTOMER,
+               "customer_context_id": null, "quote_id": null})
+    );
+}
+
+#[tokio::test]
+async fn a_project_a_comment_and_the_planning_go_to_the_right_paths() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "create_project",
+        json!({"organization": "acme", "name": "Interne"}),
+    )
+    .await;
+    call(
+        &mcp,
+        "t",
+        "add_task_comment",
+        json!({"organization": "acme", "task_id": TASK, "body": "commande passée"}),
+    )
+    .await;
+    let sent = writes(&fake);
+    assert_eq!(sent[0].body, json!({"name": "Interne"}));
+    assert_eq!(
+        sent[1].path,
+        format!("/api/v1/organizations/{ORG_A}/tasks/{TASK}/comments")
+    );
+    assert_eq!(sent[1].body, json!({"body": "commande passée"}));
+
+    call(
+        &mcp,
+        "t",
+        "get_planning",
+        json!({"organization": "acme", "from": "2026-11-09", "to": "2026-11-15"}),
+    )
+    .await;
+    let query = fake.seen().pop().unwrap().query;
+    assert!(query.contains("from=2026-11-09") && query.contains("to=2026-11-15"));
+}
+
+#[tokio::test]
+async fn updating_a_product_keeps_its_fields_and_its_archive_state() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "update_product",
+        json!({"organization": "acme", "product_id": OWN_PRODUCT, "unit_price_cents": 12000}),
+    )
+    .await;
+    let sent = &writes(&fake)[0];
+    assert_eq!(sent.method, "PATCH");
+    assert_eq!(sent.path, format!("/api/v1/products/{OWN_PRODUCT}"));
+    assert_eq!(sent.body["unit_price_cents"], 12000);
+    assert_eq!(sent.body["name"], "Banc");
+    assert_eq!(sent.body["photo_keys"], json!(["p/1.jpg"]));
+    assert_eq!(sent.body["cost_cents"], 6000);
+    assert_eq!(sent.body["archived"], true);
+    assert!(sent.body.get("usage_count").is_none());
+}
+
+#[tokio::test]
+async fn a_product_and_a_supplier_are_created_in_the_organization() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "create_product",
+        json!({"organization": "acme", "name": "Banc", "unit": "u", "unit_price_cents": 10000}),
+    )
+    .await;
+    call(
+        &mcp,
+        "t",
+        "create_supplier",
+        json!({"organization": "acme", "name": "Brico", "payment_terms_days": 30}),
+    )
+    .await;
+    let sent = writes(&fake);
+    assert_eq!(
+        sent[0].path,
+        format!("/api/v1/organizations/{ORG_A}/products")
+    );
+    assert_eq!(sent[0].body["photo_keys"], json!([]));
+    assert_eq!(
+        sent[1].path,
+        format!("/api/v1/organizations/{ORG_A}/suppliers")
+    );
+    assert_eq!(
+        sent[1].body,
+        json!({"name": "Brico", "payment_terms_days": 30})
+    );
+}
+
+#[tokio::test]
+async fn updating_a_supplier_replaces_it_without_losing_its_contacts() {
+    let (mcp, fake) = start().await;
+    call(
+        &mcp,
+        "t",
+        "update_supplier",
+        json!({"organization": "acme", "supplier_id": OWN_SUPPLIER, "email": "a@brico.fr"}),
+    )
+    .await;
+    let sent = &writes(&fake)[0];
+    assert_eq!(sent.method, "PUT");
+    assert_eq!(sent.body["email"], "a@brico.fr");
+    assert_eq!(sent.body["name"], "Brico");
+    assert_eq!(sent.body["phone"], "0400");
+    assert_eq!(sent.body["contacts"][0]["first_name"], "Luc");
+    assert_eq!(sent.body["addresses"], json!([]));
+    assert!(sent.body.get("archived_at").is_none());
+}
+
+#[tokio::test]
+async fn the_purchase_expense_and_reporting_reads_hit_their_endpoints() {
+    let (mcp, fake) = start().await;
+    for (tool, args) in [
+        ("list_suppliers", json!({"organization": "acme"})),
+        ("list_supplier_invoices", json!({"organization": "acme"})),
+        ("list_expenses", json!({"organization": "acme"})),
+        ("list_outstanding_invoices", json!({"organization": "acme"})),
+        (
+            "get_profitability",
+            json!({"organization": "acme", "from": "2026-01-01", "to": "2026-12-31"}),
+        ),
+        (
+            "get_worked_hours",
+            json!({"organization": "acme", "from": "2026-01-01", "to": "2026-12-31"}),
+        ),
+    ] {
+        let result = call(&mcp, "t", tool, args).await;
+        assert_ne!(result["isError"], json!(true), "{tool}: {result}");
+    }
+    let paths: Vec<String> = fake
+        .seen()
+        .into_iter()
+        .map(|s| s.path)
+        .filter(|p| !p.contains("users/@me"))
+        .collect();
+    for suffix in [
+        "suppliers",
+        "supplier-invoices",
+        "expenses",
+        "invoices/outstanding",
+        "reporting/profitability",
+        "reporting/worked-hours",
+    ] {
+        assert!(
+            paths.iter().any(|p| p.ends_with(suffix)),
+            "{suffix}: {paths:?}"
+        );
+    }
+    assert!(writes(&fake).is_empty());
 }
