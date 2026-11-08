@@ -341,16 +341,52 @@ mod tests {
         starts_at: DateTime<Utc>,
         ends_at: DateTime<Utc>,
     ) {
+        seed_absence_with_status(
+            pool,
+            organization_id,
+            member_id,
+            starts_at,
+            ends_at,
+            "APPROVED",
+        )
+        .await;
+    }
+
+    async fn seed_absence_with_status(
+        pool: &PgPool,
+        organization_id: OrganizationId,
+        member_id: MemberId,
+        starts_at: DateTime<Utc>,
+        ends_at: DateTime<Utc>,
+        status: &str,
+    ) {
+        let type_id = generate_uuid_v7();
         sqlx::query!(
             r#"
-            INSERT INTO absences (id, org_id, member_id, kind, starts_at, ends_at)
-            VALUES ($1, $2, $3, 'LEAVE', $4, $5)
+            INSERT INTO absence_types (id, org_id, name, hue, count_mode, paid, needs_approval, needs_proof, kind)
+            VALUES ($1, $2, 'Test', 10, 'WORKING', true, true, false, 'LEAVE')
+            "#,
+            type_id,
+            organization_id.0,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            r#"
+            INSERT INTO absences (id, org_id, member_id, kind, type_id, starts_at, ends_at,
+                                  start_date, start_part, end_date, end_part, status)
+            VALUES ($1, $2, $3, 'LEAVE', $4, $5, $6, $7, 'MORNING', $8, 'AFTERNOON', $9)
             "#,
             generate_uuid_v7(),
             organization_id.0,
             member_id.0,
+            type_id,
             starts_at,
             ends_at,
+            starts_at.date_naive(),
+            ends_at.date_naive(),
+            status,
         )
         .execute(pool)
         .await
@@ -360,7 +396,13 @@ mod tests {
     /// Removes everything seeded under `organization_id`, plus the loose
     /// user rows that outlive the organization.
     async fn cleanup(pool: &PgPool, organization_id: OrganizationId, user_ids: &[UserId]) {
-        for table in ["absences", "work_slots", "task_assignments", "tasks"] {
+        for table in [
+            "absences",
+            "absence_types",
+            "work_slots",
+            "task_assignments",
+            "tasks",
+        ] {
             purge(
                 pool,
                 &format!("DELETE FROM {table} WHERE org_id = $1"),
@@ -754,6 +796,60 @@ mod tests {
                 .iter()
                 .any(|c| matches!(c.kind, crate::ConflictKind::Absence { .. }))
         );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn only_an_approved_absence_blocks_planning_and_availability() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let member_id = seed_employee(&pool, fixture.organization_id).await;
+        let now = now_storable();
+        for status in ["PENDING", "REJECTED", "CANCELLED"] {
+            seed_absence_with_status(
+                &pool,
+                fixture.organization_id,
+                member_id,
+                now,
+                now + Duration::hours(4),
+                status,
+            )
+            .await;
+        }
+        let usecase = make_usecase(pool.clone());
+        let window = TimeRange::new(now + Duration::hours(1), now + Duration::hours(2)).unwrap();
+
+        let reports = usecase
+            .get_availability(fixture.organization_id, window)
+            .await
+            .unwrap();
+        let report = reports
+            .iter()
+            .find(|r| r.resource.member_id == member_id)
+            .unwrap();
+        assert!(report.available());
+        assert!(report.conflicts.is_empty());
+
+        seed_absence_with_status(
+            &pool,
+            fixture.organization_id,
+            member_id,
+            now,
+            now + Duration::hours(4),
+            "APPROVED",
+        )
+        .await;
+        let reports = usecase
+            .get_availability(fixture.organization_id, window)
+            .await
+            .unwrap();
+        let report = reports
+            .iter()
+            .find(|r| r.resource.member_id == member_id)
+            .unwrap();
+        assert!(!report.available());
 
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
     }

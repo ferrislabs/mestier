@@ -350,7 +350,10 @@ function EmployeeWorkTimeScreen({
 	}))
 
 	const memberAbsences: AbsenceListItem[] = (absencesQuery.data?.data ?? [])
-		.filter((absence) => absence.member_id === memberId)
+		.filter(
+			(absence) =>
+				absence.member_id === memberId && absence.status === 'APPROVED',
+		)
 		.map((absence) => ({
 			id: absence.id,
 			...absenceToDraft({ ...absence, absence_kind: absence.kind }, timeZone),

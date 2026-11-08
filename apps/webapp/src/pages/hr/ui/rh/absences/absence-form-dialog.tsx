@@ -26,6 +26,10 @@ import {
 	SelectValue,
 } from '#/components/ui/select'
 import {
+	type AbsenceFailure,
+	absenceFailureOf,
+} from '#/pages/hr/lib/rh/absence-wire'
+import {
 	absenceDays,
 	findMember,
 	findType,
@@ -46,7 +50,11 @@ import {
 	TeamConflictList,
 } from '#/pages/hr/ui/rh/absences/decision-context'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
-import { useRhActorId, useRhState } from '#/pages/hr/ui/rh/shared/rh-context'
+import {
+	useRhAbsenceActions,
+	useRhActorId,
+	useRhState,
+} from '#/pages/hr/ui/rh/shared/rh-context'
 import { TypeDot } from '#/pages/hr/ui/rh/shared/type-chip'
 
 export type AbsenceFormInitial = { memberId?: string; startDate?: IsoDate }
@@ -55,23 +63,17 @@ export type AbsenceFormDialogProps = {
 	open: boolean
 	onOpenChange: (open: boolean) => void
 	initial?: AbsenceFormInitial
-	onSubmit: (draft: AbsenceDraft) => void
 }
 
 export function AbsenceFormDialog({
 	open,
 	onOpenChange,
 	initial,
-	onSubmit,
 }: AbsenceFormDialogProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-4xl">
-				<AbsenceForm
-					initial={initial}
-					onSubmit={onSubmit}
-					onClose={() => onOpenChange(false)}
-				/>
+				<AbsenceForm initial={initial} onClose={() => onOpenChange(false)} />
 			</DialogContent>
 		</Dialog>
 	)
@@ -79,13 +81,15 @@ export function AbsenceFormDialog({
 
 function AbsenceForm({
 	initial,
-	onSubmit,
 	onClose,
 }: {
 	initial?: AbsenceFormInitial
-	onSubmit: (draft: AbsenceDraft) => void
 	onClose: () => void
 }) {
+	const actions = useRhAbsenceActions()
+	const [proof, setProof] = useState<File | null>(null)
+	const [failure, setFailure] = useState<AbsenceFailure | null>(null)
+	const [isPending, setIsPending] = useState(false)
 	const actorId = useRhActorId()
 	const state = useRhState()
 	const baseId = useId()
@@ -120,10 +124,12 @@ function AbsenceForm({
 	const mode = type ? countModeOption(type.countMode) : null
 
 	function patch(partial: Partial<AbsenceDraft>) {
+		setFailure(null)
 		setDraft((current) => ({ ...current, ...partial }))
 	}
 
 	function changeStart(value: string) {
+		setFailure(null)
 		setDraft((current) => ({
 			...current,
 			startDate: value,
@@ -134,21 +140,41 @@ function AbsenceForm({
 		}))
 	}
 
-	function submit(event: FormEvent<HTMLFormElement>) {
+	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
-		if (errors.length > 0) return
-		onSubmit({ ...draft, comment: draft.comment.trim() })
-		onClose()
+		if (errors.length > 0 || isPending) return
+		setIsPending(true)
+		setFailure(null)
+		try {
+			await actions.create({ ...draft, comment: draft.comment.trim() }, proof)
+			onClose()
+		} catch (error) {
+			setFailure(absenceFailureOf(error))
+		} finally {
+			setIsPending(false)
+		}
 	}
 
 	function pickProof(files: FileList | null) {
-		patch({ proofName: files?.[0]?.name ?? null })
+		const file = files?.[0] ?? null
+		setProof(file)
+		patch({ proofName: file?.name ?? null })
 	}
 
 	function clearProof() {
 		if (proofRef.current) proofRef.current.value = ''
+		setProof(null)
 		patch({ proofName: null })
 	}
+
+	const fieldFailure = (field: AbsenceFailure['field']) =>
+		failure?.field === field ? failure.message : null
+	const periodFailure =
+		fieldFailure('startDate') ?? fieldFailure('endDate') ?? fieldFailure('type')
+	const dialogFailure =
+		failure && (failure.field === null || failure.field === 'status')
+			? failure.message
+			: null
 
 	const memberId = `${baseId}-member`
 	const typeId = `${baseId}-type`
@@ -159,7 +185,11 @@ function AbsenceForm({
 	const errorsId = `${baseId}-errors`
 
 	return (
-		<form onSubmit={submit} className="grid gap-5" noValidate>
+		<form
+			onSubmit={(event) => void submit(event)}
+			className="grid gap-5"
+			noValidate
+		>
 			<DialogHeader>
 				<DialogTitle>Poser une absence</DialogTitle>
 				<DialogDescription>
@@ -252,18 +282,20 @@ function AbsenceForm({
 							/>
 						</div>
 					</div>
-					{errors.length > 0 && (
+					{(errors.length > 0 || periodFailure) && (
 						<div id={errorsId} role="alert">
 							<ul className="grid gap-1">
-								{errors.map((message) => (
-									<li
-										key={message}
-										className="flex items-start gap-2 text-sm text-state-alert"
-									>
-										<CircleAlert className="mt-0.5 size-4 shrink-0" />
-										{message}
-									</li>
-								))}
+								{[...errors, ...(periodFailure ? [periodFailure] : [])].map(
+									(message) => (
+										<li
+											key={message}
+											className="flex items-start gap-2 text-sm text-state-alert"
+										>
+											<CircleAlert className="mt-0.5 size-4 shrink-0" />
+											{message}
+										</li>
+									),
+								)}
 							</ul>
 						</div>
 					)}
@@ -280,6 +312,7 @@ function AbsenceForm({
 							value={draft.comment}
 							onChange={(event) => patch({ comment: event.target.value })}
 							placeholder="Une précision utile pour la validation."
+							aria-invalid={fieldFailure('comment') ? true : undefined}
 							className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
 						/>
 					</div>
@@ -332,10 +365,20 @@ function AbsenceForm({
 								</>
 							) : (
 								<span className="text-muted-foreground text-xs">
-									Seul le nom du fichier est conservé.
+									Le fichier est envoyé avec la demande.
 								</span>
 							)}
 						</div>
+						{fieldFailure('proof') && (
+							<p role="alert" className="text-sm text-state-alert">
+								{fieldFailure('proof')}
+							</p>
+						)}
+						{fieldFailure('comment') && (
+							<p role="alert" className="text-sm text-state-alert">
+								{fieldFailure('comment')}
+							</p>
+						)}
 					</div>
 				</div>
 				<aside
@@ -381,7 +424,8 @@ function AbsenceForm({
 					{type?.needsProof && !draft.proofName && (
 						<p className="flex items-start gap-2 text-muted-foreground">
 							<TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-state-today" />
-							Justificatif attendu pour ce motif.
+							Justificatif attendu pour ce motif : sans lui, la demande ne
+							pourra pas être validée.
 						</p>
 					)}
 					<div className="border-t pt-3">
@@ -389,11 +433,16 @@ function AbsenceForm({
 					</div>
 				</aside>
 			</div>
+			{dialogFailure && (
+				<p role="alert" className="text-sm text-state-alert">
+					{dialogFailure}
+				</p>
+			)}
 			<DialogFooter>
 				<Button type="button" variant="outline" onClick={onClose}>
 					Annuler
 				</Button>
-				<Button type="submit" disabled={errors.length > 0}>
+				<Button type="submit" disabled={errors.length > 0 || isPending}>
 					{type && !type.needsApproval
 						? 'Enregistrer l’absence'
 						: 'Envoyer la demande'}

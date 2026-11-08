@@ -1,6 +1,5 @@
 // MOCK: rh-binding — no backend endpoint yet. Replace with the HR domain API once members carry contracts, schedules and balances.
-import type { AbsenceFormValues, AbsenceKind } from '#/pages/hr/lib/absences'
-import type { Absence, Member, RhState } from '#/pages/hr/lib/rh/types'
+import type { Member, RhState } from '#/pages/hr/lib/rh/types'
 import { defaultMember } from './rh-seed'
 
 export interface RealMember {
@@ -8,32 +7,6 @@ export interface RealMember {
 	firstName: string
 	lastName: string
 	email: string
-}
-
-export const REAL_ABSENCE_PREFIX = 'real:'
-
-export function isRealAbsenceId(id: string): boolean {
-	return id.startsWith(REAL_ABSENCE_PREFIX)
-}
-
-export function realAbsenceId(id: string): string {
-	return id.slice(REAL_ABSENCE_PREFIX.length)
-}
-
-const KIND_TYPE_IDS: Record<AbsenceKind, string> = {
-	LEAVE: 'cp',
-	SICK: 'maladie',
-	UNAVAILABLE: 'indisponible',
-}
-
-const TYPE_KINDS: Record<string, AbsenceKind> = {
-	maladie: 'SICK',
-	intemperies: 'UNAVAILABLE',
-	indisponible: 'UNAVAILABLE',
-}
-
-export function kindOfType(typeId: string): AbsenceKind {
-	return TYPE_KINDS[typeId] ?? 'LEAVE'
 }
 
 function bindMember(seed: Member, real: RealMember): Member {
@@ -162,29 +135,4 @@ export function renameMembers(
 		return { ...member, firstName: entry.firstName, lastName: entry.lastName }
 	})
 	return changed ? { ...state, members } : state
-}
-
-export function realAbsenceToAbsence(
-	id: string,
-	values: AbsenceFormValues,
-): Absence {
-	return {
-		id: `${REAL_ABSENCE_PREFIX}${id}`,
-		memberId: values.memberId,
-		typeId: KIND_TYPE_IDS[values.kind],
-		startDate: values.range.from,
-		startPart:
-			values.allDay || values.startTime < '12:00' ? 'morning' : 'afternoon',
-		endDate: values.range.to,
-		endPart:
-			values.allDay || values.endTime > '13:00' ? 'afternoon' : 'morning',
-		comment: values.note,
-		proofName: null,
-		status: 'approved',
-		createdAt: `${values.range.from}T00:00:00.000Z`,
-		createdById: values.memberId,
-		decidedById: null,
-		decidedAt: `${values.range.from}T00:00:00.000Z`,
-		decisionComment: '',
-	}
 }

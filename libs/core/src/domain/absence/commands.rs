@@ -1,9 +1,25 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 
+use super::DayPart;
 use crate::{
-    MemberId, OrganizationId,
+    AbsenceTypeId, MemberId, OrganizationId,
     domain::absence::{AbsenceId, AbsenceKind},
 };
+
+#[derive(Debug, Clone)]
+pub enum AbsenceSchedule {
+    Window {
+        starts_at: DateTime<Utc>,
+        ends_at: DateTime<Utc>,
+        all_day: bool,
+    },
+    Days {
+        start_date: NaiveDate,
+        start_part: DayPart,
+        end_date: NaiveDate,
+        end_part: DayPart,
+    },
+}
 
 #[derive(Debug, Clone)]
 pub struct CreateAbsenceCommand {
@@ -13,11 +29,13 @@ pub struct CreateAbsenceCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,
     pub member_id: MemberId,
-    pub kind: AbsenceKind,
-    pub starts_at: DateTime<Utc>,
-    pub ends_at: DateTime<Utc>,
-    pub all_day: bool,
+    /// Only read when `type_id` is absent: the absence then takes the default
+    /// type of this kind and is approved at once.
+    pub kind: Option<AbsenceKind>,
+    pub type_id: Option<AbsenceTypeId>,
+    pub schedule: AbsenceSchedule,
     pub note: Option<String>,
+    pub proof_file_key: Option<String>,
 }
 
 /// Carries a `PATCH`: every field is optional and only the ones present are
@@ -38,6 +56,7 @@ pub struct PatchAbsenceCommand {
     pub ends_at: Option<DateTime<Utc>>,
     pub all_day: Option<bool>,
     pub note: Option<Option<String>>,
+    pub proof_file_key: Option<Option<String>>,
 }
 
 impl PatchAbsenceCommand {
@@ -52,6 +71,22 @@ impl PatchAbsenceCommand {
             ends_at: None,
             all_day: None,
             note: None,
+            proof_file_key: None,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct DecideAbsenceCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub id: AbsenceId,
+}
+
+#[derive(Debug, Clone)]
+pub struct RejectAbsenceCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub id: AbsenceId,
+    pub comment: String,
 }

@@ -2,27 +2,16 @@ import { assert, test } from 'vitest'
 import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	absenceDays,
-	cancelAbsence,
-	createAbsence,
-	decideAbsence,
 	teamConflicts,
 	validateAbsence,
 } from '#/pages/hr/lib/rh/absences'
-import type { AbsenceDraft, ActionContext } from '#/pages/hr/lib/rh/types'
+import type { AbsenceDraft } from '#/pages/hr/lib/rh/types'
 
 const state = INITIAL_RH_STATE
 const member = (id: string) => {
 	const found = state.members.find((other) => other.id === id)
 	if (!found) throw new Error(id)
 	return found
-}
-
-let next = 0
-const context: ActionContext = {
-	now: '2026-11-04T10:00:00.000Z',
-	today: '2026-11-04',
-	actorId: 'baptiste',
-	newId: () => `id-${++next}`,
 }
 
 function draft(patch: Partial<AbsenceDraft> = {}): AbsenceDraft {
@@ -131,62 +120,6 @@ test('validateAbsence refuse un chevauchement mais accepte l’autre demi-journ�
 			}),
 		).length,
 		0,
-	)
-})
-
-test('createAbsence passe en attente si le motif demande une validation', () => {
-	const created = createAbsence(state, context, draft())
-	assert.equal(created.absences.length, state.absences.length + 1)
-	assert.equal(created.absences[0].status, 'pending')
-	assert.equal(created.absences[0].decidedById, null)
-})
-
-test('createAbsence valide directement un motif sans validation', () => {
-	const created = createAbsence(
-		state,
-		context,
-		draft({ typeId: 'maladie', proofName: 'arret.pdf' }),
-	)
-	assert.equal(created.absences[0].status, 'approved')
-})
-
-test('createAbsence ignore une demande invalide', () => {
-	assert.equal(
-		createAbsence(
-			state,
-			context,
-			draft({ startDate: '2026-12-09', endDate: '2026-12-07' }),
-		),
-		state,
-	)
-})
-
-test('decideAbsence ne touche que les demandes en attente', () => {
-	const approved = decideAbsence(
-		state,
-		context,
-		'abs-julien-novembre',
-		'approved',
-		' ok ',
-	)
-	const target = approved.absences.find(
-		(absence) => absence.id === 'abs-julien-novembre',
-	)
-	assert.equal(target?.status, 'approved')
-	assert.equal(target?.decisionComment, 'ok')
-	assert.deepEqual(
-		decideAbsence(approved, context, 'abs-julien-novembre', 'rejected', '')
-			.absences,
-		approved.absences,
-	)
-})
-
-test('cancelAbsence annule une demande validée', () => {
-	const cancelled = cancelAbsence(state, context, 'abs-karim-novembre')
-	assert.equal(
-		cancelled.absences.find((absence) => absence.id === 'abs-karim-novembre')
-			?.status,
-		'cancelled',
 	)
 })
 

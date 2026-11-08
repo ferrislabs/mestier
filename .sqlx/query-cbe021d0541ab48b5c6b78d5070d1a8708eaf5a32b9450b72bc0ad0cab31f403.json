@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, name, hue, count_mode, account_id, paid, needs_approval,\n                   needs_proof, kind::text AS \"kind!\", archived_at, created_at\n            FROM absence_types\n            WHERE org_id = $1 AND id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "hue",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "count_mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "paid",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "needs_approval",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "needs_proof",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "cbe021d0541ab48b5c6b78d5070d1a8708eaf5a32b9450b72bc0ad0cab31f403"
+}

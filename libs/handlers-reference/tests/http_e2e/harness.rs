@@ -96,6 +96,8 @@ impl App {
     pub async fn cleanup(&self) {
         for org_id in [self.organization_id, self.other_organization_id().await] {
             for statement in [
+                "DELETE FROM absences WHERE org_id = $1",
+                "DELETE FROM absence_types WHERE org_id = $1",
                 "DELETE FROM member_documents WHERE org_id = $1",
                 "DELETE FROM member_contracts WHERE org_id = $1",
                 "DELETE FROM member_hr_profiles WHERE org_id = $1",
@@ -258,6 +260,7 @@ async fn seed_org_owner_and_employee(
     // carries no permissions, `create_organization` is what normally seeds
     // this role and assigns it to the owner's seat.
     const MANAGE_MEMBERS: i64 = 1 << 1;
+    const MANAGE_PLANNING: i64 = 1 << 8;
     const MANAGE_REFERENCE: i64 = 1 << 14;
     let role_id = Uuid::now_v7();
     sqlx::query(
@@ -266,7 +269,7 @@ async fn seed_org_owner_and_employee(
     .bind(role_id)
     .bind(organization_id)
     .bind("Owner")
-    .bind(MANAGE_MEMBERS | MANAGE_REFERENCE)
+    .bind(MANAGE_MEMBERS | MANAGE_PLANNING | MANAGE_REFERENCE)
     .execute(pool)
     .await
     .expect("seed the owner role");

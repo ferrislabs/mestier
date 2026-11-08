@@ -4,6 +4,12 @@ import type { Schemas } from '#/api/api.client'
 const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
 const ABSENCE_PATH =
 	'/api/v1/organizations/{organization_id}/absences/{absence_id}'
+const APPROVE_PATH =
+	'/api/v1/organizations/{organization_id}/absences/{absence_id}/approve'
+const REJECT_PATH =
+	'/api/v1/organizations/{organization_id}/absences/{absence_id}/reject'
+const CANCEL_PATH =
+	'/api/v1/organizations/{organization_id}/absences/{absence_id}/cancel'
 const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
 
 /**
@@ -81,6 +87,33 @@ export function useDeleteAbsence() {
 
 	return useMutation({
 		...window.tanstackApi.mutation('delete', ABSENCE_PATH).mutationOptions,
+		onSuccess: () => invalidateAbsenceReads(queryClient),
+	})
+}
+
+export function useApproveAbsence() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', APPROVE_PATH).mutationOptions,
+		onSuccess: () => invalidateAbsenceReads(queryClient),
+	})
+}
+
+export function useRejectAbsence() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', REJECT_PATH).mutationOptions,
+		onSuccess: () => invalidateAbsenceReads(queryClient),
+	})
+}
+
+export function useCancelAbsence() {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		...window.tanstackApi.mutation('post', CANCEL_PATH).mutationOptions,
 		onSuccess: () => invalidateAbsenceReads(queryClient),
 	})
 }

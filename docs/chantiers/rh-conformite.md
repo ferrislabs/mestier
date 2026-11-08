@@ -17,7 +17,7 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 | F2 | Liste et fiche membre, invitation et rôles conservés | F1 | fait |
 | B1 | Profil RH du membre, archivage | F2 | fait |
 | B2 | Contrats, horaires, documents | B1 | fait |
-| B3 | Motifs d'absence et circuit de validation | B2 | à faire |
+| B3 | Motifs d'absence et circuit de validation | B2 | fait |
 | B4 | Compteurs et ajustements | B3 | à faire |
 | B5 | Exceptions de jour et flux du planning | B2, B3 | à faire |
 | B6 | Majorations et heures extra | B3 | à faire |
@@ -69,3 +69,23 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 - Premier contrat à la création : non repris. Le formulaire de création réel n'a aucun champ de contrat (type, dates, horaire) ; en créer un par défaut (CDI à la date du jour) inventerait une donnée contractuelle. Le premier contrat s'ajoute depuis l'onglet Contrats.
 - Le contrôle « un membre garde au moins un contrat » reste côté interface seulement ; l'API n'impose rien.
 - `tsc --noEmit` : 38 erreurs avant et après.
+
+## Reports issus de B3
+- Forme de requête rétrocompatible : l'ancienne création (`kind`, `starts_at`, `ends_at`, `all_day`) reste acceptée, prend le motif par défaut de son `kind` et est validée aussitôt. Les écrans RH n'utilisent que la nouvelle forme (`type_id`, `start_date`, `start_part`, `end_date`, `end_part`, `note`, `proof_file_key`).
+- Les absences gagnent les colonnes `start_date` et `end_date` ; `created_by` et `decided_by` sont nullables (absences d'avant B3, validation automatique).
+- Seules les absences APPROVED bloquent le planning. Les écrans hors RH qui montrent une disponibilité (aperçu Temps de travail, fiche Temps de travail d'un membre) filtrent donc sur `APPROVED`.
+- Le PATCH garde les champs de l'ancienne fenêtre (`starts_at`, `ends_at`, `all_day`) : il sert encore au calendrier de planification, plus à l'écran RH, qui n'a ni modification ni suppression (le prototype n'a que l'annulation).
+- Approuver, refuser et annuler n'émettent aucun événement : les absences n'en émettent aucun aujourd'hui.
+- Pas de libre-service employé : la création exige `MANAGE_REFERENCE`, donc un employé ne peut pas poser sa propre absence. Le front masque « Poser une absence » (barre d'actions, planning, fiche membre, popover du jour) sans cette permission ; Valider, Refuser et Annuler exigent `MANAGE_PLANNING`. L'annulation par le créateur seul n'est pas offerte : le modèle front ne connaît pas le membre connecté (`actorId` du store est le premier membre).
+- 36 tests de base de données échouent ensemble sur la base partagée mais passent isolément (même famille que les instables connus). Le filtre `automation` seul : 1 échec connu.
+- Chevauchement : le contrôle du prototype (pas deux absences actives sur les mêmes demi-journées d'un membre) reste dans `lib/rh/absences.ts` côté interface. L'API ne le refuse pas : l'ajouter exige une requête de lecture sur la période et un `query!` ; non fait, à décider avec le spec.
+- Motifs : les 7 motifs par défaut sont créés à la première lecture (le prototype en comptait 8 avec « Indisponibilité »). `kind` (LEAVE, SICK, UNAVAILABLE) est requis par l'API et absent du prototype : le formulaire de motif ne le montre pas, un nouveau motif est LEAVE, la modification conserve le `kind` lu.
+- Compte débité : `account_id` est un UUID côté API, les comptes de congés restent mockés (id `cp`, `rtt`). Le lien motif vers compte reste donc dans `rh-store` (mémoire, jamais envoyé s'il n'est pas un UUID) et les motifs « Congés payés » et « RTT » sont reliés par leur nom pour garder les soldes. B4 remplace ce lien.
+- Justificatif : le fichier passe par `POST /files`, la clé est envoyée en `proof_file_key` et affichée en lien (`/files/url`) sur la demande à valider. Approuver sans justificatif un motif qui l'exige : 422 sur `proof_file_key`, affiché dans le bandeau de l'écran. Refuser sans commentaire : bloqué avant l'appel, et 422 sur `comment` affiché dans la fenêtre.
+- Archiver un membre annule désormais ses demandes futures en attente par l'API (`cancel`, au mieux : un échec n'annule pas l'archivage), à la place de l'ancien réducteur du store.
+- La liste des absences est lue sur une seule page de 100 (limite de l'API, sans filtre par membre) : au-delà, la fin manque dans l'historique.
+- Lecture : une liste de motifs ou d'absences en 403 ouvre l'écran vide, sans bandeau d'erreur ; tout autre échec bloque l'écran.
+- Absence d'un motif archivé : l'API le refuse (422 sur `type_id`) ; le formulaire ne propose que les motifs actifs.
+- Le client OpenAPI a été régénéré (le précédent datait d'avant B3). `kind`, `starts_at`, `ends_at` de la création sont désormais optionnels dans les types générés.
+- `tsc --noEmit` : 38 erreurs avant et après.
+

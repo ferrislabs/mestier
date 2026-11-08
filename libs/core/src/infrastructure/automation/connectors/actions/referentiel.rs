@@ -3,7 +3,9 @@ use common::{CoreError, OrganizationId};
 use serde_json::{Value, json};
 
 use super::{ActionContext, failure};
-use crate::domain::absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand};
+use crate::domain::absence::commands::{
+    AbsenceSchedule, CreateAbsenceCommand, PatchAbsenceCommand,
+};
 use crate::domain::custom_unit::commands::CreateCustomUnitCommand;
 use crate::domain::equipment::commands::{CreateEquipmentCommand, UpdateEquipmentCommand};
 use crate::domain::product::commands::{CreateProductCommand, UpdateProductCommand};
@@ -638,15 +640,20 @@ async fn create_absence(context: &ActionContext<'_>) -> Result<Value, String> {
             actor: context.actor(),
             organization_id: context.organization_id,
             member_id,
-            kind,
-            starts_at,
-            ends_at,
-            all_day,
+            kind: Some(kind),
+            type_id: None,
+            schedule: AbsenceSchedule::Window {
+                starts_at,
+                ends_at,
+                all_day,
+            },
             note,
+            proof_file_key: None,
         })
         .await
+        .map_err(failure)?
         .map(|absence| absence_json(&absence))
-        .map_err(failure)
+        .map_err(|refusal| refusal.to_string())
 }
 
 async fn update_absence(context: &ActionContext<'_>) -> Result<Value, String> {

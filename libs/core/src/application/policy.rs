@@ -61,6 +61,17 @@ pub fn subject_user_id(subject: &Subject) -> Result<UserId, CoreError> {
     })
 }
 
+/// The `MemberId` an enriched [`Subject`] carries, `None` for system subjects
+/// and subjects not yet enriched for an organization.
+pub fn subject_member_id(subject: &Subject) -> Option<crate::MemberId> {
+    subject
+        .properties
+        .get(SUBJECT_MEMBER_ID_KEY)
+        .and_then(|v| v.as_str())
+        .and_then(|raw| uuid::Uuid::parse_str(raw).ok())
+        .map(crate::MemberId)
+}
+
 /// Loads `(member, aggregated permissions)` for the user behind the
 /// subject in the given organization, and writes the AuthZen-shaped
 /// properties (`mestier.member_id`, `mestier.organization_id`,

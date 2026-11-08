@@ -46,7 +46,7 @@ pub trait PlanningRepository: Send {
         to: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<PlanningTask>, CoreError>> + Send;
 
-    /// Every absence whose window overlaps `[from, to)`, for the whole
+    /// Every approved absence whose window overlaps `[from, to)`, for the whole
     /// organization in one query.
     fn list_absences_in_window(
         &mut self,

@@ -1,15 +1,25 @@
 use std::{fmt::Display, str::FromStr};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{MemberId, OrganizationId};
+use crate::{AbsenceType, AbsenceTypeId, FileKey, MemberId, OrganizationId};
 
 pub mod commands;
+pub mod error;
 pub mod ports;
 pub mod service;
+pub mod span;
+pub mod status;
+
+#[cfg(test)]
+mod tests;
+
+pub use error::{AbsenceError, AbsenceOutcome};
+pub use span::{AbsenceSpan, DayPart};
+pub use status::AbsenceStatus;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct AbsenceId(pub Uuid);
@@ -74,55 +84,133 @@ pub struct Absence {
     pub organization_id: OrganizationId,
     pub member_id: MemberId,
     pub kind: AbsenceKind,
+    pub type_id: AbsenceTypeId,
     pub starts_at: DateTime<Utc>,
     pub ends_at: DateTime<Utc>,
     pub all_day: bool,
+    pub start_date: NaiveDate,
+    pub start_part: DayPart,
+    pub end_date: NaiveDate,
+    pub end_part: DayPart,
+    pub status: AbsenceStatus,
     pub note: Option<String>,
+    pub proof_file_key: Option<String>,
+    pub created_by_member_id: Option<MemberId>,
+    pub decided_by_member_id: Option<MemberId>,
+    pub decided_at: Option<DateTime<Utc>>,
+    pub decision_comment: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn employee_absence_id_parses_uuid() {
-        let uuid = Uuid::new_v4();
-        let parsed = AbsenceId::from_str(&uuid.to_string()).unwrap();
-
-        assert_eq!(parsed.0, uuid);
+pub(crate) fn clean_note(note: Option<&str>) -> AbsenceOutcome<Option<String>> {
+    match note {
+        Some(value) if value.trim().is_empty() => Err(AbsenceError::NoteBlank),
+        other => Ok(other.map(str::to_owned)),
     }
+}
 
-    #[test]
-    fn employee_absence_id_rejects_invalid_uuid() {
-        assert!(AbsenceId::from_str("not-a-uuid").is_err());
-    }
+pub(crate) fn clean_proof(proof: Option<&str>) -> AbsenceOutcome<Option<String>> {
+    proof
+        .map(|key| {
+            FileKey::try_from(key)
+                .map(|valid| valid.as_str().to_owned())
+                .map_err(|_| AbsenceError::ProofKeyInvalid)
+        })
+        .transpose()
+}
 
-    #[test]
-    fn absence_kind_parses_known_values() {
-        assert_eq!("LEAVE".parse::<AbsenceKind>().unwrap(), AbsenceKind::Leave);
-        assert_eq!("SICK".parse::<AbsenceKind>().unwrap(), AbsenceKind::Sick);
-        assert_eq!(
-            "UNAVAILABLE".parse::<AbsenceKind>().unwrap(),
-            AbsenceKind::Unavailable
-        );
-    }
-
-    #[test]
-    fn absence_kind_rejects_unknown_values() {
-        assert!("HOLIDAY".parse::<AbsenceKind>().is_err());
-    }
-
-    #[test]
-    fn absence_kind_round_trips_through_as_str() {
-        for kind in [
-            AbsenceKind::Leave,
-            AbsenceKind::Sick,
-            AbsenceKind::Unavailable,
-        ] {
-            assert_eq!(kind.as_str().parse::<AbsenceKind>().unwrap(), kind);
+impl Absence {
+    #[allow(clippy::too_many_arguments)]
+    pub fn request(
+        id: AbsenceId,
+        organization_id: OrganizationId,
+        member_id: MemberId,
+        absence_type: &AbsenceType,
+        span: AbsenceSpan,
+        window: (DateTime<Utc>, DateTime<Utc>),
+        needs_approval: bool,
+        note: Option<&str>,
+        proof_file_key: Option<&str>,
+        created_by_member_id: Option<MemberId>,
+        now: DateTime<Utc>,
+    ) -> AbsenceOutcome<Self> {
+        if absence_type.is_archived() {
+            return Err(AbsenceError::TypeArchived);
         }
+        let note = clean_note(note)?;
+        let proof_file_key = clean_proof(proof_file_key)?;
+        Ok(Self {
+            id,
+            organization_id,
+            member_id,
+            kind: absence_type.kind,
+            type_id: absence_type.id,
+            starts_at: window.0,
+            ends_at: window.1,
+            all_day: span.is_full_days(),
+            start_date: span.start_date(),
+            start_part: span.start_part(),
+            end_date: span.end_date(),
+            end_part: span.end_part(),
+            status: if needs_approval {
+                AbsenceStatus::Pending
+            } else {
+                AbsenceStatus::Approved
+            },
+            note,
+            proof_file_key,
+            created_by_member_id,
+            decided_by_member_id: None,
+            decided_at: None,
+            decision_comment: None,
+            deleted_at: None,
+            created_at: now,
+            updated_at: now,
+        })
+    }
+
+    pub fn approve(
+        &mut self,
+        absence_type: &AbsenceType,
+        decider: Option<MemberId>,
+        at: DateTime<Utc>,
+    ) -> AbsenceOutcome<()> {
+        let status = self.status.approve()?;
+        if absence_type.needs_proof && self.proof_file_key.is_none() {
+            return Err(AbsenceError::ProofRequired);
+        }
+        self.decide(status, decider, at);
+        Ok(())
+    }
+
+    pub fn reject(
+        &mut self,
+        comment: &str,
+        decider: Option<MemberId>,
+        at: DateTime<Utc>,
+    ) -> AbsenceOutcome<()> {
+        let status = self.status.reject()?;
+        let comment = comment.trim();
+        if comment.is_empty() {
+            return Err(AbsenceError::CommentRequired);
+        }
+        self.decision_comment = Some(comment.to_owned());
+        self.decide(status, decider, at);
+        Ok(())
+    }
+
+    pub fn cancel(&mut self, decider: Option<MemberId>, at: DateTime<Utc>) -> AbsenceOutcome<()> {
+        let status = self.status.cancel()?;
+        self.decide(status, decider, at);
+        Ok(())
+    }
+
+    fn decide(&mut self, status: AbsenceStatus, decider: Option<MemberId>, at: DateTime<Utc>) {
+        self.status = status;
+        self.decided_by_member_id = decider;
+        self.decided_at = Some(at);
+        self.updated_at = at;
     }
 }

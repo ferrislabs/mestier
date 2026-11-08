@@ -13,10 +13,14 @@ import type {
 	DocumentRecord,
 } from '#/pages/hr/lib/rh/member-wire'
 import { renderWithRouter } from '#/test/render-with-router'
+import {
+	ABSENCE_TYPES_PATH,
+	ABSENCES_PATH,
+	DEFAULT_TYPE_RECORDS,
+} from '#/test/rh-absence-fixtures'
 import { MemberDetailFeature } from './member-detail-feature'
 
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
-const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
 const PROFILES_PATH = '/api/v1/organizations/{organization_id}/member-profiles'
 const CONTRACTS_PATH =
 	'/api/v1/organizations/{organization_id}/member-contracts'
@@ -113,6 +117,8 @@ function installFakeApi() {
 					queryFn: async () => {
 						if (path === MEMBERS_PATH)
 							return { data: MEMBERS, pagination: null }
+						if (path === ABSENCE_TYPES_PATH)
+							return { data: DEFAULT_TYPE_RECORDS, pagination: null }
 						if (path === ABSENCES_PATH || path === PROFILES_PATH)
 							return { data: [], pagination: null }
 						if (path === CONTRACTS_PATH || path === DOCUMENTS_PATH) {

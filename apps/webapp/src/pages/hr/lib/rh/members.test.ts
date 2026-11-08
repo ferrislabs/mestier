@@ -1,7 +1,6 @@
 import { assert, test } from 'vitest'
 import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
-	cancelUpcomingAbsences,
 	createMember,
 	currentSchedule,
 	defaultContractSchedule,
@@ -10,6 +9,7 @@ import {
 	EMPTY_ADDRESS,
 	formatAddress,
 	upcomingDeadlines,
+	upcomingPendingAbsenceIds,
 	validateMemberDraft,
 	weeklyHours,
 	weeklyHoursOf,
@@ -182,11 +182,10 @@ test('createMember nettoie e-mails, téléphones et adresse', () => {
 	})
 })
 
-test('cancelUpcomingAbsences annule les demandes futures en attente sans toucher au profil', () => {
-	const next = cancelUpcomingAbsences(state, context, 'julien')
-	assert.equal(
-		next.absences.find((a) => a.id === 'abs-julien-novembre')?.status,
-		'cancelled',
-	)
-	assert.equal(next.members, state.members)
+test('upcomingPendingAbsenceIds ne garde que les demandes futures en attente du membre', () => {
+	assert.deepEqual(upcomingPendingAbsenceIds(state, 'julien', context.today), [
+		'abs-julien-novembre',
+	])
+	assert.deepEqual(upcomingPendingAbsenceIds(state, 'julien', '2026-12-01'), [])
+	assert.deepEqual(upcomingPendingAbsenceIds(state, 'sophie', '2026-01-01'), [])
 })

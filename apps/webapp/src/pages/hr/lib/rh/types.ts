@@ -95,10 +95,13 @@ export type MemberDraft = Omit<
 
 export type CountMode = 'working' | 'workable' | 'calendar'
 
+export type AbsenceKind = 'leave' | 'sick' | 'unavailable'
+
 export type AbsenceType = {
 	id: string
 	name: string
 	hue: number
+	kind: AbsenceKind
 	countMode: CountMode
 	accountId: string | null
 	paid: boolean
@@ -122,7 +125,7 @@ export type Absence = {
 	endDate: IsoDate
 	endPart: DayPart
 	comment: string
-	proofName: string | null
+	proofKey: string | null
 	status: AbsenceStatus
 	createdAt: string
 	createdById: string
@@ -130,6 +133,11 @@ export type Absence = {
 	decidedAt: string | null
 	decisionComment: string
 }
+
+export type AbsenceSpanInput = Pick<
+	Absence,
+	'memberId' | 'typeId' | 'startDate' | 'startPart' | 'endDate' | 'endPart'
+>
 
 export type AbsenceDraft = Pick<
 	Absence,
@@ -140,8 +148,7 @@ export type AbsenceDraft = Pick<
 	| 'endDate'
 	| 'endPart'
 	| 'comment'
-	| 'proofName'
->
+> & { proofName: string | null }
 
 export type Acquisition =
 	| { kind: 'monthly'; perMonth: number }

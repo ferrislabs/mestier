@@ -1,5 +1,11 @@
-// MOCK: rh-store — balances, overrides and extras have no backend endpoint yet. Member profile fields (contacts, address, job title, manager, work permit, archiving), contracts with their schedules, and documents come from the API through setMemberProfiles, setMemberContracts and setMemberDocuments and are never held here.
+// MOCK: rh-store — balances, overrides and extras have no backend endpoint yet. Member profile fields (contacts, address, job title, manager, work permit, archiving), contracts with their schedules, documents, absence types and absences come from the API through setMemberProfiles, setMemberContracts, setMemberDocuments, setAbsenceTypes and setAbsences and are never held here. Only the link between an absence type and a mock leave account lives here until B4.
 import { useSyncExternalStore } from 'react'
+import {
+	type AbsenceRecord,
+	type AbsenceTypeRecord,
+	overlayAbsences,
+	overlayAbsenceTypes,
+} from '#/pages/hr/lib/rh/absence-wire'
 import { todayIso } from '#/pages/hr/lib/rh/dates'
 import {
 	overlayProfiles,
@@ -11,15 +17,14 @@ import {
 	overlayContracts,
 	overlayDocuments,
 } from '#/pages/hr/lib/rh/member-wire'
-import type { Absence, ActionContext, RhState } from '#/pages/hr/lib/rh/types'
+import type { ActionContext, RhState } from '#/pages/hr/lib/rh/types'
 import {
 	bindSeed,
-	isRealAbsenceId,
 	type RealMember,
 	reconcileMembers,
 	renameMembers,
 } from './rh-binding'
-import { INITIAL_RH_STATE } from './rh-seed'
+import { DEFAULT_ACCOUNT_BY_TYPE_NAME, INITIAL_RH_STATE } from './rh-seed'
 
 const WRITE_DELAY_MS = 120
 
@@ -29,10 +34,16 @@ interface Snapshot {
 	profilesLoaded: boolean
 	contractsLoaded: boolean
 	documentsLoaded: boolean
+	typesLoaded: boolean
+	absencesLoaded: boolean
 }
 
 let base: RhState = INITIAL_RH_STATE
-let realAbsences: readonly Absence[] = []
+let absenceTypes: readonly AbsenceTypeRecord[] = []
+let typesLoaded = false
+let typeAccounts = new Map<string, string | null>()
+let absences: readonly AbsenceRecord[] = []
+let absencesLoaded = false
 let boundKey: string | null = null
 let profiles: readonly ProfileRecord[] = []
 let profilesLoaded = false
@@ -46,16 +57,28 @@ let snapshot: Snapshot = compose()
 const listeners = new Set<() => void>()
 
 function compose(): Snapshot {
-	const overlaid = overlayDocuments(
-		overlayContracts(overlayProfiles(base, profiles, accountEmails), contracts),
-		documents,
+	const overlaid = overlayAbsences(
+		overlayAbsenceTypes(
+			overlayDocuments(
+				overlayContracts(
+					overlayProfiles(base, profiles, accountEmails),
+					contracts,
+				),
+				documents,
+			),
+			absenceTypes,
+			typeAccounts,
+		),
+		absences,
 	)
 	return {
-		state: { ...overlaid, absences: [...base.absences, ...realAbsences] },
+		state: overlaid,
 		boundKey,
 		profilesLoaded,
 		contractsLoaded,
 		documentsLoaded,
+		typesLoaded,
+		absencesLoaded,
 	}
 }
 
@@ -97,8 +120,27 @@ export function bindRhMembers(members: readonly RealMember[]) {
 	publish()
 }
 
-export function setRealAbsences(absences: readonly Absence[]) {
-	realAbsences = absences
+export function setAbsenceTypes(records: readonly AbsenceTypeRecord[]) {
+	const links = new Map(typeAccounts)
+	for (const record of records) {
+		const known = DEFAULT_ACCOUNT_BY_TYPE_NAME[record.name]
+		if (!links.has(record.id) && !record.account_id && known)
+			links.set(record.id, known)
+	}
+	typeAccounts = links
+	absenceTypes = records
+	typesLoaded = true
+	publish()
+}
+
+export function setTypeAccount(typeId: string, accountId: string | null) {
+	typeAccounts = new Map(typeAccounts).set(typeId, accountId)
+	publish()
+}
+
+export function setAbsences(records: readonly AbsenceRecord[]) {
+	absences = records
+	absencesLoaded = true
 	publish()
 }
 
@@ -149,17 +191,18 @@ export function updateRh(
 	update: (current: RhState, context: ActionContext) => RhState,
 ): Promise<void> {
 	const next = update(snapshot.state, actionContext())
-	base = {
-		...next,
-		absences: next.absences.filter((absence) => !isRealAbsenceId(absence.id)),
-	}
+	base = next
 	publish()
 	return new Promise((resolve) => setTimeout(resolve, WRITE_DELAY_MS))
 }
 
 export function resetRhStore() {
 	base = INITIAL_RH_STATE
-	realAbsences = []
+	absenceTypes = []
+	typesLoaded = false
+	typeAccounts = new Map()
+	absences = []
+	absencesLoaded = false
 	profiles = []
 	profilesLoaded = false
 	contracts = []

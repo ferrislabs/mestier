@@ -3,11 +3,9 @@ import { daysInRange, formatRange, weekdayOf } from '#/pages/hr/lib/rh/dates'
 import { isHoliday } from '#/pages/hr/lib/rh/holidays'
 import type {
 	Absence,
-	AbsenceDraft,
+	AbsenceSpanInput,
 	AbsenceStatus,
 	AbsenceType,
-	AbsenceTypeDraft,
-	ActionContext,
 	CountMode,
 	DayPart,
 	IsoDate,
@@ -104,7 +102,7 @@ export function findMember(
 
 export function validateAbsence(
 	state: RhState,
-	draft: AbsenceDraft,
+	draft: AbsenceSpanInput,
 	ignoreId?: string,
 ): string[] {
 	const member = findMember(state, draft.memberId)
@@ -142,7 +140,7 @@ export type TeamConflict = { member: Member; absence: Absence }
 
 export function teamConflicts(
 	state: RhState,
-	draft: AbsenceDraft,
+	draft: AbsenceSpanInput,
 ): TeamConflict[] {
 	return state.absences.flatMap((other) => {
 		if (other.memberId === draft.memberId || !isActiveAbsence(other)) return []
@@ -153,113 +151,8 @@ export function teamConflicts(
 	})
 }
 
-export function createAbsence(
-	state: RhState,
-	context: ActionContext,
-	draft: AbsenceDraft,
-): RhState {
-	const type = findType(state, draft.typeId)
-	if (!type || validateAbsence(state, draft).length > 0) return state
-	const absence: Absence = {
-		...draft,
-		id: context.newId(),
-		status: type.needsApproval ? 'pending' : 'approved',
-		createdAt: context.now,
-		createdById: context.actorId,
-		decidedById: type.needsApproval ? null : context.actorId,
-		decidedAt: type.needsApproval ? null : context.now,
-		decisionComment: '',
-	}
-	return { ...state, absences: [absence, ...state.absences] }
-}
-
-export function decideAbsence(
-	state: RhState,
-	context: ActionContext,
-	absenceId: string,
-	decision: 'approved' | 'rejected',
-	comment: string,
-): RhState {
-	return {
-		...state,
-		absences: state.absences.map((absence) =>
-			absence.id === absenceId && absence.status === 'pending'
-				? {
-						...absence,
-						status: decision,
-						decidedById: context.actorId,
-						decidedAt: context.now,
-						decisionComment: comment.trim(),
-					}
-				: absence,
-		),
-	}
-}
-
-export function cancelAbsence(
-	state: RhState,
-	context: ActionContext,
-	absenceId: string,
-): RhState {
-	return {
-		...state,
-		absences: state.absences.map((absence) =>
-			absence.id === absenceId && isActiveAbsence(absence)
-				? {
-						...absence,
-						status: 'cancelled',
-						decidedById: context.actorId,
-						decidedAt: context.now,
-					}
-				: absence,
-		),
-	}
-}
-
 export function pendingAbsences(state: RhState): Absence[] {
 	return state.absences.filter((absence) => absence.status === 'pending')
-}
-
-export function createAbsenceType(
-	state: RhState,
-	context: ActionContext,
-	draft: AbsenceTypeDraft,
-): RhState {
-	const name = draft.name.trim()
-	if (name === '') return state
-	return {
-		...state,
-		absenceTypes: [
-			...state.absenceTypes,
-			{ ...draft, name, id: context.newId(), archived: false },
-		],
-	}
-}
-
-export function updateAbsenceType(
-	state: RhState,
-	typeId: string,
-	patch: Partial<AbsenceTypeDraft>,
-): RhState {
-	return {
-		...state,
-		absenceTypes: state.absenceTypes.map((type) =>
-			type.id === typeId ? { ...type, ...patch } : type,
-		),
-	}
-}
-
-export function setAbsenceTypeArchived(
-	state: RhState,
-	typeId: string,
-	archived: boolean,
-): RhState {
-	return {
-		...state,
-		absenceTypes: state.absenceTypes.map((type) =>
-			type.id === typeId ? { ...type, archived } : type,
-		),
-	}
 }
 
 export function typeUsage(state: RhState, typeId: string): number {

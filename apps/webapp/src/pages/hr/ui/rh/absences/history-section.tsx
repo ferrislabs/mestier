@@ -1,4 +1,4 @@
-import { Ban, Check, MoreHorizontal, Search, Trash2, X } from 'lucide-react'
+import { Ban, Check, MoreHorizontal, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
@@ -27,7 +27,7 @@ import {
 	TableRow,
 } from '#/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
-import { isRealAbsenceId } from '#/pages/hr/feature/mocks/rh-binding'
+import { useHasPermission } from '#/hooks/use-permissions'
 import { absenceDays, findMember, findType } from '#/pages/hr/lib/rh/absences'
 import {
 	canCancel,
@@ -70,8 +70,6 @@ export function HistorySection({
 	onApprove,
 	onReject,
 	onCancel,
-	onEdit,
-	onDelete,
 	onCreate,
 }: {
 	state: RhState
@@ -84,8 +82,6 @@ export function HistorySection({
 	onApprove: (absence: Absence) => void
 	onReject: (absence: Absence) => void
 	onCancel: (absence: Absence) => void
-	onEdit: (absence: Absence) => void
-	onDelete: (absence: Absence) => void
 	onCreate: () => void
 }) {
 	const [local, setLocal] = useState({ query: '', typeId: HISTORY_ALL })
@@ -222,9 +218,11 @@ export function HistorySection({
 								Réinitialiser les filtres
 							</Button>
 						) : (
-							<Button type="button" size="sm" onClick={onCreate}>
-								Poser une absence
-							</Button>
+							<RequirePermission permission="MANAGE_REFERENCE">
+								<Button type="button" size="sm" onClick={onCreate}>
+									Poser une absence
+								</Button>
+							</RequirePermission>
 						)}
 					</div>
 				</div>
@@ -254,8 +252,6 @@ export function HistorySection({
 									onApprove={onApprove}
 									onReject={onReject}
 									onCancel={onCancel}
-									onEdit={onEdit}
-									onDelete={onDelete}
 								/>
 							))}
 						</TableBody>
@@ -273,8 +269,6 @@ function HistoryRow({
 	onApprove,
 	onReject,
 	onCancel,
-	onEdit,
-	onDelete,
 }: {
 	state: RhState
 	absence: Absence
@@ -282,10 +276,8 @@ function HistoryRow({
 	onApprove: (absence: Absence) => void
 	onReject: (absence: Absence) => void
 	onCancel: (absence: Absence) => void
-	onEdit: (absence: Absence) => void
-	onDelete: (absence: Absence) => void
 }) {
-	const real = isRealAbsenceId(absence.id)
+	const canDecide = useHasPermission('MANAGE_PLANNING')
 	const member = findMember(state, absence.memberId)
 	const type = findType(state, absence.typeId)
 	if (!member || !type) return null
@@ -293,7 +285,8 @@ function HistoryRow({
 	const note = partsNote(absence)
 	const decider = findMember(state, absence.decidedById)
 	const pending = absence.status === 'pending'
-	const cancellable = !real && canCancel(absence, today)
+	const decidable = pending && canDecide
+	const cancellable = canDecide && canCancel(absence, today)
 	return (
 		<TableRow>
 			<TableCell className="py-2.5 pl-4">
@@ -343,7 +336,7 @@ function HistoryRow({
 				)}
 			</TableCell>
 			<TableCell className="pr-4 text-right">
-				{(pending || cancellable || real) && (
+				{(decidable || cancellable) && (
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<Button
@@ -356,7 +349,7 @@ function HistoryRow({
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
-							{pending && (
+							{decidable && (
 								<>
 									<DropdownMenuItem onSelect={() => onApprove(absence)}>
 										<Check />
@@ -368,22 +361,7 @@ function HistoryRow({
 									</DropdownMenuItem>
 								</>
 							)}
-							{real && (
-								<RequirePermission permission="MANAGE_REFERENCE">
-									<DropdownMenuItem onSelect={() => onEdit(absence)}>
-										Modifier
-									</DropdownMenuItem>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem
-										variant="destructive"
-										onSelect={() => onDelete(absence)}
-									>
-										<Trash2 />
-										Supprimer
-									</DropdownMenuItem>
-								</RequirePermission>
-							)}
-							{pending && cancellable && <DropdownMenuSeparator />}
+							{decidable && cancellable && <DropdownMenuSeparator />}
 							{cancellable && (
 								<DropdownMenuItem
 									variant="destructive"

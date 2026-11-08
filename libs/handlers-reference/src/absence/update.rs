@@ -37,6 +37,9 @@ pub struct UpdateAbsenceRequest {
     #[serde(default, deserialize_with = "deserialize_present")]
     #[schema(value_type = Option<String>, nullable)]
     pub note: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<String>, nullable)]
+    pub proof_file_key: Option<Option<String>>,
 }
 
 #[utoipa::path(
@@ -77,6 +80,7 @@ pub async fn handler(
     command.ends_at = payload.ends_at;
     command.all_day = payload.all_day;
     command.note = payload.note;
+    command.proof_file_key = payload.proof_file_key;
 
     let absence = state
         .usecase

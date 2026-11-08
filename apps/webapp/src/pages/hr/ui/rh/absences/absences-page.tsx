@@ -7,11 +7,7 @@ import type {
 	HistoryFilters,
 	sortPending,
 } from '#/pages/hr/lib/rh/absences-view'
-import type { Absence, AbsenceDraft, RhState } from '#/pages/hr/lib/rh/types'
-import {
-	AbsenceFormSheet,
-	type AbsenceFormSheetProps,
-} from '#/pages/hr/ui/absence-form-sheet'
+import type { Absence, RhState } from '#/pages/hr/lib/rh/types'
 import {
 	AbsenceFormDialog,
 	type AbsenceFormInitial,
@@ -37,16 +33,12 @@ export interface AbsencesPageProps {
 	onApprove: (absence: Absence) => void
 	onAskReject: (absence: Absence) => void
 	onCancel: (absence: Absence) => void
-	onEdit: (absence: Absence) => void
-	onDelete: (absence: Absence) => void
 	rejecting: { absence: Absence | null; open: boolean }
 	onRejectOpenChange: (open: boolean) => void
-	onRejectConfirm: (absence: Absence, comment: string) => void
+	onRejectConfirm: (absence: Absence, comment: string) => Promise<void>
 	creating: boolean
 	initial?: AbsenceFormInitial
 	onCreatingChange: (open: boolean, initial?: AbsenceFormInitial) => void
-	onSubmitAbsence: (draft: AbsenceDraft) => void
-	absenceSheet: AbsenceFormSheetProps
 	saveError: string | null
 	notice: string
 }
@@ -62,16 +54,12 @@ export function AbsencesPage({
 	onApprove,
 	onAskReject,
 	onCancel,
-	onEdit,
-	onDelete,
 	rejecting,
 	onRejectOpenChange,
 	onRejectConfirm,
 	creating,
 	initial,
 	onCreatingChange,
-	onSubmitAbsence,
-	absenceSheet,
 	saveError,
 	notice,
 }: AbsencesPageProps) {
@@ -137,8 +125,6 @@ export function AbsencesPage({
 						onApprove={onApprove}
 						onReject={onAskReject}
 						onCancel={onCancel}
-						onEdit={onEdit}
-						onDelete={onDelete}
 						onCreate={() => onCreatingChange(true)}
 					/>
 				</TabsContent>
@@ -156,9 +142,7 @@ export function AbsencesPage({
 				open={creating}
 				initial={initial}
 				onOpenChange={(open) => onCreatingChange(open)}
-				onSubmit={onSubmitAbsence}
 			/>
-			<AbsenceFormSheet {...absenceSheet} />
 			<output className="sr-only">{notice}</output>
 		</PageShell>
 	)

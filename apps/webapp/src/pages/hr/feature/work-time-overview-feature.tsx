@@ -71,7 +71,8 @@ function WorkTimeOverviewScreen({
 		.map((member) => {
 			const profile = profileByMember.get(member.id)
 			const memberAbsences = allAbsences.filter(
-				(absence) => absence.member_id === member.id,
+				(absence) =>
+					absence.member_id === member.id && absence.status === 'APPROVED',
 			)
 			return {
 				memberId: member.id,

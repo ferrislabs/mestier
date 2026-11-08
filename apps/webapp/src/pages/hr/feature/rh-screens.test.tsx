@@ -9,6 +9,12 @@ import {
 } from '#/hooks/use-active-organization'
 import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import { renderWithRouter } from '#/test/render-with-router'
+import {
+	ABSENCE_TYPES_PATH,
+	ABSENCES_PATH,
+	absenceRecord,
+	DEFAULT_TYPE_RECORDS,
+} from '#/test/rh-absence-fixtures'
 import { AbsencesFeature } from './absences-feature'
 import { ExtraFeature } from './extra-feature'
 import { MemberDetailFeature } from './member-detail-feature'
@@ -21,7 +27,6 @@ const CONTRACTS_PATH =
 	'/api/v1/organizations/{organization_id}/member-contracts'
 const DOCUMENTS_PATH =
 	'/api/v1/organizations/{organization_id}/member-documents'
-const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
 const PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
 
@@ -62,6 +67,8 @@ function installFakeApi(absences: unknown[] = []) {
 					queryFn: async () => {
 						if (path === MEMBERS_PATH)
 							return { data: MEMBERS, pagination: null }
+						if (path === ABSENCE_TYPES_PATH)
+							return { data: DEFAULT_TYPE_RECORDS, pagination: null }
 						if (path === ABSENCES_PATH)
 							return { data: absences, pagination: null }
 						if (
@@ -201,7 +208,7 @@ describe('RH screens over the real members', () => {
 		expect(await screen.findByText('Ce membre est introuvable.')).toBeDefined()
 	})
 
-	it('absences: lists a real absence next to the mock requests', async () => {
+	it('absences: lists the API absences with their type', async () => {
 		await renderScreen(
 			<AbsencesFeature
 				tab="demandes"
@@ -213,18 +220,13 @@ describe('RH screens over the real members', () => {
 				onCreatingChange={() => undefined}
 			/>,
 			[
-				{
-					id: 'abs-real-1',
-					organization_id: 'org-1',
-					member_id: 'u-3',
+				absenceRecord('abs-real-1', 'u-3', 't-maladie', {
 					kind: 'SICK',
-					all_day: true,
-					starts_at: '2026-11-09T00:00:00Z',
-					ends_at: '2026-11-10T00:00:00Z',
+					status: 'APPROVED',
+					start_date: '2026-11-09',
+					end_date: '2026-11-10',
 					note: 'Grippe',
-					created_at: '2026-11-01T00:00:00Z',
-					updated_at: '2026-11-01T00:00:00Z',
-				},
+				}),
 			],
 		)
 

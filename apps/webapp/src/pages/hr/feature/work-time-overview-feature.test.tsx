@@ -57,6 +57,7 @@ interface FakeAbsence {
 	starts_at: string
 	ends_at: string
 	note: string | null
+	status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
 	created_at: string
 	updated_at: string
 }
@@ -156,6 +157,7 @@ function absence(overrides: Partial<FakeAbsence> = {}): FakeAbsence {
 		starts_at: '2026-08-20T00:00:00Z',
 		ends_at: '2026-08-21T00:00:00Z',
 		note: null,
+		status: 'APPROVED',
 		created_at: '2026-08-01T00:00:00Z',
 		updated_at: '2026-08-01T00:00:00Z',
 		...overrides,
@@ -258,6 +260,37 @@ describe('WorkTimeOverviewFeature — next upcoming absence', () => {
 
 		expect(await screen.findByText('Nova Alix')).toBeDefined()
 		expect(screen.getByText('—')).toBeDefined()
+	})
+
+	it('ignores absences that are not approved', async () => {
+		await renderFeature({
+			members: [member()],
+			employeeProfiles: [profile()],
+			absences: [
+				absence({
+					id: 'pending',
+					status: 'PENDING',
+					starts_at: '2100-08-01T00:00:00Z',
+					ends_at: '2100-08-02T00:00:00Z',
+				}),
+				absence({
+					id: 'cancelled',
+					status: 'CANCELLED',
+					starts_at: '2100-08-03T00:00:00Z',
+					ends_at: '2100-08-04T00:00:00Z',
+				}),
+				absence({
+					id: 'approved',
+					starts_at: '2100-08-20T00:00:00Z',
+					ends_at: '2100-08-21T00:00:00Z',
+				}),
+			],
+		})
+
+		expect(await screen.findByText('Nova Alix')).toBeDefined()
+		expect(screen.getByText('20/08/2100')).toBeDefined()
+		expect(screen.queryByText('01/08/2100')).toBeNull()
+		expect(screen.queryByText('03/08/2100')).toBeNull()
 	})
 
 	it('never mixes up absences between two different members', async () => {

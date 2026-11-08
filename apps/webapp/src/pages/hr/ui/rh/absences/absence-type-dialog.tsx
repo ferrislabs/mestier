@@ -20,11 +20,8 @@ import {
 } from '#/components/ui/select'
 import { Switch } from '#/components/ui/switch'
 import { cn } from '#/lib/utils'
-import {
-	createAbsenceType,
-	typeUsage,
-	updateAbsenceType,
-} from '#/pages/hr/lib/rh/absences'
+import { type TypeFailure, typeFailureOf } from '#/pages/hr/lib/rh/absence-wire'
+import { typeUsage } from '#/pages/hr/lib/rh/absences'
 import {
 	COUNT_MODES,
 	countModeOption,
@@ -36,7 +33,10 @@ import type {
 	AbsenceTypeDraft,
 	CountMode,
 } from '#/pages/hr/lib/rh/types'
-import { useRhState, useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import {
+	useRhAbsenceTypeActions,
+	useRhState,
+} from '#/pages/hr/ui/rh/shared/rh-context'
 import { TYPE_SOLID, TypeChip } from '#/pages/hr/ui/rh/shared/type-chip'
 
 const NO_ACCOUNT = 'none'
@@ -66,15 +66,18 @@ function AbsenceTypeForm({
 	type: AbsenceType | null
 	onClose: () => void
 }) {
-	const updateRh = useRhUpdate()
+	const actions = useRhAbsenceTypeActions()
 	const state = useRhState()
 	const baseId = useId()
 	const [touched, setTouched] = useState(false)
+	const [failure, setFailure] = useState<TypeFailure | null>(null)
+	const [isPending, setIsPending] = useState(false)
 	const [draft, setDraft] = useState<AbsenceTypeDraft>(() =>
 		type
 			? {
 					name: type.name,
 					hue: type.hue,
+					kind: type.kind,
 					countMode: type.countMode,
 					accountId: type.accountId,
 					paid: type.paid,
@@ -84,6 +87,7 @@ function AbsenceTypeForm({
 			: {
 					name: '',
 					hue: TYPE_HUES[0].hue,
+					kind: 'leave',
 					countMode: 'working',
 					accountId: null,
 					paid: true,
@@ -103,24 +107,41 @@ function AbsenceTypeForm({
 	const errorId = `${baseId}-error`
 
 	function patch(partial: Partial<AbsenceTypeDraft>) {
+		setFailure(null)
 		setDraft((current) => ({ ...current, ...partial }))
 	}
 
-	function submit(event: FormEvent<HTMLFormElement>) {
+	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
 		setTouched(true)
-		if (nameError) return
-		const clean = { ...draft, name: draft.name.trim() }
-		updateRh((current, context) =>
-			type
-				? updateAbsenceType(current, type.id, clean)
-				: createAbsenceType(current, context, clean),
-		)
-		onClose()
+		if (nameError || isPending) return
+		setIsPending(true)
+		setFailure(null)
+		try {
+			await actions.save(type?.id ?? null, {
+				...draft,
+				name: draft.name.trim(),
+			})
+			onClose()
+		} catch (error) {
+			setFailure(typeFailureOf(error))
+		} finally {
+			setIsPending(false)
+		}
 	}
 
+	const nameMessage =
+		(shownError ? nameError : null) ??
+		(failure?.field === 'name' ? failure.message : null)
+	const dialogFailure =
+		failure && failure.field !== 'name' ? failure.message : null
+
 	return (
-		<form onSubmit={submit} className="grid gap-5" noValidate>
+		<form
+			onSubmit={(event) => void submit(event)}
+			className="grid gap-5"
+			noValidate
+		>
 			<DialogHeader>
 				<DialogTitle>
 					{type ? 'Modifier le motif' : 'Nouveau motif'}
@@ -137,14 +158,14 @@ function AbsenceTypeForm({
 					value={draft.name}
 					placeholder="Par exemple : Déménagement"
 					aria-required
-					aria-invalid={shownError ? true : undefined}
-					aria-describedby={shownError ? errorId : undefined}
+					aria-invalid={nameMessage ? true : undefined}
+					aria-describedby={nameMessage ? errorId : undefined}
 					onChange={(event) => patch({ name: event.target.value })}
 					onBlur={() => setTouched(true)}
 				/>
-				{shownError && (
+				{nameMessage && (
 					<p id={errorId} className="text-sm text-state-alert">
-						{nameError}
+						{nameMessage}
 					</p>
 				)}
 			</div>
@@ -262,11 +283,18 @@ function AbsenceTypeForm({
 					changements s’appliquent aussi aux demandes existantes.
 				</p>
 			)}
+			{dialogFailure && (
+				<p role="alert" className="text-sm text-state-alert">
+					{dialogFailure}
+				</p>
+			)}
 			<DialogFooter>
 				<Button type="button" variant="outline" onClick={onClose}>
 					Annuler
 				</Button>
-				<Button type="submit">{type ? 'Enregistrer' : 'Créer le motif'}</Button>
+				<Button type="submit" disabled={isPending}>
+					{type ? 'Enregistrer' : 'Créer le motif'}
+				</Button>
 			</DialogFooter>
 		</form>
 	)

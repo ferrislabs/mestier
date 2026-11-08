@@ -3,6 +3,7 @@ use axum_extra::routing::RouterExt;
 use handlers::{AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 
 pub mod absence;
+pub mod absence_type;
 pub mod catalog;
 pub mod cost_basis;
 pub mod custom_unit;
@@ -51,6 +52,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(custom_unit::list::handler)
         .typed_post(custom_unit::create::handler)
         .merge(absence::router(state))
+        .merge(absence_type::router(state))
         .merge(member_profile::router(state))
         .merge(member_contract::router(state))
         .merge(member_document::router(state))

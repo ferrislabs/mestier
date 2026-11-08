@@ -205,9 +205,10 @@ impl<'tx> PlanningRepository for PgPlanningRepository<'tx> {
         let rows = sqlx::query_as!(
             AbsenceRow,
             r#"
-            SELECT id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            SELECT id, org_id, member_id, kind::text AS "kind!", type_id, starts_at, ends_at, all_day, start_date, start_part, end_date, end_part, status, note, proof_file_key, created_by_member_id, decided_by_member_id, decided_at, decision_comment, deleted_at, created_at, updated_at
             FROM absences
             WHERE org_id = $1 AND deleted_at IS NULL
+              AND status = 'APPROVED'
               AND starts_at < $3 AND ends_at > $2
             ORDER BY starts_at ASC, id ASC
             "#,

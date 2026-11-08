@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { CalendarPlus } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
 import { absenceDays, findType } from '#/pages/hr/lib/rh/absences'
@@ -149,14 +150,16 @@ export function AbsencesCard({
 				/>
 				{member.status === 'active' && (
 					<div className="border-t pt-3">
-						<Button variant="outline" size="sm" asChild>
-							<Link
-								to={orgPath('/rh/absences/nouvelle')}
-								search={{ membre: member.id }}
-							>
-								<CalendarPlus aria-hidden /> Poser une absence
-							</Link>
-						</Button>
+						<RequirePermission permission="MANAGE_REFERENCE">
+							<Button variant="outline" size="sm" asChild>
+								<Link
+									to={orgPath('/rh/absences/nouvelle')}
+									search={{ membre: member.id }}
+								>
+									<CalendarPlus aria-hidden /> Poser une absence
+								</Link>
+							</Button>
+						</RequirePermission>
 					</div>
 				)}
 			</div>

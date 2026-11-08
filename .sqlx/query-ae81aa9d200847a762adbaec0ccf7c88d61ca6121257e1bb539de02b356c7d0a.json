@@ -1,0 +1,98 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE absence_types\n            SET name = $3, hue = $4, count_mode = $5, account_id = $6, paid = $7,\n                needs_approval = $8, needs_proof = $9, kind = CAST($10 AS text)::absence_kind,\n                archived_at = $11\n            WHERE org_id = $1 AND id = $2\n            RETURNING id, org_id, name, hue, count_mode, account_id, paid, needs_approval,\n                      needs_proof, kind::text AS \"kind!\", archived_at, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "hue",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "count_mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "paid",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "needs_approval",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "needs_proof",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Text",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "ae81aa9d200847a762adbaec0ccf7c88d61ca6121257e1bb539de02b356c7d0a"
+}

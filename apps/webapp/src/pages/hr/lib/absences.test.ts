@@ -162,10 +162,10 @@ describe('absenceToDraft — aller-retour', () => {
 		const draft = absenceToDraft(
 			{
 				member_id: 'member-1',
-				absence_kind: created.kind,
+				absence_kind: created.kind ?? 'LEAVE',
 				all_day: created.all_day ?? true,
-				starts_at: created.starts_at,
-				ends_at: created.ends_at,
+				starts_at: created.starts_at ?? '',
+				ends_at: created.ends_at ?? '',
 				note: created.note ?? null,
 			},
 			TZ,
@@ -193,10 +193,10 @@ describe('absenceToDraft — aller-retour', () => {
 		const draft = absenceToDraft(
 			{
 				member_id: 'member-1',
-				absence_kind: created.kind,
+				absence_kind: created.kind ?? 'LEAVE',
 				all_day: created.all_day ?? true,
-				starts_at: created.starts_at,
-				ends_at: created.ends_at,
+				starts_at: created.starts_at ?? '',
+				ends_at: created.ends_at ?? '',
 				note: created.note ?? null,
 			},
 			TZ,
@@ -220,10 +220,10 @@ describe('absenceToDraft — aller-retour', () => {
 		const draft = absenceToDraft(
 			{
 				member_id: 'member-1',
-				absence_kind: created.kind,
+				absence_kind: created.kind ?? 'LEAVE',
 				all_day: created.all_day ?? false,
-				starts_at: created.starts_at,
-				ends_at: created.ends_at,
+				starts_at: created.starts_at ?? '',
+				ends_at: created.ends_at ?? '',
 				note: created.note ?? null,
 			},
 			TZ,
