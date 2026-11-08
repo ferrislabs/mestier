@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
+import {
+	fetchAllPages,
+	LIST_PAGE_SIZE,
+	readListPage,
+} from '#/hooks/fetch-all-pages'
 
 const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
 const ABSENCE_PATH =
@@ -11,19 +16,6 @@ const REJECT_PATH =
 const CANCEL_PATH =
 	'/api/v1/organizations/{organization_id}/absences/{absence_id}/cancel'
 const PLANNING_PATH = '/api/v1/organizations/{organization_id}/planning'
-
-/**
- * The API paginates (`MAX_PER_PAGE = 100` — see `libs/pagination`, an
- * endpoint this workstream doesn't own and the design doc keeps
- * unchanged), and doesn't filter by member. The HR screen fetches this
- * one page and filters by `member_id` client-side (see
- * `EmployeeWorkTimeFeature`) — fine at artisan/SME scale, but an
- * organization with more than 100 absences on the books would silently
- * lose the tail. Flagged rather than worked around: fixing it for real
- * means either a `member_id` filter or real pagination on the list
- * endpoint, both backend changes out of this workstream's scope.
- */
-const ABSENCES_LIST_PER_PAGE = 100
 
 interface QueryKeyMeta {
 	_id?: unknown
@@ -53,13 +45,28 @@ function invalidateAbsenceReads(
 	})
 }
 
-/** Every absence in the organization — see {@link ABSENCES_LIST_PER_PAGE}'s doc for the pagination caveat. */
+function absencesPage(organizationId: string, page: number) {
+	return window.tanstackApi.get(ABSENCES_PATH, {
+		path: { organization_id: organizationId },
+		query: { page, per_page: LIST_PAGE_SIZE },
+	}).queryOptions
+}
+
+/**
+ * Every absence the caller may read, all pages fetched: the whole
+ * organization for a planning or reference manager, only their own
+ * otherwise (the API filters).
+ */
 export function useAbsences(organizationId: string, enabled = true) {
 	return useQuery({
-		...window.tanstackApi.get(ABSENCES_PATH, {
-			path: { organization_id: organizationId },
-			query: { per_page: ABSENCES_LIST_PER_PAGE },
-		}).queryOptions,
+		queryKey: absencesPage(organizationId, 1).queryKey,
+		queryFn: (context) =>
+			fetchAllPages<Schemas.AbsenceResponse>((page) =>
+				readListPage<Schemas.AbsenceResponse>(
+					absencesPage(organizationId, page),
+					context,
+				),
+			),
 		enabled: enabled && Boolean(organizationId),
 	})
 }

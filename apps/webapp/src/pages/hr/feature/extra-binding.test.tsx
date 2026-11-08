@@ -19,6 +19,7 @@ import {
 	ABSENCES_PATH,
 	DEFAULT_TYPE_RECORDS,
 } from '#/test/rh-absence-fixtures'
+import { MY_MEMBER_PATH, myMemberResponse } from '#/test/rh-current-member'
 import {
 	DEFAULT_SURCHARGE_RECORDS,
 	EXTRAS_PATH,
@@ -135,6 +136,7 @@ function installFakeApi() {
 								throw Object.assign(new Error('Forbidden'), { status: 403 })
 							return { data: structuredClone(extras), pagination: null }
 						}
+						if (path === MY_MEMBER_PATH) return myMemberResponse()
 						if (path === PERMISSIONS_PATH)
 							return { data: { permissions }, pagination: null }
 						throw new Error(`unmocked GET ${path}`)
@@ -624,13 +626,45 @@ describe('surcharges and extra periods bound to the API', () => {
 		permissions = []
 		await renderExtra()
 
-		expect(await screen.findByText('Heures extra')).toBeDefined()
+		expect(await screen.findByText('Mes demandes')).toBeDefined()
 		expect(screen.queryByRole('alert')).toBeNull()
 		expect(screen.queryByText('Rattrapage API')).toBeNull()
-		expect(
-			screen.queryByRole('button', { name: 'Déclarer des heures' }),
-		).toBeNull()
 		expect(writes).toHaveLength(0)
+	})
+
+	it('spec_rh_7_6 a member without the bit declares for themselves as PENDING and cancels only their own pending period', async () => {
+		permissions = []
+		extras = [
+			extraRecord('e-1', 'u-1', { date: '2999-01-02', reason: 'Mes heures' }),
+			extraRecord('e-2', 'u-2', { date: '2999-01-03', reason: 'Autre' }),
+			extraRecord('e-3', 'u-1', {
+				date: '2999-01-04',
+				status: 'APPROVED',
+				reason: 'Deja validee',
+			}),
+		]
+		await renderExtra()
+		const user = userEvent.setup()
+
+		expect(await screen.findByText('Mes demandes')).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: 'Déclarer des heures' }),
+		).toBeDefined()
+		const menus = await screen.findAllByRole('button', {
+			name: /Actions pour la déclaration/,
+		})
+		expect(menus).toHaveLength(1)
+		await user.click(menus[0] as HTMLElement)
+		expect(screen.queryByRole('menuitem', { name: 'Valider' })).toBeNull()
+		await user.click(
+			await screen.findByRole('menuitem', { name: 'Annuler la déclaration' }),
+		)
+
+		await waitFor(() => expect(writes).toHaveLength(1))
+		expect(writes[0]).toMatchObject({
+			path: CANCEL_PATH,
+			params: { path: { period_id: 'e-1' } },
+		})
 	})
 
 	it('spec_rh_6_5 counts the pending periods of the API in the sidebar', async () => {

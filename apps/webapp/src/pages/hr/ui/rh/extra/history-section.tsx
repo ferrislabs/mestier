@@ -1,6 +1,5 @@
 import { Ban, Check, MoreHorizontal, Search, X } from 'lucide-react'
 import { useState } from 'react'
-import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	DropdownMenu,
@@ -27,6 +26,7 @@ import {
 	TableRow,
 } from '#/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { useHasPermission } from '#/hooks/use-permissions'
 import { findMember } from '#/pages/hr/lib/rh/absences'
 import { formatShort, todayIso } from '#/pages/hr/lib/rh/dates'
 import {
@@ -38,6 +38,7 @@ import {
 } from '#/pages/hr/lib/rh/extra'
 import {
 	canCancel,
+	canCancelOwn,
 	dayCaption,
 	filterHistory,
 	HISTORY_ALL,
@@ -51,6 +52,11 @@ import {
 	STATUS_LABELS,
 } from '#/pages/hr/ui/rh/shared/absence-status-badge'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
+import {
+	CanRequest,
+	useOwnRequestsOnly,
+} from '#/pages/hr/ui/rh/shared/request-access'
+import { useRhActorId } from '#/pages/hr/ui/rh/shared/rh-context'
 
 const DEFAULT_FILTERS: HistoryFilters = {
 	query: '',
@@ -88,6 +94,7 @@ export function HistorySection({
 	onCancel: (extra: ExtraPeriod) => void
 	onCreate: () => void
 }) {
+	const mine = useOwnRequestsOnly('extra')
 	const [query, setQuery] = useState('')
 	const filters: HistoryFilters = { query, status, memberId }
 	function setFilters(next: HistoryFilters) {
@@ -116,22 +123,24 @@ export function HistorySection({
 				</span>
 			</div>
 			<div className="mb-3 flex flex-wrap items-center gap-2">
-				<div className="relative w-full max-w-60">
-					<Search
-						className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-						aria-hidden
-					/>
-					<Input
-						type="search"
-						value={query}
-						onChange={(event) =>
-							setFilters({ ...filters, query: event.target.value })
-						}
-						placeholder="Rechercher un membre"
-						aria-label="Rechercher un membre"
-						className="h-8 bg-card pl-8"
-					/>
-				</div>
+				{!mine && (
+					<div className="relative w-full max-w-60">
+						<Search
+							className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+							aria-hidden
+						/>
+						<Input
+							type="search"
+							value={query}
+							onChange={(event) =>
+								setFilters({ ...filters, query: event.target.value })
+							}
+							placeholder="Rechercher un membre"
+							aria-label="Rechercher un membre"
+							className="h-8 bg-card pl-8"
+						/>
+					</div>
+				)}
 				<ToggleGroup
 					type="single"
 					variant="outline"
@@ -152,28 +161,30 @@ export function HistorySection({
 						</ToggleGroupItem>
 					))}
 				</ToggleGroup>
-				<Select
-					value={memberId}
-					onValueChange={(next) => setFilters({ ...filters, memberId: next })}
-				>
-					<SelectTrigger
-						size="sm"
-						aria-label="Filtrer par membre"
-						className="min-w-44 bg-card"
+				{!mine && (
+					<Select
+						value={memberId}
+						onValueChange={(next) => setFilters({ ...filters, memberId: next })}
 					>
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value={HISTORY_ALL}>Tous les membres</SelectItem>
-						<SelectSeparator />
-						{members.map((member) => (
-							<SelectItem key={member.id} value={member.id}>
-								<MemberAvatar member={member} size="sm" />
-								{fullName(member)}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+						<SelectTrigger
+							size="sm"
+							aria-label="Filtrer par membre"
+							className="min-w-44 bg-card"
+						>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value={HISTORY_ALL}>Tous les membres</SelectItem>
+							<SelectSeparator />
+							{members.map((member) => (
+								<SelectItem key={member.id} value={member.id}>
+									<MemberAvatar member={member} size="sm" />
+									{fullName(member)}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				)}
 			</div>
 			{rows.length === 0 ? (
 				<div className="rounded-lg border border-dashed bg-card px-6 py-12 text-center">
@@ -185,7 +196,9 @@ export function HistorySection({
 					<p className="mt-1 text-[13px] text-muted-foreground">
 						{filtered
 							? 'Élargis la recherche ou retire un filtre.'
-							: 'Les heures faites en plus de l’horaire habituel apparaîtront ici.'}
+							: mine
+								? 'Tes demandes apparaîtront ici dès que tu en feras une.'
+								: 'Les heures faites en plus de l’horaire habituel apparaîtront ici.'}
 					</p>
 					<div className="mt-4 flex justify-center">
 						{filtered ? (
@@ -198,11 +211,11 @@ export function HistorySection({
 								Réinitialiser les filtres
 							</Button>
 						) : (
-							<RequirePermission permission="MANAGE_PLANNING">
+							<CanRequest kind="extra">
 								<Button type="button" size="sm" onClick={onCreate}>
 									Déclarer des heures
 								</Button>
-							</RequirePermission>
+							</CanRequest>
 						)}
 					</div>
 				</div>
@@ -259,13 +272,18 @@ function HistoryRow({
 	onReject: (extra: ExtraPeriod) => void
 	onCancel: (extra: ExtraPeriod) => void
 }) {
+	const canDecide = useHasPermission('MANAGE_PLANNING')
+	const actorId = useRhActorId()
 	const member = findMember(state, extra.memberId)
 	if (!member) return null
 	const name = fullName(member)
 	const decider = findMember(state, extra.decidedById)
 	const surcharge = findSurcharge(state, extra.surchargeId)
 	const pending = extra.status === 'pending'
-	const cancellable = canCancel(extra, today)
+	const decidable = pending && canDecide
+	const cancellable =
+		(canDecide && canCancel(extra, today)) ||
+		canCancelOwn(extra, actorId, today)
 	return (
 		<TableRow>
 			<TableCell className="py-2.5 pl-4">
@@ -324,45 +342,43 @@ function HistoryRow({
 				)}
 			</TableCell>
 			<TableCell className="pr-4 text-right">
-				{(pending || cancellable) && (
-					<RequirePermission permission="MANAGE_PLANNING">
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon-sm"
-									aria-label={`Actions pour la déclaration de ${name}, ${formatShort(extra.date)}`}
-								>
-									<MoreHorizontal />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
-								{pending && (
-									<>
-										<DropdownMenuItem onSelect={() => onApprove(extra)}>
-											<Check />
-											Valider
-										</DropdownMenuItem>
-										<DropdownMenuItem onSelect={() => onReject(extra)}>
-											<X />
-											Refuser
-										</DropdownMenuItem>
-									</>
-								)}
-								{pending && cancellable && <DropdownMenuSeparator />}
-								{cancellable && (
-									<DropdownMenuItem
-										variant="destructive"
-										onSelect={() => onCancel(extra)}
-									>
-										<Ban />
-										Annuler la déclaration
+				{(decidable || cancellable) && (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								aria-label={`Actions pour la déclaration de ${name}, ${formatShort(extra.date)}`}
+							>
+								<MoreHorizontal />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							{decidable && (
+								<>
+									<DropdownMenuItem onSelect={() => onApprove(extra)}>
+										<Check />
+										Valider
 									</DropdownMenuItem>
-								)}
-							</DropdownMenuContent>
-						</DropdownMenu>
-					</RequirePermission>
+									<DropdownMenuItem onSelect={() => onReject(extra)}>
+										<X />
+										Refuser
+									</DropdownMenuItem>
+								</>
+							)}
+							{decidable && cancellable && <DropdownMenuSeparator />}
+							{cancellable && (
+								<DropdownMenuItem
+									variant="destructive"
+									onSelect={() => onCancel(extra)}
+								>
+									<Ban />
+									Annuler la déclaration
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
 				)}
 			</TableCell>
 		</TableRow>

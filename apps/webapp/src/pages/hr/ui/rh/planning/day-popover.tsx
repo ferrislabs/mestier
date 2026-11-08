@@ -33,6 +33,7 @@ import {
 } from '#/pages/hr/lib/rh/planning-model'
 import type { ExtraPeriod, Member } from '#/pages/hr/lib/rh/types'
 import { AbsenceStatusBadge } from '#/pages/hr/ui/rh/shared/absence-status-badge'
+import { CanRequest } from '#/pages/hr/ui/rh/shared/request-access'
 import { useRhOverrideActions } from '#/pages/hr/ui/rh/shared/rh-context'
 import { TypeDot } from '#/pages/hr/ui/rh/shared/type-chip'
 
@@ -331,7 +332,7 @@ export function DayPopoverBody({
 				{extras.length > 0 && <ExtraList extras={extras} />}
 				{!inactive && (
 					<div className="flex flex-wrap gap-2">
-						<RequirePermission permission="MANAGE_REFERENCE">
+						<CanRequest kind="absence" memberId={member.id}>
 							<Button
 								type="button"
 								variant="outline"
@@ -347,7 +348,7 @@ export function DayPopoverBody({
 								<CalendarPlus />
 								Poser une absence
 							</Button>
-						</RequirePermission>
+						</CanRequest>
 						<Button
 							type="button"
 							variant="outline"

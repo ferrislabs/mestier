@@ -1,5 +1,4 @@
 import { CalendarPlus, ChevronLeft, ChevronRight, Search } from 'lucide-react'
-import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
@@ -8,6 +7,7 @@ import {
 	periodLabel,
 } from '#/pages/hr/lib/rh/planning-model'
 import type { IsoDate } from '#/pages/hr/lib/rh/types'
+import { CanRequest } from '#/pages/hr/ui/rh/shared/request-access'
 
 export function PlanningToolbar({
 	view,
@@ -88,12 +88,12 @@ export function PlanningToolbar({
 					<ToggleGroupItem value="week">Semaine</ToggleGroupItem>
 					<ToggleGroupItem value="month">Mois</ToggleGroupItem>
 				</ToggleGroup>
-				<RequirePermission permission="MANAGE_REFERENCE">
+				<CanRequest kind="absence">
 					<Button type="button" size="sm" onClick={onRequestAbsence}>
 						<CalendarPlus />
 						Poser une absence
 					</Button>
-				</RequirePermission>
+				</CanRequest>
 			</div>
 		</header>
 	)

@@ -16,6 +16,7 @@ import {
 	ABSENCES_PATH,
 	DEFAULT_TYPE_RECORDS,
 } from '#/test/rh-absence-fixtures'
+import { MY_MEMBER_PATH, myMemberResponse } from '#/test/rh-current-member'
 import { EXTRAS_PATH, SURCHARGES_PATH } from '#/test/rh-extra-fixtures'
 import {
 	DEFAULT_ACCOUNT_RECORDS,
@@ -143,6 +144,7 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 						if (path === INVITATIONS_PATH) {
 							return { data: invitations, pagination: null }
 						}
+						if (path === MY_MEMBER_PATH) return myMemberResponse()
 						if (path === MY_PERMISSIONS_PATH) {
 							return { data: { permissions }, pagination: null }
 						}

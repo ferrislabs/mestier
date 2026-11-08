@@ -211,6 +211,19 @@ export function canCancel(absence: Absence, today: IsoDate): boolean {
 	return isActiveAbsence(absence) && absence.endDate >= today
 }
 
+export function canCancelOwn(
+	absence: Absence,
+	actorId: string,
+	today: IsoDate,
+): boolean {
+	return (
+		actorId !== '' &&
+		absence.createdById === actorId &&
+		absence.status === 'pending' &&
+		absence.endDate >= today
+	)
+}
+
 export function normalizeText(value: string): string {
 	return value
 		.normalize('NFD')

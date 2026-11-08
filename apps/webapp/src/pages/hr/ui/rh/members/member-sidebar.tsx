@@ -22,6 +22,7 @@ import {
 } from '#/pages/hr/ui/rh/members/contract-badge'
 import { RubriqueList } from '#/pages/hr/ui/rh/members/rubrique-list'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
+import { CanRequest } from '#/pages/hr/ui/rh/shared/request-access'
 import {
 	useRhOrgPath,
 	useRhProfileActions,
@@ -99,7 +100,7 @@ export function MemberSidebar({
 				</div>
 				<div className="mt-3 flex flex-wrap items-center gap-2">
 					{!archived && (
-						<RequirePermission permission="MANAGE_REFERENCE">
+						<CanRequest kind="absence" memberId={member.id}>
 							<Button variant="outline" size="sm" asChild>
 								<Link
 									to={orgPath('/rh/absences/nouvelle')}
@@ -108,7 +109,7 @@ export function MemberSidebar({
 									<CalendarPlus aria-hidden /> Poser une absence
 								</Link>
 							</Button>
-						</RequirePermission>
+						</CanRequest>
 					)}
 					<RequirePermission permission="MANAGE_MEMBERS">
 						{archived ? (

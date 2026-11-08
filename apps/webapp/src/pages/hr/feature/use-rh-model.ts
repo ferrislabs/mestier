@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { useAuth } from 'react-oidc-context'
 import { useAbsenceTypes } from '#/hooks/use-absence-types'
 import { useAbsences } from '#/hooks/use-absences'
+import { useCurrentMember } from '#/hooks/use-current-member'
 import { useExtraPeriods } from '#/hooks/use-extra-periods'
 import { useLeaveAccounts } from '#/hooks/use-leave-accounts'
 import { useLeaveAdjustments } from '#/hooks/use-leave-adjustments'
@@ -10,7 +10,7 @@ import { useMemberDocuments } from '#/hooks/use-member-documents'
 import { useMemberProfiles } from '#/hooks/use-member-profiles'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { useSurcharges } from '#/hooks/use-surcharges'
-import { isForbiddenError } from '#/lib/api-error'
+import { isForbiddenError, isNotFoundError } from '#/lib/api-error'
 import {
 	useAbsenceActions,
 	useAbsenceTypeActions,
@@ -58,6 +58,7 @@ export function useRhModel(
 	const adjustmentsQuery = useLeaveAdjustments(organizationId)
 	const surchargesQuery = useSurcharges(organizationId)
 	const extrasQuery = useExtraPeriods(organizationId)
+	const currentMemberQuery = useCurrentMember(organizationId)
 	const profilesQuery = useMemberProfiles(organizationId)
 	const contractsQuery = useMemberContracts(organizationId)
 	const documentsQuery = useMemberDocuments(organizationId)
@@ -78,7 +79,6 @@ export function useRhModel(
 			return next
 		})
 	}, [])
-	const auth = useAuth()
 	const profiles = useProfileActions(organizationId, getState)
 	const contracts = useContractActions(organizationId)
 	const documents = useDocumentActions(organizationId)
@@ -161,7 +161,9 @@ export function useRhModel(
 		],
 	)
 	stateRef.current = state
-	const actorId = actorIdOf(members, auth?.user?.profile?.email)
+	const seatless = isNotFoundError(currentMemberQuery.error)
+	const currentMemberLoaded = currentMemberQuery.isSuccess || seatless
+	const actorId = actorIdOf(currentMemberQuery.data?.data.member_id)
 
 	return {
 		isLoading:
@@ -174,7 +176,8 @@ export function useRhModel(
 			!accountsLoaded ||
 			!adjustmentsLoaded ||
 			!surchargesLoaded ||
-			!extrasLoaded,
+			!extrasLoaded ||
+			!currentMemberLoaded,
 		error:
 			catalog.members.error?.message ??
 			(profilesRestricted ? null : profilesQuery.error?.message) ??
@@ -186,6 +189,9 @@ export function useRhModel(
 			(adjustmentsRestricted ? null : adjustmentsQuery.error?.message) ??
 			(surchargesRestricted ? null : surchargesQuery.error?.message) ??
 			(extrasRestricted ? null : extrasQuery.error?.message) ??
+			(!seatless && currentMemberQuery.error instanceof Error
+				? currentMemberQuery.error.message
+				: null) ??
 			null,
 		state,
 		context: {

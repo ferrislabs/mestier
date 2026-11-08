@@ -19,6 +19,7 @@ import {
 	absenceRecord,
 	typeRecord,
 } from '#/test/rh-absence-fixtures'
+import { MY_MEMBER_PATH, myMemberResponse } from '#/test/rh-current-member'
 import { EXTRAS_PATH, SURCHARGES_PATH } from '#/test/rh-extra-fixtures'
 import {
 	DEFAULT_ACCOUNT_RECORDS,
@@ -119,6 +120,7 @@ function installFakeApi() {
 						}
 						if (path === '/api/v1/files/url')
 							return { data: { url: 'https://files.test/proof' } }
+						if (path === MY_MEMBER_PATH) return myMemberResponse()
 						if (path === PERMISSIONS_PATH)
 							return { data: { permissions }, pagination: null }
 						if (path === LEAVE_ACCOUNTS_PATH)
@@ -316,6 +318,11 @@ describe('absence types and requests bound to the API', () => {
 		})
 		const user = userEvent.setup()
 		const dialog = await screen.findByRole('dialog')
+		await waitFor(() =>
+			expect(
+				within(dialog).getByRole('combobox', { name: 'Membre' }),
+			).toHaveProperty('disabled', false),
+		)
 		expect(
 			within(dialog).queryByRole('button', { name: 'Enregistrer l’absence' }),
 		).toBeNull()
@@ -348,6 +355,11 @@ describe('absence types and requests bound to the API', () => {
 		})
 		const user = userEvent.setup()
 		const dialog = await screen.findByRole('dialog')
+		await waitFor(() =>
+			expect(
+				within(dialog).getByRole('combobox', { name: 'Membre' }),
+			).toHaveProperty('disabled', false),
+		)
 		await user.click(
 			within(dialog).getByRole('button', { name: 'Enregistrer l’absence' }),
 		)
@@ -680,21 +692,83 @@ describe('absence types and requests bound to the API', () => {
 
 	it('spec_rh_3_9 hides every write control without the permissions', async () => {
 		permissions = []
-		absences = [pendingRequest()]
+		absences = [
+			absenceRecord('a-1', 'u-2', REQUEST.id, {
+				start_date: FUTURE,
+				end_date: '2099-03-03',
+			}),
+		]
 		await renderAbsences()
 
 		expect(
 			await screen.findByRole('region', { name: 'Historique' }),
 		).toBeDefined()
 		expect(
-			screen.queryByRole('button', { name: 'Poser une absence' }),
-		).toBeNull()
-		expect(
 			screen.queryByRole('button', { name: /Valider la demande/ }),
 		).toBeNull()
 		expect(
 			screen.queryByRole('button', { name: /Actions pour la demande/ }),
 		).toBeNull()
+	})
+
+	it('spec_rh_7_6 a member without the bits requests for themselves under Mes demandes, locked to their own seat', async () => {
+		permissions = []
+		types = [REQUEST, AUTO, PROOF]
+		await renderAbsences({
+			creating: true,
+			initial: { memberId: 'u-2', startDate: FUTURE },
+		})
+		const user = userEvent.setup()
+		const dialog = await screen.findByRole('dialog')
+		expect(
+			within(dialog).getByRole('combobox', { name: 'Membre' }),
+		).toHaveProperty('disabled', true)
+		await user.click(
+			within(dialog).getByRole('button', { name: 'Envoyer la demande' }),
+		)
+
+		await waitFor(() => expect(writes).toHaveLength(1))
+		expect(writes[0]?.params.body).toMatchObject({ member_id: 'u-1' })
+		expect(screen.getByRole('heading', { name: 'Mes demandes' })).toBeDefined()
+	})
+
+	it("spec_rh_7_6 offers the cancel of their own pending request only, never another member's", async () => {
+		permissions = []
+		absences = [
+			pendingRequest(),
+			absenceRecord('a-2', 'u-2', REQUEST.id, {
+				start_date: FUTURE,
+				end_date: '2099-03-03',
+			}),
+			absenceRecord('a-3', 'u-1', REQUEST.id, {
+				start_date: FUTURE,
+				end_date: '2099-03-03',
+				status: 'APPROVED',
+			}),
+		]
+		await renderAbsences()
+		const user = userEvent.setup()
+
+		const history = await screen.findByRole('region', { name: 'Historique' })
+		expect(
+			await within(history).findAllByRole('button', {
+				name: /Actions pour la demande/,
+			}),
+		).toHaveLength(1)
+		expect(screen.queryByRole('region', { name: /À valider/ })).toBeNull()
+		await user.click(
+			within(history).getByRole('button', {
+				name: /Actions pour la demande de Alix Nova/,
+			}),
+		)
+		expect(screen.queryByRole('menuitem', { name: 'Valider' })).toBeNull()
+		await user.click(
+			await screen.findByRole('menuitem', { name: 'Annuler la demande' }),
+		)
+
+		await waitFor(() => expect(writes).toHaveLength(1))
+		expect(writes[0]?.path).toContain('/cancel')
+		expect(writes[0]?.params.path?.absence_id).toBe('a-1')
 	})
 
 	it('spec_rh_3_9 hides the type controls without MANAGE_REFERENCE', async () => {

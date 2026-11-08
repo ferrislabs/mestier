@@ -1,5 +1,4 @@
 import { Plus } from 'lucide-react'
-import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
@@ -16,6 +15,10 @@ import { AbsenceTypesTab } from '#/pages/hr/ui/rh/absences/absence-types-tab'
 import { HistorySection } from '#/pages/hr/ui/rh/absences/history-section'
 import { PendingRequests } from '#/pages/hr/ui/rh/absences/pending-requests'
 import { RejectDialog } from '#/pages/hr/ui/rh/absences/reject-dialog'
+import {
+	CanRequest,
+	useOwnRequestsOnly,
+} from '#/pages/hr/ui/rh/shared/request-access'
 
 export type AbsencesTab = 'demandes' | 'motifs'
 
@@ -63,18 +66,19 @@ export function AbsencesPage({
 	saveError,
 	notice,
 }: AbsencesPageProps) {
+	const mine = useOwnRequestsOnly('absence')
 	return (
 		<PageShell className="block">
 			<PageHeader
 				className="mb-6"
-				title="Absences"
+				title={mine ? 'Mes demandes' : 'Absences'}
 				description={
 					pending.length > 0
-						? `${pending.length} demande${pending.length > 1 ? 's' : ''} à valider`
+						? `${pending.length} demande${pending.length > 1 ? 's' : ''} ${mine ? 'en attente de validation' : 'à valider'}`
 						: 'Aucune demande en attente.'
 				}
 				actions={
-					<RequirePermission permission="MANAGE_REFERENCE">
+					<CanRequest kind="absence">
 						<Button
 							type="button"
 							size="sm"
@@ -83,7 +87,7 @@ export function AbsencesPage({
 							<Plus />
 							Poser une absence
 						</Button>
-					</RequirePermission>
+					</CanRequest>
 				}
 			/>
 			{saveError ? (
@@ -109,7 +113,7 @@ export function AbsencesPage({
 					<TabsTrigger value="motifs">Motifs</TabsTrigger>
 				</TabsList>
 				<TabsContent value="demandes">
-					{pending.length > 0 && (
+					{pending.length > 0 && !mine && (
 						<PendingRequests
 							state={state}
 							requests={pending}

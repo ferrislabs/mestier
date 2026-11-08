@@ -1,6 +1,5 @@
 import { Link } from '@tanstack/react-router'
 import { CalendarPlus } from 'lucide-react'
-import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
 import { absenceDays, findType } from '#/pages/hr/lib/rh/absences'
@@ -10,6 +9,7 @@ import { absenceLists } from '#/pages/hr/lib/rh/rubriques'
 import type { Absence, IsoDate, Member, RhState } from '#/pages/hr/lib/rh/types'
 import { DetailCard, EmptyNote } from '#/pages/hr/ui/rh/members/detail-card'
 import { AbsenceStatusBadge } from '#/pages/hr/ui/rh/shared/absence-status-badge'
+import { CanRequest } from '#/pages/hr/ui/rh/shared/request-access'
 import { useRhOrgPath } from '#/pages/hr/ui/rh/shared/rh-context'
 import { TypeChip } from '#/pages/hr/ui/rh/shared/type-chip'
 
@@ -151,7 +151,7 @@ export function AbsencesCard({
 				/>
 				{member.status === 'active' && (
 					<div className="border-t pt-3">
-						<RequirePermission permission="MANAGE_REFERENCE">
+						<CanRequest kind="absence" memberId={member.id}>
 							<Button variant="outline" size="sm" asChild>
 								<Link
 									to={orgPath('/rh/absences/nouvelle')}
@@ -160,7 +160,7 @@ export function AbsencesCard({
 									<CalendarPlus aria-hidden /> Poser une absence
 								</Link>
 							</Button>
-						</RequirePermission>
+						</CanRequest>
 					</div>
 				)}
 			</div>

@@ -97,16 +97,12 @@ describe('composeRhState', () => {
 })
 
 describe('actorIdOf', () => {
-	it('picks the member whose account email is the signed-in email, ignoring case', () => {
-		expect(actorIdOf([ALIX, MANON], ' manon@ATELIER.fr ')).toBe('m-manon')
+	it('spec_rh_7_6 takes the actor from members/me, never from an e-mail guess', () => {
+		expect(actorIdOf('m-manon')).toBe('m-manon')
 	})
 
-	it('falls back to the first member when the email matches nobody', () => {
-		expect(actorIdOf([ALIX, MANON], 'x@y.z')).toBe('m-alix')
-		expect(actorIdOf([ALIX, MANON], undefined)).toBe('m-alix')
-	})
-
-	it('is empty without members', () => {
-		expect(actorIdOf([], 'alix@atelier.fr')).toBe('')
+	it('spec_rh_7_6 has no actor for a caller without a seat', () => {
+		expect(actorIdOf(undefined)).toBe('')
+		expect(actorIdOf(null)).toBe('')
 	})
 })
