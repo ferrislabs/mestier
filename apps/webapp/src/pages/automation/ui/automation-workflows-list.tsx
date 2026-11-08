@@ -1,14 +1,15 @@
 import { Link } from '@tanstack/react-router'
-import { Loader2, Plus } from 'lucide-react'
+import { FolderPlus, Loader2, Plus } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
+import { useHasPermission } from '#/hooks/use-permissions'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	newWorkflowPath,
 	workflowsPath,
 } from '#/pages/automation/lib/automation-paths'
-import type { WorkflowFolder } from '#/pages/automation/lib/folders'
+import type { DragItem, WorkflowFolder } from '#/pages/automation/lib/folders'
 import {
 	ALL_TAGS,
 	type WorkflowSortKey,
@@ -54,7 +55,17 @@ export interface AutomationWorkflowsListProps {
 	sort: WorkflowSortKey
 	onSortChange: (sort: WorkflowSortKey) => void
 	onResetFilters: () => void
+	dragItem: DragItem | null
+	canDropOn: (targetId: string | null) => boolean
+	onDragStart: (item: DragItem) => void
+	onDragEnd: () => void
+	onDropOn: (targetId: string | null) => void
+	onCreateFolder: () => void
+	onRenameFolder: (folder: WorkflowFolder) => void
+	onMoveFolder: (folder: WorkflowFolder) => void
+	onDeleteFolder: (folder: WorkflowFolder) => void
 	onRename: (workflow: WorkflowRow) => void
+	onMove: (workflow: WorkflowRow) => void
 	onToggleEnabled: (workflow: WorkflowRow) => void
 	onDuplicate: (workflow: WorkflowRow) => void
 	onExport: (workflow: WorkflowRow) => void
@@ -90,13 +101,25 @@ export function AutomationWorkflowsList({
 	sort,
 	onSortChange,
 	onResetFilters,
+	dragItem,
+	canDropOn,
+	onDragStart,
+	onDragEnd,
+	onDropOn,
+	onCreateFolder,
+	onRenameFolder,
+	onMoveFolder,
+	onDeleteFolder,
 	onRename,
+	onMove,
 	onToggleEnabled,
 	onDuplicate,
 	onExport,
 	onArchive,
 	onDelete,
 }: AutomationWorkflowsListProps) {
+	const canManage = useHasPermission('MANAGE_AUTOMATION')
+
 	if (folderPending) {
 		return (
 			<PageShell className="gap-0">
@@ -130,6 +153,8 @@ export function AutomationWorkflowsList({
 				<FolderBreadcrumb
 					path={folderPath}
 					organizationSlug={organizationSlug}
+					canDrop={(targetId) => dragItem !== null && canDropOn(targetId)}
+					onDropItem={onDropOn}
 				/>
 			)}
 			<PageHeader
@@ -142,12 +167,18 @@ export function AutomationWorkflowsList({
 				}
 				actions={
 					<RequirePermission permission="MANAGE_AUTOMATION">
-						<Button asChild>
-							<Link to={buildOrgPath(organizationSlug, newWorkflowPath())}>
-								<Plus />
-								Nouveau workflow
-							</Link>
-						</Button>
+						<div className="flex items-center gap-2">
+							<Button variant="outline" onClick={onCreateFolder}>
+								<FolderPlus />
+								Nouveau dossier
+							</Button>
+							<Button asChild>
+								<Link to={buildOrgPath(organizationSlug, newWorkflowPath())}>
+									<Plus />
+									Nouveau workflow
+								</Link>
+							</Button>
+						</div>
 					</RequirePermission>
 				}
 			/>
@@ -165,10 +196,28 @@ export function AutomationWorkflowsList({
 				sort={sort}
 				onSortChange={onSortChange}
 			/>
-			{subfolders.length > 0 && (
+			{isLoading ? (
+				<WorkflowsLoading />
+			) : subfolders.length === 0 && workflows.length === 0 ? (
+				!hasWorkflowsInScope ? (
+					folder ? (
+						<p className="rounded-lg border border-border border-dashed bg-card px-4 py-8 text-center text-muted-foreground text-sm">
+							Ce dossier est vide.
+						</p>
+					) : (
+						<WorkflowListNoneYet />
+					)
+				) : (
+					<WorkflowListEmpty
+						query={query}
+						tag={tag === ALL_TAGS ? null : tag}
+						onReset={onResetFilters}
+					/>
+				)
+			) : (
 				<ul
-					aria-label="Sous-dossiers"
-					className="mb-3 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card"
+					aria-label="Contenu du dossier"
+					className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card"
 				>
 					{subfolders.map((subfolder) => (
 						<FolderRow
@@ -176,34 +225,45 @@ export function AutomationWorkflowsList({
 							folder={subfolder.folder}
 							workflowCount={subfolder.workflowCount}
 							organizationSlug={organizationSlug}
+							onRename={onRenameFolder}
+							onMove={onMoveFolder}
+							onDelete={onDeleteFolder}
+							draggable={canManage}
+							dragging={
+								dragItem?.kind === 'folder' &&
+								dragItem.id === subfolder.folder.id
+							}
+							canDrop={dragItem !== null && canDropOn(subfolder.folder.id)}
+							onDragStart={(dragged) =>
+								onDragStart({
+									kind: 'folder',
+									id: dragged.id,
+									parentId: dragged.parentId,
+								})
+							}
+							onDragEnd={onDragEnd}
+							onDropItem={(target) => onDropOn(target.id)}
 						/>
 					))}
-				</ul>
-			)}
-			{isLoading ? (
-				<WorkflowsLoading />
-			) : !hasWorkflowsInScope ? (
-				folder ? (
-					<p className="rounded-lg border border-border border-dashed bg-card px-4 py-8 text-center text-muted-foreground text-sm">
-						Ce projet ne contient encore aucun workflow.
-					</p>
-				) : (
-					<WorkflowListNoneYet />
-				)
-			) : workflows.length === 0 ? (
-				<WorkflowListEmpty
-					query={query}
-					tag={tag === ALL_TAGS ? null : tag}
-					onReset={onResetFilters}
-				/>
-			) : (
-				<ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
 					{workflows.map((workflow) => (
 						<WorkflowListRow
 							key={workflow.id}
 							workflow={workflow}
 							organizationSlug={organizationSlug}
 							onRename={onRename}
+							onMove={onMove}
+							draggable={canManage}
+							dragging={
+								dragItem?.kind === 'workflow' && dragItem.id === workflow.id
+							}
+							onDragStart={(dragged) =>
+								onDragStart({
+									kind: 'workflow',
+									id: dragged.id,
+									parentId: dragged.folderId,
+								})
+							}
+							onDragEnd={onDragEnd}
 							onToggleEnabled={onToggleEnabled}
 							onDuplicate={onDuplicate}
 							onExport={onExport}

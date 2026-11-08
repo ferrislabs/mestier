@@ -36,6 +36,8 @@ const SETTINGS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/settings'
 const FOLDERS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/folders'
+const FOLDER_PATH =
+	'/api/v1/organizations/{organization_id}/automation/folders/{folder_id}'
 const WORKFLOWS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/workflows'
 const WORKFLOW_PATH =
@@ -211,6 +213,30 @@ export function useAutomationFolders(organizationId: string) {
 			path: { organization_id: organizationId },
 		}).queryOptions,
 	)
+}
+
+export function useCreateFolder() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('post', FOLDERS_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, FOLDERS_PATH),
+	})
+}
+
+export function useUpdateFolder() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('patch', FOLDER_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, FOLDERS_PATH),
+	})
+}
+
+export function useDeleteFolder() {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('delete', FOLDER_PATH).mutationOptions,
+		onSuccess: () => invalidate(queryClient, FOLDERS_PATH),
+	})
 }
 
 export function useAutomationWorkflows(

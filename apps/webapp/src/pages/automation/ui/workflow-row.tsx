@@ -5,6 +5,7 @@ import {
 	Download,
 	Ellipsis,
 	Folder,
+	FolderInput,
 	History,
 	Pencil,
 	Trash2,
@@ -31,6 +32,7 @@ import {
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { Switch } from '#/components/ui/switch'
+import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	workflowExecutionsSearch,
@@ -60,26 +62,49 @@ export function WorkflowListRow({
 	workflow,
 	organizationSlug,
 	onRename,
+	onMove,
 	onToggleEnabled,
 	onDuplicate,
 	onExport,
 	onArchive,
 	onDelete,
+	draggable,
+	dragging,
+	onDragStart,
+	onDragEnd,
 }: {
 	workflow: WorkflowRow
 	organizationSlug: string
 	onRename: (workflow: WorkflowRow) => void
+	onMove: (workflow: WorkflowRow) => void
 	onToggleEnabled: (workflow: WorkflowRow) => void
 	onDuplicate: (workflow: WorkflowRow) => void
 	onExport: (workflow: WorkflowRow) => void
 	onArchive: (workflow: WorkflowRow) => void
 	onDelete: (workflow: WorkflowRow) => void
+	draggable: boolean
+	dragging: boolean
+	onDragStart: (workflow: WorkflowRow) => void
+	onDragEnd: () => void
 }) {
 	return (
-		<li className="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-3 transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1fr)_200px_200px_auto]">
+		<li
+			draggable={draggable}
+			onDragStart={(event) => {
+				event.dataTransfer.effectAllowed = 'move'
+				event.dataTransfer.setData('text/plain', workflow.id)
+				onDragStart(workflow)
+			}}
+			onDragEnd={onDragEnd}
+			className={cn(
+				'relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-3 transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1fr)_200px_200px_auto]',
+				dragging && 'opacity-40',
+			)}
+		>
 			<div className="min-w-0">
 				<Link
 					to={buildOrgPath(organizationSlug, workflowPath(workflow.id))}
+					draggable={false}
 					className="block truncate font-medium text-base outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
 				>
 					{workflow.name}
@@ -89,7 +114,7 @@ export function WorkflowListRow({
 					{workflow.folderLabel && (
 						<span className="inline-flex items-center gap-1">
 							<Folder className="size-3.5" aria-hidden />
-							<span className="sr-only">Projet :</span>
+							<span className="sr-only">Dossier :</span>
 							{workflow.folderLabel}
 						</span>
 					)}
@@ -159,6 +184,10 @@ export function WorkflowListRow({
 								<DropdownMenuItem onSelect={() => onRename(workflow)}>
 									<Pencil />
 									Renommer
+								</DropdownMenuItem>
+								<DropdownMenuItem onSelect={() => onMove(workflow)}>
+									<FolderInput />
+									Déplacer
 								</DropdownMenuItem>
 								<DropdownMenuSeparator />
 								<DropdownMenuItem
