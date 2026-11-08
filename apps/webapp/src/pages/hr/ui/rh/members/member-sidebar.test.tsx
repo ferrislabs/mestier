@@ -31,6 +31,14 @@ const NO_ABSENCE_TYPE_ACTIONS = {
 	restore: async () => {},
 }
 
+const NO_LEAVE_ACTIONS = {
+	saveAccount: async () => {},
+	archiveAccount: async () => {},
+	restoreAccount: async () => {},
+	addAdjustment: async () => {},
+	removeAdjustment: async () => {},
+}
+
 const NO_DOCUMENT_ACTIONS = {
 	add: async () => {},
 	remove: async () => {},
@@ -104,6 +112,7 @@ function renderSidebar(permissions: string[]) {
 							documents: NO_DOCUMENT_ACTIONS,
 							absences: NO_ABSENCE_ACTIONS,
 							absenceTypes: NO_ABSENCE_TYPE_ACTIONS,
+							leave: NO_LEAVE_ACTIONS,
 							actorId: MEMBER.id,
 							organizationSlug: 'atelier-bois',
 						}}

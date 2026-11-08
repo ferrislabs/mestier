@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -11,11 +12,8 @@ import {
 	DialogTitle,
 } from '#/components/ui/dialog'
 import { cn } from '#/lib/utils'
-import {
-	computeBalance,
-	movementsFor,
-	removeAdjustment,
-} from '#/pages/hr/lib/rh/balances'
+import { computeBalance, movementsFor } from '#/pages/hr/lib/rh/balances'
+import { adjustmentFailureOf } from '#/pages/hr/lib/rh/leave-wire'
 import { fullName } from '#/pages/hr/lib/rh/members'
 import {
 	acquiredTotal,
@@ -34,7 +32,7 @@ import type {
 import { AdjustmentForm } from '#/pages/hr/ui/rh/rights/adjustment-form'
 import { MovementsTable } from '#/pages/hr/ui/rh/rights/movements-table'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
-import { useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import { useRhLeaveActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
 function Figure({
 	label,
@@ -81,9 +79,10 @@ export function MemberBalanceDialog({
 	today: IsoDate
 	onClose: () => void
 }) {
-	const updateRh = useRhUpdate()
+	const leave = useRhLeaveActions()
 	const [adding, setAdding] = useState(false)
 	const [announcement, setAnnouncement] = useState('')
+	const [removeError, setRemoveError] = useState<string | null>(null)
 	const line = computeBalance(state, member, account, today)
 	const movements = orderMovements(movementsFor(state, member, account, today))
 	const waiting = [
@@ -142,17 +141,20 @@ export function MemberBalanceDialog({
 					<section aria-label="Registre des mouvements" className="grid gap-3">
 						<div className="flex items-center justify-between gap-3">
 							<h3 className="font-semibold">Registre des mouvements</h3>
-							{!adding && (
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => {
-										setAnnouncement('')
-										setAdding(true)
-									}}
-								>
-									<Plus /> Ajouter une régularisation
-								</Button>
+							{!adding && !account.archived && (
+								<RequirePermission permission="MANAGE_PLANNING">
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => {
+											setAnnouncement('')
+											setRemoveError(null)
+											setAdding(true)
+										}}
+									>
+										<Plus /> Ajouter une régularisation
+									</Button>
+								</RequirePermission>
 							)}
 						</div>
 						{adding && (
@@ -174,11 +176,21 @@ export function MemberBalanceDialog({
 							account={account}
 							movements={movements}
 							today={today}
-							onRemove={(movementId) => {
-								updateRh((current) => removeAdjustment(current, movementId))
-								setAnnouncement('Mouvement supprimé du registre.')
+							onRemove={async (movementId) => {
+								setRemoveError(null)
+								try {
+									await leave.removeAdjustment(movementId)
+									setAnnouncement('Mouvement supprimé du registre.')
+								} catch (error) {
+									setRemoveError(adjustmentFailureOf(error).message)
+								}
 							}}
 						/>
+						{removeError && (
+							<p role="alert" className="text-sm text-state-alert">
+								{removeError}
+							</p>
+						)}
 						<output className="sr-only">{announcement}</output>
 					</section>
 				</div>

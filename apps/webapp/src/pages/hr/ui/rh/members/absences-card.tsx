@@ -73,6 +73,7 @@ export function AbsencesCard({
 }) {
 	const orgPath = useRhOrgPath()
 	const { upcoming, past } = absenceLists(state, member.id, today)
+	const activeAccounts = state.accounts.filter((account) => !account.archived)
 	return (
 		<DetailCard
 			title="Absences"
@@ -89,7 +90,7 @@ export function AbsencesCard({
 			<div className="grid gap-5">
 				<section aria-label="Soldes" className="grid gap-1.5">
 					<h4 className="text-[12px] text-muted-foreground">Soldes</h4>
-					{state.accounts.length === 0 ? (
+					{activeAccounts.length === 0 ? (
 						<EmptyNote>Aucun compte de congés n’est configuré.</EmptyNote>
 					) : (
 						<>
@@ -101,7 +102,7 @@ export function AbsencesCard({
 								<span className="text-right text-[12px] text-muted-foreground">
 									Disponible
 								</span>
-								{state.accounts.map((account) => {
+								{activeAccounts.map((account) => {
 									const line = computeBalance(state, member, account, today)
 									return (
 										<div key={account.id} className="contents">

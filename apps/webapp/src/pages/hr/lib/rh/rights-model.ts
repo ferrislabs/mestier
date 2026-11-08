@@ -225,8 +225,8 @@ export function validateAdjustmentDraft(
 export function validateAccountSettings(draft: AccountSettingsDraft): string[] {
 	const errors: string[] = []
 	const limit = draft.kind === 'monthly' ? MAX_MONTHLY_RATE : MAX_ANNUAL_DAYS
-	if (!Number.isFinite(draft.value) || draft.value < 0)
-		errors.push('Indique un nombre de jours acquis positif ou nul.')
+	if (!Number.isFinite(draft.value) || draft.value <= 0)
+		errors.push('Indique un nombre de jours acquis strictement positif.')
 	else if (draft.value > limit)
 		errors.push(
 			`L’acquisition ne peut pas dépasser ${limit} jours ${draft.kind === 'monthly' ? 'par mois' : 'par an'}.`,

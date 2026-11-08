@@ -18,6 +18,11 @@ import {
 	ABSENCES_PATH,
 	DEFAULT_TYPE_RECORDS,
 } from '#/test/rh-absence-fixtures'
+import {
+	DEFAULT_ACCOUNT_RECORDS,
+	LEAVE_ACCOUNTS_PATH,
+	LEAVE_ADJUSTMENTS_PATH,
+} from '#/test/rh-leave-fixtures'
 import { MemberDetailFeature } from './member-detail-feature'
 
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
@@ -136,6 +141,10 @@ function installFakeApi() {
 						}
 						if (path === PERMISSIONS_PATH)
 							return { data: { permissions }, pagination: null }
+						if (path === LEAVE_ACCOUNTS_PATH)
+							return { data: DEFAULT_ACCOUNT_RECORDS, pagination: null }
+						if (path === LEAVE_ADJUSTMENTS_PATH)
+							return { data: [], pagination: null }
 						throw new Error(`unmocked GET ${path}`)
 					},
 				},

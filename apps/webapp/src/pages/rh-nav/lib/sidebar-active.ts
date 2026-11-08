@@ -1,5 +1,3 @@
-import { DEFAULT_ACCOUNT_ID } from '#/pages/hr/lib/rh/balances'
-
 export const ENTRY = {
 	members: 'members',
 	planning: 'planning',
@@ -24,6 +22,7 @@ export function activeSidebarEntries(
 	modulePath: string,
 	search: Readonly<Record<string, unknown>>,
 	currentMemberId: string,
+	defaultAccountId = '',
 ): ReadonlySet<string> {
 	if (modulePath.startsWith('/rh/membres')) return new Set([ENTRY.members])
 	if (modulePath.startsWith('/rh/planning')) return new Set([ENTRY.planning])
@@ -49,6 +48,6 @@ export function activeSidebarEntries(
 		return new Set([ENTRY.extraRequests])
 	}
 	if (modulePath.startsWith('/rh/droits'))
-		return new Set([ENTRY.account(text(search.compte) ?? DEFAULT_ACCOUNT_ID)])
+		return new Set([ENTRY.account(text(search.compte) ?? defaultAccountId)])
 	return new Set()
 }

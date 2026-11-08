@@ -31,6 +31,7 @@ import type { SidebarDeadline } from '#/pages/rh-nav/lib/sidebar-deadlines'
 export interface RhSidebarAccount {
 	id: string
 	name: string
+	acquisition: { kind: 'monthly' | 'annual' }
 }
 
 export interface RhSidebarProps {
@@ -45,7 +46,10 @@ export interface RhSidebarProps {
 	onToggleGroup: (groupId: string) => void
 }
 
-const ACCOUNT_ICONS: Record<string, LucideIcon> = { cp: Sun, rtt: Timer }
+const ACCOUNT_ICONS: Record<'monthly' | 'annual', LucideIcon> = {
+	monthly: Sun,
+	annual: Timer,
+}
 
 const DEADLINE_ICONS: Record<DeadlineKind, LucideIcon> = {
 	trial: Clock,
@@ -235,12 +239,12 @@ export function RhSidebar({
 					collapsed={isCollapsed('rights')}
 					onToggle={() => onToggleGroup('rights')}
 				>
-					{accounts.map((account) =>
+					{accounts.map((account, index) =>
 						entry({
 							to: '/rh/droits',
-							search: account.id === 'cp' ? undefined : { compte: account.id },
+							search: index === 0 ? undefined : { compte: account.id },
 							active: active.has(ENTRY.account(account.id)),
-							icon: ACCOUNT_ICONS[account.id] ?? Hourglass,
+							icon: ACCOUNT_ICONS[account.acquisition.kind],
 							label: account.name,
 						}),
 					)}

@@ -6,7 +6,7 @@ import { sidebarCounts } from '#/pages/rh-nav/lib/sidebar-counts'
 const ME = 'baptiste'
 
 const active = (path: string, search: Record<string, unknown> = {}) => [
-	...activeSidebarEntries(path, search, ME),
+	...activeSidebarEntries(path, search, ME, 'cp'),
 ]
 
 describe('activeSidebarEntries', () => {
@@ -60,7 +60,7 @@ describe('activeSidebarEntries', () => {
 		])
 	})
 
-	it('droits : compte congés payés par défaut', () => {
+	it('droits : premier compte par défaut', () => {
 		expect(active('/rh/droits')).toEqual([ENTRY.account('cp')])
 		expect(active('/rh/droits', { compte: 'rtt' })).toEqual([
 			ENTRY.account('rtt'),

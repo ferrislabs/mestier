@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { RightsFeature } from '#/pages/hr/feature/rights-feature'
-import { DEFAULT_ACCOUNT_ID } from '#/pages/hr/lib/rh/balances'
 
 interface RightsSearch {
 	compte?: string
@@ -23,11 +22,11 @@ function RightsRoute() {
 
 	return (
 		<RightsFeature
-			accountId={search.compte ?? DEFAULT_ACCOUNT_ID}
+			accountId={search.compte ?? null}
 			onAccountChange={(accountId) =>
 				navigate({
 					replace: true,
-					search: accountId === DEFAULT_ACCOUNT_ID ? {} : { compte: accountId },
+					search: { compte: accountId },
 				})
 			}
 		/>

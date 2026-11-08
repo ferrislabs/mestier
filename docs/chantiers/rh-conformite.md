@@ -18,7 +18,7 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 | B1 | Profil RH du membre, archivage | F2 | fait |
 | B2 | Contrats, horaires, documents | B1 | fait |
 | B3 | Motifs d'absence et circuit de validation | B2 | fait |
-| B4 | Compteurs et ajustements | B3 | à faire |
+| B4 | Compteurs et ajustements | B3 | fait |
 | B5 | Exceptions de jour et flux du planning | B2, B3 | à faire |
 | B6 | Majorations et heures extra | B3 | à faire |
 | Fin | Suppression de `rh-store`, `rh-seed`, `rh-binding` | B6 | à faire |
@@ -89,3 +89,16 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 - Le client OpenAPI a été régénéré (le précédent datait d'avant B3). `kind`, `starts_at`, `ends_at` de la création sont désormais optionnels dans les types générés.
 - `tsc --noEmit` : 38 erreurs avant et après.
 
+## Reports issus de B4
+- Les jours sont stockés en centièmes entiers (`acquisition_hundredths`, `carry_over_max_hundredths`, `days_hundredths`) : exacts, jamais arrondis. Le fil porte des nombres à deux décimales au plus ; une troisième décimale est refusée (422).
+- Le compte CP par défaut est à 2,08 j par mois (25 j par an, report maximal 5, début en juin) et non 2,5 comme le spec : le prototype compte 25/12, que deux décimales ne représentent pas. Sur une année pleine l'acquis reste 25 j, mais un mois intermédiaire peut différer d'une demi-journée de l'arrondi du prototype (3 mois : 6,24 au lieu de 6,25, donc 6 j au lieu de 6,5). RTT : 10 j par an, début en janvier, aucun report. Pour retrouver 25/12 exactement il faudrait une échelle plus fine ou une fraction.
+- Les motifs et les comptes par défaut sont créés ensemble, sous le même verrou de l'organisation, à la première lecture de l'un ou de l'autre ; les motifs « Congés payés » et « RTT » sont reliés à leur compte par leur nom. La migration crée les deux comptes des organisations qui ont déjà des motifs, relie ces deux motifs et ajoute la clé étrangère `absence_types.account_id`. Les `account_id` libres de B3 sont remis à null (aucun compte n'existait). Le retour arrière supprime la clé et remet les `account_id` à null.
+- Pas d'endpoint de suppression d'un compte : archiver ou restaurer. Un compte archivé reste lisible, reste sur les motifs et les mouvements passés, mais refuse un nouveau mouvement et un nouveau motif (422 sur `account_id`) ; un motif qui le porte déjà peut être modifié sans changer de compte.
+- Lectures : les comptes se lisent comme les motifs (tout membre). Les mouvements de l'organisation exigent `MANAGE_PLANNING` ou `MANAGE_REFERENCE` (soldes personnels) ; sans l'un des deux, 403, et l'écran s'ouvre sans mouvement (soldes d'acquisition seuls, sans bandeau d'erreur). Un membre ordinaire ne voit donc pas son propre solde corrigé des mouvements : il n'existe pas de lecture « mes soldes », à décider avec le spec.
+- Écritures : comptes `MANAGE_REFERENCE`, mouvements `MANAGE_PLANNING`. L'auteur est le membre de l'appelant. Un report doit être positif et au plus le maximum du compte (règle du prototype, reprise côté API) ; le motif est obligatoire pour tout mouvement, le front envoie « Report » quand un report n'en a pas.
+- Aucun calcul de solde en Rust (ADR 0014) : le front calcule à partir des comptes, des mouvements et des absences. Le total de reports par membre et par période reste contrôlé côté interface seulement.
+- Les identifiants de compte sont de vrais UUID : le lien en mémoire `typeAccounts` et `DEFAULT_ACCOUNT_BY_TYPE_NAME` de B3 sont supprimés, `account_id` des motifs vient de l'API. L'ancien `DEFAULT_ACCOUNT_ID` (`cp`) disparaît : sans `?compte=`, l'écran Droits et la barre latérale prennent le premier compte non archivé. Les seeds `ACCOUNTS` et `ADJUSTMENTS` ne servent plus qu'aux tests de calcul ; `addAdjustment` et `updateAccount` sont passés dans `lib/rh/balance-fixtures.ts`, réservé aux tests.
+- Archiver et restaurer un compte : bouton dans la fenêtre de paramétrage (`MANAGE_REFERENCE`) ; l'onglet d'un compte archivé est suffixé « (archivé) », et la barre latérale et la carte Soldes d'un membre ne le montrent plus. Il n'y a pas de création de compte dans l'interface (le prototype n'en a pas).
+- Le paramétrage refuse désormais une acquisition nulle (positive stricte, comme l'API).
+- Le client OpenAPI a été régénéré ; la limite de lecture des mouvements n'est pas paginée.
+- `tsc --noEmit` : 38 erreurs avant et après.

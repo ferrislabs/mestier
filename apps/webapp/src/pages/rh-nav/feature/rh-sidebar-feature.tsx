@@ -31,6 +31,9 @@ export function RhSidebarFeature() {
 		permission === null || granted.includes(permission)
 
 	const ready = !model.isLoading && model.error === null
+	const accounts = ready
+		? model.state.accounts.filter((account) => !account.archived)
+		: []
 	const currentMemberId = model.context.actorId
 
 	return (
@@ -40,10 +43,11 @@ export function RhSidebarFeature() {
 				modulePath,
 				location.search,
 				currentMemberId,
+				accounts[0]?.id,
 			)}
 			counts={ready ? sidebarCounts(model.state, currentMemberId) : null}
 			currentMemberId={currentMemberId}
-			accounts={ready ? model.state.accounts : []}
+			accounts={accounts}
 			deadlines={
 				ready ? sidebarDeadlines(model.state, todayIso(), DEADLINE_LIMIT) : []
 			}

@@ -140,22 +140,22 @@ test('an archived record is archived and a UUID account id is kept', () => {
 	expect(type.accountId).toBe(ACCOUNT_ID)
 })
 
-test('the request only carries an account id the API can store', () => {
+test('the request carries the account id as the API knows it', () => {
 	const draft: AbsenceTypeDraft = {
 		name: '  Déménagement ',
 		hue: 10,
 		kind: 'unavailable',
 		countMode: 'working',
-		accountId: 'cp',
+		accountId: ACCOUNT_ID,
 		paid: false,
 		needsApproval: false,
 		needsProof: true,
 	}
-	expect(absenceTypeRequestOf(draft).account_id).toBeNull()
+	expect(absenceTypeRequestOf(draft).account_id).toBe(ACCOUNT_ID)
 	expect(absenceTypeRequestOf(draft).name).toBe('Déménagement')
 	expect(
-		absenceTypeRequestOf({ ...draft, accountId: ACCOUNT_ID }).account_id,
-	).toBe(ACCOUNT_ID)
+		absenceTypeRequestOf({ ...draft, accountId: null }).account_id,
+	).toBeNull()
 })
 
 test('an absence record maps to the model', () => {
@@ -227,28 +227,20 @@ test('a draft becomes a request in the new shape', () => {
 	expect(bare.proof_file_key).toBeUndefined()
 })
 
-test('the overlay replaces the types and carries explicit account links', () => {
-	const links = new Map<string, string | null>([[TYPE_ID, 'cp']])
+test('the overlay replaces the types and keeps the account the API gives', () => {
 	const state = overlayAbsenceTypes(
 		{
 			...EMPTY_STATE,
 			absenceTypes: [{ ...absenceTypeOf(typeRecord()), id: 'old' }],
 		},
-		[typeRecord(), typeRecord({ id: 'other', name: 'RTT' })],
-		links,
+		[
+			typeRecord({ account_id: ACCOUNT_ID }),
+			typeRecord({ id: 'other', name: 'RTT' }),
+		],
 	)
 	expect(state.absenceTypes.map((type) => type.id)).toEqual([TYPE_ID, 'other'])
-	expect(state.absenceTypes[0]?.accountId).toBe('cp')
+	expect(state.absenceTypes[0]?.accountId).toBe(ACCOUNT_ID)
 	expect(state.absenceTypes[1]?.accountId).toBeNull()
-})
-
-test('an explicit null link wins over a stored account id', () => {
-	const state = overlayAbsenceTypes(
-		EMPTY_STATE,
-		[typeRecord({ account_id: ACCOUNT_ID })],
-		new Map([[TYPE_ID, null]]),
-	)
-	expect(state.absenceTypes[0]?.accountId).toBeNull()
 })
 
 test('the overlay replaces the absences, newest first', () => {

@@ -1,4 +1,5 @@
 import { Settings2 } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import type { BalancePeriod } from '#/pages/hr/lib/rh/balances'
 import {
@@ -43,14 +44,16 @@ export function RuleBanner({
 					}
 				/>
 			</dl>
-			<Button
-				variant="outline"
-				size="sm"
-				className="ml-auto"
-				onClick={onConfigure}
-			>
-				<Settings2 /> Paramétrer le compte
-			</Button>
+			<RequirePermission permission="MANAGE_REFERENCE">
+				<Button
+					variant="outline"
+					size="sm"
+					className="ml-auto"
+					onClick={onConfigure}
+				>
+					<Settings2 /> Paramétrer le compte
+				</Button>
+			</RequirePermission>
 		</section>
 	)
 }

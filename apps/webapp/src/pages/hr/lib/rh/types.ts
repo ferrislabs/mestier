@@ -160,6 +160,7 @@ export type LeaveAccount = {
 	acquisition: Acquisition
 	periodStartMonth: number
 	carryOverMax: number
+	archived: boolean
 }
 
 export type AdjustmentKind = 'adjustment' | 'carry_over'

@@ -17,8 +17,6 @@ export type AbsenceTypeRequest = Schemas.AbsenceTypeRequest
 export type AbsenceRecord = Schemas.AbsenceResponse
 export type AbsenceRequest = Schemas.CreateAbsenceRequest
 
-export type AccountLinks = ReadonlyMap<string, string | null>
-
 export const COUNT_MODE_TO_WIRE: Record<CountMode, Schemas.CountMode> = {
 	working: 'WORKING',
 	workable: 'WORKABLE',
@@ -64,8 +62,6 @@ export const ABSENCE_STATUS_FROM_WIRE: Record<
 	CANCELLED: 'cancelled',
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export function absenceTypeOf(record: AbsenceTypeRecord): AbsenceType {
 	return {
 		id: record.id,
@@ -89,10 +85,7 @@ export function absenceTypeRequestOf(
 		hue: draft.hue,
 		kind: ABSENCE_KIND_TO_WIRE[draft.kind],
 		count_mode: COUNT_MODE_TO_WIRE[draft.countMode],
-		account_id:
-			draft.accountId !== null && UUID.test(draft.accountId)
-				? draft.accountId
-				: null,
+		account_id: draft.accountId,
 		paid: draft.paid,
 		needs_approval: draft.needsApproval,
 		needs_proof: draft.needsProof,
@@ -139,17 +132,8 @@ export function absenceRequestOf(
 export function overlayAbsenceTypes(
 	state: RhState,
 	records: readonly AbsenceTypeRecord[],
-	links: AccountLinks,
 ): RhState {
-	return {
-		...state,
-		absenceTypes: records.map((record) => {
-			const type = absenceTypeOf(record)
-			return links.has(record.id)
-				? { ...type, accountId: links.get(record.id) ?? null }
-				: type
-		}),
-	}
+	return { ...state, absenceTypes: records.map(absenceTypeOf) }
 }
 
 export function overlayAbsences(
