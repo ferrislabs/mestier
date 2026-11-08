@@ -1,3 +1,4 @@
+import { RequirePermission } from '#/components/require-permission'
 import {
 	Table,
 	TableBody,
@@ -36,7 +37,7 @@ export function MovementsTable({
 	account: LeaveAccount
 	movements: readonly Movement[]
 	today: IsoDate
-	onRemove: (movementId: string) => void
+	onRemove: (movementId: string) => void | Promise<void>
 }) {
 	return (
 		<div className="overflow-hidden rounded-lg border bg-card">
@@ -94,10 +95,12 @@ export function MovementsTable({
 								</TableCell>
 								<TableCell className="pr-4 text-right">
 									{removable && (
-										<RemoveAdjustmentButton
-											label={removeLabel(movement)}
-											onRemove={() => onRemove(movement.id)}
-										/>
+										<RequirePermission permission="MANAGE_PLANNING">
+											<RemoveAdjustmentButton
+												label={removeLabel(movement)}
+												onRemove={() => onRemove(movement.id)}
+											/>
+										</RequirePermission>
 									)}
 								</TableCell>
 							</TableRow>

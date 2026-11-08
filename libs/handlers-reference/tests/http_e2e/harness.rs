@@ -97,7 +97,9 @@ impl App {
         for org_id in [self.organization_id, self.other_organization_id().await] {
             for statement in [
                 "DELETE FROM absences WHERE org_id = $1",
+                "DELETE FROM leave_adjustments WHERE org_id = $1",
                 "DELETE FROM absence_types WHERE org_id = $1",
+                "DELETE FROM leave_accounts WHERE org_id = $1",
                 "DELETE FROM member_documents WHERE org_id = $1",
                 "DELETE FROM member_contracts WHERE org_id = $1",
                 "DELETE FROM member_hr_profiles WHERE org_id = $1",

@@ -48,6 +48,8 @@ pub mod equipment;
 pub mod expense;
 pub mod invitation;
 pub mod invoice;
+pub mod leave_account;
+pub mod leave_adjustment;
 pub mod ledger;
 pub mod maintenance_contract;
 pub mod maintenance_intervention;

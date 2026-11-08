@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import { useAbsenceTypes } from '#/hooks/use-absence-types'
 import { useAbsences } from '#/hooks/use-absences'
+import { useLeaveAccounts } from '#/hooks/use-leave-accounts'
+import { useLeaveAdjustments } from '#/hooks/use-leave-adjustments'
 import { useMemberContracts } from '#/hooks/use-member-contracts'
 import { useMemberDocuments } from '#/hooks/use-member-documents'
 import { useMemberProfiles } from '#/hooks/use-member-profiles'
@@ -13,6 +15,8 @@ import {
 	memberKey,
 	setAbsences,
 	setAbsenceTypes,
+	setLeaveAccounts,
+	setLeaveAdjustments,
 	setMemberContracts,
 	setMemberDocuments,
 	setMemberProfiles,
@@ -27,6 +31,7 @@ import {
 	useContractActions,
 	useDocumentActions,
 } from '#/pages/hr/feature/use-contract-actions'
+import { useLeaveActions } from '#/pages/hr/feature/use-leave-actions'
 import { useProfileActions } from '#/pages/hr/feature/use-profile-actions'
 import type { RhState } from '#/pages/hr/lib/rh/types'
 import type { RhContextValue } from '#/pages/hr/ui/rh/shared/rh-context'
@@ -50,6 +55,8 @@ export function useRhModel(
 	})
 	const absencesQuery = useAbsences(organizationId)
 	const typesQuery = useAbsenceTypes(organizationId)
+	const accountsQuery = useLeaveAccounts(organizationId)
+	const adjustmentsQuery = useLeaveAdjustments(organizationId)
 	const profilesQuery = useMemberProfiles(organizationId)
 	const contractsQuery = useMemberContracts(organizationId)
 	const documentsQuery = useMemberDocuments(organizationId)
@@ -58,6 +65,7 @@ export function useRhModel(
 	const documents = useDocumentActions(organizationId)
 	const absenceActions = useAbsenceActions(organizationId)
 	const absenceTypeActions = useAbsenceTypeActions(organizationId)
+	const leaveActions = useLeaveActions(organizationId)
 	const snapshot = useRhSnapshot()
 
 	const memberRows = catalog.members.data?.data
@@ -77,6 +85,12 @@ export function useRhModel(
 	const typeRows = typesQuery.data?.data
 	const typesRestricted = isForbiddenError(typesQuery.error)
 	const typesLoaded = typesQuery.isSuccess || typesRestricted
+	const accountRows = accountsQuery.data?.data
+	const accountsRestricted = isForbiddenError(accountsQuery.error)
+	const accountsLoaded = accountsQuery.isSuccess || accountsRestricted
+	const adjustmentRows = adjustmentsQuery.data?.data
+	const adjustmentsRestricted = isForbiddenError(adjustmentsQuery.error)
+	const adjustmentsLoaded = adjustmentsQuery.isSuccess || adjustmentsRestricted
 
 	const membersLoaded = catalog.members.isSuccess
 	const profileRows = profilesQuery.data?.data
@@ -103,6 +117,14 @@ export function useRhModel(
 	}, [typesLoaded, typeRows])
 
 	useEffect(() => {
+		if (accountsLoaded) setLeaveAccounts(accountRows ?? [])
+	}, [accountsLoaded, accountRows])
+
+	useEffect(() => {
+		if (adjustmentsLoaded) setLeaveAdjustments(adjustmentRows ?? [])
+	}, [adjustmentsLoaded, adjustmentRows])
+
+	useEffect(() => {
 		if (profilesLoaded) setMemberProfiles(profileRows ?? [])
 	}, [profilesLoaded, profileRows])
 
@@ -123,12 +145,16 @@ export function useRhModel(
 			documentsQuery.isLoading ||
 			absencesQuery.isLoading ||
 			typesQuery.isLoading ||
+			accountsQuery.isLoading ||
+			adjustmentsQuery.isLoading ||
 			!isBound ||
 			!snapshot.profilesLoaded ||
 			!snapshot.contractsLoaded ||
 			!snapshot.documentsLoaded ||
 			!snapshot.absencesLoaded ||
-			!snapshot.typesLoaded,
+			!snapshot.typesLoaded ||
+			!snapshot.accountsLoaded ||
+			!snapshot.adjustmentsLoaded,
 		error:
 			catalog.members.error?.message ??
 			(profilesRestricted ? null : profilesQuery.error?.message) ??
@@ -136,6 +162,8 @@ export function useRhModel(
 			(documentsRestricted ? null : documentsQuery.error?.message) ??
 			(absencesRestricted ? null : absencesQuery.error?.message) ??
 			(typesRestricted ? null : typesQuery.error?.message) ??
+			(accountsRestricted ? null : accountsQuery.error?.message) ??
+			(adjustmentsRestricted ? null : adjustmentsQuery.error?.message) ??
 			null,
 		state: snapshot.state,
 		context: {
@@ -146,6 +174,7 @@ export function useRhModel(
 			documents,
 			absences: absenceActions,
 			absenceTypes: absenceTypeActions,
+			leave: leaveActions,
 			actorId: getRhActorId(),
 			organizationSlug,
 		},

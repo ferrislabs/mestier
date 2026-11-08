@@ -77,7 +77,7 @@ export function RightsPage({
 				<TabsList aria-label="Compte de droits">
 					{state.accounts.map((other) => (
 						<TabsTrigger key={other.id} value={other.id} className="px-4">
-							{other.name}
+							{other.archived ? `${other.name} (archivé)` : other.name}
 						</TabsTrigger>
 					))}
 				</TabsList>

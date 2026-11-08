@@ -12,7 +12,6 @@ import {
 	useRejectAbsence,
 } from '#/hooks/use-absences'
 import { useUploadFile } from '#/hooks/use-customers'
-import { setTypeAccount } from '#/pages/hr/feature/mocks/rh-store'
 import {
 	absenceRequestOf,
 	absenceTypeRequestOf,
@@ -91,15 +90,13 @@ export function useAbsenceTypeActions(
 			save: async (typeId, draft) => {
 				const body = absenceTypeRequestOf(draft)
 				if (typeId === null) {
-					const created = await createAsync({
+					await createAsync({
 						path: { organization_id: organizationId },
 						body,
 					})
-					setTypeAccount(created.data.id, draft.accountId)
 					return
 				}
 				await updateAsync({ path: path(typeId), body })
-				setTypeAccount(typeId, draft.accountId)
 			},
 			archive: async (typeId) => {
 				await archiveAsync({ path: path(typeId) })

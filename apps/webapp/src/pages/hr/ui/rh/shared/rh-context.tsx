@@ -1,12 +1,15 @@
 import { createContext, type ReactNode, useContext } from 'react'
 import { buildOrgPath } from '#/modules/org-path'
 import type { ProfileFields } from '#/pages/hr/lib/rh/member-profile'
+import type { AccountSettingsDraft } from '#/pages/hr/lib/rh/rights-model'
 import type {
 	AbsenceDraft,
 	AbsenceTypeDraft,
 	ActionContext,
+	AdjustmentDraft,
 	ContractDraft,
 	DocumentKind,
+	LeaveAccount,
 	RhState,
 } from '#/pages/hr/lib/rh/types'
 
@@ -48,6 +51,17 @@ export interface RhAbsenceTypeActions {
 	restore: (typeId: string) => Promise<void>
 }
 
+export interface RhLeaveActions {
+	saveAccount: (
+		account: LeaveAccount,
+		settings: AccountSettingsDraft,
+	) => Promise<void>
+	archiveAccount: (accountId: string) => Promise<void>
+	restoreAccount: (accountId: string) => Promise<void>
+	addAdjustment: (draft: AdjustmentDraft) => Promise<void>
+	removeAdjustment: (adjustmentId: string) => Promise<void>
+}
+
 export interface RhContextValue {
 	state: RhState
 	update: RhUpdate
@@ -56,6 +70,7 @@ export interface RhContextValue {
 	documents: RhDocumentActions
 	absences: RhAbsenceActions
 	absenceTypes: RhAbsenceTypeActions
+	leave: RhLeaveActions
 	actorId: string
 	organizationSlug: string
 }
@@ -104,6 +119,10 @@ export function useRhAbsenceActions(): RhAbsenceActions {
 
 export function useRhAbsenceTypeActions(): RhAbsenceTypeActions {
 	return useRhContext().absenceTypes
+}
+
+export function useRhLeaveActions(): RhLeaveActions {
+	return useRhContext().leave
 }
 
 export function useRhActorId(): string {

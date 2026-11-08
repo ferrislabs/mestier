@@ -11,27 +11,30 @@ use crate::{
             ports::AbsenceRepository,
         },
         absence_type::ports::AbsenceTypeRepository,
+        leave_account::ports::LeaveAccountRepository,
     },
 };
 
-pub struct AbsenceService<AR, TR>
+pub struct AbsenceService<AR, TR, LR>
 where
     AR: AbsenceRepository,
     TR: AbsenceTypeRepository,
+    LR: LeaveAccountRepository,
 {
     absence_repository: AR,
-    types: AbsenceTypeService<TR>,
+    types: AbsenceTypeService<TR, LR>,
 }
 
-impl<AR, TR> AbsenceService<AR, TR>
+impl<AR, TR, LR> AbsenceService<AR, TR, LR>
 where
     AR: AbsenceRepository,
     TR: AbsenceTypeRepository,
+    LR: LeaveAccountRepository,
 {
-    pub fn new(absence_repository: AR, type_repository: TR) -> Self {
+    pub fn new(absence_repository: AR, type_repository: TR, account_repository: LR) -> Self {
         Self {
             absence_repository,
-            types: AbsenceTypeService::new(type_repository),
+            types: AbsenceTypeService::new(type_repository, account_repository),
         }
     }
 
@@ -287,6 +290,7 @@ mod tests {
             absence_type::{
                 AbsenceTypeInput, default_absence_types, ports::MockAbsenceTypeRepository,
             },
+            leave_account::ports::MockLeaveAccountRepository,
         },
     };
     use chrono_tz::Europe::Paris;
@@ -328,8 +332,13 @@ mod tests {
     fn service(
         absence_repository: MockAbsenceRepository,
         stored: Vec<AbsenceType>,
-    ) -> AbsenceService<MockAbsenceRepository, MockAbsenceTypeRepository> {
-        AbsenceService::new(absence_repository, type_repository(stored))
+    ) -> AbsenceService<MockAbsenceRepository, MockAbsenceTypeRepository, MockLeaveAccountRepository>
+    {
+        AbsenceService::new(
+            absence_repository,
+            type_repository(stored),
+            MockLeaveAccountRepository::new(),
+        )
     }
 
     fn echo_insert(repository: &mut MockAbsenceRepository) {

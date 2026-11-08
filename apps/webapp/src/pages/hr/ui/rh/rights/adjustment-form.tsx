@@ -9,7 +9,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { addAdjustment, type BalancePeriod } from '#/pages/hr/lib/rh/balances'
+import type { BalancePeriod } from '#/pages/hr/lib/rh/balances'
+import { adjustmentFailureOf } from '#/pages/hr/lib/rh/leave-wire'
 import {
 	formatAmount,
 	parseDecimal,
@@ -23,7 +24,7 @@ import type {
 	Member,
 	RhState,
 } from '#/pages/hr/lib/rh/types'
-import { useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import { useRhLeaveActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
 const KIND_LABELS: Record<AdjustmentKind, string> = {
 	adjustment: 'Régularisation',
@@ -47,7 +48,7 @@ export function AdjustmentForm({
 	onDone: (message: string) => void
 	onCancel: () => void
 }) {
-	const updateRh = useRhUpdate()
+	const leave = useRhLeaveActions()
 	const kindId = useId()
 	const daysId = useId()
 	const dateId = useId()
@@ -58,6 +59,8 @@ export function AdjustmentForm({
 	const [date, setDate] = useState(today)
 	const [reason, setReason] = useState('')
 	const [touched, setTouched] = useState(false)
+	const [pending, setPending] = useState(false)
+	const [failure, setFailure] = useState<string | null>(null)
 
 	const draft: AdjustmentDraft = {
 		memberId: member.id,
@@ -72,17 +75,25 @@ export function AdjustmentForm({
 	function edit(update: () => void) {
 		update()
 		setTouched(true)
+		setFailure(null)
 	}
 
-	function submit() {
+	async function submit() {
 		setTouched(true)
-		if (errors.length > 0) return
-		updateRh((current, context) => addAdjustment(current, context, draft))
-		onDone(
-			kind === 'carry_over'
-				? 'Report ajouté au registre.'
-				: 'Régularisation ajoutée au registre.',
-		)
+		if (errors.length > 0 || pending) return
+		setPending(true)
+		setFailure(null)
+		try {
+			await leave.addAdjustment(draft)
+			onDone(
+				kind === 'carry_over'
+					? 'Report ajouté au registre.'
+					: 'Régularisation ajoutée au registre.',
+			)
+		} catch (error) {
+			setFailure(adjustmentFailureOf(error).message)
+			setPending(false)
+		}
 	}
 
 	return (
@@ -92,7 +103,7 @@ export function AdjustmentForm({
 			className="grid gap-3 rounded-lg border bg-muted/40 p-4"
 			onSubmit={(event) => {
 				event.preventDefault()
-				submit()
+				void submit()
 			}}
 		>
 			<div className="grid grid-cols-[11rem_8rem_1fr] gap-3 max-sm:grid-cols-1">
@@ -176,12 +187,17 @@ export function AdjustmentForm({
 							{error}
 						</p>
 					))}
+				{failure && (
+					<p role="alert" className="text-sm text-state-alert">
+						{failure}
+					</p>
+				)}
 			</div>
 			<div className="flex justify-end gap-2">
 				<Button type="button" variant="outline" size="sm" onClick={onCancel}>
 					Annuler
 				</Button>
-				<Button type="submit" size="sm" disabled={errors.length > 0}>
+				<Button type="submit" size="sm" disabled={errors.length > 0 || pending}>
 					{kind === 'carry_over'
 						? 'Enregistrer le report'
 						: 'Enregistrer la régularisation'}

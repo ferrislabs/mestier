@@ -15,6 +15,11 @@ import {
 	absenceRecord,
 	DEFAULT_TYPE_RECORDS,
 } from '#/test/rh-absence-fixtures'
+import {
+	DEFAULT_ACCOUNT_RECORDS,
+	LEAVE_ACCOUNTS_PATH,
+	LEAVE_ADJUSTMENTS_PATH,
+} from '#/test/rh-leave-fixtures'
 import { AbsencesFeature } from './absences-feature'
 import { ExtraFeature } from './extra-feature'
 import { MemberDetailFeature } from './member-detail-feature'
@@ -82,6 +87,10 @@ function installFakeApi(absences: unknown[] = []) {
 								data: { permissions: ['MANAGE_REFERENCE', 'MANAGE_MEMBERS'] },
 								pagination: null,
 							}
+						if (path === LEAVE_ACCOUNTS_PATH)
+							return { data: DEFAULT_ACCOUNT_RECORDS, pagination: null }
+						if (path === LEAVE_ADJUSTMENTS_PATH)
+							return { data: [], pagination: null }
 						throw new Error(`unmocked GET ${path}`)
 					},
 				},

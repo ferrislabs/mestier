@@ -1,11 +1,15 @@
 use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
+use uuid::Uuid;
 
 use super::{
-    AbsenceType, AbsenceTypeId, AbsenceTypeInput, AbsenceTypeOutcome, commands::AbsenceTypeDraft,
-    default_absence_types, ports::AbsenceTypeRepository, staggered,
+    AbsenceType, AbsenceTypeError, AbsenceTypeId, AbsenceTypeInput, AbsenceTypeOutcome,
+    commands::AbsenceTypeDraft, ports::AbsenceTypeRepository,
 };
-use crate::{AbsenceKind, OrganizationId};
+use crate::{
+    AbsenceKind, LeaveAccountId, OrganizationId,
+    domain::leave_account::{ports::LeaveAccountRepository, service::ensure_defaults_for_types},
+};
 
 impl AbsenceTypeDraft {
     pub fn as_input(&self) -> AbsenceTypeInput<'_> {
@@ -22,45 +26,29 @@ impl AbsenceTypeDraft {
     }
 }
 
-pub struct AbsenceTypeService<T>
+pub struct AbsenceTypeService<T, A>
 where
     T: AbsenceTypeRepository,
+    A: LeaveAccountRepository,
 {
     types: T,
+    accounts: A,
 }
 
-impl<T> AbsenceTypeService<T>
+impl<T, A> AbsenceTypeService<T, A>
 where
     T: AbsenceTypeRepository,
+    A: LeaveAccountRepository,
 {
-    pub fn new(types: T) -> Self {
-        Self { types }
+    pub fn new(types: T, accounts: A) -> Self {
+        Self { types, accounts }
     }
 
     pub async fn list(
         &mut self,
         organization_id: OrganizationId,
     ) -> Result<Vec<AbsenceType>, CoreError> {
-        self.types.lock_organization(organization_id).await?;
-        let existing = self.types.list_by_organization(organization_id).await?;
-        if !existing.is_empty() {
-            return Ok(existing);
-        }
-
-        let base = Utc::now();
-        for (index, default) in default_absence_types().iter().enumerate() {
-            let absence_type = AbsenceType::new(
-                AbsenceTypeId(generate_uuid_v7()),
-                organization_id,
-                AbsenceTypeInput::from(default),
-                staggered(base, index),
-            )
-            .map_err(|error| {
-                CoreError::Internal(format!("default absence type is invalid: {error}"))
-            })?;
-            self.types.insert(&absence_type).await?;
-        }
-
+        ensure_defaults_for_types(&mut self.types, &mut self.accounts, organization_id).await?;
         self.types.list_by_organization(organization_id).await
     }
 
@@ -93,6 +81,12 @@ where
         draft: &AbsenceTypeDraft,
     ) -> Result<AbsenceTypeOutcome<AbsenceType>, CoreError> {
         self.list(organization_id).await?;
+        if let Err(refusal) = self
+            .check_account(organization_id, draft.account_id, None)
+            .await?
+        {
+            return Ok(Err(refusal));
+        }
         let absence_type = match AbsenceType::new(
             AbsenceTypeId(generate_uuid_v7()),
             organization_id,
@@ -112,6 +106,12 @@ where
         draft: &AbsenceTypeDraft,
     ) -> Result<AbsenceTypeOutcome<AbsenceType>, CoreError> {
         let mut absence_type = self.find(organization_id, id).await?;
+        if let Err(refusal) = self
+            .check_account(organization_id, draft.account_id, absence_type.account_id)
+            .await?
+        {
+            return Ok(Err(refusal));
+        }
         if let Err(refusal) = absence_type.revise(draft.as_input()) {
             return Ok(Err(refusal));
         }
@@ -131,5 +131,27 @@ where
             absence_type.restore();
         }
         self.types.update(&absence_type).await
+    }
+
+    async fn check_account(
+        &mut self,
+        organization_id: OrganizationId,
+        account_id: Option<Uuid>,
+        current: Option<Uuid>,
+    ) -> Result<AbsenceTypeOutcome<()>, CoreError> {
+        let Some(account_id) = account_id else {
+            return Ok(Ok(()));
+        };
+        let Some(account) = self
+            .accounts
+            .find(organization_id, LeaveAccountId(account_id))
+            .await?
+        else {
+            return Ok(Err(AbsenceTypeError::AccountUnknown));
+        };
+        if account.is_archived() && current != Some(account_id) {
+            return Ok(Err(AbsenceTypeError::AccountArchived));
+        }
+        Ok(Ok(()))
     }
 }

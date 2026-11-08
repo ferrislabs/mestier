@@ -9,15 +9,12 @@ import {
 import type {
 	Absence,
 	AbsenceStatus,
-	ActionContext,
 	AdjustmentDraft,
 	IsoDate,
 	LeaveAccount,
 	Member,
 	RhState,
 } from '#/pages/hr/lib/rh/types'
-
-export const DEFAULT_ACCOUNT_ID = 'cp'
 
 export type BalancePeriod = { start: IsoDate; end: IsoDate }
 
@@ -275,51 +272,6 @@ export function validateAdjustment(
 	if (draft.reason.trim() === '' && draft.kind === 'adjustment')
 		return ['Indique le motif de la régularisation.']
 	return []
-}
-
-export function addAdjustment(
-	state: RhState,
-	context: ActionContext,
-	draft: AdjustmentDraft,
-): RhState {
-	if (validateAdjustment(state, draft).length > 0) return state
-	return {
-		...state,
-		adjustments: [
-			...state.adjustments,
-			{
-				...draft,
-				reason: draft.reason.trim(),
-				id: context.newId(),
-				authorId: context.actorId,
-			},
-		],
-	}
-}
-
-export function removeAdjustment(
-	state: RhState,
-	adjustmentId: string,
-): RhState {
-	return {
-		...state,
-		adjustments: state.adjustments.filter(
-			(adjustment) => adjustment.id !== adjustmentId,
-		),
-	}
-}
-
-export function updateAccount(
-	state: RhState,
-	accountId: string,
-	patch: Partial<Omit<LeaveAccount, 'id'>>,
-): RhState {
-	return {
-		...state,
-		accounts: state.accounts.map((account) =>
-			account.id === accountId ? { ...account, ...patch } : account,
-		),
-	}
 }
 
 export function describeAcquisition(account: LeaveAccount): string {

@@ -199,6 +199,7 @@ impl AbsenceType {
 #[derive(Debug, Clone, Copy)]
 pub struct DefaultAbsenceType {
     pub name: &'static str,
+    pub account_name: Option<&'static str>,
     pub hue: u16,
     pub count_mode: CountMode,
     pub paid: bool,
@@ -225,6 +226,7 @@ impl From<&DefaultAbsenceType> for AbsenceTypeInput<'static> {
 const DEFAULT_ABSENCE_TYPES: [DefaultAbsenceType; 7] = [
     DefaultAbsenceType {
         name: "Congés payés",
+        account_name: Some("Congés payés"),
         hue: 155,
         count_mode: CountMode::Working,
         paid: true,
@@ -234,6 +236,7 @@ const DEFAULT_ABSENCE_TYPES: [DefaultAbsenceType; 7] = [
     },
     DefaultAbsenceType {
         name: "RTT",
+        account_name: Some("RTT"),
         hue: 250,
         count_mode: CountMode::Working,
         paid: true,
@@ -243,6 +246,7 @@ const DEFAULT_ABSENCE_TYPES: [DefaultAbsenceType; 7] = [
     },
     DefaultAbsenceType {
         name: "Arrêt maladie",
+        account_name: None,
         hue: 25,
         count_mode: CountMode::Calendar,
         paid: true,
@@ -252,6 +256,7 @@ const DEFAULT_ABSENCE_TYPES: [DefaultAbsenceType; 7] = [
     },
     DefaultAbsenceType {
         name: "Intempéries",
+        account_name: None,
         hue: 215,
         count_mode: CountMode::Working,
         paid: true,
@@ -261,6 +266,7 @@ const DEFAULT_ABSENCE_TYPES: [DefaultAbsenceType; 7] = [
     },
     DefaultAbsenceType {
         name: "Événement familial",
+        account_name: None,
         hue: 320,
         count_mode: CountMode::Working,
         paid: true,
@@ -270,6 +276,7 @@ const DEFAULT_ABSENCE_TYPES: [DefaultAbsenceType; 7] = [
     },
     DefaultAbsenceType {
         name: "Formation",
+        account_name: None,
         hue: 190,
         count_mode: CountMode::Working,
         paid: true,
@@ -279,6 +286,7 @@ const DEFAULT_ABSENCE_TYPES: [DefaultAbsenceType; 7] = [
     },
     DefaultAbsenceType {
         name: "Congé sans solde",
+        account_name: None,
         hue: 60,
         count_mode: CountMode::Working,
         paid: false,

@@ -55,11 +55,13 @@ export namespace Schemas {
     organization_id: OrganizationId;
     paid: boolean;
   };
+  export type AcquisitionBody = { kind: "MONTHLY"; per_month: number } | { days: number; kind: "ANNUAL" };
   export type DocumentKind = "CONTRACT" | "IDENTITY" | "DIPLOMA" | "MEDICAL" | "OTHER";
   export type AddMemberDocumentRequest = { file_key: string; kind: DocumentKind; name: string };
   export type AddTicketBadgeRequest = { label: string; tone?: (string | null) | undefined };
   export type AddTicketEntryRequest = { body: string; kind: string };
   export type AddressKind = "BILLING" | "SITE" | "OTHER";
+  export type AdjustmentKind = "ADJUSTMENT" | "CARRY_OVER";
   export type InvoiceId = string;
   export type AllocateReceiptRequest = { invoice_id: InvoiceId };
   export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
@@ -599,6 +601,15 @@ export namespace Schemas {
     payment_terms_days?: (number | null) | undefined;
     project_id?: (null | ProjectId) | undefined;
     title?: string | undefined;
+  };
+  export type LeaveAccountId = string;
+  export type CreateLeaveAdjustmentRequest = {
+    account_id: LeaveAccountId;
+    date: string;
+    days: number;
+    kind: AdjustmentKind;
+    member_id: MemberId;
+    reason: string;
   };
   export type CreateMaintenanceContractRequest = ContractBody & {
     customer_context_id: CustomerContextId;
@@ -1541,6 +1552,35 @@ export namespace Schemas {
     share_capital_cents?: (number | null) | undefined;
     vat_exemption_basis?: (string | null) | undefined;
     vat_number?: (string | null) | undefined;
+  };
+  export type LeaveAccountRequest = {
+    acquisition: AcquisitionBody;
+    carry_over_max: number;
+    name: string;
+    period_start_month: number;
+  };
+  export type LeaveAccountResponse = {
+    acquisition: AcquisitionBody;
+    archived_at?: (string | null) | undefined;
+    carry_over_max: number;
+    created_at: string;
+    id: LeaveAccountId;
+    name: string;
+    organization_id: OrganizationId;
+    period_start_month: number;
+  };
+  export type LeaveAdjustmentId = string;
+  export type LeaveAdjustmentResponse = {
+    account_id: LeaveAccountId;
+    author_member_id?: (null | MemberId) | undefined;
+    created_at: string;
+    date: string;
+    days: number;
+    id: LeaveAdjustmentId;
+    kind: AdjustmentKind;
+    member_id: MemberId;
+    organization_id: OrganizationId;
+    reason: string;
   };
   export type LedgerKind = "RECEIPT" | "EXPENSE";
   export type LedgerStatus = "DONE" | "PENDING" | "LATE" | "UNALLOCATED" | "TO_REIMBURSE";
@@ -8041,6 +8081,207 @@ export namespace Endpoints {
       403: unknown;
     };
   };
+  export type get_ListLeaveAccounts = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/leave-accounts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          acquisition: Schemas.AcquisitionBody;
+          archived_at?: (string | null) | undefined;
+          carry_over_max: number;
+          created_at: string;
+          id: Schemas.LeaveAccountId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          period_start_month: number;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateLeaveAccount = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/leave-accounts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.LeaveAccountRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          acquisition: Schemas.AcquisitionBody;
+          archived_at?: (string | null) | undefined;
+          carry_over_max: number;
+          created_at: string;
+          id: Schemas.LeaveAccountId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          period_start_month: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type put_UpdateLeaveAccount = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; account_id: string };
+
+      body: Schemas.LeaveAccountRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          acquisition: Schemas.AcquisitionBody;
+          archived_at?: (string | null) | undefined;
+          carry_over_max: number;
+          created_at: string;
+          id: Schemas.LeaveAccountId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          period_start_month: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_ArchiveLeaveAccount = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; account_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          acquisition: Schemas.AcquisitionBody;
+          archived_at?: (string | null) | undefined;
+          carry_over_max: number;
+          created_at: string;
+          id: Schemas.LeaveAccountId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          period_start_month: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_RestoreLeaveAccount = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}/restore";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; account_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          acquisition: Schemas.AcquisitionBody;
+          archived_at?: (string | null) | undefined;
+          carry_over_max: number;
+          created_at: string;
+          id: Schemas.LeaveAccountId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          period_start_month: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListLeaveAdjustments = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/leave-adjustments";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ member_id: string; account_id: string }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          account_id: Schemas.LeaveAccountId;
+          author_member_id?: (null | Schemas.MemberId) | undefined;
+          created_at: string;
+          date: string;
+          days: number;
+          id: Schemas.LeaveAdjustmentId;
+          kind: Schemas.AdjustmentKind;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          reason: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateLeaveAdjustment = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/leave-adjustments";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateLeaveAdjustmentRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          account_id: Schemas.LeaveAccountId;
+          author_member_id?: (null | Schemas.MemberId) | undefined;
+          created_at: string;
+          date: string;
+          days: number;
+          id: Schemas.LeaveAdjustmentId;
+          kind: Schemas.AdjustmentKind;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          reason: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_DeleteLeaveAdjustment = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/leave-adjustments/{adjustment_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; adjustment_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type get_ReadLedger = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/ledger";
@@ -12416,6 +12657,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
+    "/api/v1/organizations/{organization_id}/leave-adjustments/{adjustment_id}": Endpoints.delete_DeleteLeaveAdjustment;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.delete_DeleteMemberContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/documents/{document_id}": Endpoints.delete_DeleteMemberDocument;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
@@ -12500,6 +12742,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.get_ListInvitations;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.get_ListInvoices;
     "/api/v1/organizations/{organization_id}/invoices/outstanding": Endpoints.get_ListOutstandingBalanceByCustomer;
+    "/api/v1/organizations/{organization_id}/leave-accounts": Endpoints.get_ListLeaveAccounts;
+    "/api/v1/organizations/{organization_id}/leave-adjustments": Endpoints.get_ListLeaveAdjustments;
     "/api/v1/organizations/{organization_id}/ledger": Endpoints.get_ReadLedger;
     "/api/v1/organizations/{organization_id}/maintenance/contracts": Endpoints.get_ListMaintenanceContracts;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.get_GetMaintenanceContract;
@@ -12624,6 +12868,10 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/field/time-entries/declare": Endpoints.post_DeclareTimeEntry;
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.post_CreateInvoice;
+    "/api/v1/organizations/{organization_id}/leave-accounts": Endpoints.post_CreateLeaveAccount;
+    "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}/archive": Endpoints.post_ArchiveLeaveAccount;
+    "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}/restore": Endpoints.post_RestoreLeaveAccount;
+    "/api/v1/organizations/{organization_id}/leave-adjustments": Endpoints.post_CreateLeaveAdjustment;
     "/api/v1/organizations/{organization_id}/maintenance/contracts": Endpoints.post_CreateMaintenanceContract;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}/archive": Endpoints.post_ArchiveMaintenanceContract;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}/duplicate": Endpoints.post_DuplicateMaintenanceContract;
@@ -12694,6 +12942,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
+    "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}": Endpoints.put_UpdateLeaveAccount;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.put_UpdateMemberContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.put_PutMemberProfile;

@@ -146,6 +146,8 @@ pub use domain::{
     expense::ports::{MockExpenseCategoryRepository, MockExpenseRepository},
     invitation::ports::MockInvitationRepository,
     invoice::ports::{MockDocumentFormat, MockInvoiceRepository},
+    leave_account::ports::MockLeaveAccountRepository,
+    leave_adjustment::ports::MockLeaveAdjustmentRepository,
     ledger::ports::{MockLedgerRepository, MockReceiptRepository},
     maintenance::ports::{MockInterventionRepository, MockMaintenanceContractRepository},
     member::ports::MockMemberRepository,
@@ -236,6 +238,14 @@ pub use domain::{
         CreateDoeModelCommand, CreateDoeModelFromStarterCommand, PreviewDoeStyleCommand,
         UpdateDoeModelCommand, UpdateDoeSettingsCommand,
     },
+};
+
+pub use domain::{
+    Acquisition, AcquisitionDraft, AdjustmentDays, AdjustmentKind, AdjustmentReason, CarryOverMax,
+    DefaultLeaveAccount, LeaveAccount, LeaveAccountError, LeaveAccountId, LeaveAccountInput,
+    LeaveAccountName, LeaveAccountOutcome, LeaveAccountService, LeaveAdjustment,
+    LeaveAdjustmentDraft, LeaveAdjustmentError, LeaveAdjustmentId, LeaveAdjustmentOutcome,
+    LeaveAdjustmentService, LeaveDays, PeriodStartMonth, PositiveDays, default_leave_accounts,
 };
 
 pub use domain::{
@@ -333,6 +343,13 @@ pub use domain::{
         QuoteInvoicing, QuoteInvoicingBlocker, line_net_cents as invoice_line_net_cents,
     },
     invoice::service::QuoteInvoicingView,
+    leave_account::commands::{
+        ArchiveLeaveAccountCommand, CreateLeaveAccountCommand, LeaveAccountDraft,
+        ListLeaveAccountsCommand, UpdateLeaveAccountCommand,
+    },
+    leave_adjustment::commands::{
+        CreateLeaveAdjustmentCommand, DeleteLeaveAdjustmentCommand, ListLeaveAdjustmentsCommand,
+    },
     ledger::commands::{AllocateReceiptCommand, RecordReceiptCommand},
     member::commands::{
         AddMemberCommand, AssignRoleCommand, CreateMemberCommand, UnassignRoleCommand,

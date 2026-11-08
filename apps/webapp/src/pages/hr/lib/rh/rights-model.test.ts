@@ -2,10 +2,9 @@ import { assert, test } from 'vitest'
 import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	addAdjustment,
-	movementsFor,
-	periodOf,
 	updateAccount,
-} from '#/pages/hr/lib/rh/balances'
+} from '#/pages/hr/lib/rh/balance-fixtures'
+import { movementsFor, periodOf } from '#/pages/hr/lib/rh/balances'
 import {
 	acquiredTotal,
 	consumptionOf,
@@ -259,10 +258,8 @@ test('validateAccountSettings contrôle les valeurs et la période', () => {
 		carryOverMax: 5,
 	}
 	assert.deepEqual(validateAccountSettings(valid), [])
-	assert.deepEqual(
-		validateAccountSettings({ ...valid, value: 0, carryOverMax: 0 }),
-		[],
-	)
+	assert.equal(validateAccountSettings({ ...valid, value: 0 }).length, 1)
+	assert.deepEqual(validateAccountSettings({ ...valid, carryOverMax: 0 }), [])
 	assert.equal(validateAccountSettings({ ...valid, value: -1 }).length, 1)
 	assert.equal(
 		validateAccountSettings({ ...valid, value: Number.NaN }).length,

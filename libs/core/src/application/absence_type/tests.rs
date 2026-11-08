@@ -56,6 +56,12 @@ mod tests {
         .await;
         purge(
             pool,
+            "DELETE FROM leave_accounts WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
             "DELETE FROM organizations WHERE id = $1",
             organization_id.0,
         )

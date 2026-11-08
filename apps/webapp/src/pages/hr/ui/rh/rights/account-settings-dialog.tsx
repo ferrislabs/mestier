@@ -17,13 +17,13 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { periodOf, updateAccount } from '#/pages/hr/lib/rh/balances'
+import { periodOf } from '#/pages/hr/lib/rh/balances'
+import { accountFailureOf } from '#/pages/hr/lib/rh/leave-wire'
 import {
 	type AccountSettingsDraft,
 	convertAcquisitionValue,
 	describePeriod,
 	parseDecimal,
-	settingsPatch,
 	validateAccountSettings,
 } from '#/pages/hr/lib/rh/rights-model'
 import type {
@@ -31,7 +31,7 @@ import type {
 	IsoDate,
 	LeaveAccount,
 } from '#/pages/hr/lib/rh/types'
-import { useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import { useRhLeaveActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
 const MONTHS = [
 	'Janvier',
@@ -72,7 +72,7 @@ export function AccountSettingsDialog({
 	today: IsoDate
 	onClose: () => void
 }) {
-	const updateRh = useRhUpdate()
+	const leave = useRhLeaveActions()
 	const kindId = useId()
 	const valueId = useId()
 	const monthId = useId()
@@ -85,6 +85,8 @@ export function AccountSettingsDialog({
 		account.periodStartMonth,
 	)
 	const [carryText, setCarryText] = useState(inputText(account.carryOverMax))
+	const [pending, setPending] = useState(false)
+	const [failure, setFailure] = useState<string | null>(null)
 
 	const draft: AccountSettingsDraft = {
 		kind,
@@ -107,10 +109,30 @@ export function AccountSettingsDialog({
 		setKind(next)
 	}
 
+	async function run(action: () => Promise<void>) {
+		if (pending) return
+		setPending(true)
+		setFailure(null)
+		try {
+			await action()
+			onClose()
+		} catch (error) {
+			setFailure(accountFailureOf(error).message)
+			setPending(false)
+		}
+	}
+
 	function save() {
 		if (errors.length > 0) return
-		updateRh((state) => updateAccount(state, account.id, settingsPatch(draft)))
-		onClose()
+		void run(() => leave.saveAccount(account, draft))
+	}
+
+	function toggleArchive() {
+		void run(() =>
+			account.archived
+				? leave.restoreAccount(account.id)
+				: leave.archiveAccount(account.id),
+		)
 	}
 
 	return (
@@ -222,12 +244,26 @@ export function AccountSettingsDialog({
 								{error}
 							</p>
 						))}
+						{failure && (
+							<p role="alert" className="text-sm text-state-alert">
+								{failure}
+							</p>
+						)}
 					</div>
 					<DialogFooter>
+						<Button
+							type="button"
+							variant="outline"
+							disabled={pending}
+							onClick={toggleArchive}
+							className="sm:mr-auto"
+						>
+							{account.archived ? 'Restaurer le compte' : 'Archiver le compte'}
+						</Button>
 						<Button type="button" variant="outline" onClick={onClose}>
 							Annuler
 						</Button>
-						<Button type="submit" disabled={errors.length > 0}>
+						<Button type="submit" disabled={errors.length > 0 || pending}>
 							Enregistrer
 						</Button>
 					</DialogFooter>

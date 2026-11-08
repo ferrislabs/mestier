@@ -9,6 +9,7 @@ mod absence_b3;
 mod catalog_b6;
 mod harness;
 mod issuer;
+mod leave_b4;
 mod member_contract_b2;
 mod member_profile_b1;
 

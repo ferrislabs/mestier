@@ -401,11 +401,6 @@ const MEMBERS: readonly Member[] = [
 	}),
 ]
 
-export const DEFAULT_ACCOUNT_BY_TYPE_NAME: Readonly<Record<string, string>> = {
-	'Congés payés': 'cp',
-	RTT: 'rtt',
-}
-
 const ABSENCE_TYPES: readonly AbsenceType[] = [
 	{
 		id: 'cp',
@@ -512,6 +507,7 @@ const ACCOUNTS: readonly LeaveAccount[] = [
 		acquisition: { kind: 'monthly', perMonth: 25 / 12 },
 		periodStartMonth: 6,
 		carryOverMax: 5,
+		archived: false,
 	},
 	{
 		id: 'rtt',
@@ -519,6 +515,7 @@ const ACCOUNTS: readonly LeaveAccount[] = [
 		acquisition: { kind: 'annual', days: 10 },
 		periodStartMonth: 1,
 		carryOverMax: 0,
+		archived: false,
 	},
 ]
 

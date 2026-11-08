@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, name, acquisition_kind, acquisition_hundredths,\n                   period_start_month, carry_over_max_hundredths, archived_at, created_at\n            FROM leave_accounts\n            WHERE org_id = $1 AND id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "acquisition_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "acquisition_hundredths",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "period_start_month",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "carry_over_max_hundredths",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "a9314e995d2f00962892cc5d024412a1c287c53817c8aa40f646e570a7e65287"
+}

@@ -11,7 +11,7 @@ import { useRhState } from '#/pages/hr/ui/rh/shared/rh-context'
 import { RhScreen } from './rh-screen'
 
 export interface RightsFeatureProps {
-	accountId: string
+	accountId: string | null
 	onAccountChange: (accountId: string) => void
 }
 
@@ -29,7 +29,9 @@ function RightsScreen({ accountId, onAccountChange }: RightsFeatureProps) {
 	const [configuring, setConfiguring] = useState(false)
 	const today = todayIso()
 	const account =
-		state.accounts.find((other) => other.id === accountId) ?? state.accounts[0]
+		state.accounts.find((other) => other.id === accountId) ??
+		state.accounts.find((other) => !other.archived) ??
+		state.accounts[0]
 	const period = account ? periodOf(account, today) : null
 	const rows = account ? rightsRows(state, account, today) : []
 	const totals = account ? totalsOf(rows) : null

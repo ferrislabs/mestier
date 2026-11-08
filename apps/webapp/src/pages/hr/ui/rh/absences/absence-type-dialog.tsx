@@ -243,11 +243,18 @@ function AbsenceTypeForm({
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value={NO_ACCOUNT}>Aucun</SelectItem>
-							{state.accounts.map((account) => (
-								<SelectItem key={account.id} value={account.id}>
-									{account.name}
-								</SelectItem>
-							))}
+							{state.accounts
+								.filter(
+									(account) =>
+										!account.archived || account.id === draft.accountId,
+								)
+								.map((account) => (
+									<SelectItem key={account.id} value={account.id}>
+										{account.archived
+											? `${account.name} (archivé)`
+											: account.name}
+									</SelectItem>
+								))}
 						</SelectContent>
 					</Select>
 					<p className="text-muted-foreground text-xs">

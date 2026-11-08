@@ -1,8 +1,8 @@
 import { assert, test } from 'vitest'
 import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
+import { addAdjustment } from '#/pages/hr/lib/rh/balance-fixtures'
 import {
 	acquiredAt,
-	addAdjustment,
 	computeBalance,
 	movementsFor,
 	periodOf,
