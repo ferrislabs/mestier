@@ -21,6 +21,7 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 | B4 | Compteurs et ajustements | B3 | fait |
 | B5 | Exceptions de jour et flux du planning | B2, B3 | fait |
 | B6 | Majorations et heures extra | B3 | fait |
+| B7 | Libre-service (`members/me`, demandes de soi-même), pagination complète | Fin | à faire |
 | Fin | Suppression de `rh-store`, `rh-seed`, `rh-binding` | B6 | fait |
 
 ## Mocks front
