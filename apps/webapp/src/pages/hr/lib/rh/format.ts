@@ -57,6 +57,7 @@ export function contractPeriod(span: Span, today?: IsoDate): string {
 }
 
 export function contractTerm(span: Span, today: IsoDate): string {
+	if (span.startDate === '') return '—'
 	const phase: ContractPhase = phaseOf(span, today)
 	if (phase === 'upcoming') return `À partir du ${formatDate(span.startDate)}`
 	if (phase === 'ended' && span.endDate)
@@ -105,6 +106,7 @@ export function scheduleCaption(
 	contract: Pick<Contract, 'type' | 'startDate' | 'endDate'>,
 	today: IsoDate,
 ): string {
+	if (contract.startDate === '') return 'Aucun contrat'
 	const prefix = {
 		upcoming: 'Contrat à venir',
 		current: 'Contrat en cours',

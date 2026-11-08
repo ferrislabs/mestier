@@ -14,7 +14,6 @@ import { addDays, diffDays } from '#/pages/hr/lib/rh/dates'
 import { DEFAULT_LUNCH, workDayMinutes } from '#/pages/hr/lib/rh/schedule'
 import type {
 	ActionContext,
-	Contract,
 	ContractDraft,
 	ContractSchedule,
 	DocumentKind,
@@ -168,23 +167,6 @@ export function createMember(
 	return { ...state, members: [...state.members, member] }
 }
 
-function withContracts(
-	state: RhState,
-	memberId: string,
-	change: (contracts: readonly Contract[]) => Contract[],
-): RhState {
-	const member = findMemberById(state, memberId)
-	if (!member) return state
-	const contracts = sortContracts(change(member.contracts))
-	if (validateContracts(contracts).length > 0) return state
-	return {
-		...state,
-		members: state.members.map((other) =>
-			other.id === memberId ? { ...other, contracts } : other,
-		),
-	}
-}
-
 export function contractErrors(
 	member: Member,
 	draft: ContractDraft,
@@ -192,50 +174,6 @@ export function contractErrors(
 ): string[] {
 	const others = member.contracts.filter((contract) => contract.id !== ignoreId)
 	return validateContracts([...others, draft])
-}
-
-export function addContract(
-	state: RhState,
-	context: ActionContext,
-	memberId: string,
-	draft: ContractDraft,
-): RhState {
-	return withContracts(state, memberId, (contracts) => [
-		...contracts,
-		{ ...draft, id: context.newId() },
-	])
-}
-
-export function updateContract(
-	state: RhState,
-	memberId: string,
-	contractId: string,
-	patch: Partial<ContractDraft>,
-): RhState {
-	return withContracts(state, memberId, (contracts) =>
-		contracts.map((contract) =>
-			contract.id === contractId ? { ...contract, ...patch } : contract,
-		),
-	)
-}
-
-export function removeContract(
-	state: RhState,
-	memberId: string,
-	contractId: string,
-): RhState {
-	return withContracts(state, memberId, (contracts) =>
-		contracts.filter((contract) => contract.id !== contractId),
-	)
-}
-
-export function setContractSchedule(
-	state: RhState,
-	memberId: string,
-	contractId: string,
-	schedule: ContractSchedule,
-): RhState {
-	return updateContract(state, memberId, contractId, { schedule })
 }
 
 export function currentSchedule(
@@ -258,55 +196,6 @@ export function cancelUpcomingAbsences(
 			absence.startDate > context.today
 				? { ...absence, status: 'cancelled' }
 				: absence,
-		),
-	}
-}
-
-export function addDocument(
-	state: RhState,
-	context: ActionContext,
-	memberId: string,
-	document: { name: string; kind: DocumentKind },
-): RhState {
-	const name = document.name.trim()
-	if (name === '') return state
-	return {
-		...state,
-		members: state.members.map((member) =>
-			member.id === memberId
-				? {
-						...member,
-						documents: [
-							...member.documents,
-							{
-								id: context.newId(),
-								name,
-								kind: document.kind,
-								addedAt: context.today,
-							},
-						],
-					}
-				: member,
-		),
-	}
-}
-
-export function removeDocument(
-	state: RhState,
-	memberId: string,
-	documentId: string,
-): RhState {
-	return {
-		...state,
-		members: state.members.map((member) =>
-			member.id === memberId
-				? {
-						...member,
-						documents: member.documents.filter(
-							(document) => document.id !== documentId,
-						),
-					}
-				: member,
 		),
 	}
 }

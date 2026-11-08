@@ -1,5 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useAbsences } from '#/hooks/use-absences'
+import { useMemberContracts } from '#/hooks/use-member-contracts'
+import { useMemberDocuments } from '#/hooks/use-member-documents'
 import { useMemberProfiles } from '#/hooks/use-member-profiles'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { isForbiddenError } from '#/lib/api-error'
@@ -11,11 +13,17 @@ import {
 	bindRhMembers,
 	getRhActorId,
 	memberKey,
+	setMemberContracts,
+	setMemberDocuments,
 	setMemberProfiles,
 	setRealAbsences,
 	updateRh,
 	useRhSnapshot,
 } from '#/pages/hr/feature/mocks/rh-store'
+import {
+	useContractActions,
+	useDocumentActions,
+} from '#/pages/hr/feature/use-contract-actions'
 import { useProfileActions } from '#/pages/hr/feature/use-profile-actions'
 import { absenceToDraft } from '#/pages/hr/lib/absences'
 import type { RhState } from '#/pages/hr/lib/rh/types'
@@ -41,7 +49,11 @@ export function useRhModel(
 	})
 	const absencesQuery = useAbsences(organizationId)
 	const profilesQuery = useMemberProfiles(organizationId)
+	const contractsQuery = useMemberContracts(organizationId)
+	const documentsQuery = useMemberDocuments(organizationId)
 	const profiles = useProfileActions(organizationId)
+	const contracts = useContractActions(organizationId)
+	const documents = useDocumentActions(organizationId)
 	const snapshot = useRhSnapshot()
 
 	const memberRows = catalog.members.data?.data
@@ -72,6 +84,13 @@ export function useRhModel(
 	const profilesRestricted = isForbiddenError(profilesQuery.error)
 	const profilesLoaded = profilesQuery.isSuccess || profilesRestricted
 
+	const contractRows = contractsQuery.data?.data
+	const contractsRestricted = isForbiddenError(contractsQuery.error)
+	const contractsLoaded = contractsQuery.isSuccess || contractsRestricted
+	const documentRows = documentsQuery.data?.data
+	const documentsRestricted = isForbiddenError(documentsQuery.error)
+	const documentsLoaded = documentsQuery.isSuccess || documentsRestricted
+
 	useEffect(() => {
 		if (membersLoaded) bindRhMembers(members)
 	}, [membersLoaded, members])
@@ -84,22 +103,38 @@ export function useRhModel(
 		if (profilesLoaded) setMemberProfiles(profileRows ?? [])
 	}, [profilesLoaded, profileRows])
 
+	useEffect(() => {
+		if (contractsLoaded) setMemberContracts(contractRows ?? [])
+	}, [contractsLoaded, contractRows])
+
+	useEffect(() => {
+		if (documentsLoaded) setMemberDocuments(documentRows ?? [])
+	}, [documentsLoaded, documentRows])
+
 	const isBound = membersLoaded && snapshot.boundKey === memberKey(members)
 	return {
 		isLoading:
 			catalog.members.isLoading ||
 			profilesQuery.isLoading ||
+			contractsQuery.isLoading ||
+			documentsQuery.isLoading ||
 			!isBound ||
-			!snapshot.profilesLoaded,
+			!snapshot.profilesLoaded ||
+			!snapshot.contractsLoaded ||
+			!snapshot.documentsLoaded,
 		error:
 			catalog.members.error?.message ??
 			(profilesRestricted ? null : profilesQuery.error?.message) ??
+			(contractsRestricted ? null : contractsQuery.error?.message) ??
+			(documentsRestricted ? null : documentsQuery.error?.message) ??
 			null,
 		state: snapshot.state,
 		context: {
 			state: snapshot.state,
 			update: updateRh,
 			profiles,
+			contracts,
+			documents,
 			actorId: getRhActorId(),
 			organizationSlug,
 		},

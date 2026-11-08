@@ -15,6 +15,7 @@ import {
 } from '#/pages/hr/lib/rh/contract-draft'
 import { CONTRACT_LABELS } from '#/pages/hr/lib/rh/contracts'
 import { todayIso } from '#/pages/hr/lib/rh/dates'
+import type { ContractFailure } from '#/pages/hr/lib/rh/member-wire'
 import { followStart } from '#/pages/hr/lib/rh/schedule-mode'
 import type { ContractDraft, ContractType } from '#/pages/hr/lib/rh/types'
 import { ScheduleModeEditor } from '#/pages/hr/ui/rh/members/schedule-mode-editor'
@@ -24,12 +25,14 @@ export function ContractFields({
 	value,
 	onChange,
 	errors,
+	failure = null,
 	startLabel = 'Date de début',
 }: {
 	idPrefix: string
 	value: ContractDraft
 	onChange: (draft: ContractDraft) => void
 	errors: readonly string[]
+	failure?: ContractFailure | null
 	startLabel?: string
 }) {
 	const [touched, setTouched] = useState<ReadonlySet<ContractFieldKey>>(
@@ -55,8 +58,10 @@ export function ContractFields({
 	}
 
 	function shown(field: ContractFieldKey): string | undefined {
+		if (failure?.field === field && !failure.overlap) return failure.message
 		return touched.has(field) ? grouped.byField[field] : undefined
 	}
+	const overlap = grouped.overlap ?? (failure?.overlap ? failure.message : null)
 
 	function fieldProps(field: ContractFieldKey) {
 		const error = shown(field)
@@ -150,9 +155,9 @@ export function ContractFields({
 						{...fieldProps('trialEndDate')}
 					/>
 				</FormField>
-				{grouped.overlap && (
+				{overlap && (
 					<div className="grid gap-0.5 sm:col-span-2">
-						<p className="text-[13px] text-state-alert">{grouped.overlap}</p>
+						<p className="text-[13px] text-state-alert">{overlap}</p>
 						<p className="text-[12px] text-muted-foreground">
 							Ajuste les dates, ou renseigne d’abord la fin du contrat
 							précédent.

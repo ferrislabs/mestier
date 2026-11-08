@@ -11,16 +11,9 @@ import {
 	suggestNextContract,
 	validateContracts,
 } from '#/pages/hr/lib/rh/contracts'
-import {
-	addContract,
-	contractErrors,
-	removeContract,
-	setContractSchedule,
-	upcomingDeadlines,
-	updateContract,
-} from '#/pages/hr/lib/rh/members'
+import { contractErrors, upcomingDeadlines } from '#/pages/hr/lib/rh/members'
 import { isEmployedOn, resolveDay } from '#/pages/hr/lib/rh/planning'
-import type { ActionContext, ContractDraft } from '#/pages/hr/lib/rh/types'
+import type { ContractDraft } from '#/pages/hr/lib/rh/types'
 
 const state = INITIAL_RH_STATE
 const member = (id: string) => {
@@ -28,13 +21,6 @@ const member = (id: string) => {
 	if (!found) throw new Error(id)
 	return found
 }
-const context: ActionContext = {
-	now: '2026-11-04T10:00:00.000Z',
-	today: '2026-11-04',
-	actorId: 'baptiste',
-	newId: () => 'c-new',
-}
-
 function draft(patch: Partial<ContractDraft> = {}): ContractDraft {
 	return {
 		type: 'cdi',
@@ -137,50 +123,6 @@ test('validateContracts exige début, fin pour les contrats à durée limitée e
 	)
 })
 
-test('addContract ajoute un contrat à la suite et le garde trié', () => {
-	const julien = member('julien')
-	const closed = updateContract(state, 'karim', 'c-karim-1', {
-		endDate: '2026-12-31',
-		type: 'cdd',
-	})
-	const next = addContract(
-		closed,
-		context,
-		'karim',
-		draft({ startDate: '2027-01-01' }),
-	)
-	const contracts = next.members.find((m) => m.id === 'karim')?.contracts ?? []
-	assert.deepEqual(
-		contracts.map((c) => c.id),
-		['c-karim-1', 'c-new'],
-	)
-	assert.equal(
-		next.members.find((m) => m.id === 'julien'),
-		julien,
-	)
-})
-
-test('addContract refuse un chevauchement', () => {
-	assert.equal(
-		addContract(state, context, 'karim', draft({ startDate: '2026-01-01' })),
-		state,
-	)
-})
-
-test('removeContract garde au moins un contrat', () => {
-	assert.equal(removeContract(state, 'karim', 'c-karim-1'), state)
-	const next = removeContract(state, 'julien', 'c-julien-2')
-	assert.equal(next.members.find((m) => m.id === 'julien')?.contracts.length, 2)
-})
-
-test('setContractSchedule ne modifie que le contrat visé', () => {
-	const schedule = member('thomas').contracts[1].schedule
-	const next = setContractSchedule(state, 'julien', 'c-julien-1', schedule)
-	const contracts = next.members.find((m) => m.id === 'julien')?.contracts ?? []
-	assert.equal(contracts[0].schedule, schedule)
-	assert.equal(contracts[2].schedule, member('julien').contracts[2].schedule)
-})
-
 test('contractErrors ignore le contrat édité', () => {
 	const julien = member('julien')
 	const edited = { ...julien.contracts[1], id: undefined }
@@ -205,15 +147,26 @@ test('la fin de contrat n’est une échéance que pour le dernier contrat', () 
 		(deadline) => deadline.memberId === 'julien',
 	)
 	assert.deepEqual(kinds, [])
-	const closed = updateContract(state, 'hugo', 'c-hugo-1', {
-		endDate: '2026-12-01',
-	})
-	const withNext = addContract(
-		closed,
-		context,
-		'hugo',
-		draft({ startDate: '2026-12-02' }),
-	)
+	const hugoContract = member('hugo').contracts[0]
+	const withNext = {
+		...state,
+		members: state.members.map((other) =>
+			other.id === 'hugo'
+				? {
+						...other,
+						contracts: [
+							{ ...hugoContract, endDate: '2026-12-01' },
+							{
+								...hugoContract,
+								id: 'c-new',
+								startDate: '2026-12-02',
+								endDate: null,
+							},
+						],
+					}
+				: other,
+		),
+	}
 	const hugo = upcomingDeadlines(withNext, '2026-11-04').filter(
 		(d) => d.memberId === 'hugo',
 	)

@@ -17,6 +17,10 @@ const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
 const EMPLOYEE_PROFILES_PATH =
 	'/api/v1/organizations/{organization_id}/employee-profiles'
 const PROFILES_PATH = '/api/v1/organizations/{organization_id}/member-profiles'
+const CONTRACTS_PATH =
+	'/api/v1/organizations/{organization_id}/member-contracts'
+const DOCUMENTS_PATH =
+	'/api/v1/organizations/{organization_id}/member-documents'
 const INVITATIONS_PATH = '/api/v1/organizations/{organization_id}/invitations'
 const MY_PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
@@ -113,7 +117,11 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 							}
 							return { data: [], pagination: null }
 						}
-						if (path === PROFILES_PATH) {
+						if (
+							path === PROFILES_PATH ||
+							path === CONTRACTS_PATH ||
+							path === DOCUMENTS_PATH
+						) {
 							return { data: [], pagination: null }
 						}
 						if (path === INVITATIONS_PATH) {

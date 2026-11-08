@@ -1,10 +1,16 @@
-// MOCK: rh-store — contracts, schedules, documents, balances, overrides and extras have no backend endpoint yet. Member profile fields (contacts, address, job title, manager, work permit, archiving) come from the API through setMemberProfiles and are never held here.
+// MOCK: rh-store — balances, overrides and extras have no backend endpoint yet. Member profile fields (contacts, address, job title, manager, work permit, archiving), contracts with their schedules, and documents come from the API through setMemberProfiles, setMemberContracts and setMemberDocuments and are never held here.
 import { useSyncExternalStore } from 'react'
 import { todayIso } from '#/pages/hr/lib/rh/dates'
 import {
 	overlayProfiles,
 	type ProfileRecord,
 } from '#/pages/hr/lib/rh/member-profile'
+import {
+	type ContractRecord,
+	type DocumentRecord,
+	overlayContracts,
+	overlayDocuments,
+} from '#/pages/hr/lib/rh/member-wire'
 import type { Absence, ActionContext, RhState } from '#/pages/hr/lib/rh/types'
 import {
 	bindSeed,
@@ -21,6 +27,8 @@ interface Snapshot {
 	state: RhState
 	boundKey: string | null
 	profilesLoaded: boolean
+	contractsLoaded: boolean
+	documentsLoaded: boolean
 }
 
 let base: RhState = INITIAL_RH_STATE
@@ -28,17 +36,26 @@ let realAbsences: readonly Absence[] = []
 let boundKey: string | null = null
 let profiles: readonly ProfileRecord[] = []
 let profilesLoaded = false
+let contracts: readonly ContractRecord[] = []
+let contractsLoaded = false
+let documents: readonly DocumentRecord[] = []
+let documentsLoaded = false
 let accountEmails: ReadonlyMap<string, string> = new Map()
 let actorId = ''
 let snapshot: Snapshot = compose()
 const listeners = new Set<() => void>()
 
 function compose(): Snapshot {
-	const overlaid = overlayProfiles(base, profiles, accountEmails)
+	const overlaid = overlayDocuments(
+		overlayContracts(overlayProfiles(base, profiles, accountEmails), contracts),
+		documents,
+	)
 	return {
 		state: { ...overlaid, absences: [...base.absences, ...realAbsences] },
 		boundKey,
 		profilesLoaded,
+		contractsLoaded,
+		documentsLoaded,
 	}
 }
 
@@ -91,6 +108,18 @@ export function setMemberProfiles(records: readonly ProfileRecord[]) {
 	publish()
 }
 
+export function setMemberContracts(records: readonly ContractRecord[]) {
+	contracts = records
+	contractsLoaded = true
+	publish()
+}
+
+export function setMemberDocuments(records: readonly DocumentRecord[]) {
+	documents = records
+	documentsLoaded = true
+	publish()
+}
+
 export function memberKey(members: readonly RealMember[]): string {
 	return keyOf(members)
 }
@@ -133,6 +162,10 @@ export function resetRhStore() {
 	realAbsences = []
 	profiles = []
 	profilesLoaded = false
+	contracts = []
+	contractsLoaded = false
+	documents = []
+	documentsLoaded = false
 	accountEmails = new Map()
 	boundKey = null
 	actorId = ''

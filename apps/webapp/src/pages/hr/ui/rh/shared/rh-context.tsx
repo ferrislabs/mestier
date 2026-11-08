@@ -1,7 +1,12 @@
 import { createContext, type ReactNode, useContext } from 'react'
 import { buildOrgPath } from '#/modules/org-path'
 import type { ProfileFields } from '#/pages/hr/lib/rh/member-profile'
-import type { ActionContext, RhState } from '#/pages/hr/lib/rh/types'
+import type {
+	ActionContext,
+	ContractDraft,
+	DocumentKind,
+	RhState,
+} from '#/pages/hr/lib/rh/types'
 
 export type RhUpdate = (
 	update: (current: RhState, context: ActionContext) => RhState,
@@ -13,10 +18,27 @@ export interface RhProfileActions {
 	restore: (memberId: string) => Promise<void>
 }
 
+export interface RhContractActions {
+	add: (memberId: string, draft: ContractDraft) => Promise<void>
+	update: (
+		memberId: string,
+		contractId: string,
+		draft: ContractDraft,
+	) => Promise<void>
+	remove: (memberId: string, contractId: string) => Promise<void>
+}
+
+export interface RhDocumentActions {
+	add: (memberId: string, file: File, kind: DocumentKind) => Promise<void>
+	remove: (memberId: string, documentId: string) => Promise<void>
+}
+
 export interface RhContextValue {
 	state: RhState
 	update: RhUpdate
 	profiles: RhProfileActions
+	contracts: RhContractActions
+	documents: RhDocumentActions
 	actorId: string
 	organizationSlug: string
 }
@@ -49,6 +71,14 @@ export function useRhUpdate(): RhUpdate {
 
 export function useRhProfileActions(): RhProfileActions {
 	return useRhContext().profiles
+}
+
+export function useRhContractActions(): RhContractActions {
+	return useRhContext().contracts
+}
+
+export function useRhDocumentActions(): RhDocumentActions {
+	return useRhContext().documents
 }
 
 export function useRhActorId(): string {

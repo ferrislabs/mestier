@@ -1,4 +1,4 @@
-// MOCK: rh — no backend endpoint yet. Replace with the HR domain API (contracts, leave accounts, absence requests, overtime declarations, day planning).
+// MOCK: rh — no backend endpoint yet. Replace with the HR domain API (leave accounts, absence requests, overtime declarations, day planning). Contracts are bound to the API through the store overlay; the contracts below only serve fixtures.
 import { NO_SCHEDULE, weekly } from '#/pages/hr/lib/rh/contract-schedule'
 import { daysInRange, weekdayOf } from '#/pages/hr/lib/rh/dates'
 import { isHoliday } from '#/pages/hr/lib/rh/holidays'
@@ -138,14 +138,6 @@ const MEMBERS: readonly Member[] = [
 			city: 'Vichy',
 			country: 'France',
 		},
-		documents: [
-			{
-				id: 'doc-baptiste-1',
-				name: 'Statuts de la société.pdf',
-				kind: 'other',
-				addedAt: '2014-03-01',
-			},
-		],
 	}),
 	member({
 		id: 'karim',
@@ -167,20 +159,6 @@ const MEMBERS: readonly Member[] = [
 			city: 'Cusset',
 			country: 'France',
 		},
-		documents: [
-			{
-				id: 'doc-karim-1',
-				name: 'Contrat de travail CDI.pdf',
-				kind: 'contract',
-				addedAt: '2017-05-15',
-			},
-			{
-				id: 'doc-karim-2',
-				name: 'Visite médicale 2025.pdf',
-				kind: 'medical',
-				addedAt: '2025-02-11',
-			},
-		],
 	}),
 	member({
 		id: 'julien',
@@ -213,20 +191,6 @@ const MEMBERS: readonly Member[] = [
 			city: 'Vichy',
 			country: 'France',
 		},
-		documents: [
-			{
-				id: 'doc-julien-1',
-				name: 'Contrat d’apprentissage.pdf',
-				kind: 'contract',
-				addedAt: '2019-09-02',
-			},
-			{
-				id: 'doc-julien-2',
-				name: 'Contrat de travail CDI.pdf',
-				kind: 'contract',
-				addedAt: '2022-03-01',
-			},
-		],
 	}),
 	member({
 		id: 'lucie',
@@ -257,14 +221,6 @@ const MEMBERS: readonly Member[] = [
 			city: 'Bellerive-sur-Allier',
 			country: 'France',
 		},
-		documents: [
-			{
-				id: 'doc-lucie-1',
-				name: 'Avenant temps partiel 80 %.pdf',
-				kind: 'contract',
-				addedAt: '2023-09-01',
-			},
-		],
 	}),
 	member({
 		id: 'sophie',

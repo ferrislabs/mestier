@@ -16,6 +16,8 @@ export namespace Schemas {
     starts_at: string;
     updated_at: string;
   };
+  export type DocumentKind = "CONTRACT" | "IDENTITY" | "DIPLOMA" | "MEDICAL" | "OTHER";
+  export type AddMemberDocumentRequest = { file_key: string; kind: DocumentKind; name: string };
   export type AddTicketBadgeRequest = { label: string; tone?: (string | null) | undefined };
   export type AddTicketEntryRequest = { body: string; kind: string };
   export type AddressKind = "BILLING" | "SITE" | "OTHER";
@@ -106,6 +108,15 @@ export namespace Schemas {
     recovery_fee_cents: number;
   };
   export type BlankPageCount = number;
+  export type ScheduleUnit = "weeks" | "months";
+  export type LunchInput = { end: string; start: string };
+  export type WorkDayInput = { end: string; lunch?: (null | LunchInput) | undefined; start: string };
+  export type BlockInput = {
+    label?: string | undefined;
+    length: number;
+    unit: ScheduleUnit;
+    week: Array<null | WorkDayInput>;
+  };
   export type BranchDto = "Then" | "Else" | "Each" | "After";
   export type BulkAssignTasksRequest = { assignees: Array<AssigneeRefRequest>; task_ids: Array<TaskId> };
   export type TaskAssignmentSummary = { id: TaskAssignmentId; member_id: MemberId };
@@ -343,6 +354,7 @@ export namespace Schemas {
     postal_code?: (string | null) | undefined;
     site_label: string;
   };
+  export type ContractType = "CDI" | "CDD" | "APPRENTICESHIP" | "INTERIM" | "MANAGER";
   export type CorrectEmployeeCostBasisRequest = {
     effective_from: string;
     effective_to?: (string | null) | undefined;
@@ -1548,6 +1560,31 @@ export namespace Schemas {
   };
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
+  export type MemberContractId = string;
+  export type ScheduleInput =
+    | { kind: "weekly"; week: Array<null | WorkDayInput> }
+    | { anchor: string; blocks: Array<BlockInput>; kind: "rotation" }
+    | { default_day: WorkDayInput; kind: "variable" };
+  export type MemberContractResponse = {
+    end_date?: (string | null) | undefined;
+    id: MemberContractId;
+    member_id: MemberId;
+    organization_id: OrganizationId;
+    schedule: ScheduleInput;
+    start_date: string;
+    trial_end_date?: (string | null) | undefined;
+    type: ContractType;
+  };
+  export type MemberDocumentId = string;
+  export type MemberDocumentResponse = {
+    added_at: string;
+    file_key: string;
+    id: MemberDocumentId;
+    kind: DocumentKind;
+    member_id: MemberId;
+    name: string;
+    organization_id: OrganizationId;
+  };
   export type MemberProfileAddressResponse = {
     city: string;
     complement: string;
@@ -1860,6 +1897,13 @@ export namespace Schemas {
     title: string;
   };
   export type ProposeInterventionRequest = { done_on: string };
+  export type PutMemberContractRequest = {
+    end_date?: (string | null) | undefined;
+    schedule: ScheduleInput;
+    start_date: string;
+    trial_end_date?: (string | null) | undefined;
+    type: ContractType;
+  };
   export type PutMemberProfileRequest = Partial<{
     address: PostalAddressBody;
     job_title: string | null;
@@ -8125,6 +8169,55 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListOrganizationMemberContracts = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/member-contracts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          end_date?: (string | null) | undefined;
+          id: Schemas.MemberContractId;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          schedule: Schemas.ScheduleInput;
+          start_date: string;
+          trial_end_date?: (string | null) | undefined;
+          type: Schemas.ContractType;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListMemberDocuments = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/member-documents";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          added_at: string;
+          file_key: string;
+          id: Schemas.MemberDocumentId;
+          kind: Schemas.DocumentKind;
+          member_id: Schemas.MemberId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
   export type get_ListMemberProfiles = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/member-profiles";
@@ -8252,6 +8345,138 @@ export namespace Endpoints {
       404: unknown;
       422: unknown;
     };
+  };
+  export type get_ListMemberContracts = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/contracts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          end_date?: (string | null) | undefined;
+          id: Schemas.MemberContractId;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          schedule: Schemas.ScheduleInput;
+          start_date: string;
+          trial_end_date?: (string | null) | undefined;
+          type: Schemas.ContractType;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateMemberContract = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/contracts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string };
+
+      body: Schemas.PutMemberContractRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          end_date?: (string | null) | undefined;
+          id: Schemas.MemberContractId;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          schedule: Schemas.ScheduleInput;
+          start_date: string;
+          trial_end_date?: (string | null) | undefined;
+          type: Schemas.ContractType;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type put_UpdateMemberContract = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string; contract_id: string };
+
+      body: Schemas.PutMemberContractRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          end_date?: (string | null) | undefined;
+          id: Schemas.MemberContractId;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          schedule: Schemas.ScheduleInput;
+          start_date: string;
+          trial_end_date?: (string | null) | undefined;
+          type: Schemas.ContractType;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_DeleteMemberContract = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string; contract_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type post_AddMemberDocument = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/documents";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string };
+
+      body: Schemas.AddMemberDocumentRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          added_at: string;
+          file_key: string;
+          id: Schemas.MemberDocumentId;
+          kind: Schemas.DocumentKind;
+          member_id: Schemas.MemberId;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_DeleteMemberDocument = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/documents/{document_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string; document_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
   export type get_GetMemberProfile = {
     method: "GET";
@@ -11833,6 +12058,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.delete_DeleteMemberContract;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/documents/{document_id}": Endpoints.delete_DeleteMemberDocument;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
     "/api/v1/organizations/{organization_id}/support/api-keys/{key_id}": Endpoints.delete_RevokeSupportApiKey;
@@ -11921,9 +12148,12 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/maintenance/interventions": Endpoints.get_ListMaintenanceInterventions;
     "/api/v1/organizations/{organization_id}/maintenance/recap": Endpoints.get_GetMaintenanceRecap;
     "/api/v1/organizations/{organization_id}/maintenance/recap.pdf": Endpoints.get_ExportMaintenanceRecapPdf;
+    "/api/v1/organizations/{organization_id}/member-contracts": Endpoints.get_ListOrganizationMemberContracts;
+    "/api/v1/organizations/{organization_id}/member-documents": Endpoints.get_ListMemberDocuments;
     "/api/v1/organizations/{organization_id}/member-profiles": Endpoints.get_ListMemberProfiles;
     "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
     "/api/v1/organizations/{organization_id}/members/me/permissions": Endpoints.get_GetMyPermissions;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/contracts": Endpoints.get_ListMemberContracts;
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.get_GetMemberProfile;
     "/api/v1/organizations/{organization_id}/numbering": Endpoints.get_GetOrganizationNumbering;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
@@ -12038,6 +12268,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/maintenance/recap/plan": Endpoints.post_PlanMaintenanceLines;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
     "/api/v1/organizations/{organization_id}/members/{member_id}/archive": Endpoints.post_ArchiveMember;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/contracts": Endpoints.post_CreateMemberContract;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/documents": Endpoints.post_AddMemberDocument;
     "/api/v1/organizations/{organization_id}/members/{member_id}/restore": Endpoints.post_RestoreMember;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/project-templates": Endpoints.post_CreateProjectTemplate;
@@ -12097,6 +12329,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.put_UpdateMemberContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.put_PutMemberProfile;
     "/api/v1/organizations/{organization_id}/numbering/{kind}": Endpoints.put_SetOrganizationNextNumber;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
