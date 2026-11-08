@@ -85,8 +85,9 @@ export function useMessageThreadUi(channelId: string) {
 	const lastMarkedReadIdRef = useRef<string | null>(null)
 	const markChannelRead = useMarkChannelRead()
 
-	function maybeMarkRead(atBottom: boolean) {
-		if (!hasUserInteractedRef.current || !atBottom) return
+	function maybeMarkRead(atBottom: boolean, seenWithoutScrolling = false) {
+		if (!seenWithoutScrolling && !hasUserInteractedRef.current) return
+		if (!atBottom) return
 		const latest = messages.at(-1)?.message.id
 		if (!latest || latest === lastMarkedReadIdRef.current) return
 		lastMarkedReadIdRef.current = latest
@@ -128,6 +129,11 @@ export function useMessageThreadUi(channelId: string) {
 		previousMessageCountRef.current = messages.length
 		if (grew && wasNearBottomRef.current) {
 			container.scrollTop = container.scrollHeight
+		}
+		// A thread short enough to fit has nothing to scroll, so no wheel event
+		// will ever come: everything is already on screen, hence read.
+		if (container.scrollHeight <= container.clientHeight) {
+			maybeMarkRead(true, true)
 		}
 	}, [messages.length])
 
