@@ -9,6 +9,7 @@ use discord::{
 use mestier_macros::transactional;
 
 use crate::application::{MestierUseCase, policy::resolve_org_permissions};
+use crate::domain::chat::events::ChatChannelCreated;
 use crate::domain::member::ports::MemberRepository;
 use crate::domain::role::{Permissions, ports::RoleRepository};
 
@@ -214,7 +215,7 @@ impl MestierUseCase {
     /// channel is never visible, even for an instant, before it is closed.
     /// `creator` gets a member overwrite of their own: whatever roles they hold,
     /// they cannot lock themselves out of what they just made.
-    #[transactional(channel, overwrite, role, events)]
+    #[transactional(channel, overwrite, role, events, emitter)]
     pub async fn create_private_channel(
         &self,
         command: CreateChannelCommand,
@@ -263,6 +264,13 @@ impl MestierUseCase {
         overwrite_repository
             .upsert(overwrite(OverwriteTarget::Member(creator), access, 0))
             .await?;
+
+        emitter.emit(
+            organization_id,
+            &ChatChannelCreated {
+                channel: channel.clone(),
+            },
+        )?;
 
         Ok(channel)
     }

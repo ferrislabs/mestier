@@ -6,12 +6,19 @@ use discord::{
 use mestier_macros::transactional;
 
 use crate::application::MestierUseCase;
+use crate::domain::chat::events::ChatChannelCreated;
 
 impl MestierUseCase {
-    #[transactional(channel, events)]
+    #[transactional(channel, events, emitter)]
     pub async fn create_channel(&self, cmd: CreateChannelCommand) -> Result<Channel, CoreError> {
         let mut service = ChannelService::new(channel_repository, &events);
         let result = service.create_channel(cmd).await?;
+        emitter.emit(
+            result.organization_id,
+            &ChatChannelCreated {
+                channel: result.clone(),
+            },
+        )?;
         Ok(result)
     }
 
