@@ -239,3 +239,45 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf 'ghcr.io/ferrislabs/mestier-${{ matrix.target }}@sha256:%s ' *)
+
+  # Deploys the demo: writes the new tag into infra, Argo CD does the rest.
+  # Runs only once every image manifest is pushed, and only for main.
+  bump-infra:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: push-manifest
+    runs-on: ubuntu-24.04
+    # Two merges close together must bump one after the other, never race.
+    concurrency:
+      group: bump-infra
+      cancel-in-progress: false
+    steps:
+      - name: checkout infra
+        uses: actions/checkout@v5
+        with:
+          repository: ferrislabs/infra
+          ref: main
+          token: ${{ secrets.INFRA_BOT_TOKEN }}
+
+      - name: bump image tags
+        run: |
+          tag="sha-${GITHUB_SHA::7}"
+          for key in api webapp mcpGateway mcpServer; do
+            yq -i ".${key}.image.tag = \"${tag}\"" apps/mestier/images.yaml
+          done
+          echo "TAG_SHORT=${tag}" >> "$GITHUB_ENV"
+
+      - name: commit and push
+        run: |
+          if git diff --quiet; then
+            echo "images.yaml already at ${TAG_SHORT}, nothing to do"
+            exit 0
+          fi
+          git config user.name "mestier-ci"
+          git config user.email "mestier-ci@users.noreply.github.com"
+          git commit -am "chore(mestier): deploy ${TAG_SHORT}"
+          for attempt in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git pull --rebase origin main
+          done
+          echo "could not push the bump after 3 attempts" >&2
+          exit 1
