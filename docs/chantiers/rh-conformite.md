@@ -13,8 +13,8 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 
 | Lot | Contenu | Dépend de | État |
 |---|---|---|---|
-| F1 | Coque : URLs `/rh/*`, redirections `/hr`, barre latérale, compteurs, routes « nouvelle » | – | à faire |
-| F2 | Liste et fiche membre, invitation et rôles conservés | F1 | à faire |
+| F1 | Coque : URLs `/rh/*`, redirections `/hr`, barre latérale, compteurs, routes « nouvelle » | – | fait |
+| F2 | Liste et fiche membre, invitation et rôles conservés | F1 | fait |
 | B1 | Profil RH du membre, archivage | F2 | à faire |
 | B2 | Contrats, horaires, documents | B1 | à faire |
 | B3 | Motifs d'absence et circuit de validation | B2 | à faire |
@@ -27,4 +27,16 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 `pages/hr/feature/mocks/{rh-store,rh-seed,rh-binding}.ts`, découpés par lot : profil (B1), contrats et documents (B2), motifs et absences (B3), compteurs (B4), exceptions (B5), majorations et extras (B6).
 
 ## Reports
-(vide, rempli à chaque lot)
+## Reports issus de F1
+- Les clés de recherche passent en français (`onglet`, `statut`, `membre`, `compte`, `vue`, `mois`). La redirection `/hr/**` renomme chemins et clés ; un `/hr` inconnu va sur `/rh`.
+- Les compteurs (absences et extras en attente) vivent dans la barre latérale dépliée ; le rail replié n'en montre pas (pas de source `ModuleSection.badge`).
+- `moduleLandingPath` ignore `requiredPermission` : l'atterrissage `/rh/membres` est caché sans `MANAGE_MEMBERS`.
+- `app-breadcrumb.tsx` garde des regex CRM sur les anciens chemins `/crm/customers` et `/crm/quotes`.
+- `INITIAL_RH_STATE` compte 8 motifs d'absence, le prototype 7 ; les autres écarts de seed ne sont pas vérifiés.
+
+## Reports issus de F2
+- La liste affiche `fullName` (prénom nom) comme le prototype, pas `display_name` (nom prénom) de l'API.
+- Le formulaire de création garde la création réelle (membre + profil de coût), pas le premier contrat du prototype : B2 le reprendra.
+- `tsc --noEmit` : 43 erreurs avant, 38 après (tests supprimés), aucune nouvelle.
+- B1 remplace `status`, archivage, restauration, `managerId`, poste et e-mails du store ; garder `RhScreen` comme porte de chargement. Si la fiche clignote « introuvable » après création, attendre `isBound`.
+- Pas de contrôle visuel : pas d'authentification possible en autonomie.
