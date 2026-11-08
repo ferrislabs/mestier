@@ -421,7 +421,7 @@ async fn the_original_request_shape_still_works_and_cancel_follows_its_rule() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{created}");
-    assert_eq!(created["data"]["status"], json!("APPROVED"));
+    assert_eq!(created["data"]["status"], json!("PENDING"));
     assert_eq!(created["data"]["kind"], json!("SICK"));
     assert_eq!(created["data"]["starts_at"], json!("2026-02-02T08:00:00Z"));
     let id = created["data"]["id"].as_str().expect("an id").to_owned();

@@ -240,7 +240,9 @@ where
         privileged: bool,
     ) -> Result<AbsenceOutcome<Absence>, CoreError> {
         let mut absence = self.in_organization(organization_id, id).await?;
-        let is_creator = caller.is_some() && absence.created_by_member_id == caller;
+        let is_creator = caller.is_some_and(|member| {
+            absence.created_by_member_id == Some(member) && absence.member_id == member
+        });
         if !privileged && !is_creator {
             return Err(CoreError::Forbidden {
                 reason: Some("only the creator or a planning manager can cancel".to_owned()),
@@ -471,7 +473,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let approved = service
+        let awaiting_proof = service
             .create_absence(days(sick.id), None, Paris)
             .await
             .unwrap()
@@ -479,8 +481,8 @@ mod tests {
 
         assert_eq!(pending.status, AbsenceStatus::Pending);
         assert!(pending.all_day);
-        assert_eq!(approved.status, AbsenceStatus::Approved);
-        assert_eq!(approved.kind, AbsenceKind::Sick);
+        assert_eq!(awaiting_proof.status, AbsenceStatus::Pending);
+        assert_eq!(awaiting_proof.kind, AbsenceKind::Sick);
     }
 
     #[tokio::test]
@@ -724,6 +726,7 @@ mod tests {
         let creator = MemberId(Uuid::new_v4());
         let mut existing = absence(id, organization_id, AbsenceTypeId(Uuid::new_v4()));
         existing.created_by_member_id = Some(creator);
+        existing.member_id = creator;
         existing.status = AbsenceStatus::Pending;
         let mut repository = repository_holding(existing);
         repository.expect_update().times(2).returning(|a| {
@@ -750,5 +753,23 @@ mod tests {
         assert!(matches!(stranger, CoreError::Forbidden { .. }));
         assert_eq!(by_creator.status, AbsenceStatus::Cancelled);
         assert_eq!(by_manager.status, AbsenceStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn spec_rh_7_10_an_unprivileged_creator_cannot_cancel_for_another_member() {
+        let id = AbsenceId(Uuid::new_v4());
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let creator = MemberId(Uuid::new_v4());
+        let mut existing = absence(id, organization_id, AbsenceTypeId(Uuid::new_v4()));
+        existing.created_by_member_id = Some(creator);
+        existing.status = AbsenceStatus::Pending;
+        let mut service = service(repository_holding(existing), Vec::new());
+
+        let refused = service
+            .cancel(organization_id, id, Some(creator), false)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(refused, CoreError::Forbidden { .. }));
     }
 }

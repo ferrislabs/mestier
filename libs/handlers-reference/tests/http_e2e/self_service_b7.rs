@@ -60,6 +60,15 @@ fn org(app: &App, suffix: &str) -> String {
 }
 
 async fn new_type(app: &App, name: &str, needs_approval: bool) -> String {
+    new_type_with_proof(app, name, needs_approval, false).await
+}
+
+async fn new_type_with_proof(
+    app: &App,
+    name: &str,
+    needs_approval: bool,
+    needs_proof: bool,
+) -> String {
     let (status, created) = post(
         app,
         &app.token,
@@ -71,7 +80,7 @@ async fn new_type(app: &App, name: &str, needs_approval: bool) -> String {
             "account_id": null,
             "paid": true,
             "needs_approval": needs_approval,
-            "needs_proof": false,
+            "needs_proof": needs_proof,
             "kind": "LEAVE",
         })),
     )
@@ -429,6 +438,148 @@ async fn spec_rh_7_5_a_member_lists_only_their_own_requests_and_every_account() 
     assert_eq!(listed["data"].as_array().expect("a list").len(), 2);
     let (status, listed) = get(&app, &app.restricted_token, &org(&app, "absence-types")).await;
     assert_eq!(status, StatusCode::OK, "{listed}");
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_rh_7_7_a_type_needing_proof_is_pending_until_a_proof_is_given() {
+    let app = harness::start().await;
+    let me = seat(&app, "No Role").await;
+    let sick = new_type_with_proof(&app, "Maladie preuve", false, true).await;
+    let absences = org(&app, "absences");
+
+    let mut without = absence_body(me, &sick);
+    without.as_object_mut().unwrap().remove("proof_file_key");
+    for token in [&app.restricted_token, &app.token] {
+        let (status, created) = post(&app, token, &absences, Some(without.clone())).await;
+        assert_eq!(status, StatusCode::CREATED, "{created}");
+        assert_eq!(created["data"]["status"], json!("PENDING"));
+    }
+
+    let (status, with) = post(
+        &app,
+        &app.restricted_token,
+        &absences,
+        Some(absence_body(me, &sick)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{with}");
+    assert_eq!(with["data"]["status"], json!("APPROVED"));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_rh_7_8_a_self_extra_cannot_set_its_own_rate() {
+    let app = harness::start().await;
+    let me = seat(&app, "No Role").await;
+    let extras = org(&app, "extra-periods");
+
+    let mut body = extra_body(me);
+    body["rate_bp"] = json!(20000);
+    let (status, own) = post(&app, &app.restricted_token, &extras, Some(body.clone())).await;
+    assert_eq!(status, StatusCode::CREATED, "{own}");
+    assert_eq!(own["data"]["rate_bp"], json!(0));
+
+    let (status, managed) = post(&app, &app.token, &extras, Some(body)).await;
+    assert_eq!(status, StatusCode::CREATED, "{managed}");
+    assert_eq!(managed["data"]["rate_bp"], json!(20000));
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_rh_7_9_a_foreign_member_answers_like_an_unknown_one() {
+    let app = harness::start().await;
+    let leave = new_type(&app, "Conges oracle", true).await;
+    let foreign: Uuid = sqlx::query_scalar(
+        "INSERT INTO organization_members (id, organization_id, last_name) VALUES ($1, $2, 'Etranger') RETURNING id",
+    )
+    .bind(Uuid::now_v7())
+    .bind(app.other_organization_id().await)
+    .fetch_one(&app.pool)
+    .await
+    .expect("seed a foreign member");
+
+    let absences = org(&app, "absences");
+    let (foreign_status, _) = post(
+        &app,
+        &app.token,
+        &absences,
+        Some(absence_body(foreign, &leave)),
+    )
+    .await;
+    let (unknown_status, _) = post(
+        &app,
+        &app.token,
+        &absences,
+        Some(absence_body(Uuid::now_v7(), &leave)),
+    )
+    .await;
+    assert_eq!(foreign_status, StatusCode::NOT_FOUND);
+    assert_eq!(unknown_status, StatusCode::NOT_FOUND);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_rh_7_10_an_unprivileged_creator_cannot_cancel_a_request_for_someone_else() {
+    let app = harness::start().await;
+    let me = seat(&app, "No Role").await;
+    let other = colleague(&app).await;
+    let leave = new_type(&app, "Conges ancien gestionnaire", true).await;
+
+    let absence = id_of(
+        post(
+            &app,
+            &app.token,
+            &org(&app, "absences"),
+            Some(absence_body(other, &leave)),
+        )
+        .await,
+    )
+    .await;
+    let extra = id_of(
+        post(
+            &app,
+            &app.token,
+            &org(&app, "extra-periods"),
+            Some(json!({
+                "member_id": other,
+                "date": "2026-11-14",
+                "start": "08:00",
+                "end": "12:00",
+                "reason": "Rattrapage",
+            })),
+        )
+        .await,
+    )
+    .await;
+    sqlx::query("UPDATE absences SET created_by_member_id = $1 WHERE id = $2::uuid")
+        .bind(me)
+        .bind(&absence)
+        .execute(&app.pool)
+        .await
+        .expect("make the former manager the creator");
+    sqlx::query("UPDATE extra_periods SET created_by_member_id = $1 WHERE id = $2::uuid")
+        .bind(me)
+        .bind(&extra)
+        .execute(&app.pool)
+        .await
+        .expect("make the former manager the creator");
+
+    for path in [
+        format!("{}/{absence}/cancel", org(&app, "absences")),
+        format!("{}/{extra}/cancel", org(&app, "extra-periods")),
+    ] {
+        let (status, refused) = post(&app, &app.restricted_token, &path, None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{refused}");
+    }
 
     app.cleanup().await;
 }

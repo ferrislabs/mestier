@@ -167,7 +167,7 @@ pub(crate) async fn require_member_target(
         .await?
         .ok_or(ApiError::NotFound)?;
     if member.organization_id != organization_id {
-        return Err(ApiError::Forbidden);
+        return Err(ApiError::NotFound);
     }
 
     Ok(())

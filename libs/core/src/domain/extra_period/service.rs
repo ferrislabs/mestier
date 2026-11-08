@@ -118,7 +118,9 @@ where
         privileged: bool,
     ) -> Result<ExtraPeriodOutcome<ExtraPeriod>, CoreError> {
         let mut period = self.find(organization_id, id).await?;
-        let is_creator = caller.is_some() && period.created_by_member_id == caller;
+        let is_creator = caller.is_some_and(|member| {
+            period.created_by_member_id == Some(member) && period.member_id == member
+        });
         if !privileged && !is_creator {
             return Err(CoreError::Forbidden {
                 reason: Some("only the creator or a planning manager can cancel".to_owned()),

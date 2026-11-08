@@ -87,6 +87,7 @@ impl MestierUseCase {
                 });
             }
             draft.approve = false;
+            draft.rate_bp = None;
         }
 
         let mut service = ExtraPeriodService::new(
