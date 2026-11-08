@@ -21,6 +21,12 @@ import {
 import { RhProvider } from '#/pages/hr/ui/rh/shared/rh-context'
 import { renderWithRouter } from '#/test/render-with-router'
 
+const NO_PROFILE_ACTIONS = {
+	save: async () => {},
+	archive: async () => {},
+	restore: async () => {},
+}
+
 const ORGANIZATION: Organization = {
 	id: 'org-1',
 	name: 'Atelier Bois & Co',
@@ -103,6 +109,7 @@ function render(page: MembersPageProps, permissions = ['MANAGE_MEMBERS']) {
 						value={{
 							state: page.state,
 							update: async () => {},
+							profiles: NO_PROFILE_ACTIONS,
 							actorId: SEED_MEMBER.id,
 							organizationSlug: 'atelier-bois',
 						}}

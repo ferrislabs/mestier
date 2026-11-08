@@ -8,6 +8,7 @@ pub mod cost_basis;
 pub mod custom_unit;
 pub mod employee;
 pub mod equipment;
+pub mod member_profile;
 pub mod paths;
 pub mod product;
 pub mod response;
@@ -45,6 +46,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(custom_unit::list::handler)
         .typed_post(custom_unit::create::handler)
         .merge(absence::router(state))
+        .merge(member_profile::router(state))
         .merge(cost_basis::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))

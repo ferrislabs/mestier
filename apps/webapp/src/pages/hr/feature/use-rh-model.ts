@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import { useAbsences } from '#/hooks/use-absences'
+import { useMemberProfiles } from '#/hooks/use-member-profiles'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
+import { isForbiddenError } from '#/lib/api-error'
 import {
 	type RealMember,
 	realAbsenceToAbsence,
@@ -9,10 +11,12 @@ import {
 	bindRhMembers,
 	getRhActorId,
 	memberKey,
+	setMemberProfiles,
 	setRealAbsences,
 	updateRh,
 	useRhSnapshot,
 } from '#/pages/hr/feature/mocks/rh-store'
+import { useProfileActions } from '#/pages/hr/feature/use-profile-actions'
 import { absenceToDraft } from '#/pages/hr/lib/absences'
 import type { RhState } from '#/pages/hr/lib/rh/types'
 import { browserTimeZone } from '#/pages/hr/types'
@@ -36,6 +40,8 @@ export function useRhModel(
 		products: false,
 	})
 	const absencesQuery = useAbsences(organizationId)
+	const profilesQuery = useMemberProfiles(organizationId)
+	const profiles = useProfileActions(organizationId)
 	const snapshot = useRhSnapshot()
 
 	const memberRows = catalog.members.data?.data
@@ -62,6 +68,9 @@ export function useRhModel(
 
 	const membersLoaded = catalog.members.isSuccess
 	const absencesLoaded = absencesQuery.isSuccess
+	const profileRows = profilesQuery.data?.data
+	const profilesRestricted = isForbiddenError(profilesQuery.error)
+	const profilesLoaded = profilesQuery.isSuccess || profilesRestricted
 
 	useEffect(() => {
 		if (membersLoaded) bindRhMembers(members)
@@ -71,14 +80,26 @@ export function useRhModel(
 		if (absencesLoaded) setRealAbsences(absences)
 	}, [absencesLoaded, absences])
 
+	useEffect(() => {
+		if (profilesLoaded) setMemberProfiles(profileRows ?? [])
+	}, [profilesLoaded, profileRows])
+
 	const isBound = membersLoaded && snapshot.boundKey === memberKey(members)
 	return {
-		isLoading: catalog.members.isLoading || !isBound,
-		error: catalog.members.error?.message ?? null,
+		isLoading:
+			catalog.members.isLoading ||
+			profilesQuery.isLoading ||
+			!isBound ||
+			!snapshot.profilesLoaded,
+		error:
+			catalog.members.error?.message ??
+			(profilesRestricted ? null : profilesQuery.error?.message) ??
+			null,
 		state: snapshot.state,
 		context: {
 			state: snapshot.state,
 			update: updateRh,
+			profiles,
 			actorId: getRhActorId(),
 			organizationSlug,
 		},

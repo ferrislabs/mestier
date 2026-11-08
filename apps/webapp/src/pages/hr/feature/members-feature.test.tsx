@@ -16,6 +16,7 @@ import { renderWithRouter } from '#/test/render-with-router'
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
 const EMPLOYEE_PROFILES_PATH =
 	'/api/v1/organizations/{organization_id}/employee-profiles'
+const PROFILES_PATH = '/api/v1/organizations/{organization_id}/member-profiles'
 const INVITATIONS_PATH = '/api/v1/organizations/{organization_id}/invitations'
 const MY_PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
@@ -110,6 +111,9 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 									},
 								})
 							}
+							return { data: [], pagination: null }
+						}
+						if (path === PROFILES_PATH) {
 							return { data: [], pagination: null }
 						}
 						if (path === INVITATIONS_PATH) {

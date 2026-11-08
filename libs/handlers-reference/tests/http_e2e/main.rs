@@ -8,6 +8,7 @@
 mod catalog_b6;
 mod harness;
 mod issuer;
+mod member_profile_b1;
 
 use chrono::{Duration, NaiveDate, Utc};
 

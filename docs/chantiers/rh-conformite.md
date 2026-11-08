@@ -15,7 +15,7 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 |---|---|---|---|
 | F1 | Coque : URLs `/rh/*`, redirections `/hr`, barre latérale, compteurs, routes « nouvelle » | – | fait |
 | F2 | Liste et fiche membre, invitation et rôles conservés | F1 | fait |
-| B1 | Profil RH du membre, archivage | F2 | à faire |
+| B1 | Profil RH du membre, archivage | F2 | fait |
 | B2 | Contrats, horaires, documents | B1 | à faire |
 | B3 | Motifs d'absence et circuit de validation | B2 | à faire |
 | B4 | Compteurs et ajustements | B3 | à faire |
@@ -40,3 +40,17 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 - `tsc --noEmit` : 43 erreurs avant, 38 après (tests supprimés), aucune nouvelle.
 - B1 remplace `status`, archivage, restauration, `managerId`, poste et e-mails du store ; garder `RhScreen` comme porte de chargement. Si la fiche clignote « introuvable » après création, attendre `isBound`.
 - Pas de contrôle visuel : pas d'authentification possible en autonomie.
+
+## Reports issus de B1
+- Table `member_hr_profiles` séparée de `employees` : celle-ci a des colonnes contractuelles `NOT NULL`, un membre sans coût doit pouvoir avoir un profil.
+- Newtype `ContactEmail` ajouté ; `list_active_by_organization` écarte les membres archivés (plus de planning pour eux).
+- Les endpoints de profil répondent 422 avec `details.field` et le code `E_MEMBER_PROFILE_MANAGER_CYCLE` pour un cycle de responsables.
+- Ajout hors périmètre initial : `GET /organizations/{org}/member-profiles` (liste de tous les profils, membres sans profil absents, test `spec_rh_1_5_*`). Les deux lectures de profil exigent `member.manage` ; un 403 sur la liste n'empêche pas l'écran, le front retombe sur les défauts en lecture seule.
+- Front : `hooks/use-member-profiles.ts` (liste, PUT, archivage, restauration, invalidation), `lib/rh/member-profile.ts` (overlay pur, corps de requête), `feature/use-profile-actions.ts`. Le store superpose le profil API à chaque membre ; un membre sans profil reçoit les défauts vides (e-mail pro = e-mail du compte), jamais les valeurs du prototype.
+- Réducteurs `updateMember`, `archiveMember`, `restoreMember` supprimés ; `cancelUpcomingAbsences` reste dans le store (absences encore mockées).
+- `POST .../archive` accepte `{reassign_reports_to: member_id|null}` : les subordonnés directs actifs passent au nouveau responsable (même organisation, sans cycle) dans la transaction de l'archivage, sinon rien n'est écrit (422). Le PUT d'un membre sans profil écrit son e-mail de compte en e-mail pro : accepté.
+- Modifier, archiver et réactiver sont masqués sans `MANAGE_MEMBERS` (`RequirePermission`).
+- Un échec de la liste des profils autre que 403 bloque l'écran RH (message d'erreur).
+- Le front tronque la date d'archivage à la date UTC de `archived_at`.
+- Trois tests ignorés du dispatcher d'automatisation (`one_pass_fans_a_committed_event_out_to_a_workflow_run`, `a_disabled_subscription_receives_no_run`, `a_disabled_workflow_receives_no_run_but_its_event_is_still_done_with`) échouent dans le run ignoré complet sur la base partagée. Même échec sur le commit de base `31cbfbd6` (avec trois autres tests de `postgres::run` instables sur la base partagée) : antérieur à B1, sans lien avec lui.
+- `tsc --noEmit` : 38 erreurs avant et après.

@@ -18,6 +18,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
+import { mutationErrorMessage } from '#/lib/api-error'
 import { todayIso } from '#/pages/hr/lib/rh/dates'
 import {
 	emptyDraft,
@@ -30,13 +31,16 @@ import {
 	managerCandidates,
 	validateIdentity,
 } from '#/pages/hr/lib/rh/member-draft'
-import { fullName, updateMember } from '#/pages/hr/lib/rh/members'
+import { fullName } from '#/pages/hr/lib/rh/members'
 import type {
 	Member,
 	MemberDraft,
 	PostalAddress,
 } from '#/pages/hr/lib/rh/types'
-import { useRhState, useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import {
+	useRhProfileActions,
+	useRhState,
+} from '#/pages/hr/ui/rh/shared/rh-context'
 
 const NO_MANAGER = '__none'
 
@@ -98,13 +102,15 @@ function MemberForm({
 	onClose: () => void
 	onRename: (names: { firstName: string; lastName: string }) => void
 }) {
-	const updateRh = useRhUpdate()
+	const profiles = useRhProfileActions()
 	const state = useRhState()
 	const baseId = useId()
 	const [draft, setDraft] = useState<MemberDraft>(() => ({
 		...emptyDraft(todayIso()),
 		...fieldsOf(member),
 	}))
+	const [saving, setSaving] = useState(false)
+	const [saveError, setSaveError] = useState<string | null>(null)
 	const [touched, setTouched] = useState<ReadonlySet<FieldKey>>(new Set())
 
 	const final = finalizeDraft(draft)
@@ -143,17 +149,29 @@ function MemberForm({
 
 	const emailsError = shown('emails')
 
-	function submit(event: FormEvent) {
+	async function submit(event: FormEvent) {
 		event.preventDefault()
-		if (blocked) return
+		if (blocked || saving) return
 		const fields = finalizeFields(identityOf(final))
-		void updateRh((current) => updateMember(current, member.id, fields))
+		setSaving(true)
+		setSaveError(null)
+		try {
+			await profiles.save(member.id, fields)
+		} catch (error) {
+			setSaveError(mutationErrorMessage(error))
+			setSaving(false)
+			return
+		}
 		onRename({ firstName: fields.firstName, lastName: fields.lastName })
 		onClose()
 	}
 
 	return (
-		<form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col">
+		<form
+			onSubmit={(event) => void submit(event)}
+			noValidate
+			className="flex min-h-0 flex-1 flex-col"
+		>
 			<DialogHeader className="px-6 pt-6 pb-4">
 				<DialogTitle>{`Modifier ${fullName(member)}`}</DialogTitle>
 				<DialogDescription>
@@ -392,6 +410,12 @@ function MemberForm({
 					</FormField>
 				</Section>
 
+				{saveError && (
+					<p role="alert" className="text-[13px] text-state-alert">
+						{saveError}
+					</p>
+				)}
+
 				{otherErrors.length > 0 && (
 					<ul className="grid gap-1 text-[13px] text-state-alert">
 						{otherErrors.map((message) => (
@@ -413,7 +437,7 @@ function MemberForm({
 							Annuler
 						</Button>
 					</DialogClose>
-					<Button type="submit" disabled={blocked}>
+					<Button type="submit" disabled={blocked || saving}>
 						Enregistrer
 					</Button>
 				</div>

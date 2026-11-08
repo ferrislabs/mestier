@@ -1,14 +1,22 @@
 import { createContext, type ReactNode, useContext } from 'react'
 import { buildOrgPath } from '#/modules/org-path'
+import type { ProfileFields } from '#/pages/hr/lib/rh/member-profile'
 import type { ActionContext, RhState } from '#/pages/hr/lib/rh/types'
 
 export type RhUpdate = (
 	update: (current: RhState, context: ActionContext) => RhState,
 ) => Promise<void>
 
+export interface RhProfileActions {
+	save: (memberId: string, fields: ProfileFields) => Promise<void>
+	archive: (memberId: string) => Promise<void>
+	restore: (memberId: string) => Promise<void>
+}
+
 export interface RhContextValue {
 	state: RhState
 	update: RhUpdate
+	profiles: RhProfileActions
 	actorId: string
 	organizationSlug: string
 }
@@ -37,6 +45,10 @@ export function useRhState(): RhState {
 
 export function useRhUpdate(): RhUpdate {
 	return useRhContext().update
+}
+
+export function useRhProfileActions(): RhProfileActions {
+	return useRhContext().profiles
 }
 
 export function useRhActorId(): string {

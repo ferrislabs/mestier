@@ -1,9 +1,8 @@
 import { assert, test } from 'vitest'
 import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import { weekly } from '#/pages/hr/lib/rh/contract-schedule'
-import { archiveMember } from '#/pages/hr/lib/rh/members'
 import { todayStatus } from '#/pages/hr/lib/rh/today-status'
-import type { ActionContext, Member, RhState } from '#/pages/hr/lib/rh/types'
+import type { Member, RhState } from '#/pages/hr/lib/rh/types'
 
 const state = INITIAL_RH_STATE
 
@@ -141,13 +140,14 @@ test('un membre pas encore arrivé ou archivé est inactif', () => {
 })
 
 test('un membre archivé aujourd’hui est inactif', () => {
-	const context: ActionContext = {
-		now: '2026-11-04T10:00:00.000Z',
-		today: '2026-11-04',
-		actorId: 'baptiste',
-		newId: () => 'x',
+	const archived = {
+		...state,
+		members: state.members.map((member) =>
+			member.id === 'thomas'
+				? { ...member, status: 'archived' as const, archivedAt: '2026-11-04' }
+				: member,
+		),
 	}
-	const archived = archiveMember(state, context, 'thomas')
 	const thomas = archived.members.find((member) => member.id === 'thomas')
 	assert.ok(thomas)
 	assert.deepEqual(todayStatus(archived, thomas, '2026-11-04'), {

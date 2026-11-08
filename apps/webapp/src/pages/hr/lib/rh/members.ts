@@ -168,30 +168,6 @@ export function createMember(
 	return { ...state, members: [...state.members, member] }
 }
 
-export function updateMember(
-	state: RhState,
-	memberId: string,
-	patch: Partial<Omit<MemberDraft, 'contract'>>,
-): RhState {
-	return {
-		...state,
-		members: state.members.map((member) =>
-			member.id === memberId
-				? {
-						...member,
-						...patch,
-						...(patch.firstName !== undefined
-							? { firstName: patch.firstName.trim() }
-							: {}),
-						...(patch.lastName !== undefined
-							? { lastName: patch.lastName.trim() }
-							: {}),
-					}
-				: member,
-		),
-	}
-}
-
 function withContracts(
 	state: RhState,
 	memberId: string,
@@ -269,39 +245,19 @@ export function currentSchedule(
 	return currentContract(member, today).schedule
 }
 
-export function archiveMember(
+export function cancelUpcomingAbsences(
 	state: RhState,
 	context: ActionContext,
 	memberId: string,
 ): RhState {
-	const archived = findMemberById(state, memberId)
-	if (!archived || archived.status === 'archived') return state
 	return {
 		...state,
-		members: state.members.map((member) => {
-			if (member.id === memberId)
-				return { ...member, status: 'archived', archivedAt: context.today }
-			return member.managerId === memberId
-				? { ...member, managerId: archived.managerId }
-				: member
-		}),
 		absences: state.absences.map((absence) =>
 			absence.memberId === memberId &&
 			absence.status === 'pending' &&
 			absence.startDate > context.today
 				? { ...absence, status: 'cancelled' }
 				: absence,
-		),
-	}
-}
-
-export function restoreMember(state: RhState, memberId: string): RhState {
-	return {
-		...state,
-		members: state.members.map((member) =>
-			member.id === memberId
-				? { ...member, status: 'active', archivedAt: null }
-				: member,
 		),
 	}
 }

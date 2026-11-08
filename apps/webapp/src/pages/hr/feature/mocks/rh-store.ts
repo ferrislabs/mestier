@@ -1,6 +1,10 @@
-// MOCK: rh-store — no backend endpoint yet. Replace with TanStack Query hooks over the HR domain API.
+// MOCK: rh-store — contracts, schedules, documents, balances, overrides and extras have no backend endpoint yet. Member profile fields (contacts, address, job title, manager, work permit, archiving) come from the API through setMemberProfiles and are never held here.
 import { useSyncExternalStore } from 'react'
 import { todayIso } from '#/pages/hr/lib/rh/dates'
+import {
+	overlayProfiles,
+	type ProfileRecord,
+} from '#/pages/hr/lib/rh/member-profile'
 import type { Absence, ActionContext, RhState } from '#/pages/hr/lib/rh/types'
 import {
 	bindSeed,
@@ -16,19 +20,25 @@ const WRITE_DELAY_MS = 120
 interface Snapshot {
 	state: RhState
 	boundKey: string | null
+	profilesLoaded: boolean
 }
 
 let base: RhState = INITIAL_RH_STATE
 let realAbsences: readonly Absence[] = []
 let boundKey: string | null = null
+let profiles: readonly ProfileRecord[] = []
+let profilesLoaded = false
+let accountEmails: ReadonlyMap<string, string> = new Map()
 let actorId = ''
 let snapshot: Snapshot = compose()
 const listeners = new Set<() => void>()
 
 function compose(): Snapshot {
+	const overlaid = overlayProfiles(base, profiles, accountEmails)
 	return {
-		state: { ...base, absences: [...base.absences, ...realAbsences] },
+		state: { ...overlaid, absences: [...base.absences, ...realAbsences] },
 		boundKey,
+		profilesLoaded,
 	}
 }
 
@@ -50,6 +60,7 @@ function keyOf(members: readonly RealMember[]): string {
 
 export function bindRhMembers(members: readonly RealMember[]) {
 	const key = keyOf(members)
+	accountEmails = new Map(members.map((member) => [member.id, member.email]))
 	if (key === boundKey) {
 		const renamed = renameMembers(base, members)
 		if (renamed !== base) {
@@ -74,12 +85,22 @@ export function setRealAbsences(absences: readonly Absence[]) {
 	publish()
 }
 
+export function setMemberProfiles(records: readonly ProfileRecord[]) {
+	profiles = records
+	profilesLoaded = true
+	publish()
+}
+
 export function memberKey(members: readonly RealMember[]): string {
 	return keyOf(members)
 }
 
 export function useRhSnapshot(): Snapshot {
 	return useSyncExternalStore(subscribe, () => snapshot)
+}
+
+export function getRhState(): RhState {
+	return snapshot.state
 }
 
 export function getRhActorId(): string {
@@ -110,6 +131,9 @@ export function updateRh(
 export function resetRhStore() {
 	base = INITIAL_RH_STATE
 	realAbsences = []
+	profiles = []
+	profilesLoaded = false
+	accountEmails = new Map()
 	boundKey = null
 	actorId = ''
 	publish()
