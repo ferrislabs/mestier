@@ -6,11 +6,11 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import type { Member } from '#/pages/hr/lib/rh/types'
 import { MemberSidebar } from '#/pages/hr/ui/rh/members/member-sidebar'
 import { RhProvider } from '#/pages/hr/ui/rh/shared/rh-context'
 import { renderWithRouter } from '#/test/render-with-router'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const NO_CONTRACT_ACTIONS = {
 	add: async () => {},
@@ -126,7 +126,7 @@ function renderSidebar(permissions: string[]) {
 					<RhProvider
 						value={{
 							state: INITIAL_RH_STATE,
-							update: async () => {},
+							setOverridePeriod: () => {},
 							profiles: NO_PROFILE_ACTIONS,
 							contracts: NO_CONTRACT_ACTIONS,
 							documents: NO_DOCUMENT_ACTIONS,

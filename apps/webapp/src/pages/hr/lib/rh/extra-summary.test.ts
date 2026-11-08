@@ -1,8 +1,8 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import { summarizeExtras } from '#/pages/hr/lib/rh/extra'
 import { recentExtras, totalLabel } from '#/pages/hr/lib/rh/extra-summary'
 import type { ExtraPeriod, RhState } from '#/pages/hr/lib/rh/types'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 

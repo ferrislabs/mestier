@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import { validateExtra } from '#/pages/hr/lib/rh/extra'
 import {
 	bonusMinutes,
@@ -27,6 +26,7 @@ import {
 	suggestedMajoration,
 } from '#/pages/hr/lib/rh/extra-view'
 import type { ExtraPeriod, RhState } from '#/pages/hr/lib/rh/types'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 

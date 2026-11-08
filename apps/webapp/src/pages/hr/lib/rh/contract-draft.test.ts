@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	contractDraftOf,
 	emptyContractDraft,
@@ -19,6 +18,7 @@ import {
 	defaultSchedule,
 } from '#/pages/hr/lib/rh/members'
 import { withLunch } from '#/pages/hr/lib/rh/schedule-draft'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 

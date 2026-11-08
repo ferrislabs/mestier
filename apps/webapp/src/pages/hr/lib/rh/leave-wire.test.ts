@@ -1,5 +1,4 @@
 import { expect, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	ADJUSTMENT_KIND_FROM_WIRE,
 	ADJUSTMENT_KIND_TO_WIRE,
@@ -18,6 +17,7 @@ import {
 	adjustmentRecord,
 	DEFAULT_ACCOUNT_RECORDS,
 } from '#/test/rh-leave-fixtures'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const UNPROCESSABLE = (field: string, message = '') => ({
 	status: 422,

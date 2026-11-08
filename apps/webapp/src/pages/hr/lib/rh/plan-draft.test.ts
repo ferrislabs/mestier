@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	clearPlanning,
 	planDays,
@@ -17,6 +16,7 @@ import {
 } from '#/pages/hr/lib/rh/plan-draft'
 import { DEFAULT_LUNCH } from '#/pages/hr/lib/rh/schedule'
 import type { ActionContext, WorkDay } from '#/pages/hr/lib/rh/types'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 const DAY: WorkDay = { start: '08:00', end: '17:00', lunch: DEFAULT_LUNCH }

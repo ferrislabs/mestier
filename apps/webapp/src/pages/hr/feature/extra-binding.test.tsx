@@ -1,13 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
-import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import type {
 	ExtraPeriodRecord,
 	SurchargeRecord,
@@ -268,17 +267,12 @@ const PENDING = () =>
 
 describe('surcharges and extra periods bound to the API', () => {
 	beforeEach(() => {
-		resetRhStore()
 		surcharges = structuredClone(DEFAULT_SURCHARGE_RECORDS)
 		extras = []
 		writes = []
 		refuse = null
 		extrasForbidden = false
 		permissions = ['MANAGE_PLANNING', 'MANAGE_REFERENCE']
-	})
-
-	afterEach(() => {
-		resetRhStore()
 	})
 
 	it('spec_rh_6_5 reads the pending list and the history from the API', async () => {

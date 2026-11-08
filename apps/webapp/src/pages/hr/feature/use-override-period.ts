@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { useDayOverrides } from '#/hooks/use-day-overrides'
 import { useHrPlanningFeed } from '#/hooks/use-hr-planning-feed'
 import { isForbiddenError } from '#/lib/api-error'
-import { setDayOverrides } from '#/pages/hr/feature/mocks/rh-store'
 import type { DayOverrideRecord } from '#/pages/hr/lib/rh/override-wire'
+import { useRhOverridePeriods } from '#/pages/hr/ui/rh/shared/rh-context'
 
 const NO_OVERRIDES: readonly DayOverrideRecord[] = []
 
@@ -12,6 +12,7 @@ export function useFeedOverrides(
 	from: string,
 	to: string,
 ) {
+	const setDayOverrides = useRhOverridePeriods()
 	const query = useHrPlanningFeed(organizationId, { from, to })
 	const records = query.data?.data.overrides
 	const settled = query.isSuccess || isForbiddenError(query.error)
@@ -25,7 +26,7 @@ export function useFeedOverrides(
 				records: records ?? NO_OVERRIDES,
 			})
 		}
-	}, [settled, records, from, to])
+	}, [settled, records, from, to, setDayOverrides])
 
 	return { restricted: isForbiddenError(query.error), loaded: settled }
 }
@@ -37,6 +38,7 @@ export function useMemberOverrides(
 	to: string,
 	enabled = true,
 ) {
+	const setDayOverrides = useRhOverridePeriods()
 	const query = useDayOverrides(organizationId, { from, to, memberId }, enabled)
 	const records = query.data?.data
 	const settled = enabled && (query.isSuccess || isForbiddenError(query.error))
@@ -50,7 +52,7 @@ export function useMemberOverrides(
 				records: records ?? NO_OVERRIDES,
 			})
 		}
-	}, [settled, records, memberId, from, to])
+	}, [settled, records, memberId, from, to, setDayOverrides])
 
 	return { restricted: isForbiddenError(query.error), loaded: settled }
 }

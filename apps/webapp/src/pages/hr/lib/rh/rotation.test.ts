@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	averageWeeklyHours,
 	describeCycle,
@@ -14,6 +13,7 @@ import type {
 	ScheduleBlock,
 	WeekSchedule,
 } from '#/pages/hr/lib/rh/types'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const FULL: WeekSchedule = [
 	{ start: '08:00', end: '17:00', lunch: { start: '12:00', end: '13:00' } },

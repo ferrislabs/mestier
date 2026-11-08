@@ -7,7 +7,6 @@ import {
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
 import type { Organization } from '#/hooks/use-organizations'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import { DEFAULT_FILTERS } from '#/pages/hr/lib/rh/members-filter'
 import type { Member, RhState } from '#/pages/hr/lib/rh/types'
 import {
@@ -20,6 +19,7 @@ import {
 } from '#/pages/hr/ui/rh/members/members-page'
 import { RhProvider } from '#/pages/hr/ui/rh/shared/rh-context'
 import { renderWithRouter } from '#/test/render-with-router'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const NO_CONTRACT_ACTIONS = {
 	add: async () => {},
@@ -160,7 +160,7 @@ function render(page: MembersPageProps, permissions = ['MANAGE_MEMBERS']) {
 					<RhProvider
 						value={{
 							state: page.state,
-							update: async () => {},
+							setOverridePeriod: () => {},
 							profiles: NO_PROFILE_ACTIONS,
 							contracts: NO_CONTRACT_ACTIONS,
 							documents: NO_DOCUMENT_ACTIONS,

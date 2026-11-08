@@ -2,13 +2,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
-import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import type {
 	AbsenceRecord,
 	AbsenceTypeRecord,
@@ -287,7 +286,6 @@ function pendingRequest(id = 'a-1', typeId = REQUEST.id) {
 
 describe('absence types and requests bound to the API', () => {
 	beforeEach(() => {
-		resetRhStore()
 		types = [AUTO, REQUEST, PROOF]
 		absences = []
 		writes = []
@@ -295,10 +293,6 @@ describe('absence types and requests bound to the API', () => {
 		refuse = null
 		listsForbidden = false
 		permissions = ['MANAGE_REFERENCE', 'MANAGE_PLANNING']
-	})
-
-	afterEach(() => {
-		resetRhStore()
 	})
 
 	it('spec_rh_3_9 lists the API requests with their type and decides nothing from the prototype', async () => {

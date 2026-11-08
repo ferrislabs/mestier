@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import { addDays, todayIso } from '#/pages/hr/lib/rh/dates'
 import { sidebarDeadlines } from '#/pages/rh-nav/lib/sidebar-deadlines'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 describe('sidebarDeadlines', () => {
 	const today = todayIso()

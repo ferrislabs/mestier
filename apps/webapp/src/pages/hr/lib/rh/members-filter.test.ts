@@ -1,10 +1,10 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	DEFAULT_FILTERS,
 	filterMembers,
 	membersSummary,
 } from '#/pages/hr/lib/rh/members-filter'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const members = INITIAL_RH_STATE.members
 

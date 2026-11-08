@@ -1,9 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
-import {
-	addAdjustment,
-	updateAccount,
-} from '#/pages/hr/lib/rh/balance-fixtures'
 import { movementsFor, periodOf } from '#/pages/hr/lib/rh/balances'
 import {
 	acquiredTotal,
@@ -27,6 +22,8 @@ import {
 	validateAdjustmentDraft,
 } from '#/pages/hr/lib/rh/rights-model'
 import type { ActionContext, AdjustmentDraft } from '#/pages/hr/lib/rh/types'
+import { addAdjustment, updateAccount } from '#/test/rh-balance-reducers'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 const TODAY = '2026-11-04'

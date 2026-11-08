@@ -21,10 +21,10 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 | B4 | Compteurs et ajustements | B3 | fait |
 | B5 | Exceptions de jour et flux du planning | B2, B3 | fait |
 | B6 | Majorations et heures extra | B3 | fait |
-| Fin | Suppression de `rh-store`, `rh-seed`, `rh-binding` | B6 | à faire |
+| Fin | Suppression de `rh-store`, `rh-seed`, `rh-binding` | B6 | fait |
 
-## Mocks front à remplacer
-`pages/hr/feature/mocks/{rh-store,rh-seed,rh-binding}.ts`, découpés par lot : profil (B1), contrats et documents (B2), motifs et absences (B3), compteurs (B4), exceptions (B5), majorations et extras (B6).
+## Mocks front
+Plus aucun mock RH : `pages/hr/feature/mocks/` n'existe plus, le webapp ne lit aucune donnée RH depuis `localStorage` ni depuis un store en mémoire (test garde `spec_rh_9_1`).
 
 ## Reports
 ## Reports issus de F1
@@ -128,4 +128,17 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 - Récapitulatif (heures, majorations par mois) : calculé dans le webapp (ADR 0014), aucun calcul en Rust.
 - Réducteurs `createExtra`, `decideExtra`, `cancelExtra`, `createSurcharge`, `updateSurcharge`, `setSurchargeArchived` déplacés dans `lib/rh/extra-fixtures.ts`, réservé aux tests. Les extras et les majorations du seed ne sont plus jamais lus ; `rh-store` ne garde plus aucune donnée métier de ce lot.
 - Le client OpenAPI a été régénéré (ajouts seulement).
+- `tsc --noEmit` : 38 erreurs avant et après.
+
+## Reports issus de Fin
+- `RhState` est composé à chaque rendu par `composeRhState` (`lib/rh/compose.ts`, pur, testé) à partir des résultats de requêtes ; plus de singleton de module ni de `useSyncExternalStore`. Les périodes d'exceptions lues par les écrans vivent dans l'état React de `useRhModel` (clé de période, la plus récente fait foi), alimentées par `useRhOverridePeriods`. `RhScreen` est déjà clé par organisation : l'état repart de zéro au changement d'organisation.
+- Teinte d'un membre : `memberHue(id)` (`lib/rh/member-hue.ts`), déterministe depuis l'identifiant, même algorithme que `organizationHue`. Aucune source API.
+- Membre de l'appelant : l'API ne le donne pas (`/members/me/permissions` ne renvoie que les droits ; `MemberAccountResponse` n'a que `email` et `name`, pas d'identifiant d'utilisateur ni de drapeau « c'est moi »). `actorIdOf` rapproche l'e-mail OIDC de l'e-mail du compte des membres (comme `currentMemberOf` des clients), et retombe sur le premier membre sans correspondance. Manque côté API : un `GET /members/me` (ou un drapeau `is_me` dans la liste) pour ne plus dépendre de l'e-mail. L'identité sert aujourd'hui à préremplir le membre des formulaires d'absence et d'extra.
+- L'annulation par le créateur seul et « mes demandes » (reports B3 et B6) restent non offertes : aucune fonction nouvelle ajoutée dans ce lot ; l'identité fiable est maintenant disponible quand l'e-mail du compte correspond, mais les écritures exigent toujours `MANAGE_PLANNING` ou `MANAGE_REFERENCE`.
+- Supprimés : `rh-store.ts`, `rh-binding.ts` (+ son test), `updateRh`, `RhUpdate`, `useRhUpdate`, champ `update` du contexte, `resetRhStore`, `getRhState`. Les écritures lisent l'état courant par une référence passée aux hooks d'actions (`getState`), pas par un global.
+- Jeux de test déplacés dans `src/test/` : `rh-seed-fixtures.ts` (ancien `rh-seed`, sans `defaultMember`, `hueOf` ni `CURRENT_MEMBER_ID`), `rh-extra-reducers.ts` et `rh-balance-reducers.ts` (ex `lib/rh/*-fixtures.ts`). Le code de production n'importe rien de `src/test`.
+- Réducteurs purs de `lib/rh` (`members.ts`, `planning.ts`, `day-planning.ts`…) conservés : couverts par les tests du prototype. Plusieurs ne sont plus appelés par aucun écran ; à élaguer dans un lot dédié.
+- `rh-seed-fixtures.ts` garde le seed du prototype complet (978 lignes) ; l'élaguer exigerait de réécrire une vingtaine de tests.
+- Écarts relevés sans les traiter : le rail replié de la barre latérale ne montre pas les compteurs (F1) ; le seed compte 8 motifs, le prototype 7 (F1) ; les listes d'absences et d'extras sont lues sur une seule page de 100 (B3, B6) ; chevauchement et contrôles de contrat uniquement côté interface (B3, B6).
+- Biome plante (mémoire) quand un import n'est pas trié ou qu'une ligne n'est pas formatée et qu'on lance `--write` ; trier et formater à la main fait passer `pnpm check`.
 - `tsc --noEmit` : 38 erreurs avant et après.

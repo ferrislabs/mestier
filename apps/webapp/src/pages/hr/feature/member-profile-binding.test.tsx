@@ -1,13 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
-import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import type { AbsenceRecord } from '#/pages/hr/lib/rh/absence-wire'
 import { renderWithRouter } from '#/test/render-with-router'
 import {
@@ -225,17 +224,12 @@ function renderDetail(memberId: string) {
 
 describe('member profile bound to the API', () => {
 	beforeEach(() => {
-		resetRhStore()
 		profiles = []
 		writes = []
 		absences = []
 		refuse = null
 		profilesForbidden = false
 		permissions = ['MANAGE_MEMBERS']
-	})
-
-	afterEach(() => {
-		resetRhStore()
 	})
 
 	it('spec_rh_1_5 shows the job title read from the API and defaults for a member without profile', async () => {

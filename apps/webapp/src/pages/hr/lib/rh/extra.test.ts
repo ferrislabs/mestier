@@ -1,5 +1,4 @@
 import { assert, test } from 'vitest'
-import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	equivalentMinutes,
 	extraMinutes,
@@ -11,6 +10,8 @@ import {
 	surchargeUsage,
 	validateExtra,
 } from '#/pages/hr/lib/rh/extra'
+import { presenceOn } from '#/pages/hr/lib/rh/planning'
+import type { ActionContext, ExtraDraft } from '#/pages/hr/lib/rh/types'
 import {
 	cancelExtra,
 	createExtra,
@@ -18,9 +19,8 @@ import {
 	decideExtra,
 	setSurchargeArchived,
 	updateSurcharge,
-} from '#/pages/hr/lib/rh/extra-fixtures'
-import { presenceOn } from '#/pages/hr/lib/rh/planning'
-import type { ActionContext, ExtraDraft } from '#/pages/hr/lib/rh/types'
+} from '#/test/rh-extra-reducers'
+import { INITIAL_RH_STATE } from '#/test/rh-seed-fixtures'
 
 const state = INITIAL_RH_STATE
 const context: ActionContext = {

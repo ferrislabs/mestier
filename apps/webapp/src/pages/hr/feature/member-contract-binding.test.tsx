@@ -1,13 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
-import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import type {
 	ContractRecord,
 	DocumentRecord,
@@ -246,7 +245,6 @@ function renderDetail(memberId: string, tab: string) {
 
 describe('member contracts and documents bound to the API', () => {
 	beforeEach(() => {
-		resetRhStore()
 		contracts = []
 		documents = []
 		writes = []
@@ -254,10 +252,6 @@ describe('member contracts and documents bound to the API', () => {
 		refuse = null
 		listsForbidden = false
 		permissions = ['MANAGE_MEMBERS']
-	})
-
-	afterEach(() => {
-		resetRhStore()
 	})
 
 	it('spec_rh_2_6 shows the contracts read from the API and none for a member without one', async () => {
