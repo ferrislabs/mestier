@@ -13,6 +13,8 @@ const ORG_CHANNELS_PATH =
 	'/api/v1/chat/organizations/{organization_id}/channels'
 const ORG_DIRECTORY_PATH =
 	'/api/v1/chat/organizations/{organization_id}/directory'
+const ORG_DIRECT_CHANNELS_PATH =
+	'/api/v1/chat/organizations/{organization_id}/direct-channels'
 const CHANNEL_PATH = '/api/v1/chat/channels/{channel_id}'
 const CHANNEL_MESSAGES_PATH = '/api/v1/chat/channels/{channel_id}/messages'
 const MESSAGE_PATH = '/api/v1/chat/messages/{message_id}'
@@ -704,6 +706,40 @@ export function useDeleteCategory(organizationId: string) {
 	return useMutation({
 		...window.tanstackApi.mutation('delete', CATEGORY_PATH).mutationOptions,
 		onSuccess: invalidateOnSettled(queryClient, categoriesKey(organizationId)),
+	})
+}
+
+function directChannelsKey(organizationId: string) {
+	return window.tanstackApi.get(ORG_DIRECT_CHANNELS_PATH, {
+		path: { organization_id: organizationId },
+	}).queryKey
+}
+
+/** How often to look for a conversation someone else just opened with us.
+ * Opening a direct message publishes no event on purpose (the gateway would
+ * tell the whole organization), so the list has to be asked for. */
+const DIRECT_CHANNELS_REFETCH_MS = 30_000
+
+export function useDirectChannels(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(ORG_DIRECT_CHANNELS_PATH, {
+			path: { organization_id: organizationId },
+		}).queryOptions,
+		select: (response) => response.data,
+		enabled: Boolean(organizationId),
+		refetchInterval: DIRECT_CHANNELS_REFETCH_MS,
+	})
+}
+
+export function useOpenDirectChannel(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('post', ORG_DIRECT_CHANNELS_PATH)
+			.mutationOptions,
+		onSuccess: invalidateOnSettled(
+			queryClient,
+			directChannelsKey(organizationId),
+		),
 	})
 }
 

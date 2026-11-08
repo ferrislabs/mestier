@@ -4,12 +4,15 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useCategories,
 	useChannels,
+	useChatDirectory,
 	useChatListGatewaySync,
+	useDirectChannels,
 	useReadStateGatewaySync,
 	useUnreadMentionCount,
 	useUnreadSummaries,
 } from '#/hooks/use-chat'
-import { useOnlineCount } from '#/hooks/use-presence'
+import { useOnlineCount, usePresenceStatuses } from '#/hooks/use-presence'
+import { buildDirectMessageItems } from '#/pages/chat/lib/direct-messages'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
 import { ChatSidebarUI } from '#/pages/chat/ui/chat-sidebar-ui'
 import {
@@ -17,6 +20,7 @@ import {
 	useChannelAdminDialog,
 } from './channel-admin-dialog-context'
 import { NewChannelFeature } from './new-channel-feature'
+import { NewDirectMessageFeature } from './new-direct-message-feature'
 
 /**
  * The chat layout: sidebar (categories + channels) on the left, the active
@@ -55,6 +59,10 @@ function ChatShellLayout({ organizationId }: { organizationId: string }) {
 	const unreadSummaries = useUnreadSummaries(organizationId)
 	const mentionCount = useUnreadMentionCount(organizationId)
 	const [newChannelDialogOpen, setNewChannelDialogOpen] = useState(false)
+	const [newDirectDialogOpen, setNewDirectDialogOpen] = useState(false)
+	const directChannels = useDirectChannels(organizationId)
+	const directory = useChatDirectory(organizationId)
+	const presenceStatuses = usePresenceStatuses()
 
 	const unreadCounts = useMemo(
 		() =>
@@ -65,6 +73,13 @@ function ChatShellLayout({ organizationId }: { organizationId: string }) {
 				]),
 			),
 		[unreadSummaries.data],
+	)
+
+	const directMessages = buildDirectMessageItems(
+		directChannels.data ?? [],
+		directory.data ?? [],
+		presenceStatuses,
+		unreadCounts,
 	)
 
 	const groups = groupChannelsByCategory(
@@ -94,12 +109,20 @@ function ChatShellLayout({ organizationId }: { organizationId: string }) {
 				onlineCount={onlineCount}
 				unreadCounts={unreadCounts}
 				mentionCount={mentionCount}
+				directMessages={directMessages}
 				onRequestNewChannel={() => setNewChannelDialogOpen(true)}
+				onRequestNewDirectMessage={() => setNewDirectDialogOpen(true)}
 				onOpenChannelAdmin={openChannelAdmin}
 			/>
 			<div className="flex min-w-0 flex-1 flex-col">
 				<Outlet />
 			</div>
+			<NewDirectMessageFeature
+				organizationId={organizationId}
+				organizationSlug={activeOrganization.slug}
+				open={newDirectDialogOpen}
+				onOpenChange={setNewDirectDialogOpen}
+			/>
 			<NewChannelFeature
 				organizationId={organizationId}
 				open={newChannelDialogOpen}

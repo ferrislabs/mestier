@@ -58,6 +58,8 @@ function baseProps(
 		isError: false,
 		onlineCount: 0,
 		unreadCounts: new Map(),
+		directMessages: [],
+		onRequestNewDirectMessage: vi.fn(),
 		mentionCount: 0,
 		onRequestNewChannel: vi.fn(),
 		onOpenChannelAdmin: vi.fn(),
@@ -213,5 +215,40 @@ describe('ChatSidebarUI permission gating (#407)', () => {
 		expect(
 			screen.queryByRole('button', { name: /créer un canal$/i }),
 		).toBeNull()
+	})
+})
+
+describe('ChatSidebarUI — direct messages', () => {
+	const karim = {
+		channelId: 'dm-1',
+		name: 'Karim Benali',
+		hue: 200,
+		presence: 'ONLINE' as const,
+		unreadCount: 2,
+	}
+
+	it('lists each conversation by its peer, with the unread count', async () => {
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ directMessages: [karim] })} />,
+		)
+
+		const link = screen.getByRole('link', { name: /Karim Benali/ })
+		expect(link.getAttribute('href')).toBe('/o/acme/discussions/dm-1')
+		expect(screen.getByText(/messages non lus/)).toBeDefined()
+		expect(screen.getByText('En ligne')).toBeDefined()
+	})
+
+	it('asks for a new direct message from the plus button', async () => {
+		const user = userEvent.setup()
+		const onRequestNewDirectMessage = vi.fn()
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ onRequestNewDirectMessage })} />,
+		)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Nouveau message direct' }),
+		)
+
+		expect(onRequestNewDirectMessage).toHaveBeenCalledTimes(1)
 	})
 })

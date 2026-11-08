@@ -1,7 +1,16 @@
 import { Hash, Search, Settings, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Skeleton } from '#/components/ui/skeleton'
+import type { PresenceStatus } from '#/hooks/use-presence'
+import { PRESENCE_LABELS } from '#/pages/chat/lib/presence'
 import { IconButton, IconToggle } from '#/pages/chat/ui/icon-button'
+import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
+
+export interface DirectPeer {
+	name: string
+	hue: number
+	presence: PresenceStatus
+}
 
 export interface ChatChannelHeaderUIProps {
 	name?: string
@@ -12,6 +21,8 @@ export interface ChatChannelHeaderUIProps {
 	membersOpen: boolean
 	onMembersOpenChange: (open: boolean) => void
 	pinned: ReactNode
+	/** Set on a direct message: the header names the person, not a channel. */
+	peer?: DirectPeer
 	onOpenAdmin: () => void
 }
 
@@ -24,6 +35,7 @@ export function ChatChannelHeaderUI({
 	membersOpen,
 	onMembersOpenChange,
 	pinned,
+	peer,
 	onOpenAdmin,
 }: ChatChannelHeaderUIProps) {
 	if (isLoading) {
@@ -38,11 +50,26 @@ export function ChatChannelHeaderUI({
 	return (
 		<header className="flex min-h-12 shrink-0 items-center gap-3 border-border border-b bg-background px-4 py-2">
 			<div className="flex min-w-0 flex-1 items-center gap-3">
-				<h1 className="flex shrink-0 items-center gap-1 font-semibold text-base">
-					<Hash aria-hidden className="size-4 text-muted-foreground" />
-					{name}
-				</h1>
-				{topic ? (
+				{peer ? (
+					<>
+						<PersonAvatar
+							name={peer.name}
+							hue={peer.hue}
+							size="sm"
+							presence={peer.presence}
+						/>
+						<h1 className="truncate font-semibold text-base">{peer.name}</h1>
+						<p className="hidden truncate text-muted-foreground text-sm md:block">
+							{PRESENCE_LABELS[peer.presence]}
+						</p>
+					</>
+				) : (
+					<h1 className="flex shrink-0 items-center gap-1 font-semibold text-base">
+						<Hash aria-hidden className="size-4 text-muted-foreground" />
+						{name}
+					</h1>
+				)}
+				{!peer && topic ? (
 					<p className="hidden min-w-0 truncate text-muted-foreground text-sm md:block">
 						{topic}
 					</p>
@@ -67,11 +94,13 @@ export function ChatChannelHeaderUI({
 					onPressedChange={onMembersOpenChange}
 					className="max-xl:hidden"
 				/>
-				<IconButton
-					label="Paramètres du canal"
-					icon={Settings}
-					onClick={onOpenAdmin}
-				/>
+				{peer ? null : (
+					<IconButton
+						label="Paramètres du canal"
+						icon={Settings}
+						onClick={onOpenAdmin}
+					/>
+				)}
 			</div>
 		</header>
 	)

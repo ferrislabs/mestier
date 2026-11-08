@@ -24,7 +24,9 @@ import {
 import { Skeleton } from '#/components/ui/skeleton'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import type { DirectMessageItem } from '#/pages/chat/lib/direct-messages'
 import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
+import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
 import { PresenceSummaryUI } from '#/pages/chat/ui/presence-summary-ui'
 
 export interface ChatSidebarUIProps {
@@ -38,7 +40,9 @@ export interface ChatSidebarUIProps {
 	onlineCount: number
 	unreadCounts: ReadonlyMap<string, number>
 	mentionCount: number
+	directMessages: readonly DirectMessageItem[]
 	onRequestNewChannel: () => void
+	onRequestNewDirectMessage: () => void
 	/** Opens the channel admin sheet for one channel — see #372: channel
 	 * management now starts here, not only from inside the channel itself. */
 	onOpenChannelAdmin: (channelId: string) => void
@@ -55,7 +59,9 @@ export function ChatSidebarUI({
 	onlineCount,
 	unreadCounts,
 	mentionCount,
+	directMessages,
 	onRequestNewChannel,
+	onRequestNewDirectMessage,
 	onOpenChannelAdmin,
 }: ChatSidebarUIProps) {
 	return (
@@ -125,7 +131,87 @@ export function ChatSidebarUI({
 					))}
 				</div>
 			) : null}
+
+			<DirectMessagesSection
+				organizationSlug={organizationSlug}
+				items={directMessages}
+				activeChannelId={activeChannelId}
+				onRequestNewDirectMessage={onRequestNewDirectMessage}
+			/>
 		</nav>
+	)
+}
+
+function DirectMessagesSection({
+	organizationSlug,
+	items,
+	activeChannelId,
+	onRequestNewDirectMessage,
+}: {
+	organizationSlug: string
+	items: readonly DirectMessageItem[]
+	activeChannelId?: string
+	onRequestNewDirectMessage: () => void
+}) {
+	return (
+		<section aria-labelledby="discussions-direct-heading" className="px-2 pb-2">
+			<div className="flex items-center justify-between px-2 pb-1">
+				<h2
+					id="discussions-direct-heading"
+					className="font-semibold text-muted-foreground text-xs uppercase tracking-wide"
+				>
+					Messages directs
+				</h2>
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon"
+					aria-label="Nouveau message direct"
+					className="size-6"
+					onClick={onRequestNewDirectMessage}
+				>
+					<Plus className="size-3.5" />
+				</Button>
+			</div>
+			<ul className="flex flex-col gap-0.5">
+				{items.map((item) => (
+					<li key={item.channelId}>
+						<Link
+							to={buildOrgPath(
+								organizationSlug,
+								`/discussions/${item.channelId}`,
+							)}
+							className={cn(
+								'flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
+								item.channelId === activeChannelId &&
+									'bg-accent font-medium text-accent-foreground',
+								item.unreadCount > 0 && 'font-semibold text-foreground',
+							)}
+						>
+							<PersonAvatar
+								name={item.name}
+								hue={item.hue}
+								size="sm"
+								presence={item.presence}
+								surface="card"
+							/>
+							<span className="min-w-0 flex-1 truncate">{item.name}</span>
+							{item.unreadCount > 0 ? (
+								<span className="tabular flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-semibold text-primary-foreground text-xs">
+									{item.unreadCount}
+									<span className="sr-only">
+										{' '}
+										{item.unreadCount > 1
+											? 'messages non lus'
+											: 'message non lu'}
+									</span>
+								</span>
+							) : null}
+						</Link>
+					</li>
+				))}
+			</ul>
+		</section>
 	)
 }
 

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip'
 import { ChannelNotFoundUI } from './channel-not-found-ui'
 import { ChannelSearchBar } from './channel-search-bar'
+import { ChatChannelHeaderUI } from './chat-channel-header-ui'
 import { ChatIndexUI } from './chat-index-ui'
 import { MemberList } from './member-list'
 import { PinnedMessagesPopover } from './pinned-messages-popover'
@@ -171,5 +172,39 @@ describe('ChatIndexUI', () => {
 
 		rerender(<ChatIndexUI state="redirecting" />)
 		expect(container.innerHTML).toBe('')
+	})
+})
+
+describe('ChatChannelHeaderUI — direct message', () => {
+	const baseProps = {
+		isLoading: false,
+		searchOpen: false,
+		onSearchOpenChange: vi.fn(),
+		membersOpen: true,
+		onMembersOpenChange: vi.fn(),
+		pinned: null,
+		onOpenAdmin: vi.fn(),
+	}
+
+	it('names the person with their presence and offers no channel settings', () => {
+		withTooltips(
+			<ChatChannelHeaderUI
+				{...baseProps}
+				name="direct"
+				topic="ignored"
+				peer={{ name: 'Karim Benali', hue: 200, presence: 'DND' }}
+			/>,
+		)
+
+		expect(screen.getByRole('heading', { name: 'Karim Benali' })).toBeDefined()
+		expect(screen.getAllByText('Absent').length).toBeGreaterThan(0)
+		expect(screen.queryByText('ignored')).toBeNull()
+		expect(screen.queryByLabelText('Paramètres du canal')).toBeNull()
+	})
+
+	it('keeps the settings button on a regular channel', () => {
+		withTooltips(<ChatChannelHeaderUI {...baseProps} name="general" />)
+
+		expect(screen.getByLabelText('Paramètres du canal')).toBeDefined()
 	})
 })

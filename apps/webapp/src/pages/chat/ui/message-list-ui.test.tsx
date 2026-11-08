@@ -131,6 +131,22 @@ describe('MessageListUI', () => {
 		expect(other?.className).not.toContain('bg-highlight/10')
 	})
 
+	it('offers no thread action when threads are disabled', () => {
+		const messages = [displayMessage()]
+		renderList(
+			<MessageListUI {...baseProps({ messages, threadsEnabled: false })} />,
+		)
+
+		expect(screen.queryByLabelText('Répondre dans un fil')).toBeNull()
+	})
+
+	it('offers a thread action by default', () => {
+		const messages = [displayMessage()]
+		renderList(<MessageListUI {...baseProps({ messages })} />)
+
+		expect(screen.getByLabelText('Répondre dans un fil')).toBeDefined()
+	})
+
 	it('shows a retry action on a failed send', async () => {
 		const user = userEvent.setup()
 		const onRetry = vi.fn()

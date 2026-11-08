@@ -15,6 +15,12 @@ if (typeof window.ResizeObserver !== 'function') {
 	}
 }
 
+// jsdom n'implémente pas non plus scrollIntoView, que cmdk appelle sur l'item
+// actif d'une `Command` : sans ce stub, ouvrir une liste de commandes plante.
+if (typeof Element.prototype.scrollIntoView !== 'function') {
+	Element.prototype.scrollIntoView = () => {}
+}
+
 // jsdom n'implémente pas matchMedia, dont dépend `useIsMobile` — donc toute la
 // primitive Sidebar. Média toujours faux : les tests rendent la version bureau.
 if (typeof window.matchMedia !== 'function') {

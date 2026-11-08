@@ -5,6 +5,7 @@ import {
 	useChannel,
 	useChatDirectory,
 	useCreateThread,
+	useDirectChannels,
 	useThreads,
 	useThreadsGatewaySync,
 	useUnreadSummaries,
@@ -62,6 +63,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 	const directory = useChatDirectory(activeOrganization.id)
 	const presenceStatuses = usePresenceStatuses()
 	const unreadSummaries = useUnreadSummaries(activeOrganization.id)
+	const directChannels = useDirectChannels(activeOrganization.id)
 	const [unreadMarker, setUnreadMarker] = useState<UnreadMarker | undefined>()
 	const [unreadCaptured, setUnreadCaptured] = useState(false)
 
@@ -142,7 +144,28 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 		)
 	}
 
-	const channelLabel = channel.data?.name ? `#${channel.data.name}` : 'ce canal'
+	const isDirect = channel.data?.channel_type === 'DIRECT'
+	const peerUserId = directChannels.data?.find(
+		(direct) => direct.channel_id === channelId,
+	)?.peer_user_id
+	const peerEntry = directory.data?.find(
+		(entry) => entry.user_id === peerUserId,
+	)
+	const peer = isDirect
+		? {
+				name: peerEntry?.display_name ?? 'Ancien membre',
+				hue: userHue(peerUserId),
+				presence:
+					(peerUserId ? presenceStatuses.get(peerUserId) : undefined) ??
+					peerEntry?.presence ??
+					'OFFLINE',
+			}
+		: undefined
+	const channelLabel = peer
+		? peer.name
+		: channel.data?.name
+			? `#${channel.data.name}`
+			: 'ce canal'
 	const isFiltering = searchOpen && searchQuery.trim() !== ''
 	const visibleMessages = isFiltering
 		? filterMessagesByQuery(messageListProps.messages, searchQuery)
@@ -159,12 +182,19 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 				text: message.content,
 			}
 		})
-	const members = (directory.data ?? []).map((entry) => ({
-		id: entry.user_id,
-		name: entry.display_name,
-		hue: userHue(entry.user_id),
-		presence: presenceStatuses.get(entry.user_id) ?? entry.presence,
-	}))
+	const members = (directory.data ?? [])
+		.filter(
+			(entry) =>
+				!isDirect ||
+				entry.user_id === currentUserId ||
+				entry.user_id === peerUserId,
+		)
+		.map((entry) => ({
+			id: entry.user_id,
+			name: entry.display_name,
+			hue: userHue(entry.user_id),
+			presence: presenceStatuses.get(entry.user_id) ?? entry.presence,
+		}))
 
 	return (
 		<div className="flex min-h-0 flex-1">
@@ -175,6 +205,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 				<ChatChannelHeaderUI
 					name={channel.data?.name}
 					topic={channel.data?.topic}
+					peer={peer}
 					isLoading={channel.isLoading}
 					searchOpen={searchOpen}
 					onSearchOpenChange={(open) =>
@@ -206,6 +237,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 					}
 					pinnedMessageIds={flags.data.pinned}
 					savedMessageIds={flags.data.saved}
+					threadsEnabled={!isDirect}
 					threadedMessageIds={new Set(threadByOriginMessageId.keys())}
 					onOpenThread={handleOpenThread}
 					onCopyLink={handleCopyLink}
@@ -216,7 +248,11 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 				<MessageComposerUI
 					{...composerProps}
 					label={`Message dans ${channelLabel}`}
-					placeholder={`Écrire dans ${channelLabel}`}
+					placeholder={
+						isDirect
+							? `Écrire à ${channelLabel}`
+							: `Écrire dans ${channelLabel}`
+					}
 				/>
 			</section>
 			{openThreadChannelId ? (

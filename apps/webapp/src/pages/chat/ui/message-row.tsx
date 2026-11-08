@@ -19,6 +19,7 @@ export interface MessageRowProps {
 	continuation: boolean
 	isEditing: boolean
 	editDraft: string
+	threadsEnabled?: boolean
 	hasThread: boolean
 	pinned: boolean
 	saved: boolean
@@ -48,6 +49,7 @@ export function MessageRow({
 	continuation,
 	isEditing,
 	editDraft,
+	threadsEnabled,
 	hasThread,
 	pinned,
 	saved,
@@ -208,6 +210,7 @@ export function MessageRow({
 			</div>
 			{status === 'sent' && !isEditing ? (
 				<MessageToolbar
+					threadsEnabled={threadsEnabled}
 					hasThread={hasThread}
 					isOwn={isOwn}
 					pinned={pinned}
