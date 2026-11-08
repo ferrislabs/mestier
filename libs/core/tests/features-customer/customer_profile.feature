@@ -19,6 +19,10 @@ Feature: Customer profile, lifecycle and billing designation
     And the customer source is "salon"
     And the customer notes are "Livraison le matin"
     And the customer payment terms are 45 days
+    And the company is notified of the event "customer.created"
+    And the event "customer.created" carries "/customer/name" equal to "Boulangerie Lemoine"
+    And the event "customer.created" carries "/customer/status" equal to "PROSPECT"
+    And the event "customer.created" carries "/customer/kind" equal to "PROFESSIONAL"
 
   @spec-crm-2-1
   Scenario: A customer designates its billing contact and billing address
@@ -109,6 +113,7 @@ Feature: Customer profile, lifecycle and billing designation
   Scenario: An owner who is not a member of the company is refused
     When the artisan creates a customer owned by a member of another company
     Then the designation is refused on the field "owner_member_id"
+    And the company is notified of no event
 
   @spec-crm-2-8
   Scenario Outline: Payment terms outside 0 to 60 days are refused, naming the field

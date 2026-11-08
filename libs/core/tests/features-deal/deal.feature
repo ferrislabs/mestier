@@ -14,12 +14,16 @@ Feature: Deals, the sales opportunities of a customer
     Then the deal "Rénovation du fournil" is in stage NEW
     And the deal "Rénovation du fournil" is open
     And the deal "Rénovation du fournil" is worth 1250000 cents
+    And the company is notified of the event "deal.created"
+    And the event "deal.created" carries "/deal/title" equal to "Rénovation du fournil"
+    And the event "deal.created" carries "/deal/stage" equal to "NEW"
 
   @spec-crm-3-1
   Scenario Outline: A deal without a title, a known customer or a positive amount is refused
     When the artisan creates the deal "<title>" of <amount> cents for "<customer>"
     Then the deal is refused with "<refusal>"
     And no deal is stored
+    And the company is notified of no deal event
 
     Examples:
       | title     | amount | customer            | refusal                            |
@@ -150,3 +154,40 @@ Feature: Deals, the sales opportunities of a customer
     And a customer "Ancien" converted 91 days ago
     When the artisan reads the pipeline summary
     Then the summary counts 2 conversions
+
+  @spec-crm-3-7
+  Scenario: Moving a deal announces the stage it left and the stage it reached
+    Given a deal "Rénovation du fournil" in stage NEW for "Boulangerie Lemoine"
+    When the artisan moves the deal "Rénovation du fournil" to VISIT
+    Then the company is notified of 1 events "deal.stage_changed"
+    And the event "deal.stage_changed" carries "/from" equal to "NEW"
+    And the event "deal.stage_changed" carries "/to" equal to "VISIT"
+    And the event "deal.stage_changed" carries "/deal/stage" equal to "VISIT"
+
+  @spec-crm-3-7
+  Scenario: A lost deal announces its reason
+    Given a deal "Rénovation du fournil" in stage NEGOTIATION for "Boulangerie Lemoine"
+    When the artisan moves the deal "Rénovation du fournil" to LOST with the reason "Prix trop élevé"
+    Then the event "deal.stage_changed" carries "/to" equal to "LOST"
+    And the event "deal.stage_changed" carries "/deal/lost_reason" equal to "Prix trop élevé"
+
+  @spec-crm-3-7
+  Scenario: Moving a deal to the stage it is already in announces nothing
+    Given a deal "Rénovation du fournil" in stage VISIT for "Boulangerie Lemoine"
+    When the artisan moves the deal "Rénovation du fournil" to VISIT
+    Then the company is notified of no deal event
+
+  @spec-crm-3-7
+  Scenario: A refused move announces nothing
+    Given a deal "Rénovation du fournil" in stage NEGOTIATION for "Boulangerie Lemoine"
+    When the artisan moves the deal "Rénovation du fournil" to LOST without a reason
+    Then the deal is refused with "lost_reason: a lost deal needs a reason"
+    And the company is notified of no deal event
+
+  @spec-crm-3-7
+  Scenario: Archiving a customer announces each deal it loses
+    Given a deal "Cuisine" in stage NEW for "Boulangerie Lemoine"
+    And a deal "Fournil" in stage QUOTE_SENT for "Boulangerie Lemoine"
+    And a deal "Vitrine" in stage WON for "Boulangerie Lemoine"
+    When the artisan archives the customer "Boulangerie Lemoine"
+    Then the company is notified of 2 events "deal.stage_changed"

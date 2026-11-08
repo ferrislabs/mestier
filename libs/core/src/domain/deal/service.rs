@@ -1,10 +1,12 @@
 use authz::{Authorizer, Resource, Subject};
 use chrono::{DateTime, Utc};
 use common::{CoreError, generate_uuid_v7};
+use events::EventEmitter;
 
 use super::{
     Deal, DealAmount, DealError, DealId, DealOutcome, DealStage, DealTitle, PipelineSummary,
     commands::{CreateDealCommand, DealFilter, MoveDealCommand, UpdateDealCommand},
+    events::{DealCreated, DealStageChanged},
     normalized_notes,
     ports::DealRepository,
     summary::{summarise, window_start},
@@ -18,28 +20,31 @@ use crate::{
     },
 };
 
-pub struct DealService<D, C, M, Ro, A>
+pub struct DealService<D, C, M, Ro, A, E>
 where
     D: DealRepository,
     C: CustomerRepository,
     M: MemberRepository,
     Ro: RoleRepository,
     A: Authorizer,
+    E: EventEmitter,
 {
     deals: D,
     customers: C,
     member_repository: M,
     role_repository: Ro,
     authz: A,
+    emitter: E,
 }
 
-impl<D, C, M, Ro, A> DealService<D, C, M, Ro, A>
+impl<D, C, M, Ro, A, E> DealService<D, C, M, Ro, A, E>
 where
     D: DealRepository,
     C: CustomerRepository,
     M: MemberRepository,
     Ro: RoleRepository,
     A: Authorizer,
+    E: EventEmitter,
 {
     pub fn new(
         deals: D,
@@ -47,6 +52,7 @@ where
         member_repository: M,
         role_repository: Ro,
         authz: A,
+        emitter: E,
     ) -> Self {
         Self {
             deals,
@@ -54,6 +60,7 @@ where
             member_repository,
             role_repository,
             authz,
+            emitter,
         }
     }
 
@@ -150,7 +157,16 @@ where
             quote_count: 0,
         };
 
-        self.deals.insert(&deal).await.map(Ok)
+        let created = self.deals.insert(&deal).await?;
+
+        self.emitter.emit(
+            created.organization_id,
+            &DealCreated {
+                deal: created.clone(),
+            },
+        )?;
+
+        Ok(Ok(created))
     }
 
     pub async fn get_deal(&mut self, id: DealId) -> Result<Deal, CoreError> {
@@ -223,6 +239,7 @@ where
 
         let now = Utc::now();
         let won = matches!(stage, DealStage::Won);
+        let from = deal.stage.name();
         if !deal.move_to(stage, now) {
             return Ok(Ok(deal));
         }
@@ -231,6 +248,14 @@ where
         if won {
             convert_prospect(&mut self.customers, saved.customer_id, now).await?;
         }
+
+        self.emitter.emit(
+            saved.organization_id,
+            &DealStageChanged {
+                deal: saved.clone(),
+                from,
+            },
+        )?;
 
         Ok(Ok(saved))
     }

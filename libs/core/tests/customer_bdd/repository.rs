@@ -119,6 +119,8 @@ pub fn roles() -> MockRoleRepository {
 
 pub fn deals() -> MockDealRepository {
     let mut repo = MockDealRepository::new();
+    repo.expect_list()
+        .returning(|_, _, _| Box::pin(async { Ok((Vec::new(), 0)) }));
     repo.expect_lose_open_of_customer()
         .returning(|_, _, _| Box::pin(async { Ok(0) }));
     repo

@@ -9,6 +9,7 @@ use crate::OrganizationId;
 
 pub mod commands;
 pub mod directory;
+pub mod events;
 pub mod ports;
 pub mod profile;
 pub mod service;

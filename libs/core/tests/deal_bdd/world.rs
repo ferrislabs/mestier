@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use authz::{Decision, MockAuthorizer, Subject};
 use common::CoreError;
+use events::testing::RecordingEmitter;
 use mestier_core::{
     CustomerId, CustomerService, DealError, DealId, DealService, MockCustomerRepository,
     MockDealRepository, MockMemberRepository, MockRoleRepository, OrganizationId, PipelineSummary,
@@ -9,20 +10,22 @@ use mestier_core::{
 
 use crate::repository::{self, Store};
 
-pub type Deals = DealService<
+pub type Deals<'a> = DealService<
     MockDealRepository,
     MockCustomerRepository,
     MockMemberRepository,
     MockRoleRepository,
     MockAuthorizer,
+    &'a RecordingEmitter,
 >;
 
-pub type Customers = CustomerService<
+pub type Customers<'a> = CustomerService<
     MockCustomerRepository,
     MockDealRepository,
     MockMemberRepository,
     MockRoleRepository,
     MockAuthorizer,
+    &'a RecordingEmitter,
 >;
 
 #[derive(Debug)]
@@ -44,6 +47,7 @@ impl Refusal {
 #[derive(Debug, Default, cucumber::World)]
 pub struct DealWorld {
     pub store: Store,
+    pub emitter: RecordingEmitter,
     pub organization_id: Option<OrganizationId>,
     pub customers: HashMap<String, CustomerId>,
     pub deals: HashMap<String, DealId>,
@@ -60,23 +64,25 @@ fn allow_all() -> MockAuthorizer {
 }
 
 impl DealWorld {
-    pub fn deals(&self) -> Deals {
+    pub fn deals(&self) -> Deals<'_> {
         DealService::new(
             repository::deals(&self.store),
             repository::customers(&self.store),
             repository::members(&self.store),
             repository::roles(),
             allow_all(),
+            &self.emitter,
         )
     }
 
-    pub fn customer_service(&self) -> Customers {
+    pub fn customer_service(&self) -> Customers<'_> {
         CustomerService::new(
             repository::customers(&self.store),
             repository::deals(&self.store),
             repository::members(&self.store),
             repository::roles(),
             allow_all(),
+            &self.emitter,
         )
     }
 

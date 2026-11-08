@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use authz::{Decision, MockAuthorizer, Subject};
 use chrono::{DateTime, Utc};
+use events::testing::RecordingEmitter;
 use mestier_core::{
     CustomerContactService, CustomerContextService, CustomerError, CustomerId, CustomerService,
     MockCustomerContactRepository, MockCustomerContextRepository, MockCustomerRepository,
@@ -11,12 +12,13 @@ use mestier_core::{
 
 use crate::repository::{self, Store};
 
-pub type Customers = CustomerService<
+pub type Customers<'a> = CustomerService<
     MockCustomerRepository,
     MockDealRepository,
     MockMemberRepository,
     MockRoleRepository,
     MockAuthorizer,
+    &'a RecordingEmitter,
 >;
 
 pub type Contacts = CustomerContactService<
@@ -38,6 +40,7 @@ pub type Contexts = CustomerContextService<
 #[derive(Debug, Default, cucumber::World)]
 pub struct CustomerWorld {
     pub store: Store,
+    pub emitter: RecordingEmitter,
     pub organization_id: Option<OrganizationId>,
     pub members: HashMap<String, mestier_core::MemberId>,
     pub customers: HashMap<String, CustomerId>,
@@ -57,13 +60,14 @@ fn allow_all() -> MockAuthorizer {
 }
 
 impl CustomerWorld {
-    pub fn customers(&self) -> Customers {
+    pub fn customers(&self) -> Customers<'_> {
         CustomerService::new(
             repository::customers(&self.store),
             repository::deals(),
             repository::members(&self.store),
             repository::roles(),
             allow_all(),
+            &self.emitter,
         )
     }
 

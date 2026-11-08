@@ -89,6 +89,16 @@ const EVENT_DOMAINS: readonly EventDomain[] = [
 		label: 'Équipe',
 		events: ['member.invited', 'member.joined', 'member.removed'],
 	},
+	{
+		id: 'customer',
+		label: 'Clients',
+		events: ['customer.created'],
+	},
+	{
+		id: 'deal',
+		label: 'Opportunités',
+		events: ['deal.created', 'deal.stage_changed'],
+	},
 ]
 
 const OTHER_DOMAIN = { id: 'other', label: 'Autres' }
