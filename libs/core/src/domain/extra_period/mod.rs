@@ -9,6 +9,7 @@ use crate::{MemberId, OrganizationId, RateBp, Surcharge, SurchargeId, WorkDay, W
 
 pub mod commands;
 pub mod error;
+pub mod events;
 pub mod ports;
 pub mod service;
 

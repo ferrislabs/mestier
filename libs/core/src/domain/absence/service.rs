@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use common::{CoreError, generate_uuid_v7};
+use events::EventEmitter;
 
 use crate::{
     Absence, AbsenceOutcome, AbsenceSpan, AbsenceStatus, AbsenceType, AbsenceTypeService, MemberId,
@@ -8,6 +9,7 @@ use crate::{
         absence::{
             AbsenceError, AbsenceId, clean_note, clean_proof,
             commands::{AbsenceSchedule, CreateAbsenceCommand, PatchAbsenceCommand},
+            events::{AbsenceDecided, AbsenceRequested},
             ports::AbsenceRepository,
         },
         absence_type::ports::AbsenceTypeRepository,
@@ -15,27 +17,46 @@ use crate::{
     },
 };
 
-pub struct AbsenceService<AR, TR, LR>
+pub struct AbsenceService<AR, TR, LR, E>
 where
     AR: AbsenceRepository,
     TR: AbsenceTypeRepository,
     LR: LeaveAccountRepository,
+    E: EventEmitter,
 {
     absence_repository: AR,
     types: AbsenceTypeService<TR, LR>,
+    emitter: E,
 }
 
-impl<AR, TR, LR> AbsenceService<AR, TR, LR>
+impl<AR, TR, LR, E> AbsenceService<AR, TR, LR, E>
 where
     AR: AbsenceRepository,
     TR: AbsenceTypeRepository,
     LR: LeaveAccountRepository,
+    E: EventEmitter,
 {
-    pub fn new(absence_repository: AR, type_repository: TR, account_repository: LR) -> Self {
+    pub fn new(
+        absence_repository: AR,
+        type_repository: TR,
+        account_repository: LR,
+        emitter: E,
+    ) -> Self {
         Self {
             absence_repository,
             types: AbsenceTypeService::new(type_repository, account_repository),
+            emitter,
         }
+    }
+
+    fn emit_decision(&self, absence: &Absence, from: AbsenceStatus) -> Result<(), CoreError> {
+        self.emitter.emit(
+            absence.organization_id,
+            &AbsenceDecided {
+                absence: absence.clone(),
+                from,
+            },
+        )
     }
 
     pub async fn create_absence(
@@ -115,7 +136,19 @@ where
             absence.all_day = all_day;
         }
 
-        self.absence_repository.insert(&absence).await.map(Ok)
+        let created = self.absence_repository.insert(&absence).await?;
+
+        self.emitter.emit(
+            created.organization_id,
+            &AbsenceRequested {
+                absence: created.clone(),
+            },
+        )?;
+        if created.status == AbsenceStatus::Approved {
+            self.emit_decision(&created, AbsenceStatus::Pending)?;
+        }
+
+        Ok(Ok(created))
     }
 
     pub async fn get_absence(&mut self, id: AbsenceId) -> Result<Absence, CoreError> {
@@ -212,10 +245,13 @@ where
     ) -> Result<AbsenceOutcome<Absence>, CoreError> {
         let mut absence = self.in_organization(organization_id, id).await?;
         let absence_type = self.type_of(&absence).await?;
+        let from = absence.status;
         if let Err(refusal) = absence.approve(&absence_type, decider, Utc::now()) {
             return Ok(Err(refusal));
         }
-        self.absence_repository.update(&absence).await.map(Ok)
+        let saved = self.absence_repository.update(&absence).await?;
+        self.emit_decision(&saved, from)?;
+        Ok(Ok(saved))
     }
 
     pub async fn reject(
@@ -226,10 +262,13 @@ where
         decider: Option<MemberId>,
     ) -> Result<AbsenceOutcome<Absence>, CoreError> {
         let mut absence = self.in_organization(organization_id, id).await?;
+        let from = absence.status;
         if let Err(refusal) = absence.reject(comment, decider, Utc::now()) {
             return Ok(Err(refusal));
         }
-        self.absence_repository.update(&absence).await.map(Ok)
+        let saved = self.absence_repository.update(&absence).await?;
+        self.emit_decision(&saved, from)?;
+        Ok(Ok(saved))
     }
 
     pub async fn cancel(
@@ -251,10 +290,13 @@ where
         if !privileged && absence.status != AbsenceStatus::Pending {
             return Ok(Err(AbsenceError::AlreadyDecided));
         }
+        let from = absence.status;
         if let Err(refusal) = absence.cancel(caller, Utc::now()) {
             return Ok(Err(refusal));
         }
-        self.absence_repository.update(&absence).await.map(Ok)
+        let saved = self.absence_repository.update(&absence).await?;
+        self.emit_decision(&saved, from)?;
+        Ok(Ok(saved))
     }
 
     pub async fn in_organization(
@@ -311,6 +353,7 @@ mod tests {
         },
     };
     use chrono_tz::Europe::Paris;
+    use events::testing::RecordingEmitter;
     use mockall::predicate::eq;
     use uuid::Uuid;
 
@@ -349,13 +392,43 @@ mod tests {
     fn service(
         absence_repository: MockAbsenceRepository,
         stored: Vec<AbsenceType>,
-    ) -> AbsenceService<MockAbsenceRepository, MockAbsenceTypeRepository, MockLeaveAccountRepository>
-    {
+    ) -> AbsenceService<
+        MockAbsenceRepository,
+        MockAbsenceTypeRepository,
+        MockLeaveAccountRepository,
+        RecordingEmitter,
+    > {
         AbsenceService::new(
             absence_repository,
             type_repository(stored),
             MockLeaveAccountRepository::new(),
+            RecordingEmitter::new(),
         )
+    }
+
+    fn recording_service(
+        absence_repository: MockAbsenceRepository,
+        stored: Vec<AbsenceType>,
+        emitter: &RecordingEmitter,
+    ) -> AbsenceService<
+        MockAbsenceRepository,
+        MockAbsenceTypeRepository,
+        MockLeaveAccountRepository,
+        &RecordingEmitter,
+    > {
+        AbsenceService::new(
+            absence_repository,
+            type_repository(stored),
+            MockLeaveAccountRepository::new(),
+            emitter,
+        )
+    }
+
+    fn echo_update(repository: &mut MockAbsenceRepository) {
+        repository.expect_update().times(1).returning(|a| {
+            let cloned = a.clone();
+            Box::pin(async move { Ok(cloned) })
+        });
     }
 
     fn echo_insert(repository: &mut MockAbsenceRepository) {
@@ -771,5 +844,189 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(refused, CoreError::Forbidden { .. }));
+    }
+
+    fn pending_absence(organization_id: OrganizationId, stored: &[AbsenceType]) -> Absence {
+        let mut existing = absence(AbsenceId(Uuid::new_v4()), organization_id, stored[0].id);
+        existing.status = AbsenceStatus::Pending;
+        existing
+    }
+
+    #[tokio::test]
+    async fn creating_a_pending_absence_emits_requested_only() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let stored = defaults(organization_id);
+        let leave = stored[0].id;
+        let mut repository = MockAbsenceRepository::new();
+        echo_insert(&mut repository);
+        let emitter = RecordingEmitter::new();
+        let mut service = recording_service(repository, stored, &emitter);
+        let mut command = window_command(organization_id);
+        command.kind = None;
+        command.type_id = Some(leave);
+
+        let created = service
+            .create_absence(command, None, Paris)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(emitter.names(), vec!["absence.requested"]);
+        let event = emitter.only("absence.requested");
+        assert_eq!(event.payload["absence"]["status"], "PENDING");
+        assert_eq!(event.payload["absence"]["id"], created.id.0.to_string());
+    }
+
+    #[tokio::test]
+    async fn creating_an_already_approved_absence_emits_requested_then_approved() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let mut repository = MockAbsenceRepository::new();
+        echo_insert(&mut repository);
+        let emitter = RecordingEmitter::new();
+        let mut service = recording_service(repository, defaults(organization_id), &emitter);
+
+        service
+            .create_absence(window_command(organization_id), None, Paris)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            emitter.names(),
+            vec!["absence.requested", "absence.approved"]
+        );
+        assert_eq!(
+            emitter.only("absence.requested").payload["absence"]["status"],
+            "APPROVED"
+        );
+        assert_eq!(emitter.only("absence.approved").payload["from"], "PENDING");
+    }
+
+    #[tokio::test]
+    async fn a_refused_creation_emits_nothing() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let emitter = RecordingEmitter::new();
+        let mut service = recording_service(
+            MockAbsenceRepository::new(),
+            defaults(organization_id),
+            &emitter,
+        );
+        let mut command = window_command(organization_id);
+        command.kind = None;
+
+        let outcome = service.create_absence(command, None, Paris).await.unwrap();
+
+        assert_eq!(outcome, Err(AbsenceError::TypeRequired));
+        assert!(emitter.names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_failed_insert_emits_nothing() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let mut repository = MockAbsenceRepository::new();
+        repository
+            .expect_insert()
+            .returning(|_| Box::pin(async { Err(CoreError::Conflict("boom".to_owned())) }));
+        let emitter = RecordingEmitter::new();
+        let mut service = recording_service(repository, defaults(organization_id), &emitter);
+
+        let result = service
+            .create_absence(window_command(organization_id), None, Paris)
+            .await;
+
+        assert!(result.is_err());
+        assert!(emitter.names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn approving_emits_approved_from_pending() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let stored = defaults(organization_id);
+        let existing = pending_absence(organization_id, &stored);
+        let id = existing.id;
+        let mut repository = repository_holding(existing);
+        echo_update(&mut repository);
+        let emitter = RecordingEmitter::new();
+        let mut service = recording_service(repository, stored, &emitter);
+
+        service
+            .approve(organization_id, id, None)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let event = emitter.only("absence.approved");
+        assert_eq!(event.payload["from"], "PENDING");
+        assert_eq!(event.payload["to"], "APPROVED");
+        assert_eq!(event.payload["absence"]["status"], "APPROVED");
+        assert_eq!(emitter.names().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn rejecting_emits_rejected_with_the_decision_comment() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let stored = defaults(organization_id);
+        let existing = pending_absence(organization_id, &stored);
+        let id = existing.id;
+        let mut repository = repository_holding(existing);
+        echo_update(&mut repository);
+        let emitter = RecordingEmitter::new();
+        let mut service = recording_service(repository, stored, &emitter);
+
+        service
+            .reject(organization_id, id, "Période chargée", None)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let event = emitter.only("absence.rejected");
+        assert_eq!(event.payload["from"], "PENDING");
+        assert_eq!(
+            event.payload["absence"]["decision_comment"],
+            "Période chargée"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelling_emits_cancelled() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let stored = defaults(organization_id);
+        let existing = pending_absence(organization_id, &stored);
+        let id = existing.id;
+        let mut repository = repository_holding(existing);
+        echo_update(&mut repository);
+        let emitter = RecordingEmitter::new();
+        let mut service = recording_service(repository, stored, &emitter);
+
+        service
+            .cancel(organization_id, id, None, true)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let event = emitter.only("absence.cancelled");
+        assert_eq!(event.payload["from"], "PENDING");
+        assert_eq!(event.payload["to"], "CANCELLED");
+    }
+
+    #[tokio::test]
+    async fn a_refused_decision_emits_nothing() {
+        let organization_id = OrganizationId(Uuid::new_v4());
+        let stored = defaults(organization_id);
+        let mut existing = pending_absence(organization_id, &stored);
+        existing.status = AbsenceStatus::Approved;
+        let id = existing.id;
+        let emitter = RecordingEmitter::new();
+        let mut service = recording_service(repository_holding(existing), stored, &emitter);
+
+        let approved = service.approve(organization_id, id, None).await.unwrap();
+        let rejected = service
+            .reject(organization_id, id, "Non", None)
+            .await
+            .unwrap();
+
+        assert!(approved.is_err());
+        assert!(rejected.is_err());
+        assert!(emitter.names().is_empty());
     }
 }

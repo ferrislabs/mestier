@@ -96,6 +96,7 @@ impl App {
     pub async fn cleanup(&self) {
         for org_id in [self.organization_id, self.other_organization_id().await] {
             for statement in [
+                "DELETE FROM automation.event WHERE org_id = $1",
                 "DELETE FROM day_overrides WHERE org_id = $1",
                 "DELETE FROM extra_periods WHERE org_id = $1",
                 "DELETE FROM surcharges WHERE org_id = $1",

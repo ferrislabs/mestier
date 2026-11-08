@@ -9,6 +9,7 @@ use crate::{AbsenceType, AbsenceTypeId, FileKey, MemberId, OrganizationId};
 
 pub mod commands;
 pub mod error;
+pub mod events;
 pub mod ports;
 pub mod service;
 pub mod span;

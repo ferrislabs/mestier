@@ -24,7 +24,8 @@ impl MestierUseCase {
         organization,
         role,
         member,
-        authz
+        authz,
+        emitter
     )]
     pub async fn create_absence(
         &self,
@@ -66,11 +67,12 @@ impl MestierUseCase {
             absence_repository,
             absence_type_repository,
             leave_account_repository,
+            emitter,
         );
         service.create_absence(command, creator, timezone).await
     }
 
-    #[transactional(absence, absence_type, leave_account, role, member, authz)]
+    #[transactional(absence, absence_type, leave_account, role, member, authz, emitter)]
     pub async fn list_absences_for(
         &self,
         command: ListAbsencesCommand,
@@ -95,6 +97,7 @@ impl MestierUseCase {
             absence_repository,
             absence_type_repository,
             leave_account_repository,
+            emitter,
         );
         match scope {
             Some(member_id) => {
@@ -115,17 +118,18 @@ impl MestierUseCase {
         }
     }
 
-    #[transactional(absence, absence_type, leave_account)]
+    #[transactional(absence, absence_type, leave_account, emitter)]
     pub async fn get_absence(&self, id: AbsenceId) -> Result<Absence, CoreError> {
         let mut service = AbsenceService::new(
             absence_repository,
             absence_type_repository,
             leave_account_repository,
+            emitter,
         );
         service.get_absence(id).await
     }
 
-    #[transactional(absence, absence_type, leave_account)]
+    #[transactional(absence, absence_type, leave_account, emitter)]
     pub async fn list_absences(
         &self,
         organization_id: OrganizationId,
@@ -136,6 +140,7 @@ impl MestierUseCase {
             absence_repository,
             absence_type_repository,
             leave_account_repository,
+            emitter,
         );
         service.list_absences(organization_id, limit, offset).await
     }
@@ -152,7 +157,8 @@ impl MestierUseCase {
         organization,
         role,
         member,
-        authz
+        authz,
+        emitter
     )]
     pub async fn patch_absence(&self, command: PatchAbsenceCommand) -> Result<Absence, CoreError> {
         let mut member_repository = member_repository;
@@ -163,6 +169,7 @@ impl MestierUseCase {
             absence_repository,
             absence_type_repository,
             leave_account_repository,
+            emitter,
         );
         let existing = service.get_absence(command.id).await?;
 
@@ -190,7 +197,7 @@ impl MestierUseCase {
     /// rule as [`Self::patch_absence`] — there is no domain command to
     /// carry an `actor` for a bare-id delete, so it is threaded as its own
     /// parameter instead, the same way `remove_employee_profile` does.
-    #[transactional(absence, absence_type, leave_account, role, member, authz)]
+    #[transactional(absence, absence_type, leave_account, role, member, authz, emitter)]
     pub async fn soft_delete_absence(
         &self,
         actor: Subject,
@@ -203,6 +210,7 @@ impl MestierUseCase {
             absence_repository,
             absence_type_repository,
             leave_account_repository,
+            emitter,
         );
         let existing = service.get_absence(id).await?;
 
@@ -224,7 +232,7 @@ impl MestierUseCase {
         service.soft_delete_absence(id).await
     }
 
-    #[transactional(absence, absence_type, leave_account, role, member, authz)]
+    #[transactional(absence, absence_type, leave_account, role, member, authz, emitter)]
     pub async fn approve_absence(
         &self,
         command: DecideAbsenceCommand,
@@ -251,6 +259,7 @@ impl MestierUseCase {
             absence_repository,
             absence_type_repository,
             leave_account_repository,
+            emitter,
         );
         service
             .approve(
@@ -261,7 +270,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(absence, absence_type, leave_account, role, member, authz)]
+    #[transactional(absence, absence_type, leave_account, role, member, authz, emitter)]
     pub async fn reject_absence(
         &self,
         command: RejectAbsenceCommand,
@@ -288,6 +297,7 @@ impl MestierUseCase {
             absence_repository,
             absence_type_repository,
             leave_account_repository,
+            emitter,
         );
         service
             .reject(
@@ -301,7 +311,7 @@ impl MestierUseCase {
 
     /// The creator may withdraw their own request; anyone else needs
     /// `planning.manage`.
-    #[transactional(absence, absence_type, leave_account, role, member, authz)]
+    #[transactional(absence, absence_type, leave_account, role, member, authz, emitter)]
     pub async fn cancel_absence(
         &self,
         command: DecideAbsenceCommand,
@@ -333,6 +343,7 @@ impl MestierUseCase {
             absence_repository,
             absence_type_repository,
             leave_account_repository,
+            emitter,
         );
         service
             .cancel(

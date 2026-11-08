@@ -29,6 +29,9 @@ const LEAD_SOURCES = [
 	'autre',
 ]
 const DEAL_STAGES = ['NEW', 'VISIT', 'QUOTE_SENT', 'NEGOTIATION', 'WON', 'LOST']
+const DECISION_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']
+const ABSENCE_KINDS = ['LEAVE', 'SICK', 'UNAVAILABLE']
+const DAY_PARTS = ['MORNING', 'AFTERNOON']
 
 const DECLARATIONS: Record<string, Declaration> = {
 	Uuid: { source: 'type Uuid = string', uses: [] },
@@ -279,6 +282,74 @@ const DECLARATIONS: Record<string, Declaration> = {
 		]),
 		uses: ['DealStage', 'Uuid', 'Cents', 'IsoDate', 'DateTime'],
 	},
+	DecisionStatus: {
+		source: `type DecisionStatus = ${union(DECISION_STATUSES)}`,
+		uses: [],
+	},
+	AbsenceKind: {
+		source: `type AbsenceKind = ${union(ABSENCE_KINDS)}`,
+		uses: [],
+	},
+	DayPart: {
+		source: `type DayPart = ${union(DAY_PARTS)}`,
+		uses: [],
+	},
+	Absence: {
+		source: block('interface', 'Absence', [
+			'id: Uuid',
+			'organization_id: Uuid',
+			'member_id: Uuid',
+			'kind: AbsenceKind',
+			'type_id: Uuid',
+			'starts_at: DateTime',
+			'ends_at: DateTime',
+			'all_day: boolean',
+			'start_date: IsoDate',
+			'start_part: DayPart',
+			'end_date: IsoDate',
+			'end_part: DayPart',
+			'status: DecisionStatus',
+			'note: string | null',
+			'proof_file_key: string | null',
+			'created_by_member_id: Uuid | null',
+			'decided_by_member_id: Uuid | null',
+			'decided_at: DateTime | null',
+			'decision_comment: string | null',
+			'created_at: DateTime',
+			'updated_at: DateTime',
+		]),
+		uses: [
+			'AbsenceKind',
+			'DayPart',
+			'DecisionStatus',
+			'Uuid',
+			'IsoDate',
+			'DateTime',
+		],
+	},
+	ExtraPeriod: {
+		source: block('interface', 'ExtraPeriod', [
+			'id: Uuid',
+			'organization_id: Uuid',
+			'member_id: Uuid',
+			'date: IsoDate',
+			'start: string',
+			'end: string',
+			'lunch: { start: string; end: string } | null',
+			'worked_minutes: number',
+			'reason: string',
+			'surcharge_id: Uuid | null',
+			'rate_bp: number',
+			'status: DecisionStatus',
+			'created_by_member_id: Uuid | null',
+			'decided_by_member_id: Uuid | null',
+			'decided_at: DateTime | null',
+			'decision_comment: string | null',
+			'created_at: DateTime',
+			'updated_at: DateTime',
+		]),
+		uses: ['DecisionStatus', 'Uuid', 'IsoDate', 'DateTime'],
+	},
 	SupplierInvoiceLineAllocation: {
 		source: block('interface', 'SupplierInvoiceLineAllocation', [
 			'id: Uuid',
@@ -438,6 +509,44 @@ const PAYLOADS: Record<string, PayloadContract> = {
 		fields: ['deal: Deal', 'from: DealStage', 'to: DealStage'],
 		uses: ['Deal', 'DealStage'],
 	},
+	'absence.requested': created('absence', 'Absence'),
+	'absence.approved': transitioned(
+		'absence',
+		'Absence',
+		'DecisionStatus',
+		'APPROVED',
+	),
+	'absence.rejected': transitioned(
+		'absence',
+		'Absence',
+		'DecisionStatus',
+		'REJECTED',
+	),
+	'absence.cancelled': transitioned(
+		'absence',
+		'Absence',
+		'DecisionStatus',
+		'CANCELLED',
+	),
+	'extra_period.requested': created('extra_period', 'ExtraPeriod'),
+	'extra_period.approved': transitioned(
+		'extra_period',
+		'ExtraPeriod',
+		'DecisionStatus',
+		'APPROVED',
+	),
+	'extra_period.rejected': transitioned(
+		'extra_period',
+		'ExtraPeriod',
+		'DecisionStatus',
+		'REJECTED',
+	),
+	'extra_period.cancelled': transitioned(
+		'extra_period',
+		'ExtraPeriod',
+		'DecisionStatus',
+		'CANCELLED',
+	),
 	'member.removed': {
 		fields: [
 			'member_id: Uuid',

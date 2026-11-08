@@ -99,6 +99,26 @@ const EVENT_DOMAINS: readonly EventDomain[] = [
 		label: 'Opportunités',
 		events: ['deal.created', 'deal.stage_changed'],
 	},
+	{
+		id: 'absence',
+		label: 'Absences',
+		events: [
+			'absence.requested',
+			'absence.approved',
+			'absence.rejected',
+			'absence.cancelled',
+		],
+	},
+	{
+		id: 'extra_period',
+		label: 'Heures supplémentaires',
+		events: [
+			'extra_period.requested',
+			'extra_period.approved',
+			'extra_period.rejected',
+			'extra_period.cancelled',
+		],
+	},
 ]
 
 const OTHER_DOMAIN = { id: 'other', label: 'Autres' }

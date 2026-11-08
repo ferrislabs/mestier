@@ -56,6 +56,14 @@ const PROTOTYPE_EVENTS: readonly (readonly [string, string])[] = [
 	['customer.created', 'Clients'],
 	['deal.created', 'Opportunités'],
 	['deal.stage_changed', 'Opportunités'],
+	['absence.requested', 'Absences'],
+	['absence.approved', 'Absences'],
+	['absence.rejected', 'Absences'],
+	['absence.cancelled', 'Absences'],
+	['extra_period.requested', 'Heures supplémentaires'],
+	['extra_period.approved', 'Heures supplémentaires'],
+	['extra_period.rejected', 'Heures supplémentaires'],
+	['extra_period.cancelled', 'Heures supplémentaires'],
 ]
 
 const catalogue = PROTOTYPE_EVENTS.map(([name]) => event(name))
@@ -78,6 +86,8 @@ describe('groupEvents', () => {
 			'Équipe',
 			'Clients',
 			'Opportunités',
+			'Absences',
+			'Heures supplémentaires',
 		])
 	})
 

@@ -45,6 +45,14 @@ const EVENT_NAMES = [
 	'customer.created',
 	'deal.created',
 	'deal.stage_changed',
+	'absence.requested',
+	'absence.approved',
+	'absence.rejected',
+	'absence.cancelled',
+	'extra_period.requested',
+	'extra_period.approved',
+	'extra_period.rejected',
+	'extra_period.cancelled',
 ]
 
 function declaredNames(source: string): Set<string> {
