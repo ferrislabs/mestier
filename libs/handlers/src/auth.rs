@@ -9,7 +9,7 @@ use axum::{
 };
 use http::{HeaderValue, header::AUTHORIZATION};
 use mestier_core::{CreateUserCommand, UserId, application::policy};
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::{
     delegated::delegated_route_allowed,
@@ -90,24 +90,16 @@ pub async fn auth_middleware(
     }
 
     if let Identity::User(user) = &identity {
-        let name = user.name.as_deref().unwrap_or_else(|| &user.username);
-
-        let email = user.email.as_deref().unwrap_or_else(|| {
-            error!("Auth middleware: user {} has no email", name);
-            "unknown"
-        });
-
-        if let Err(err) = state
-            .usecase
-            .create_user(CreateUserCommand {
-                name: name.to_string(),
-                username: user.username.clone(),
-                email: email.to_string(),
-                sub: user.id.clone(),
-            })
-            .await
-        {
-            error!("auth middleware: failed to create user {:?}", err);
+        match provisioning_command(user) {
+            Some(command) => {
+                if let Err(err) = state.usecase.create_user(command).await {
+                    error!("auth middleware: failed to create user {:?}", err);
+                }
+            }
+            None if !user.delegated => {
+                warn!("auth middleware: user {} has no email", user.id);
+            }
+            None => {}
         }
     }
 
@@ -116,10 +108,56 @@ pub async fn auth_middleware(
     Ok(next.run(req).await)
 }
 
+/// The command that provisions the local row for a token's user, or `None`
+/// when the token carries no email.
+///
+/// Users are upserted by email, so a stand-in email would collide with the
+/// next email-less user, or rewrite the `sub` of an existing row and break
+/// `users_sub_key`. A delegated token from the MCP gateway has no email: its
+/// user was provisioned by their own login.
+fn provisioning_command(user: &auth::User) -> Option<CreateUserCommand> {
+    let email = user.email.as_deref()?;
+    Some(CreateUserCommand {
+        name: user.name.as_deref().unwrap_or(&user.username).to_string(),
+        username: user.username.clone(),
+        email: email.to_string(),
+        sub: user.id.clone(),
+    })
+}
+
 pub fn extract_bearer(auth_header: &HeaderValue) -> Result<&str, ApiError> {
     auth_header
         .to_str()
         .map_err(|_| ApiError::TokenNotFound)?
         .strip_prefix("Bearer ")
         .ok_or(ApiError::TokenNotFound)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn user(email: Option<&str>, name: Option<&str>) -> auth::User {
+        auth::User {
+            id: "sub-1".to_string(),
+            username: "jane".to_string(),
+            email: email.map(str::to_string),
+            name: name.map(str::to_string),
+            roles: vec![],
+            delegated: false,
+        }
+    }
+
+    #[test]
+    fn a_user_without_email_is_not_provisioned() {
+        assert!(provisioning_command(&user(None, Some("Jane"))).is_none());
+    }
+
+    #[test]
+    fn the_username_stands_in_for_a_missing_name() {
+        let command = provisioning_command(&user(Some("j@x.fr"), None)).unwrap();
+        assert_eq!(command.name, "jane");
+        assert_eq!(command.email, "j@x.fr");
+        assert_eq!(command.sub, "sub-1");
+    }
 }
