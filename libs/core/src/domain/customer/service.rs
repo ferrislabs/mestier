@@ -1,55 +1,101 @@
 use authz::{Authorizer, Resource, Subject};
-use chrono::{NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::{CoreError, generate_uuid_v7};
+use events::EventEmitter;
 
 use crate::{
     Customer, CustomerError, CustomerField, CustomerId, CustomerInvoiceFact, CustomerListRow,
-    CustomerOutcome, CustomerProfile, CustomerStatus, LostReason, MemberId, OrganizationId,
-    RegistrationNumber,
+    CustomerOutcome, CustomerProfile, CustomerStatus, Deal, DealFilter, DealStage, DealStageName,
+    LostReason, MemberId, OrganizationId, RegistrationNumber,
     application::policy,
     domain::{
         customer::{
             commands::{CreateCustomerCommand, UpdateCustomerCommand},
             directory::indicators_of,
+            events::CustomerCreated,
             ports::CustomerRepository,
         },
-        deal::ports::DealRepository,
+        deal::{events::DealStageChanged, ports::DealRepository},
         member::ports::MemberRepository,
         role::ports::RoleRepository,
     },
 };
 
-pub struct CustomerService<R, D, M, Ro, A>
+/// Deals of one customer in one open stage, read when it is archived.
+const OPEN_DEALS_PER_STAGE: u64 = 1_000;
+
+pub struct CustomerService<R, D, M, Ro, A, E>
 where
     R: CustomerRepository,
     D: DealRepository,
     M: MemberRepository,
     Ro: RoleRepository,
     A: Authorizer,
+    E: EventEmitter,
 {
     repo: R,
     deals: D,
     member_repository: M,
     role_repository: Ro,
     authz: A,
+    emitter: E,
 }
 
-impl<R, D, M, Ro, A> CustomerService<R, D, M, Ro, A>
+impl<R, D, M, Ro, A, E> CustomerService<R, D, M, Ro, A, E>
 where
     R: CustomerRepository,
     D: DealRepository,
     M: MemberRepository,
     Ro: RoleRepository,
     A: Authorizer,
+    E: EventEmitter,
 {
-    pub fn new(repo: R, deals: D, member_repository: M, role_repository: Ro, authz: A) -> Self {
+    pub fn new(
+        repo: R,
+        deals: D,
+        member_repository: M,
+        role_repository: Ro,
+        authz: A,
+        emitter: E,
+    ) -> Self {
         Self {
             repo,
             deals,
             member_repository,
             role_repository,
             authz,
+            emitter,
         }
+    }
+
+    /// Read before the bulk update that loses them: that update reports a
+    /// count, and each deal that moves has to be announced.
+    async fn open_deals_of(&mut self, customer: &Customer) -> Result<Vec<Deal>, CoreError> {
+        let mut open = Vec::new();
+        for stage in DealStageName::ALL
+            .into_iter()
+            .filter(|stage| stage.is_open())
+        {
+            let filter = DealFilter {
+                organization_id: customer.organization_id,
+                customer_id: Some(customer.id),
+                stage: Some(stage),
+                query: None,
+            };
+            let (deals, _) = self.deals.list(&filter, OPEN_DEALS_PER_STAGE, 0).await?;
+            open.extend(deals);
+        }
+        Ok(open)
+    }
+
+    fn emit_lost(&self, open: Vec<Deal>, now: DateTime<Utc>) -> Result<(), CoreError> {
+        for mut deal in open {
+            let from = deal.stage.name();
+            deal.move_to(DealStage::Lost(LostReason::archived_account()), now);
+            self.emitter
+                .emit(deal.organization_id, &DealStageChanged { deal, from })?;
+        }
+        Ok(())
     }
 
     async fn refusal_of(
@@ -147,7 +193,16 @@ where
         };
         customer.change_status(command.status, now);
 
-        self.repo.insert(&customer).await.map(Ok)
+        let created = self.repo.insert(&customer).await?;
+
+        self.emitter.emit(
+            created.organization_id,
+            &CustomerCreated {
+                customer: created.clone(),
+            },
+        )?;
+
+        Ok(Ok(created))
     }
 
     pub async fn get_customer(&mut self, id: CustomerId) -> Result<Customer, CoreError> {
@@ -259,9 +314,11 @@ where
 
         let updated = self.repo.update(&customer).await?;
         if !was_archived && updated.status == CustomerStatus::Archived {
+            let open = self.open_deals_of(&updated).await?;
             self.deals
                 .lose_open_of_customer(updated.id, &LostReason::archived_account(), now)
                 .await?;
+            self.emit_lost(open, now)?;
         }
 
         Ok(Ok(updated))
@@ -329,6 +386,7 @@ mod tests {
     use crate::domain::member::ports::MockMemberRepository;
     use crate::domain::role::ports::MockRoleRepository;
     use authz::{Decision, MockAuthorizer};
+    use events::testing::RecordingEmitter;
     use mockall::predicate::eq;
     use uuid::Uuid;
 
@@ -383,6 +441,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
         let created = service
             .create_customer(CreateCustomerCommand {
@@ -424,6 +483,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
         let updated = service
             .update_customer(UpdateCustomerCommand {
@@ -504,6 +564,7 @@ mod tests {
             MockMemberRepository::new(),
             MockRoleRepository::new(),
             MockAuthorizer::new(),
+            RecordingEmitter::new(),
         );
         let (rows, total) = service
             .list_customer_rows(org_id, 10, 0, today)
@@ -543,6 +604,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
         let (items, total) = service.list_customers(org_id, 10, 20).await.unwrap();
 
@@ -571,6 +633,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
         service
             .soft_delete_customer(id, system_actor())
@@ -590,6 +653,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
 
         let err = service
@@ -627,6 +691,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
         let created = service
             .create_customer(CreateCustomerCommand {
@@ -664,6 +729,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
         let created = service
             .create_customer(CreateCustomerCommand {
@@ -711,6 +777,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
         let updated = service
             .update_customer(UpdateCustomerCommand {
@@ -756,6 +823,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
         let refused = service
             .update_customer(UpdateCustomerCommand {
@@ -802,6 +870,7 @@ mod tests {
             member_repository,
             role_repository,
             authz,
+            RecordingEmitter::new(),
         );
         let err = service
             .update_customer(UpdateCustomerCommand {

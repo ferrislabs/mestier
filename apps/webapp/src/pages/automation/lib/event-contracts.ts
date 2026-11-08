@@ -19,6 +19,16 @@ const INVOICE_STATUSES = [
 	'CANCELLED',
 ]
 const SUPPLIER_INVOICE_STATUSES = ['RECEIVED', 'CONFIRMED', 'REJECTED']
+const CUSTOMER_STATUSES = ['PROSPECT', 'CLIENT', 'ARCHIVED']
+const LEAD_SOURCES = [
+	'bouche_a_oreille',
+	'site_web',
+	'recommandation',
+	'salon',
+	'architecte',
+	'autre',
+]
+const DEAL_STAGES = ['NEW', 'VISIT', 'QUOTE_SENT', 'NEGOTIATION', 'WON', 'LOST']
 
 const DECLARATIONS: Record<string, Declaration> = {
 	Uuid: { source: 'type Uuid = string', uses: [] },
@@ -223,6 +233,52 @@ const DECLARATIONS: Record<string, Declaration> = {
 			'Cents',
 		],
 	},
+	CustomerStatus: {
+		source: `type CustomerStatus = ${union(CUSTOMER_STATUSES)}`,
+		uses: [],
+	},
+	LeadSource: {
+		source: `type LeadSource = ${union(LEAD_SOURCES)}`,
+		uses: [],
+	},
+	Customer: {
+		source: block('interface', 'Customer', [
+			'id: Uuid',
+			'organization_id: Uuid',
+			'status: CustomerStatus',
+			"kind: 'INDIVIDUAL' | 'PROFESSIONAL'",
+			'name: string',
+			'email: string | null',
+			'phone: string | null',
+			'registration_number: string | null',
+			'vat_number: string | null',
+			'owner_member_id: Uuid | null',
+			'lead_source: LeadSource | null',
+			'created_at: DateTime',
+		]),
+		uses: ['CustomerStatus', 'LeadSource', 'Uuid', 'DateTime'],
+	},
+	DealStage: {
+		source: `type DealStage = ${union(DEAL_STAGES)}`,
+		uses: [],
+	},
+	Deal: {
+		source: block('interface', 'Deal', [
+			'id: Uuid',
+			'organization_id: Uuid',
+			'customer_id: Uuid',
+			'title: string',
+			'amount_cents: Cents',
+			'stage: DealStage',
+			'lost_reason: string | null',
+			'expected_close_date: IsoDate | null',
+			'owner_member_id: Uuid | null',
+			'created_at: DateTime',
+			'stage_changed_at: DateTime',
+			'closed_at: DateTime | null',
+		]),
+		uses: ['DealStage', 'Uuid', 'Cents', 'IsoDate', 'DateTime'],
+	},
 	SupplierInvoiceLineAllocation: {
 		source: block('interface', 'SupplierInvoiceLineAllocation', [
 			'id: Uuid',
@@ -375,6 +431,12 @@ const PAYLOADS: Record<string, PayloadContract> = {
 			'joined_at: DateTime',
 		],
 		uses: ['Uuid', 'DateTime'],
+	},
+	'customer.created': created('customer', 'Customer'),
+	'deal.created': created('deal', 'Deal'),
+	'deal.stage_changed': {
+		fields: ['deal: Deal', 'from: DealStage', 'to: DealStage'],
+		uses: ['Deal', 'DealStage'],
 	},
 	'member.removed': {
 		fields: [

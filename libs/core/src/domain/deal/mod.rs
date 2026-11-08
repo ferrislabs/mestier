@@ -9,6 +9,7 @@ use crate::{CustomerId, LeadSource, MemberId, OrganizationId};
 
 pub mod commands;
 pub mod error;
+pub mod events;
 pub mod ports;
 pub mod quote_link;
 pub mod service;

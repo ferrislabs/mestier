@@ -13,7 +13,7 @@ use crate::{
 };
 
 impl MestierUseCase {
-    #[transactional(deal, customer, role, member, authz)]
+    #[transactional(deal, customer, role, member, authz, emitter)]
     pub async fn create_deal(
         &self,
         command: CreateDealCommand,
@@ -24,11 +24,12 @@ impl MestierUseCase {
             member_repository,
             role_repository,
             authz,
+            emitter,
         );
         service.create_deal(command).await
     }
 
-    #[transactional(deal, customer, role, member, authz)]
+    #[transactional(deal, customer, role, member, authz, emitter)]
     pub async fn get_deal(&self, id: DealId) -> Result<Deal, CoreError> {
         let mut service = DealService::new(
             deal_repository,
@@ -36,11 +37,12 @@ impl MestierUseCase {
             member_repository,
             role_repository,
             authz,
+            emitter,
         );
         service.get_deal(id).await
     }
 
-    #[transactional(deal, customer, role, member, authz)]
+    #[transactional(deal, customer, role, member, authz, emitter)]
     pub async fn list_deals(
         &self,
         filter: DealFilter,
@@ -53,11 +55,12 @@ impl MestierUseCase {
             member_repository,
             role_repository,
             authz,
+            emitter,
         );
         service.list_deals(filter, limit, offset).await
     }
 
-    #[transactional(deal, customer, role, member, authz)]
+    #[transactional(deal, customer, role, member, authz, emitter)]
     pub async fn update_deal(
         &self,
         command: UpdateDealCommand,
@@ -68,11 +71,12 @@ impl MestierUseCase {
             member_repository,
             role_repository,
             authz,
+            emitter,
         );
         service.update_deal(command).await
     }
 
-    #[transactional(deal, customer, role, member, authz)]
+    #[transactional(deal, customer, role, member, authz, emitter)]
     pub async fn move_deal(
         &self,
         command: MoveDealCommand,
@@ -83,11 +87,12 @@ impl MestierUseCase {
             member_repository,
             role_repository,
             authz,
+            emitter,
         );
         service.move_deal(command).await
     }
 
-    #[transactional(deal, customer, role, member, authz)]
+    #[transactional(deal, customer, role, member, authz, emitter)]
     pub async fn delete_deal(
         &self,
         id: DealId,
@@ -99,11 +104,12 @@ impl MestierUseCase {
             member_repository,
             role_repository,
             authz,
+            emitter,
         );
         service.delete_deal(id, actor).await
     }
 
-    #[transactional(deal, customer, role, member, authz)]
+    #[transactional(deal, customer, role, member, authz, emitter)]
     pub async fn deal_summary(
         &self,
         organization_id: OrganizationId,
@@ -114,6 +120,7 @@ impl MestierUseCase {
             member_repository,
             role_repository,
             authz,
+            emitter,
         );
         service.summary(organization_id, Utc::now()).await
     }

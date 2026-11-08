@@ -53,6 +53,9 @@ const PROTOTYPE_EVENTS: readonly (readonly [string, string])[] = [
 	['member.invited', 'Équipe'],
 	['member.joined', 'Équipe'],
 	['member.removed', 'Équipe'],
+	['customer.created', 'Clients'],
+	['deal.created', 'Opportunités'],
+	['deal.stage_changed', 'Opportunités'],
 ]
 
 const catalogue = PROTOTYPE_EVENTS.map(([name]) => event(name))
@@ -62,7 +65,7 @@ function reversed<T>(items: readonly T[]): T[] {
 }
 
 describe('groupEvents', () => {
-	it('lists the nine prototype domains in the prototype order', () => {
+	it('lists the prototype domains in the prototype order', () => {
 		expect(groupEvents(catalogue).map((group) => group.label)).toEqual([
 			'Devis',
 			'Factures',
@@ -73,6 +76,8 @@ describe('groupEvents', () => {
 			'Écarts de planning',
 			'Achats',
 			'Équipe',
+			'Clients',
+			'Opportunités',
 		])
 	})
 

@@ -1,8 +1,8 @@
 use events::{EventCatalogue, EventDescriptor};
 
 use crate::domain::{
-    assignment_report, invitation, invoice, maintenance, member, quote, supplier_invoice, support,
-    time_entry,
+    assignment_report, customer, deal, invitation, invoice, maintenance, member, quote,
+    supplier_invoice, support, time_entry,
 };
 
 /// Every event the product can emit, assembled from the modules that own them.
@@ -32,6 +32,8 @@ fn descriptors() -> Vec<EventDescriptor> {
         maintenance::events::descriptors(),
         supplier_invoice::events::descriptors(),
         support::events::descriptors(),
+        customer::events::descriptors(),
+        deal::events::descriptors(),
     ]
     .concat()
 }
@@ -62,6 +64,8 @@ mod tests {
             maintenance::events::emitted_events(),
             supplier_invoice::events::emitted_events(),
             support::events::emitted_events(),
+            customer::events::emitted_events(),
+            deal::events::emitted_events(),
         ]
         .concat()
         .iter()

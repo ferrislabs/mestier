@@ -67,6 +67,20 @@ pub fn deals(store: &Store) -> MockDealRepository {
     });
 
     let store_ref = store.clone();
+    repo.expect_list().returning(move |filter, _, _| {
+        let matching: Vec<Deal> = state(&store_ref)
+            .deals
+            .values()
+            .filter(|deal| deal.organization_id == filter.organization_id)
+            .filter(|deal| filter.customer_id.is_none_or(|id| deal.customer_id == id))
+            .filter(|deal| filter.stage.is_none_or(|stage| deal.stage.name() == stage))
+            .cloned()
+            .collect();
+        let total = matching.len() as u64;
+        Box::pin(async move { Ok((matching, total)) })
+    });
+
+    let store_ref = store.clone();
     repo.expect_delete().returning(move |id| {
         state(&store_ref).deals.remove(&id);
         Box::pin(async { Ok(()) })

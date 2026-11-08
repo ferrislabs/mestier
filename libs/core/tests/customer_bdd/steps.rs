@@ -546,3 +546,48 @@ async fn the_address_facts(
     assert_eq!(found.country, country);
     assert_eq!(found.address_line2.as_deref(), Some(line2.as_str()));
 }
+
+#[then(expr = "the company is notified of the event {string}")]
+async fn the_company_is_notified(world: &mut CustomerWorld, expected: String) {
+    let published = world.emitter.names();
+
+    assert!(
+        published.contains(&expected),
+        "expected `{expected}` among the published events, got {published:?}"
+    );
+}
+
+#[then(expr = "the company is notified of {int} events {string}")]
+async fn the_company_is_notified_n_times(
+    world: &mut CustomerWorld,
+    count: usize,
+    expected: String,
+) {
+    let published = world.emitter.names();
+    let seen = published.iter().filter(|name| **name == expected).count();
+
+    assert_eq!(seen, count, "`{expected}` among {published:?}");
+}
+
+#[then("the company is notified of no event")]
+async fn the_company_is_notified_of_nothing(world: &mut CustomerWorld) {
+    assert_eq!(world.emitter.names(), Vec::<String>::new());
+}
+
+#[then(expr = "the event {string} carries {string} equal to {string}")]
+async fn the_event_carries(
+    world: &mut CustomerWorld,
+    name: String,
+    pointer: String,
+    expected: String,
+) {
+    let payload = world.emitter.only(&name).payload;
+    let found = payload
+        .pointer(&pointer)
+        .unwrap_or_else(|| panic!("no `{pointer}` in {payload}"));
+    let found = found
+        .as_str()
+        .map_or_else(|| found.to_string(), str::to_owned);
+
+    assert_eq!(found, expected, "`{pointer}` of {payload}");
+}

@@ -417,3 +417,46 @@ async fn the_summary_counts_conversions(world: &mut DealWorld, count: i64) {
     let summary = world.summary.as_ref().expect("the summary was read");
     assert_eq!(summary.conversions, count);
 }
+
+#[then(expr = "the company is notified of the event {string}")]
+async fn the_company_is_notified(world: &mut DealWorld, expected: String) {
+    let published = world.emitter.names();
+
+    assert!(
+        published.contains(&expected),
+        "expected `{expected}` among the published events, got {published:?}"
+    );
+}
+
+#[then(expr = "the company is notified of {int} events {string}")]
+async fn the_company_is_notified_n_times(world: &mut DealWorld, count: usize, expected: String) {
+    let published = world.emitter.names();
+    let seen = published.iter().filter(|name| **name == expected).count();
+
+    assert_eq!(seen, count, "`{expected}` among {published:?}");
+}
+
+#[then("the company is notified of no deal event")]
+async fn the_company_is_notified_of_no_deal_event(world: &mut DealWorld) {
+    let deal_events: Vec<String> = world
+        .emitter
+        .names()
+        .into_iter()
+        .filter(|name| name.starts_with("deal."))
+        .collect();
+
+    assert_eq!(deal_events, Vec::<String>::new());
+}
+
+#[then(expr = "the event {string} carries {string} equal to {string}")]
+async fn the_event_carries(world: &mut DealWorld, name: String, pointer: String, expected: String) {
+    let payload = world.emitter.only(&name).payload;
+    let found = payload
+        .pointer(&pointer)
+        .unwrap_or_else(|| panic!("no `{pointer}` in {payload}"));
+    let found = found
+        .as_str()
+        .map_or_else(|| found.to_string(), str::to_owned);
+
+    assert_eq!(found, expected, "`{pointer}` of {payload}");
+}

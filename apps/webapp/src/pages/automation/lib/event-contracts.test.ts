@@ -42,6 +42,9 @@ const EVENT_NAMES = [
 	'member.invited',
 	'member.joined',
 	'member.removed',
+	'customer.created',
+	'deal.created',
+	'deal.stage_changed',
 ]
 
 function declaredNames(source: string): Set<string> {
