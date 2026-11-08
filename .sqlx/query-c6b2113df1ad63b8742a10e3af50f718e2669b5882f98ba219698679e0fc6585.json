@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM extra_periods\n            WHERE org_id = $1\n              AND ($2::uuid IS NULL OR member_id = $2)\n              AND ($3::text IS NULL OR status = $3)\n              AND ($4::date IS NULL OR date >= $4)\n              AND ($5::date IS NULL OR date <= $5)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c6b2113df1ad63b8742a10e3af50f718e2669b5882f98ba219698679e0fc6585"
+}
