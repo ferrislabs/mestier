@@ -47,6 +47,7 @@ pub mod domain {
     pub struct Quote;
     pub struct Role;
     pub struct Member;
+    pub struct MemberProfile;
     pub struct ServiceRate;
     pub struct Supplier;
     pub struct SupplierInvoice;

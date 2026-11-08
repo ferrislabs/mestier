@@ -20,6 +20,7 @@ pub mod ledger;
 pub mod maintenance_contract;
 pub mod maintenance_intervention;
 pub mod member;
+pub mod member_profile;
 pub mod message;
 pub mod notification;
 pub mod organization;

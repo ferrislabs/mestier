@@ -120,6 +120,7 @@ impl<'tx> MemberRepository for PgMemberRepository<'tx> {
             SELECT id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at
             FROM organization_members
             WHERE organization_id = $1 AND deleted_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM member_hr_profiles p WHERE p.member_id = organization_members.id AND p.archived_at IS NOT NULL)
             ORDER BY last_name ASC, first_name ASC, created_at ASC
             "#,
             organization_id.0,

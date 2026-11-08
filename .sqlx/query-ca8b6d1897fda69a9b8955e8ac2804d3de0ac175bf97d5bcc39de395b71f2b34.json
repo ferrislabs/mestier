@@ -1,0 +1,134 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO member_hr_profiles (\n                member_id, org_id, work_email, personal_email, mobile, landline, street,\n                complement, postal_code, city, country, job_title, manager_member_id,\n                work_permit_end_date, archived_at, created_at, updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            ON CONFLICT (member_id) DO UPDATE SET\n                work_email = EXCLUDED.work_email,\n                personal_email = EXCLUDED.personal_email,\n                mobile = EXCLUDED.mobile,\n                landline = EXCLUDED.landline,\n                street = EXCLUDED.street,\n                complement = EXCLUDED.complement,\n                postal_code = EXCLUDED.postal_code,\n                city = EXCLUDED.city,\n                country = EXCLUDED.country,\n                job_title = EXCLUDED.job_title,\n                manager_member_id = EXCLUDED.manager_member_id,\n                work_permit_end_date = EXCLUDED.work_permit_end_date,\n                archived_at = EXCLUDED.archived_at,\n                updated_at = EXCLUDED.updated_at\n            RETURNING member_id, org_id, work_email, personal_email, mobile, landline, street,\n                      complement, postal_code, city, country, job_title, manager_member_id,\n                      work_permit_end_date, archived_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "work_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "personal_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mobile",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "landline",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "street",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "complement",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "postal_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "city",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "job_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "manager_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "work_permit_end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 14,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Date",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "ca8b6d1897fda69a9b8955e8ac2804d3de0ac175bf97d5bcc39de395b71f2b34"
+}
