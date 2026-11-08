@@ -2,7 +2,7 @@ import { assert, test } from 'vitest'
 import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
 	addDocument,
-	archiveMember,
+	cancelUpcomingAbsences,
 	createMember,
 	currentSchedule,
 	defaultContractSchedule,
@@ -11,9 +11,7 @@ import {
 	EMPTY_ADDRESS,
 	formatAddress,
 	removeDocument,
-	restoreMember,
 	upcomingDeadlines,
-	updateMember,
 	validateMemberDraft,
 	weeklyHours,
 	weeklyHoursOf,
@@ -125,40 +123,6 @@ test('createMember nettoie les champs et ajoute un membre actif', () => {
 	assert.equal(createMember(state, context, draft({ lastName: '' })), state)
 })
 
-test('updateMember modifie uniquement le membre ciblé', () => {
-	const next = updateMember(state, 'julien', { jobTitle: 'Chef d’équipe pose' })
-	assert.equal(
-		next.members.find((m) => m.id === 'julien')?.jobTitle,
-		'Chef d’équipe pose',
-	)
-	assert.equal(
-		next.members.find((m) => m.id === 'karim')?.jobTitle,
-		'Chef de chantier',
-	)
-})
-
-test('archiveMember reporte les subordonnés sur le responsable et annule les demandes futures', () => {
-	const next = archiveMember(state, context, 'julien')
-	const julien = next.members.find((m) => m.id === 'julien')
-	assert.equal(julien?.status, 'archived')
-	assert.equal(julien?.archivedAt, '2026-11-04')
-	assert.equal(
-		next.members.find((m) => m.id === 'manon')?.managerId,
-		'baptiste',
-	)
-	assert.equal(
-		next.absences.find((a) => a.id === 'abs-julien-novembre')?.status,
-		'cancelled',
-	)
-	assert.equal(archiveMember(next, context, 'julien'), next)
-})
-
-test('restoreMember réactive un membre archivé', () => {
-	const next = restoreMember(state, 'marc')
-	assert.equal(next.members.find((m) => m.id === 'marc')?.status, 'active')
-	assert.equal(next.members.find((m) => m.id === 'marc')?.archivedAt, null)
-})
-
 test('documents : ajout puis suppression', () => {
 	const added = addDocument(state, context, 'julien', {
 		name: 'Permis CACES.pdf',
@@ -237,4 +201,13 @@ test('createMember nettoie e-mails, téléphones et adresse', () => {
 		city: 'Vichy',
 		country: 'France',
 	})
+})
+
+test('cancelUpcomingAbsences annule les demandes futures en attente sans toucher au profil', () => {
+	const next = cancelUpcomingAbsences(state, context, 'julien')
+	assert.equal(
+		next.absences.find((a) => a.id === 'abs-julien-novembre')?.status,
+		'cancelled',
+	)
+	assert.equal(next.members, state.members)
 })

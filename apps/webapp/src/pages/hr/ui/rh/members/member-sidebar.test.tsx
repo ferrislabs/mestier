@@ -12,6 +12,12 @@ import { MemberSidebar } from '#/pages/hr/ui/rh/members/member-sidebar'
 import { RhProvider } from '#/pages/hr/ui/rh/shared/rh-context'
 import { renderWithRouter } from '#/test/render-with-router'
 
+const NO_PROFILE_ACTIONS = {
+	save: async () => {},
+	archive: async () => {},
+	restore: async () => {},
+}
+
 const ORGANIZATION: Organization = {
 	id: 'org-1',
 	name: 'Atelier Bois & Co',
@@ -69,6 +75,7 @@ function renderSidebar(permissions: string[]) {
 						value={{
 							state: INITIAL_RH_STATE,
 							update: async () => {},
+							profiles: NO_PROFILE_ACTIONS,
 							actorId: MEMBER.id,
 							organizationSlug: 'atelier-bois',
 						}}

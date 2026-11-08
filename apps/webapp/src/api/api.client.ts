@@ -1547,6 +1547,26 @@ export namespace Schemas {
   };
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
+  export type MemberProfileAddressResponse = {
+    city: string;
+    complement: string;
+    country: string;
+    postal_code?: (string | null) | undefined;
+    street: string;
+  };
+  export type MemberProfileResponse = {
+    address: MemberProfileAddressResponse;
+    archived_at?: (string | null) | undefined;
+    job_title?: (string | null) | undefined;
+    landline?: (string | null) | undefined;
+    manager_member_id?: (null | MemberId) | undefined;
+    member_id: MemberId;
+    mobile?: (string | null) | undefined;
+    organization_id: OrganizationId;
+    personal_email?: (string | null) | undefined;
+    work_email?: (string | null) | undefined;
+    work_permit_end_date?: (string | null) | undefined;
+  };
   export type MissingCost = "HOURLY_RATE" | "MONTHLY_COST" | "CONTRACTED_HOURS" | "NO_COST_BASIS";
   export type MemberProfitabilityResponse = {
     labour_cost_cents?: (number | null) | undefined;
@@ -1716,6 +1736,13 @@ export namespace Schemas {
     work_time: Array<PlanningWorkTimeResponse>;
   };
   export type PostIntakeMessageRequest = { body: string };
+  export type PostalAddressBody = Partial<{
+    city: string | null;
+    complement: string | null;
+    country: string | null;
+    postal_code: string | null;
+    street: string | null;
+  }>;
   export type PresenceStatus = "ONLINE" | "OFFLINE" | "DND";
   export type PresenceResponse = {
     organization_id: OrganizationId;
@@ -1832,6 +1859,16 @@ export namespace Schemas {
     title: string;
   };
   export type ProposeInterventionRequest = { done_on: string };
+  export type PutMemberProfileRequest = Partial<{
+    address: PostalAddressBody;
+    job_title: string | null;
+    landline: string | null;
+    manager_member_id: null | MemberId;
+    mobile: string | null;
+    personal_email: string | null;
+    work_email: string | null;
+    work_permit_end_date: string | null;
+  }>;
   export type RhythmSlotRequest = { ends_minute: number; starts_minute: number; weekday: number };
   export type PutRhythmRequest = {
     effective_from: string;
@@ -8087,6 +8124,34 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_ListMemberProfiles = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/member-profiles";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          address: Schemas.MemberProfileAddressResponse;
+          archived_at?: (string | null) | undefined;
+          job_title?: (string | null) | undefined;
+          landline?: (string | null) | undefined;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          member_id: Schemas.MemberId;
+          mobile?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          personal_email?: (string | null) | undefined;
+          work_email?: (string | null) | undefined;
+          work_permit_end_date?: (string | null) | undefined;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
   export type get_ListMembers = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/members";
@@ -8153,6 +8218,125 @@ export namespace Endpoints {
       200: { data: { permissions: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
       401: unknown;
       403: unknown;
+    };
+  };
+  export type post_ArchiveMember = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address: Schemas.MemberProfileAddressResponse;
+          archived_at?: (string | null) | undefined;
+          job_title?: (string | null) | undefined;
+          landline?: (string | null) | undefined;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          member_id: Schemas.MemberId;
+          mobile?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          personal_email?: (string | null) | undefined;
+          work_email?: (string | null) | undefined;
+          work_permit_end_date?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_GetMemberProfile = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/profile";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address: Schemas.MemberProfileAddressResponse;
+          archived_at?: (string | null) | undefined;
+          job_title?: (string | null) | undefined;
+          landline?: (string | null) | undefined;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          member_id: Schemas.MemberId;
+          mobile?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          personal_email?: (string | null) | undefined;
+          work_email?: (string | null) | undefined;
+          work_permit_end_date?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_PutMemberProfile = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/profile";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string };
+
+      body: Schemas.PutMemberProfileRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          address: Schemas.MemberProfileAddressResponse;
+          archived_at?: (string | null) | undefined;
+          job_title?: (string | null) | undefined;
+          landline?: (string | null) | undefined;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          member_id: Schemas.MemberId;
+          mobile?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          personal_email?: (string | null) | undefined;
+          work_email?: (string | null) | undefined;
+          work_permit_end_date?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_RestoreMember = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/restore";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address: Schemas.MemberProfileAddressResponse;
+          archived_at?: (string | null) | undefined;
+          job_title?: (string | null) | undefined;
+          landline?: (string | null) | undefined;
+          manager_member_id?: (null | Schemas.MemberId) | undefined;
+          member_id: Schemas.MemberId;
+          mobile?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          personal_email?: (string | null) | undefined;
+          work_email?: (string | null) | undefined;
+          work_permit_end_date?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
     };
   };
   export type get_GetOrganizationNumbering = {
@@ -11733,8 +11917,10 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/maintenance/interventions": Endpoints.get_ListMaintenanceInterventions;
     "/api/v1/organizations/{organization_id}/maintenance/recap": Endpoints.get_GetMaintenanceRecap;
     "/api/v1/organizations/{organization_id}/maintenance/recap.pdf": Endpoints.get_ExportMaintenanceRecapPdf;
+    "/api/v1/organizations/{organization_id}/member-profiles": Endpoints.get_ListMemberProfiles;
     "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
     "/api/v1/organizations/{organization_id}/members/me/permissions": Endpoints.get_GetMyPermissions;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.get_GetMemberProfile;
     "/api/v1/organizations/{organization_id}/numbering": Endpoints.get_GetOrganizationNumbering;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
@@ -11847,6 +12033,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/maintenance/lines/{line_id}/interventions": Endpoints.post_RecordMaintenanceIntervention;
     "/api/v1/organizations/{organization_id}/maintenance/recap/plan": Endpoints.post_PlanMaintenanceLines;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/archive": Endpoints.post_ArchiveMember;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/restore": Endpoints.post_RestoreMember;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/project-templates": Endpoints.post_CreateProjectTemplate;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/instantiate": Endpoints.post_InstantiateProjectTemplate;
@@ -11905,6 +12093,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.put_PutMemberProfile;
     "/api/v1/organizations/{organization_id}/numbering/{kind}": Endpoints.put_SetOrganizationNextNumber;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.put_UpdateSupplier;

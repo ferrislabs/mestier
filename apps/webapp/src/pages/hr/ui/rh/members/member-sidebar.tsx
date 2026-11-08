@@ -10,13 +10,10 @@ import {
 import { useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
+import { mutationErrorMessage } from '#/lib/api-error'
 import { currentContract } from '#/pages/hr/lib/rh/contracts'
 import { contractCountLabel } from '#/pages/hr/lib/rh/format'
-import {
-	archiveMember,
-	fullName,
-	restoreMember,
-} from '#/pages/hr/lib/rh/members'
+import { fullName } from '#/pages/hr/lib/rh/members'
 import type { MemberTab } from '#/pages/hr/lib/rh/rubriques'
 import type { IsoDate, Member, RhState } from '#/pages/hr/lib/rh/types'
 import { ArchiveDialog } from '#/pages/hr/ui/rh/members/archive-dialog'
@@ -26,7 +23,10 @@ import {
 } from '#/pages/hr/ui/rh/members/contract-badge'
 import { RubriqueList } from '#/pages/hr/ui/rh/members/rubrique-list'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
-import { useRhOrgPath, useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import {
+	useRhOrgPath,
+	useRhProfileActions,
+} from '#/pages/hr/ui/rh/shared/rh-context'
 
 export function BackLink() {
 	const orgPath = useRhOrgPath()
@@ -53,9 +53,23 @@ export function MemberSidebar({
 	today: IsoDate
 	tab: MemberTab
 }) {
-	const updateRh = useRhUpdate()
+	const profiles = useRhProfileActions()
 	const orgPath = useRhOrgPath()
 	const [archiving, setArchiving] = useState(false)
+	const [pending, setPending] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const run = async (action: () => Promise<void>) => {
+		setPending(true)
+		setError(null)
+		try {
+			await action()
+		} catch (failure) {
+			setError(mutationErrorMessage(failure))
+		} finally {
+			setPending(false)
+			setArchiving(false)
+		}
+	}
 	const archived = member.status === 'archived'
 	return (
 		<aside
@@ -99,9 +113,8 @@ export function MemberSidebar({
 						<Button
 							variant="outline"
 							size="sm"
-							onClick={() =>
-								updateRh((current) => restoreMember(current, member.id))
-							}
+							disabled={pending}
+							onClick={() => void run(() => profiles.restore(member.id))}
 						>
 							<ArchiveRestore aria-hidden /> Réactiver
 						</Button>
@@ -112,20 +125,20 @@ export function MemberSidebar({
 							today={today}
 							open={archiving}
 							onOpenChange={setArchiving}
-							onConfirm={() => {
-								updateRh((current, context) =>
-									archiveMember(current, context, member.id),
-								)
-								setArchiving(false)
-							}}
+							onConfirm={() => void run(() => profiles.archive(member.id))}
 							trigger={
-								<Button variant="outline" size="sm">
+								<Button variant="outline" size="sm" disabled={pending}>
 									<Archive aria-hidden /> Archiver
 								</Button>
 							}
 						/>
 					)}
 				</div>
+				{error && (
+					<p role="alert" className="mt-2 text-[12px] text-state-alert">
+						{error}
+					</p>
+				)}
 				<div className="mt-2 flex flex-wrap items-center gap-2">
 					<Button variant="ghost" size="sm" asChild>
 						<Link
