@@ -80,7 +80,7 @@ export const MOCK_HOME_ACTIVITY: MockActivity[] = [
 		context: 'Dernier message de Karim Benali',
 		state: 'today',
 		when: 'Il y a 10 minutes',
-		to: '/chat',
+		to: '/discussions',
 	},
 	{
 		id: 'planif-dupont',

@@ -30,7 +30,7 @@ describe('resolveModule', () => {
 	})
 
 	it('resolves an announced module like any other', () => {
-		expect(resolveModule('/chat').id).toBe('chat')
+		expect(resolveModule('/discussions').id).toBe('chat')
 	})
 
 	it('resolves HR pages to the hr module', () => {

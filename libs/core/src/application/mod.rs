@@ -36,6 +36,7 @@ pub mod day_override;
 pub mod deal;
 pub mod discord_category;
 pub mod discord_channel;
+pub mod discord_directory;
 pub mod discord_message;
 pub mod discord_notification;
 pub mod discord_overwrite;

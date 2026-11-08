@@ -84,6 +84,13 @@ pub struct WebhookExecutePath {
     pub token: String,
 }
 
+// Directory
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/organizations/{organization_id}/directory")]
+pub struct OrgDirectoryPath {
+    pub organization_id: OrganizationId,
+}
+
 // Presence
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/chat/organizations/{organization_id}/presence")]

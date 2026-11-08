@@ -1013,6 +1013,8 @@ export namespace Schemas {
     line2?: (string | null) | undefined;
     postal_code: string;
   };
+  export type UserId = string;
+  export type DirectoryEntryResponse = { display_name: string; user_id: UserId };
   export type DoeFile = { caption?: (string | null) | undefined; key: string };
   export type DoeId = string;
   export type DoeModelResponse = {
@@ -1506,7 +1508,6 @@ export namespace Schemas {
   export type InvoiceDocumentFormatQuery = "pdf" | "facturx";
   export type InvoiceEventId = string;
   export type InvoiceEventKind = "SENT" | "REMINDER" | "NOTE";
-  export type UserId = string;
   export type InvoiceEventResponse = {
     actor?: (null | UserId) | undefined;
     at: string;
@@ -3457,6 +3458,22 @@ export namespace Endpoints {
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListChatDirectory = {
+    method: "GET";
+    path: "/api/v1/chat/organizations/{organization_id}/directory";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{ display_name: string; user_id: Schemas.UserId }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
       401: unknown;
       403: unknown;
     };
@@ -13183,6 +13200,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.get_ListReactors;
     "/api/v1/chat/organizations/{organization_id}/categories": Endpoints.get_ListCategories;
     "/api/v1/chat/organizations/{organization_id}/channels": Endpoints.get_ListChannels;
+    "/api/v1/chat/organizations/{organization_id}/directory": Endpoints.get_ListChatDirectory;
     "/api/v1/chat/organizations/{organization_id}/notifications": Endpoints.get_ListNotifications;
     "/api/v1/chat/organizations/{organization_id}/unread": Endpoints.get_ListUnreadChannels;
     "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.get_GetCustomerContact;

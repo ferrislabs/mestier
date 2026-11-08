@@ -1,6 +1,7 @@
 import { AlertCircle, Loader2 } from 'lucide-react'
 import type { RefObject } from 'react'
 import { Skeleton } from '#/components/ui/skeleton'
+import type { AuthorDirectory } from '#/pages/chat/lib/authors'
 import type { DisplayMessage } from '#/pages/chat/lib/messages-reducer'
 import { buildTimeline } from '#/pages/chat/lib/timeline'
 import { MessageRow } from '#/pages/chat/ui/message-row'
@@ -9,6 +10,7 @@ import { DaySeparator } from '#/pages/chat/ui/timeline-separators'
 export interface MessageListUIProps {
 	messages: DisplayMessage[]
 	currentUserId: string | null
+	authors: AuthorDirectory
 	isLoadingInitial: boolean
 	initialError: string | null
 	isLoadingOlder: boolean
@@ -49,6 +51,7 @@ function ignore() {}
 export function MessageListUI({
 	messages,
 	currentUserId,
+	authors,
 	isLoadingInitial,
 	initialError,
 	isLoadingOlder,
@@ -149,6 +152,7 @@ export function MessageListUI({
 						pinned={pinnedMessageIds.has(entry.message.id)}
 						saved={savedMessageIds.has(entry.message.id)}
 						currentUserId={currentUserId}
+						authors={authors}
 						onRetry={onRetry}
 						onStartEdit={onStartEdit}
 						onChangeEditDraft={onChangeEditDraft}

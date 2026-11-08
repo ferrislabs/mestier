@@ -6,7 +6,7 @@ import { buildOrgPath } from '#/modules/org-path'
 import { ChatIndexUI } from '#/pages/chat/ui/chat-index-ui'
 
 /**
- * `/chat` with no channel selected. Redirects to the first channel (by
+ * `/discussions` with no channel selected. Redirects to the first channel (by
  * position) as soon as the list resolves — a paste-able URL for "my chat"
  * should not be a permanently empty column when channels exist.
  */
@@ -22,7 +22,10 @@ export function ChatIndexFeature() {
 	useEffect(() => {
 		if (!firstChannelId) return
 		void navigate({
-			to: buildOrgPath(activeOrganization.slug, `/chat/${firstChannelId}`),
+			to: buildOrgPath(
+				activeOrganization.slug,
+				`/discussions/${firstChannelId}`,
+			),
 			replace: true,
 		})
 	}, [firstChannelId, navigate, activeOrganization.slug])

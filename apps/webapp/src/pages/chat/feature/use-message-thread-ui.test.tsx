@@ -7,6 +7,12 @@ import { GatewayProvider } from '#/hooks/use-gateway'
 import { clearAuth, setAuth } from '#/store/auth.store'
 import { useMessageThreadUi } from './use-message-thread-ui'
 
+vi.mock('#/hooks/use-active-organization', () => ({
+	useActiveOrganization: () => ({
+		activeOrganization: { id: 'org-1', slug: 'atelier', name: 'Atelier' },
+	}),
+}))
+
 class FakeWebSocket {
 	onopen: (() => void) | null = null
 	onmessage: ((event: { data: string }) => void) | null = null

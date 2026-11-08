@@ -2,7 +2,8 @@ import { RotateCw } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Textarea } from '#/components/ui/textarea'
 import { cn } from '#/lib/utils'
-import { formatFileSize, formatTime, userHue } from '#/pages/chat/lib/format'
+import { type AuthorDirectory, resolveAuthor } from '#/pages/chat/lib/authors'
+import { formatFileSize, formatTime } from '#/pages/chat/lib/format'
 import type { DisplayMessage } from '#/pages/chat/lib/messages-reducer'
 import { AttachmentCard } from '#/pages/chat/ui/attachment-card'
 import { MessageText } from '#/pages/chat/ui/message-text'
@@ -22,6 +23,7 @@ export interface MessageRowProps {
 	pinned: boolean
 	saved: boolean
 	currentUserId: string | null
+	authors: AuthorDirectory
 	onRetry: (tempId: string) => void
 	onStartEdit: (messageId: string, content: string) => void
 	onChangeEditDraft: (value: string) => void
@@ -50,6 +52,7 @@ export function MessageRow({
 	pinned,
 	saved,
 	currentUserId,
+	authors,
 	onRetry,
 	onStartEdit,
 	onChangeEditDraft,
@@ -66,7 +69,12 @@ export function MessageRow({
 	const { message, status } = entry
 	const sentAt = new Date(message.created_at)
 	const time = formatTime(sentAt)
-	const authorLabel = isOwn ? 'Vous' : 'Membre'
+	const author = resolveAuthor(authors, message.author_user_id)
+	const authorLabel = author.name
+	const mentionsMe =
+		currentUserId !== null &&
+		(message.mention_everyone ||
+			message.mention_user_ids.includes(currentUserId))
 	const reactions = message.reactions.map((reaction) => ({
 		emoji: reaction.emoji,
 		count: reaction.count,
@@ -87,6 +95,8 @@ export function MessageRow({
 			className={cn(
 				'group relative flex gap-3 px-4 py-0.5 transition-colors focus-within:bg-muted/60 hover:bg-muted/60',
 				!continuation && 'mt-3 pt-1',
+				mentionsMe &&
+					'bg-highlight/10 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-highlight focus-within:bg-highlight/15 hover:bg-highlight/15',
 				status === 'failed' && 'opacity-60',
 			)}
 		>
@@ -99,11 +109,7 @@ export function MessageRow({
 						{time}
 					</time>
 				) : (
-					<PersonAvatar
-						name={authorLabel}
-						hue={userHue(message.author_user_id)}
-						size="md"
-					/>
+					<PersonAvatar name={authorLabel} hue={author.hue} size="md" />
 				)}
 			</div>
 			<div className="min-w-0 flex-1">
@@ -145,7 +151,10 @@ export function MessageRow({
 						</div>
 					</div>
 				) : (
-					<MessageText text={message.content} />
+					<MessageText
+						text={message.content}
+						currentUserName={authors.get(currentUserId ?? '')?.name}
+					/>
 				)}
 
 				{message.attachments.map((attachment) => {

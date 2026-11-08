@@ -8,6 +8,7 @@ use mestier_core::Permissions;
 
 pub mod category;
 pub mod channel;
+pub mod directory;
 pub mod gateway;
 pub mod message;
 pub mod notification;
@@ -119,6 +120,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(webhook::create::handler)
         .typed_patch(webhook::update::handler)
         .typed_delete(webhook::delete::handler)
+        .typed_get(directory::list::handler)
         .typed_put(presence::set::handler)
         .typed_post(typing::start::handler)
         .typed_put(read_state::mark::handler)
