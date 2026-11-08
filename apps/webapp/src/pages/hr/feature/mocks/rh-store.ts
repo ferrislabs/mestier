@@ -1,4 +1,4 @@
-// MOCK: rh-store — extras have no backend endpoint yet. Day overrides come from the API by period through setDayOverrides and the seed overrides are never read. Member profile fields (contacts, address, job title, manager, work permit, archiving), contracts with their schedules, documents, absence types, absences, leave accounts and balance adjustments come from the API through setMemberProfiles, setMemberContracts, setMemberDocuments, setAbsenceTypes, setAbsences, setLeaveAccounts and setLeaveAdjustments and are never held here.
+// MOCK: rh-store — nothing here is read from the backend except through the setters. Day overrides come from the API by period through setDayOverrides and the seed overrides are never read. Member profile fields (contacts, address, job title, manager, work permit, archiving), contracts with their schedules, documents, absence types, absences, leave accounts and balance adjustments come from the API through setMemberProfiles, setMemberContracts, setMemberDocuments, setAbsenceTypes, setAbsences, setLeaveAccounts and setLeaveAdjustments, and surcharges and extra periods through setSurcharges and setExtraPeriods; none of them is held here.
 import { useSyncExternalStore } from 'react'
 import {
 	type AbsenceRecord,
@@ -7,6 +7,12 @@ import {
 	overlayAbsenceTypes,
 } from '#/pages/hr/lib/rh/absence-wire'
 import { todayIso } from '#/pages/hr/lib/rh/dates'
+import {
+	type ExtraPeriodRecord,
+	overlayExtras,
+	overlaySurcharges,
+	type SurchargeRecord,
+} from '#/pages/hr/lib/rh/extra-wire'
 import {
 	type LeaveAccountRecord,
 	type LeaveAdjustmentRecord,
@@ -49,6 +55,8 @@ interface Snapshot {
 	absencesLoaded: boolean
 	accountsLoaded: boolean
 	adjustmentsLoaded: boolean
+	surchargesLoaded: boolean
+	extrasLoaded: boolean
 }
 
 let base: RhState = INITIAL_RH_STATE
@@ -60,6 +68,10 @@ let accounts: readonly LeaveAccountRecord[] = []
 let accountsLoaded = false
 let adjustments: readonly LeaveAdjustmentRecord[] = []
 let adjustmentsLoaded = false
+let surcharges: readonly SurchargeRecord[] = []
+let surchargesLoaded = false
+let extras: readonly ExtraPeriodRecord[] = []
+let extrasLoaded = false
 let overridePeriods = new Map<string, OverridePeriod>()
 let boundKey: string | null = null
 let profiles: readonly ProfileRecord[] = []
@@ -74,28 +86,16 @@ let snapshot: Snapshot = compose()
 const listeners = new Set<() => void>()
 
 function compose(): Snapshot {
-	const overlaid = overlayOverrides(
-		overlayAdjustments(
-			overlayAccounts(
-				overlayAbsences(
-					overlayAbsenceTypes(
-						overlayDocuments(
-							overlayContracts(
-								overlayProfiles(base, profiles, accountEmails),
-								contracts,
-							),
-							documents,
-						),
-						absenceTypes,
-					),
-					absences,
-				),
-				accounts,
-			),
-			adjustments,
-		),
-		[...overridePeriods.values()],
-	)
+	let overlaid = overlayProfiles(base, profiles, accountEmails)
+	overlaid = overlayContracts(overlaid, contracts)
+	overlaid = overlayDocuments(overlaid, documents)
+	overlaid = overlayAbsenceTypes(overlaid, absenceTypes)
+	overlaid = overlayAbsences(overlaid, absences)
+	overlaid = overlayAccounts(overlaid, accounts)
+	overlaid = overlayAdjustments(overlaid, adjustments)
+	overlaid = overlaySurcharges(overlaid, surcharges)
+	overlaid = overlayExtras(overlaid, extras)
+	overlaid = overlayOverrides(overlaid, [...overridePeriods.values()])
 	return {
 		state: overlaid,
 		boundKey,
@@ -106,6 +106,8 @@ function compose(): Snapshot {
 		absencesLoaded,
 		accountsLoaded,
 		adjustmentsLoaded,
+		surchargesLoaded,
+		extrasLoaded,
 	}
 }
 
@@ -163,6 +165,18 @@ export function setLeaveAccounts(records: readonly LeaveAccountRecord[]) {
 export function setLeaveAdjustments(records: readonly LeaveAdjustmentRecord[]) {
 	adjustments = records
 	adjustmentsLoaded = true
+	publish()
+}
+
+export function setSurcharges(records: readonly SurchargeRecord[]) {
+	surcharges = records
+	surchargesLoaded = true
+	publish()
+}
+
+export function setExtraPeriods(records: readonly ExtraPeriodRecord[]) {
+	extras = records
+	extrasLoaded = true
 	publish()
 }
 
@@ -243,6 +257,10 @@ export function resetRhStore() {
 	accountsLoaded = false
 	adjustments = []
 	adjustmentsLoaded = false
+	surcharges = []
+	surchargesLoaded = false
+	extras = []
+	extrasLoaded = false
 	overridePeriods = new Map()
 	profiles = []
 	profilesLoaded = false

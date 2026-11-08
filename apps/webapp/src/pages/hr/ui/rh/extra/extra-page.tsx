@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
@@ -39,10 +40,11 @@ export interface ExtraPageProps {
 	onCancel: (extra: ExtraPeriod) => void
 	rejecting: { extra: ExtraPeriod | null; open: boolean }
 	onRejectOpenChange: (open: boolean) => void
-	onRejectConfirm: (extra: ExtraPeriod, comment: string) => void
+	onRejectConfirm: (extra: ExtraPeriod, comment: string) => Promise<void>
 	creating: boolean
 	initial?: ExtraFormInitial
 	onCreatingChange: (open: boolean, initial?: ExtraFormInitial) => void
+	saveError: string | null
 	notice: string
 }
 
@@ -66,6 +68,7 @@ export function ExtraPage({
 	creating,
 	initial,
 	onCreatingChange,
+	saveError,
 	notice,
 }: ExtraPageProps) {
 	return (
@@ -79,16 +82,23 @@ export function ExtraPage({
 						: 'Aucune déclaration en attente.'
 				}
 				actions={
-					<Button
-						type="button"
-						size="sm"
-						onClick={() => onCreatingChange(true)}
-					>
-						<Plus />
-						Déclarer des heures
-					</Button>
+					<RequirePermission permission="MANAGE_PLANNING">
+						<Button
+							type="button"
+							size="sm"
+							onClick={() => onCreatingChange(true)}
+						>
+							<Plus />
+							Déclarer des heures
+						</Button>
+					</RequirePermission>
 				}
 			/>
+			{saveError ? (
+				<div className="mb-6 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+					{saveError}
+				</div>
+			) : null}
 			<Tabs
 				value={tab}
 				onValueChange={(value) => onTabChange(value as ExtraTab)}

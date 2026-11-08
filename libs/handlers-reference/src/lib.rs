@@ -10,6 +10,7 @@ pub mod custom_unit;
 pub mod day_override;
 pub mod employee;
 pub mod equipment;
+pub mod extra_period;
 pub mod leave_account;
 pub mod leave_adjustment;
 pub mod member_contract;
@@ -20,6 +21,7 @@ pub mod planning_feed;
 pub mod product;
 pub mod response;
 pub mod service_rate;
+pub mod surcharge;
 
 pub use mestier_core::{
     BlockInput, ContractType, DocumentKind, LunchInput, ScheduleInput, ScheduleUnit,
@@ -59,6 +61,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(absence_type::router(state))
         .merge(leave_account::router(state))
         .merge(leave_adjustment::router(state))
+        .merge(surcharge::router(state))
+        .merge(extra_period::router(state))
         .merge(day_override::router(state))
         .merge(planning_feed::router(state))
         .merge(member_profile::router(state))

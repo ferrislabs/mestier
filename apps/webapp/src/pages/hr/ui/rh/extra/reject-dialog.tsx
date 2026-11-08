@@ -16,6 +16,7 @@ import {
 	extraMinutes,
 	formatDuration,
 } from '#/pages/hr/lib/rh/extra'
+import { extraFailureOf } from '#/pages/hr/lib/rh/extra-wire'
 import { fullName } from '#/pages/hr/lib/rh/members'
 import type { ExtraPeriod } from '#/pages/hr/lib/rh/types'
 import { useRhState } from '#/pages/hr/ui/rh/shared/rh-context'
@@ -29,7 +30,7 @@ export function RejectDialog({
 	extra: ExtraPeriod | null
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	onConfirm: (extra: ExtraPeriod, comment: string) => void
+	onConfirm: (extra: ExtraPeriod, comment: string) => Promise<void>
 }) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -53,18 +54,39 @@ function RejectForm({
 }: {
 	extra: ExtraPeriod
 	onCancel: () => void
-	onConfirm: (comment: string) => void
+	onConfirm: (comment: string) => Promise<void>
 }) {
 	const state = useRhState()
 	const fieldId = useId()
 	const [comment, setComment] = useState('')
+	const [error, setError] = useState<string | null>(null)
+	const [isPending, setIsPending] = useState(false)
+	const blank = comment.trim() === ''
+
+	async function submit() {
+		if (isPending) return
+		if (blank) {
+			setError('Un refus doit être motivé par un commentaire.')
+			return
+		}
+		setIsPending(true)
+		setError(null)
+		try {
+			await onConfirm(comment)
+		} catch (failure) {
+			setError(extraFailureOf(failure).message)
+		} finally {
+			setIsPending(false)
+		}
+	}
+
 	const member = findMember(state, extra.memberId)
 	return (
 		<form
 			className="grid gap-4"
 			onSubmit={(event) => {
 				event.preventDefault()
-				onConfirm(comment)
+				void submit()
 			}}
 		>
 			<DialogHeader>
@@ -76,18 +98,25 @@ function RejectForm({
 				</DialogDescription>
 			</DialogHeader>
 			<div className="grid gap-1.5">
-				<Label htmlFor={fieldId}>
-					Commentaire
-					<span className="font-normal text-muted-foreground">facultatif</span>
-				</Label>
+				<Label htmlFor={fieldId}>Commentaire</Label>
 				<textarea
 					id={fieldId}
 					rows={3}
 					value={comment}
-					onChange={(event) => setComment(event.target.value)}
+					aria-required
+					aria-invalid={error ? true : undefined}
+					onChange={(event) => {
+						setError(null)
+						setComment(event.target.value)
+					}}
 					placeholder="Explique ce choix, par exemple une commande non validée."
 					className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
 				/>
+				{error && (
+					<p role="alert" className="text-sm text-state-alert">
+						{error}
+					</p>
+				)}
 				<p className="text-muted-foreground text-xs">
 					Le commentaire est conservé avec la décision dans l’historique.
 				</p>
@@ -96,7 +125,7 @@ function RejectForm({
 				<Button type="button" variant="outline" onClick={onCancel}>
 					Garder la déclaration
 				</Button>
-				<Button type="submit" variant="destructive">
+				<Button type="submit" variant="destructive" disabled={isPending}>
 					Refuser la déclaration
 				</Button>
 			</DialogFooter>

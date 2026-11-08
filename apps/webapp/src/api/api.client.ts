@@ -559,6 +559,18 @@ export namespace Schemas {
     supplier_id?: (null | SupplierId) | undefined;
     vat_cents?: number | undefined;
   };
+  export type SurchargeId = string;
+  export type CreateExtraPeriodRequest = {
+    approve?: boolean | undefined;
+    date: string;
+    end: string;
+    lunch?: (null | LunchInput) | undefined;
+    member_id: MemberId;
+    rate_bp?: (number | null) | undefined;
+    reason: string;
+    start: string;
+    surcharge_id?: (null | SurchargeId) | undefined;
+  };
   export type CreateFolderRequest = { name: string; parent_id?: (string | null) | undefined };
   export type CreateIntakeTicketRequest = {
     body: string;
@@ -1243,6 +1255,26 @@ export namespace Schemas {
     total_cents: number;
     updated_at: string;
     vat_cents: number;
+  };
+  export type ExtraPeriodId = string;
+  export type ExtraStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  export type ExtraPeriodResponse = {
+    created_at: string;
+    created_by_member_id?: (null | MemberId) | undefined;
+    date: string;
+    decided_at?: (string | null) | undefined;
+    decided_by_member_id?: (null | MemberId) | undefined;
+    decision_comment?: (string | null) | undefined;
+    end: string;
+    id: ExtraPeriodId;
+    lunch?: (null | LunchInput) | undefined;
+    member_id: MemberId;
+    organization_id: OrganizationId;
+    rate_bp: number;
+    reason: string;
+    start: string;
+    status: ExtraStatus;
+    surcharge_id?: (null | SurchargeId) | undefined;
   };
   export type FeedMemberResponse = {
     archived: boolean;
@@ -2169,6 +2201,7 @@ export namespace Schemas {
     | { frequency: "WEEKLY"; weekdays: Array<number> }
     | { day_of_month: number; frequency: "MONTHLY" };
   export type RejectAbsenceRequest = { comment: string };
+  export type RejectExtraPeriodRequest = { comment: string };
   export type RejectInterventionRequest = Partial<{ note: string | null }>;
   export type RejectSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type ReplaceBillingSettingsRequest = {
@@ -2349,6 +2382,17 @@ export namespace Schemas {
     size_bytes: number;
   };
   export type SupportSettingsResponse = { display_fields: Array<string> };
+  export type SurchargeKind = "OVERTIME" | "SUNDAY" | "HOLIDAY" | "NIGHT" | "OTHER";
+  export type SurchargeRequest = { kind: SurchargeKind; name: string; rate_bp: number };
+  export type SurchargeResponse = {
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    id: SurchargeId;
+    kind: SurchargeKind;
+    name: string;
+    organization_id: OrganizationId;
+    rate_bp: number;
+  };
   export type TaskCommentAuthorResponse = { display_name: string; id: UserId };
   export type TaskCommentId = string;
   export type TaskCommentResponse = {
@@ -7756,6 +7800,190 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type get_ListExtraPeriods = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/extra-periods";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{
+        member_id: string;
+        status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+        from: string;
+        to: string;
+        page: number;
+        per_page: number;
+      }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          date: string;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end: string;
+          id: Schemas.ExtraPeriodId;
+          lunch?: (null | Schemas.LunchInput) | undefined;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+          reason: string;
+          start: string;
+          status: Schemas.ExtraStatus;
+          surcharge_id?: (null | Schemas.SurchargeId) | undefined;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateExtraPeriod = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/extra-periods";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateExtraPeriodRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          date: string;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end: string;
+          id: Schemas.ExtraPeriodId;
+          lunch?: (null | Schemas.LunchInput) | undefined;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+          reason: string;
+          start: string;
+          status: Schemas.ExtraStatus;
+          surcharge_id?: (null | Schemas.SurchargeId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type post_ApproveExtraPeriod = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/extra-periods/{period_id}/approve";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; period_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          date: string;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end: string;
+          id: Schemas.ExtraPeriodId;
+          lunch?: (null | Schemas.LunchInput) | undefined;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+          reason: string;
+          start: string;
+          status: Schemas.ExtraStatus;
+          surcharge_id?: (null | Schemas.SurchargeId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_CancelExtraPeriod = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/extra-periods/{period_id}/cancel";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; period_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          date: string;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end: string;
+          id: Schemas.ExtraPeriodId;
+          lunch?: (null | Schemas.LunchInput) | undefined;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+          reason: string;
+          start: string;
+          status: Schemas.ExtraStatus;
+          surcharge_id?: (null | Schemas.SurchargeId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_RejectExtraPeriod = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/extra-periods/{period_id}/reject";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; period_id: string };
+
+      body: Schemas.RejectExtraPeriodRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          created_by_member_id?: (null | Schemas.MemberId) | undefined;
+          date: string;
+          decided_at?: (string | null) | undefined;
+          decided_by_member_id?: (null | Schemas.MemberId) | undefined;
+          decision_comment?: (string | null) | undefined;
+          end: string;
+          id: Schemas.ExtraPeriodId;
+          lunch?: (null | Schemas.LunchInput) | undefined;
+          member_id: Schemas.MemberId;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+          reason: string;
+          start: string;
+          status: Schemas.ExtraStatus;
+          surcharge_id?: (null | Schemas.SurchargeId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
   export type get_ListMyAssignmentReports = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/field/assignment-reports";
@@ -10981,6 +11209,135 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type get_ListSurcharges = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/surcharges";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SurchargeId;
+          kind: Schemas.SurchargeKind;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateSurcharge = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/surcharges";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.SurchargeRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SurchargeId;
+          kind: Schemas.SurchargeKind;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type put_UpdateSurcharge = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; surcharge_id: string };
+
+      body: Schemas.SurchargeRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SurchargeId;
+          kind: Schemas.SurchargeKind;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_ArchiveSurcharge = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; surcharge_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SurchargeId;
+          kind: Schemas.SurchargeKind;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_RestoreSurcharge = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}/restore";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; surcharge_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SurchargeId;
+          kind: Schemas.SurchargeKind;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rate_bp: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_ListTaskLabels = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/task-labels";
@@ -12863,6 +13220,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
     "/api/v1/organizations/{organization_id}/expense-categories": Endpoints.get_ListExpenseCategories;
     "/api/v1/organizations/{organization_id}/expenses": Endpoints.get_ListExpenses;
+    "/api/v1/organizations/{organization_id}/extra-periods": Endpoints.get_ListExtraPeriods;
     "/api/v1/organizations/{organization_id}/field/assignment-reports": Endpoints.get_ListMyAssignmentReports;
     "/api/v1/organizations/{organization_id}/field/current": Endpoints.get_GetCurrentTimeEntry;
     "/api/v1/organizations/{organization_id}/field/tasks": Endpoints.get_ListMyFieldTasks;
@@ -12910,6 +13268,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/support/tickets": Endpoints.get_ListSupportTickets;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}": Endpoints.get_GetSupportTicket;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/entries": Endpoints.get_ListSupportTicketEntries;
+    "/api/v1/organizations/{organization_id}/surcharges": Endpoints.get_ListSurcharges;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.get_ListTaskRecurrences;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.get_ListTasks;
@@ -12989,6 +13348,10 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
     "/api/v1/organizations/{organization_id}/expense-categories": Endpoints.post_CreateExpenseCategory;
     "/api/v1/organizations/{organization_id}/expenses": Endpoints.post_CreateExpense;
+    "/api/v1/organizations/{organization_id}/extra-periods": Endpoints.post_CreateExtraPeriod;
+    "/api/v1/organizations/{organization_id}/extra-periods/{period_id}/approve": Endpoints.post_ApproveExtraPeriod;
+    "/api/v1/organizations/{organization_id}/extra-periods/{period_id}/cancel": Endpoints.post_CancelExtraPeriod;
+    "/api/v1/organizations/{organization_id}/extra-periods/{period_id}/reject": Endpoints.post_RejectExtraPeriod;
     "/api/v1/organizations/{organization_id}/field/assignments/{task_assignment_id}/report": Endpoints.post_ReportAssignment;
     "/api/v1/organizations/{organization_id}/field/day-end": Endpoints.post_EndWorkingDay;
     "/api/v1/organizations/{organization_id}/field/tasks/{task_id}/intervention": Endpoints.post_ProposeMaintenanceIntervention;
@@ -13033,6 +13396,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}/send": Endpoints.post_SendSupportDraft;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges": Endpoints.post_AddSupportTicketBadge;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/entries": Endpoints.post_AddSupportTicketEntry;
+    "/api/v1/organizations/{organization_id}/surcharges": Endpoints.post_CreateSurcharge;
+    "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}/archive": Endpoints.post_ArchiveSurcharge;
+    "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}/restore": Endpoints.post_RestoreSurcharge;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.post_CreateTaskRecurrence;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
@@ -13080,6 +13446,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.put_UpdateSupplier;
     "/api/v1/organizations/{organization_id}/support/settings": Endpoints.put_ReplaceSupportSettings;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/assignee": Endpoints.put_AssignSupportTicket;
+    "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}": Endpoints.put_UpdateSurcharge;
     "/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations": Endpoints.put_ReplaceSupplierInvoiceLineAllocations;
   };
 };

@@ -1,5 +1,6 @@
 import { Ban, Check, MoreHorizontal, Search, X } from 'lucide-react'
 import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	DropdownMenu,
@@ -197,9 +198,11 @@ export function HistorySection({
 								Réinitialiser les filtres
 							</Button>
 						) : (
-							<Button type="button" size="sm" onClick={onCreate}>
-								Déclarer des heures
-							</Button>
+							<RequirePermission permission="MANAGE_PLANNING">
+								<Button type="button" size="sm" onClick={onCreate}>
+									Déclarer des heures
+								</Button>
+							</RequirePermission>
 						)}
 					</div>
 				</div>
@@ -322,42 +325,44 @@ function HistoryRow({
 			</TableCell>
 			<TableCell className="pr-4 text-right">
 				{(pending || cancellable) && (
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-sm"
-								aria-label={`Actions pour la déclaration de ${name}, ${formatShort(extra.date)}`}
-							>
-								<MoreHorizontal />
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end">
-							{pending && (
-								<>
-									<DropdownMenuItem onSelect={() => onApprove(extra)}>
-										<Check />
-										Valider
-									</DropdownMenuItem>
-									<DropdownMenuItem onSelect={() => onReject(extra)}>
-										<X />
-										Refuser
-									</DropdownMenuItem>
-								</>
-							)}
-							{pending && cancellable && <DropdownMenuSeparator />}
-							{cancellable && (
-								<DropdownMenuItem
-									variant="destructive"
-									onSelect={() => onCancel(extra)}
+					<RequirePermission permission="MANAGE_PLANNING">
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon-sm"
+									aria-label={`Actions pour la déclaration de ${name}, ${formatShort(extra.date)}`}
 								>
-									<Ban />
-									Annuler la déclaration
-								</DropdownMenuItem>
-							)}
-						</DropdownMenuContent>
-					</DropdownMenu>
+									<MoreHorizontal />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								{pending && (
+									<>
+										<DropdownMenuItem onSelect={() => onApprove(extra)}>
+											<Check />
+											Valider
+										</DropdownMenuItem>
+										<DropdownMenuItem onSelect={() => onReject(extra)}>
+											<X />
+											Refuser
+										</DropdownMenuItem>
+									</>
+								)}
+								{pending && cancellable && <DropdownMenuSeparator />}
+								{cancellable && (
+									<DropdownMenuItem
+										variant="destructive"
+										onSelect={() => onCancel(extra)}
+									>
+										<Ban />
+										Annuler la déclaration
+									</DropdownMenuItem>
+								)}
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</RequirePermission>
 				)}
 			</TableCell>
 		</TableRow>

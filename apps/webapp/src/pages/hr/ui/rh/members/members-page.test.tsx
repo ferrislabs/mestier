@@ -47,6 +47,19 @@ const NO_OVERRIDE_ACTIONS = {
 	clearRange: async () => {},
 }
 
+const NO_EXTRA_ACTIONS = {
+	create: async () => {},
+	approve: async () => {},
+	reject: async () => {},
+	cancel: async () => {},
+}
+
+const NO_SURCHARGE_ACTIONS = {
+	save: async () => {},
+	archive: async () => {},
+	restore: async () => {},
+}
+
 const NO_LEAVE_ACTIONS = {
 	saveAccount: async () => {},
 	archiveAccount: async () => {},
@@ -154,6 +167,8 @@ function render(page: MembersPageProps, permissions = ['MANAGE_MEMBERS']) {
 							absences: NO_ABSENCE_ACTIONS,
 							absenceTypes: NO_ABSENCE_TYPE_ACTIONS,
 							leave: NO_LEAVE_ACTIONS,
+							extras: NO_EXTRA_ACTIONS,
+							surcharges: NO_SURCHARGE_ACTIONS,
 							overrides: NO_OVERRIDE_ACTIONS,
 							organizationId: 'org-1',
 							actorId: SEED_MEMBER.id,

@@ -48,7 +48,9 @@ pub mod domain {
     pub struct Quote;
     pub struct Role;
     pub struct DayOverride;
+    pub struct ExtraPeriod;
     pub struct LeaveAccount;
+    pub struct Surcharge;
     pub struct LeaveAdjustment;
     pub struct Member;
     pub struct MemberContract;

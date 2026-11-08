@@ -8,6 +8,7 @@
 mod absence_b3;
 mod catalog_b6;
 mod day_override_b5;
+mod extra_b6;
 mod harness;
 mod issuer;
 mod leave_b4;

@@ -17,6 +17,7 @@ import {
 	ABSENCES_PATH,
 	DEFAULT_TYPE_RECORDS,
 } from '#/test/rh-absence-fixtures'
+import { EXTRAS_PATH, SURCHARGES_PATH } from '#/test/rh-extra-fixtures'
 import {
 	DEFAULT_ACCOUNT_RECORDS,
 	LEAVE_ACCOUNTS_PATH,
@@ -138,6 +139,8 @@ function installFakeApi() {
 									}
 								: { data: rows, pagination: null }
 						}
+						if (path === SURCHARGES_PATH || path === EXTRAS_PATH)
+							return { data: [], pagination: null }
 						throw new Error(`unmocked GET ${path}`)
 					},
 				},

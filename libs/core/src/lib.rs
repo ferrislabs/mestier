@@ -145,6 +145,7 @@ pub use domain::{
     employee::ports::{MockEmployeeCostBasisRepository, MockEmployeeRepository},
     equipment::ports::MockEquipmentRepository,
     expense::ports::{MockExpenseCategoryRepository, MockExpenseRepository},
+    extra_period::ports::MockExtraPeriodRepository,
     invitation::ports::MockInvitationRepository,
     invoice::ports::{MockDocumentFormat, MockInvoiceRepository},
     leave_account::ports::MockLeaveAccountRepository,
@@ -171,6 +172,7 @@ pub use domain::{
         MockSupportApiKeyRepository, MockSupportSettingsRepository, MockTicketEntryRepository,
         MockTicketRepository,
     },
+    surcharge::ports::MockSurchargeRepository,
     task::ports::MockTaskRepository,
     task_comment::ports::MockTaskCommentRepository,
     task_label::ports::MockTaskLabelRepository,
@@ -245,6 +247,13 @@ pub use domain::{
     DayOverride, DayOverrideError, DayOverrideId, DayOverrideInput, DayOverrideOutcome,
     DayOverrideService, DayShape, FeedMember, HrPlanningFeed, OverrideKind, PlanningPeriod,
     PlanningPeriodError,
+};
+
+pub use domain::{
+    DefaultSurcharge, ExtraPeriod, ExtraPeriodDraft, ExtraPeriodError, ExtraPeriodFilter,
+    ExtraPeriodId, ExtraPeriodOutcome, ExtraPeriodService, ExtraReason, ExtraStatus, MAX_RATE_BP,
+    RateBp, Surcharge, SurchargeError, SurchargeId, SurchargeInput, SurchargeKind, SurchargeName,
+    SurchargeOutcome, SurchargeService, default_surcharges,
 };
 
 pub use domain::{
@@ -337,6 +346,10 @@ pub use domain::{
         CreateExpenseCategoryCommand, CreateExpenseCommand, MarkExpensePaidCommand,
         UpdateExpenseCategoryCommand, UpdateExpenseCommand,
     },
+    extra_period::commands::{
+        CreateExtraPeriodCommand, DecideExtraPeriodCommand, ListExtraPeriodsCommand,
+        RejectExtraPeriodCommand,
+    },
     file_storage::commands::UploadFileCommand,
     format_number,
     invitation::commands::{AcceptInvitationCommand, InviteMemberCommand, RevokeInvitationCommand},
@@ -408,6 +421,10 @@ pub use domain::{
         UpdateSupplierInvoiceNotesCommand,
     },
     supplier_invoice::commands::{CreateSupplierCommand, UpdateSupplierCommand},
+    surcharge::commands::{
+        ArchiveSurchargeCommand, CreateSurchargeCommand, ListSurchargesCommand, SurchargeDraft,
+        UpdateSurchargeCommand,
+    },
     task::commands::{CreateTaskCommand, PatchTaskCommand},
     task::service::{
         resolve_task_window, sort_by_board_rank, validate_parent_depth, validate_reparenting,

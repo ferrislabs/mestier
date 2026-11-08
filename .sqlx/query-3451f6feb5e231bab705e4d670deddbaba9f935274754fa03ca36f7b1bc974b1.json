@@ -1,0 +1,130 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE extra_periods\n            SET status = $3, decided_by_member_id = $4, decided_at = $5,\n                decision_comment = $6, updated_at = $7\n            WHERE org_id = $1 AND id = $2\n            RETURNING id, org_id, member_id, date, start_time, end_time, lunch_start, lunch_end,\n                      reason, surcharge_id, rate_bp, status, created_by_member_id,\n                      decided_by_member_id, decided_at, decision_comment, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "start_time",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 5,
+        "name": "end_time",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 6,
+        "name": "lunch_start",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 7,
+        "name": "lunch_end",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 8,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "surcharge_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "rate_bp",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_by_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "decided_by_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "decided_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "decision_comment",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "3451f6feb5e231bab705e4d670deddbaba9f935274754fa03ca36f7b1bc974b1"
+}

@@ -19,7 +19,7 @@ import {
 	SelectValue,
 } from '#/components/ui/select'
 import { isIsoDate, todayIso } from '#/pages/hr/lib/rh/dates'
-import { createExtra, validateExtra } from '#/pages/hr/lib/rh/extra'
+import { validateExtra } from '#/pages/hr/lib/rh/extra'
 import {
 	buildExtraDraft,
 	CUSTOM_RATE,
@@ -29,6 +29,7 @@ import {
 	resolveDate,
 	suggestedMajoration,
 } from '#/pages/hr/lib/rh/extra-view'
+import { type ExtraFailure, extraFailureOf } from '#/pages/hr/lib/rh/extra-wire'
 import { fullName } from '#/pages/hr/lib/rh/members'
 import { activePlanningMembers } from '#/pages/hr/lib/rh/planning'
 import { DEFAULT_LUNCH } from '#/pages/hr/lib/rh/schedule'
@@ -39,8 +40,8 @@ import { SwitchRow } from '#/pages/hr/ui/rh/extra/switch-row'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
 import {
 	useRhActorId,
+	useRhExtraActions,
 	useRhState,
-	useRhUpdate,
 } from '#/pages/hr/ui/rh/shared/rh-context'
 
 export type ExtraFormInitial = { memberId?: string; date?: IsoDate }
@@ -74,7 +75,7 @@ function ExtraFormBody({
 	initial?: ExtraFormInitial
 	onClose: () => void
 }) {
-	const updateRh = useRhUpdate()
+	const actions = useRhExtraActions()
 	const actorId = useRhActorId()
 	const state = useRhState()
 	const baseId = useId()
@@ -96,6 +97,8 @@ function ExtraFormBody({
 		}
 	})
 	const [approve, setApprove] = useState(false)
+	const [failure, setFailure] = useState<ExtraFailure | null>(null)
+	const [isPending, setIsPending] = useState(false)
 	const [dirty, setDirty] = useState(false)
 	const [reasonTouched, setReasonTouched] = useState(false)
 	const [majorationTouched, setMajorationTouched] = useState(false)
@@ -119,11 +122,13 @@ function ExtraFormBody({
 	const spanInvalid = fieldError && !rateInvalid
 
 	function patch(partial: Partial<ExtraForm>) {
+		setFailure(null)
 		setDirty(true)
 		setForm((current) => ({ ...current, ...partial }))
 	}
 
 	function changeDate(date: string) {
+		setFailure(null)
 		setDirty(true)
 		setForm((current) => ({
 			...current,
@@ -136,6 +141,7 @@ function ExtraFormBody({
 	}
 
 	function changeMajoration(partial: Partial<Majoration>) {
+		setFailure(null)
 		setMajorationTouched(true)
 		setDirty(true)
 		setForm((current) => ({
@@ -144,15 +150,21 @@ function ExtraFormBody({
 		}))
 	}
 
-	function submit(event: FormEvent<HTMLFormElement>) {
+	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault()
 		setDirty(true)
 		setReasonTouched(true)
-		if (errors.length > 0) return
-		updateRh((current, context) =>
-			createExtra(current, context, draft, approve),
-		)
-		onClose()
+		if (errors.length > 0 || isPending) return
+		setIsPending(true)
+		setFailure(null)
+		try {
+			await actions.create(draft, approve)
+			onClose()
+		} catch (error) {
+			setFailure(extraFailureOf(error))
+		} finally {
+			setIsPending(false)
+		}
 	}
 
 	const memberId = `${baseId}-member`
@@ -166,7 +178,11 @@ function ExtraFormBody({
 	const describedBy = message ? errorId : undefined
 
 	return (
-		<form onSubmit={submit} className="grid gap-5" noValidate>
+		<form
+			onSubmit={(event) => void submit(event)}
+			className="grid gap-5"
+			noValidate
+		>
 			<DialogHeader>
 				<DialogTitle>Déclarer des heures extra</DialogTitle>
 				<DialogDescription>
@@ -307,7 +323,16 @@ function ExtraFormBody({
 						checked={approve}
 						onChange={setApprove}
 					/>
-					{message &&
+					{failure && (
+						<div id={errorId} role="alert">
+							<p className="flex items-start gap-2 text-sm text-state-alert">
+								<CircleAlert className="mt-0.5 size-4 shrink-0" />
+								{failure.message}
+							</p>
+						</div>
+					)}
+					{!failure &&
+						message &&
 						(urgent ? (
 							<div id={errorId} role="alert">
 								<p className="flex items-start gap-2 text-sm text-state-alert">
@@ -331,7 +356,7 @@ function ExtraFormBody({
 				<Button type="button" variant="outline" onClick={onClose}>
 					Annuler
 				</Button>
-				<Button type="submit" disabled={errors.length > 0}>
+				<Button type="submit" disabled={errors.length > 0 || isPending}>
 					Déclarer
 				</Button>
 			</DialogFooter>
