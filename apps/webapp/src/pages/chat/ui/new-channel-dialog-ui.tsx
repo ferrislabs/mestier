@@ -9,17 +9,7 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import type { Category } from '#/hooks/use-chat'
-
-const NO_CATEGORY_VALUE = '__none__'
 
 export interface NewChannelDialogUIProps {
 	open: boolean
@@ -28,9 +18,9 @@ export interface NewChannelDialogUIProps {
 	onChangeKind: (kind: 'channel' | 'category') => void
 	name: string
 	onChangeName: (value: string) => void
-	categories: Category[]
-	categoryId: string | null
-	onChangeCategoryId: (value: string | null) => void
+	/** Set when opened from a category: the channel goes in it, and only a
+	 * channel can be created from there. */
+	parentCategoryName?: string
 	onSubmit: () => void
 	isSubmitting: boolean
 }
@@ -42,9 +32,7 @@ export function NewChannelDialogUI({
 	onChangeKind,
 	name,
 	onChangeName,
-	categories,
-	categoryId,
-	onChangeCategoryId,
+	parentCategoryName,
 	onSubmit,
 	isSubmitting,
 }: NewChannelDialogUIProps) {
@@ -52,7 +40,11 @@ export function NewChannelDialogUI({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Créer</DialogTitle>
+					<DialogTitle>
+						{parentCategoryName
+							? `Nouveau canal dans ${parentCategoryName}`
+							: 'Créer'}
+					</DialogTitle>
 				</DialogHeader>
 
 				<Tabs
@@ -61,10 +53,12 @@ export function NewChannelDialogUI({
 						onChangeKind(value as 'channel' | 'category')
 					}
 				>
-					<TabsList>
-						<TabsTrigger value="channel">Canal</TabsTrigger>
-						<TabsTrigger value="category">Catégorie</TabsTrigger>
-					</TabsList>
+					{parentCategoryName ? null : (
+						<TabsList>
+							<TabsTrigger value="channel">Canal</TabsTrigger>
+							<TabsTrigger value="category">Catégorie</TabsTrigger>
+						</TabsList>
+					)}
 
 					<TabsContent value="channel" className="flex flex-col gap-3 py-3">
 						<div className="flex flex-col gap-1.5">
@@ -75,29 +69,6 @@ export function NewChannelDialogUI({
 								onChange={(event) => onChangeName(event.target.value)}
 								placeholder="général"
 							/>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="new-channel-category">Catégorie</Label>
-							<Select
-								value={categoryId ?? NO_CATEGORY_VALUE}
-								onValueChange={(value) =>
-									onChangeCategoryId(value === NO_CATEGORY_VALUE ? null : value)
-								}
-							>
-								<SelectTrigger id="new-channel-category">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value={NO_CATEGORY_VALUE}>
-										Sans catégorie
-									</SelectItem>
-									{categories.map((category) => (
-										<SelectItem key={category.id} value={category.id}>
-											{category.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
 						</div>
 					</TabsContent>
 

@@ -2,12 +2,15 @@ import { Store } from '@tanstack/store'
 
 interface ChatDialogsState {
 	newChannelOpen: boolean
+	/** The category a channel is being created in, from its own "+". */
+	newChannelCategoryId: string | null
 	newDirectOpen: boolean
 	adminChannelId: string | null
 }
 
 const initialState: ChatDialogsState = {
 	newChannelOpen: false,
+	newChannelCategoryId: null,
 	newDirectOpen: false,
 	adminChannelId: null,
 }
@@ -20,8 +23,12 @@ const initialState: ChatDialogsState = {
  */
 export const chatDialogsStore = new Store<ChatDialogsState>(initialState)
 
-export function openNewChannel() {
-	chatDialogsStore.setState((prev) => ({ ...prev, newChannelOpen: true }))
+export function openNewChannel(categoryId?: string) {
+	chatDialogsStore.setState((prev) => ({
+		...prev,
+		newChannelOpen: true,
+		newChannelCategoryId: categoryId ?? null,
+	}))
 }
 
 export function setNewChannelOpen(open: boolean) {

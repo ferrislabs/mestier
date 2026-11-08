@@ -61,6 +61,7 @@ function baseProps(
 		onRequestNewDirectMessage: vi.fn(),
 		mentionCount: 0,
 		onRequestNewChannel: vi.fn(),
+		onRequestNewChannelInCategory: vi.fn(),
 		onOpenChannelAdmin: vi.fn(),
 		...overrides,
 	}
@@ -142,6 +143,27 @@ describe('ChatSidebarUI', () => {
 		await user.click(screen.getByText('cat-1'))
 
 		expect(onToggleCategory).toHaveBeenCalledWith('cat-1', true)
+	})
+})
+
+describe('ChatSidebarUI — channel creation in a category', () => {
+	it('creates a channel from the plus button of its category', async () => {
+		const user = userEvent.setup()
+		const onRequestNewChannelInCategory = vi.fn()
+		const groups = [
+			{ category: category('cat-1'), channels: [channel('ch-1', 'cat-1')] },
+		]
+		await renderSidebar(
+			<ChatSidebarUI
+				{...baseProps({ groups, onRequestNewChannelInCategory })}
+			/>,
+		)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Créer un canal dans cat-1' }),
+		)
+
+		expect(onRequestNewChannelInCategory).toHaveBeenCalledWith('cat-1')
 	})
 })
 

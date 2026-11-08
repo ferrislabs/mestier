@@ -14,14 +14,19 @@ import { NewDirectMessageFeature } from './new-direct-message-feature'
  * `chatDialogsStore` from the side nav and from the channel header. */
 export function ChatDialogsFeature() {
 	const { activeOrganization } = useActiveOrganization()
-	const { newChannelOpen, newDirectOpen, adminChannelId } =
-		useStore(chatDialogsStore)
+	const {
+		newChannelOpen,
+		newChannelCategoryId,
+		newDirectOpen,
+		adminChannelId,
+	} = useStore(chatDialogsStore)
 
 	return (
 		<>
 			<NewChannelFeature
 				organizationId={activeOrganization.id}
 				open={newChannelOpen}
+				categoryId={newChannelCategoryId}
 				onOpenChange={setNewChannelOpen}
 			/>
 			<NewDirectMessageFeature

@@ -86,7 +86,8 @@ export function ChatSidebarFeature() {
 			unreadCounts={unreadCounts}
 			mentionCount={mentionCount}
 			directMessages={directMessages}
-			onRequestNewChannel={openNewChannel}
+			onRequestNewChannel={() => openNewChannel()}
+			onRequestNewChannelInCategory={openNewChannel}
 			onRequestNewDirectMessage={openNewDirect}
 			onOpenChannelAdmin={openChannelAdmin}
 		/>

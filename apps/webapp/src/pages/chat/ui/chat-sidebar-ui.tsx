@@ -38,6 +38,7 @@ export interface ChatSidebarUIProps {
 	mentionCount: number
 	directMessages: readonly DirectMessageItem[]
 	onRequestNewChannel: () => void
+	onRequestNewChannelInCategory: (categoryId: string) => void
 	onRequestNewDirectMessage: () => void
 	/** Opens the channel admin sheet for one channel — see #372: channel
 	 * management starts here, not only from inside the channel itself. */
@@ -69,6 +70,7 @@ export function ChatSidebarUI({
 	mentionCount,
 	directMessages,
 	onRequestNewChannel,
+	onRequestNewChannelInCategory,
 	onRequestNewDirectMessage,
 	onOpenChannelAdmin,
 }: ChatSidebarUIProps) {
@@ -135,6 +137,7 @@ export function ChatSidebarUI({
 								onToggleCategory={onToggleCategory}
 								unreadCounts={unreadCounts}
 								onOpenChannelAdmin={onOpenChannelAdmin}
+								onRequestNewChannelInCategory={onRequestNewChannelInCategory}
 							/>
 						))}
 					</div>
@@ -217,6 +220,7 @@ interface CategoryGroupProps {
 	onToggleCategory: (categoryId: string, collapsed: boolean) => void
 	unreadCounts: ReadonlyMap<string, number>
 	onOpenChannelAdmin: (channelId: string) => void
+	onRequestNewChannelInCategory: (categoryId: string) => void
 }
 
 function CategoryGroup({
@@ -227,6 +231,7 @@ function CategoryGroup({
 	onToggleCategory,
 	unreadCounts,
 	onOpenChannelAdmin,
+	onRequestNewChannelInCategory,
 }: CategoryGroupProps) {
 	const channelList = (
 		<ul className="flex flex-col gap-0.5">
@@ -281,15 +286,33 @@ function CategoryGroup({
 				if (group.category) onToggleCategory(group.category.id, !open)
 			}}
 		>
-			<CollapsibleTrigger className="flex w-full items-center gap-1 rounded-md px-2 pb-1 font-semibold text-nav-muted text-xs uppercase tracking-wide outline-none hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary">
-				<ChevronRight
-					className={cn(
-						'size-3.5 shrink-0 transition-transform',
-						!collapsed && 'rotate-90',
-					)}
-				/>
-				<span className="truncate">{group.category.name}</span>
-			</CollapsibleTrigger>
+			<div className="group/category flex items-center pr-1 pb-1">
+				<CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-2 font-semibold text-nav-muted text-xs uppercase tracking-wide outline-none hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary">
+					<ChevronRight
+						className={cn(
+							'size-3.5 shrink-0 transition-transform',
+							!collapsed && 'rotate-90',
+						)}
+					/>
+					<span className="truncate">{group.category.name}</span>
+				</CollapsibleTrigger>
+				<RequirePermission permission="MANAGE_CHANNELS">
+					<button
+						type="button"
+						aria-label={`Créer un canal dans ${group.category.name}`}
+						className={cn(
+							addButtonClassName,
+							'opacity-0 focus-visible:opacity-100 group-hover/category:opacity-100',
+						)}
+						onClick={() => {
+							if (group.category)
+								onRequestNewChannelInCategory(group.category.id)
+						}}
+					>
+						<Plus className="size-3.5" />
+					</button>
+				</RequirePermission>
+			</div>
 			<CollapsibleContent>{channelList}</CollapsibleContent>
 		</Collapsible>
 	)
