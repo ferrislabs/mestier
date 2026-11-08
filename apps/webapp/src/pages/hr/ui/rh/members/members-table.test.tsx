@@ -18,6 +18,17 @@ import { MembersTable } from '#/pages/hr/ui/rh/members/members-table'
 import { RhProvider } from '#/pages/hr/ui/rh/shared/rh-context'
 import { renderWithRouter } from '#/test/render-with-router'
 
+const NO_CONTRACT_ACTIONS = {
+	add: async () => {},
+	update: async () => {},
+	remove: async () => {},
+}
+
+const NO_DOCUMENT_ACTIONS = {
+	add: async () => {},
+	remove: async () => {},
+}
+
 const NO_PROFILE_ACTIONS = {
 	save: async () => {},
 	archive: async () => {},
@@ -101,6 +112,8 @@ function renderTable(
 							state,
 							update: async () => {},
 							profiles: NO_PROFILE_ACTIONS,
+							contracts: NO_CONTRACT_ACTIONS,
+							documents: NO_DOCUMENT_ACTIONS,
 							actorId: member.id,
 							organizationSlug: 'atelier-bois',
 						}}

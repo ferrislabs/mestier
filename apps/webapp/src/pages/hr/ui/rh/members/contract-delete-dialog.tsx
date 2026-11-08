@@ -19,12 +19,16 @@ export function ContractDeleteDialog({
 	open,
 	onOpenChange,
 	onConfirm,
+	error = null,
+	isPending = false,
 	trigger,
 }: {
 	contract: Contract
 	open: boolean
 	onOpenChange: (open: boolean) => void
 	onConfirm: () => void
+	error?: string | null
+	isPending?: boolean
 	trigger: ReactNode
 }) {
 	return (
@@ -42,11 +46,20 @@ export function ContractDeleteDialog({
 					Les autres contrats ne changent pas : vérifie qu’aucune période ne
 					reste sans contrat.
 				</p>
+				{error && (
+					<p role="alert" className="text-[13px] text-state-alert">
+						{error}
+					</p>
+				)}
 				<DialogFooter>
 					<DialogClose asChild>
 						<Button variant="outline">Annuler</Button>
 					</DialogClose>
-					<Button variant="destructive" onClick={onConfirm}>
+					<Button
+						variant="destructive"
+						disabled={isPending}
+						onClick={onConfirm}
+					>
 						Supprimer
 					</Button>
 				</DialogFooter>

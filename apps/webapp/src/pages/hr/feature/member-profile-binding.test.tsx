@@ -14,6 +14,10 @@ import { MemberDetailFeature } from './member-detail-feature'
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
 const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
 const PROFILES_PATH = '/api/v1/organizations/{organization_id}/member-profiles'
+const CONTRACTS_PATH =
+	'/api/v1/organizations/{organization_id}/member-contracts'
+const DOCUMENTS_PATH =
+	'/api/v1/organizations/{organization_id}/member-documents'
 const PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
 
@@ -110,6 +114,8 @@ function installFakeApi() {
 						if (path === MEMBERS_PATH)
 							return { data: MEMBERS, pagination: null }
 						if (path === ABSENCES_PATH) return { data: [], pagination: null }
+						if (path === CONTRACTS_PATH || path === DOCUMENTS_PATH)
+							return { data: [], pagination: null }
 						if (path === PROFILES_PATH && profilesForbidden)
 							throw Object.assign(new Error('Forbidden'), { status: 403 })
 						if (path === PROFILES_PATH)

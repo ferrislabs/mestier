@@ -3,8 +3,9 @@ import { isFixedTerm } from '#/pages/hr/lib/rh/contract-draft'
 import {
 	CONTRACT_LABELS,
 	type ContractPhase,
+	currentContract,
 } from '#/pages/hr/lib/rh/contracts'
-import type { ContractType } from '#/pages/hr/lib/rh/types'
+import type { ContractType, IsoDate, Member } from '#/pages/hr/lib/rh/types'
 
 export function ContractBadge({
 	contract,
@@ -25,6 +26,34 @@ export function ContractBadge({
 		>
 			{CONTRACT_LABELS[contract]}
 		</span>
+	)
+}
+
+export function MemberContractBadge({
+	member,
+	today,
+	className,
+}: {
+	member: Member
+	today: IsoDate
+	className?: string
+}) {
+	if (member.contracts.length === 0)
+		return (
+			<span
+				className={cn(
+					'inline-flex h-5 items-center whitespace-nowrap rounded-sm bg-muted px-1.5 font-medium text-[11px] text-muted-foreground',
+					className,
+				)}
+			>
+				Aucun contrat
+			</span>
+		)
+	return (
+		<ContractBadge
+			contract={currentContract(member, today).type}
+			className={className}
+		/>
 	)
 }
 

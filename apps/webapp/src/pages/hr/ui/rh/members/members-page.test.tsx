@@ -21,6 +21,17 @@ import {
 import { RhProvider } from '#/pages/hr/ui/rh/shared/rh-context'
 import { renderWithRouter } from '#/test/render-with-router'
 
+const NO_CONTRACT_ACTIONS = {
+	add: async () => {},
+	update: async () => {},
+	remove: async () => {},
+}
+
+const NO_DOCUMENT_ACTIONS = {
+	add: async () => {},
+	remove: async () => {},
+}
+
 const NO_PROFILE_ACTIONS = {
 	save: async () => {},
 	archive: async () => {},
@@ -110,6 +121,8 @@ function render(page: MembersPageProps, permissions = ['MANAGE_MEMBERS']) {
 							state: page.state,
 							update: async () => {},
 							profiles: NO_PROFILE_ACTIONS,
+							contracts: NO_CONTRACT_ACTIONS,
+							documents: NO_DOCUMENT_ACTIONS,
 							actorId: SEED_MEMBER.id,
 							organizationSlug: 'atelier-bois',
 						}}

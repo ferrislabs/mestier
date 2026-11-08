@@ -1,7 +1,6 @@
 import { assert, test } from 'vitest'
 import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
-	addDocument,
 	cancelUpcomingAbsences,
 	createMember,
 	currentSchedule,
@@ -10,7 +9,6 @@ import {
 	directReports,
 	EMPTY_ADDRESS,
 	formatAddress,
-	removeDocument,
 	upcomingDeadlines,
 	validateMemberDraft,
 	weeklyHours,
@@ -121,25 +119,6 @@ test('createMember nettoie les champs et ajoute un membre actif', () => {
 	assert.equal(created?.status, 'active')
 	assert.equal(created?.documents.length, 0)
 	assert.equal(createMember(state, context, draft({ lastName: '' })), state)
-})
-
-test('documents : ajout puis suppression', () => {
-	const added = addDocument(state, context, 'julien', {
-		name: 'Permis CACES.pdf',
-		kind: 'diploma',
-	})
-	const documents =
-		added.members.find((m) => m.id === 'julien')?.documents ?? []
-	assert.equal(documents.at(-1)?.name, 'Permis CACES.pdf')
-	const removed = removeDocument(added, 'julien', 'new-id')
-	assert.equal(
-		removed.members.find((m) => m.id === 'julien')?.documents.length,
-		documents.length - 1,
-	)
-	assert.equal(
-		addDocument(state, context, 'julien', { name: ' ', kind: 'other' }),
-		state,
-	)
 })
 
 test('directReports ne liste que les membres actifs', () => {

@@ -22,14 +22,13 @@ import {
 import { todayIso } from '#/pages/hr/lib/rh/dates'
 import { contractPeriod } from '#/pages/hr/lib/rh/format'
 import {
-	addContract,
-	contractErrors,
-	fullName,
-	updateContract,
-} from '#/pages/hr/lib/rh/members'
+	type ContractFailure,
+	contractFailureOf,
+} from '#/pages/hr/lib/rh/member-wire'
+import { contractErrors, fullName } from '#/pages/hr/lib/rh/members'
 import type { Contract, ContractDraft, Member } from '#/pages/hr/lib/rh/types'
 import { ContractFields } from '#/pages/hr/ui/rh/members/contract-fields'
-import { useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import { useRhContractActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
 export type ContractFormDialogProps = {
 	open: boolean
@@ -69,8 +68,10 @@ function ContractForm({
 	contract?: Contract
 	onClose: () => void
 }) {
-	const updateRh = useRhUpdate()
+	const actions = useRhContractActions()
 	const idPrefix = useId()
+	const [failure, setFailure] = useState<ContractFailure | null>(null)
+	const [isPending, setIsPending] = useState(false)
 	const [draft, setDraft] = useState<ContractDraft>(() =>
 		contract
 			? contractDraftOf(contract)
@@ -85,19 +86,26 @@ function ContractForm({
 	)
 	const blocked = errors.length > 0
 
-	function submit(event: FormEvent) {
+	async function submit(event: FormEvent) {
 		event.preventDefault()
-		if (blocked) return
-		if (contract)
-			updateRh((current) =>
-				updateContract(current, member.id, contract.id, final),
-			)
-		else
-			updateRh((current, context) =>
-				addContract(current, context, member.id, final),
-			)
-		onClose()
+		if (blocked || isPending) return
+		setIsPending(true)
+		setFailure(null)
+		try {
+			if (contract) await actions.update(member.id, contract.id, final)
+			else await actions.add(member.id, final)
+			onClose()
+		} catch (error) {
+			setFailure(contractFailureOf(error))
+		} finally {
+			setIsPending(false)
+		}
 	}
+
+	const dialogError =
+		failure && (failure.field === null || failure.field === 'schedule')
+			? failure.message
+			: null
 
 	return (
 		<form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col">
@@ -115,9 +123,18 @@ function ContractForm({
 				<ContractFields
 					idPrefix={idPrefix}
 					value={draft}
-					onChange={setDraft}
+					onChange={(next) => {
+						setFailure(null)
+						setDraft(next)
+					}}
 					errors={errors}
+					failure={failure}
 				/>
+				{dialogError && (
+					<p role="alert" className="text-[13px] text-state-alert">
+						{dialogError}
+					</p>
+				)}
 				{otherErrors.length > 0 && (
 					<ul className="grid gap-1 text-[13px] text-state-alert">
 						{otherErrors.map((message) => (
@@ -138,7 +155,7 @@ function ContractForm({
 							Annuler
 						</Button>
 					</DialogClose>
-					<Button type="submit" disabled={blocked}>
+					<Button type="submit" disabled={blocked || isPending}>
 						{contract ? 'Enregistrer' : 'Ajouter le contrat'}
 					</Button>
 				</div>

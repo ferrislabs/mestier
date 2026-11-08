@@ -1,5 +1,6 @@
 import { Pencil } from 'lucide-react'
 import { type FormEvent, useId, useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -11,6 +12,7 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '#/components/ui/dialog'
+import { contractDraftOf } from '#/pages/hr/lib/rh/contract-draft'
 import {
 	describeCycle,
 	validateSchedule,
@@ -23,11 +25,8 @@ import {
 	formatDate,
 	scheduleCaption,
 } from '#/pages/hr/lib/rh/format'
-import {
-	formatHours,
-	fullName,
-	setContractSchedule,
-} from '#/pages/hr/lib/rh/members'
+import { contractFailureOf } from '#/pages/hr/lib/rh/member-wire'
+import { formatHours, fullName } from '#/pages/hr/lib/rh/members'
 import { blockLengthLabel } from '#/pages/hr/lib/rh/rotation'
 import { formatWorkDay } from '#/pages/hr/lib/rh/schedule'
 import {
@@ -49,7 +48,7 @@ import type {
 import { DetailCard } from '#/pages/hr/ui/rh/members/detail-card'
 import { PlanDaysDialog } from '#/pages/hr/ui/rh/members/plan-days-dialog'
 import { ScheduleModeEditor } from '#/pages/hr/ui/rh/members/schedule-mode-editor'
-import { useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import { useRhContractActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
 export const CALENDAR_ANCHOR = 'member-calendar'
 
@@ -64,9 +63,11 @@ function RhythmForm({
 	today: IsoDate
 	onClose: () => void
 }) {
-	const updateRh = useRhUpdate()
+	const actions = useRhContractActions()
 	const idPrefix = useId()
 	const [schedule, setDraft] = useState<ContractSchedule>(contract.schedule)
+	const [failure, setFailure] = useState<string | null>(null)
+	const [isPending, setIsPending] = useState(false)
 	const errors = validateSchedule(schedule)
 	const blocked = errors.length > 0
 	const extra = errors.filter(
@@ -78,13 +79,22 @@ function RhythmForm({
 			!message.startsWith('Une séquence dure'),
 	)
 
-	function submit(event: FormEvent) {
+	async function submit(event: FormEvent) {
 		event.preventDefault()
-		if (blocked) return
-		updateRh((state) =>
-			setContractSchedule(state, member.id, contract.id, schedule),
-		)
-		onClose()
+		if (blocked || isPending) return
+		setIsPending(true)
+		setFailure(null)
+		try {
+			await actions.update(member.id, contract.id, {
+				...contractDraftOf(contract),
+				schedule,
+			})
+			onClose()
+		} catch (error) {
+			setFailure(contractFailureOf(error).message)
+		} finally {
+			setIsPending(false)
+		}
 	}
 
 	return (
@@ -100,10 +110,18 @@ function RhythmForm({
 				<ScheduleModeEditor
 					idPrefix={idPrefix}
 					value={schedule}
-					onChange={setDraft}
+					onChange={(next) => {
+						setFailure(null)
+						setDraft(next)
+					}}
 					contractStart={contract.startDate}
 					today={today}
 				/>
+				{failure && (
+					<p role="alert" className="text-[13px] text-state-alert">
+						{failure}
+					</p>
+				)}
 				{extra.length > 0 && (
 					<ul className="grid gap-1 text-[13px] text-state-alert">
 						{extra.map((message) => (
@@ -118,7 +136,7 @@ function RhythmForm({
 						Annuler
 					</Button>
 				</DialogClose>
-				<Button type="submit" disabled={blocked}>
+				<Button type="submit" disabled={blocked || isPending}>
 					Enregistrer
 				</Button>
 			</DialogFooter>
@@ -335,11 +353,15 @@ export function RhythmCard({
 			<DetailCard
 				title="Rythme de travail"
 				action={
-					<DialogTrigger asChild>
-						<Button variant="outline" size="sm">
-							<Pencil aria-hidden /> Modifier le rythme
-						</Button>
-					</DialogTrigger>
+					member.contracts.length > 0 ? (
+						<RequirePermission permission="MANAGE_MEMBERS">
+							<DialogTrigger asChild>
+								<Button variant="outline" size="sm">
+									<Pencil aria-hidden /> Modifier le rythme
+								</Button>
+							</DialogTrigger>
+						</RequirePermission>
+					) : undefined
 				}
 			>
 				<p className="mb-3 text-[12px] text-muted-foreground">

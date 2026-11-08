@@ -1,5 +1,6 @@
 import { FileText, Paperclip, Trash2 } from 'lucide-react'
 import { type ChangeEvent, useRef, useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { RubriqueLayout } from '#/components/rubrique-layout'
 import { Button } from '#/components/ui/button'
 import {
@@ -9,28 +10,41 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
+import { useFileUrls } from '#/hooks/use-file-url'
+import { mutationErrorMessage } from '#/lib/api-error'
 import { formatDate } from '#/pages/hr/lib/rh/format'
-import {
-	addDocument,
-	DOCUMENT_LABELS,
-	removeDocument,
-} from '#/pages/hr/lib/rh/members'
+import { DOCUMENT_LABELS } from '#/pages/hr/lib/rh/members'
 import type { DocumentKind, Member } from '#/pages/hr/lib/rh/types'
 import { DetailCard } from '#/pages/hr/ui/rh/members/detail-card'
-import { useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import { useRhDocumentActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
 export function DocumentsSection({ member }: { member: Member }) {
-	const updateRh = useRhUpdate()
+	const actions = useRhDocumentActions()
 	const input = useRef<HTMLInputElement>(null)
 	const [kind, setKind] = useState<DocumentKind>('other')
+	const [pending, setPending] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const links = useFileUrls(
+		member.documents.map((document) => document.fileKey),
+	)
+
+	async function run(action: () => Promise<void>) {
+		setPending(true)
+		setError(null)
+		try {
+			await action()
+		} catch (failure) {
+			setError(mutationErrorMessage(failure))
+		} finally {
+			setPending(false)
+		}
+	}
 
 	function pick(event: ChangeEvent<HTMLInputElement>) {
 		const file = event.target.files?.item(0)
 		event.target.value = ''
 		if (!file) return
-		updateRh((state, context) =>
-			addDocument(state, context, member.id, { name: file.name, kind }),
-		)
+		void run(() => actions.add(member.id, file, kind))
 	}
 
 	return (
@@ -38,7 +52,7 @@ export function DocumentsSection({ member }: { member: Member }) {
 			title="Documents"
 			description="Pièces du dossier du membre."
 			actions={
-				<>
+				<RequirePermission permission="MANAGE_MEMBERS">
 					<span aria-hidden className="text-[12px] text-muted-foreground">
 						Type
 					</span>
@@ -64,6 +78,7 @@ export function DocumentsSection({ member }: { member: Member }) {
 					<Button
 						variant="outline"
 						size="sm"
+						disabled={pending}
 						onClick={() => input.current?.click()}
 					>
 						<Paperclip aria-hidden /> Ajouter un document
@@ -76,9 +91,14 @@ export function DocumentsSection({ member }: { member: Member }) {
 						aria-label="Choisir un fichier"
 						onChange={pick}
 					/>
-				</>
+				</RequirePermission>
 			}
 		>
+			{error && (
+				<p role="alert" className="text-[13px] text-state-alert">
+					{error}
+				</p>
+			)}
 			{member.documents.length === 0 ? (
 				<div className="rounded-lg border border-dashed bg-card px-6 py-12 text-center">
 					<p className="font-medium">Aucun document pour l’instant.</p>
@@ -90,38 +110,53 @@ export function DocumentsSection({ member }: { member: Member }) {
 			) : (
 				<DetailCard title="Pièces du dossier">
 					<ul className="-mx-1 grid divide-y">
-						{member.documents.map((document) => (
-							<li
-								key={document.id}
-								className="flex items-center gap-3 px-1 py-2.5 first:pt-0 last:pb-0"
-							>
-								<FileText
-									className="size-4 shrink-0 text-muted-foreground"
-									aria-hidden
-								/>
-								<span className="min-w-0 flex-1">
-									<span className="block truncate text-[13px]">
-										{document.name}
-									</span>
-									<span className="block text-[12px] text-muted-foreground">
-										{DOCUMENT_LABELS[document.kind]} · ajouté le{' '}
-										{formatDate(document.addedAt)}
-									</span>
-								</span>
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									aria-label={`Supprimer ${document.name}`}
-									onClick={() =>
-										updateRh((state) =>
-											removeDocument(state, member.id, document.id),
-										)
-									}
+						{member.documents.map((document, index) => {
+							const url = links[index]?.url
+							return (
+								<li
+									key={document.id}
+									className="flex items-center gap-3 px-1 py-2.5 first:pt-0 last:pb-0"
 								>
-									<Trash2 aria-hidden />
-								</Button>
-							</li>
-						))}
+									<FileText
+										className="size-4 shrink-0 text-muted-foreground"
+										aria-hidden
+									/>
+									<span className="min-w-0 flex-1">
+										{url ? (
+											<a
+												href={url}
+												target="_blank"
+												rel="noreferrer"
+												className="block truncate text-[13px] hover:underline"
+											>
+												{document.name}
+											</a>
+										) : (
+											<span className="block truncate text-[13px]">
+												{document.name}
+											</span>
+										)}
+										<span className="block text-[12px] text-muted-foreground">
+											{DOCUMENT_LABELS[document.kind]} · ajouté le{' '}
+											{formatDate(document.addedAt)}
+										</span>
+									</span>
+									<RequirePermission permission="MANAGE_MEMBERS">
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											disabled={pending}
+											aria-label={`Supprimer ${document.name}`}
+											onClick={() =>
+												void run(() => actions.remove(member.id, document.id))
+											}
+										>
+											<Trash2 aria-hidden />
+										</Button>
+									</RequirePermission>
+								</li>
+							)
+						})}
 					</ul>
 				</DetailCard>
 			)}

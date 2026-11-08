@@ -62,6 +62,7 @@ export function identitySummary(member: Member): string {
 }
 
 export function contractsSummary(member: Member): string {
+	if (member.contracts.length === 0) return 'Aucun contrat'
 	const trail = contractTrail(member)
 		.map((type) => CONTRACT_LABELS[type])
 		.join(' → ')

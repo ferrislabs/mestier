@@ -1,7 +1,9 @@
 import { ArrowRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Fragment, useId, useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { RubriqueLayout } from '#/components/rubrique-layout'
 import { Button } from '#/components/ui/button'
+import { mutationErrorMessage } from '#/lib/api-error'
 import { cn } from '#/lib/utils'
 import {
 	CONTRACT_LABELS,
@@ -17,7 +19,7 @@ import {
 	formatDate,
 	tenureLabel,
 } from '#/pages/hr/lib/rh/format'
-import { removeContract, upcomingDeadlines } from '#/pages/hr/lib/rh/members'
+import { upcomingDeadlines } from '#/pages/hr/lib/rh/members'
 import { rhythmLines } from '#/pages/hr/lib/rh/schedule-mode'
 import type {
 	Contract,
@@ -34,7 +36,7 @@ import { ContractDeleteDialog } from '#/pages/hr/ui/rh/members/contract-delete-d
 import { ContractFormDialog } from '#/pages/hr/ui/rh/members/contract-form-dialog'
 import { DeadlineNote } from '#/pages/hr/ui/rh/members/deadline-note'
 import { DetailCard } from '#/pages/hr/ui/rh/members/detail-card'
-import { useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import { useRhContractActions } from '#/pages/hr/ui/rh/shared/rh-context'
 
 const HORIZON_DAYS = 60
 
@@ -51,8 +53,10 @@ export function ContractsSection({
 	member: Member
 	today: IsoDate
 }) {
-	const updateRh = useRhUpdate()
+	const actions = useRhContractActions()
 	const noteId = useId()
+	const [removing, setRemoving] = useState(false)
+	const [removeError, setRemoveError] = useState<string | null>(null)
 	const [adding, setAdding] = useState(false)
 	const [editingId, setEditingId] = useState<string | null>(null)
 	const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -70,16 +74,18 @@ export function ContractsSection({
 			title="Contrats"
 			description="Historique des contrats et semaines types associées."
 			actions={
-				<ContractFormDialog
-					open={adding}
-					onOpenChange={setAdding}
-					member={member}
-					trigger={
-						<Button variant="outline" size="sm">
-							<Plus aria-hidden /> Ajouter un contrat
-						</Button>
-					}
-				/>
+				<RequirePermission permission="MANAGE_MEMBERS">
+					<ContractFormDialog
+						open={adding}
+						onOpenChange={setAdding}
+						member={member}
+						trigger={
+							<Button variant="outline" size="sm">
+								<Plus aria-hidden /> Ajouter un contrat
+							</Button>
+						}
+					/>
+				</RequirePermission>
 			}
 		>
 			<DetailCard title="Historique">
@@ -140,52 +146,63 @@ export function ContractsSection({
 									<ContractBadge contract={contract.type} />
 									<ContractPhaseBadge phase={phase} />
 									<span className="ml-auto flex items-center gap-0.5">
-										<ContractFormDialog
-											open={editingId === contract.id}
-											onOpenChange={(open) =>
-												setEditingId(open ? contract.id : null)
-											}
-											member={member}
-											contract={contract}
-											trigger={
-												<Button
-													variant="ghost"
-													size="icon-xs"
-													aria-label={`Modifier le contrat ${label}`}
-												>
-													<Pencil aria-hidden />
-												</Button>
-											}
-										/>
-										<ContractDeleteDialog
-											contract={contract}
-											open={deletingId === contract.id}
-											onOpenChange={(open) =>
-												setDeletingId(open ? contract.id : null)
-											}
-											onConfirm={() => {
-												updateRh((current) =>
-													removeContract(current, member.id, contract.id),
-												)
-												setDeletingId(null)
-											}}
-											trigger={
-												<Button
-													variant="ghost"
-													size="icon-xs"
-													disabled={onlyOne}
-													aria-label={`Supprimer le contrat ${label}`}
-													aria-describedby={onlyOne ? noteId : undefined}
-													title={
-														onlyOne
-															? 'Un membre doit garder au moins un contrat'
-															: undefined
+										<RequirePermission permission="MANAGE_MEMBERS">
+											<ContractFormDialog
+												open={editingId === contract.id}
+												onOpenChange={(open) =>
+													setEditingId(open ? contract.id : null)
+												}
+												member={member}
+												contract={contract}
+												trigger={
+													<Button
+														variant="ghost"
+														size="icon-xs"
+														aria-label={`Modifier le contrat ${label}`}
+													>
+														<Pencil aria-hidden />
+													</Button>
+												}
+											/>
+											<ContractDeleteDialog
+												contract={contract}
+												open={deletingId === contract.id}
+												onOpenChange={(open) => {
+													setRemoveError(null)
+													setDeletingId(open ? contract.id : null)
+												}}
+												error={removeError}
+												isPending={removing}
+												onConfirm={async () => {
+													setRemoving(true)
+													setRemoveError(null)
+													try {
+														await actions.remove(member.id, contract.id)
+														setDeletingId(null)
+													} catch (error) {
+														setRemoveError(mutationErrorMessage(error))
+													} finally {
+														setRemoving(false)
 													}
-												>
-													<Trash2 aria-hidden />
-												</Button>
-											}
-										/>
+												}}
+												trigger={
+													<Button
+														variant="ghost"
+														size="icon-xs"
+														disabled={onlyOne}
+														aria-label={`Supprimer le contrat ${label}`}
+														aria-describedby={onlyOne ? noteId : undefined}
+														title={
+															onlyOne
+																? 'Un membre doit garder au moins un contrat'
+																: undefined
+														}
+													>
+														<Trash2 aria-hidden />
+													</Button>
+												}
+											/>
+										</RequirePermission>
 									</span>
 								</div>
 								<p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-[13px]">

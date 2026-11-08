@@ -33,6 +33,7 @@ export type MemberDocument = {
 	name: string
 	kind: DocumentKind
 	addedAt: IsoDate
+	fileKey: string
 }
 
 export type ScheduleUnit = 'weeks' | 'months'

@@ -16,7 +16,7 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 | F1 | Coque : URLs `/rh/*`, redirections `/hr`, barre latérale, compteurs, routes « nouvelle » | – | fait |
 | F2 | Liste et fiche membre, invitation et rôles conservés | F1 | fait |
 | B1 | Profil RH du membre, archivage | F2 | fait |
-| B2 | Contrats, horaires, documents | B1 | à faire |
+| B2 | Contrats, horaires, documents | B1 | fait |
 | B3 | Motifs d'absence et circuit de validation | B2 | à faire |
 | B4 | Compteurs et ajustements | B3 | à faire |
 | B5 | Exceptions de jour et flux du planning | B2, B3 | à faire |
@@ -53,4 +53,19 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 - Un échec de la liste des profils autre que 403 bloque l'écran RH (message d'erreur).
 - Le front tronque la date d'archivage à la date UTC de `archived_at`.
 - Trois tests ignorés du dispatcher d'automatisation (`one_pass_fans_a_committed_event_out_to_a_workflow_run`, `a_disabled_subscription_receives_no_run`, `a_disabled_workflow_receives_no_run_but_its_event_is_still_done_with`) échouent dans le run ignoré complet sur la base partagée. Même échec sur le commit de base `31cbfbd6` (avec trois autres tests de `postgres::run` instables sur la base partagée) : antérieur à B1, sans lien avec lui.
+- `tsc --noEmit` : 38 erreurs avant et après.
+
+## Reports issus de B2
+- Énumérations en SCREAMING_SNAKE sur le fil (`type` : CDI, CDD, APPRENTICESHIP, INTERIM, MANAGER ; `kind` de document : CONTRACT, IDENTITY, DIPLOMA, MEDICAL, OTHER), minuscules du prototype côté modèle : `lib/rh/member-wire.ts` porte les tables de correspondance explicites, testées en aller-retour. Horaire en snake_case, union étiquetée sur `kind` (weekly|rotation|variable).
+- Pas de chevauchement de contrats d'un même membre : contrainte d'exclusion (`btree_gist`) en base plus contrôle du service. Le refus est un 422 `E_MEMBER_CONTRACT_OVERLAP` sur `start_date` ; une course perdue contre la contrainte peut revenir en 409. Le front traite les deux comme un chevauchement, affiché près des dates.
+- Les refus de validation sont des 422 avec `details.field` : `start_date`, `end_date`, `trial_end_date`, `schedule.week[i]`, `schedule.blocks[i].length`, `schedule.blocks[i].week[j]`, `schedule.default_day`. Les dates s'affichent sous leur champ ; une erreur d'horaire s'affiche dans la fenêtre avec le jour nommé (« Rythme, mercredi : … »), le formulaire d'horaire n'ayant pas d'emplacement par jour.
+- CDD, apprentissage (APPRENTICESHIP) et intérim exigent une date de fin ; la fin d'essai doit tomber pendant le contrat.
+- Limites des rotations : 1 à 52 semaines ou 1 à 12 mois par séquence, 12 séquences au plus, ancre avant le 29 pour des séquences en mois.
+- Risque inter-locataires : `/files` n'a pas de notion de propriétaire et la clé d'un document est fournie par l'appelant. Supprimer le fichier à la suppression de la ligne aurait permis à un gestionnaire de membres de détruire le fichier d'une autre organisation. La suppression d'un document ne supprime donc plus que la ligne (commit `fix(hr): stop deleting stored files when a document row is removed`) ; le fichier reste orphelin. À reprendre quand `/files` portera un propriétaire.
+- Lecture : `GET /member-contracts` et `GET /member-documents` exigent `member.manage` ; un 403 laisse l'écran ouvert, sans contrat ni document et sans contrôle d'écriture. Les écritures sont masquées sans `MANAGE_MEMBERS`.
+- Front : `hooks/use-member-contracts.ts`, `hooks/use-member-documents.ts`, `feature/use-contract-actions.ts` (écritures puis relecture), surcouche dans `rh-store` (contrats et documents API remplacent ceux du store, jamais les valeurs du prototype). Réducteurs `addContract`, `updateContract`, `removeContract`, `setContractSchedule`, `addDocument`, `removeDocument` supprimés ; documents du jeu de départ retirés.
+- Documents : le fichier passe par `POST /files` (`useUploadFile`) puis la ligne est créée avec la clé retournée ; le nom devient un lien via `/files/url` (`useFileUrls`).
+- Un membre sans contrat est désormais possible (membre réel créé sans contrat) : badge « Aucun contrat », pas de bouton « Modifier le rythme ».
+- Premier contrat à la création : non repris. Le formulaire de création réel n'a aucun champ de contrat (type, dates, horaire) ; en créer un par défaut (CDI à la date du jour) inventerait une donnée contractuelle. Le premier contrat s'ajoute depuis l'onglet Contrats.
+- Le contrôle « un membre garde au moins un contrat » reste côté interface seulement ; l'API n'impose rien.
 - `tsc --noEmit` : 38 erreurs avant et après.

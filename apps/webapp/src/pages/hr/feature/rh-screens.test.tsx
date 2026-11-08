@@ -17,6 +17,10 @@ import { RightsFeature } from './rights-feature'
 
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
 const PROFILES_PATH = '/api/v1/organizations/{organization_id}/member-profiles'
+const CONTRACTS_PATH =
+	'/api/v1/organizations/{organization_id}/member-contracts'
+const DOCUMENTS_PATH =
+	'/api/v1/organizations/{organization_id}/member-documents'
 const ABSENCES_PATH = '/api/v1/organizations/{organization_id}/absences'
 const PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
@@ -60,7 +64,12 @@ function installFakeApi(absences: unknown[] = []) {
 							return { data: MEMBERS, pagination: null }
 						if (path === ABSENCES_PATH)
 							return { data: absences, pagination: null }
-						if (path === PROFILES_PATH) return { data: [], pagination: null }
+						if (
+							path === PROFILES_PATH ||
+							path === CONTRACTS_PATH ||
+							path === DOCUMENTS_PATH
+						)
+							return { data: [], pagination: null }
 						if (path === PERMISSIONS_PATH)
 							return {
 								data: { permissions: ['MANAGE_REFERENCE', 'MANAGE_MEMBERS'] },

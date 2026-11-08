@@ -12,6 +12,17 @@ import { MemberSidebar } from '#/pages/hr/ui/rh/members/member-sidebar'
 import { RhProvider } from '#/pages/hr/ui/rh/shared/rh-context'
 import { renderWithRouter } from '#/test/render-with-router'
 
+const NO_CONTRACT_ACTIONS = {
+	add: async () => {},
+	update: async () => {},
+	remove: async () => {},
+}
+
+const NO_DOCUMENT_ACTIONS = {
+	add: async () => {},
+	remove: async () => {},
+}
+
 const NO_PROFILE_ACTIONS = {
 	save: async () => {},
 	archive: async () => {},
@@ -76,6 +87,8 @@ function renderSidebar(permissions: string[]) {
 							state: INITIAL_RH_STATE,
 							update: async () => {},
 							profiles: NO_PROFILE_ACTIONS,
+							contracts: NO_CONTRACT_ACTIONS,
+							documents: NO_DOCUMENT_ACTIONS,
 							actorId: MEMBER.id,
 							organizationSlug: 'atelier-bois',
 						}}

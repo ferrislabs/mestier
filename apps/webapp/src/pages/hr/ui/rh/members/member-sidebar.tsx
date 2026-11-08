@@ -11,7 +11,6 @@ import { useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { mutationErrorMessage } from '#/lib/api-error'
-import { currentContract } from '#/pages/hr/lib/rh/contracts'
 import { contractCountLabel } from '#/pages/hr/lib/rh/format'
 import { fullName } from '#/pages/hr/lib/rh/members'
 import type { MemberTab } from '#/pages/hr/lib/rh/rubriques'
@@ -19,7 +18,7 @@ import type { IsoDate, Member, RhState } from '#/pages/hr/lib/rh/types'
 import { ArchiveDialog } from '#/pages/hr/ui/rh/members/archive-dialog'
 import {
 	ArchivedBadge,
-	ContractBadge,
+	MemberContractBadge,
 } from '#/pages/hr/ui/rh/members/contract-badge'
 import { RubriqueList } from '#/pages/hr/ui/rh/members/rubrique-list'
 import { MemberAvatar } from '#/pages/hr/ui/rh/shared/member-avatar'
@@ -88,7 +87,7 @@ export function MemberSidebar({
 							{member.jobTitle || 'Poste non renseigné'}
 						</p>
 						<div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-							<ContractBadge contract={currentContract(member, today).type} />
+							<MemberContractBadge member={member} today={today} />
 							{member.contracts.length > 1 && (
 								<span className="text-[12px] text-muted-foreground">
 									{contractCountLabel(member.contracts.length)}

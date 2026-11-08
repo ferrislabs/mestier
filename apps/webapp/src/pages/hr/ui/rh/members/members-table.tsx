@@ -18,7 +18,7 @@ import type { IsoDate, Member, RhState } from '#/pages/hr/lib/rh/types'
 import type { AccessState } from '#/pages/hr/types'
 import {
 	ArchivedBadge,
-	ContractBadge,
+	MemberContractBadge,
 } from '#/pages/hr/ui/rh/members/contract-badge'
 import {
 	type MemberRealInfo,
@@ -122,7 +122,7 @@ export function MembersTable({
 								</TableCell>
 								<TableCell>
 									<span className="flex items-center gap-1.5">
-										<ContractBadge contract={contract.type} />
+										<MemberContractBadge member={member} today={today} />
 										{member.contracts.length > 1 && (
 											<span className="text-[12px] text-muted-foreground">
 												{contractCountLabel(member.contracts.length)}
