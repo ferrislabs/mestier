@@ -73,3 +73,39 @@ export function countWorkflowsInSubtree(
 		isInSubtree(folders, workflow.folderId, rootId),
 	).length
 }
+
+export interface FolderTarget {
+	id: string
+	label: string
+}
+
+export function moveTargets(
+	folders: readonly WorkflowFolder[],
+	movedId?: string,
+): FolderTarget[] {
+	return folders
+		.filter((folder) => !movedId || !isInSubtree(folders, folder.id, movedId))
+		.map((folder) => ({
+			id: folder.id,
+			label: folderPath(folders, folder.id)
+				.map((step) => step.name)
+				.join(' › '),
+		}))
+		.sort((left, right) => left.label.localeCompare(right.label, 'fr'))
+}
+
+export interface DragItem {
+	kind: 'folder' | 'workflow'
+	id: string
+	parentId: string | null
+}
+
+export function canDropOn(
+	folders: readonly WorkflowFolder[],
+	item: DragItem,
+	targetId: string | null,
+): boolean {
+	if (targetId === item.parentId) return false
+	if (item.kind === 'workflow' || targetId === null) return true
+	return !isInSubtree(folders, targetId, item.id)
+}

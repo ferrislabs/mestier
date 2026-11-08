@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type {
@@ -46,7 +46,17 @@ function baseProps(
 		sort: 'updated',
 		onSortChange: vi.fn(),
 		onResetFilters: vi.fn(),
+		dragItem: null,
+		canDropOn: () => true,
+		onDragStart: vi.fn(),
+		onDragEnd: vi.fn(),
+		onDropOn: vi.fn(),
+		onCreateFolder: vi.fn(),
+		onRenameFolder: vi.fn(),
+		onMoveFolder: vi.fn(),
+		onDeleteFolder: vi.fn(),
 		onRename: vi.fn(),
+		onMove: vi.fn(),
 		onToggleEnabled: vi.fn(),
 		onDuplicate: vi.fn(),
 		onExport: vi.fn(),
@@ -92,15 +102,10 @@ describe('AutomationWorkflowsList — table content', () => {
 		).toBe('false')
 	})
 
-	it('shows the tags and the project of a workflow', async () => {
-		await render({
-			workflows: [
-				workflow({ tags: ['Ventes'], folderLabel: 'Ventes › Relances' }),
-			],
-		})
+	it('shows the tags of a workflow', async () => {
+		await render({ workflows: [workflow({ tags: ['Ventes'] })] })
 
 		expect(screen.getByText('Ventes')).toBeDefined()
-		expect(screen.getByText('Ventes › Relances')).toBeDefined()
 	})
 
 	it('shows the last run status when the workflow has run before', async () => {
@@ -224,6 +229,7 @@ describe('AutomationWorkflowsList — row actions', () => {
 			'Exporter',
 			'Historique d’exécution',
 			'Renommer',
+			'Déplacer',
 			'Archiver',
 			'Supprimer',
 		])
@@ -424,5 +430,202 @@ describe('AutomationWorkflowsList — reaching the editor', () => {
 
 		expect(screen.getByRole('menuitem', { name: 'Renommer' })).toBeDefined()
 		expect(screen.queryByRole('menuitem', { name: 'Modifier' })).toBeNull()
+	})
+})
+
+describe('AutomationWorkflowsList — folder management', () => {
+	it('offers folder creation to a manager and not to a reader', async () => {
+		const onCreateFolder = vi.fn()
+		const user = userEvent.setup()
+		await render({ onCreateFolder })
+
+		await user.click(screen.getByRole('button', { name: 'Nouveau dossier' }))
+
+		expect(onCreateFolder).toHaveBeenCalledOnce()
+	})
+
+	it('hides every folder action from a caller without MANAGE_AUTOMATION', async () => {
+		await render(
+			{
+				subfolders: [
+					{
+						folder: { id: 'ventes', name: 'Ventes', parentId: null },
+						workflowCount: 0,
+					},
+				],
+			},
+			['VIEW_AUTOMATION'],
+		)
+
+		expect(screen.queryByRole('button', { name: 'Nouveau dossier' })).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: /Dossier « .* » : actions/ }),
+		).toBeNull()
+	})
+
+	it('hands the folder to the rename, move and delete callbacks', async () => {
+		const ventes = { id: 'ventes', name: 'Ventes', parentId: null }
+		const onRenameFolder = vi.fn()
+		const onMoveFolder = vi.fn()
+		const onDeleteFolder = vi.fn()
+		const user = userEvent.setup()
+		await render({
+			subfolders: [{ folder: ventes, workflowCount: 0 }],
+			onRenameFolder,
+			onMoveFolder,
+			onDeleteFolder,
+		})
+		const open = () =>
+			user.click(
+				screen.getByRole('button', {
+					name: 'Dossier « Ventes » : actions',
+				}),
+			)
+
+		await open()
+		await user.click(screen.getByRole('menuitem', { name: 'Renommer' }))
+		await open()
+		await user.click(screen.getByRole('menuitem', { name: 'Déplacer' }))
+		await open()
+		await user.click(screen.getByRole('menuitem', { name: 'Supprimer' }))
+		await user.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+		expect(onRenameFolder).toHaveBeenCalledWith(ventes)
+		expect(onMoveFolder).toHaveBeenCalledWith(ventes)
+		expect(onDeleteFolder).toHaveBeenCalledWith(ventes)
+	})
+
+	it('hands the workflow to the move callback', async () => {
+		const onMove = vi.fn()
+		const user = userEvent.setup()
+		await render({ onMove })
+
+		await user.click(screen.getByRole('button', { name: /Actions pour « / }))
+		await user.click(screen.getByRole('menuitem', { name: 'Déplacer' }))
+
+		expect(onMove).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'workflow-1' }),
+		)
+	})
+})
+
+describe('AutomationWorkflowsList — drag and drop', () => {
+	const ventes = { id: 'ventes', name: 'Ventes', parentId: null }
+	const transfer = () => ({
+		setData: vi.fn(),
+		effectAllowed: '',
+		dropEffect: '',
+	})
+
+	it('reports a dragged workflow, then clears it when the drag ends', async () => {
+		const onDragStart = vi.fn()
+		const onDragEnd = vi.fn()
+		await render({ onDragStart, onDragEnd })
+		const row = screen
+			.getByText('Créer une facture Odoo')
+			.closest('li') as HTMLElement
+
+		fireEvent.dragStart(row, { dataTransfer: transfer() })
+		fireEvent.dragEnd(row)
+
+		expect(onDragStart).toHaveBeenCalledWith({
+			kind: 'workflow',
+			id: 'workflow-1',
+			parentId: null,
+		})
+		expect(onDragEnd).toHaveBeenCalledOnce()
+	})
+
+	it('reports a dragged folder with its parent', async () => {
+		const onDragStart = vi.fn()
+		const europe = { id: 'europe', name: 'Europe', parentId: 'ventes' }
+		await render({
+			subfolders: [{ folder: europe, workflowCount: 0 }],
+			onDragStart,
+		})
+		const row = screen
+			.getByRole('link', { name: 'Europe' })
+			.closest('li') as HTMLElement
+
+		fireEvent.dragStart(row, { dataTransfer: transfer() })
+
+		expect(onDragStart).toHaveBeenCalledWith({
+			kind: 'folder',
+			id: 'europe',
+			parentId: 'ventes',
+		})
+	})
+
+	it('drops on a folder row that accepts the item', async () => {
+		const onDropOn = vi.fn()
+		await render({
+			subfolders: [{ folder: ventes, workflowCount: 0 }],
+			dragItem: { kind: 'workflow', id: 'workflow-1', parentId: null },
+			onDropOn,
+		})
+		const row = screen
+			.getByRole('link', { name: 'Ventes' })
+			.closest('li') as HTMLElement
+
+		fireEvent.dragOver(row, { dataTransfer: transfer() })
+		fireEvent.drop(row, { dataTransfer: transfer() })
+
+		expect(onDropOn).toHaveBeenCalledWith('ventes')
+	})
+
+	it('ignores a drop on a folder that refuses the item', async () => {
+		const onDropOn = vi.fn()
+		await render({
+			subfolders: [{ folder: ventes, workflowCount: 0 }],
+			dragItem: { kind: 'folder', id: 'ventes', parentId: null },
+			canDropOn: () => false,
+			onDropOn,
+		})
+		const row = screen
+			.getByRole('link', { name: 'Ventes' })
+			.closest('li') as HTMLElement
+
+		fireEvent.drop(row, { dataTransfer: transfer() })
+
+		expect(onDropOn).not.toHaveBeenCalled()
+	})
+
+	it('drops on the breadcrumb to move up, to the root or to an ancestor', async () => {
+		const onDropOn = vi.fn()
+		const europe = { id: 'europe', name: 'Europe', parentId: 'ventes' }
+		await render({
+			folder: europe,
+			folderPath: [ventes, europe],
+			dragItem: { kind: 'workflow', id: 'workflow-1', parentId: 'europe' },
+			onDropOn,
+		})
+		const crumbs = screen.getByRole('navigation', {
+			name: 'Emplacement du projet',
+		})
+
+		fireEvent.drop(
+			within(crumbs)
+				.getByRole('link', { name: 'Workflows' })
+				.closest('li') as HTMLElement,
+			{ dataTransfer: transfer() },
+		)
+		fireEvent.drop(
+			within(crumbs)
+				.getByRole('link', { name: 'Ventes' })
+				.closest('li') as HTMLElement,
+			{ dataTransfer: transfer() },
+		)
+
+		expect(onDropOn).toHaveBeenNthCalledWith(1, null)
+		expect(onDropOn).toHaveBeenNthCalledWith(2, 'ventes')
+	})
+
+	it('makes nothing draggable for a caller without MANAGE_AUTOMATION', async () => {
+		await render({}, ['VIEW_AUTOMATION'])
+
+		expect(
+			(screen.getByText('Créer une facture Odoo').closest('li') as HTMLElement)
+				.draggable,
+		).toBe(false)
 	})
 })

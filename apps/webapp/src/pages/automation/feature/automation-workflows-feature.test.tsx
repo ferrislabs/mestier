@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
@@ -23,6 +23,8 @@ const WORKFLOW_PATH =
 const RUNS_PATH = '/api/v1/organizations/{organization_id}/automation/runs'
 const FOLDERS_PATH =
 	'/api/v1/organizations/{organization_id}/automation/folders'
+const FOLDER_PATH =
+	'/api/v1/organizations/{organization_id}/automation/folders/{folder_id}'
 
 const ORGANIZATION: Organization = {
 	id: 'org-1',
@@ -305,11 +307,8 @@ describe('AutomationWorkflowsFeature — projects', () => {
 		expect(
 			screen.getByRole('navigation', { name: 'Emplacement du projet' }),
 		).toBeDefined()
-		const subfolders = screen.getByRole('list', { name: 'Sous-dossiers' })
-		expect(subfolders.textContent).toContain('Relances')
-		expect(
-			screen.getByText('Ce projet ne contient encore aucun workflow.'),
-		).toBeDefined()
+		const content = screen.getByRole('list', { name: 'Contenu du dossier' })
+		expect(content.textContent).toContain('Relances')
 	})
 
 	it('says so when the project does not exist', async () => {
@@ -368,21 +367,23 @@ describe('AutomationWorkflowsFeature — folder and tags of a workflow', () => {
 			tags: ['Ventes', 'Clients'],
 		})
 
-	it('shows the project path and the tags the API sends, on the root page', async () => {
+	it('shows only what the root holds directly, and the tags the API sends', async () => {
 		await renderFeature((fakeApi) => {
 			fakeApi.mockGet(FOLDERS_PATH, () => ({
 				data: [VENTES, RELANCES],
 				pagination: null,
 			}))
 			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
-				data: [relanceDesDevis()],
+				data: [relanceDesDevis(), workflow({ tags: ['Clients'] })],
 				pagination: null,
 			}))
 		})
 
-		expect(await screen.findByText('Ventes › Relances')).toBeDefined()
-		expect(screen.getByText('Ventes')).toBeDefined()
+		expect(await screen.findByText('Créer une facture Odoo')).toBeDefined()
+		expect(screen.getByRole('link', { name: 'Ventes' })).toBeDefined()
 		expect(screen.getByText('Clients')).toBeDefined()
+		expect(screen.queryByText('Relance des devis')).toBeNull()
+		expect(screen.queryByText('Ventes › Relances')).toBeNull()
 	})
 
 	it('lists the workflow inside its project and counts it in the parent project', async () => {
@@ -413,10 +414,10 @@ describe('AutomationWorkflowsFeature — folder and tags of a workflow', () => {
 			}))
 		}, 'folder-ventes')
 
-		const subfolders = await screen.findByRole('list', {
-			name: 'Sous-dossiers',
+		const content = await screen.findByRole('list', {
+			name: 'Contenu du dossier',
 		})
-		expect(subfolders.textContent).toContain('1 workflow')
+		expect(content.textContent).toContain('1 workflow')
 		expect(screen.queryByText('Relance des devis')).toBeNull()
 	})
 
@@ -433,9 +434,7 @@ describe('AutomationWorkflowsFeature — folder and tags of a workflow', () => {
 			}))
 		}, 'folder-ventes')
 
-		expect(
-			await screen.findByText('Ce projet ne contient encore aucun workflow.'),
-		).toBeDefined()
+		expect(await screen.findByText('Ce dossier est vide.')).toBeDefined()
 		expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
 	})
 
@@ -449,7 +448,7 @@ describe('AutomationWorkflowsFeature — folder and tags of a workflow', () => {
 
 		expect(await screen.findByText('Créer une facture Odoo')).toBeDefined()
 		expect(screen.queryByText('Projet :')).toBeNull()
-		expect(screen.queryByText('Ventes')).toBeNull()
+		expect(screen.getAllByText('Ventes')).toHaveLength(1)
 	})
 
 	it('offers the tags of the listed workflows to the tag filter', async () => {
@@ -586,10 +585,10 @@ describe('AutomationWorkflowsFeature — row actions', () => {
 				'/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions',
 				() => ({ data: {} }),
 			)
-		})
+		}, 'folder-ventes')
 
 		await user.click(
-			await screen.findByRole('button', { name: /Actions pour/ }),
+			await screen.findByRole('button', { name: /Actions pour « / }),
 		)
 		await user.click(screen.getByRole('menuitem', { name: 'Dupliquer' }))
 
@@ -628,7 +627,7 @@ describe('AutomationWorkflowsFeature — row actions', () => {
 		})
 
 		await user.click(
-			await screen.findByRole('button', { name: /Actions pour/ }),
+			await screen.findByRole('button', { name: /Actions pour « / }),
 		)
 		await user.click(screen.getByRole('menuitem', { name: 'Dupliquer' }))
 
@@ -657,7 +656,7 @@ describe('AutomationWorkflowsFeature — row actions', () => {
 		})
 
 		await user.click(
-			await screen.findByRole('button', { name: /Actions pour/ }),
+			await screen.findByRole('button', { name: /Actions pour « / }),
 		)
 		await user.click(screen.getByRole('menuitem', { name: 'Dupliquer' }))
 
@@ -696,5 +695,277 @@ describe('AutomationWorkflowsFeature — row actions', () => {
 		await waitFor(() => expect(click).toHaveBeenCalled())
 		expect(createObjectURL).toHaveBeenCalled()
 		expect(downloads).toEqual(['creer-une-facture-odoo.json'])
+	})
+})
+
+function bodyOf(api: FakeApi, method: string) {
+	const call = api.calls.find((entry) => entry.method === method)
+	return (call?.params as { body?: Record<string, unknown> } | undefined)?.body
+}
+
+describe('AutomationWorkflowsFeature — folders', () => {
+	const withFolders = (api: FakeApi) =>
+		api.mockGet(FOLDERS_PATH, () => ({
+			data: [VENTES, RELANCES],
+			pagination: null,
+		}))
+
+	it('creates a folder at the root from the workflow list', async () => {
+		const user = userEvent.setup()
+		const api = await renderFeature((fakeApi) => {
+			fakeApi.mockMutation('post', FOLDERS_PATH, () => ({ data: VENTES }))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouveau dossier' }),
+		)
+		await user.type(screen.getByLabelText('Nom du dossier'), '  Chantiers ')
+		await user.click(screen.getByRole('button', { name: 'Créer' }))
+
+		await waitFor(() =>
+			expect(bodyOf(api, 'post')).toEqual({
+				name: 'Chantiers',
+				parent_id: null,
+			}),
+		)
+	})
+
+	it('creates a folder inside the current project', async () => {
+		const user = userEvent.setup()
+		const api = await renderFeature((fakeApi) => {
+			withFolders(fakeApi)
+			fakeApi.mockMutation('post', FOLDERS_PATH, () => ({ data: RELANCES }))
+		}, 'folder-ventes')
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouveau dossier' }),
+		)
+		await user.type(screen.getByLabelText('Nom du dossier'), 'Devis')
+		await user.click(screen.getByRole('button', { name: 'Créer' }))
+
+		await waitFor(() =>
+			expect(bodyOf(api, 'post')).toEqual({
+				name: 'Devis',
+				parent_id: 'folder-ventes',
+			}),
+		)
+	})
+
+	it('lists the root folders on the workflow list', async () => {
+		await renderFeature(withFolders)
+
+		expect(await screen.findByRole('link', { name: 'Ventes' })).toBeDefined()
+		expect(screen.queryByRole('link', { name: 'Relances' })).toBeNull()
+	})
+
+	it('renames a folder', async () => {
+		const user = userEvent.setup()
+		const api = await renderFeature((fakeApi) => {
+			withFolders(fakeApi)
+			fakeApi.mockMutation('patch', FOLDER_PATH, () => ({ data: VENTES }))
+		})
+
+		await user.click(
+			await screen.findByRole('button', {
+				name: 'Dossier « Ventes » : actions',
+			}),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Renommer' }))
+		const input = screen.getByLabelText('Nom du dossier')
+		await user.clear(input)
+		await user.type(input, 'Commercial')
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() =>
+			expect(bodyOf(api, 'patch')).toEqual({ name: 'Commercial' }),
+		)
+	})
+
+	it('moves a folder to the root and never offers its own subtree', async () => {
+		const user = userEvent.setup()
+		const api = await renderFeature((fakeApi) => {
+			withFolders(fakeApi)
+			fakeApi.mockMutation('patch', FOLDER_PATH, () => ({ data: RELANCES }))
+		}, 'folder-ventes')
+
+		await user.click(
+			await screen.findByRole('button', {
+				name: 'Dossier « Relances » : actions',
+			}),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Déplacer' }))
+
+		const options = screen
+			.getAllByRole('option')
+			.map((option) => option.textContent)
+		expect(options).toEqual(['Aucun dossier (racine)', 'Ventes'])
+
+		await user.selectOptions(screen.getByLabelText('Destination'), '')
+		await user.click(screen.getByRole('button', { name: 'Déplacer' }))
+
+		await waitFor(() =>
+			expect(bodyOf(api, 'patch')).toEqual({ parent_id: null }),
+		)
+	})
+
+	it('moves a workflow into a folder', async () => {
+		const user = userEvent.setup()
+		const api = await renderFeature((fakeApi) => {
+			withFolders(fakeApi)
+			fakeApi.mockMutation('patch', WORKFLOW_PATH, () => ({ data: workflow() }))
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: /Actions pour « / }),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Déplacer' }))
+		await user.selectOptions(
+			screen.getByLabelText('Destination'),
+			'folder-relances',
+		)
+		await user.click(screen.getByRole('button', { name: 'Déplacer' }))
+
+		await waitFor(() =>
+			expect(bodyOf(api, 'patch')).toEqual({ folder_id: 'folder-relances' }),
+		)
+	})
+
+	it('says why a non-empty folder was not deleted', async () => {
+		const user = userEvent.setup()
+		await renderFeature((fakeApi) => {
+			withFolders(fakeApi)
+			fakeApi.mockMutation('delete', FOLDER_PATH, () => {
+				throw new Error('Le dossier contient encore des éléments')
+			})
+		})
+
+		await user.click(
+			await screen.findByRole('button', {
+				name: 'Dossier « Ventes » : actions',
+			}),
+		)
+		await user.click(screen.getByRole('menuitem', { name: 'Supprimer' }))
+		await user.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+		expect(
+			await screen.findByText('Le dossier contient encore des éléments'),
+		).toBeDefined()
+	})
+
+	const transfer = () => ({
+		setData: vi.fn(),
+		effectAllowed: '',
+		dropEffect: '',
+	})
+	const rowOf = (name: string) =>
+		screen.getByText(name).closest('li') as HTMLElement
+
+	it('moves a workflow dropped on a folder', async () => {
+		const api = await renderFeature((fakeApi) => {
+			withFolders(fakeApi)
+			fakeApi.mockMutation('patch', WORKFLOW_PATH, () => ({ data: workflow() }))
+		})
+		await screen.findByRole('link', { name: 'Ventes' })
+
+		fireEvent.dragStart(rowOf('Créer une facture Odoo'), {
+			dataTransfer: transfer(),
+		})
+		fireEvent.drop(rowOf('Ventes'), { dataTransfer: transfer() })
+
+		await waitFor(() =>
+			expect(bodyOf(api, 'patch')).toEqual({ folder_id: 'folder-ventes' }),
+		)
+	})
+
+	it('moves a folder dropped on the Workflows crumb to the root', async () => {
+		const api = await renderFeature((fakeApi) => {
+			withFolders(fakeApi)
+			fakeApi.mockMutation('patch', FOLDER_PATH, () => ({ data: RELANCES }))
+		}, 'folder-ventes')
+		await screen.findByRole('link', { name: 'Relances' })
+
+		fireEvent.dragStart(rowOf('Relances'), { dataTransfer: transfer() })
+		fireEvent.drop(
+			screen
+				.getByRole('link', { name: 'Workflows' })
+				.closest('li') as HTMLElement,
+			{ dataTransfer: transfer() },
+		)
+
+		await waitFor(() =>
+			expect(bodyOf(api, 'patch')).toEqual({ parent_id: null }),
+		)
+	})
+
+	it('sends nothing when a folder is dropped on itself', async () => {
+		const api = await renderFeature(withFolders)
+		await screen.findByRole('link', { name: 'Ventes' })
+
+		fireEvent.dragStart(rowOf('Ventes'), { dataTransfer: transfer() })
+		fireEvent.drop(rowOf('Ventes'), { dataTransfer: transfer() })
+
+		expect(api.calls.some((call) => call.method === 'patch')).toBe(false)
+	})
+
+	it('shows a workflow of a subfolder only once that folder is open', async () => {
+		const configure = (fakeApi: FakeApi) => {
+			withFolders(fakeApi)
+			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+				data: [
+					workflow({ name: 'Relance des devis', folder_id: 'folder-relances' }),
+				],
+				pagination: null,
+			}))
+		}
+
+		await renderFeature(configure, 'folder-relances')
+
+		expect(await screen.findByText('Relance des devis')).toBeDefined()
+	})
+
+	describe('search', () => {
+		const relance = () =>
+			workflow({
+				id: 'workflow-2',
+				name: 'Relance des devis',
+				folder_id: 'folder-relances',
+			})
+		const configure = (fakeApi: FakeApi) => {
+			withFolders(fakeApi)
+			fakeApi.mockGet(WORKFLOWS_PATH, () => ({
+				data: [workflow(), relance()],
+				pagination: null,
+			}))
+		}
+
+		it('finds a workflow of any folder from the root, with its folder path', async () => {
+			const user = userEvent.setup()
+			await renderFeature(configure)
+			await screen.findByText('Créer une facture Odoo')
+			expect(screen.queryByText('Relance des devis')).toBeNull()
+
+			await user.type(screen.getByRole('searchbox'), 'relance')
+
+			expect(await screen.findByText('Relance des devis')).toBeDefined()
+			expect(screen.getByText('Ventes › Relances')).toBeDefined()
+			expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
+			expect(screen.queryByRole('link', { name: 'Ventes' })).toBeNull()
+		})
+
+		it('searches outside the open folder too, and restores it when cleared', async () => {
+			const user = userEvent.setup()
+			await renderFeature(configure, 'folder-relances')
+			await screen.findByText('Relance des devis')
+			expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
+
+			const box = screen.getByRole('searchbox')
+			await user.type(box, 'facture')
+			expect(await screen.findByText('Créer une facture Odoo')).toBeDefined()
+			expect(screen.queryByText('Relance des devis')).toBeNull()
+
+			await user.clear(box)
+			expect(await screen.findByText('Relance des devis')).toBeDefined()
+			expect(screen.queryByText('Créer une facture Odoo')).toBeNull()
+		})
 	})
 })
