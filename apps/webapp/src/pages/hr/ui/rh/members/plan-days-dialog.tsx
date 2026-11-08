@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useId, useState } from 'react'
 import { FormField } from '#/components/form-field'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -12,16 +13,17 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { useMemberOverrides } from '#/pages/hr/feature/use-override-period'
 import { currentContract } from '#/pages/hr/lib/rh/contracts'
-import { WEEKDAY_LABELS, WEEKDAY_SHORT } from '#/pages/hr/lib/rh/dates'
 import {
-	clearPlanning,
-	type DayPlan,
-	planDays,
-	validatePlan,
-} from '#/pages/hr/lib/rh/day-planning'
+	diffDays,
+	WEEKDAY_LABELS,
+	WEEKDAY_SHORT,
+} from '#/pages/hr/lib/rh/dates'
+import { type DayPlan, validatePlan } from '#/pages/hr/lib/rh/day-planning'
 import { formatDate } from '#/pages/hr/lib/rh/format'
 import { fullName } from '#/pages/hr/lib/rh/members'
+import { overrideFailureOf } from '#/pages/hr/lib/rh/override-wire'
 import {
 	countPlanned,
 	defaultPlanPeriod,
@@ -38,7 +40,13 @@ import type {
 	WorkDay,
 } from '#/pages/hr/lib/rh/types'
 import { WorkDayFields } from '#/pages/hr/ui/rh/members/work-day-fields'
-import { useRhState, useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import {
+	useRhOrganizationId,
+	useRhOverrideActions,
+	useRhState,
+} from '#/pages/hr/ui/rh/shared/rh-context'
+
+const MAX_OVERRIDE_QUERY_DAYS = 366
 
 const FALLBACK_DAY: WorkDay = {
 	start: '08:00',
@@ -63,17 +71,19 @@ export function PlanDaysDialog({
 }) {
 	const [open, setOpen] = useState(false)
 	return (
-		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogTrigger asChild>{trigger}</DialogTrigger>
-			<DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0 sm:max-w-xl">
-				<PlanForm
-					member={member}
-					today={today}
-					month={month}
-					onClose={() => setOpen(false)}
-				/>
-			</DialogContent>
-		</Dialog>
+		<RequirePermission permission="MANAGE_PLANNING">
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogTrigger asChild>{trigger}</DialogTrigger>
+				<DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0 sm:max-w-xl">
+					<PlanForm
+						member={member}
+						today={today}
+						month={month}
+						onClose={() => setOpen(false)}
+					/>
+				</DialogContent>
+			</Dialog>
+		</RequirePermission>
 	)
 }
 
@@ -88,8 +98,11 @@ function PlanForm({
 	month: IsoDate
 	onClose: () => void
 }) {
-	const updateRh = useRhUpdate()
+	const overrides = useRhOverrideActions()
+	const organizationId = useRhOrganizationId()
 	const state = useRhState()
+	const [refusal, setRefusal] = useState<string | null>(null)
+	const [pending, setPending] = useState(false)
 	const baseId = useId()
 	const schedule = currentContract(member, today).schedule
 	const defaultDay =
@@ -100,7 +113,19 @@ function PlanForm({
 	const [confirmClear, setConfirmClear] = useState(false)
 	const errors = validatePlan(state, plan)
 	const dayError = plan.kind === 'work' ? validateWorkDay(planDay(plan)) : null
-	const blocked = errors.length > 0
+	const blocked = errors.length > 0 || pending
+	const rangeLoadable =
+		Boolean(plan.startDate) &&
+		Boolean(plan.endDate) &&
+		diffDays(plan.startDate, plan.endDate) >= 0 &&
+		diffDays(plan.startDate, plan.endDate) < MAX_OVERRIDE_QUERY_DAYS
+	useMemberOverrides(
+		organizationId,
+		member.id,
+		plan.startDate,
+		plan.endDate,
+		rangeLoadable,
+	)
 	const planned = countPlanned(state, member.id, plan.startDate, plan.endDate)
 	const id = (field: string) => `${baseId}-${field}`
 
@@ -109,18 +134,30 @@ function PlanForm({
 		setConfirmClear(false)
 	}
 
+	async function commit(write: () => Promise<void>) {
+		setPending(true)
+		setRefusal(null)
+		try {
+			await write()
+			onClose()
+		} catch (error) {
+			setRefusal(overrideFailureOf(error).message)
+			setConfirmClear(false)
+		} finally {
+			setPending(false)
+		}
+	}
+
 	function submit(event: FormEvent) {
 		event.preventDefault()
 		if (blocked) return
-		updateRh((current, context) => planDays(current, context, plan))
-		onClose()
+		void commit(() => overrides.plan(plan))
 	}
 
 	function clear() {
-		updateRh((current) =>
-			clearPlanning(current, member.id, plan.startDate, plan.endDate),
+		void commit(() =>
+			overrides.clearRange(member.id, plan.startDate, plan.endDate),
 		)
-		onClose()
 	}
 
 	return (
@@ -216,6 +253,11 @@ function PlanForm({
 				</FormField>
 				<div className="grid gap-1 rounded-md bg-muted/60 px-3 py-2.5 text-[13px]">
 					<output>{errors.length === 0 ? planSummary(state, plan) : ''}</output>
+					{refusal && (
+						<p role="alert" className="text-state-alert">
+							{refusal}
+						</p>
+					)}
 					{errors
 						.filter((message) => message !== dayError)
 						.map((message) => (
@@ -241,6 +283,7 @@ function PlanForm({
 									type="button"
 									variant="destructive"
 									size="sm"
+									disabled={pending}
 									onClick={clear}
 								>
 									Confirmer l’effacement

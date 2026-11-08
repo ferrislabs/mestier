@@ -1,4 +1,4 @@
-// MOCK: rh-store — overrides and extras have no backend endpoint yet. Member profile fields (contacts, address, job title, manager, work permit, archiving), contracts with their schedules, documents, absence types, absences, leave accounts and balance adjustments come from the API through setMemberProfiles, setMemberContracts, setMemberDocuments, setAbsenceTypes, setAbsences, setLeaveAccounts and setLeaveAdjustments and are never held here.
+// MOCK: rh-store — extras have no backend endpoint yet. Day overrides come from the API by period through setDayOverrides and the seed overrides are never read. Member profile fields (contacts, address, job title, manager, work permit, archiving), contracts with their schedules, documents, absence types, absences, leave accounts and balance adjustments come from the API through setMemberProfiles, setMemberContracts, setMemberDocuments, setAbsenceTypes, setAbsences, setLeaveAccounts and setLeaveAdjustments and are never held here.
 import { useSyncExternalStore } from 'react'
 import {
 	type AbsenceRecord,
@@ -23,6 +23,11 @@ import {
 	overlayContracts,
 	overlayDocuments,
 } from '#/pages/hr/lib/rh/member-wire'
+import {
+	type OverridePeriod,
+	overlayOverrides,
+	periodKey,
+} from '#/pages/hr/lib/rh/override-wire'
 import type { ActionContext, RhState } from '#/pages/hr/lib/rh/types'
 import {
 	bindSeed,
@@ -55,6 +60,7 @@ let accounts: readonly LeaveAccountRecord[] = []
 let accountsLoaded = false
 let adjustments: readonly LeaveAdjustmentRecord[] = []
 let adjustmentsLoaded = false
+let overridePeriods = new Map<string, OverridePeriod>()
 let boundKey: string | null = null
 let profiles: readonly ProfileRecord[] = []
 let profilesLoaded = false
@@ -68,24 +74,27 @@ let snapshot: Snapshot = compose()
 const listeners = new Set<() => void>()
 
 function compose(): Snapshot {
-	const overlaid = overlayAdjustments(
-		overlayAccounts(
-			overlayAbsences(
-				overlayAbsenceTypes(
-					overlayDocuments(
-						overlayContracts(
-							overlayProfiles(base, profiles, accountEmails),
-							contracts,
+	const overlaid = overlayOverrides(
+		overlayAdjustments(
+			overlayAccounts(
+				overlayAbsences(
+					overlayAbsenceTypes(
+						overlayDocuments(
+							overlayContracts(
+								overlayProfiles(base, profiles, accountEmails),
+								contracts,
+							),
+							documents,
 						),
-						documents,
+						absenceTypes,
 					),
-					absenceTypes,
+					absences,
 				),
-				absences,
+				accounts,
 			),
-			accounts,
+			adjustments,
 		),
-		adjustments,
+		[...overridePeriods.values()],
 	)
 	return {
 		state: overlaid,
@@ -129,6 +138,7 @@ export function bindRhMembers(members: readonly RealMember[]) {
 	}
 	const ids = new Set(members.map((member) => member.id))
 	const sameTenant = base.members.some((member) => ids.has(member.id))
+	if (boundKey === null || !sameTenant) overridePeriods = new Map()
 	base =
 		boundKey === null || !sameTenant
 			? bindSeed(INITIAL_RH_STATE, members)
@@ -153,6 +163,15 @@ export function setLeaveAccounts(records: readonly LeaveAccountRecord[]) {
 export function setLeaveAdjustments(records: readonly LeaveAdjustmentRecord[]) {
 	adjustments = records
 	adjustmentsLoaded = true
+	publish()
+}
+
+export function setDayOverrides(period: OverridePeriod) {
+	const key = periodKey(period.memberId, period.from, period.to)
+	const next = new Map(overridePeriods)
+	next.delete(key)
+	next.set(key, period)
+	overridePeriods = next
 	publish()
 }
 
@@ -224,6 +243,7 @@ export function resetRhStore() {
 	accountsLoaded = false
 	adjustments = []
 	adjustmentsLoaded = false
+	overridePeriods = new Map()
 	profiles = []
 	profilesLoaded = false
 	contracts = []

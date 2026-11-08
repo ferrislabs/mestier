@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useFeedOverrides } from '#/pages/hr/feature/use-override-period'
 import { todayIso } from '#/pages/hr/lib/rh/dates'
 import { activePlanningMembers } from '#/pages/hr/lib/rh/planning'
 import {
@@ -13,7 +14,10 @@ import {
 } from '#/pages/hr/lib/rh/planning-model'
 import type { IsoDate } from '#/pages/hr/lib/rh/types'
 import { PlanningPage } from '#/pages/hr/ui/rh/planning/planning-page'
-import { useRhState } from '#/pages/hr/ui/rh/shared/rh-context'
+import {
+	useRhOrganizationId,
+	useRhState,
+} from '#/pages/hr/ui/rh/shared/rh-context'
 import { RhScreen } from './rh-screen'
 
 export type { PlanningView } from '#/pages/hr/lib/rh/planning-model'
@@ -56,6 +60,8 @@ function PlanningScreen({ view, date, onChange }: PlanningFeatureProps) {
 	const team = useMemo(() => activePlanningMembers(state), [state])
 	const members = useMemo(() => filterMembers(team, query), [team, query])
 	const days = useMemo(() => periodDays(view, date), [view, date])
+	const organizationId = useRhOrganizationId()
+	useFeedOverrides(organizationId, days[0], days[days.length - 1])
 
 	return (
 		<PlanningPage

@@ -31,6 +31,13 @@ const NO_ABSENCE_TYPE_ACTIONS = {
 	restore: async () => {},
 }
 
+const NO_OVERRIDE_ACTIONS = {
+	put: async () => {},
+	clear: async () => {},
+	plan: async () => {},
+	clearRange: async () => {},
+}
+
 const NO_LEAVE_ACTIONS = {
 	saveAccount: async () => {},
 	archiveAccount: async () => {},
@@ -113,6 +120,8 @@ function renderSidebar(permissions: string[]) {
 							absences: NO_ABSENCE_ACTIONS,
 							absenceTypes: NO_ABSENCE_TYPE_ACTIONS,
 							leave: NO_LEAVE_ACTIONS,
+							overrides: NO_OVERRIDE_ACTIONS,
+							organizationId: 'org-1',
 							actorId: MEMBER.id,
 							organizationSlug: 'atelier-bois',
 						}}

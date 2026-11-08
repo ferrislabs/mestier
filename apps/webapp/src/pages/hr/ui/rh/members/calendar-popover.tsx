@@ -1,9 +1,10 @@
+import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
 import { absenceDays, findType } from '#/pages/hr/lib/rh/absences'
 import { dayDetails, type HalfDetail } from '#/pages/hr/lib/rh/calendar-model'
 import { formatDays, formatRange } from '#/pages/hr/lib/rh/dates'
-import { clearPlanning, planDays } from '#/pages/hr/lib/rh/day-planning'
 import {
 	describeSpan,
 	equivalentMinutes,
@@ -11,6 +12,7 @@ import {
 	formatDuration,
 	formatRate,
 } from '#/pages/hr/lib/rh/extra'
+import { overrideFailureOf } from '#/pages/hr/lib/rh/override-wire'
 import { dayPlanOf } from '#/pages/hr/lib/rh/plan-draft'
 import { formatWorkDay } from '#/pages/hr/lib/rh/schedule'
 import type {
@@ -21,7 +23,7 @@ import type {
 	WorkDay,
 } from '#/pages/hr/lib/rh/types'
 import { AbsenceStatusBadge } from '#/pages/hr/ui/rh/shared/absence-status-badge'
-import { useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import { useRhOverrideActions } from '#/pages/hr/ui/rh/shared/rh-context'
 import { TypeChip } from '#/pages/hr/ui/rh/shared/type-chip'
 
 function HalfLine({
@@ -129,12 +131,21 @@ function PlanningActions({
 	current: 'work' | 'off' | null
 	onClose: () => void
 }) {
-	const updateRh = useRhUpdate()
+	const overrides = useRhOverrideActions()
+	const [refusal, setRefusal] = useState<string | null>(null)
+	async function commit(write: () => Promise<void>) {
+		setRefusal(null)
+		try {
+			await write()
+			onClose()
+		} catch (error) {
+			setRefusal(overrideFailureOf(error).message)
+		}
+	}
 	function plan(kind: 'work' | 'off') {
-		updateRh((state, context) =>
-			planDays(state, context, dayPlanOf(member.id, date, kind, defaultDay)),
+		void commit(() =>
+			overrides.plan(dayPlanOf(member.id, date, kind, defaultDay)),
 		)
-		onClose()
 	}
 	return (
 		<section aria-label="Planification du jour" className="grid gap-1.5">
@@ -164,14 +175,18 @@ function PlanningActions({
 						size="xs"
 						variant="ghost"
 						onClick={() => {
-							updateRh((state) => clearPlanning(state, member.id, date, date))
-							onClose()
+							void commit(() => overrides.clear(member.id, date))
 						}}
 					>
 						Retirer du planning
 					</Button>
 				)}
 			</div>
+			{refusal && (
+				<p role="alert" className="text-state-alert text-xs">
+					{refusal}
+				</p>
+			)}
 			<p className="text-[11px] text-muted-foreground">
 				Travaillé reprend les horaires par défaut ({formatWorkDay(defaultDay)}).
 			</p>
@@ -222,22 +237,24 @@ export function CalendarDayPopover({
 				</p>
 			)}
 			{details.variable && member.status === 'active' && (
-				<PlanningActions
-					member={member}
-					date={date}
-					defaultDay={details.variable.defaultDay}
-					planned={details.variable.planned}
-					current={
-						details.variable.planned && first.kind !== 'unplanned'
-							? first.kind === 'work'
-								? 'work'
-								: first.kind === 'off'
-									? 'off'
-									: null
-							: null
-					}
-					onClose={onClose}
-				/>
+				<RequirePermission permission="MANAGE_PLANNING">
+					<PlanningActions
+						member={member}
+						date={date}
+						defaultDay={details.variable.defaultDay}
+						planned={details.variable.planned}
+						current={
+							details.variable.planned && first.kind !== 'unplanned'
+								? first.kind === 'work'
+									? 'work'
+									: first.kind === 'off'
+										? 'off'
+										: null
+								: null
+						}
+						onClose={onClose}
+					/>
+				</RequirePermission>
 			)}
 			{details.extras.length > 0 && (
 				<section aria-label="Heures extra" className="grid gap-1.5">
