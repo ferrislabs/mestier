@@ -4,22 +4,22 @@ import { isAbsenceStatus } from '#/pages/hr/lib/rh/absences-view'
 import type { ExtraStatus } from '#/pages/hr/lib/rh/types'
 
 interface ExtraSearch {
-	tab?: ExtraTab
-	status?: ExtraStatus
-	member?: string
+	onglet?: ExtraTab
+	statut?: ExtraStatus
+	membre?: string
 }
 
 function validateSearch(raw: Record<string, unknown>): ExtraSearch {
-	if (raw.tab === 'majorations') return { tab: 'majorations' }
+	if (raw.onglet === 'majorations') return { onglet: 'majorations' }
 	return {
-		...(isAbsenceStatus(raw.status) ? { status: raw.status } : {}),
-		...(typeof raw.member === 'string' && raw.member !== ''
-			? { member: raw.member }
+		...(isAbsenceStatus(raw.statut) ? { statut: raw.statut } : {}),
+		...(typeof raw.membre === 'string' && raw.membre !== ''
+			? { membre: raw.membre }
 			: {}),
 	}
 }
 
-export const Route = createFileRoute('/_app/o/$organizationSlug/hr/extra/')({
+export const Route = createFileRoute('/_app/o/$organizationSlug/rh/extra/')({
 	validateSearch,
 	component: ExtraRoute,
 })
@@ -30,21 +30,21 @@ function ExtraRoute() {
 
 	return (
 		<ExtraFeature
-			tab={search.tab ?? 'declarations'}
+			tab={search.onglet ?? 'declarations'}
 			onTabChange={(tab) =>
 				navigate({
 					replace: true,
-					search: tab === 'majorations' ? { tab: 'majorations' } : {},
+					search: tab === 'majorations' ? { onglet: 'majorations' } : {},
 				})
 			}
-			status={search.status ?? 'all'}
-			memberId={search.member ?? 'all'}
+			status={search.statut ?? 'all'}
+			memberId={search.membre ?? 'all'}
 			onFiltersChange={(patch) =>
 				navigate({
 					replace: true,
 					search: {
-						...(patch.status === 'all' ? {} : { status: patch.status }),
-						...(patch.memberId === 'all' ? {} : { member: patch.memberId }),
+						...(patch.status === 'all' ? {} : { statut: patch.status }),
+						...(patch.memberId === 'all' ? {} : { membre: patch.memberId }),
 					},
 				})
 			}
@@ -52,9 +52,9 @@ function ExtraRoute() {
 			onCreatingChange={(open, initial) => {
 				if (!open) return
 				navigate({
-					to: '/o/$organizationSlug/hr/extra/new',
+					to: '/o/$organizationSlug/rh/extra/nouvelle',
 					search: {
-						...(initial?.memberId ? { member: initial.memberId } : {}),
+						...(initial?.memberId ? { membre: initial.memberId } : {}),
 						...(initial?.date ? { date: initial.date } : {}),
 					},
 				})

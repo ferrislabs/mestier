@@ -24,7 +24,7 @@ export function BackLink() {
 	const orgPath = useRhOrgPath()
 	return (
 		<Link
-			to={orgPath('/hr/team')}
+			to={orgPath('/rh/membres')}
 			activeOptions={{ exact: true }}
 			className="-ml-1 inline-flex items-center gap-1.5 rounded-sm px-1 text-[13px] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 		>
@@ -80,8 +80,8 @@ export function MemberSidebar({
 					{!archived && (
 						<Button variant="outline" size="sm" asChild>
 							<Link
-								to={orgPath('/hr/absences/new')}
-								search={{ member: member.id }}
+								to={orgPath('/rh/absences/nouvelle')}
+								search={{ membre: member.id }}
 							>
 								<CalendarPlus aria-hidden /> Poser une absence
 							</Link>

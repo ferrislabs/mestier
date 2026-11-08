@@ -310,7 +310,7 @@ describe('TeamListUI — access to the work time screen', () => {
 		const link = screen.getByRole('menuitem', { name: /Temps de travail/ })
 		expect(link.tagName).toBe('A')
 		expect(link.getAttribute('href')).toBe(
-			'/o/atelier-bois/hr/team/member-1/work-time',
+			'/o/atelier-bois/rh/membres/member-1/temps-de-travail',
 		)
 	})
 })
@@ -531,7 +531,7 @@ describe('TeamListUI — salaried row display', () => {
 		const link = screen.getByRole('link', {
 			name: /base contractuelle à renseigner/i,
 		})
-		expect(link.getAttribute('href')).toContain('/work-time')
+		expect(link.getAttribute('href')).toContain('/temps-de-travail')
 	})
 })
 

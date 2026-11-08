@@ -3,16 +3,16 @@ import { RightsFeature } from '#/pages/hr/feature/rights-feature'
 import { DEFAULT_ACCOUNT_ID } from '#/pages/hr/lib/rh/balances'
 
 interface RightsSearch {
-	account?: string
+	compte?: string
 }
 
 function validateSearch(raw: Record<string, unknown>): RightsSearch {
-	return typeof raw.account === 'string' && raw.account !== ''
-		? { account: raw.account }
+	return typeof raw.compte === 'string' && raw.compte !== ''
+		? { compte: raw.compte }
 		: {}
 }
 
-export const Route = createFileRoute('/_app/o/$organizationSlug/hr/rights')({
+export const Route = createFileRoute('/_app/o/$organizationSlug/rh/droits')({
 	validateSearch,
 	component: RightsRoute,
 })
@@ -23,12 +23,11 @@ function RightsRoute() {
 
 	return (
 		<RightsFeature
-			accountId={search.account ?? DEFAULT_ACCOUNT_ID}
+			accountId={search.compte ?? DEFAULT_ACCOUNT_ID}
 			onAccountChange={(accountId) =>
 				navigate({
 					replace: true,
-					search:
-						accountId === DEFAULT_ACCOUNT_ID ? {} : { account: accountId },
+					search: accountId === DEFAULT_ACCOUNT_ID ? {} : { compte: accountId },
 				})
 			}
 		/>

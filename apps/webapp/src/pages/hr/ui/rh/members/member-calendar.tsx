@@ -86,8 +86,8 @@ export function MemberCalendar({
 			title="Calendrier"
 			action={
 				<Link
-					to={orgPath('/hr/planning')}
-					search={{ view: 'month', date: first }}
+					to={orgPath('/rh/planning')}
+					search={{ vue: 'month', date: first }}
 					className="rounded-sm text-[13px] text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					Ouvrir dans le planning

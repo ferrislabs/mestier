@@ -67,9 +67,9 @@ export function RubriqueList({
 			}))}
 			renderLink={(item, props) => (
 				<Link
-					to={orgPath('/hr/team/$memberId')}
+					to={orgPath('/rh/membres/$memberId')}
 					params={{ memberId: member.id }}
-					search={(previous) => ({ ...previous, tab: item.id })}
+					search={(previous) => ({ ...previous, onglet: item.id })}
 					{...props}
 				/>
 			)}

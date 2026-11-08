@@ -57,7 +57,9 @@ describe('crossOrganizationPath', () => {
 
 	it('climbs back to the list from an entity screen', () => {
 		expect(crossOrganizationPath('/crm/clients/abc-123')).toBe('/crm/clients')
-		expect(crossOrganizationPath('/hr/team/abc-123/work-time')).toBe('/hr/team')
+		expect(crossOrganizationPath('/rh/membres/abc-123/temps-de-travail')).toBe(
+			'/rh/membres',
+		)
 	})
 
 	it('keeps the root of a module that has an overview', () => {

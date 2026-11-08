@@ -8,7 +8,7 @@ export function MemberLink({ member }: { member: Member }) {
 	const orgPath = useRhOrgPath()
 	return (
 		<Link
-			to={orgPath('/hr/team/$memberId')}
+			to={orgPath('/rh/membres/$memberId')}
 			params={{ memberId: member.id }}
 			className="-mx-1.5 flex items-center gap-2.5 rounded-md px-1.5 py-1 outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
 		>

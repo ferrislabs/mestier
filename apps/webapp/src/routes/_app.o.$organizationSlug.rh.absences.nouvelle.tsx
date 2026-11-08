@@ -3,21 +3,21 @@ import { AbsencesFeature } from '#/pages/hr/feature/absences-feature'
 import { isIsoDate } from '#/pages/hr/lib/rh/dates'
 
 interface NewAbsenceSearch {
-	member?: string
+	membre?: string
 	date?: string
 }
 
 function validateSearch(raw: Record<string, unknown>): NewAbsenceSearch {
 	return {
-		...(typeof raw.member === 'string' && raw.member !== ''
-			? { member: raw.member }
+		...(typeof raw.membre === 'string' && raw.membre !== ''
+			? { membre: raw.membre }
 			: {}),
 		...(isIsoDate(raw.date) ? { date: raw.date } : {}),
 	}
 }
 
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/hr/absences/new',
+	'/_app/o/$organizationSlug/rh/absences/nouvelle',
 )({
 	validateSearch,
 	component: NewAbsenceRoute,
@@ -33,25 +33,25 @@ function NewAbsenceRoute() {
 			historyMemberId="all"
 			onHistoryFiltersChange={(patch) =>
 				navigate({
-					to: '/o/$organizationSlug/hr/absences',
+					to: '/o/$organizationSlug/rh/absences',
 					search: {
-						...(patch.status === 'all' ? {} : { status: patch.status }),
-						...(patch.memberId === 'all' ? {} : { member: patch.memberId }),
+						...(patch.status === 'all' ? {} : { statut: patch.status }),
+						...(patch.memberId === 'all' ? {} : { membre: patch.memberId }),
 					},
 				})
 			}
 			tab="demandes"
 			onTabChange={(tab) =>
 				navigate({
-					to: '/o/$organizationSlug/hr/absences',
-					search: tab === 'motifs' ? { tab: 'motifs' } : {},
+					to: '/o/$organizationSlug/rh/absences',
+					search: tab === 'motifs' ? { onglet: 'motifs' } : {},
 				})
 			}
 			creating
-			initial={{ memberId: search.member, startDate: search.date }}
+			initial={{ memberId: search.membre, startDate: search.date }}
 			onCreatingChange={(open) => {
 				if (!open)
-					navigate({ to: '/o/$organizationSlug/hr/absences', search: {} })
+					navigate({ to: '/o/$organizationSlug/rh/absences', search: {} })
 			}}
 		/>
 	)

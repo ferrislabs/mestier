@@ -175,7 +175,7 @@ function WorkTimeTable({
 										<Link
 											to={buildOrgPath(
 												organizationSlug,
-												'/hr/team/$memberId/work-time',
+												'/rh/membres/$memberId/temps-de-travail',
 											)}
 											params={{ memberId: row.memberId }}
 										>

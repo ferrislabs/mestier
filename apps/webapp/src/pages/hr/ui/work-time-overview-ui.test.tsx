@@ -127,7 +127,7 @@ describe('WorkTimeOverviewUI — link to the detailed page', () => {
 
 		const link = screen.getByRole('link', { name: /Détails/ })
 		expect(link.getAttribute('href')).toBe(
-			'/o/atelier-bois/hr/team/member-42/work-time',
+			'/o/atelier-bois/rh/membres/member-42/temps-de-travail',
 		)
 	})
 })

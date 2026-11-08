@@ -34,7 +34,7 @@ describe('resolveModule', () => {
 	})
 
 	it('resolves HR pages to the hr module', () => {
-		expect(resolveModule('/hr/employees').id).toBe('hr')
+		expect(resolveModule('/rh/employees').id).toBe('hr')
 	})
 
 	it('resolves planning pages to the planning module', () => {

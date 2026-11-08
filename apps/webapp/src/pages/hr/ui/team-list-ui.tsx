@@ -555,7 +555,7 @@ function TeamTable({
 													<Link
 														to={buildOrgPath(
 															organizationSlug,
-															'/hr/team/$memberId',
+															'/rh/membres/$memberId',
 														)}
 														params={{ memberId: member.id }}
 														className="flex items-center gap-2 font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset"
@@ -804,7 +804,7 @@ function RowActions({
 							<Link
 								to={buildOrgPath(
 									organizationSlug,
-									'/hr/team/$memberId/work-time',
+									'/rh/membres/$memberId/temps-de-travail',
 								)}
 								params={{ memberId }}
 							>
@@ -1039,7 +1039,10 @@ function SalariedRateCell({
 					// not "heures contractuelles", because a pointer that renames its
 					// destination is a pointer nobody can follow.
 					<Link
-						to={buildOrgPath(organizationSlug, '/hr/team/$memberId/work-time')}
+						to={buildOrgPath(
+							organizationSlug,
+							'/rh/membres/$memberId/temps-de-travail',
+						)}
 						params={{ memberId }}
 						className="text-amber-600 underline dark:text-amber-500"
 					>
