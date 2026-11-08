@@ -39,7 +39,7 @@ export function CostHistorySection({
 	)
 
 	return (
-		<SectionCard>
+		<SectionCard id="historique-cout">
 			<SectionHeader
 				title="Historique du coût"
 				description="Chaque changement est daté : un rapport de rentabilité déjà publié garde le chiffre qui était vrai à l’époque."

@@ -7,18 +7,18 @@ import { isIsoDate, todayIso } from '#/pages/hr/lib/rh/dates'
 import type { IsoDate } from '#/pages/hr/lib/rh/types'
 
 interface PlanningSearch {
-	view?: PlanningView
+	vue?: PlanningView
 	date?: IsoDate
 }
 
 function validateSearch(raw: Record<string, unknown>): PlanningSearch {
 	return {
-		...(raw.view === 'month' || raw.view === 'week' ? { view: raw.view } : {}),
+		...(raw.vue === 'month' || raw.vue === 'week' ? { vue: raw.vue } : {}),
 		...(isIsoDate(raw.date) ? { date: raw.date } : {}),
 	}
 }
 
-export const Route = createFileRoute('/_app/o/$organizationSlug/hr/planning')({
+export const Route = createFileRoute('/_app/o/$organizationSlug/rh/planning')({
 	validateSearch,
 	component: PlanningRoute,
 })
@@ -29,7 +29,7 @@ function PlanningRoute() {
 
 	return (
 		<PlanningFeature
-			view={search.view ?? 'week'}
+			view={search.vue ?? 'week'}
 			date={search.date ?? todayIso()}
 			onChange={(patch) =>
 				navigate({
@@ -37,7 +37,7 @@ function PlanningRoute() {
 					search: (previous) =>
 						validateSearch({
 							...previous,
-							...(patch.view ? { view: patch.view } : {}),
+							...(patch.view ? { vue: patch.view } : {}),
 							...(patch.date ? { date: patch.date } : {}),
 						}),
 				})

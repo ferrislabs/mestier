@@ -50,7 +50,7 @@ export function ExtraCard({
 	const archived = member.status === 'archived'
 	const declare = !archived && (
 		<Button variant="outline" size="sm" asChild>
-			<Link to={orgPath('/hr/extra/new')} search={{ member: member.id }}>
+			<Link to={orgPath('/rh/extra/nouvelle')} search={{ membre: member.id }}>
 				<Plus aria-hidden /> Déclarer des heures
 			</Link>
 		</Button>
@@ -61,8 +61,8 @@ export function ExtraCard({
 			action={
 				recent.length > 0 && (
 					<Link
-						to={orgPath('/hr/extra')}
-						search={{ member: member.id }}
+						to={orgPath('/rh/extra')}
+						search={{ membre: member.id }}
 						className="rounded-sm text-[13px] text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						Voir tout

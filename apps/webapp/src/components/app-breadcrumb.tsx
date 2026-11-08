@@ -107,7 +107,7 @@ function getCustomerId(pathname: string): string | null {
 }
 
 function getMemberWorkTimeId(pathname: string): string | null {
-	const match = /^\/hr\/team\/([^/]+)\/work-time$/.exec(pathname)
+	const match = /^\/rh\/membres\/([^/]+)\/temps-de-travail$/.exec(pathname)
 	if (!match?.[1]) return null
 	return decodeURIComponent(match[1])
 }

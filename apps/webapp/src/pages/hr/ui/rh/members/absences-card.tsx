@@ -77,8 +77,8 @@ export function AbsencesCard({
 			title="Absences"
 			action={
 				<Link
-					to={orgPath('/hr/absences')}
-					search={{ member: member.id }}
+					to={orgPath('/rh/absences')}
+					search={{ membre: member.id }}
 					className={LINK}
 				>
 					Voir tout
@@ -105,8 +105,8 @@ export function AbsencesCard({
 									return (
 										<div key={account.id} className="contents">
 											<Link
-												to={orgPath('/hr/rights')}
-												search={{ account: account.id }}
+												to={orgPath('/rh/droits')}
+												search={{ compte: account.id }}
 												className="w-fit rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 											>
 												{account.name}
@@ -151,8 +151,8 @@ export function AbsencesCard({
 					<div className="border-t pt-3">
 						<Button variant="outline" size="sm" asChild>
 							<Link
-								to={orgPath('/hr/absences/new')}
-								search={{ member: member.id }}
+								to={orgPath('/rh/absences/nouvelle')}
+								search={{ membre: member.id }}
 							>
 								<CalendarPlus aria-hidden /> Poser une absence
 							</Link>

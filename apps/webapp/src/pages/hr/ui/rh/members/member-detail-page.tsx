@@ -49,7 +49,7 @@ export function MemberDetailPage({
 							Il n’existe pas ou l’adresse n’est plus valide.
 						</p>
 						<Button variant="outline" size="sm" className="mt-4" asChild>
-							<Link to={orgPath('/hr/team')}>
+							<Link to={orgPath('/rh/membres')}>
 								<ArrowLeft aria-hidden /> Retour aux membres
 							</Link>
 						</Button>

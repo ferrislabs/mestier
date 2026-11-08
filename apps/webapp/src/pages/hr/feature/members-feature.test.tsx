@@ -2,13 +2,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
 } from '#/hooks/use-active-organization'
+import type { Organization } from '#/hooks/use-organizations'
 import type { Role } from '#/hooks/use-roles'
-import { TeamListFeature } from '#/pages/hr/feature/team-list-feature'
+import { MembersFeature } from '#/pages/hr/feature/members-feature'
+import { resetRhStore } from '#/pages/hr/feature/mocks/rh-store'
 import { renderWithRouter } from '#/test/render-with-router'
 
 const MEMBERS_PATH = '/api/v1/organizations/{organization_id}/members'
@@ -33,10 +35,17 @@ function role(overrides: Partial<Role> = {}): Role {
 	}
 }
 
-const ORGANIZATION = {
+const ORGANIZATION: Organization = {
 	id: 'org-1',
 	name: 'Atelier Bois & Co',
 	slug: 'atelier-bois',
+	owner_id: 'user-1',
+	created_at: '2026-01-01T00:00:00Z',
+	updated_at: '2026-01-01T00:00:00Z',
+	field_clock_enabled: false,
+	vat_on_debits: false,
+	mcp_enabled: false,
+	missing_legal_identity_fields: [],
 }
 
 const MEMBER = {
@@ -53,15 +62,12 @@ const MEMBER = {
 interface FakeApiHandlers {
 	invitations?: unknown[]
 	postInvitation?: (params: unknown) => unknown
+	postMember?: (params: unknown) => unknown
+	onMemberCreated?: (memberId: string) => void
 	deleteInvitation?: (params: unknown) => unknown
-	/** Mirrors a real 403 from `member.manage` gating on employee-profiles. */
 	employeeProfilesForbidden?: boolean
-	/** Grants every bit by default — none of these tests exercise permission
-	 * gating itself (covered by `team-list-ui.test.tsx` and
-	 * `require-permission.test.tsx`). */
 	permissions?: string[]
 	roles?: Role[]
-	/** member id -> role ids held. */
 	memberRoleIds?: Record<string, string[]>
 	assignRole?: (params: {
 		path: { member_id: string }
@@ -137,6 +143,10 @@ function installFakeTanstackApi(handlers: FakeApiHandlers = {}) {
 					mutationKey,
 					mutationFn: async (params: unknown) => {
 						calls.push({ method, path, params })
+						if (method === 'post' && path === MEMBERS_PATH) {
+							if (!handlers.postMember) throw new Error('postMember not mocked')
+							return handlers.postMember(params)
+						}
 						if (method === 'post' && path === INVITATIONS_PATH) {
 							if (!handlers.postInvitation) {
 								throw new Error('postInvitation not mocked')
@@ -196,12 +206,21 @@ function renderFeature(handlers: FakeApiHandlers = {}) {
 
 	return renderWithRouter(
 		<Providers>
-			<TeamListFeature />
+			<MembersFeature
+				status="active"
+				contract="all"
+				onFilterChange={() => {}}
+				onMemberCreated={handlers.onMemberCreated ?? (() => {})}
+			/>
 		</Providers>,
 	).then((result) => ({ ...result, calls }))
 }
 
-describe('TeamListFeature — invite gesture', () => {
+beforeEach(() => {
+	resetRhStore()
+})
+
+describe('MembersFeature — invite gesture', () => {
 	afterEach(() => {
 		vi.restoreAllMocks()
 	})
@@ -221,7 +240,7 @@ describe('TeamListFeature — invite gesture', () => {
 		await user.click(await screen.findByRole('button', { name: 'Actions' }))
 		await user.click(screen.getByRole('menuitem', { name: /Inviter/ }))
 
-		expect(screen.getByText('Inviter Nova Alix')).toBeDefined()
+		expect(screen.getByText('Inviter Alix Nova')).toBeDefined()
 		await user.click(screen.getByRole('button', { name: /Générer le lien/ }))
 
 		await waitFor(() => {
@@ -235,10 +254,6 @@ describe('TeamListFeature — invite gesture', () => {
 			body: { member_id: 'member-1' },
 		})
 
-		// Close, then reopen "Inviter" for the same seat — the token must not
-		// come back on its own; only a fresh "Générer le lien" click would
-		// produce one, and the backend never returns the same clear value
-		// twice regardless.
 		await user.click(screen.getByRole('button', { name: 'Fermer' }))
 		await user.click(await screen.findByRole('button', { name: 'Actions' }))
 		await user.click(screen.getByRole('menuitem', { name: /Inviter/ }))
@@ -250,7 +265,7 @@ describe('TeamListFeature — invite gesture', () => {
 	})
 })
 
-describe('TeamListFeature — pending invitations', () => {
+describe('MembersFeature — pending invitations', () => {
 	afterEach(() => {
 		vi.restoreAllMocks()
 	})
@@ -271,7 +286,7 @@ describe('TeamListFeature — pending invitations', () => {
 		})
 
 		expect(await screen.findByText('Invitations en attente (1)')).toBeDefined()
-		expect(screen.getAllByText('Nova Alix').length).toBeGreaterThan(0)
+		expect(screen.getAllByText('Alix Nova').length).toBeGreaterThan(0)
 
 		await user.click(screen.getByRole('button', { name: /Révoquer/ }))
 
@@ -288,7 +303,7 @@ describe('TeamListFeature — pending invitations', () => {
 	})
 })
 
-describe('TeamListFeature — employee profiles forbidden (#371)', () => {
+describe('MembersFeature — employee profiles forbidden (#371)', () => {
 	afterEach(() => {
 		vi.restoreAllMocks()
 	})
@@ -296,7 +311,7 @@ describe('TeamListFeature — employee profiles forbidden (#371)', () => {
 	it('shows the team and a neutral notice instead of a fatal error banner', async () => {
 		await renderFeature({ employeeProfilesForbidden: true })
 
-		expect(await screen.findByText('Nova Alix')).toBeDefined()
+		expect(await screen.findByText('Alix Nova')).toBeDefined()
 		expect(
 			screen.getByText(/n’avez pas la permission de consulter/),
 		).toBeDefined()
@@ -311,7 +326,7 @@ describe('TeamListFeature — employee profiles forbidden (#371)', () => {
 	})
 })
 
-describe('TeamListFeature — role assignment (#308)', () => {
+describe('MembersFeature — role assignment (#308)', () => {
 	afterEach(() => {
 		vi.restoreAllMocks()
 	})
@@ -356,6 +371,95 @@ describe('TeamListFeature — role assignment (#308)', () => {
 		})
 
 		expect(await screen.findByText('Comptabilité')).toBeDefined()
+	})
+})
+
+describe('MembersFeature — the prototype list', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it('links each member to the detail page and shows the prototype columns', async () => {
+		await renderFeature()
+
+		const link = await screen.findByRole('link', { name: 'Alix Nova' })
+		expect(link.getAttribute('href')).toBe(
+			'/o/atelier-bois/rh/membres/member-1',
+		)
+		expect(screen.getByText('Semaine type')).toBeDefined()
+		expect(screen.getByText('Responsable')).toBeDefined()
+		expect(screen.getByText('1 membre actif')).toBeDefined()
+	})
+
+	it('narrows the list on the search box and offers to reset when nothing matches', async () => {
+		const user = userEvent.setup()
+		await renderFeature()
+
+		await screen.findByRole('link', { name: 'Alix Nova' })
+		await user.type(
+			screen.getByRole('textbox', { name: 'Rechercher un membre' }),
+			'zzz',
+		)
+
+		expect(screen.getByText('Aucun membre ne correspond.')).toBeDefined()
+		await user.click(
+			screen.getByRole('button', { name: 'Réinitialiser les filtres' }),
+		)
+		expect(await screen.findByRole('link', { name: 'Alix Nova' })).toBeDefined()
+	})
+
+	it('creates a real member and hands its id to the route', async () => {
+		const user = userEvent.setup()
+		const onMemberCreated = vi.fn()
+		const { calls } = await renderFeature({
+			onMemberCreated,
+			postMember: () => ({ data: { id: 'member-9' } }),
+		})
+
+		await user.click(
+			await screen.findByRole('button', { name: /Nouveau membre/ }),
+		)
+		await user.type(screen.getByLabelText('Nom'), 'Durand')
+		await user.click(screen.getByRole('button', { name: 'Ajouter' }))
+
+		await waitFor(() =>
+			expect(onMemberCreated).toHaveBeenCalledWith('member-9'),
+		)
+		const post = calls.find(
+			(c) => c.method === 'post' && c.path === MEMBERS_PATH,
+		)
+		expect(post?.params).toMatchObject({
+			path: { organization_id: 'org-1' },
+			body: { last_name: 'Durand', first_name: null },
+		})
+	})
+
+	it('links the work time page of the member from the row menu', async () => {
+		const user = userEvent.setup()
+		await renderFeature()
+
+		await user.click(await screen.findByRole('button', { name: 'Actions' }))
+		const link = screen.getByRole('menuitem', { name: /Temps de travail/ })
+		expect(link.getAttribute('href')).toBe(
+			'/o/atelier-bois/rh/membres/member-1/temps-de-travail',
+		)
+	})
+})
+
+describe('MembersFeature — permission gating', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it('hides creation and editing without MANAGE_MEMBERS', async () => {
+		const user = userEvent.setup()
+		await renderFeature({ permissions: [] })
+
+		await screen.findByRole('link', { name: 'Alix Nova' })
+		expect(screen.queryByRole('button', { name: /Nouveau membre/ })).toBeNull()
+		await user.click(screen.getByRole('button', { name: 'Actions' }))
+		expect(screen.queryByRole('menuitem', { name: 'Modifier' })).toBeNull()
+		expect(screen.queryByRole('menuitem', { name: /Supprimer/ })).toBeNull()
 	})
 })
 

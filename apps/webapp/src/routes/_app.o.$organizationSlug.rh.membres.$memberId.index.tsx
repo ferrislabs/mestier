@@ -9,19 +9,19 @@ import {
 import type { IsoDate } from '#/pages/hr/lib/rh/types'
 
 interface MemberSearch {
-	tab?: MemberTab
-	month?: IsoDate
+	onglet?: MemberTab
+	mois?: IsoDate
 }
 
 function validateSearch(raw: Record<string, unknown>): MemberSearch {
 	return {
-		...(isMemberTab(raw.tab) ? { tab: raw.tab } : {}),
-		...(isIsoDate(raw.month) ? { month: raw.month } : {}),
+		...(isMemberTab(raw.onglet) ? { onglet: raw.onglet } : {}),
+		...(isIsoDate(raw.mois) ? { mois: raw.mois } : {}),
 	}
 }
 
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/hr/team/$memberId/',
+	'/_app/o/$organizationSlug/rh/membres/$memberId/',
 )({
 	validateSearch,
 	component: MemberRoute,
@@ -35,14 +35,14 @@ function MemberRoute() {
 	return (
 		<MemberDetailFeature
 			memberId={memberId}
-			tab={search.tab ?? DEFAULT_TAB}
-			month={search.month ?? null}
+			tab={search.onglet ?? DEFAULT_TAB}
+			month={search.mois ?? null}
 			onChange={(patch) =>
 				navigate({
 					replace: true,
 					search: (previous) => ({
 						...previous,
-						month: patch.month ?? undefined,
+						mois: patch.month ?? undefined,
 					}),
 				})
 			}

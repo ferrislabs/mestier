@@ -1,6 +1,14 @@
 import { Link } from '@tanstack/react-router'
-import { Archive, ArchiveRestore, ArrowLeft, CalendarPlus } from 'lucide-react'
+import {
+	Archive,
+	ArchiveRestore,
+	ArrowLeft,
+	CalendarPlus,
+	Clock,
+	Wallet,
+} from 'lucide-react'
 import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { currentContract } from '#/pages/hr/lib/rh/contracts'
 import { contractCountLabel } from '#/pages/hr/lib/rh/format'
@@ -24,7 +32,7 @@ export function BackLink() {
 	const orgPath = useRhOrgPath()
 	return (
 		<Link
-			to={orgPath('/hr/team')}
+			to={orgPath('/rh/membres')}
 			activeOptions={{ exact: true }}
 			className="-ml-1 inline-flex items-center gap-1.5 rounded-sm px-1 text-[13px] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
 		>
@@ -80,8 +88,8 @@ export function MemberSidebar({
 					{!archived && (
 						<Button variant="outline" size="sm" asChild>
 							<Link
-								to={orgPath('/hr/absences/new')}
-								search={{ member: member.id }}
+								to={orgPath('/rh/absences/nouvelle')}
+								search={{ membre: member.id }}
 							>
 								<CalendarPlus aria-hidden /> Poser une absence
 							</Link>
@@ -117,6 +125,27 @@ export function MemberSidebar({
 							}
 						/>
 					)}
+				</div>
+				<div className="mt-2 flex flex-wrap items-center gap-2">
+					<Button variant="ghost" size="sm" asChild>
+						<Link
+							to={orgPath('/rh/membres/$memberId/temps-de-travail')}
+							params={{ memberId: member.id }}
+						>
+							<Clock aria-hidden /> Temps de travail
+						</Link>
+					</Button>
+					<RequirePermission permission="MANAGE_MEMBERS">
+						<Button variant="ghost" size="sm" asChild>
+							<Link
+								to={orgPath('/rh/membres/$memberId/temps-de-travail')}
+								params={{ memberId: member.id }}
+								hash="historique-cout"
+							>
+								<Wallet aria-hidden /> Historique du coût
+							</Link>
+						</Button>
+					</RequirePermission>
 				</div>
 			</div>
 			<RubriqueList

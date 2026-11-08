@@ -46,7 +46,7 @@ export function DeadlinesCard({
 					return (
 						<li key={`${deadline.memberId}-${deadline.kind}`}>
 							<Link
-								to={buildOrgPath(organizationSlug, '/hr/team/$memberId')}
+								to={buildOrgPath(organizationSlug, '/rh/membres/$memberId')}
 								params={{ memberId: member.id }}
 								className="flex items-center gap-3 px-4 py-2 outline-none transition-colors hover:bg-accent/60 focus-visible:bg-accent"
 							>

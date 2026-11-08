@@ -145,7 +145,7 @@ export const MOCK_HOME_ACTIVITY: MockActivity[] = [
 		context: '2 jours de congés payés, du 5 au 6 novembre',
 		state: 'waiting',
 		when: 'À valider',
-		to: '/hr/absences',
+		to: '/rh/absences',
 	},
 	{
 		id: 'hr-sophie-essai',
@@ -154,7 +154,7 @@ export const MOCK_HOME_ACTIVITY: MockActivity[] = [
 		context: 'Le 6 novembre : confirmer ou rompre avant cette date',
 		state: 'today',
 		when: 'Cette semaine',
-		to: '/hr/team',
+		to: '/rh/membres',
 	},
 	{
 		id: 'support-58',

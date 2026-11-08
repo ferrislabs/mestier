@@ -45,7 +45,7 @@ function WorkTimeOverviewScreen({
 		catalog.employeeProfiles.isLoading ||
 		absences.isLoading
 
-	// See team-list-feature.tsx: `employee-profiles` is gated on a stricter
+	// See members-feature.tsx: `employee-profiles` is gated on a stricter
 	// permission than `members`, so a 403 here is an expected access
 	// boundary, not a page failure. See #371.
 	const hrDataRestricted = isForbiddenError(catalog.employeeProfiles.error)

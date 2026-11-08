@@ -122,7 +122,7 @@ describe('module routability', () => {
 			) ?? []
 
 		expect(sectionsOf('crm')).toContain('/crm/catalogue')
-		expect(sectionsOf('hr')).toContain('/hr/equipment')
+		expect(sectionsOf('hr')).toContain('/rh/materiel')
 		expect(sectionsOf('settings')).toEqual(['/settings'])
 	})
 

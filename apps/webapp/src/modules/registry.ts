@@ -48,6 +48,7 @@ import {
 } from '#/pages/automation/lib/automation-paths'
 import { CrmSidebarFeature } from '#/pages/crm-nav/feature/crm-sidebar-feature'
 import { ProjetSidebarFeature } from '#/pages/projet/feature/projet-sidebar-feature'
+import { RhSidebarFeature } from '#/pages/rh-nav/feature/rh-sidebar-feature'
 
 export const MODULES: AppModule[] = [
 	{
@@ -339,57 +340,58 @@ export const MODULES: AppModule[] = [
 		icon: UserRoundCog,
 		hue: 300,
 		description: 'Membres, planning de travail, absences et RTT',
-		basePath: '/hr',
+		basePath: '/rh',
 		status: 'available',
 		hasOverview: false,
-		primaryAction: { label: 'Poser une absence', to: '/hr/absences/new' },
+		sidebar: RhSidebarFeature,
+		primaryAction: { label: 'Poser une absence', to: '/rh/absences/nouvelle' },
 		sections: [
 			{
-				id: 'team',
-				label: 'Équipe',
-				to: '/hr/team',
+				id: 'members',
+				label: 'Membres',
+				to: '/rh/membres',
 				icon: Users,
 				requiredPermission: 'MANAGE_MEMBERS',
 			},
 			{
-				id: 'work-time',
-				label: 'Temps de travail',
-				to: '/hr/work-time',
-				icon: Clock,
+				id: 'hr-planning',
+				label: 'Planning',
+				to: '/rh/planning',
+				icon: CalendarCheck,
 				requiredPermission: 'MANAGE_PLANNING',
 			},
 			{
 				id: 'absences',
 				label: 'Absences',
-				to: '/hr/absences',
+				to: '/rh/absences',
 				icon: CalendarOff,
 				requiredPermission: 'MANAGE_REFERENCE',
 			},
 			{
-				id: 'hr-planning',
-				label: 'Planning',
-				to: '/hr/planning',
-				icon: CalendarCheck,
-				requiredPermission: 'MANAGE_PLANNING',
-			},
-			{
 				id: 'extra',
 				label: 'Heures extra',
-				to: '/hr/extra',
+				to: '/rh/extra',
 				icon: AlarmClockPlus,
 				requiredPermission: 'MANAGE_PLANNING',
 			},
 			{
 				id: 'rights',
 				label: 'Droits et RTT',
-				to: '/hr/rights',
+				to: '/rh/droits',
 				icon: Hourglass,
 				requiredPermission: 'MANAGE_REFERENCE',
 			},
 			{
+				id: 'work-time',
+				label: 'Temps de travail',
+				to: '/rh/temps-de-travail',
+				icon: Clock,
+				requiredPermission: 'MANAGE_PLANNING',
+			},
+			{
 				id: 'equipment',
 				label: 'Matériel',
-				to: '/hr/equipment',
+				to: '/rh/materiel',
 				icon: Package,
 				requiredPermission: 'MANAGE_REFERENCE',
 			},

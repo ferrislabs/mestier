@@ -7,22 +7,22 @@ import { isAbsenceStatus } from '#/pages/hr/lib/rh/absences-view'
 import type { AbsenceStatus } from '#/pages/hr/lib/rh/types'
 
 interface AbsencesSearch {
-	tab?: AbsencesTab
-	status?: AbsenceStatus
-	member?: string
+	onglet?: AbsencesTab
+	statut?: AbsenceStatus
+	membre?: string
 }
 
 function validateSearch(raw: Record<string, unknown>): AbsencesSearch {
-	if (raw.tab === 'motifs') return { tab: 'motifs' }
+	if (raw.onglet === 'motifs') return { onglet: 'motifs' }
 	return {
-		...(isAbsenceStatus(raw.status) ? { status: raw.status } : {}),
-		...(typeof raw.member === 'string' && raw.member !== ''
-			? { member: raw.member }
+		...(isAbsenceStatus(raw.statut) ? { statut: raw.statut } : {}),
+		...(typeof raw.membre === 'string' && raw.membre !== ''
+			? { membre: raw.membre }
 			: {}),
 	}
 }
 
-export const Route = createFileRoute('/_app/o/$organizationSlug/hr/absences/')({
+export const Route = createFileRoute('/_app/o/$organizationSlug/rh/absences/')({
 	validateSearch,
 	component: AbsencesRoute,
 })
@@ -33,21 +33,21 @@ function AbsencesRoute() {
 
 	return (
 		<AbsencesFeature
-			tab={search.tab ?? 'demandes'}
+			tab={search.onglet ?? 'demandes'}
 			onTabChange={(tab) =>
 				navigate({
 					replace: true,
-					search: tab === 'motifs' ? { tab: 'motifs' } : {},
+					search: tab === 'motifs' ? { onglet: 'motifs' } : {},
 				})
 			}
-			historyStatus={search.status ?? 'all'}
-			historyMemberId={search.member ?? 'all'}
+			historyStatus={search.statut ?? 'all'}
+			historyMemberId={search.membre ?? 'all'}
 			onHistoryFiltersChange={(patch) =>
 				navigate({
 					replace: true,
 					search: {
-						...(patch.status === 'all' ? {} : { status: patch.status }),
-						...(patch.memberId === 'all' ? {} : { member: patch.memberId }),
+						...(patch.status === 'all' ? {} : { statut: patch.status }),
+						...(patch.memberId === 'all' ? {} : { membre: patch.memberId }),
 					},
 				})
 			}
@@ -55,9 +55,9 @@ function AbsencesRoute() {
 			onCreatingChange={(open, initial) => {
 				if (!open) return
 				navigate({
-					to: '/o/$organizationSlug/hr/absences/new',
+					to: '/o/$organizationSlug/rh/absences/nouvelle',
 					search: {
-						...(initial?.memberId ? { member: initial.memberId } : {}),
+						...(initial?.memberId ? { membre: initial.memberId } : {}),
 						...(initial?.startDate ? { date: initial.startDate } : {}),
 					},
 				})

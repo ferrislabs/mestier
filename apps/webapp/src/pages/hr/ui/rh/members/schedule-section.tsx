@@ -31,7 +31,7 @@ export function ScheduleSection({
 			actions={
 				<Button variant="outline" size="sm" asChild>
 					<Link
-						to={orgPath('/hr/team/$memberId/work-time')}
+						to={orgPath('/rh/membres/$memberId/temps-de-travail')}
 						params={{ memberId: member.id }}
 					>
 						<Clock aria-hidden /> Temps de travail

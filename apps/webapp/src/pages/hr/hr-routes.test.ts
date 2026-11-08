@@ -12,14 +12,15 @@ function matchChain(pathname: string): string[] {
 	return router.matchRoutes(pathname, {}).map((match) => match.routeId)
 }
 
-const TEAM_LIST = '/_app/o/$organizationSlug/hr/team/'
-const MEMBER_WORK_TIME = '/_app/o/$organizationSlug/hr/team/$memberId/work-time'
-const MEMBER_DETAIL = '/_app/o/$organizationSlug/hr/team/$memberId/'
+const TEAM_LIST = '/_app/o/$organizationSlug/rh/membres/'
+const MEMBER_WORK_TIME =
+	'/_app/o/$organizationSlug/rh/membres/$memberId/temps-de-travail'
+const MEMBER_DETAIL = '/_app/o/$organizationSlug/rh/membres/$memberId/'
 
 describe('hr routes', () => {
 	/**
-	 * The regression this file exists for. `hr.team.tsx` — a bare route rather
-	 * than an `index` — became the *parent* of `hr.team.$memberId.work-time`
+	 * The regression this file exists for. `rh.membres.tsx` — a bare route rather
+	 * than an `index` — became the *parent* of `rh.membres.$memberId.temps-de-travail`
 	 * under file-based routing. It renders the team list and no `<Outlet/>`, so
 	 * opening a member's work time showed the team list instead, with that
 	 * member's name in the breadcrumb to prove the URL had matched.
@@ -30,27 +31,42 @@ describe('hr routes', () => {
 	 * `.at(-1)` passes either way and would have been worse than no test.
 	 */
 	it("opens a member's work time without the team list in front of it", () => {
-		const chain = matchChain('/o/acme/hr/team/member-1/work-time')
+		const chain = matchChain('/o/acme/rh/membres/member-1/temps-de-travail')
 
 		expect(chain.at(-1)).toBe(MEMBER_WORK_TIME)
 		expect(chain).not.toContain(TEAM_LIST)
 	})
 
+	it('redirects the legacy /hr URLs through the splat route', () => {
+		expect(matchChain('/o/acme/hr/team/member-1').at(-1)).toBe(
+			'/_app/o/$organizationSlug/hr/$',
+		)
+	})
+
 	it('still lists the team at the collection path', () => {
-		expect(matchChain('/o/acme/hr/team').at(-1)).toBe(TEAM_LIST)
+		expect(matchChain('/o/acme/rh/membres').at(-1)).toBe(TEAM_LIST)
 	})
 
 	/** The other HR sections are siblings, not children of the team list. */
 	it('keeps the other hr sections reachable', () => {
 		for (const [path, routeId] of [
-			['/o/acme/hr/work-time', '/_app/o/$organizationSlug/hr/work-time'],
-			['/o/acme/hr/absences', '/_app/o/$organizationSlug/hr/absences/'],
-			['/o/acme/hr/absences/new', '/_app/o/$organizationSlug/hr/absences/new'],
-			['/o/acme/hr/equipment', '/_app/o/$organizationSlug/hr/equipment'],
-			['/o/acme/hr/planning', '/_app/o/$organizationSlug/hr/planning'],
-			['/o/acme/hr/extra', '/_app/o/$organizationSlug/hr/extra/'],
-			['/o/acme/hr/extra/new', '/_app/o/$organizationSlug/hr/extra/new'],
-			['/o/acme/hr/rights', '/_app/o/$organizationSlug/hr/rights'],
+			[
+				'/o/acme/rh/temps-de-travail',
+				'/_app/o/$organizationSlug/rh/temps-de-travail',
+			],
+			['/o/acme/rh/absences', '/_app/o/$organizationSlug/rh/absences/'],
+			[
+				'/o/acme/rh/absences/nouvelle',
+				'/_app/o/$organizationSlug/rh/absences/nouvelle',
+			],
+			['/o/acme/rh/materiel', '/_app/o/$organizationSlug/rh/materiel'],
+			['/o/acme/rh/planning', '/_app/o/$organizationSlug/rh/planning'],
+			['/o/acme/rh/extra', '/_app/o/$organizationSlug/rh/extra/'],
+			[
+				'/o/acme/rh/extra/nouvelle',
+				'/_app/o/$organizationSlug/rh/extra/nouvelle',
+			],
+			['/o/acme/rh/droits', '/_app/o/$organizationSlug/rh/droits'],
 		]) {
 			const chain = matchChain(path)
 			expect(chain.at(-1)).toBe(routeId)
@@ -59,7 +75,7 @@ describe('hr routes', () => {
 	})
 
 	it("opens a member's file without the team list in front of it", () => {
-		const chain = matchChain('/o/acme/hr/team/member-1')
+		const chain = matchChain('/o/acme/rh/membres/member-1')
 
 		expect(chain.at(-1)).toBe(MEMBER_DETAIL)
 		expect(chain).not.toContain(TEAM_LIST)
