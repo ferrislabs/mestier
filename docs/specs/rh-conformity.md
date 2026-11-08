@@ -75,7 +75,7 @@ Acceptance (Gherkin)
   @spec-rh-2-2    Scenario: a schedule with a work day ending before it starts, or a lunch outside the day, is refused naming the day
   @spec-rh-2-3    Scenario: two contracts overlapping for one member are refused
   @spec-rh-2-4    Scenario: a trial end outside the contract is refused
-  @spec-rh-2-5    Scenario: a document is stored with its file key and deleted with its row
+  @spec-rh-2-5    Scenario: a document is stored with its file key and deleted as a row only, its file is left in storage
   @spec-rh-2-6    Scenario: the contracts and documents sections read the API
   B3
   @spec-rh-3-1    Scenario: the first read of an organization creates the default types once

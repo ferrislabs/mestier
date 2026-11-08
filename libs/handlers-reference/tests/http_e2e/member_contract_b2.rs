@@ -272,7 +272,7 @@ async fn spec_rh_2_4_a_trial_end_outside_the_contract_is_refused() {
 
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
-async fn spec_rh_2_5_a_document_is_stored_with_its_file_key_and_deleted_with_its_row() {
+async fn spec_rh_2_5_a_document_is_stored_with_its_file_key_and_deleted_as_a_row_only() {
     let app = harness::start().await;
     let member = colleague(&app).await;
     let documents = member_path(&app, member, "documents");

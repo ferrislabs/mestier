@@ -206,7 +206,7 @@ pub async fn add_document(
         ("document_id" = MemberDocumentId, Path, description = "Document identifier"),
     ),
     responses(
-        (status = 204, description = "Document row deleted, then its stored file on a best-effort basis"),
+        (status = 204, description = "Document row deleted, the stored file is left untouched"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Document not found for this member in the organization"),
@@ -219,7 +219,7 @@ pub async fn delete_document(
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<EmptyResponse>, ApiError> {
     let (user_id, actor) = resolve_actor(&state, &identity).await?;
-    let removed = state
+    state
         .usecase
         .acting_as(user_id)
         .delete_member_document(DeleteMemberDocumentCommand {
@@ -229,10 +229,6 @@ pub async fn delete_document(
             document_id: path.document_id,
         })
         .await?;
-
-    if let Err(error) = state.file_storage.delete(removed.file_key.as_str()).await {
-        tracing::warn!(%error, document_id = %removed.id, "the document row is gone but its file could not be deleted");
-    }
 
     Ok(Response::NoContent)
 }
