@@ -14,8 +14,6 @@ function renderHeader(overrides: Partial<ChatChannelHeaderUIProps> = {}) {
 		isLoading: false,
 		searchOpen: false,
 		onSearchOpenChange: vi.fn(),
-		membersOpen: true,
-		onMembersOpenChange: vi.fn(),
 		pinned: <span>épinglés</span>,
 		onOpenAdmin: vi.fn(),
 		...overrides,
@@ -69,13 +67,11 @@ describe('ChatChannelHeaderUI', () => {
 		).toBe('true')
 	})
 
-	it('toggles the member list and names the action after its state', async () => {
-		const user = userEvent.setup()
-		const props = renderHeader({ membersOpen: true })
+	it('has no member list toggle any more: the avatar group opens it', () => {
+		renderHeader()
 
-		await user.click(screen.getByLabelText('Masquer la liste des membres'))
-
-		expect(props.onMembersOpenChange).toHaveBeenCalledWith(false)
+		expect(screen.queryByLabelText('Masquer la liste des membres')).toBeNull()
+		expect(screen.queryByLabelText('Afficher la liste des membres')).toBeNull()
 	})
 
 	it('opens the channel settings', async () => {

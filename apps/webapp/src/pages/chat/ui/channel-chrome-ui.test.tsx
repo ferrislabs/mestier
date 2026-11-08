@@ -2,11 +2,11 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '#/components/ui/tooltip'
+import { ChannelMembersDialogUI } from './channel-members-dialog-ui'
 import { ChannelNotFoundUI } from './channel-not-found-ui'
 import { ChannelSearchBar } from './channel-search-bar'
 import { ChatChannelHeaderUI } from './chat-channel-header-ui'
 import { ChatIndexUI } from './chat-index-ui'
-import { MemberList } from './member-list'
 import { PinnedMessagesPopover } from './pinned-messages-popover'
 import { ThreadPanelHeaderUI } from './thread-panel-header-ui'
 
@@ -103,40 +103,6 @@ describe('PinnedMessagesPopover', () => {
 	})
 })
 
-describe('MemberList', () => {
-	it('groups members by presence and marks the current user', () => {
-		render(
-			<MemberList
-				currentUserId="m-1"
-				members={[
-					{ id: 'm-1', name: 'Alix Martin', hue: 10, presence: 'ONLINE' },
-					{ id: 'm-2', name: 'Jo Durand', hue: 80, presence: 'OFFLINE' },
-					{ id: 'm-3', name: 'Sam Roux', hue: 120, presence: 'DND' },
-				]}
-			/>,
-		)
-
-		expect(screen.getByText('· 3')).toBeDefined()
-		expect(screen.getByLabelText('En ligne, 1')).toBeDefined()
-		expect(screen.getByLabelText('Absent, 1')).toBeDefined()
-		expect(screen.getByLabelText('Hors ligne, 1')).toBeDefined()
-		expect(screen.getByText('(vous)')).toBeDefined()
-	})
-
-	it('omits a presence group nobody belongs to', () => {
-		render(
-			<MemberList
-				currentUserId={null}
-				members={[
-					{ id: 'm-1', name: 'Alix Martin', hue: 10, presence: 'ONLINE' },
-				]}
-			/>,
-		)
-
-		expect(screen.queryByLabelText(/Hors ligne/)).toBeNull()
-	})
-})
-
 describe('ThreadPanelHeaderUI', () => {
 	it.each([
 		[0, 'Aucune réponse'],
@@ -180,8 +146,6 @@ describe('ChatChannelHeaderUI — direct message', () => {
 		isLoading: false,
 		searchOpen: false,
 		onSearchOpenChange: vi.fn(),
-		membersOpen: true,
-		onMembersOpenChange: vi.fn(),
 		pinned: null,
 		onOpenAdmin: vi.fn(),
 	}
@@ -202,11 +166,45 @@ describe('ChatChannelHeaderUI — direct message', () => {
 		expect(screen.queryByLabelText('Paramètres du canal')).toBeNull()
 	})
 
-	it('shows the member count on a channel but not on a direct message', () => {
+	it('shows the first three members as an avatar group that opens the list', async () => {
+		const user = userEvent.setup()
+		const onOpenMembers = vi.fn()
 		withTooltips(
-			<ChatChannelHeaderUI {...baseProps} name="general" memberCount={5} />,
+			<ChatChannelHeaderUI
+				{...baseProps}
+				name="general"
+				onOpenMembers={onOpenMembers}
+				members={[
+					{ id: 'u-1', name: 'Alix Martin', hue: 10 },
+					{ id: 'u-2', name: 'Jo Durand', hue: 80 },
+					{ id: 'u-3', name: 'Sam Roux', hue: 120 },
+					{ id: 'u-4', name: 'Lou Petit', hue: 200 },
+					{ id: 'u-5', name: 'Eve Blanc', hue: 300 },
+				]}
+			/>,
 		)
-		expect(screen.getByText('5 membres')).toBeDefined()
+
+		expect(screen.getByText('+2')).toBeDefined()
+		expect(screen.queryByText('LP')).toBeNull()
+		await user.click(
+			screen.getByRole('button', { name: 'Voir les 5 membres du canal' }),
+		)
+
+		expect(onOpenMembers).toHaveBeenCalledTimes(1)
+	})
+
+	it('shows no member list button on a direct message', () => {
+		withTooltips(
+			<ChatChannelHeaderUI
+				{...baseProps}
+				name="direct"
+				peer={{ name: 'Karim Benali', hue: 200, presence: 'ONLINE' }}
+				onOpenMembers={vi.fn()}
+				members={[{ id: 'u-1', name: 'Alix Martin', hue: 10 }]}
+			/>,
+		)
+
+		expect(screen.queryByRole('button', { name: /membre/ })).toBeNull()
 	})
 
 	it('keeps a channel s icon for its type', () => {
@@ -225,5 +223,61 @@ describe('ChatChannelHeaderUI — direct message', () => {
 		withTooltips(<ChatChannelHeaderUI {...baseProps} name="general" />)
 
 		expect(screen.getByLabelText('Paramètres du canal')).toBeDefined()
+	})
+})
+
+describe('ChannelMembersDialogUI', () => {
+	const members = [
+		{ id: 'm-1', name: 'Alix Martin', hue: 10, presence: 'ONLINE' as const },
+		{ id: 'm-2', name: 'Jo Durand', hue: 80, presence: 'OFFLINE' as const },
+		{ id: 'm-3', name: 'Sam Roux', hue: 120, presence: 'DND' as const },
+	]
+
+	it('lists every member grouped by presence and marks the current user', () => {
+		render(
+			<ChannelMembersDialogUI
+				open
+				onOpenChange={vi.fn()}
+				channelLabel="#chantier-dupont"
+				members={members}
+				currentUserId="m-1"
+			/>,
+		)
+
+		expect(screen.getByText('· 3')).toBeDefined()
+		expect(screen.getByText('#chantier-dupont')).toBeDefined()
+		expect(screen.getByLabelText('En ligne, 1')).toBeDefined()
+		expect(screen.getByLabelText('Absent, 1')).toBeDefined()
+		expect(screen.getByLabelText('Hors ligne, 1')).toBeDefined()
+		expect(screen.getByText('Sam Roux')).toBeDefined()
+		expect(screen.getByText('(vous)')).toBeDefined()
+	})
+
+	it('omits a presence group nobody belongs to', () => {
+		render(
+			<ChannelMembersDialogUI
+				open
+				onOpenChange={vi.fn()}
+				channelLabel="#general"
+				members={[members[0] as (typeof members)[number]]}
+				currentUserId={null}
+			/>,
+		)
+
+		expect(screen.queryByLabelText(/Hors ligne/)).toBeNull()
+	})
+
+	it('renders nothing when closed', () => {
+		render(
+			<ChannelMembersDialogUI
+				open={false}
+				onOpenChange={vi.fn()}
+				channelLabel="#general"
+				members={members}
+				currentUserId={null}
+			/>,
+		)
+
+		expect(screen.queryByText('Alix Martin')).toBeNull()
 	})
 })

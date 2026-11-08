@@ -25,6 +25,7 @@ import {
 	formatDayLabel,
 	type UnreadMarker,
 } from '#/pages/chat/lib/timeline'
+import { ChannelMembersDialogUI } from '#/pages/chat/ui/channel-members-dialog-ui'
 import { ChannelNotFoundUI } from '#/pages/chat/ui/channel-not-found-ui'
 import {
 	ReadOnlyNoticeUI,
@@ -32,7 +33,6 @@ import {
 } from '#/pages/chat/ui/channel-notice-ui'
 import { ChannelSearchBar } from '#/pages/chat/ui/channel-search-bar'
 import { ChatChannelHeaderUI } from '#/pages/chat/ui/chat-channel-header-ui'
-import { MemberList } from '#/pages/chat/ui/member-list'
 import { MessageComposerUI } from '#/pages/chat/ui/message-composer-ui'
 import { MessageListUI } from '#/pages/chat/ui/message-list-ui'
 import {
@@ -94,8 +94,8 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 		null,
 	)
 	const [searchOpen, setSearchOpen] = useState(false)
+	const [membersDialogOpen, setMembersDialogOpen] = useState(false)
 	const [searchQuery, setSearchQuery] = useState('')
-	const [membersOpen, setMembersOpen] = useState(true)
 
 	const threadByOriginMessageId = useMemo(() => {
 		const map = new Map<string, string>()
@@ -215,14 +215,13 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 					channelType={channel.data?.channel_type}
 					topic={channel.data?.topic}
 					peer={peer}
-					memberCount={members.length}
+					members={members}
+					onOpenMembers={() => setMembersDialogOpen(true)}
 					isLoading={channel.isLoading}
 					searchOpen={searchOpen}
 					onSearchOpenChange={(open) =>
 						open ? setSearchOpen(true) : closeSearch()
 					}
-					membersOpen={membersOpen}
-					onMembersOpenChange={setMembersOpen}
 					pinned={<PinnedMessagesPopover items={pinnedItems} />}
 					onOpenAdmin={() => openChannelAdmin(channelId)}
 				/>
@@ -284,9 +283,13 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 					onClose={() => setOpenThreadChannelId(null)}
 				/>
 			) : null}
-			{membersOpen ? (
-				<MemberList members={members} currentUserId={currentUserId} />
-			) : null}
+			<ChannelMembersDialogUI
+				open={membersDialogOpen}
+				onOpenChange={setMembersDialogOpen}
+				channelLabel={channelLabel}
+				members={members}
+				currentUserId={currentUserId}
+			/>
 		</div>
 	)
 }

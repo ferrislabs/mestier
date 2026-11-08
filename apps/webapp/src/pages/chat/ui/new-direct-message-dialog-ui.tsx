@@ -13,7 +13,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '#/components/ui/dialog'
-import type { MemberItem } from '#/pages/chat/ui/member-list'
+import type { MemberItem } from '#/pages/chat/lib/members'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
 
 export interface NewDirectMessageDialogUIProps {
