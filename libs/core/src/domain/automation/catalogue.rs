@@ -1,8 +1,8 @@
 use events::{EventCatalogue, EventDescriptor};
 
 use crate::domain::{
-    assignment_report, customer, deal, invitation, invoice, maintenance, member, quote,
-    supplier_invoice, support, time_entry,
+    absence, assignment_report, customer, deal, extra_period, invitation, invoice, maintenance,
+    member, quote, supplier_invoice, support, time_entry,
 };
 
 /// Every event the product can emit, assembled from the modules that own them.
@@ -34,6 +34,8 @@ fn descriptors() -> Vec<EventDescriptor> {
         support::events::descriptors(),
         customer::events::descriptors(),
         deal::events::descriptors(),
+        absence::events::descriptors(),
+        extra_period::events::descriptors(),
     ]
     .concat()
 }
@@ -66,6 +68,8 @@ mod tests {
             support::events::emitted_events(),
             customer::events::emitted_events(),
             deal::events::emitted_events(),
+            absence::events::emitted_events(),
+            extra_period::events::emitted_events(),
         ]
         .concat()
         .iter()
@@ -85,6 +89,28 @@ mod tests {
                 "`{}` has no payload example, so nothing documents its shape",
                 descriptor.name
             );
+        }
+    }
+
+    #[test]
+    fn the_catalogue_lists_the_absence_and_extra_period_events() {
+        let catalogue = event_catalogue();
+        let names: Vec<&str> = catalogue
+            .descriptors()
+            .map(|descriptor| descriptor.name)
+            .collect();
+
+        for expected in [
+            "absence.requested",
+            "absence.approved",
+            "absence.rejected",
+            "absence.cancelled",
+            "extra_period.requested",
+            "extra_period.approved",
+            "extra_period.rejected",
+            "extra_period.cancelled",
+        ] {
+            assert!(names.contains(&expected), "`{expected}` is not catalogued");
         }
     }
 }

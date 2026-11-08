@@ -18,7 +18,7 @@ use crate::{
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(extra_period, surcharge, member, role, authz)]
+    #[transactional(extra_period, surcharge, member, role, authz, emitter)]
     pub async fn list_extra_periods(
         &self,
         command: ListExtraPeriodsCommand,
@@ -46,6 +46,7 @@ impl MestierUseCase {
             extra_period_repository,
             surcharge_repository,
             member_repository,
+            emitter,
         );
         service
             .list(
@@ -57,7 +58,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(extra_period, surcharge, member, role, authz)]
+    #[transactional(extra_period, surcharge, member, role, authz, emitter)]
     pub async fn create_extra_period(
         &self,
         command: CreateExtraPeriodCommand,
@@ -94,13 +95,14 @@ impl MestierUseCase {
             extra_period_repository,
             surcharge_repository,
             member_repository,
+            emitter,
         );
         service
             .create(command.organization_id, &draft, creator)
             .await
     }
 
-    #[transactional(extra_period, surcharge, member, role, authz)]
+    #[transactional(extra_period, surcharge, member, role, authz, emitter)]
     pub async fn approve_extra_period(
         &self,
         command: DecideExtraPeriodCommand,
@@ -121,6 +123,7 @@ impl MestierUseCase {
             extra_period_repository,
             surcharge_repository,
             member_repository,
+            emitter,
         );
         service
             .approve(
@@ -131,7 +134,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(extra_period, surcharge, member, role, authz)]
+    #[transactional(extra_period, surcharge, member, role, authz, emitter)]
     pub async fn reject_extra_period(
         &self,
         command: RejectExtraPeriodCommand,
@@ -152,6 +155,7 @@ impl MestierUseCase {
             extra_period_repository,
             surcharge_repository,
             member_repository,
+            emitter,
         );
         service
             .reject(
@@ -163,7 +167,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(extra_period, surcharge, member, role, authz)]
+    #[transactional(extra_period, surcharge, member, role, authz, emitter)]
     pub async fn cancel_extra_period(
         &self,
         command: DecideExtraPeriodCommand,
@@ -195,6 +199,7 @@ impl MestierUseCase {
             extra_period_repository,
             surcharge_repository,
             member_repository,
+            emitter,
         );
         service
             .cancel(
