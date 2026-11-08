@@ -315,8 +315,8 @@ pub use domain::{
     TimeRange, Tz, UnknownNumberSeries, User, UserId, VatStatus, WeekSchedule, WorkDay,
     WorkDayInput, WorkSlot, WorkSlotId,
     absence::commands::{
-        AbsenceSchedule, CreateAbsenceCommand, DecideAbsenceCommand, PatchAbsenceCommand,
-        RejectAbsenceCommand,
+        AbsenceSchedule, CreateAbsenceCommand, DecideAbsenceCommand, ListAbsencesCommand,
+        PatchAbsenceCommand, RejectAbsenceCommand,
     },
     absence_type::commands::{
         AbsenceTypeDraft, ArchiveAbsenceTypeCommand, CreateAbsenceTypeCommand,

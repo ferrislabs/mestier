@@ -90,3 +90,12 @@ pub struct RejectAbsenceCommand {
     pub id: AbsenceId,
     pub comment: String,
 }
+
+#[derive(Debug, Clone)]
+pub struct ListAbsencesCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub member_id: Option<MemberId>,
+    pub limit: u64,
+    pub offset: u64,
+}

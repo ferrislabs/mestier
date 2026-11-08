@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 
-use crate::{Absence, AbsenceId, OrganizationId};
+use crate::{Absence, AbsenceId, MemberId, OrganizationId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait AbsenceRepository: Send {
@@ -18,6 +18,14 @@ pub trait AbsenceRepository: Send {
     fn list_by_organization(
         &mut self,
         organization_id: OrganizationId,
+        limit: u64,
+        offset: u64,
+    ) -> impl Future<Output = Result<(Vec<Absence>, u64), CoreError>> + Send;
+
+    fn list_by_member(
+        &mut self,
+        organization_id: OrganizationId,
+        member_id: MemberId,
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Absence>, u64), CoreError>> + Send;

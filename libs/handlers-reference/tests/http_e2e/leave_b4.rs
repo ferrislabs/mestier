@@ -285,7 +285,12 @@ async fn spec_rh_4_3_deleting_an_adjustment_removes_it_from_the_list() {
         1
     );
 
-    let (status, _) = get(&app, &app.restricted_token, &adjustments_path(&app)).await;
+    let (status, _) = get(
+        &app,
+        &app.restricted_token,
+        &format!("{}?member_id={member}", adjustments_path(&app)),
+    )
+    .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 
     let path = format!("{}/{}", adjustments_path(&app), ids[0]);

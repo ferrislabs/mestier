@@ -16,6 +16,23 @@ pub struct MemberAccountResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct MyMemberResponse {
+    pub member_id: MemberId,
+    pub organization_id: OrganizationId,
+    pub display_name: String,
+}
+
+impl From<Member> for MyMemberResponse {
+    fn from(value: Member) -> Self {
+        Self {
+            member_id: value.id,
+            organization_id: value.organization_id,
+            display_name: value.display_name(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct MemberResponse {
     pub id: MemberId,
     pub organization_id: OrganizationId,

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    Absence, AbsenceOutcome, AbsenceSpan, AbsenceType, AbsenceTypeService, MemberId,
+    Absence, AbsenceOutcome, AbsenceSpan, AbsenceStatus, AbsenceType, AbsenceTypeService, MemberId,
     OrganizationId, Tz,
     domain::{
         absence::{
@@ -136,6 +136,18 @@ where
             .await
     }
 
+    pub async fn list_absences_of_member(
+        &mut self,
+        organization_id: OrganizationId,
+        member_id: MemberId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<Absence>, u64), CoreError> {
+        self.absence_repository
+            .list_by_member(organization_id, member_id, limit, offset)
+            .await
+    }
+
     pub async fn patch_absence(
         &mut self,
         command: PatchAbsenceCommand,
@@ -233,6 +245,9 @@ where
             return Err(CoreError::Forbidden {
                 reason: Some("only the creator or a planning manager can cancel".to_owned()),
             });
+        }
+        if !privileged && absence.status != AbsenceStatus::Pending {
+            return Ok(Err(AbsenceError::AlreadyDecided));
         }
         if let Err(refusal) = absence.cancel(caller, Utc::now()) {
             return Ok(Err(refusal));

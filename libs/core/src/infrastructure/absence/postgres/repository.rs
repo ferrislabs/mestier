@@ -3,7 +3,7 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    Absence, AbsenceId, OrganizationId,
+    Absence, AbsenceId, MemberId, OrganizationId,
     domain::absence::ports::AbsenceRepository,
     infrastructure::{
         absence::postgres::model::AbsenceRow, postgres::SharedTx, postgres::error::map_sqlx_error,
@@ -107,6 +107,49 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
         let total: i64 = sqlx::query_scalar!(
             r#"SELECT COUNT(*) AS "count!" FROM absences WHERE org_id = $1 AND deleted_at IS NULL"#,
             organization_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let mut absences = Vec::with_capacity(rows.len());
+        for row in rows {
+            absences.push(row.into_employee_absence()?);
+        }
+
+        Ok((absences, total as u64))
+    }
+
+    async fn list_by_member(
+        &mut self,
+        organization_id: OrganizationId,
+        member_id: MemberId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<Absence>, u64), CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            AbsenceRow,
+            r#"
+            SELECT id, org_id, member_id, kind::text AS "kind!", type_id, starts_at, ends_at, all_day, start_date, start_part, end_date, end_part, status, note, proof_file_key, created_by_member_id, decided_by_member_id, decided_at, decision_comment, deleted_at, created_at, updated_at
+            FROM absences
+            WHERE org_id = $1 AND member_id = $2 AND deleted_at IS NULL
+            ORDER BY starts_at ASC, id ASC
+            LIMIT $3 OFFSET $4
+            "#,
+            organization_id.0,
+            member_id.0,
+            limit as i64,
+            offset as i64,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let total: i64 = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "count!" FROM absences WHERE org_id = $1 AND member_id = $2 AND deleted_at IS NULL"#,
+            organization_id.0,
+            member_id.0,
         )
         .fetch_one(&mut ***tx)
         .await

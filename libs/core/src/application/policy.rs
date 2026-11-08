@@ -181,6 +181,40 @@ pub async fn require<A: Authorizer>(
     Err(CoreError::Forbidden { reason })
 }
 
+/// Like [`require`], but a deny answers `false` instead of an error.
+pub async fn holds<A: Authorizer>(
+    authorizer: &A,
+    subject: &Subject,
+    action: &str,
+    resource: Resource,
+) -> Result<bool, CoreError> {
+    match require(authorizer, subject, action, resource).await {
+        Ok(()) => Ok(true),
+        Err(CoreError::Forbidden { .. }) => Ok(false),
+        Err(other) => Err(other),
+    }
+}
+
+/// The member filter a list may use. Holders of the organization-wide bit
+/// keep the one they asked for; anyone else is pinned to their own seat and
+/// refused when they ask for another.
+pub fn own_scope(
+    actor: &Subject,
+    requested: Option<crate::MemberId>,
+    organization_wide: bool,
+) -> Result<Option<crate::MemberId>, CoreError> {
+    if organization_wide || actor.is_system() {
+        return Ok(requested);
+    }
+    let own = subject_member_id(actor).ok_or(CoreError::Forbidden { reason: None })?;
+    match requested {
+        Some(other) if other != own => Err(CoreError::Forbidden {
+            reason: Some("a member can only list their own requests".to_owned()),
+        }),
+        _ => Ok(Some(own)),
+    }
+}
+
 /// Builds a [`Subject`] for a regular Mestier user. `iam_roles` is the list
 /// of realm/IAM roles carried by the JWT, surfaced under `iam.roles`
 /// where the [`LocalPolicyEngine`](authz::LocalPolicyEngine) reads them

@@ -2,7 +2,7 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use super::{
-    ExtraPeriod, ExtraPeriodError, ExtraPeriodId, ExtraPeriodOutcome,
+    ExtraPeriod, ExtraPeriodError, ExtraPeriodId, ExtraPeriodOutcome, ExtraStatus,
     commands::{ExtraPeriodDraft, ExtraPeriodFilter},
     ports::ExtraPeriodRepository,
 };
@@ -123,6 +123,9 @@ where
             return Err(CoreError::Forbidden {
                 reason: Some("only the creator or a planning manager can cancel".to_owned()),
             });
+        }
+        if !privileged && period.status != ExtraStatus::Pending {
+            return Ok(Err(ExtraPeriodError::AlreadyDecided));
         }
         if let Err(refusal) = period.cancel(caller, Utc::now()) {
             return Ok(Err(refusal));
