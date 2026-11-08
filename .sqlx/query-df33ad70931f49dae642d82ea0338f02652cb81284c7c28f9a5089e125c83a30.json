@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO absences (id, org_id, member_id, kind, type_id, starts_at, ends_at,\n                                  start_date, start_part, end_date, end_part, status)\n            VALUES ($1, $2, $3, 'LEAVE', $4, $5, $6, $7, 'MORNING', $8, 'AFTERNOON', $9)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Date",
+        "Date",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "df33ad70931f49dae642d82ea0338f02652cb81284c7c28f9a5089e125c83a30"
+}

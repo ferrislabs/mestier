@@ -17,6 +17,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
+uuid = { workspace = true }
 
 # The end-to-end suite drives the real router over a real socket, so it needs
 # the bootstrap crates the binary uses.
@@ -28,7 +29,6 @@ reqwest = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
-uuid = { workspace = true }
 
 [[test]]
 name = "http_e2e"

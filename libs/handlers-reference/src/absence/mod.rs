@@ -17,18 +17,29 @@
 //! and a `.merge(absence::router(state))`.
 
 use auth::Identity;
-use axum::Router;
+use axum::{
+    Json, Router,
+    response::{IntoResponse, Response as AxumResponse},
+};
 use axum_extra::routing::{RouterExt, TypedPath};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use handlers::{ApiError, AppState};
-use mestier_core::{Absence, AbsenceId, AbsenceKind, MemberId, OrganizationId};
+use http::StatusCode;
+use mestier_core::{
+    Absence, AbsenceError, AbsenceId, AbsenceKind, AbsenceStatus, AbsenceTypeId, DayPart, MemberId,
+    OrganizationId,
+};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use utoipa::ToSchema;
 
 use crate::require_org_membership;
 
+pub mod approve;
+pub mod cancel;
 pub mod create;
 pub mod list;
+pub mod reject;
 pub mod soft_delete;
 pub mod update;
 
@@ -42,6 +53,9 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(create::handler)
         .typed_patch(update::handler)
         .typed_delete(soft_delete::handler)
+        .typed_post(approve::handler)
+        .typed_post(reject::handler)
+        .typed_post(cancel::handler)
 }
 
 #[derive(TypedPath, Deserialize)]
@@ -55,6 +69,66 @@ pub struct AbsencesPath {
 pub struct AbsencePath {
     pub organization_id: OrganizationId,
     pub absence_id: AbsenceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/absences/{absence_id}/approve")]
+pub struct ApproveAbsencePath {
+    pub organization_id: OrganizationId,
+    pub absence_id: AbsenceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/absences/{absence_id}/reject")]
+pub struct RejectAbsencePath {
+    pub organization_id: OrganizationId,
+    pub absence_id: AbsenceId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/absences/{absence_id}/cancel")]
+pub struct CancelAbsencePath {
+    pub organization_id: OrganizationId,
+    pub absence_id: AbsenceId,
+}
+
+#[derive(Debug)]
+pub enum AbsenceFailure {
+    Api(ApiError),
+    Refused(AbsenceError),
+}
+
+impl From<ApiError> for AbsenceFailure {
+    fn from(error: ApiError) -> Self {
+        Self::Api(error)
+    }
+}
+
+impl From<AbsenceError> for AbsenceFailure {
+    fn from(error: AbsenceError) -> Self {
+        Self::Refused(error)
+    }
+}
+
+impl IntoResponse for AbsenceFailure {
+    fn into_response(self) -> AxumResponse {
+        match self {
+            Self::Api(error) => error.into_response(),
+            Self::Refused(error) => {
+                let status = StatusCode::UNPROCESSABLE_ENTITY;
+                (
+                    status,
+                    Json(json!({
+                        "code": "E_UNPROCESSABLE_ENTITY",
+                        "message": error.to_string(),
+                        "status": status.as_u16(),
+                        "details": { "field": error.field() },
+                    })),
+                )
+                    .into_response()
+            }
+        }
+    }
 }
 
 /// Loads the absence and checks both that the caller belongs to
@@ -105,10 +179,21 @@ pub struct AbsenceResponse {
     pub organization_id: OrganizationId,
     pub member_id: MemberId,
     pub kind: AbsenceKind,
+    pub type_id: AbsenceTypeId,
     pub starts_at: DateTime<Utc>,
     pub ends_at: DateTime<Utc>,
     pub all_day: bool,
+    pub start_date: NaiveDate,
+    pub start_part: DayPart,
+    pub end_date: NaiveDate,
+    pub end_part: DayPart,
+    pub status: AbsenceStatus,
     pub note: Option<String>,
+    pub proof_file_key: Option<String>,
+    pub created_by_member_id: Option<MemberId>,
+    pub decided_by_member_id: Option<MemberId>,
+    pub decided_at: Option<DateTime<Utc>>,
+    pub decision_comment: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -120,10 +205,21 @@ impl From<Absence> for AbsenceResponse {
             organization_id: value.organization_id,
             member_id: value.member_id,
             kind: value.kind,
+            type_id: value.type_id,
             starts_at: value.starts_at,
             ends_at: value.ends_at,
             all_day: value.all_day,
+            start_date: value.start_date,
+            start_part: value.start_part,
+            end_date: value.end_date,
+            end_part: value.end_part,
+            status: value.status,
             note: value.note,
+            proof_file_key: value.proof_file_key,
+            created_by_member_id: value.created_by_member_id,
+            decided_by_member_id: value.decided_by_member_id,
+            decided_at: value.decided_at,
+            decision_comment: value.decision_comment,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }
@@ -148,10 +244,21 @@ mod tests {
             organization_id,
             member_id,
             kind: AbsenceKind::Leave,
+            type_id: "44444444-4444-4444-4444-444444444444".parse().unwrap(),
             starts_at: now,
             ends_at: now + chrono::Duration::hours(2),
             all_day: false,
+            start_date: now.date_naive(),
+            start_part: DayPart::Morning,
+            end_date: now.date_naive(),
+            end_part: DayPart::Afternoon,
+            status: AbsenceStatus::Approved,
             note: Some("Congés payés".to_owned()),
+            proof_file_key: None,
+            created_by_member_id: None,
+            decided_by_member_id: None,
+            decided_at: None,
+            decision_comment: None,
             deleted_at: None,
             created_at: now,
             updated_at: now,

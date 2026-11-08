@@ -27,18 +27,29 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
         let row = sqlx::query_as!(
             AbsenceRow,
             r#"
-            INSERT INTO absences (id, org_id, member_id, kind, starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at)
-            VALUES ($1, $2, $3, CAST($4 AS text)::absence_kind, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            INSERT INTO absences (id, org_id, member_id, kind, type_id, starts_at, ends_at, all_day, start_date, start_part, end_date, end_part, status, note, proof_file_key, created_by_member_id, decided_by_member_id, decided_at, decision_comment, deleted_at, created_at, updated_at)
+            VALUES ($1, $2, $3, CAST($4 AS text)::absence_kind, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            RETURNING id, org_id, member_id, kind::text AS "kind!", type_id, starts_at, ends_at, all_day, start_date, start_part, end_date, end_part, status, note, proof_file_key, created_by_member_id, decided_by_member_id, decided_at, decision_comment, deleted_at, created_at, updated_at
             "#,
             absence.id.0,
             absence.organization_id.0,
             absence.member_id.0,
             absence.kind.as_str(),
+            absence.type_id.0,
             absence.starts_at,
             absence.ends_at,
             absence.all_day,
+            absence.start_date,
+            absence.start_part.as_str(),
+            absence.end_date,
+            absence.end_part.as_str(),
+            absence.status.as_str(),
             absence.note,
+            absence.proof_file_key,
+            absence.created_by_member_id.map(|id| id.0),
+            absence.decided_by_member_id.map(|id| id.0),
+            absence.decided_at,
+            absence.decision_comment,
             absence.deleted_at,
             absence.created_at,
             absence.updated_at,
@@ -55,9 +66,10 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
         let row = sqlx::query_as!(
             AbsenceRow,
             r#"
-            SELECT id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            SELECT id, org_id, member_id, kind::text AS "kind!", type_id, starts_at, ends_at, all_day, start_date, start_part, end_date, end_part, status, note, proof_file_key, created_by_member_id, decided_by_member_id, decided_at, decision_comment, deleted_at, created_at, updated_at
             FROM absences
             WHERE id = $1 AND deleted_at IS NULL
+            FOR UPDATE
             "#,
             id.0,
         )
@@ -78,7 +90,7 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
         let rows = sqlx::query_as!(
             AbsenceRow,
             r#"
-            SELECT id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            SELECT id, org_id, member_id, kind::text AS "kind!", type_id, starts_at, ends_at, all_day, start_date, start_part, end_date, end_part, status, note, proof_file_key, created_by_member_id, decided_by_member_id, decided_at, decision_comment, deleted_at, created_at, updated_at
             FROM absences
             WHERE org_id = $1 AND deleted_at IS NULL
             ORDER BY starts_at ASC, id ASC
@@ -115,20 +127,40 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
             r#"
             UPDATE absences
             SET kind = CAST($2 AS text)::absence_kind,
-                starts_at = $3,
-                ends_at = $4,
-                all_day = $5,
-                note = $6,
-                updated_at = $7
+                type_id = $3,
+                starts_at = $4,
+                ends_at = $5,
+                all_day = $6,
+                start_date = $7,
+                start_part = $8,
+                end_date = $9,
+                end_part = $10,
+                status = $11,
+                note = $12,
+                proof_file_key = $13,
+                decided_by_member_id = $14,
+                decided_at = $15,
+                decision_comment = $16,
+                updated_at = $17
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, org_id, member_id, kind::text AS "kind!", starts_at, ends_at, all_day, note, deleted_at, created_at, updated_at
+            RETURNING id, org_id, member_id, kind::text AS "kind!", type_id, starts_at, ends_at, all_day, start_date, start_part, end_date, end_part, status, note, proof_file_key, created_by_member_id, decided_by_member_id, decided_at, decision_comment, deleted_at, created_at, updated_at
             "#,
             absence.id.0,
             absence.kind.as_str(),
+            absence.type_id.0,
             absence.starts_at,
             absence.ends_at,
             absence.all_day,
+            absence.start_date,
+            absence.start_part.as_str(),
+            absence.end_date,
+            absence.end_part.as_str(),
+            absence.status.as_str(),
             absence.note,
+            absence.proof_file_key,
+            absence.decided_by_member_id.map(|id| id.0),
+            absence.decided_at,
+            absence.decision_comment,
             absence.updated_at,
         )
         .fetch_optional(&mut ***tx)

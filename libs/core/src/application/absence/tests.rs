@@ -8,8 +8,16 @@ mod tests {
 
     use crate::application::test_support::{dev_pool, purge};
     use crate::application::{MestierUseCase, default_authorizer};
-    use crate::domain::absence::commands::{CreateAbsenceCommand, PatchAbsenceCommand};
+    use crate::domain::absence::commands::{
+        AbsenceSchedule, CreateAbsenceCommand, DecideAbsenceCommand, PatchAbsenceCommand,
+        RejectAbsenceCommand,
+    };
+    use crate::domain::absence_type::commands::{
+        AbsenceTypeDraft, ArchiveAbsenceTypeCommand, CreateAbsenceTypeCommand,
+        ListAbsenceTypesCommand,
+    };
     use crate::infrastructure::realtime::EventHub;
+    use crate::{AbsenceError, AbsenceStatus, AbsenceTypeId, CountMode, DayPart};
     use crate::{AbsenceId, AbsenceKind, EmployeeId, MemberId};
 
     async fn make_pool() -> PgPool {
@@ -104,6 +112,12 @@ mod tests {
         .await;
         purge(
             pool,
+            "DELETE FROM absence_types WHERE org_id = $1",
+            organization_id.0,
+        )
+        .await;
+        purge(
+            pool,
             "DELETE FROM employees WHERE org_id = $1",
             organization_id.0,
         )
@@ -125,11 +139,15 @@ mod tests {
             actor: authz::Subject::system(),
             organization_id: fixture.organization_id,
             member_id: fixture.member_id,
-            kind: AbsenceKind::Leave,
-            starts_at: now,
-            ends_at: now + Duration::hours(2),
-            all_day: false,
+            kind: Some(AbsenceKind::Leave),
+            type_id: None,
+            schedule: AbsenceSchedule::Window {
+                starts_at: now,
+                ends_at: now + Duration::hours(2),
+                all_day: false,
+            },
             note: Some("Congés payés".to_owned()),
+            proof_file_key: None,
         }
     }
 
@@ -143,7 +161,8 @@ mod tests {
         let created = usecase
             .create_absence(create_command(&fixture))
             .await
-            .expect("create_absence must succeed");
+            .expect("create_absence must succeed")
+            .expect("the request is valid");
 
         assert_eq!(created.kind, AbsenceKind::Leave);
         assert_eq!(created.member_id, fixture.member_id);
@@ -169,10 +188,12 @@ mod tests {
         usecase
             .create_absence(create_command(&fixture_a))
             .await
+            .unwrap()
             .unwrap();
         usecase
             .create_absence(create_command(&fixture_b))
             .await
+            .unwrap()
             .unwrap();
 
         let (items, total) = usecase
@@ -198,6 +219,7 @@ mod tests {
         let created = usecase
             .create_absence(create_command(&fixture))
             .await
+            .unwrap()
             .unwrap();
 
         let new_starts_at = created.starts_at + Duration::days(1);
@@ -235,6 +257,7 @@ mod tests {
         let created = usecase
             .create_absence(create_command(&fixture))
             .await
+            .unwrap()
             .unwrap();
 
         usecase
@@ -274,5 +297,255 @@ mod tests {
         assert!(matches!(missing, common::CoreError::NotFound));
 
         cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    fn draft(name: &str, needs_approval: bool, needs_proof: bool) -> AbsenceTypeDraft {
+        AbsenceTypeDraft {
+            name: name.to_owned(),
+            hue: 120,
+            count_mode: CountMode::Working,
+            account_id: None,
+            paid: true,
+            needs_approval,
+            needs_proof,
+            kind: AbsenceKind::Leave,
+        }
+    }
+
+    async fn seed_type(
+        usecase: &MestierUseCase,
+        fixture: &Fixture,
+        name: &str,
+        needs_approval: bool,
+        needs_proof: bool,
+    ) -> AbsenceTypeId {
+        usecase
+            .create_absence_type(CreateAbsenceTypeCommand {
+                actor: authz::Subject::system(),
+                organization_id: fixture.organization_id,
+                draft: draft(name, needs_approval, needs_proof),
+            })
+            .await
+            .unwrap()
+            .unwrap()
+            .id
+    }
+
+    fn days_command(fixture: &Fixture, type_id: AbsenceTypeId) -> CreateAbsenceCommand {
+        CreateAbsenceCommand {
+            kind: None,
+            type_id: Some(type_id),
+            schedule: AbsenceSchedule::Days {
+                start_date: chrono::NaiveDate::from_ymd_opt(2026, 7, 6).unwrap(),
+                start_part: DayPart::Afternoon,
+                end_date: chrono::NaiveDate::from_ymd_opt(2026, 7, 8).unwrap(),
+                end_part: DayPart::Morning,
+            },
+            ..create_command(fixture)
+        }
+    }
+
+    fn decide(fixture: &Fixture, id: AbsenceId) -> DecideAbsenceCommand {
+        DecideAbsenceCommand {
+            actor: authz::Subject::system(),
+            organization_id: fixture.organization_id,
+            id,
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn spec_rh_3_2_and_3_8_a_day_request_is_pending_with_the_organization_timezone_window() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+        let needing = seed_type(&usecase, &fixture, "Besoin d'accord", true, false).await;
+        let free = seed_type(&usecase, &fixture, "Sans accord", false, false).await;
+
+        let pending = usecase
+            .create_absence(days_command(&fixture, needing))
+            .await
+            .unwrap()
+            .unwrap();
+        let approved = usecase
+            .create_absence(days_command(&fixture, free))
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(pending.status, AbsenceStatus::Pending);
+        assert_eq!(approved.status, AbsenceStatus::Approved);
+        assert!(approved.decided_by_member_id.is_none());
+        assert_eq!(
+            pending.starts_at,
+            chrono::DateTime::parse_from_rfc3339("2026-07-06T10:00:00Z").unwrap()
+        );
+        assert_eq!(
+            pending.ends_at,
+            chrono::DateTime::parse_from_rfc3339("2026-07-08T10:00:00Z").unwrap()
+        );
+        assert!(!pending.all_day);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn spec_rh_3_3_approving_then_deciding_again_is_refused() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+        let needing = seed_type(&usecase, &fixture, "Besoin d'accord", true, false).await;
+        let created = usecase
+            .create_absence(days_command(&fixture, needing))
+            .await
+            .unwrap()
+            .unwrap();
+
+        let approved = usecase
+            .approve_absence(decide(&fixture, created.id))
+            .await
+            .unwrap()
+            .unwrap();
+        let again = usecase
+            .approve_absence(decide(&fixture, created.id))
+            .await
+            .unwrap();
+        let rejected = usecase
+            .reject_absence(RejectAbsenceCommand {
+                actor: authz::Subject::system(),
+                organization_id: fixture.organization_id,
+                id: created.id,
+                comment: "non".to_owned(),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(approved.status, AbsenceStatus::Approved);
+        assert!(approved.decided_at.is_some());
+        assert_eq!(again, Err(AbsenceError::AlreadyDecided));
+        assert_eq!(rejected, Err(AbsenceError::AlreadyDecided));
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn spec_rh_3_4_and_3_5_rejection_needs_a_comment_and_proof_gates_approval() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+        let proof_type = seed_type(&usecase, &fixture, "Sur justificatif", true, true).await;
+        let created = usecase
+            .create_absence(days_command(&fixture, proof_type))
+            .await
+            .unwrap()
+            .unwrap();
+
+        let blank = usecase
+            .reject_absence(RejectAbsenceCommand {
+                actor: authz::Subject::system(),
+                organization_id: fixture.organization_id,
+                id: created.id,
+                comment: "  ".to_owned(),
+            })
+            .await
+            .unwrap();
+        let without_proof = usecase
+            .approve_absence(decide(&fixture, created.id))
+            .await
+            .unwrap();
+
+        assert_eq!(blank, Err(AbsenceError::CommentRequired));
+        assert_eq!(without_proof, Err(AbsenceError::ProofRequired));
+
+        let mut patch = PatchAbsenceCommand::new(created.id, authz::Subject::system());
+        patch.proof_file_key = Some(Some("absences/justificatif.pdf".to_owned()));
+        usecase.patch_absence(patch).await.unwrap();
+        let approved = usecase
+            .approve_absence(decide(&fixture, created.id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(approved.status, AbsenceStatus::Approved);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn spec_rh_3_6_an_archived_type_is_refused_for_new_absences_and_stays_on_past_ones() {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+        let type_id = seed_type(&usecase, &fixture, "Ancien motif", true, false).await;
+        let past = usecase
+            .create_absence(days_command(&fixture, type_id))
+            .await
+            .unwrap()
+            .unwrap();
+
+        usecase
+            .archive_absence_type(ArchiveAbsenceTypeCommand {
+                actor: authz::Subject::system(),
+                organization_id: fixture.organization_id,
+                id: type_id,
+                archived: true,
+            })
+            .await
+            .unwrap();
+
+        let refused = usecase
+            .create_absence(days_command(&fixture, type_id))
+            .await
+            .unwrap();
+        assert_eq!(refused, Err(AbsenceError::TypeArchived));
+        let kept = usecase.get_absence(past.id).await.unwrap();
+        assert_eq!(kept.type_id, type_id);
+        let types = usecase
+            .list_absence_types(ListAbsenceTypesCommand {
+                actor: authz::Subject::system(),
+                organization_id: fixture.organization_id,
+            })
+            .await
+            .unwrap();
+        assert!(
+            types
+                .iter()
+                .any(|t| t.id == type_id && t.archived_at.is_some())
+        );
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires live postgres"]
+    async fn cancelling_by_a_system_caller_needs_no_creator_and_the_other_organization_sees_not_found()
+     {
+        let pool = make_pool().await;
+        let fixture = seed_fixture(&pool).await;
+        let other = seed_fixture(&pool).await;
+        let usecase = make_usecase(pool.clone());
+        let created = usecase
+            .create_absence(create_command(&fixture))
+            .await
+            .unwrap()
+            .unwrap();
+
+        let foreign = usecase
+            .cancel_absence(decide(&other, created.id))
+            .await
+            .unwrap_err();
+        let cancelled = usecase
+            .cancel_absence(decide(&fixture, created.id))
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(matches!(foreign, common::CoreError::NotFound));
+        assert_eq!(cancelled.status, AbsenceStatus::Cancelled);
+
+        cleanup(&pool, fixture.organization_id, &[fixture.owner_id]).await;
+        cleanup(&pool, other.organization_id, &[other.owner_id]).await;
     }
 }

@@ -1,0 +1,164 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE absences\n            SET kind = CAST($2 AS text)::absence_kind,\n                type_id = $3,\n                starts_at = $4,\n                ends_at = $5,\n                all_day = $6,\n                start_date = $7,\n                start_part = $8,\n                end_date = $9,\n                end_part = $10,\n                status = $11,\n                note = $12,\n                proof_file_key = $13,\n                decided_by_member_id = $14,\n                decided_at = $15,\n                decision_comment = $16,\n                updated_at = $17\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING id, org_id, member_id, kind::text AS \"kind!\", type_id, starts_at, ends_at, all_day, start_date, start_part, end_date, end_part, status, note, proof_file_key, created_by_member_id, decided_by_member_id, decided_at, decision_comment, deleted_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "type_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "all_day",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "start_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "start_part",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 11,
+        "name": "end_part",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "proof_file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_by_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "decided_by_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "decided_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "decision_comment",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool",
+        "Date",
+        "Text",
+        "Date",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "5d2af4bbbb34094583cbd8a657a1529c7cfc2e94964280a451bf76b8663f473d"
+}

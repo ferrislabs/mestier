@@ -1,4 +1,5 @@
 pub mod absence;
+pub mod absence_type;
 pub mod assignment_report;
 pub mod automation;
 pub mod category;

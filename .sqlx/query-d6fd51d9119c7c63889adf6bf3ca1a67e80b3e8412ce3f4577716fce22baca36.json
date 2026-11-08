@@ -1,0 +1,99 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO absence_types (\n                id, org_id, name, hue, count_mode, account_id, paid, needs_approval,\n                needs_proof, kind, archived_at, created_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CAST($10 AS text)::absence_kind, $11, $12)\n            RETURNING id, org_id, name, hue, count_mode, account_id, paid, needs_approval,\n                      needs_proof, kind::text AS \"kind!\", archived_at, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "hue",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "count_mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "paid",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "needs_approval",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "needs_proof",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Text",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "d6fd51d9119c7c63889adf6bf3ca1a67e80b3e8412ce3f4577716fce22baca36"
+}
