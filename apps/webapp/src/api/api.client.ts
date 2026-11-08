@@ -245,7 +245,7 @@ export namespace Schemas {
     updated_at: string;
   };
   export type ChannelId = string;
-  export type ChannelType = "TEXT" | "THREAD" | "DIRECT";
+  export type ChannelType = "TEXT" | "THREAD" | "DIRECT" | "ANNOUNCEMENT" | "VOICE";
   export type MessageId = string;
   export type ChannelResponse = {
     archived: boolean;
@@ -262,6 +262,7 @@ export namespace Schemas {
     topic?: (string | null) | undefined;
     updated_at: string;
   };
+  export type ChatRoleResponse = { name: string; role_id: RoleId };
   export type HttpMethodDto = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   export type ParameterLocationDto = "path" | "query" | "header";
   export type ParameterDto = {
@@ -420,7 +421,9 @@ export namespace Schemas {
   };
   export type CreateCategoryRequest = { name: string; position: number };
   export type CreateChannelRequest = {
+    allowed_role_ids?: (Array<RoleId> | null) | undefined;
     category_id?: (null | CategoryId) | undefined;
+    channel_type?: (null | ChannelType) | undefined;
     name: string;
     position: number;
     topic?: (string | null) | undefined;
@@ -3472,6 +3475,7 @@ export namespace Endpoints {
       400: unknown;
       401: unknown;
       403: unknown;
+      409: unknown;
     };
   };
   export type get_ListDirectChannels = {
@@ -3588,6 +3592,22 @@ export namespace Endpoints {
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       400: unknown;
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListChatRoles = {
+    method: "GET";
+    path: "/api/v1/chat/organizations/{organization_id}/roles";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{ name: string; role_id: Schemas.RoleId }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
       401: unknown;
       403: unknown;
     };
@@ -13261,6 +13281,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/organizations/{organization_id}/direct-channels": Endpoints.get_ListDirectChannels;
     "/api/v1/chat/organizations/{organization_id}/directory": Endpoints.get_ListChatDirectory;
     "/api/v1/chat/organizations/{organization_id}/notifications": Endpoints.get_ListNotifications;
+    "/api/v1/chat/organizations/{organization_id}/roles": Endpoints.get_ListChatRoles;
     "/api/v1/chat/organizations/{organization_id}/unread": Endpoints.get_ListUnreadChannels;
     "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.get_GetCustomerContact;
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.get_GetCustomerContext;

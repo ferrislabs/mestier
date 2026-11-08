@@ -1,9 +1,12 @@
 use common::{OrganizationId, ProjectId};
 
-use crate::{CategoryId, ChannelId, MessageId};
+use crate::{CategoryId, ChannelId, ChannelType, MessageId};
 
 pub struct CreateChannelCommand {
     pub organization_id: OrganizationId,
+    /// `Text`, `Announcement` or `Voice`: a thread or a direct channel is
+    /// never made through here.
+    pub channel_type: ChannelType,
     pub category_id: Option<CategoryId>,
     pub name: String,
     pub topic: Option<String>,

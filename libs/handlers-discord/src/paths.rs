@@ -98,6 +98,12 @@ pub struct OrgDirectoryPath {
     pub organization_id: OrganizationId,
 }
 
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/organizations/{organization_id}/roles")]
+pub struct OrgChatRolesPath {
+    pub organization_id: OrganizationId,
+}
+
 // Presence
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/chat/organizations/{organization_id}/presence")]

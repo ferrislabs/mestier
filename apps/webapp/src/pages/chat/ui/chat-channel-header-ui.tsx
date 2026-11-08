@@ -1,7 +1,8 @@
-import { Hash, Search, Settings, Users } from 'lucide-react'
+import { Search, Settings, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Skeleton } from '#/components/ui/skeleton'
 import type { PresenceStatus } from '#/hooks/use-presence'
+import { channelKindIcon } from '#/pages/chat/lib/channel-kinds'
 import { PRESENCE_LABELS } from '#/pages/chat/lib/presence'
 import { IconButton, IconToggle } from '#/pages/chat/ui/icon-button'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
@@ -14,6 +15,7 @@ export interface DirectPeer {
 
 export interface ChatChannelHeaderUIProps {
 	name?: string
+	channelType?: string
 	topic?: string | null
 	isLoading: boolean
 	searchOpen: boolean
@@ -30,6 +32,7 @@ export interface ChatChannelHeaderUIProps {
 
 export function ChatChannelHeaderUI({
 	name,
+	channelType,
 	topic,
 	isLoading,
 	searchOpen,
@@ -41,6 +44,8 @@ export function ChatChannelHeaderUI({
 	memberCount,
 	onOpenAdmin,
 }: ChatChannelHeaderUIProps) {
+	const KindIcon = channelKindIcon(channelType)
+
 	if (isLoading) {
 		return (
 			<header className="flex min-h-12 shrink-0 items-center gap-3 border-border border-b bg-background px-4 py-2">
@@ -68,7 +73,7 @@ export function ChatChannelHeaderUI({
 					</>
 				) : (
 					<h1 className="flex shrink-0 items-center gap-1 font-semibold text-base">
-						<Hash aria-hidden className="size-4 text-muted-foreground" />
+						<KindIcon aria-hidden className="size-4 text-muted-foreground" />
 						{name}
 					</h1>
 				)}

@@ -8,6 +8,11 @@ pub enum ChannelType {
     Text,
     Thread,
     Direct,
+    /// Read by everyone who can see it, written only by those who manage
+    /// channels.
+    Announcement,
+    /// A place to talk, not to type: it carries no text messages.
+    Voice,
 }
 
 impl ChannelType {
@@ -16,6 +21,8 @@ impl ChannelType {
             Self::Text => "TEXT",
             Self::Thread => "THREAD",
             Self::Direct => "DIRECT",
+            Self::Announcement => "ANNOUNCEMENT",
+            Self::Voice => "VOICE",
         }
     }
 }
@@ -33,6 +40,8 @@ impl FromStr for ChannelType {
             "TEXT" => Ok(Self::Text),
             "THREAD" => Ok(Self::Thread),
             "DIRECT" => Ok(Self::Direct),
+            "ANNOUNCEMENT" => Ok(Self::Announcement),
+            "VOICE" => Ok(Self::Voice),
             other => Err(format!("invalid channel type `{other}`")),
         }
     }
@@ -157,8 +166,17 @@ mod tests {
     }
 
     #[test]
+    fn channel_type_parses_announcement_and_voice() {
+        assert_eq!(
+            "ANNOUNCEMENT".parse::<ChannelType>().unwrap(),
+            ChannelType::Announcement
+        );
+        assert_eq!("VOICE".parse::<ChannelType>().unwrap(), ChannelType::Voice);
+    }
+
+    #[test]
     fn channel_type_rejects_unknown() {
-        assert!("VOICE".parse::<ChannelType>().is_err());
+        assert!("FORUM".parse::<ChannelType>().is_err());
     }
 
     #[test]

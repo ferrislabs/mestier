@@ -209,6 +209,18 @@ describe('ChatChannelHeaderUI — direct message', () => {
 		expect(screen.getByText('5 membres')).toBeDefined()
 	})
 
+	it('keeps a channel s icon for its type', () => {
+		withTooltips(
+			<ChatChannelHeaderUI
+				{...baseProps}
+				name="annonces"
+				channelType="ANNOUNCEMENT"
+			/>,
+		)
+
+		expect(screen.getByRole('heading', { name: 'annonces' })).toBeDefined()
+	})
+
 	it('keeps the settings button on a regular channel', () => {
 		withTooltips(<ChatChannelHeaderUI {...baseProps} name="general" />)
 

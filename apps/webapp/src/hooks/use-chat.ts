@@ -11,6 +11,7 @@ const ORG_CATEGORIES_PATH =
 	'/api/v1/chat/organizations/{organization_id}/categories'
 const ORG_CHANNELS_PATH =
 	'/api/v1/chat/organizations/{organization_id}/channels'
+const ORG_CHAT_ROLES_PATH = '/api/v1/chat/organizations/{organization_id}/roles'
 const ORG_DIRECTORY_PATH =
 	'/api/v1/chat/organizations/{organization_id}/directory'
 const ORG_DIRECT_CHANNELS_PATH =
@@ -67,7 +68,7 @@ export function useCategories(organizationId: string) {
 }
 
 /**
- * TEXT channels only — threads (`channel_type === 'THREAD'`) are fetched per
+ * Text, announcement and voice channels — threads (`channel_type === 'THREAD'`) are fetched per
  * parent channel (see #326), not listed at the organization level. The
  * server already scopes this to `list_by_organization`, which does not
  * return threads; the filter here is a cheap, harmless belt-and-braces.
@@ -78,8 +79,33 @@ export function useChannels(organizationId: string) {
 			path: { organization_id: organizationId },
 		}).queryOptions,
 		select: (response) =>
-			response.data.filter((channel) => channel.channel_type === 'TEXT'),
+			response.data.filter((channel) =>
+				isListedChannelType(channel.channel_type),
+			),
 		enabled: Boolean(organizationId),
+	})
+}
+
+const LISTED_CHANNEL_TYPES: readonly Schemas.ChannelType[] = [
+	'TEXT',
+	'ANNOUNCEMENT',
+	'VOICE',
+]
+
+/** Threads and direct messages have their own lists. */
+function isListedChannelType(type: Schemas.ChannelType): boolean {
+	return LISTED_CHANNEL_TYPES.includes(type)
+}
+
+/** The roles a channel can be restricted to, by id and name. Gated on
+ * `MANAGE_CHANNELS`, which the new-channel dialog already requires. */
+export function useChatRoles(organizationId: string, enabled = true) {
+	return useQuery({
+		...window.tanstackApi.get(ORG_CHAT_ROLES_PATH, {
+			path: { organization_id: organizationId },
+		}).queryOptions,
+		select: (response) => response.data,
+		enabled: enabled && Boolean(organizationId),
 	})
 }
 

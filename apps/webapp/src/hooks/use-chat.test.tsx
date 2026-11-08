@@ -102,6 +102,33 @@ describe('useChannels', () => {
 	})
 })
 
+describe('useChannels — channel types', () => {
+	it('lists announcement and voice channels, not threads or direct messages', () => {
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
+		})
+		queryClient.setQueryData(channelsKey('org-1'), {
+			data: [
+				channel({ id: 'ch-1', channel_type: 'TEXT' }),
+				channel({ id: 'ch-2', channel_type: 'ANNOUNCEMENT' }),
+				channel({ id: 'ch-3', channel_type: 'VOICE' }),
+				channel({ id: 'ch-4', channel_type: 'DIRECT' }),
+				channel({ id: 'ch-5', channel_type: 'THREAD', parent_id: 'ch-1' }),
+			],
+		})
+
+		const { result } = renderHook(() => useChannels('org-1'), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		expect(result.current.data?.map((c) => c.id)).toEqual([
+			'ch-1',
+			'ch-2',
+			'ch-3',
+		])
+	})
+})
+
 describe('useChatListGatewaySync', () => {
 	it('adds a channel created on another tab to the cached list', () => {
 		const queryClient = new QueryClient({

@@ -2,7 +2,6 @@ import { Link } from '@tanstack/react-router'
 import {
 	AlertCircle,
 	ChevronRight,
-	Hash,
 	MoreHorizontal,
 	Plus,
 	Settings,
@@ -22,6 +21,7 @@ import {
 import { Skeleton } from '#/components/ui/skeleton'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import { channelKindIcon } from '#/pages/chat/lib/channel-kinds'
 import type { DirectMessageItem } from '#/pages/chat/lib/direct-messages'
 import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
@@ -189,6 +189,11 @@ export function ChatSidebarUI({
 	)
 }
 
+function ChannelIcon({ type, className }: { type: string; className: string }) {
+	const Icon = channelKindIcon(type)
+	return <Icon aria-hidden className={className} />
+}
+
 function UnreadBadge({ count }: { count: number }) {
 	if (count <= 0) return null
 	return (
@@ -248,7 +253,10 @@ function CategoryGroup({
 								unreadCount > 0 && 'font-semibold text-nav-foreground',
 							)}
 						>
-							<Hash aria-hidden className="size-4 shrink-0 text-nav-muted" />
+							<ChannelIcon
+								type={chan.channel_type}
+								className="size-4 shrink-0 text-nav-muted"
+							/>
 							<span className="min-w-0 flex-1 truncate">{chan.name}</span>
 							<UnreadBadge count={unreadCount} />
 						</Link>

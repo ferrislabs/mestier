@@ -122,6 +122,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_patch(webhook::update::handler)
         .typed_delete(webhook::delete::handler)
         .typed_get(directory::list::handler)
+        .typed_get(directory::roles::handler)
         .typed_get(direct_channel::list::handler)
         .typed_post(direct_channel::open::handler)
         .typed_put(presence::set::handler)

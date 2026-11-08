@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, Json, extract::State};
-use discord::{CategoryId, CreateChannelCommand};
+use discord::{CategoryId, ChannelType, CreateChannelCommand, RoleId};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -13,6 +13,11 @@ pub struct CreateChannelRequest {
     pub topic: Option<String>,
     pub position: i32,
     pub category_id: Option<CategoryId>,
+    /// `TEXT` when absent. Only `TEXT`, `ANNOUNCEMENT` and `VOICE` are accepted.
+    pub channel_type: Option<ChannelType>,
+    /// Present means private: only members holding one of these roles, and the
+    /// creator, can see and write in the channel.
+    pub allowed_role_ids: Option<Vec<RoleId>>,
 }
 
 #[utoipa::path(
@@ -27,6 +32,7 @@ pub struct CreateChannelRequest {
         (status = 400, description = "Validation failed"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden — requires MANAGE_CHANNELS"),
+        (status = 409, description = "Unsupported channel type, or unknown or empty role list"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -39,17 +45,23 @@ pub async fn handler(
     require_permission(&state, &identity, path.organization_id, "channel.manage").await?;
     let actor = resolve_user_id(&state, &identity).await?;
 
-    let channel = state
-        .usecase
-        .acting_as(actor)
-        .create_channel(CreateChannelCommand {
-            organization_id: path.organization_id,
-            category_id: payload.category_id,
-            name: payload.name,
-            topic: payload.topic,
-            position: payload.position,
-        })
-        .await?;
+    let command = CreateChannelCommand {
+        organization_id: path.organization_id,
+        channel_type: payload.channel_type.unwrap_or(ChannelType::Text),
+        category_id: payload.category_id,
+        name: payload.name,
+        topic: payload.topic,
+        position: payload.position,
+    };
+    let usecase = state.usecase.acting_as(actor);
+    let channel = match payload.allowed_role_ids {
+        Some(role_ids) => {
+            usecase
+                .create_private_channel(command, actor, role_ids)
+                .await?
+        }
+        None => usecase.create_channel(command).await?,
+    };
 
     Ok(Response::Created(channel.into()))
 }
