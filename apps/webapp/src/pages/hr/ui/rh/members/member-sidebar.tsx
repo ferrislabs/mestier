@@ -1,6 +1,14 @@
 import { Link } from '@tanstack/react-router'
-import { Archive, ArchiveRestore, ArrowLeft, CalendarPlus } from 'lucide-react'
+import {
+	Archive,
+	ArchiveRestore,
+	ArrowLeft,
+	CalendarPlus,
+	Clock,
+	Wallet,
+} from 'lucide-react'
 import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { currentContract } from '#/pages/hr/lib/rh/contracts'
 import { contractCountLabel } from '#/pages/hr/lib/rh/format'
@@ -117,6 +125,27 @@ export function MemberSidebar({
 							}
 						/>
 					)}
+				</div>
+				<div className="mt-2 flex flex-wrap items-center gap-2">
+					<Button variant="ghost" size="sm" asChild>
+						<Link
+							to={orgPath('/rh/membres/$memberId/temps-de-travail')}
+							params={{ memberId: member.id }}
+						>
+							<Clock aria-hidden /> Temps de travail
+						</Link>
+					</Button>
+					<RequirePermission permission="MANAGE_MEMBERS">
+						<Button variant="ghost" size="sm" asChild>
+							<Link
+								to={orgPath('/rh/membres/$memberId/temps-de-travail')}
+								params={{ memberId: member.id }}
+								hash="historique-cout"
+							>
+								<Wallet aria-hidden /> Historique du coût
+							</Link>
+						</Button>
+					</RequirePermission>
 				</div>
 			</div>
 			<RubriqueList

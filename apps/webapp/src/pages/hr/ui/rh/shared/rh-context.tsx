@@ -47,3 +47,7 @@ export function useRhOrgPath(): (path: string) => string {
 	const { organizationSlug } = useRhContext()
 	return (path) => buildOrgPath(organizationSlug, path)
 }
+
+export function useRhOrgSlug(): string {
+	return useRhContext().organizationSlug
+}
