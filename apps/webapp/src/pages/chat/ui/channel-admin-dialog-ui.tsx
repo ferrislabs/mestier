@@ -11,6 +11,13 @@ import {
 	AlertDialogTitle,
 } from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -20,13 +27,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetHeader,
-	SheetTitle,
-} from '#/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import type { Category, Channel, Overwrite, Webhook } from '#/hooks/use-chat'
 import {
@@ -37,7 +37,7 @@ import {
 
 const NO_CATEGORY_VALUE = '__none__'
 
-export interface ChannelAdminSheetUIProps {
+export interface ChannelAdminDialogUIProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
 
@@ -75,7 +75,7 @@ export interface ChannelAdminSheetUIProps {
 	onDeleteWebhook: (id: string) => void
 }
 
-export function ChannelAdminSheetUI({
+export function ChannelAdminDialogUI({
 	open,
 	onOpenChange,
 	channel,
@@ -107,18 +107,18 @@ export function ChannelAdminSheetUI({
 	createdWebhookToken,
 	onDismissCreatedToken,
 	onDeleteWebhook,
-}: ChannelAdminSheetUIProps) {
+}: ChannelAdminDialogUIProps) {
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent className="w-full sm:max-w-md">
-				<SheetHeader>
-					<SheetTitle>Paramètres du canal</SheetTitle>
-					<SheetDescription>
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+				<DialogHeader>
+					<DialogTitle>Paramètres du canal</DialogTitle>
+					<DialogDescription>
 						{channel ? `#${channel.name}` : ''}
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 
-				<Tabs defaultValue="general" className="px-4">
+				<Tabs defaultValue="general">
 					<TabsList>
 						<TabsTrigger value="general">Général</TabsTrigger>
 						<RequirePermission permission="MANAGE_CHANNELS">
@@ -385,8 +385,8 @@ export function ChannelAdminSheetUI({
 						</ul>
 					</TabsContent>
 				</Tabs>
-			</SheetContent>
-		</Sheet>
+			</DialogContent>
+		</Dialog>
 	)
 }
 

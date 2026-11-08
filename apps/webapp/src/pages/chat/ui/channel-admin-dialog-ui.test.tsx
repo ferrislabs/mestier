@@ -3,8 +3,8 @@ import type { UserEvent } from '@testing-library/user-event'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { renderWithPermissions } from '#/test/with-permissions'
-import type { ChannelAdminSheetUIProps } from './channel-admin-sheet-ui'
-import { ChannelAdminSheetUI } from './channel-admin-sheet-ui'
+import type { ChannelAdminDialogUIProps } from './channel-admin-dialog-ui'
+import { ChannelAdminDialogUI } from './channel-admin-dialog-ui'
 
 /** Radix `Tabs` only keeps the active panel in the accessible tree — tests
  * touching the "permissions" or "webhooks" tab must switch to it first. */
@@ -31,8 +31,8 @@ function channel(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 function baseProps(
-	overrides: Partial<ChannelAdminSheetUIProps> = {},
-): ChannelAdminSheetUIProps {
+	overrides: Partial<ChannelAdminDialogUIProps> = {},
+): ChannelAdminDialogUIProps {
 	return {
 		open: true,
 		onOpenChange: vi.fn(),
@@ -69,12 +69,12 @@ function baseProps(
 	}
 }
 
-describe('ChannelAdminSheetUI — general', () => {
+describe('ChannelAdminDialogUI — general', () => {
 	it('calls onSaveGeneral when the save button is clicked', async () => {
 		const user = userEvent.setup()
 		const onSaveGeneral = vi.fn()
 		renderWithPermissions(
-			<ChannelAdminSheetUI {...baseProps({ onSaveGeneral })} />,
+			<ChannelAdminDialogUI {...baseProps({ onSaveGeneral })} />,
 		)
 
 		await user.click(screen.getByText('Enregistrer'))
@@ -86,7 +86,7 @@ describe('ChannelAdminSheetUI — general', () => {
 		const user = userEvent.setup()
 		const onRequestDelete = vi.fn()
 		renderWithPermissions(
-			<ChannelAdminSheetUI {...baseProps({ onRequestDelete })} />,
+			<ChannelAdminDialogUI {...baseProps({ onRequestDelete })} />,
 		)
 
 		await user.click(screen.getByText('Supprimer le canal'))
@@ -96,7 +96,7 @@ describe('ChannelAdminSheetUI — general', () => {
 
 	it('names what is lost in the delete confirmation', () => {
 		renderWithPermissions(
-			<ChannelAdminSheetUI
+			<ChannelAdminDialogUI
 				{...baseProps({
 					deleteDialogOpen: true,
 					channel: channel({ name: 'random' }),
@@ -112,7 +112,7 @@ describe('ChannelAdminSheetUI — general', () => {
 		const user = userEvent.setup()
 		const onConfirmDelete = vi.fn()
 		renderWithPermissions(
-			<ChannelAdminSheetUI
+			<ChannelAdminDialogUI
 				{...baseProps({ deleteDialogOpen: true, onConfirmDelete })}
 			/>,
 		)
@@ -123,10 +123,10 @@ describe('ChannelAdminSheetUI — general', () => {
 	})
 })
 
-describe('ChannelAdminSheetUI — permissions', () => {
+describe('ChannelAdminDialogUI — permissions', () => {
 	it('shows the everyone overwrite as inherited with no overwrite', async () => {
 		const user = userEvent.setup()
-		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />)
+		renderWithPermissions(<ChannelAdminDialogUI {...baseProps()} />)
 		await switchToTab(user, 'Permissions')
 
 		const buttons = screen
@@ -141,7 +141,7 @@ describe('ChannelAdminSheetUI — permissions', () => {
 		const user = userEvent.setup()
 		const onChangeEveryoneBit = vi.fn()
 		renderWithPermissions(
-			<ChannelAdminSheetUI {...baseProps({ onChangeEveryoneBit })} />,
+			<ChannelAdminDialogUI {...baseProps({ onChangeEveryoneBit })} />,
 		)
 		await switchToTab(user, 'Permissions')
 
@@ -154,7 +154,7 @@ describe('ChannelAdminSheetUI — permissions', () => {
 	it('reflects an existing everyone overwrite', async () => {
 		const user = userEvent.setup()
 		renderWithPermissions(
-			<ChannelAdminSheetUI
+			<ChannelAdminDialogUI
 				{...baseProps({
 					everyoneOverwrite: {
 						target_type: 'everyone',
@@ -179,7 +179,7 @@ describe('ChannelAdminSheetUI — permissions', () => {
 		const user = userEvent.setup()
 		const onDeleteTargetOverwrite = vi.fn()
 		renderWithPermissions(
-			<ChannelAdminSheetUI
+			<ChannelAdminDialogUI
 				{...baseProps({
 					roleAndMemberOverwrites: [
 						{
@@ -203,11 +203,11 @@ describe('ChannelAdminSheetUI — permissions', () => {
 	})
 })
 
-describe('ChannelAdminSheetUI — webhooks', () => {
+describe('ChannelAdminDialogUI — webhooks', () => {
 	it('disables webhook creation until a name is entered', async () => {
 		const user = userEvent.setup()
 		renderWithPermissions(
-			<ChannelAdminSheetUI {...baseProps({ newWebhookName: '' })} />,
+			<ChannelAdminDialogUI {...baseProps({ newWebhookName: '' })} />,
 		)
 		await switchToTab(user, 'Webhooks')
 
@@ -219,7 +219,7 @@ describe('ChannelAdminSheetUI — webhooks', () => {
 		const user = userEvent.setup()
 		const onDismissCreatedToken = vi.fn()
 		renderWithPermissions(
-			<ChannelAdminSheetUI
+			<ChannelAdminDialogUI
 				{...baseProps({
 					createdWebhookToken: 'secret-token-123',
 					onDismissCreatedToken,
@@ -237,7 +237,7 @@ describe('ChannelAdminSheetUI — webhooks', () => {
 		const user = userEvent.setup()
 		const onDeleteWebhook = vi.fn()
 		renderWithPermissions(
-			<ChannelAdminSheetUI
+			<ChannelAdminDialogUI
 				{...baseProps({
 					webhooks: [
 						{
@@ -262,9 +262,9 @@ describe('ChannelAdminSheetUI — webhooks', () => {
 	})
 })
 
-describe('ChannelAdminSheetUI permission gating (#407)', () => {
+describe('ChannelAdminDialogUI permission gating (#407)', () => {
 	it('shows the permissions and webhooks tabs to a fully-privileged caller', () => {
-		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />, {
+		renderWithPermissions(<ChannelAdminDialogUI {...baseProps()} />, {
 			permissions: ['MANAGE_CHANNELS', 'MANAGE_WEBHOOKS'],
 		})
 		expect(screen.getByRole('tab', { name: 'Permissions' })).toBeDefined()
@@ -274,7 +274,7 @@ describe('ChannelAdminSheetUI permission gating (#407)', () => {
 	it('hides the permissions tab without MANAGE_CHANNELS', () => {
 		// `channel/permissions/list.rs` requires `channel.manage`, so the tab
 		// would open onto a 403 rather than an empty list.
-		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />, {
+		renderWithPermissions(<ChannelAdminDialogUI {...baseProps()} />, {
 			permissions: ['MANAGE_WEBHOOKS'],
 		})
 		expect(screen.queryByRole('tab', { name: 'Permissions' })).toBeNull()
@@ -282,14 +282,14 @@ describe('ChannelAdminSheetUI permission gating (#407)', () => {
 
 	it('hides the webhooks tab without MANAGE_WEBHOOKS', () => {
 		// `webhook/list.rs` requires `webhook.manage` — same reasoning.
-		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />, {
+		renderWithPermissions(<ChannelAdminDialogUI {...baseProps()} />, {
 			permissions: ['MANAGE_CHANNELS'],
 		})
 		expect(screen.queryByRole('tab', { name: 'Webhooks' })).toBeNull()
 	})
 
 	it('hides the save and delete controls without MANAGE_CHANNELS', () => {
-		renderWithPermissions(<ChannelAdminSheetUI {...baseProps()} />, {
+		renderWithPermissions(<ChannelAdminDialogUI {...baseProps()} />, {
 			permissions: ['VIEW_CHANNEL'],
 		})
 		expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()

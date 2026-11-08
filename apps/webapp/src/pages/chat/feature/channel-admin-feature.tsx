@@ -16,7 +16,7 @@ import type {
 	TriState,
 } from '#/pages/chat/lib/permission-bits'
 import { withBitState } from '#/pages/chat/lib/permission-bits'
-import { ChannelAdminSheetUI } from '#/pages/chat/ui/channel-admin-sheet-ui'
+import { ChannelAdminDialogUI } from '#/pages/chat/ui/channel-admin-dialog-ui'
 
 export interface ChannelAdminFeatureProps {
 	channelId: string
@@ -131,7 +131,7 @@ export function ChannelAdminFeature({
 	}
 
 	return (
-		<ChannelAdminSheetUI
+		<ChannelAdminDialogUI
 			open={open}
 			onOpenChange={onOpenChange}
 			channel={channel.data}
