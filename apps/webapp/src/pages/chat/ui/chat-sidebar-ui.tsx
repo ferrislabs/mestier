@@ -36,7 +36,7 @@ export interface ChatSidebarUIProps {
 	isLoading: boolean
 	isError: boolean
 	onlineCount: number
-	unreadChannelIds: ReadonlySet<string>
+	unreadCounts: ReadonlyMap<string, number>
 	mentionCount: number
 	onRequestNewChannel: () => void
 	/** Opens the channel admin sheet for one channel — see #372: channel
@@ -53,7 +53,7 @@ export function ChatSidebarUI({
 	isLoading,
 	isError,
 	onlineCount,
-	unreadChannelIds,
+	unreadCounts,
 	mentionCount,
 	onRequestNewChannel,
 	onOpenChannelAdmin,
@@ -119,7 +119,7 @@ export function ChatSidebarUI({
 									: false
 							}
 							onToggleCategory={onToggleCategory}
-							unreadChannelIds={unreadChannelIds}
+							unreadCounts={unreadCounts}
 							onOpenChannelAdmin={onOpenChannelAdmin}
 						/>
 					))}
@@ -166,7 +166,7 @@ interface CategoryGroupProps {
 	activeChannelId?: string
 	collapsed: boolean
 	onToggleCategory: (categoryId: string, collapsed: boolean) => void
-	unreadChannelIds: ReadonlySet<string>
+	unreadCounts: ReadonlyMap<string, number>
 	onOpenChannelAdmin: (channelId: string) => void
 }
 
@@ -176,13 +176,14 @@ function CategoryGroup({
 	activeChannelId,
 	collapsed,
 	onToggleCategory,
-	unreadChannelIds,
+	unreadCounts,
 	onOpenChannelAdmin,
 }: CategoryGroupProps) {
 	const channelList = (
 		<ul className="flex flex-col gap-0.5">
 			{group.channels.map((chan) => {
-				const unread = unreadChannelIds.has(chan.id)
+				const unreadCount = unreadCounts.get(chan.id) ?? 0
+				const unread = unreadCount > 0
 				return (
 					<li key={chan.id} className="group/channel relative">
 						<Link
@@ -197,12 +198,14 @@ function CategoryGroup({
 							<Hash aria-hidden className="size-4 shrink-0" />
 							<span className="min-w-0 flex-1 truncate">{chan.name}</span>
 							{unread ? (
-								<span
-									aria-hidden="true"
-									className="size-1.5 shrink-0 rounded-full bg-primary"
-								/>
+								<span className="tabular flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-semibold text-primary-foreground text-xs">
+									{unreadCount}
+									<span className="sr-only">
+										{' '}
+										{unreadCount > 1 ? 'messages non lus' : 'message non lu'}
+									</span>
+								</span>
 							) : null}
-							{unread ? <span className="sr-only">Non lu</span> : null}
 						</Link>
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>

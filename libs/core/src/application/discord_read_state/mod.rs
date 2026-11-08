@@ -1,7 +1,7 @@
 use common::CoreError;
 use discord::{
     ChannelId, MarkChannelReadCommand, OrganizationId, ReadStateRepository, ReadStateService,
-    UserId,
+    UnreadChannel, UserId,
 };
 use mestier_macros::transactional;
 
@@ -23,5 +23,15 @@ impl MestierUseCase {
     ) -> Result<Vec<ChannelId>, CoreError> {
         let repo = read_state_repository;
         repo.unread_channels(user_id, organization_id).await
+    }
+
+    #[transactional(read_state)]
+    pub async fn list_unread_summaries(
+        &self,
+        user_id: UserId,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<UnreadChannel>, CoreError> {
+        let repo = read_state_repository;
+        repo.unread_summaries(user_id, organization_id).await
     }
 }

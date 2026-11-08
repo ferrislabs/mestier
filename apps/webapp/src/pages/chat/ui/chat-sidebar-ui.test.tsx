@@ -57,7 +57,7 @@ function baseProps(
 		isLoading: false,
 		isError: false,
 		onlineCount: 0,
-		unreadChannelIds: new Set(),
+		unreadCounts: new Map(),
 		mentionCount: 0,
 		onRequestNewChannel: vi.fn(),
 		onOpenChannelAdmin: vi.fn(),
@@ -165,7 +165,7 @@ describe('ChatSidebarUI — per-channel management (#372)', () => {
 })
 
 describe('ChatSidebarUI — unread and mentions', () => {
-	it('shows an unread indicator only for channels with unread content', async () => {
+	it('shows the unread count only for channels with unread content', async () => {
 		const groups = [
 			{
 				category: category('cat-1'),
@@ -174,11 +174,12 @@ describe('ChatSidebarUI — unread and mentions', () => {
 		]
 		await renderSidebar(
 			<ChatSidebarUI
-				{...baseProps({ groups, unreadChannelIds: new Set(['ch-1']) })}
+				{...baseProps({ groups, unreadCounts: new Map([['ch-1', 4]]) })}
 			/>,
 		)
 
-		expect(screen.getAllByText('Non lu')).toHaveLength(1)
+		expect(screen.getAllByText(/messages non lus/)).toHaveLength(1)
+		expect(screen.getByText('4')).toBeDefined()
 	})
 
 	it('shows no mention badge when there are no unread mentions', async () => {

@@ -111,6 +111,10 @@ describe('useReadStateGatewaySync', () => {
 		})
 		queryClient.setQueryData(unreadKey('org-1'), {
 			channel_ids: ['ch-1', 'ch-2'],
+			channels: [
+				{ channel_id: 'ch-1', unread_count: 2, first_unread_message_id: 'm-1' },
+				{ channel_id: 'ch-2', unread_count: 1, first_unread_message_id: 'm-9' },
+			],
 		})
 
 		renderHook(() => useReadStateGatewaySync('org-1'), {
@@ -133,14 +137,22 @@ describe('useReadStateGatewaySync', () => {
 
 		expect(
 			queryClient.getQueryData<{ channel_ids: string[] }>(unreadKey('org-1')),
-		).toEqual({ channel_ids: ['ch-2'] })
+		).toEqual({
+			channel_ids: ['ch-2'],
+			channels: [
+				{ channel_id: 'ch-2', unread_count: 1, first_unread_message_id: 'm-9' },
+			],
+		})
 	})
 
 	it('adds a notification and marks its channel unread on NOTIFICATION_CREATE', () => {
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
 		})
-		queryClient.setQueryData(unreadKey('org-1'), { channel_ids: [] })
+		queryClient.setQueryData(unreadKey('org-1'), {
+			channel_ids: [],
+			channels: [],
+		})
 		queryClient.setQueryData(notificationsKey('org-1'), { data: [] })
 
 		renderHook(() => useReadStateGatewaySync('org-1'), {
@@ -167,7 +179,7 @@ describe('useReadStateGatewaySync', () => {
 
 		expect(
 			queryClient.getQueryData<{ channel_ids: string[] }>(unreadKey('org-1')),
-		).toEqual({ channel_ids: ['ch-1'] })
+		).toEqual({ channel_ids: ['ch-1'], channels: [] })
 		expect(
 			queryClient.getQueryData<{ data: unknown[] }>(notificationsKey('org-1')),
 		).toEqual({
@@ -179,7 +191,10 @@ describe('useReadStateGatewaySync', () => {
 		const queryClient = new QueryClient({
 			defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
 		})
-		queryClient.setQueryData(unreadKey('org-1'), { channel_ids: ['ch-1'] })
+		queryClient.setQueryData(unreadKey('org-1'), {
+			channel_ids: ['ch-1'],
+			channels: [],
+		})
 
 		renderHook(() => useReadStateGatewaySync('org-1'), {
 			wrapper: createWrapper(queryClient),
@@ -201,6 +216,6 @@ describe('useReadStateGatewaySync', () => {
 
 		expect(
 			queryClient.getQueryData<{ channel_ids: string[] }>(unreadKey('org-1')),
-		).toEqual({ channel_ids: ['ch-1'] })
+		).toEqual({ channel_ids: ['ch-1'], channels: [] })
 	})
 })

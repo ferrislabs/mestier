@@ -102,3 +102,38 @@ describe('filterMessagesByQuery', () => {
 		).toEqual(['b'])
 	})
 })
+
+describe('buildTimeline — unread marker', () => {
+	const messages = [
+		entry('m-1', 'a', '2026-01-01T09:00:00Z'),
+		entry('m-2', 'a', '2026-01-01T09:01:00Z'),
+		entry('m-3', 'a', '2026-01-01T09:02:00Z'),
+	]
+
+	it('puts the line right before the first unread message', () => {
+		const timeline = buildTimeline(messages, { messageId: 'm-2', count: 2 })
+
+		expect(timeline.map((item) => item.kind)).toEqual([
+			'day',
+			'message',
+			'unread',
+			'message',
+			'message',
+		])
+	})
+
+	it('starts a new group after the line', () => {
+		const timeline = buildTimeline(messages, { messageId: 'm-2', count: 2 })
+		const after = timeline.find(
+			(item) => item.kind === 'message' && item.entry.message.id === 'm-2',
+		)
+
+		expect(after?.kind === 'message' && after.continuation).toBe(false)
+	})
+
+	it('draws no line when the marker points outside the list', () => {
+		const timeline = buildTimeline(messages, { messageId: 'older', count: 1 })
+
+		expect(timeline.some((item) => item.kind === 'unread')).toBe(false)
+	})
+})

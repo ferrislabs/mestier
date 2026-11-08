@@ -9,3 +9,15 @@ export function DaySeparator({ label }: { label: string }) {
 		</h2>
 	)
 }
+
+export function UnreadSeparator({ count }: { count: number }) {
+	return (
+		<div className="mt-3 flex items-center gap-3 px-4 font-semibold text-state-alert text-xs">
+			<span aria-hidden className="h-px flex-1 bg-state-alert/50" />
+			<span>
+				{count > 1 ? `${count} nouveaux messages` : '1 nouveau message'}
+			</span>
+			<span aria-hidden className="h-px flex-1 bg-state-alert/50" />
+		</div>
+	)
+}

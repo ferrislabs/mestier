@@ -1,6 +1,9 @@
 use common::CoreError;
 use discord::domain::read_state::ports::ReadStateRepository;
-use discord::{ChannelId, ChannelReadState, MarkChannelReadCommand, OrganizationId, UserId};
+use discord::{
+    ChannelId, ChannelReadState, MarkChannelReadCommand, MessageId, OrganizationId, UnreadChannel,
+    UserId,
+};
 use mestier_macros::repository;
 
 use super::model::ChannelReadStateRow;
@@ -99,6 +102,44 @@ impl<'tx> ReadStateRepository for PgReadStateRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         Ok(rows.into_iter().map(|r| ChannelId(r.id)).collect())
+    }
+
+    async fn unread_summaries(
+        &self,
+        user_id: UserId,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<UnreadChannel>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query!(
+            r#"
+            SELECT c.id AS "channel_id!",
+                   COUNT(m.id) AS "unread_count!",
+                   (array_agg(m.id ORDER BY m.id))[1] AS "first_unread_message_id!"
+            FROM chat.channels c
+            JOIN chat.messages m ON m.channel_id = c.id
+            WHERE c.org_id = $1
+              AND m.id > COALESCE(
+                  (SELECT rs.last_read_message_id
+                   FROM chat.channel_read_state rs
+                   WHERE rs.user_id = $2 AND rs.channel_id = c.id),
+                  '00000000-0000-0000-0000-000000000000'::uuid)
+            GROUP BY c.id
+            "#,
+            organization_id.0,
+            user_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| UnreadChannel {
+                channel_id: ChannelId(r.channel_id),
+                unread_count: r.unread_count,
+                first_unread_message_id: MessageId(r.first_unread_message_id),
+            })
+            .collect())
     }
 }
 
@@ -230,6 +271,14 @@ mod tests {
                 "channel must be unread before any mark"
             );
 
+            let summaries = repo.unread_summaries(user_id, org_id).await?;
+            let summary = summaries
+                .iter()
+                .find(|s| s.channel_id == channel_id)
+                .expect("channel must have a summary before any mark");
+            assert_eq!(summary.unread_count, 2);
+            assert_eq!(summary.first_unread_message_id, msg1);
+
             // ── Mark read at msg1 (first insert — always stores, returns Some) ────
             let cmd1 = MarkChannelReadCommand {
                 organization_id: org_id,
@@ -254,6 +303,14 @@ mod tests {
                 unread.contains(&channel_id),
                 "channel still unread after marking msg1 (msg2 is newer)"
             );
+
+            let summaries = repo.unread_summaries(user_id, org_id).await?;
+            let summary = summaries
+                .iter()
+                .find(|s| s.channel_id == channel_id)
+                .expect("channel still has one unread message");
+            assert_eq!(summary.unread_count, 1);
+            assert_eq!(summary.first_unread_message_id, msg2);
 
             // ── Advance to msg2 ───────────────────────────────────────────────────
             let cmd2 = MarkChannelReadCommand {

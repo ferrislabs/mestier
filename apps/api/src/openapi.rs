@@ -838,6 +838,7 @@ impl Modify for SecurityAddon {
         discord::response::WebhookResponse,
         discord::response::WebhookCreatedResponse,
         discord::response::DirectoryEntryResponse,
+        discord::read_state::unread::UnreadChannelResponse,
         discord::response::PresenceResponse,
         discord::read_state::unread::UnreadResponse,
         discord::response::OverwriteResponse,

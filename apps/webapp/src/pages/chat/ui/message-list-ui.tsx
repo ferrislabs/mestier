@@ -3,14 +3,18 @@ import type { RefObject } from 'react'
 import { Skeleton } from '#/components/ui/skeleton'
 import type { AuthorDirectory } from '#/pages/chat/lib/authors'
 import type { DisplayMessage } from '#/pages/chat/lib/messages-reducer'
-import { buildTimeline } from '#/pages/chat/lib/timeline'
+import { buildTimeline, type UnreadMarker } from '#/pages/chat/lib/timeline'
 import { MessageRow } from '#/pages/chat/ui/message-row'
-import { DaySeparator } from '#/pages/chat/ui/timeline-separators'
+import {
+	DaySeparator,
+	UnreadSeparator,
+} from '#/pages/chat/ui/timeline-separators'
 
 export interface MessageListUIProps {
 	messages: DisplayMessage[]
 	currentUserId: string | null
 	authors: AuthorDirectory
+	unread?: UnreadMarker
 	isLoadingInitial: boolean
 	initialError: string | null
 	isLoadingOlder: boolean
@@ -52,6 +56,7 @@ export function MessageListUI({
 	messages,
 	currentUserId,
 	authors,
+	unread,
 	isLoadingInitial,
 	initialError,
 	isLoadingOlder,
@@ -107,7 +112,7 @@ export function MessageListUI({
 		)
 	}
 
-	const timeline = buildTimeline(messages)
+	const timeline = buildTimeline(messages, unread)
 
 	return (
 		<div
@@ -136,6 +141,8 @@ export function MessageListUI({
 			{timeline.map((item) => {
 				if (item.kind === 'day')
 					return <DaySeparator key={item.key} label={item.label} />
+				if (item.kind === 'unread')
+					return <UnreadSeparator key={item.key} count={item.count} />
 				const { entry } = item
 				return (
 					<MessageRow

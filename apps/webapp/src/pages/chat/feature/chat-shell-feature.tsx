@@ -1,13 +1,13 @@
 import { Outlet, useParams } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useCategories,
 	useChannels,
 	useChatListGatewaySync,
 	useReadStateGatewaySync,
-	useUnreadChannels,
 	useUnreadMentionCount,
+	useUnreadSummaries,
 } from '#/hooks/use-chat'
 import { useOnlineCount } from '#/hooks/use-presence'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
@@ -52,9 +52,20 @@ function ChatShellLayout({ organizationId }: { organizationId: string }) {
 	useChatListGatewaySync(organizationId)
 	useReadStateGatewaySync(organizationId)
 	const onlineCount = useOnlineCount()
-	const unreadChannelIds = useUnreadChannels(organizationId)
+	const unreadSummaries = useUnreadSummaries(organizationId)
 	const mentionCount = useUnreadMentionCount(organizationId)
 	const [newChannelDialogOpen, setNewChannelDialogOpen] = useState(false)
+
+	const unreadCounts = useMemo(
+		() =>
+			new Map(
+				[...(unreadSummaries.data ?? [])].map(([channelId, unread]) => [
+					channelId,
+					unread.unread_count,
+				]),
+			),
+		[unreadSummaries.data],
+	)
 
 	const groups = groupChannelsByCategory(
 		categories.data ?? [],
@@ -81,7 +92,7 @@ function ChatShellLayout({ organizationId }: { organizationId: string }) {
 				isLoading={categories.isLoading || channels.isLoading}
 				isError={categories.isError || channels.isError}
 				onlineCount={onlineCount}
-				unreadChannelIds={unreadChannelIds.data ?? new Set()}
+				unreadCounts={unreadCounts}
 				mentionCount={mentionCount}
 				onRequestNewChannel={() => setNewChannelDialogOpen(true)}
 				onOpenChannelAdmin={openChannelAdmin}

@@ -84,7 +84,10 @@ beforeEach(() => {
 			data: { organization_id: 'org-1', user_id: 'me', status: 'ONLINE' },
 		},
 	})
-	window.tanstackApi = new TanstackQueryApiClient({ put: putSpy } as never)
+	window.tanstackApi = new TanstackQueryApiClient({
+		put: putSpy,
+		get: vi.fn().mockResolvedValue({ data: [] }),
+	} as never)
 	clearAuth()
 })
 
@@ -106,6 +109,55 @@ describe('PresenceProvider', () => {
 				}),
 			)
 		})
+	})
+
+	it('starts from the stored statuses in the chat directory', async () => {
+		const getSpy = vi.fn().mockResolvedValue({
+			data: [
+				{ user_id: 'alice', display_name: 'Alice', presence: 'DND' },
+				{ user_id: 'bob', display_name: 'Bob', presence: 'ONLINE' },
+			],
+		})
+		window.tanstackApi = new TanstackQueryApiClient({
+			put: putSpy,
+			get: getSpy,
+		} as never)
+
+		const { result } = renderHook(() => usePresenceStatus('alice'), {
+			wrapper,
+		})
+
+		await waitFor(() => expect(result.current).toBe('DND'))
+	})
+
+	it('keeps a live update over an older directory snapshot', async () => {
+		const getSpy = vi.fn().mockResolvedValue({
+			data: [{ user_id: 'alice', display_name: 'Alice', presence: 'OFFLINE' }],
+		})
+		window.tanstackApi = new TanstackQueryApiClient({
+			put: putSpy,
+			get: getSpy,
+		} as never)
+		const { result } = renderHook(() => usePresenceStatus('alice'), {
+			wrapper,
+		})
+
+		connectAndBecomeReady()
+		act(() => {
+			lastSocket().receive({
+				op: 'dispatch',
+				t: 'PRESENCE_UPDATE',
+				d: {
+					organization_id: 'org-1',
+					user_id: 'alice',
+					status: 'ONLINE',
+					updated_at: '2026-01-01T00:00:00Z',
+				},
+			})
+		})
+		await waitFor(() => expect(getSpy).toHaveBeenCalled())
+
+		expect(result.current).toBe('ONLINE')
 	})
 
 	it('tracks another member going online from a gateway event', () => {

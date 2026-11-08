@@ -519,6 +519,19 @@ export function useUnreadChannels(organizationId: string) {
 	})
 }
 
+/** Per-channel count and first unread message, for the badges and the
+ * "new messages" line. */
+export function useUnreadSummaries(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(ORG_UNREAD_PATH, {
+			path: { organization_id: organizationId },
+		}).queryOptions,
+		select: (response) =>
+			new Map(response.channels.map((unread) => [unread.channel_id, unread])),
+		enabled: Boolean(organizationId),
+	})
+}
+
 export function useMarkChannelRead() {
 	return useMutation({
 		...window.tanstackApi.mutation('put', CHANNEL_READ_PATH).mutationOptions,
@@ -594,13 +607,16 @@ export function useReadStateGatewaySync(organizationId: string) {
 
 	useGatewayEvent('CHANNEL_READ', (event) => {
 		if (event.data.organization_id !== organizationId) return
-		queryClient.setQueryData<{ channel_ids: string[] }>(
+		queryClient.setQueryData<Schemas.UnreadResponse>(
 			unreadKey(organizationId),
 			(old) =>
 				old
 					? {
 							channel_ids: old.channel_ids.filter(
 								(id) => id !== event.data.channel_id,
+							),
+							channels: old.channels.filter(
+								(unread) => unread.channel_id !== event.data.channel_id,
 							),
 						}
 					: old,
@@ -625,14 +641,19 @@ export function useReadStateGatewaySync(organizationId: string) {
 				return { ...old, data: [notification, ...old.data] }
 			},
 		)
-		queryClient.setQueryData<{ channel_ids: string[] }>(
+		queryClient.setQueryData<Schemas.UnreadResponse>(
 			unreadKey(organizationId),
 			(old) => {
-				if (!old) return { channel_ids: [event.data.channel_id] }
+				if (!old) return { channel_ids: [event.data.channel_id], channels: [] }
 				if (old.channel_ids.includes(event.data.channel_id)) return old
-				return { channel_ids: [...old.channel_ids, event.data.channel_id] }
+				return {
+					...old,
+					channel_ids: [...old.channel_ids, event.data.channel_id],
+				}
 			},
 		)
+		// The count and the first unread message are the server's to say.
+		void queryClient.invalidateQueries({ queryKey: unreadKey(organizationId) })
 	})
 }
 
