@@ -7,6 +7,7 @@ pub mod absence_type;
 pub mod catalog;
 pub mod cost_basis;
 pub mod custom_unit;
+pub mod day_override;
 pub mod employee;
 pub mod equipment;
 pub mod leave_account;
@@ -15,6 +16,7 @@ pub mod member_contract;
 pub mod member_document;
 pub mod member_profile;
 pub mod paths;
+pub mod planning_feed;
 pub mod product;
 pub mod response;
 pub mod service_rate;
@@ -57,6 +59,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(absence_type::router(state))
         .merge(leave_account::router(state))
         .merge(leave_adjustment::router(state))
+        .merge(day_override::router(state))
+        .merge(planning_feed::router(state))
         .merge(member_profile::router(state))
         .merge(member_contract::router(state))
         .merge(member_document::router(state))

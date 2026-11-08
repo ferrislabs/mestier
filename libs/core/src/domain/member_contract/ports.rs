@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use common::CoreError;
 
 use super::{MemberContract, MemberContractId};
@@ -8,6 +9,13 @@ pub trait MemberContractRepository: Send {
     fn list_by_organization(
         &mut self,
         organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<MemberContract>, CoreError>> + Send;
+
+    fn list_overlapping(
+        &mut self,
+        organization_id: OrganizationId,
+        from: NaiveDate,
+        to: NaiveDate,
     ) -> impl Future<Output = Result<Vec<MemberContract>, CoreError>> + Send;
 
     fn list_by_member(

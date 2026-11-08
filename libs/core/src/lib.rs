@@ -138,6 +138,7 @@ pub use domain::{
     customer::ports::MockCustomerRepository,
     customer_contact::ports::MockCustomerContactRepository,
     customer_context::ports::MockCustomerContextRepository,
+    day_override::ports::MockDayOverrideRepository,
     deal::ports::MockDealRepository,
     doe::ports::MockDoeRepository,
     doe_model::ports::{MockDoeModelRepository, MockDoeSettingsRepository},
@@ -241,6 +242,12 @@ pub use domain::{
 };
 
 pub use domain::{
+    DayOverride, DayOverrideError, DayOverrideId, DayOverrideInput, DayOverrideOutcome,
+    DayOverrideService, DayShape, FeedMember, HrPlanningFeed, OverrideKind, PlanningPeriod,
+    PlanningPeriodError,
+};
+
+pub use domain::{
     Acquisition, AcquisitionDraft, AdjustmentDays, AdjustmentKind, AdjustmentReason, CarryOverMax,
     DefaultLeaveAccount, LeaveAccount, LeaveAccountError, LeaveAccountId, LeaveAccountInput,
     LeaveAccountName, LeaveAccountOutcome, LeaveAccountService, LeaveAdjustment,
@@ -315,6 +322,10 @@ pub use domain::{
     customer_contact::commands::{CreateCustomerContactCommand, UpdateCustomerContactCommand},
     customer_context::DEFAULT_COUNTRY,
     customer_context::commands::{CreateCustomerContextCommand, UpdateCustomerContextCommand},
+    day_override::commands::{
+        DeleteDayOverrideCommand, HrPlanningFeedCommand, ListDayOverridesCommand,
+        PutDayOverrideCommand,
+    },
     deal::commands::{CreateDealCommand, DealFilter, MoveDealCommand, UpdateDealCommand},
     default_absence_types,
     employee::commands::{

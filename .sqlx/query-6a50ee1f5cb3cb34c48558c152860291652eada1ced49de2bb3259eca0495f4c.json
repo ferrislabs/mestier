@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM day_overrides WHERE org_id = $1 AND member_id = $2 AND date = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6a50ee1f5cb3cb34c48558c152860291652eada1ced49de2bb3259eca0495f4c"
+}

@@ -41,6 +41,13 @@ pub trait MemberRepository: Send {
         organization_id: OrganizationId,
     ) -> impl Future<Output = Result<Vec<Member>, CoreError>> + Send;
 
+    /// Every member of the organization that was not removed, archived ones
+    /// included, so a planning screen can keep their history visible.
+    fn list_with_archived_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<Member>, CoreError>> + Send;
+
     /// Active members (`deleted_at IS NULL`) only.
     fn find_by_org_and_user(
         &mut self,
