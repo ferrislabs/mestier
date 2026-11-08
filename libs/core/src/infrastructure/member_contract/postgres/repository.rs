@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use common::CoreError;
 use mestier_macros::repository;
 
@@ -42,6 +43,35 @@ impl<'tx> MemberContractRepository for PgMemberContractRepository<'tx> {
             ORDER BY member_id, start_date
             "#,
             organization_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(MemberContract::try_from).collect()
+    }
+
+    async fn list_overlapping(
+        &mut self,
+        organization_id: OrganizationId,
+        from: NaiveDate,
+        to: NaiveDate,
+    ) -> Result<Vec<MemberContract>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            MemberContractRow,
+            r#"
+            SELECT id, org_id, member_id, type AS contract_type, start_date, end_date,
+                   trial_end_date, schedule, created_at, updated_at
+            FROM member_contracts
+            WHERE org_id = $1
+              AND start_date <= $3
+              AND (end_date IS NULL OR end_date >= $2)
+            ORDER BY member_id, start_date
+            "#,
+            organization_id.0,
+            from,
+            to,
         )
         .fetch_all(&mut ***tx)
         .await

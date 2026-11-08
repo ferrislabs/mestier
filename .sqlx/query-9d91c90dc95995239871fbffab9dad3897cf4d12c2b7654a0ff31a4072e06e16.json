@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, member_id, date, kind, start_time, end_time, lunch_start,\n                   lunch_end, note, created_at, updated_at\n            FROM day_overrides\n            WHERE org_id = $1 AND date >= $2 AND date <= $3\n              AND ($4::uuid IS NULL OR member_id = $4)\n            ORDER BY date, member_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "start_time",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 6,
+        "name": "end_time",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 7,
+        "name": "lunch_start",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 8,
+        "name": "lunch_end",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 9,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9d91c90dc95995239871fbffab9dad3897cf4d12c2b7654a0ff31a4072e06e16"
+}

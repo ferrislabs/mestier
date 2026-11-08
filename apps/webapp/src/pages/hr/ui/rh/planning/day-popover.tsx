@@ -16,12 +16,8 @@ import {
 	formatDuration,
 	formatRate,
 } from '#/pages/hr/lib/rh/extra'
-import {
-	clearDayOverride,
-	type DayStatus,
-	type HalfDay,
-	setDayOverride,
-} from '#/pages/hr/lib/rh/planning'
+import { overrideFailureOf } from '#/pages/hr/lib/rh/override-wire'
+import type { DayStatus, HalfDay } from '#/pages/hr/lib/rh/planning'
 import {
 	type AbsenceInitial,
 	dayFormError,
@@ -37,7 +33,7 @@ import {
 } from '#/pages/hr/lib/rh/planning-model'
 import type { ExtraPeriod, Member } from '#/pages/hr/lib/rh/types'
 import { AbsenceStatusBadge } from '#/pages/hr/ui/rh/shared/absence-status-badge'
-import { useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import { useRhOverrideActions } from '#/pages/hr/ui/rh/shared/rh-context'
 import { TypeDot } from '#/pages/hr/ui/rh/shared/type-chip'
 
 type DayPopoverProps = {
@@ -152,7 +148,9 @@ function DayEditor({
 	status,
 	onClose,
 }: Pick<DayPopoverProps, 'member' | 'status' | 'onClose'>) {
-	const updateRh = useRhUpdate()
+	const overrides = useRhOverrideActions()
+	const [refusal, setRefusal] = useState<string | null>(null)
+	const [pending, setPending] = useState(false)
 	const id = useId()
 	const initial = initialDayForm(member, status.date, status.override)
 	const [form, setForm] = useState(initial)
@@ -163,20 +161,25 @@ function DayEditor({
 	const dirty =
 		(planning && status.override === null) || isDayFormDirty(initial, form)
 
+	async function commit(write: () => Promise<void>) {
+		setPending(true)
+		setRefusal(null)
+		try {
+			await write()
+			onClose()
+		} catch (error) {
+			setRefusal(overrideFailureOf(error).message)
+		} finally {
+			setPending(false)
+		}
+	}
+
 	function save() {
-		updateRh((current, context) =>
-			setDayOverride(
-				current,
-				context,
-				toOverride(member.id, status.date, form),
-			),
-		)
-		onClose()
+		void commit(() => overrides.put(toOverride(member.id, status.date, form)))
 	}
 
 	function restore() {
-		updateRh((current) => clearDayOverride(current, member.id, status.date))
-		onClose()
+		void commit(() => overrides.clear(member.id, status.date))
 	}
 
 	return (
@@ -184,7 +187,7 @@ function DayEditor({
 			className="grid gap-2.5 p-3"
 			onSubmit={(event) => {
 				event.preventDefault()
-				if (valid && dirty) save()
+				if (valid && dirty && !pending) save()
 			}}
 		>
 			<p className="font-medium text-xs">
@@ -249,6 +252,11 @@ function DayEditor({
 					{error}
 				</p>
 			)}
+			{refusal && (
+				<p role="alert" className="text-state-alert text-xs">
+					{refusal}
+				</p>
+			)}
 			<Input
 				value={form.note}
 				onChange={(event) => setForm({ ...form, note: event.target.value })}
@@ -258,11 +266,17 @@ function DayEditor({
 				className="h-8"
 			/>
 			<div className="flex flex-wrap items-center gap-2">
-				<Button type="submit" size="sm" disabled={!valid || !dirty}>
+				<Button type="submit" size="sm" disabled={!valid || !dirty || pending}>
 					Enregistrer
 				</Button>
 				{status.override && (
-					<Button type="button" variant="ghost" size="sm" onClick={restore}>
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						disabled={pending}
+						onClick={restore}
+					>
 						<RotateCcw />
 						{planning ? 'Retirer du planning' : 'Rétablir la semaine type'}
 					</Button>
@@ -350,10 +364,10 @@ export function DayPopoverBody({
 				)}
 			</div>
 			{!inactive && (
-				<>
+				<RequirePermission permission="MANAGE_PLANNING">
 					<Separator />
 					<DayEditor member={member} status={status} onClose={onClose} />
-				</>
+				</RequirePermission>
 			)}
 		</div>
 	)

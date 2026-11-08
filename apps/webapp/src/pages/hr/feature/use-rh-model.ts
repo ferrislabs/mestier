@@ -32,6 +32,7 @@ import {
 	useDocumentActions,
 } from '#/pages/hr/feature/use-contract-actions'
 import { useLeaveActions } from '#/pages/hr/feature/use-leave-actions'
+import { useOverrideActions } from '#/pages/hr/feature/use-override-actions'
 import { useProfileActions } from '#/pages/hr/feature/use-profile-actions'
 import type { RhState } from '#/pages/hr/lib/rh/types'
 import type { RhContextValue } from '#/pages/hr/ui/rh/shared/rh-context'
@@ -66,6 +67,7 @@ export function useRhModel(
 	const absenceActions = useAbsenceActions(organizationId)
 	const absenceTypeActions = useAbsenceTypeActions(organizationId)
 	const leaveActions = useLeaveActions(organizationId)
+	const overrideActions = useOverrideActions(organizationId)
 	const snapshot = useRhSnapshot()
 
 	const memberRows = catalog.members.data?.data
@@ -175,7 +177,9 @@ export function useRhModel(
 			absences: absenceActions,
 			absenceTypes: absenceTypeActions,
 			leave: leaveActions,
+			overrides: overrideActions,
 			actorId: getRhActorId(),
+			organizationId,
 			organizationSlug,
 		},
 	}

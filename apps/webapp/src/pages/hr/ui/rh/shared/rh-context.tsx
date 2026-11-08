@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext } from 'react'
 import { buildOrgPath } from '#/modules/org-path'
+import type { DayPlan } from '#/pages/hr/lib/rh/day-planning'
 import type { ProfileFields } from '#/pages/hr/lib/rh/member-profile'
 import type { AccountSettingsDraft } from '#/pages/hr/lib/rh/rights-model'
 import type {
@@ -8,7 +9,9 @@ import type {
 	ActionContext,
 	AdjustmentDraft,
 	ContractDraft,
+	DayOverride,
 	DocumentKind,
+	IsoDate,
 	LeaveAccount,
 	RhState,
 } from '#/pages/hr/lib/rh/types'
@@ -62,6 +65,17 @@ export interface RhLeaveActions {
 	removeAdjustment: (adjustmentId: string) => Promise<void>
 }
 
+export interface RhOverrideActions {
+	put: (draft: DayOverride) => Promise<void>
+	clear: (memberId: string, date: IsoDate) => Promise<void>
+	plan: (plan: DayPlan) => Promise<void>
+	clearRange: (
+		memberId: string,
+		startDate: IsoDate,
+		endDate: IsoDate,
+	) => Promise<void>
+}
+
 export interface RhContextValue {
 	state: RhState
 	update: RhUpdate
@@ -71,7 +85,9 @@ export interface RhContextValue {
 	absences: RhAbsenceActions
 	absenceTypes: RhAbsenceTypeActions
 	leave: RhLeaveActions
+	overrides: RhOverrideActions
 	actorId: string
+	organizationId: string
 	organizationSlug: string
 }
 
@@ -123,6 +139,14 @@ export function useRhAbsenceTypeActions(): RhAbsenceTypeActions {
 
 export function useRhLeaveActions(): RhLeaveActions {
 	return useRhContext().leave
+}
+
+export function useRhOverrideActions(): RhOverrideActions {
+	return useRhContext().overrides
+}
+
+export function useRhOrganizationId(): string {
+	return useRhContext().organizationId
 }
 
 export function useRhActorId(): string {

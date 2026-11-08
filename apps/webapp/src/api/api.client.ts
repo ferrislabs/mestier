@@ -950,6 +950,19 @@ export namespace Schemas {
     organization_id: OrganizationId;
     work_date: string;
   };
+  export type DayOverrideId = string;
+  export type OverrideKind = "WORK" | "OFF";
+  export type DayOverrideResponse = {
+    date: string;
+    end?: (string | null) | undefined;
+    id: DayOverrideId;
+    kind: OverrideKind;
+    lunch?: (null | LunchInput) | undefined;
+    member_id: MemberId;
+    note: string;
+    organization_id: OrganizationId;
+    start?: (string | null) | undefined;
+  };
   export type DealStageName = "NEW" | "VISIT" | "QUOTE_SENT" | "NEGOTIATION" | "WON" | "LOST";
   export type DealResponse = {
     amount_cents: number;
@@ -1231,6 +1244,13 @@ export namespace Schemas {
     updated_at: string;
     vat_cents: number;
   };
+  export type FeedMemberResponse = {
+    archived: boolean;
+    display_name: string;
+    first_name?: (string | null) | undefined;
+    id: MemberId;
+    last_name: string;
+  };
   export type InterventionId = string;
   export type InterventionStatus = "PROPOSED" | "VALIDATED" | "REJECTED";
   export type FieldInterventionResponse = {
@@ -1292,6 +1312,28 @@ export namespace Schemas {
     status: ContractStatus;
   };
   export type Grid = { contracts: Array<GridContract>; year: number };
+  export type MemberContractId = string;
+  export type ScheduleInput =
+    | { kind: "weekly"; week: Array<null | WorkDayInput> }
+    | { anchor: string; blocks: Array<BlockInput>; kind: "rotation" }
+    | { default_day: WorkDayInput; kind: "variable" };
+  export type MemberContractResponse = {
+    end_date?: (string | null) | undefined;
+    id: MemberContractId;
+    member_id: MemberId;
+    organization_id: OrganizationId;
+    schedule: ScheduleInput;
+    start_date: string;
+    trial_end_date?: (string | null) | undefined;
+    type: ContractType;
+  };
+  export type HrPlanningFeedResponse = {
+    absence_types: Array<AbsenceTypeResponse>;
+    absences: Array<AbsenceResponse>;
+    contracts: Array<MemberContractResponse>;
+    members: Array<FeedMemberResponse>;
+    overrides: Array<DayOverrideResponse>;
+  };
   export type SupplierInvoiceId = string;
   export type SupplierInvoiceLineAllocationId = string;
   export type SupplierInvoiceLineId = string;
@@ -1645,21 +1687,6 @@ export namespace Schemas {
   };
   export type MarkChannelReadRequest = { message_id: MessageId };
   export type MemberAccountResponse = { email: string; name: string };
-  export type MemberContractId = string;
-  export type ScheduleInput =
-    | { kind: "weekly"; week: Array<null | WorkDayInput> }
-    | { anchor: string; blocks: Array<BlockInput>; kind: "rotation" }
-    | { default_day: WorkDayInput; kind: "variable" };
-  export type MemberContractResponse = {
-    end_date?: (string | null) | undefined;
-    id: MemberContractId;
-    member_id: MemberId;
-    organization_id: OrganizationId;
-    schedule: ScheduleInput;
-    start_date: string;
-    trial_end_date?: (string | null) | undefined;
-    type: ContractType;
-  };
   export type MemberDocumentId = string;
   export type MemberDocumentResponse = {
     added_at: string;
@@ -1982,6 +2009,13 @@ export namespace Schemas {
     title: string;
   };
   export type ProposeInterventionRequest = { done_on: string };
+  export type PutDayOverrideRequest = {
+    end?: (string | null) | undefined;
+    kind: OverrideKind;
+    lunch?: (null | LunchInput) | undefined;
+    note?: string | undefined;
+    start?: (string | null) | undefined;
+  };
   export type PutMemberContractRequest = {
     end_date?: (string | null) | undefined;
     schedule: ScheduleInput;
@@ -7001,6 +7035,34 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type get_ListDayOverrides = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/day-overrides";
+    requestFormat: "json";
+    parameters: {
+      query: { from: string; to: string; member_id?: string | undefined };
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          date: string;
+          end?: (string | null) | undefined;
+          id: Schemas.DayOverrideId;
+          kind: Schemas.OverrideKind;
+          lunch?: (null | Schemas.LunchInput) | undefined;
+          member_id: Schemas.MemberId;
+          note: string;
+          organization_id: Schemas.OrganizationId;
+          start?: (string | null) | undefined;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
   export type get_ListDeals = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/deals";
@@ -7907,6 +7969,30 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       409: unknown;
+    };
+  };
+  export type get_GetHrPlanningFeed = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/hr/planning-feed";
+    requestFormat: "json";
+    parameters: {
+      query: { from: string; to: string };
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          absence_types: Array<Schemas.AbsenceTypeResponse>;
+          absences: Array<Schemas.AbsenceResponse>;
+          contracts: Array<Schemas.MemberContractResponse>;
+          members: Array<Schemas.FeedMemberResponse>;
+          overrides: Array<Schemas.DayOverrideResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
     };
   };
   export type get_ListInvitations = {
@@ -9037,6 +9123,45 @@ export namespace Endpoints {
     requestFormat: "json";
     parameters: {
       path: { organization_id: string; member_id: string; contract_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type put_PutDayOverride = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/day-overrides/{date}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string; date: string };
+
+      body: Schemas.PutDayOverrideRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          date: string;
+          end?: (string | null) | undefined;
+          id: Schemas.DayOverrideId;
+          kind: Schemas.OverrideKind;
+          lunch?: (null | Schemas.LunchInput) | undefined;
+          member_id: Schemas.MemberId;
+          note: string;
+          organization_id: Schemas.OrganizationId;
+          start?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_DeleteDayOverride = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/members/{member_id}/day-overrides/{date}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; member_id: string; date: string };
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
@@ -12659,6 +12784,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
     "/api/v1/organizations/{organization_id}/leave-adjustments/{adjustment_id}": Endpoints.delete_DeleteLeaveAdjustment;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.delete_DeleteMemberContract;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/day-overrides/{date}": Endpoints.delete_DeleteDayOverride;
     "/api/v1/organizations/{organization_id}/members/{member_id}/documents/{document_id}": Endpoints.delete_DeleteMemberDocument;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
@@ -12723,6 +12849,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.get_GetOrganizationBillingSettings;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
+    "/api/v1/organizations/{organization_id}/day-overrides": Endpoints.get_ListDayOverrides;
     "/api/v1/organizations/{organization_id}/deals": Endpoints.get_ListDeals;
     "/api/v1/organizations/{organization_id}/deals/summary": Endpoints.get_GetDealSummary;
     "/api/v1/organizations/{organization_id}/doe-model-starters": Endpoints.get_ListDoeModelStarters;
@@ -12739,6 +12866,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/field/assignment-reports": Endpoints.get_ListMyAssignmentReports;
     "/api/v1/organizations/{organization_id}/field/current": Endpoints.get_GetCurrentTimeEntry;
     "/api/v1/organizations/{organization_id}/field/tasks": Endpoints.get_ListMyFieldTasks;
+    "/api/v1/organizations/{organization_id}/hr/planning-feed": Endpoints.get_GetHrPlanningFeed;
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.get_ListInvitations;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.get_ListInvoices;
     "/api/v1/organizations/{organization_id}/invoices/outstanding": Endpoints.get_ListOutstandingBalanceByCustomer;
@@ -12945,6 +13073,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}": Endpoints.put_UpdateLeaveAccount;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.put_UpdateMemberContract;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/day-overrides/{date}": Endpoints.put_PutDayOverride;
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.put_PutMemberProfile;
     "/api/v1/organizations/{organization_id}/numbering/{kind}": Endpoints.put_SetOrganizationNextNumber;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;

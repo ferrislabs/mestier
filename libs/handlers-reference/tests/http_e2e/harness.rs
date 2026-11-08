@@ -96,6 +96,7 @@ impl App {
     pub async fn cleanup(&self) {
         for org_id in [self.organization_id, self.other_organization_id().await] {
             for statement in [
+                "DELETE FROM day_overrides WHERE org_id = $1",
                 "DELETE FROM absences WHERE org_id = $1",
                 "DELETE FROM leave_adjustments WHERE org_id = $1",
                 "DELETE FROM absence_types WHERE org_id = $1",
@@ -129,7 +130,7 @@ impl App {
     /// Looked up rather than stored: the second organization only exists to
     /// own `other_cost_basis_id`, and cleanup is the only caller that needs
     /// its id.
-    async fn other_organization_id(&self) -> Uuid {
+    pub async fn other_organization_id(&self) -> Uuid {
         sqlx::query_scalar("SELECT org_id FROM employee_cost_bases WHERE id = $1")
             .bind(self.other_cost_basis_id)
             .fetch_one(&self.pool)

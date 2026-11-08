@@ -132,6 +132,28 @@ impl<'tx> MemberRepository for PgMemberRepository<'tx> {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
+    async fn list_with_archived_by_organization(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<Member>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            MemberRow,
+            r#"
+            SELECT id, organization_id, user_id, last_name, first_name, joined_at, created_at, deleted_at
+            FROM organization_members
+            WHERE organization_id = $1 AND deleted_at IS NULL
+            ORDER BY last_name ASC, first_name ASC, created_at ASC
+            "#,
+            organization_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     #[tracing::instrument(skip(self), fields(db.system = "postgresql", db.operation = "insert", db.table = "member_roles"), err)]
     async fn assign_role(&mut self, member_id: MemberId, role_id: RoleId) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;

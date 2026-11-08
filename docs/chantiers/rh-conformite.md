@@ -19,7 +19,7 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 | B2 | Contrats, horaires, documents | B1 | fait |
 | B3 | Motifs d'absence et circuit de validation | B2 | fait |
 | B4 | Compteurs et ajustements | B3 | fait |
-| B5 | Exceptions de jour et flux du planning | B2, B3 | à faire |
+| B5 | Exceptions de jour et flux du planning | B2, B3 | fait |
 | B6 | Majorations et heures extra | B3 | à faire |
 | Fin | Suppression de `rh-store`, `rh-seed`, `rh-binding` | B6 | à faire |
 
@@ -101,4 +101,16 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 - Archiver et restaurer un compte : bouton dans la fenêtre de paramétrage (`MANAGE_REFERENCE`) ; l'onglet d'un compte archivé est suffixé « (archivé) », et la barre latérale et la carte Soldes d'un membre ne le montrent plus. Il n'y a pas de création de compte dans l'interface (le prototype n'en a pas).
 - Le paramétrage refuse désormais une acquisition nulle (positive stricte, comme l'API).
 - Le client OpenAPI a été régénéré ; la limite de lecture des mouvements n'est pas paginée.
+- `tsc --noEmit` : 38 erreurs avant et après.
+
+## Reports issus de B5
+- Table `day_overrides` (une ligne par membre et par jour, clé unique) : `kind` WORK ou OFF, `start_time` et `end_time` obligatoires et ordonnés pour WORK, nuls pour OFF, pause déjeuner nulle ou complète et strictement dans la journée. Les règles vivent dans le type `DayOverride` (qui réutilise `WorkDay` des contrats) et sont répétées en contraintes. Un second PUT du même jour remplace le premier et garde son identifiant.
+- Fil : `PUT /members/{id}/day-overrides/{date}` prend `kind`, `start`, `end`, `lunch {start,end}` et `note` ; un OFF avec des heures est refusé (422 sur `kind`), un WORK sans heure ou inversé aussi (422 sur `start`, `end` ou `lunch`). `GET /day-overrides?from&to&member_id` est borné à 366 jours.
+- Flux `GET /hr/planning-feed?from&to` : période inclusive de 62 jours au plus (422 sinon, y compris inversée). Il rend les membres non supprimés avec un drapeau `archived` (les membres archivés y figurent, contrairement à la liste active), les contrats et absences qui chevauchent la période (tous statuts), les exceptions de la période et les motifs d'absence (créés par défaut à la première lecture). Pas de teinte (`hue`) côté membre : elle n'existe pas dans l'API, le front la dérive. Lecture et écriture exigent `MANAGE_PLANNING` ; 403 sinon.
+- Deux méthodes de port ajoutées pour le flux : `list_overlapping` sur les contrats et les absences, `list_with_archived_by_organization` sur les membres.
+- Aucun calcul de cellule en Rust (ADR 0014).
+- Front : le planning lit le flux pour sa période visible (semaine ou mois), la fiche membre lit les exceptions du mois affiché élargi aux semaines pleines (onglet Emploi du temps seulement) et la fenêtre « Planifier des jours » celles de sa période. Chaque période est gardée en cache par clé ; la plus récemment lue fait foi sur ses jours, les périodes précédentes restent affichées. Les exceptions du seed ne sont plus jamais lues.
+- Le planning n'utilise du flux que ses exceptions : membres, contrats, absences et motifs continuent d'arriver par leurs lectures de l'organisation (déjà liées à l'API en B1 à B3). Les relier au flux demanderait de remplacer ces lectures globales, partagées avec d'autres écrans.
+- Écritures : `MANAGE_PLANNING` (popover d'un jour, calendrier de la fiche, fenêtre de planification). « Planifier » envoie un PUT par jour et « Effacer » un DELETE par jour planifié de la période, en séquence ; un refus s'affiche dans la fenêtre ou le popover. Un 403 en lecture laisse l'écran sans exception, sans bandeau d'erreur.
+- Le client OpenAPI a été régénéré.
 - `tsc --noEmit` : 38 erreurs avant et après.

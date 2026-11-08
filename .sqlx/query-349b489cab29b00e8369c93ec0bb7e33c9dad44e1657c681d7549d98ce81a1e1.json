@@ -1,0 +1,99 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO day_overrides (\n                id, org_id, member_id, date, kind, start_time, end_time, lunch_start,\n                lunch_end, note, created_at, updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            ON CONFLICT (member_id, date) DO UPDATE\n            SET kind = EXCLUDED.kind,\n                start_time = EXCLUDED.start_time,\n                end_time = EXCLUDED.end_time,\n                lunch_start = EXCLUDED.lunch_start,\n                lunch_end = EXCLUDED.lunch_end,\n                note = EXCLUDED.note,\n                updated_at = EXCLUDED.updated_at\n            RETURNING id, org_id, member_id, date, kind, start_time, end_time, lunch_start,\n                      lunch_end, note, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "start_time",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 6,
+        "name": "end_time",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 7,
+        "name": "lunch_start",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 8,
+        "name": "lunch_end",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 9,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Text",
+        "Time",
+        "Time",
+        "Time",
+        "Time",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "349b489cab29b00e8369c93ec0bb7e33c9dad44e1657c681d7549d98ce81a1e1"
+}

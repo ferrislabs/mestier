@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 
 use crate::{Absence, AbsenceId, OrganizationId};
@@ -21,6 +21,13 @@ pub trait AbsenceRepository: Send {
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Absence>, u64), CoreError>> + Send;
+
+    fn list_overlapping(
+        &mut self,
+        organization_id: OrganizationId,
+        from: NaiveDate,
+        to: NaiveDate,
+    ) -> impl Future<Output = Result<Vec<Absence>, CoreError>> + Send;
 
     fn update(
         &mut self,

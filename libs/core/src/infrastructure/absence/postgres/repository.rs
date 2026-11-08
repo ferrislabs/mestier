@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use common::CoreError;
 use mestier_macros::repository;
 
@@ -118,6 +118,35 @@ impl<'tx> AbsenceRepository for PgAbsenceRepository<'tx> {
         }
 
         Ok((absences, total as u64))
+    }
+
+    async fn list_overlapping(
+        &mut self,
+        organization_id: OrganizationId,
+        from: NaiveDate,
+        to: NaiveDate,
+    ) -> Result<Vec<Absence>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            AbsenceRow,
+            r#"
+            SELECT id, org_id, member_id, kind::text AS "kind!", type_id, starts_at, ends_at, all_day, start_date, start_part, end_date, end_part, status, note, proof_file_key, created_by_member_id, decided_by_member_id, decided_at, decision_comment, deleted_at, created_at, updated_at
+            FROM absences
+            WHERE org_id = $1 AND deleted_at IS NULL
+              AND start_date <= $3 AND end_date >= $2
+            ORDER BY start_date ASC, id ASC
+            "#,
+            organization_id.0,
+            from,
+            to,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter()
+            .map(AbsenceRow::into_employee_absence)
+            .collect()
     }
 
     async fn update(&mut self, absence: &Absence) -> Result<Absence, CoreError> {
