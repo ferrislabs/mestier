@@ -1,6 +1,6 @@
 use auth::Identity;
 use axum::{Extension, extract::State};
-use handlers::{ApiError, AppState, DataEnvelope, Response};
+use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_user_id};
 
 use crate::{paths::OrgCategoriesPath, require_org_membership, response::CategoryResponse};
 
@@ -24,7 +24,12 @@ pub async fn handler(
 ) -> Result<Response<Vec<CategoryResponse>>, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
 
-    let categories = state.usecase.list_categories(path.organization_id).await?;
+    let user_id = resolve_user_id(&state, &identity).await?;
+
+    let categories = state
+        .usecase
+        .list_visible_categories(user_id, path.organization_id)
+        .await?;
     let items: Vec<CategoryResponse> = categories.into_iter().map(CategoryResponse::from).collect();
     Ok(Response::OK(items))
 }

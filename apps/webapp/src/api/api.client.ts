@@ -419,7 +419,11 @@ export namespace Schemas {
     starts_at?: (string | null) | undefined;
     type_id?: (null | AbsenceTypeId) | undefined;
   };
-  export type CreateCategoryRequest = { name: string; position: number };
+  export type CreateCategoryRequest = {
+    allowed_role_ids?: (Array<RoleId> | null) | undefined;
+    name: string;
+    position: number;
+  };
   export type CreateChannelRequest = {
     allowed_role_ids?: (Array<RoleId> | null) | undefined;
     category_id?: (null | CategoryId) | undefined;
@@ -3412,6 +3416,7 @@ export namespace Endpoints {
       400: unknown;
       401: unknown;
       403: unknown;
+      409: unknown;
     };
   };
   export type get_ListChannels = {

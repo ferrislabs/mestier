@@ -10,8 +10,6 @@ function baseProps(
 	return {
 		open: true,
 		onOpenChange: vi.fn(),
-		kind: 'channel',
-		onChangeKind: vi.fn(),
 		name: '',
 		onChangeName: vi.fn(),
 		channelKind: 'TEXT',
@@ -56,14 +54,46 @@ describe('NewChannelDialogUI', () => {
 		expect(onSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it('switches between channel and category kind', async () => {
+	it('offers the category as a type card, not as a tab', () => {
+		render(<NewChannelDialogUI {...baseProps()} />)
+
+		expect(screen.getByRole('radio', { name: /Catégorie/ })).toBeDefined()
+		expect(screen.queryByRole('tab')).toBeNull()
+	})
+
+	it('reports the category when its card is picked', async () => {
 		const user = userEvent.setup()
-		const onChangeKind = vi.fn()
-		render(<NewChannelDialogUI {...baseProps({ onChangeKind })} />)
+		const onChangeChannelKind = vi.fn()
+		render(<NewChannelDialogUI {...baseProps({ onChangeChannelKind })} />)
 
-		await user.click(screen.getByRole('tab', { name: 'Catégorie' }))
+		await user.click(screen.getByRole('radio', { name: /Catégorie/ }))
 
-		expect(onChangeKind).toHaveBeenCalledWith('category')
+		expect(onChangeChannelKind).toHaveBeenCalledWith('CATEGORY')
+	})
+
+	it('asks for a category name and keeps the private switch for a category', () => {
+		render(<NewChannelDialogUI {...baseProps({ channelKind: 'CATEGORY' })} />)
+
+		expect(screen.getByLabelText('Nom de la catégorie')).toBeDefined()
+		expect(screen.getByText('Salon privé')).toBeDefined()
+		expect(screen.getByText(/voir les canaux de cette catégorie/)).toBeDefined()
+	})
+
+	it('asks for roles on a private category, like on a channel', () => {
+		render(
+			<NewChannelDialogUI
+				{...baseProps({
+					channelKind: 'CATEGORY',
+					name: 'Direction',
+					isPrivate: true,
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('Rôles autorisés')).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: 'Créer' }).hasAttribute('disabled'),
+		).toBe(true)
 	})
 
 	it('offers no category choice for a channel', () => {
@@ -81,7 +111,7 @@ describe('NewChannelDialogUI', () => {
 		)
 
 		expect(screen.getByText('Nouveau canal dans Chantiers')).toBeDefined()
-		expect(screen.queryByRole('tab', { name: 'Catégorie' })).toBeNull()
+		expect(screen.queryByRole('radio', { name: /Catégorie/ })).toBeNull()
 	})
 
 	it('offers the three channel types as cards with a title and a description', () => {

@@ -1,5 +1,5 @@
 use common::{CoreError, OrganizationId, RoleId, UserId, generate_uuid_v7};
-use discord::{ChannelId, ChannelType, CreateChannelCommand};
+use discord::{ChannelId, ChannelType, CreateCategoryCommand, CreateChannelCommand};
 use sqlx::PgPool;
 
 use crate::Permissions;
@@ -306,6 +306,120 @@ async fn nobody_sends_in_a_voice_channel_and_it_is_listed() {
     );
     let listed = usecase.list_channels(fixture.org).await.unwrap();
     assert!(listed.iter().any(|c| c.id == channel.id));
+
+    cleanup(&pool, &fixture).await;
+}
+
+fn category_command(org: OrganizationId) -> CreateCategoryCommand {
+    CreateCategoryCommand {
+        organization_id: org,
+        name: format!("categorie-{}", generate_uuid_v7()),
+        position: 0,
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_private_category_closes_the_channels_in_it_to_everyone_else() {
+    let pool = dev_pool().await;
+    let fixture = seed(&pool).await;
+    let usecase = usecase(pool.clone());
+
+    let category = usecase
+        .create_private_category(
+            category_command(fixture.org),
+            fixture.creator,
+            vec![fixture.role],
+        )
+        .await
+        .unwrap();
+    let mut in_category = command(fixture.org, ChannelType::Text);
+    in_category.category_id = Some(category.id);
+    let channel = usecase.create_channel(in_category).await.unwrap();
+
+    for user in [fixture.in_role, fixture.creator] {
+        assert!(can(&usecase, user, channel.id, Permissions::VIEW_CHANNEL).await);
+    }
+    assert!(
+        !can(
+            &usecase,
+            fixture.outside,
+            channel.id,
+            Permissions::VIEW_CHANNEL
+        )
+        .await
+    );
+    assert!(
+        !can(
+            &usecase,
+            fixture.outside,
+            channel.id,
+            Permissions::SEND_MESSAGES
+        )
+        .await
+    );
+
+    let channels_for_outside = usecase
+        .list_visible_channels(fixture.outside, fixture.org)
+        .await
+        .unwrap();
+    let categories_for_outside = usecase
+        .list_visible_categories(fixture.outside, fixture.org)
+        .await
+        .unwrap();
+    let categories_for_role = usecase
+        .list_visible_categories(fixture.in_role, fixture.org)
+        .await
+        .unwrap();
+    assert!(channels_for_outside.iter().all(|c| c.id != channel.id));
+    assert!(categories_for_outside.iter().all(|c| c.id != category.id));
+    assert!(categories_for_role.iter().any(|c| c.id == category.id));
+
+    cleanup(&pool, &fixture).await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn an_open_category_stays_open_and_a_private_one_needs_valid_roles() {
+    let pool = dev_pool().await;
+    let fixture = seed(&pool).await;
+    let usecase = usecase(pool.clone());
+
+    let open = usecase
+        .create_category(category_command(fixture.org))
+        .await
+        .unwrap();
+    let mut in_open = command(fixture.org, ChannelType::Text);
+    in_open.category_id = Some(open.id);
+    let channel = usecase.create_channel(in_open).await.unwrap();
+    assert!(
+        can(
+            &usecase,
+            fixture.outside,
+            channel.id,
+            Permissions::VIEW_CHANNEL
+        )
+        .await
+    );
+
+    let none = usecase
+        .create_private_category(category_command(fixture.org), fixture.creator, vec![])
+        .await;
+    let foreign = usecase
+        .create_private_category(
+            category_command(fixture.org),
+            fixture.creator,
+            vec![fixture.other_org_role],
+        )
+        .await;
+    assert!(matches!(none, Err(CoreError::Conflict(_))));
+    assert!(matches!(foreign, Err(CoreError::Conflict(_))));
+    let categories = usecase.list_categories(fixture.org).await.unwrap();
+    assert_eq!(
+        categories.len(),
+        1,
+        "a refused category must leave nothing behind"
+    );
 
     cleanup(&pool, &fixture).await;
 }

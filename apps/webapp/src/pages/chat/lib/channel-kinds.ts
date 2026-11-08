@@ -1,9 +1,19 @@
-import { Hash, type LucideIcon, Megaphone, Volume2 } from 'lucide-react'
+import {
+	FolderTree,
+	Hash,
+	type LucideIcon,
+	Megaphone,
+	Volume2,
+} from 'lucide-react'
 
 export type ChannelKind = 'TEXT' | 'ANNOUNCEMENT' | 'VOICE'
 
-export interface ChannelKindOption {
-	value: ChannelKind
+/** What the create dialog can make: a channel of one of three kinds, or a
+ * category that holds channels. */
+export type NewItemKind = ChannelKind | 'CATEGORY'
+
+export interface ChannelKindOption<T extends string = ChannelKind> {
+	value: T
 	title: string
 	description: string
 	icon: LucideIcon
@@ -28,6 +38,19 @@ export const CHANNEL_KINDS: readonly ChannelKindOption[] = [
 		description: 'Un salon pour parler à voix haute. Bientôt disponible.',
 		icon: Volume2,
 	},
+]
+
+export const CATEGORY_KIND: ChannelKindOption<'CATEGORY'> = {
+	value: 'CATEGORY',
+	title: 'Catégorie',
+	description: 'Un dossier pour regrouper des canaux dans la barre latérale.',
+	icon: FolderTree,
+}
+
+/** The cards of the create dialog, category last. */
+export const NEW_ITEM_KINDS: readonly ChannelKindOption<NewItemKind>[] = [
+	...CHANNEL_KINDS,
+	CATEGORY_KIND,
 ]
 
 /** The icon in front of a channel's name, in the side nav and the header. */

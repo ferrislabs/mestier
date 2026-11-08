@@ -6,7 +6,7 @@ import {
 	useCreateCategory,
 	useCreateChannel,
 } from '#/hooks/use-chat'
-import type { ChannelKind } from '#/pages/chat/lib/channel-kinds'
+import type { NewItemKind } from '#/pages/chat/lib/channel-kinds'
 import { NewChannelDialogUI } from '#/pages/chat/ui/new-channel-dialog-ui'
 
 export interface NewChannelFeatureProps {
@@ -28,9 +28,8 @@ export function NewChannelFeature({
 	const createChannel = useCreateChannel(organizationId)
 	const createCategory = useCreateCategory(organizationId)
 
-	const [kind, setKind] = useState<'channel' | 'category'>('channel')
 	const [name, setName] = useState('')
-	const [channelKind, setChannelKind] = useState<ChannelKind>('TEXT')
+	const [channelKind, setChannelKind] = useState<NewItemKind>('TEXT')
 	const [isPrivate, setIsPrivate] = useState(false)
 	const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set())
 	const roles = useChatRoles(organizationId, open && isPrivate)
@@ -41,14 +40,20 @@ export function NewChannelFeature({
 
 	function reset() {
 		setName('')
-		setKind('channel')
 		setChannelKind('TEXT')
 		setIsPrivate(false)
 		setSelectedRoleIds(new Set())
 	}
 
+	function handleOpenChange(next: boolean) {
+		// A dialog reopened from a category must not inherit a "category" kind
+		// picked in an earlier, abandoned one.
+		if (!next) reset()
+		onOpenChange(next)
+	}
+
 	function handleSubmit() {
-		if (categoryId !== null || kind === 'channel') {
+		if (channelKind !== 'CATEGORY') {
 			const position = channels.data?.length ?? 0
 			createChannel.mutate(
 				{
@@ -75,7 +80,11 @@ export function NewChannelFeature({
 		createCategory.mutate(
 			{
 				path: { organization_id: organizationId },
-				body: { name, position },
+				body: {
+					name,
+					position,
+					allowed_role_ids: isPrivate ? [...selectedRoleIds] : null,
+				},
 			} as never,
 			{
 				onSuccess: () => {
@@ -89,9 +98,7 @@ export function NewChannelFeature({
 	return (
 		<NewChannelDialogUI
 			open={open}
-			onOpenChange={onOpenChange}
-			kind={categoryId === null ? kind : 'channel'}
-			onChangeKind={setKind}
+			onOpenChange={handleOpenChange}
 			name={name}
 			onChangeName={setName}
 			parentCategoryName={parentCategory?.name}

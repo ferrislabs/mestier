@@ -1,9 +1,10 @@
 use common::CoreError;
 use discord::domain::overwrite::ports::OverwriteRepository;
 use discord::{
-    Channel, ChannelId, ChannelPermissionOverwrite, ChannelRepository, ChannelService, ChannelType,
-    CreateChannelCommand, DeleteChannelOverwrite, DirectChannelRepository, OrganizationId,
-    OverwriteTarget, RoleId, UpsertChannelOverwrite, UserId,
+    CategoryAccessRepository, Channel, ChannelId, ChannelPermissionOverwrite, ChannelRepository,
+    ChannelService, ChannelType, CreateChannelCommand, DeleteChannelOverwrite,
+    DirectChannelRepository, OrganizationId, OverwriteTarget, RoleId, UpsertChannelOverwrite,
+    UserId,
 };
 use mestier_macros::transactional;
 
@@ -13,6 +14,12 @@ use crate::domain::role::{Permissions, ports::RoleRepository};
 
 #[cfg(test)]
 mod tests;
+
+fn without_access(effective: Permissions) -> Permissions {
+    Permissions(
+        effective.bits() & !(Permissions::VIEW_CHANNEL.bits() | Permissions::SEND_MESSAGES.bits()),
+    )
+}
 
 /// What the kind of channel takes away, whatever the overwrites say: nobody
 /// types in a voice channel, and only those who manage channels write in an
@@ -36,7 +43,7 @@ impl MestierUseCase {
     /// 3. base = aggregated | VIEW_CHANNEL | SEND_MESSAGES.
     /// 4. Load channel overwrites; pick EVERYONE / caller's roles / caller's MEMBER.
     /// 5. Call pure `discord::resolve_channel_permissions`; wrap as `Permissions`.
-    #[transactional(member, role, overwrite, channel, direct_channel)]
+    #[transactional(member, role, overwrite, channel, direct_channel, category_access)]
     pub async fn resolve_channel_permissions(
         &self,
         user_id: UserId,
@@ -106,17 +113,26 @@ impl MestierUseCase {
             member_overwrite,
         );
 
-        Ok(restrict_by_channel_type(
-            channel.channel_type,
-            Permissions(effective),
-        ))
+        // A private category is a gate on every channel in it, whatever the
+        // channel's own overwrites grant.
+        let mut effective = Permissions(effective);
+        if let Some(category_id) = channel.category_id {
+            let mut category_access_repository = category_access_repository;
+            if let Some(access) = category_access_repository.find(category_id).await?
+                && !access.admits(user_id, &member_role_ids)
+            {
+                effective = without_access(effective);
+            }
+        }
+
+        Ok(restrict_by_channel_type(channel.channel_type, effective))
     }
 
     /// Returns the channels in `organization_id` that `user_id` can view (VIEW_CHANNEL set).
     ///
     /// Loads all channels + the user's base bits + all overwrites for those channels;
     /// resolves per channel; keeps those where VIEW_CHANNEL is set.
-    #[transactional(member, role, overwrite, channel)]
+    #[transactional(member, role, overwrite, channel, category_access)]
     pub async fn list_visible_channels(
         &self,
         user_id: UserId,
@@ -144,8 +160,21 @@ impl MestierUseCase {
             .list_by_organization(organization_id)
             .await?;
 
+        let mut category_access_repository = category_access_repository;
+        let private_categories = category_access_repository
+            .list_for_organization(organization_id)
+            .await?;
+
         let mut visible = Vec::new();
         for ch in all_channels {
+            if let Some(access) = ch
+                .category_id
+                .and_then(|category_id| private_categories.get(&category_id))
+                && !access.admits(user_id, &member_role_ids)
+            {
+                continue;
+            }
+
             let overwrites = overwrite_repository.list_for_channel(ch.id).await?;
 
             let everyone = overwrites

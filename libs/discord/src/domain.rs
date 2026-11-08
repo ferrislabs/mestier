@@ -209,6 +209,7 @@ mod overwrite_tests {
 }
 
 pub mod category;
+pub mod category_access;
 pub mod channel;
 pub mod direct;
 pub mod message;
