@@ -35,7 +35,7 @@ import {
 	PinnedMessagesPopover,
 } from '#/pages/chat/ui/pinned-messages-popover'
 import { TypingIndicatorUI } from '#/pages/chat/ui/typing-indicator-ui'
-import { useChannelAdminDialog } from './channel-admin-dialog-context'
+import { openChannelAdmin } from './chat-dialogs-store'
 import { ChatThreadPanelFeature } from './chat-thread-panel-feature'
 import { useMessageThreadUi } from './use-message-thread-ui'
 
@@ -59,7 +59,6 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 		composerProps,
 		typingCount,
 	} = useMessageThreadUi(channelId)
-	const { openChannelAdmin } = useChannelAdminDialog()
 	const directory = useChatDirectory(activeOrganization.id)
 	const presenceStatuses = usePresenceStatuses()
 	const unreadSummaries = useUnreadSummaries(activeOrganization.id)
@@ -206,6 +205,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 					name={channel.data?.name}
 					topic={channel.data?.topic}
 					peer={peer}
+					memberCount={members.length}
 					isLoading={channel.isLoading}
 					searchOpen={searchOpen}
 					onSearchOpenChange={(open) =>

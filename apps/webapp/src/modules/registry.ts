@@ -46,6 +46,7 @@ import {
 	newWorkflowPath,
 	workflowsPath,
 } from '#/pages/automation/lib/automation-paths'
+import { ChatSidebarFeature } from '#/pages/chat/feature/chat-sidebar-feature'
 import { CrmSidebarFeature } from '#/pages/crm-nav/feature/crm-sidebar-feature'
 import { ProjetSidebarFeature } from '#/pages/projet/feature/projet-sidebar-feature'
 import { RhSidebarFeature } from '#/pages/rh-nav/feature/rh-sidebar-feature'
@@ -285,6 +286,7 @@ export const MODULES: AppModule[] = [
 		status: 'available',
 		hasOverview: true,
 		primaryAction: { label: 'Nouveau message', to: '/discussions' },
+		sidebar: ChatSidebarFeature,
 		sections: [
 			{
 				id: 'channels',

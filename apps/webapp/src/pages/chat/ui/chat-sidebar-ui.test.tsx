@@ -56,7 +56,6 @@ function baseProps(
 		onToggleCategory: vi.fn(),
 		isLoading: false,
 		isError: false,
-		onlineCount: 0,
 		unreadCounts: new Map(),
 		directMessages: [],
 		onRequestNewDirectMessage: vi.fn(),
@@ -83,14 +82,16 @@ describe('ChatSidebarUI', () => {
 		expect(screen.getByText(/Aucun canal pour le moment/)).toBeDefined()
 	})
 
-	it('lets a request for a new channel start right from the empty state', async () => {
+	it('lets a request for a new channel start from the channels heading', async () => {
 		const user = userEvent.setup()
 		const onRequestNewChannel = vi.fn()
 		await renderSidebar(
 			<ChatSidebarUI {...baseProps({ onRequestNewChannel })} />,
 		)
 
-		await user.click(screen.getByRole('button', { name: 'Créer un canal' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Créer un canal ou une catégorie' }),
+		)
 
 		expect(onRequestNewChannel).toHaveBeenCalled()
 	})
@@ -118,7 +119,7 @@ describe('ChatSidebarUI', () => {
 		)
 
 		const link = screen.getByText('ch-1').closest('a')
-		expect(link?.className).toContain('bg-accent')
+		expect(link?.getAttribute('data-status')).toBe('active')
 	})
 
 	it('renders uncategorized channels without a category header', async () => {

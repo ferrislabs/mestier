@@ -3,13 +3,11 @@ import {
 	AlertCircle,
 	ChevronRight,
 	Hash,
-	MessageSquarePlus,
 	MoreHorizontal,
 	Plus,
 	Settings,
 } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
-import { Button } from '#/components/ui/button'
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -27,7 +25,6 @@ import { buildOrgPath } from '#/modules/org-path'
 import type { DirectMessageItem } from '#/pages/chat/lib/direct-messages'
 import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
-import { PresenceSummaryUI } from '#/pages/chat/ui/presence-summary-ui'
 
 export interface ChatSidebarUIProps {
 	organizationSlug: string
@@ -37,17 +34,29 @@ export interface ChatSidebarUIProps {
 	activeChannelId?: string
 	isLoading: boolean
 	isError: boolean
-	onlineCount: number
 	unreadCounts: ReadonlyMap<string, number>
 	mentionCount: number
 	directMessages: readonly DirectMessageItem[]
 	onRequestNewChannel: () => void
 	onRequestNewDirectMessage: () => void
 	/** Opens the channel admin sheet for one channel — see #372: channel
-	 * management now starts here, not only from inside the channel itself. */
+	 * management starts here, not only from inside the channel itself. */
 	onOpenChannelAdmin: (channelId: string) => void
 }
 
+const headingClassName =
+	'font-semibold text-nav-muted text-xs uppercase tracking-wide'
+
+const linkClassName =
+	'flex h-8 items-center gap-2 rounded-md px-2 text-nav-foreground/80 text-sm outline-none transition-colors hover:bg-nav-active/60 hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary data-[status=active]:bg-nav-active data-[status=active]:text-nav-active-foreground'
+
+const addButtonClassName =
+	'flex size-6 items-center justify-center rounded-md text-nav-muted outline-none transition-colors hover:bg-nav-active/60 hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary'
+
+/**
+ * Channels and direct messages, in the module's side nav. Coloured with the
+ * nav tokens, not the card ones: this sits on the dark rail.
+ */
 export function ChatSidebarUI({
 	organizationSlug,
 	groups,
@@ -56,7 +65,6 @@ export function ChatSidebarUI({
 	activeChannelId,
 	isLoading,
 	isError,
-	onlineCount,
 	unreadCounts,
 	mentionCount,
 	directMessages,
@@ -66,182 +74,137 @@ export function ChatSidebarUI({
 }: ChatSidebarUIProps) {
 	return (
 		<nav
-			aria-label="Canaux"
-			className="flex h-full w-64 shrink-0 flex-col overflow-y-auto border-border border-r bg-card"
+			aria-label="Canaux et messages directs"
+			className="flex flex-col gap-4 py-2"
 		>
-			<div className="flex min-h-12 items-center justify-between border-border border-b px-4 py-2">
-				<h2 className="font-semibold text-base text-foreground">Discussions</h2>
-				<div className="flex items-center gap-1">
-					{mentionCount > 0 ? (
-						<output
-							aria-label={`${mentionCount} mentions non lues`}
-							className="flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-xs font-semibold text-destructive-foreground"
-						>
-							{mentionCount}
-						</output>
-					) : null}
-					<RequirePermission permission="MANAGE_CHANNELS">
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon"
-							aria-label="Créer un canal ou une catégorie"
-							onClick={onRequestNewChannel}
-						>
-							<Plus className="size-4" />
-						</Button>
-					</RequirePermission>
+			<section aria-labelledby="discussions-channels-heading">
+				<div className="flex items-center justify-between px-2 pb-1">
+					<h2 id="discussions-channels-heading" className={headingClassName}>
+						Canaux
+					</h2>
+					<div className="flex items-center gap-1">
+						{mentionCount > 0 ? (
+							<output
+								aria-label={`${mentionCount} mentions non lues`}
+								className="tabular flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 font-semibold text-destructive-foreground text-xs"
+							>
+								{mentionCount}
+							</output>
+						) : null}
+						<RequirePermission permission="MANAGE_CHANNELS">
+							<button
+								type="button"
+								aria-label="Créer un canal ou une catégorie"
+								className={addButtonClassName}
+								onClick={onRequestNewChannel}
+							>
+								<Plus className="size-3.5" />
+							</button>
+						</RequirePermission>
+					</div>
 				</div>
-			</div>
 
-			<div className="pt-3">
-				<PresenceSummaryUI onlineCount={onlineCount} />
-			</div>
+				{isLoading ? <SidebarSkeleton /> : null}
 
-			{isLoading ? <SidebarSkeleton /> : null}
+				{isError ? (
+					<div className="flex items-start gap-2 px-2 py-1 text-nav-foreground/80 text-sm">
+						<AlertCircle className="mt-0.5 size-4 shrink-0" />
+						<span>Impossible de charger les canaux.</span>
+					</div>
+				) : null}
 
-			{isError ? (
-				<div className="flex items-start gap-2 px-4 py-2 text-sm text-destructive">
-					<AlertCircle className="mt-0.5 size-4 shrink-0" />
-					<span>Impossible de charger les canaux.</span>
+				{!isLoading && !isError && groups.length === 0 ? (
+					<p className="px-2 py-1 text-nav-muted text-sm">
+						Aucun canal pour le moment.
+					</p>
+				) : null}
+
+				{!isLoading && !isError && groups.length > 0 ? (
+					<div className="flex flex-col gap-2">
+						{groups.map((group) => (
+							<CategoryGroup
+								key={group.category?.id ?? 'uncategorized'}
+								group={group}
+								organizationSlug={organizationSlug}
+								activeChannelId={activeChannelId}
+								collapsed={
+									group.category
+										? collapsedCategoryIds.has(group.category.id)
+										: false
+								}
+								onToggleCategory={onToggleCategory}
+								unreadCounts={unreadCounts}
+								onOpenChannelAdmin={onOpenChannelAdmin}
+							/>
+						))}
+					</div>
+				) : null}
+			</section>
+
+			<section aria-labelledby="discussions-direct-heading">
+				<div className="flex items-center justify-between px-2 pb-1">
+					<h2 id="discussions-direct-heading" className={headingClassName}>
+						Messages directs
+					</h2>
+					<button
+						type="button"
+						aria-label="Nouveau message direct"
+						className={addButtonClassName}
+						onClick={onRequestNewDirectMessage}
+					>
+						<Plus className="size-3.5" />
+					</button>
 				</div>
-			) : null}
-
-			{!isLoading && !isError && groups.length === 0 ? (
-				<EmptyState onRequestNewChannel={onRequestNewChannel} />
-			) : null}
-
-			{!isLoading && !isError && groups.length > 0 ? (
-				<div className="flex flex-col gap-4 px-2 py-2">
-					{groups.map((group) => (
-						<CategoryGroup
-							key={group.category?.id ?? 'uncategorized'}
-							group={group}
-							organizationSlug={organizationSlug}
-							activeChannelId={activeChannelId}
-							collapsed={
-								group.category
-									? collapsedCategoryIds.has(group.category.id)
-									: false
-							}
-							onToggleCategory={onToggleCategory}
-							unreadCounts={unreadCounts}
-							onOpenChannelAdmin={onOpenChannelAdmin}
-						/>
+				<ul className="flex flex-col gap-0.5">
+					{directMessages.map((item) => (
+						<li key={item.channelId}>
+							<Link
+								to={buildOrgPath(
+									organizationSlug,
+									`/discussions/${item.channelId}`,
+								)}
+								className={cn(
+									linkClassName,
+									item.unreadCount > 0 && 'font-semibold text-nav-foreground',
+								)}
+							>
+								<PersonAvatar
+									name={item.name}
+									hue={item.hue}
+									size="sm"
+									presence={item.presence}
+									surface="nav"
+								/>
+								<span className="min-w-0 flex-1 truncate">{item.name}</span>
+								<UnreadBadge count={item.unreadCount} />
+							</Link>
+						</li>
 					))}
-				</div>
-			) : null}
-
-			<DirectMessagesSection
-				organizationSlug={organizationSlug}
-				items={directMessages}
-				activeChannelId={activeChannelId}
-				onRequestNewDirectMessage={onRequestNewDirectMessage}
-			/>
+				</ul>
+			</section>
 		</nav>
 	)
 }
 
-function DirectMessagesSection({
-	organizationSlug,
-	items,
-	activeChannelId,
-	onRequestNewDirectMessage,
-}: {
-	organizationSlug: string
-	items: readonly DirectMessageItem[]
-	activeChannelId?: string
-	onRequestNewDirectMessage: () => void
-}) {
+function UnreadBadge({ count }: { count: number }) {
+	if (count <= 0) return null
 	return (
-		<section aria-labelledby="discussions-direct-heading" className="px-2 pb-2">
-			<div className="flex items-center justify-between px-2 pb-1">
-				<h2
-					id="discussions-direct-heading"
-					className="font-semibold text-muted-foreground text-xs uppercase tracking-wide"
-				>
-					Messages directs
-				</h2>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon"
-					aria-label="Nouveau message direct"
-					className="size-6"
-					onClick={onRequestNewDirectMessage}
-				>
-					<Plus className="size-3.5" />
-				</Button>
-			</div>
-			<ul className="flex flex-col gap-0.5">
-				{items.map((item) => (
-					<li key={item.channelId}>
-						<Link
-							to={buildOrgPath(
-								organizationSlug,
-								`/discussions/${item.channelId}`,
-							)}
-							className={cn(
-								'flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
-								item.channelId === activeChannelId &&
-									'bg-accent font-medium text-accent-foreground',
-								item.unreadCount > 0 && 'font-semibold text-foreground',
-							)}
-						>
-							<PersonAvatar
-								name={item.name}
-								hue={item.hue}
-								size="sm"
-								presence={item.presence}
-								surface="card"
-							/>
-							<span className="min-w-0 flex-1 truncate">{item.name}</span>
-							{item.unreadCount > 0 ? (
-								<span className="tabular flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-semibold text-primary-foreground text-xs">
-									{item.unreadCount}
-									<span className="sr-only">
-										{' '}
-										{item.unreadCount > 1
-											? 'messages non lus'
-											: 'message non lu'}
-									</span>
-								</span>
-							) : null}
-						</Link>
-					</li>
-				))}
-			</ul>
-		</section>
+		<span className="tabular flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-nav-primary px-1.5 font-semibold text-nav-primary-foreground text-xs">
+			{count}
+			<span className="sr-only">
+				{' '}
+				{count > 1 ? 'messages non lus' : 'message non lu'}
+			</span>
+		</span>
 	)
 }
 
 function SidebarSkeleton() {
 	return (
-		<div className="flex flex-col gap-2 px-4 py-2">
-			<Skeleton className="h-4 w-24" />
-			<Skeleton className="h-6 w-full" />
-			<Skeleton className="h-6 w-full" />
-			<Skeleton className="mt-3 h-4 w-20" />
-			<Skeleton className="h-6 w-full" />
-		</div>
-	)
-}
-
-function EmptyState({
-	onRequestNewChannel,
-}: {
-	onRequestNewChannel: () => void
-}) {
-	return (
-		<div className="flex flex-col items-start gap-2 px-4 py-3 text-sm text-muted-foreground">
-			<MessageSquarePlus className="size-5" />
-			<p>Aucun canal pour le moment.</p>
-			<RequirePermission permission="MANAGE_CHANNELS">
-				<Button variant="outline" size="sm" onClick={onRequestNewChannel}>
-					<Plus className="size-4" />
-					Créer un canal
-				</Button>
-			</RequirePermission>
+		<div className="flex flex-col gap-2 px-2 py-1">
+			<Skeleton className="h-6 w-full bg-nav-active/60" />
+			<Skeleton className="h-6 w-full bg-nav-active/60" />
+			<Skeleton className="h-6 w-3/4 bg-nav-active/60" />
 		</div>
 	)
 }
@@ -269,41 +232,30 @@ function CategoryGroup({
 		<ul className="flex flex-col gap-0.5">
 			{group.channels.map((chan) => {
 				const unreadCount = unreadCounts.get(chan.id) ?? 0
-				const unread = unreadCount > 0
 				return (
 					<li key={chan.id} className="group/channel relative">
 						<Link
 							to={buildOrgPath(organizationSlug, `/discussions/${chan.id}`)}
+							data-status={chan.id === activeChannelId ? 'active' : undefined}
 							className={cn(
-								'flex h-8 items-center gap-2 rounded-md pr-8 pl-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
-								chan.id === activeChannelId &&
-									'bg-accent font-medium text-accent-foreground',
-								unread && 'font-semibold text-foreground',
+								linkClassName,
+								'pr-8',
+								unreadCount > 0 && 'font-semibold text-nav-foreground',
 							)}
 						>
-							<Hash aria-hidden className="size-4 shrink-0" />
+							<Hash aria-hidden className="size-4 shrink-0 text-nav-muted" />
 							<span className="min-w-0 flex-1 truncate">{chan.name}</span>
-							{unread ? (
-								<span className="tabular flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-semibold text-primary-foreground text-xs">
-									{unreadCount}
-									<span className="sr-only">
-										{' '}
-										{unreadCount > 1 ? 'messages non lus' : 'message non lu'}
-									</span>
-								</span>
-							) : null}
+							<UnreadBadge count={unreadCount} />
 						</Link>
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
-								<Button
+								<button
 									type="button"
-									variant="ghost"
-									size="icon"
 									aria-label={`Gérer le canal ${chan.name}`}
-									className="absolute top-1/2 right-1 size-6 -translate-y-1/2 opacity-0 focus-visible:opacity-100 group-hover/channel:opacity-100 data-[state=open]:opacity-100"
+									className="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-nav-muted opacity-0 outline-none hover:bg-nav-active hover:text-nav-foreground focus-visible:opacity-100 group-hover/channel:opacity-100 data-[state=open]:opacity-100"
 								>
 									<MoreHorizontal className="size-3.5" />
-								</Button>
+								</button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="start">
 								<DropdownMenuItem onSelect={() => onOpenChannelAdmin(chan.id)}>
@@ -329,7 +281,7 @@ function CategoryGroup({
 				if (group.category) onToggleCategory(group.category.id, !open)
 			}}
 		>
-			<CollapsibleTrigger className="flex w-full items-center gap-1 rounded-md px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+			<CollapsibleTrigger className="flex w-full items-center gap-1 rounded-md px-2 pb-1 font-semibold text-nav-muted text-xs uppercase tracking-wide outline-none hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary">
 				<ChevronRight
 					className={cn(
 						'size-3.5 shrink-0 transition-transform',

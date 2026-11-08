@@ -202,6 +202,13 @@ describe('ChatChannelHeaderUI — direct message', () => {
 		expect(screen.queryByLabelText('Paramètres du canal')).toBeNull()
 	})
 
+	it('shows the member count on a channel but not on a direct message', () => {
+		withTooltips(
+			<ChatChannelHeaderUI {...baseProps} name="general" memberCount={5} />,
+		)
+		expect(screen.getByText('5 membres')).toBeDefined()
+	})
+
 	it('keeps the settings button on a regular channel', () => {
 		withTooltips(<ChatChannelHeaderUI {...baseProps} name="general" />)
 

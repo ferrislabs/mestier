@@ -23,6 +23,8 @@ export interface ChatChannelHeaderUIProps {
 	pinned: ReactNode
 	/** Set on a direct message: the header names the person, not a channel. */
 	peer?: DirectPeer
+	/** Shown next to the actions on a channel, as in the rework. */
+	memberCount?: number
 	onOpenAdmin: () => void
 }
 
@@ -36,6 +38,7 @@ export function ChatChannelHeaderUI({
 	onMembersOpenChange,
 	pinned,
 	peer,
+	memberCount,
 	onOpenAdmin,
 }: ChatChannelHeaderUIProps) {
 	if (isLoading) {
@@ -75,6 +78,17 @@ export function ChatChannelHeaderUI({
 					</p>
 				) : null}
 			</div>
+			{!peer && memberCount !== undefined ? (
+				<p className="flex shrink-0 items-center gap-1 text-muted-foreground text-xs">
+					<Users aria-hidden className="size-3.5" />
+					<span aria-hidden>{memberCount}</span>
+					<span className="sr-only">
+						{memberCount > 1
+							? `${memberCount} membres`
+							: `${memberCount} membre`}
+					</span>
+				</p>
+			) : null}
 			<div className="flex shrink-0 items-center gap-0.5">
 				<IconToggle
 					label="Rechercher dans le canal"

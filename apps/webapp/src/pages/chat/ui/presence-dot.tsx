@@ -9,6 +9,7 @@ const STATUS_CLASSES: Record<PresenceStatus, string> = {
 }
 
 const SURFACE_CLASSES = {
+	nav: { ring: 'ring-nav', offline: 'border-nav-muted bg-nav' },
 	content: {
 		ring: 'ring-background',
 		offline: 'border-muted-foreground bg-background',
