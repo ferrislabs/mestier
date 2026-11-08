@@ -1,5 +1,6 @@
 import { ChevronRight, Plus } from 'lucide-react'
 import { useState } from 'react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Table,
@@ -9,21 +10,22 @@ import {
 	TableHeader,
 	TableRow,
 } from '#/components/ui/table'
-import {
-	formatRate,
-	setSurchargeArchived,
-	surchargeUsage,
-} from '#/pages/hr/lib/rh/extra'
+import { formatRate, surchargeUsage } from '#/pages/hr/lib/rh/extra'
 import { kindLabel } from '#/pages/hr/lib/rh/extra-view'
+import { surchargeFailureOf } from '#/pages/hr/lib/rh/extra-wire'
 import type { RhState, Surcharge } from '#/pages/hr/lib/rh/types'
 import { SurchargeDialog } from '#/pages/hr/ui/rh/extra/surcharge-dialog'
-import { useRhState, useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import {
+	useRhState,
+	useRhSurchargeActions,
+} from '#/pages/hr/ui/rh/shared/rh-context'
 
 type EditorState = { surcharge: Surcharge | null; open: boolean }
 
 export function SurchargesTab() {
-	const updateRh = useRhUpdate()
+	const actions = useRhSurchargeActions()
 	const state = useRhState()
+	const [saveError, setSaveError] = useState<string | null>(null)
 	const [editor, setEditor] = useState<EditorState>({
 		surcharge: null,
 		open: false,
@@ -31,8 +33,15 @@ export function SurchargesTab() {
 	const active = state.surcharges.filter((surcharge) => !surcharge.archived)
 	const archived = state.surcharges.filter((surcharge) => surcharge.archived)
 
-	function archive(surcharge: Surcharge, value: boolean) {
-		updateRh((current) => setSurchargeArchived(current, surcharge.id, value))
+	async function archive(surcharge: Surcharge, value: boolean) {
+		setSaveError(null)
+		try {
+			await (value
+				? actions.archive(surcharge.id)
+				: actions.restore(surcharge.id))
+		} catch (error) {
+			setSaveError(surchargeFailureOf(error).message)
+		}
 	}
 
 	return (
@@ -47,15 +56,22 @@ export function SurchargesTab() {
 						majoration archivée n’est plus proposée dans le formulaire.
 					</p>
 				</div>
-				<Button
-					type="button"
-					size="sm"
-					onClick={() => setEditor({ surcharge: null, open: true })}
-				>
-					<Plus />
-					Nouvelle majoration
-				</Button>
+				<RequirePermission permission="MANAGE_REFERENCE">
+					<Button
+						type="button"
+						size="sm"
+						onClick={() => setEditor({ surcharge: null, open: true })}
+					>
+						<Plus />
+						Nouvelle majoration
+					</Button>
+				</RequirePermission>
 			</div>
+			{saveError ? (
+				<div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive">
+					{saveError}
+				</div>
+			) : null}
 			{active.length === 0 ? (
 				<div className="rounded-lg border border-dashed bg-card px-6 py-12 text-center">
 					<p className="font-medium">Aucune majoration active.</p>
@@ -69,7 +85,7 @@ export function SurchargesTab() {
 					state={state}
 					surcharges={active}
 					onEdit={(surcharge) => setEditor({ surcharge, open: true })}
-					onToggle={archive}
+					onToggle={(surcharge, value) => void archive(surcharge, value)}
 				/>
 			)}
 			{archived.length > 0 && (
@@ -86,7 +102,7 @@ export function SurchargesTab() {
 							state={state}
 							surcharges={archived}
 							onEdit={(surcharge) => setEditor({ surcharge, open: true })}
-							onToggle={archive}
+							onToggle={(surcharge, value) => void archive(surcharge, value)}
 						/>
 					</div>
 				</details>
@@ -139,27 +155,29 @@ function SurchargesTable({
 								{surchargeUsage(state, surcharge.id)}
 							</TableCell>
 							<TableCell className="pr-3 text-right">
-								<div className="flex justify-end gap-1">
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										aria-label={`Modifier la majoration ${surcharge.name}`}
-										onClick={() => onEdit(surcharge)}
-									>
-										Modifier
-									</Button>
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="text-muted-foreground"
-										aria-label={`${surcharge.archived ? 'Réactiver' : 'Archiver'} la majoration ${surcharge.name}`}
-										onClick={() => onToggle(surcharge, !surcharge.archived)}
-									>
-										{surcharge.archived ? 'Réactiver' : 'Archiver'}
-									</Button>
-								</div>
+								<RequirePermission permission="MANAGE_REFERENCE">
+									<div className="flex justify-end gap-1">
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											aria-label={`Modifier la majoration ${surcharge.name}`}
+											onClick={() => onEdit(surcharge)}
+										>
+											Modifier
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											className="text-muted-foreground"
+											aria-label={`${surcharge.archived ? 'Réactiver' : 'Archiver'} la majoration ${surcharge.name}`}
+											onClick={() => onToggle(surcharge, !surcharge.archived)}
+										>
+											{surcharge.archived ? 'Réactiver' : 'Archiver'}
+										</Button>
+									</div>
+								</RequirePermission>
 							</TableCell>
 						</TableRow>
 					))}

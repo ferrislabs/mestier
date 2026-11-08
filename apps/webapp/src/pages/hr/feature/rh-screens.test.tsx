@@ -15,6 +15,7 @@ import {
 	absenceRecord,
 	DEFAULT_TYPE_RECORDS,
 } from '#/test/rh-absence-fixtures'
+import { EXTRAS_PATH, SURCHARGES_PATH } from '#/test/rh-extra-fixtures'
 import {
 	DEFAULT_ACCOUNT_RECORDS,
 	LEAVE_ACCOUNTS_PATH,
@@ -84,12 +85,20 @@ function installFakeApi(absences: unknown[] = []) {
 							return { data: [], pagination: null }
 						if (path === PERMISSIONS_PATH)
 							return {
-								data: { permissions: ['MANAGE_REFERENCE', 'MANAGE_MEMBERS'] },
+								data: {
+									permissions: [
+										'MANAGE_REFERENCE',
+										'MANAGE_MEMBERS',
+										'MANAGE_PLANNING',
+									],
+								},
 								pagination: null,
 							}
 						if (path === LEAVE_ACCOUNTS_PATH)
 							return { data: DEFAULT_ACCOUNT_RECORDS, pagination: null }
 						if (path === LEAVE_ADJUSTMENTS_PATH)
+							return { data: [], pagination: null }
+						if (path === SURCHARGES_PATH || path === EXTRAS_PATH)
 							return { data: [], pagination: null }
 						throw new Error(`unmocked GET ${path}`)
 					},
@@ -169,8 +178,8 @@ describe('RH screens over the real members', () => {
 			await screen.findByRole('heading', { name: 'Heures extra' }),
 		).toBeDefined()
 		expect(
-			screen.getByRole('button', { name: /Déclarer des heures/ }),
-		).toBeDefined()
+			screen.getAllByRole('button', { name: /Déclarer des heures/ }).length,
+		).toBeGreaterThan(0)
 	})
 
 	it('planning: renders the grid for the real members', async () => {

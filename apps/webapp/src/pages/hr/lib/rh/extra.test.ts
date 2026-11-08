@@ -1,22 +1,24 @@
 import { assert, test } from 'vitest'
 import { INITIAL_RH_STATE } from '#/pages/hr/feature/mocks/rh-seed'
 import {
-	cancelExtra,
-	createExtra,
-	createSurcharge,
-	decideExtra,
 	equivalentMinutes,
 	extraMinutes,
 	extrasOn,
 	formatDuration,
 	formatRate,
-	setSurchargeArchived,
 	suggestSurcharge,
 	summarizeExtras,
 	surchargeUsage,
-	updateSurcharge,
 	validateExtra,
 } from '#/pages/hr/lib/rh/extra'
+import {
+	cancelExtra,
+	createExtra,
+	createSurcharge,
+	decideExtra,
+	setSurchargeArchived,
+	updateSurcharge,
+} from '#/pages/hr/lib/rh/extra-fixtures'
 import { presenceOn } from '#/pages/hr/lib/rh/planning'
 import type { ActionContext, ExtraDraft } from '#/pages/hr/lib/rh/types'
 

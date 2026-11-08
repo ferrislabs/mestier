@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Plus } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
 import { formatMonth, formatShort } from '#/pages/hr/lib/rh/dates'
@@ -49,11 +50,13 @@ export function ExtraCard({
 	const recent = recentExtras(state, member.id)
 	const archived = member.status === 'archived'
 	const declare = !archived && (
-		<Button variant="outline" size="sm" asChild>
-			<Link to={orgPath('/rh/extra/nouvelle')} search={{ membre: member.id }}>
-				<Plus aria-hidden /> Déclarer des heures
-			</Link>
-		</Button>
+		<RequirePermission permission="MANAGE_PLANNING">
+			<Button variant="outline" size="sm" asChild>
+				<Link to={orgPath('/rh/extra/nouvelle')} search={{ membre: member.id }}>
+					<Plus aria-hidden /> Déclarer des heures
+				</Link>
+			</Button>
+		</RequirePermission>
 	)
 	return (
 		<DetailCard

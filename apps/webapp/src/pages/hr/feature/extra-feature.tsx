@@ -1,17 +1,17 @@
 import { useState } from 'react'
 import { findMember } from '#/pages/hr/lib/rh/absences'
 import { startOfMonth, todayIso } from '#/pages/hr/lib/rh/dates'
-import {
-	cancelExtra,
-	decideExtra,
-	pendingExtras,
-} from '#/pages/hr/lib/rh/extra'
+import { pendingExtras } from '#/pages/hr/lib/rh/extra'
 import { sortPending } from '#/pages/hr/lib/rh/extra-view'
+import { extraFailureOf } from '#/pages/hr/lib/rh/extra-wire'
 import { fullName } from '#/pages/hr/lib/rh/members'
 import type { ExtraPeriod, ExtraStatus } from '#/pages/hr/lib/rh/types'
 import type { ExtraFormInitial } from '#/pages/hr/ui/rh/extra/extra-form-dialog'
 import { ExtraPage, type ExtraTab } from '#/pages/hr/ui/rh/extra/extra-page'
-import { useRhState, useRhUpdate } from '#/pages/hr/ui/rh/shared/rh-context'
+import {
+	useRhExtraActions,
+	useRhState,
+} from '#/pages/hr/ui/rh/shared/rh-context'
 import { RhScreen } from './rh-screen'
 
 export type { ExtraTab } from '#/pages/hr/ui/rh/extra/extra-page'
@@ -53,8 +53,8 @@ function ExtraScreen({
 	initial,
 	onCreatingChange,
 }: ExtraFeatureProps) {
-	const updateRh = useRhUpdate()
 	const state = useRhState()
+	const actions = useRhExtraActions()
 	const today = todayIso()
 	const [month, setMonth] = useState(() => startOfMonth(today))
 	const [rejecting, setRejecting] = useState<RejectState>({
@@ -62,6 +62,7 @@ function ExtraScreen({
 		open: false,
 	})
 	const [notice, setNotice] = useState('')
+	const [saveError, setSaveError] = useState<string | null>(null)
 	const pending = sortPending(pendingExtras(state))
 
 	function announce(extra: ExtraPeriod, message: string) {
@@ -71,24 +72,24 @@ function ExtraScreen({
 		)
 	}
 
-	function approve(extra: ExtraPeriod) {
-		void updateRh((current, context) =>
-			decideExtra(current, context, extra.id, 'approved', ''),
-		)
-		announce(extra, 'validée')
+	async function decide(
+		extra: ExtraPeriod,
+		message: string,
+		action: () => Promise<void>,
+	) {
+		setSaveError(null)
+		try {
+			await action()
+			announce(extra, message)
+		} catch (error) {
+			setSaveError(extraFailureOf(error).message)
+		}
 	}
 
-	function reject(extra: ExtraPeriod, comment: string) {
-		void updateRh((current, context) =>
-			decideExtra(current, context, extra.id, 'rejected', comment),
-		)
+	async function reject(extra: ExtraPeriod, comment: string) {
+		await actions.reject(extra.id, comment)
 		setRejecting((current) => ({ ...current, open: false }))
 		announce(extra, 'refusée')
-	}
-
-	function cancel(extra: ExtraPeriod) {
-		void updateRh((current, context) => cancelExtra(current, context, extra.id))
-		announce(extra, 'annulée')
 	}
 
 	return (
@@ -103,9 +104,16 @@ function ExtraScreen({
 			status={status}
 			memberId={memberId}
 			onFiltersChange={onFiltersChange}
-			onApprove={approve}
-			onAskReject={(extra) => setRejecting({ extra, open: true })}
-			onCancel={cancel}
+			onApprove={(extra) =>
+				void decide(extra, 'validée', () => actions.approve(extra.id))
+			}
+			onAskReject={(extra) => {
+				setSaveError(null)
+				setRejecting({ extra, open: true })
+			}}
+			onCancel={(extra) =>
+				void decide(extra, 'annulée', () => actions.cancel(extra.id))
+			}
 			rejecting={rejecting}
 			onRejectOpenChange={(open) =>
 				setRejecting((current) => ({ ...current, open }))
@@ -114,6 +122,7 @@ function ExtraScreen({
 			creating={creating}
 			initial={initial}
 			onCreatingChange={onCreatingChange}
+			saveError={saveError}
 			notice={notice}
 		/>
 	)

@@ -11,9 +11,11 @@ import type {
 	ContractDraft,
 	DayOverride,
 	DocumentKind,
+	ExtraDraft,
 	IsoDate,
 	LeaveAccount,
 	RhState,
+	SurchargeDraft,
 } from '#/pages/hr/lib/rh/types'
 
 export type RhUpdate = (
@@ -65,6 +67,19 @@ export interface RhLeaveActions {
 	removeAdjustment: (adjustmentId: string) => Promise<void>
 }
 
+export interface RhExtraActions {
+	create: (draft: ExtraDraft, approve: boolean) => Promise<void>
+	approve: (extraId: string) => Promise<void>
+	reject: (extraId: string, comment: string) => Promise<void>
+	cancel: (extraId: string) => Promise<void>
+}
+
+export interface RhSurchargeActions {
+	save: (surchargeId: string | null, draft: SurchargeDraft) => Promise<void>
+	archive: (surchargeId: string) => Promise<void>
+	restore: (surchargeId: string) => Promise<void>
+}
+
 export interface RhOverrideActions {
 	put: (draft: DayOverride) => Promise<void>
 	clear: (memberId: string, date: IsoDate) => Promise<void>
@@ -85,6 +100,8 @@ export interface RhContextValue {
 	absences: RhAbsenceActions
 	absenceTypes: RhAbsenceTypeActions
 	leave: RhLeaveActions
+	extras: RhExtraActions
+	surcharges: RhSurchargeActions
 	overrides: RhOverrideActions
 	actorId: string
 	organizationId: string
@@ -139,6 +156,14 @@ export function useRhAbsenceTypeActions(): RhAbsenceTypeActions {
 
 export function useRhLeaveActions(): RhLeaveActions {
 	return useRhContext().leave
+}
+
+export function useRhExtraActions(): RhExtraActions {
+	return useRhContext().extras
+}
+
+export function useRhSurchargeActions(): RhSurchargeActions {
+	return useRhContext().surcharges
 }
 
 export function useRhOverrideActions(): RhOverrideActions {

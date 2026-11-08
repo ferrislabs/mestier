@@ -1,4 +1,5 @@
 import { Check, X } from 'lucide-react'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { findMember } from '#/pages/hr/lib/rh/absences'
 import { formatFull, formatLong, todayIso } from '#/pages/hr/lib/rh/dates'
@@ -124,27 +125,29 @@ function PendingCard({
 					<MemberMonthContext state={state} extra={extra} />
 				</aside>
 			</div>
-			<div className="flex justify-end gap-2 border-t bg-muted/20 px-4 py-2.5">
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					aria-label={`Refuser la déclaration de ${name}`}
-					onClick={() => onReject(extra)}
-				>
-					<X />
-					Refuser
-				</Button>
-				<Button
-					type="button"
-					size="sm"
-					aria-label={`Valider la déclaration de ${name}`}
-					onClick={() => onApprove(extra)}
-				>
-					<Check />
-					Valider
-				</Button>
-			</div>
+			<RequirePermission permission="MANAGE_PLANNING">
+				<div className="flex justify-end gap-2 border-t bg-muted/20 px-4 py-2.5">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						aria-label={`Refuser la déclaration de ${name}`}
+						onClick={() => onReject(extra)}
+					>
+						<X />
+						Refuser
+					</Button>
+					<Button
+						type="button"
+						size="sm"
+						aria-label={`Valider la déclaration de ${name}`}
+						onClick={() => onApprove(extra)}
+					>
+						<Check />
+						Valider
+					</Button>
+				</div>
+			</RequirePermission>
 		</li>
 	)
 }

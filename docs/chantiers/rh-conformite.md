@@ -20,7 +20,7 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 | B3 | Motifs d'absence et circuit de validation | B2 | fait |
 | B4 | Compteurs et ajustements | B3 | fait |
 | B5 | Exceptions de jour et flux du planning | B2, B3 | fait |
-| B6 | Majorations et heures extra | B3 | à faire |
+| B6 | Majorations et heures extra | B3 | fait |
 | Fin | Suppression de `rh-store`, `rh-seed`, `rh-binding` | B6 | à faire |
 
 ## Mocks front à remplacer
@@ -113,4 +113,19 @@ Objectif : le module RH du vrai Mestier est identique, en fonctions et en UI, au
 - Le planning n'utilise du flux que ses exceptions : membres, contrats, absences et motifs continuent d'arriver par leurs lectures de l'organisation (déjà liées à l'API en B1 à B3). Les relier au flux demanderait de remplacer ces lectures globales, partagées avec d'autres écrans.
 - Écritures : `MANAGE_PLANNING` (popover d'un jour, calendrier de la fiche, fenêtre de planification). « Planifier » envoie un PUT par jour et « Effacer » un DELETE par jour planifié de la période, en séquence ; un refus s'affiche dans la fenêtre ou le popover. Un 403 en lecture laisse l'écran sans exception, sans bandeau d'erreur.
 - Le client OpenAPI a été régénéré.
+- `tsc --noEmit` : 38 erreurs avant et après.
+
+## Reports issus de B6
+- Tables `surcharges` et `extra_periods`. Le taux est en points de base (2500 = 25 %), de 0 à 20000 : le plafond de 200 % du prototype (`MAX_RATE`) est repris côté API. Le webapp garde des pourcentages et convertit dans `lib/rh/extra-wire.ts` (arrondi au point de base, aller-retour testé).
+- Défauts : ceux du prototype, au nombre de cinq (heures supplémentaires 25 %, au-delà de 8 h 50 %, dimanche 100 %, jour férié 100 %, nuit 25 %). Le spec disait 50 % pour la nuit et ne comptait pas « au-delà de 8 h » : le spec est amendé, le prototype fait foi. Créés à la première lecture sous verrou consultatif de l'organisation, sans doublon sous lectures concurrentes.
+- Approbation à la création : comme le prototype, le formulaire a une case « Valider immédiatement » ; l'API reçoit `approve` et enregistre la déclaration approuvée par l'appelant. Toute écriture exige `MANAGE_PLANNING`, donc un employé ne peut pas déclarer ses propres heures (même limite que les absences en B3). L'annulation par le créateur seul n'est pas offerte par l'interface.
+- Taux copié : avec `surcharge_id` le taux est celui de la majoration au moment de la déclaration, `rate_bp` est ignoré ; sans majoration le taux libre est gardé (0 si absent). Une révision de la majoration ne touche pas les déclarations passées. Une majoration archivée est refusée pour une nouvelle déclaration (422 sur `surcharge_id`) et reste sur les anciennes.
+- Machine d'états : second type `ExtraStatus`, parallèle à `AbsenceStatus`. Les transitions sont les mêmes mais les erreurs de refus diffèrent ; un type commun aurait forcé une abstraction pour deux occurrences.
+- Règles de plage : fin après début, pause entière et strictement dans la plage, motif non vide (type `WorkDay` des contrats, repris en contraintes). Le prototype contrôle aussi côté interface le contrat à la date, l'absence, le chevauchement avec l'horaire et avec une autre déclaration : ces contrôles restent dans `lib/rh/extra.ts`, l'API ne les refuse pas (même choix que pour les absences en B3).
+- Refus : 422 avec `details.field` (`start`, `end`, `lunch`, `reason`, `rate_bp`, `member_id`, `surcharge_id`, `comment`, `status`) ; le refus d'une décision déjà prise est affiché dans le bandeau de l'écran, celui d'un refus sans commentaire dans la fenêtre. Le commentaire d'un refus devient obligatoire dans l'interface (facultatif dans le prototype), comme pour les absences.
+- Lecture : les majorations se lisent comme les motifs (tout membre). Les déclarations exigent `MANAGE_PLANNING` ; un 403 ouvre l'écran vide, sans bandeau, sans contrôle d'écriture. Les écritures de majoration exigent `MANAGE_REFERENCE`, celles de déclaration `MANAGE_PLANNING` (`RequirePermission`).
+- Liste des déclarations : paginée (100 au plus par page, filtres `member_id`, `status`, `from`, `to`), lue sur une seule page par le front : au-delà de 100, la fin manque dans l'historique, le résumé du mois et les compteurs de la barre latérale. À reprendre avec un filtre par mois ou une lecture de toutes les pages.
+- Récapitulatif (heures, majorations par mois) : calculé dans le webapp (ADR 0014), aucun calcul en Rust.
+- Réducteurs `createExtra`, `decideExtra`, `cancelExtra`, `createSurcharge`, `updateSurcharge`, `setSurchargeArchived` déplacés dans `lib/rh/extra-fixtures.ts`, réservé aux tests. Les extras et les majorations du seed ne sont plus jamais lus ; `rh-store` ne garde plus aucune donnée métier de ce lot.
+- Le client OpenAPI a été régénéré (ajouts seulement).
 - `tsc --noEmit` : 38 erreurs avant et après.
