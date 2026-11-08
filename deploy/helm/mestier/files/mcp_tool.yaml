@@ -35,3 +35,47 @@ resourcePolicy:
               - expr: R.attr.access == "write"
               - expr: R.attr.domain == "maintenance"
               - expr: '"mestier.maintenance.write" in P.attr.scopes'
+    - actions: ["*"]
+      effect: EFFECT_ALLOW
+      roles: ["user"]
+      name: crm_write_with_crm_write_scope
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.access == "write"
+              - expr: R.attr.domain == "crm"
+              - expr: '"mestier.crm.write" in P.attr.scopes'
+    - actions: ["*"]
+      effect: EFFECT_ALLOW
+      roles: ["user"]
+      name: quote_write_with_quote_write_scope
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.access == "write"
+              - expr: R.attr.domain == "quote"
+              - expr: '"mestier.quote.write" in P.attr.scopes'
+    - actions: ["*"]
+      effect: EFFECT_ALLOW
+      roles: ["user"]
+      name: planning_write_with_planning_write_scope
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.access == "write"
+              - expr: R.attr.domain == "planning"
+              - expr: '"mestier.planning.write" in P.attr.scopes'
+    - actions: ["*"]
+      effect: EFFECT_ALLOW
+      roles: ["user"]
+      name: reference_write_with_reference_write_scope
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.access == "write"
+              - expr: R.attr.domain in ["reference", "purchase"]
+              - expr: '"mestier.reference.write" in P.attr.scopes'

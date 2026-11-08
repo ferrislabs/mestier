@@ -14,8 +14,25 @@ pub const SCOPE_DOE_WRITE: &str = "mestier.doe.write";
 /// OAuth scope granting the maintenance write tool (contract drafts).
 pub const SCOPE_MAINTENANCE_WRITE: &str = "mestier.maintenance.write";
 
+/// OAuth scope granting the customer and deal write tools.
+pub const SCOPE_CRM_WRITE: &str = "mestier.crm.write";
+/// OAuth scope granting the quote write tools.
+pub const SCOPE_QUOTE_WRITE: &str = "mestier.quote.write";
+/// OAuth scope granting the project and task write tools.
+pub const SCOPE_PLANNING_WRITE: &str = "mestier.planning.write";
+/// OAuth scope granting the catalogue and supplier write tools.
+pub const SCOPE_REFERENCE_WRITE: &str = "mestier.reference.write";
+
 /// Every scope the gateway advertises in its protected resource metadata.
-pub const SCOPES_SUPPORTED: [&str; 3] = [SCOPE_READ, SCOPE_DOE_WRITE, SCOPE_MAINTENANCE_WRITE];
+pub const SCOPES_SUPPORTED: [&str; 7] = [
+    SCOPE_READ,
+    SCOPE_DOE_WRITE,
+    SCOPE_MAINTENANCE_WRITE,
+    SCOPE_CRM_WRITE,
+    SCOPE_QUOTE_WRITE,
+    SCOPE_PLANNING_WRITE,
+    SCOPE_REFERENCE_WRITE,
+];
 
 /// Header the gateway sets on requests it forwards, naming the LLM client
 /// the call came from. For logs only: authorization never reads it.
@@ -67,10 +84,44 @@ pub enum Tool {
     ListMaintenanceDue,
     GetMaintenanceContract,
     CreateMaintenanceContractDraft,
+    ListCustomers,
+    GetCustomer,
+    CreateCustomer,
+    UpdateCustomer,
+    CreateCustomerContact,
+    UpdateCustomerContact,
+    ListDeals,
+    GetDeal,
+    CreateDeal,
+    UpdateDeal,
+    MoveDealStage,
+    CreateQuote,
+    UpdateQuote,
+    SetQuoteStatus,
+    CreateQuoteRevision,
+    ExportQuotePdf,
+    ListTasks,
+    GetTask,
+    GetPlanning,
+    CreateProject,
+    UpdateProject,
+    CreateTask,
+    UpdateTask,
+    AddTaskComment,
+    CreateProduct,
+    UpdateProduct,
+    ListSuppliers,
+    CreateSupplier,
+    UpdateSupplier,
+    ListSupplierInvoices,
+    ListExpenses,
+    ListOutstandingInvoices,
+    GetProfitability,
+    GetWorkedHours,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 29] = [
+    pub const ALL: [Tool; 63] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -100,6 +151,40 @@ impl Tool {
         Tool::ListMaintenanceDue,
         Tool::GetMaintenanceContract,
         Tool::CreateMaintenanceContractDraft,
+        Tool::ListCustomers,
+        Tool::GetCustomer,
+        Tool::CreateCustomer,
+        Tool::UpdateCustomer,
+        Tool::CreateCustomerContact,
+        Tool::UpdateCustomerContact,
+        Tool::ListDeals,
+        Tool::GetDeal,
+        Tool::CreateDeal,
+        Tool::UpdateDeal,
+        Tool::MoveDealStage,
+        Tool::CreateQuote,
+        Tool::UpdateQuote,
+        Tool::SetQuoteStatus,
+        Tool::CreateQuoteRevision,
+        Tool::ExportQuotePdf,
+        Tool::ListTasks,
+        Tool::GetTask,
+        Tool::GetPlanning,
+        Tool::CreateProject,
+        Tool::UpdateProject,
+        Tool::CreateTask,
+        Tool::UpdateTask,
+        Tool::AddTaskComment,
+        Tool::CreateProduct,
+        Tool::UpdateProduct,
+        Tool::ListSuppliers,
+        Tool::CreateSupplier,
+        Tool::UpdateSupplier,
+        Tool::ListSupplierInvoices,
+        Tool::ListExpenses,
+        Tool::ListOutstandingInvoices,
+        Tool::GetProfitability,
+        Tool::GetWorkedHours,
     ];
 
     /// The name MCP clients call the tool by.
@@ -134,6 +219,40 @@ impl Tool {
             Self::ListMaintenanceDue => "list_maintenance_due",
             Self::GetMaintenanceContract => "get_maintenance_contract",
             Self::CreateMaintenanceContractDraft => "create_maintenance_contract_draft",
+            Self::ListCustomers => "list_customers",
+            Self::GetCustomer => "get_customer",
+            Self::CreateCustomer => "create_customer",
+            Self::UpdateCustomer => "update_customer",
+            Self::CreateCustomerContact => "create_customer_contact",
+            Self::UpdateCustomerContact => "update_customer_contact",
+            Self::ListDeals => "list_deals",
+            Self::GetDeal => "get_deal",
+            Self::CreateDeal => "create_deal",
+            Self::UpdateDeal => "update_deal",
+            Self::MoveDealStage => "move_deal_stage",
+            Self::CreateQuote => "create_quote",
+            Self::UpdateQuote => "update_quote",
+            Self::SetQuoteStatus => "set_quote_status",
+            Self::CreateQuoteRevision => "create_quote_revision",
+            Self::ExportQuotePdf => "export_quote_pdf",
+            Self::ListTasks => "list_tasks",
+            Self::GetTask => "get_task",
+            Self::GetPlanning => "get_planning",
+            Self::CreateProject => "create_project",
+            Self::UpdateProject => "update_project",
+            Self::CreateTask => "create_task",
+            Self::UpdateTask => "update_task",
+            Self::AddTaskComment => "add_task_comment",
+            Self::CreateProduct => "create_product",
+            Self::UpdateProduct => "update_product",
+            Self::ListSuppliers => "list_suppliers",
+            Self::CreateSupplier => "create_supplier",
+            Self::UpdateSupplier => "update_supplier",
+            Self::ListSupplierInvoices => "list_supplier_invoices",
+            Self::ListExpenses => "list_expenses",
+            Self::ListOutstandingInvoices => "list_outstanding_invoices",
+            Self::GetProfitability => "get_profitability",
+            Self::GetWorkedHours => "get_worked_hours",
         }
     }
 
@@ -154,7 +273,27 @@ impl Tool {
             | Self::UpdateDoeFile
             | Self::DeleteDoeFile
             | Self::UpdateDoeHeader
-            | Self::CreateMaintenanceContractDraft => Access::Write,
+            | Self::CreateMaintenanceContractDraft
+            | Self::CreateCustomer
+            | Self::UpdateCustomer
+            | Self::CreateCustomerContact
+            | Self::UpdateCustomerContact
+            | Self::CreateDeal
+            | Self::UpdateDeal
+            | Self::MoveDealStage
+            | Self::CreateQuote
+            | Self::UpdateQuote
+            | Self::SetQuoteStatus
+            | Self::CreateQuoteRevision
+            | Self::CreateProject
+            | Self::UpdateProject
+            | Self::CreateTask
+            | Self::UpdateTask
+            | Self::AddTaskComment
+            | Self::CreateProduct
+            | Self::UpdateProduct
+            | Self::CreateSupplier
+            | Self::UpdateSupplier => Access::Write,
             Self::ListOrganizations
             | Self::ListProjects
             | Self::GetProject
@@ -169,7 +308,21 @@ impl Tool {
             | Self::GetInvoice
             | Self::ExportDoePdf
             | Self::ListMaintenanceDue
-            | Self::GetMaintenanceContract => Access::Read,
+            | Self::GetMaintenanceContract
+            | Self::ListCustomers
+            | Self::GetCustomer
+            | Self::ExportQuotePdf
+            | Self::ListDeals
+            | Self::GetDeal
+            | Self::ListTasks
+            | Self::GetTask
+            | Self::GetPlanning
+            | Self::ListSuppliers
+            | Self::ListSupplierInvoices
+            | Self::ListExpenses
+            | Self::ListOutstandingInvoices
+            | Self::GetProfitability
+            | Self::GetWorkedHours => Access::Read,
         }
     }
 
@@ -178,6 +331,22 @@ impl Tool {
         match self {
             Self::ListOrganizations => "organization",
             Self::ListProjects | Self::GetProject => "project",
+            Self::CreateProduct | Self::UpdateProduct => "reference",
+            Self::ListSuppliers
+            | Self::CreateSupplier
+            | Self::UpdateSupplier
+            | Self::ListSupplierInvoices => "purchase",
+            Self::ListExpenses => "expense",
+            Self::ListOutstandingInvoices => "invoice",
+            Self::GetProfitability | Self::GetWorkedHours => "reporting",
+            Self::ListTasks
+            | Self::GetTask
+            | Self::GetPlanning
+            | Self::CreateProject
+            | Self::UpdateProject
+            | Self::CreateTask
+            | Self::UpdateTask
+            | Self::AddTaskComment => "planning",
             Self::ListDoes
             | Self::GetDoe
             | Self::ListDoeModels
@@ -196,11 +365,28 @@ impl Tool {
             | Self::UpdateDoeHeader
             | Self::ExportDoePdf => "doe",
             Self::SearchProducts | Self::GetProduct => "catalog",
-            Self::ListQuotes | Self::GetQuote => "quote",
+            Self::ListQuotes
+            | Self::GetQuote
+            | Self::CreateQuote
+            | Self::UpdateQuote
+            | Self::SetQuoteStatus
+            | Self::CreateQuoteRevision
+            | Self::ExportQuotePdf => "quote",
             Self::ListInvoices | Self::GetInvoice => "invoice",
             Self::ListMaintenanceDue
             | Self::GetMaintenanceContract
             | Self::CreateMaintenanceContractDraft => "maintenance",
+            Self::ListCustomers
+            | Self::GetCustomer
+            | Self::CreateCustomer
+            | Self::UpdateCustomer
+            | Self::CreateCustomerContact
+            | Self::UpdateCustomerContact
+            | Self::ListDeals
+            | Self::GetDeal
+            | Self::CreateDeal
+            | Self::UpdateDeal
+            | Self::MoveDealStage => "crm",
         }
     }
 
@@ -259,10 +445,22 @@ mod tests {
     }
 
     #[test]
-    fn only_doe_and_maintenance_tools_write() {
+    fn only_the_write_domains_write() {
         for tool in Tool::ALL {
             if tool.access() == Access::Write {
-                assert!(["doe", "maintenance"].contains(&tool.domain()), "{tool}");
+                assert!(
+                    [
+                        "doe",
+                        "maintenance",
+                        "crm",
+                        "quote",
+                        "planning",
+                        "reference",
+                        "purchase"
+                    ]
+                    .contains(&tool.domain()),
+                    "{tool}"
+                );
             }
         }
     }
@@ -283,16 +481,36 @@ mod tests {
                 "add_doe_section",
                 "add_doe_supply",
                 "add_doe_supply_from_product",
+                "add_task_comment",
+                "create_customer",
+                "create_customer_contact",
+                "create_deal",
                 "create_doe",
                 "create_maintenance_contract_draft",
+                "create_product",
+                "create_project",
+                "create_quote",
+                "create_quote_revision",
+                "create_supplier",
+                "create_task",
                 "delete_doe_file",
                 "delete_doe_section",
                 "delete_doe_supply",
+                "move_deal_stage",
                 "reorder_doe_sections",
+                "set_quote_status",
+                "update_customer",
+                "update_customer_contact",
+                "update_deal",
                 "update_doe_file",
                 "update_doe_header",
                 "update_doe_section",
                 "update_doe_supply",
+                "update_product",
+                "update_project",
+                "update_quote",
+                "update_supplier",
+                "update_task",
             ]
         );
     }
@@ -331,8 +549,84 @@ mod tests {
             [
                 "mestier.read",
                 "mestier.doe.write",
-                "mestier.maintenance.write"
+                "mestier.maintenance.write",
+                "mestier.crm.write",
+                "mestier.quote.write",
+                "mestier.planning.write",
+                "mestier.reference.write"
             ]
         );
+    }
+
+    #[test]
+    fn nothing_deletes_issues_or_sends_in_the_crm() {
+        for tool in Tool::ALL {
+            let name = tool.name();
+            if tool.domain() == "crm" {
+                for forbidden in ["delete", "archive", "issue", "send"] {
+                    assert!(!name.contains(forbidden), "{name}");
+                }
+                assert!(tool.is_organization_scoped(), "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_crm_write_scope_is_advertised() {
+        assert_eq!(SCOPE_CRM_WRITE, "mestier.crm.write");
+        assert!(SCOPES_SUPPORTED.contains(&SCOPE_CRM_WRITE));
+    }
+
+    #[test]
+    fn the_quote_tools_cannot_delete_accept_or_issue() {
+        for tool in Tool::ALL {
+            let name = tool.name();
+            if tool.domain() == "quote" {
+                for forbidden in ["delete", "accept", "invoice", "issue"] {
+                    assert!(!name.contains(forbidden), "{name}");
+                }
+            }
+        }
+        assert_eq!(Tool::ExportQuotePdf.access(), Access::Read);
+        assert_eq!(SCOPE_QUOTE_WRITE, "mestier.quote.write");
+    }
+
+    #[test]
+    fn the_planning_tools_never_delete() {
+        for tool in Tool::ALL {
+            if tool.domain() == "planning" {
+                assert!(!tool.name().contains("delete"), "{tool}");
+                assert!(tool.is_organization_scoped(), "{tool}");
+            }
+        }
+        assert_eq!(Tool::GetPlanning.access(), Access::Read);
+        assert_eq!(SCOPE_PLANNING_WRITE, "mestier.planning.write");
+    }
+
+    #[test]
+    fn no_write_tool_outside_the_doe_deletes_archives_issues_or_sends() {
+        for tool in Tool::ALL {
+            if tool.access() == Access::Write && tool.domain() != "doe" {
+                for forbidden in ["delete", "archive", "issue", "send", "cancel"] {
+                    assert!(!tool.name().contains(forbidden), "{tool}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_reference_write_scope_covers_the_catalogue_and_the_suppliers() {
+        assert_eq!(SCOPE_REFERENCE_WRITE, "mestier.reference.write");
+        assert_eq!(SCOPES_SUPPORTED.len(), 7);
+        for tool in [Tool::CreateProduct, Tool::CreateSupplier] {
+            assert!(["reference", "purchase"].contains(&tool.domain()));
+        }
+        for tool in [
+            Tool::GetProfitability,
+            Tool::GetWorkedHours,
+            Tool::ListExpenses,
+        ] {
+            assert_eq!(tool.access(), Access::Read, "{tool}");
+        }
     }
 }

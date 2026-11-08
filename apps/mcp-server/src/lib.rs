@@ -1,8 +1,12 @@
 pub mod api;
 pub mod app;
+pub mod crm;
 pub mod edit;
 pub mod files;
 pub mod maintenance;
+pub mod planning;
+pub mod quote;
+pub mod reference;
 pub mod session;
 pub mod tools;
 

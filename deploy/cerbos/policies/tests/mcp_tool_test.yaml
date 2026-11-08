@@ -16,6 +16,26 @@ principals:
     roles: ["user"]
     attr:
       scopes: ["mestier.read", "mestier.maintenance.write"]
+  crm_writer:
+    id: u5
+    roles: ["user"]
+    attr:
+      scopes: ["mestier.read", "mestier.crm.write"]
+  quote_writer:
+    id: u6
+    roles: ["user"]
+    attr:
+      scopes: ["mestier.read", "mestier.quote.write"]
+  planning_writer:
+    id: u7
+    roles: ["user"]
+    attr:
+      scopes: ["mestier.read", "mestier.planning.write"]
+  reference_writer:
+    id: u8
+    roles: ["user"]
+    attr:
+      scopes: ["mestier.read", "mestier.reference.write"]
   no_scope:
     id: u3
     roles: ["user"]
@@ -38,6 +58,30 @@ resources:
     kind: mcp_tool
     id: list_maintenance_due
     attr: {access: read, domain: maintenance, organization: acme}
+  write_crm:
+    kind: mcp_tool
+    id: create_customer
+    attr: {access: write, domain: crm, organization: acme}
+  read_crm:
+    kind: mcp_tool
+    id: list_customers
+    attr: {access: read, domain: crm, organization: acme}
+  write_quote:
+    kind: mcp_tool
+    id: create_quote
+    attr: {access: write, domain: quote, organization: acme}
+  write_planning:
+    kind: mcp_tool
+    id: create_task
+    attr: {access: write, domain: planning, organization: acme}
+  write_product:
+    kind: mcp_tool
+    id: create_product
+    attr: {access: write, domain: reference, organization: acme}
+  write_supplier:
+    kind: mcp_tool
+    id: create_supplier
+    attr: {access: write, domain: purchase, organization: acme}
   write_invoice:
     kind: mcp_tool
     id: create_invoice
@@ -153,3 +197,203 @@ tests:
         resource: read_maintenance
         actions:
           list_maintenance_due: EFFECT_ALLOW
+  - name: write crm with mestier.crm.write is allowed
+    input:
+      principals: [crm_writer]
+      resources: [write_crm]
+      actions: [create_customer]
+    expected:
+      - principal: crm_writer
+        resource: write_crm
+        actions:
+          create_customer: EFFECT_ALLOW
+  - name: write crm with only mestier.read is denied
+    input:
+      principals: [reader]
+      resources: [write_crm]
+      actions: [create_customer]
+    expected:
+      - principal: reader
+        resource: write_crm
+        actions:
+          create_customer: EFFECT_DENY
+  - name: write crm with only mestier.doe.write is denied
+    input:
+      principals: [doe_writer]
+      resources: [write_crm]
+      actions: [create_customer]
+    expected:
+      - principal: doe_writer
+        resource: write_crm
+        actions:
+          create_customer: EFFECT_DENY
+  - name: mestier.crm.write alone does not open a DOE write
+    input:
+      principals: [crm_writer]
+      resources: [write_doe]
+      actions: [create_doe]
+    expected:
+      - principal: crm_writer
+        resource: write_doe
+        actions:
+          create_doe: EFFECT_DENY
+  - name: read crm with mestier.read is allowed
+    input:
+      principals: [reader]
+      resources: [read_crm]
+      actions: [list_customers]
+    expected:
+      - principal: reader
+        resource: read_crm
+        actions:
+          list_customers: EFFECT_ALLOW
+  - name: write quote with mestier.quote.write is allowed
+    input:
+      principals: [quote_writer]
+      resources: [write_quote]
+      actions: [create_quote]
+    expected:
+      - principal: quote_writer
+        resource: write_quote
+        actions:
+          create_quote: EFFECT_ALLOW
+  - name: write quote with only mestier.crm.write is denied
+    input:
+      principals: [crm_writer]
+      resources: [write_quote]
+      actions: [create_quote]
+    expected:
+      - principal: crm_writer
+        resource: write_quote
+        actions:
+          create_quote: EFFECT_DENY
+  - name: write quote with only mestier.read is denied
+    input:
+      principals: [reader]
+      resources: [write_quote]
+      actions: [create_quote]
+    expected:
+      - principal: reader
+        resource: write_quote
+        actions:
+          create_quote: EFFECT_DENY
+  - name: mestier.quote.write alone does not open a CRM write
+    input:
+      principals: [quote_writer]
+      resources: [write_crm]
+      actions: [create_customer]
+    expected:
+      - principal: quote_writer
+        resource: write_crm
+        actions:
+          create_customer: EFFECT_DENY
+  - name: write planning with mestier.planning.write is allowed
+    input:
+      principals: [planning_writer]
+      resources: [write_planning]
+      actions: [create_task]
+    expected:
+      - principal: planning_writer
+        resource: write_planning
+        actions:
+          create_task: EFFECT_ALLOW
+  - name: write planning with only mestier.quote.write is denied
+    input:
+      principals: [quote_writer]
+      resources: [write_planning]
+      actions: [create_task]
+    expected:
+      - principal: quote_writer
+        resource: write_planning
+        actions:
+          create_task: EFFECT_DENY
+  - name: write planning with only mestier.read is denied
+    input:
+      principals: [reader]
+      resources: [write_planning]
+      actions: [create_task]
+    expected:
+      - principal: reader
+        resource: write_planning
+        actions:
+          create_task: EFFECT_DENY
+  - name: mestier.planning.write alone does not open a quote write
+    input:
+      principals: [planning_writer]
+      resources: [write_quote]
+      actions: [create_quote]
+    expected:
+      - principal: planning_writer
+        resource: write_quote
+        actions:
+          create_quote: EFFECT_DENY
+  - name: create_product with mestier.reference.write is allowed
+    input:
+      principals: [reference_writer]
+      resources: [write_product]
+      actions: [create_product]
+    expected:
+      - principal: reference_writer
+        resource: write_product
+        actions:
+          create_product: EFFECT_ALLOW
+  - name: create_product with only mestier.planning.write is denied
+    input:
+      principals: [planning_writer]
+      resources: [write_product]
+      actions: [create_product]
+    expected:
+      - principal: planning_writer
+        resource: write_product
+        actions:
+          create_product: EFFECT_DENY
+  - name: create_product with only mestier.read is denied
+    input:
+      principals: [reader]
+      resources: [write_product]
+      actions: [create_product]
+    expected:
+      - principal: reader
+        resource: write_product
+        actions:
+          create_product: EFFECT_DENY
+  - name: create_supplier with mestier.reference.write is allowed
+    input:
+      principals: [reference_writer]
+      resources: [write_supplier]
+      actions: [create_supplier]
+    expected:
+      - principal: reference_writer
+        resource: write_supplier
+        actions:
+          create_supplier: EFFECT_ALLOW
+  - name: create_supplier with only mestier.planning.write is denied
+    input:
+      principals: [planning_writer]
+      resources: [write_supplier]
+      actions: [create_supplier]
+    expected:
+      - principal: planning_writer
+        resource: write_supplier
+        actions:
+          create_supplier: EFFECT_DENY
+  - name: create_supplier with only mestier.read is denied
+    input:
+      principals: [reader]
+      resources: [write_supplier]
+      actions: [create_supplier]
+    expected:
+      - principal: reader
+        resource: write_supplier
+        actions:
+          create_supplier: EFFECT_DENY
+  - name: mestier.reference.write alone does not open a planning write
+    input:
+      principals: [reference_writer]
+      resources: [write_planning]
+      actions: [create_task]
+    expected:
+      - principal: reference_writer
+        resource: write_planning
+        actions:
+          create_task: EFFECT_DENY

@@ -75,6 +75,11 @@ impl ApiClient {
         self.json(request, token).await
     }
 
+    pub async fn patch(&self, token: &str, path: &str, body: &Value) -> Result<Value, Fault> {
+        let request = self.http.patch(self.url(path)).json(body);
+        self.json(request, token).await
+    }
+
     pub async fn upload(
         &self,
         token: &str,
