@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id AS \"channel_id!\",\n                   COUNT(m.id) AS \"unread_count!\",\n                   (array_agg(m.id ORDER BY m.id))[1] AS \"first_unread_message_id!\"\n            FROM chat.channels c\n            JOIN chat.messages m ON m.channel_id = c.id\n            WHERE c.org_id = $1\n              AND (c.channel_type <> 'DIRECT' OR EXISTS (\n                  SELECT 1 FROM chat.direct_channels d\n                  WHERE d.channel_id = c.id AND ($2 = d.user_low OR $2 = d.user_high)))\n              AND m.id > COALESCE(\n                  (SELECT rs.last_read_message_id\n                   FROM chat.channel_read_state rs\n                   WHERE rs.user_id = $2 AND rs.channel_id = c.id),\n                  '00000000-0000-0000-0000-000000000000'::uuid)\n            GROUP BY c.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "unread_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "first_unread_message_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "69da7779f3241e840120225da9ffbbd553a5797f7f8cdec953eade5150ee15c4"
+}

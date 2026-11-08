@@ -245,7 +245,7 @@ export namespace Schemas {
     updated_at: string;
   };
   export type ChannelId = string;
-  export type ChannelType = "TEXT" | "THREAD";
+  export type ChannelType = "TEXT" | "THREAD" | "DIRECT";
   export type MessageId = string;
   export type ChannelResponse = {
     archived: boolean;
@@ -1013,8 +1013,14 @@ export namespace Schemas {
     line2?: (string | null) | undefined;
     postal_code: string;
   };
-  export type PresenceStatus = "ONLINE" | "OFFLINE" | "DND";
   export type UserId = string;
+  export type DirectChannelResponse = {
+    channel_id: ChannelId;
+    created_at: string;
+    organization_id: OrganizationId;
+    peer_user_id: UserId;
+  };
+  export type PresenceStatus = "ONLINE" | "OFFLINE" | "DND";
   export type DirectoryEntryResponse = { display_name: string; presence: PresenceStatus; user_id: UserId };
   export type DoeFile = { caption?: (string | null) | undefined; key: string };
   export type DoeId = string;
@@ -1805,6 +1811,7 @@ export namespace Schemas {
     read_at?: (string | null) | undefined;
   };
   export type NumberSeriesKind = "QUOTE" | "INVOICE" | "CREDIT_NOTE";
+  export type OpenDirectChannelRequest = { user_id: UserId };
   export type str = string;
   export type VatStatusResponse = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type OrganizationResponse = {
@@ -3465,6 +3472,52 @@ export namespace Endpoints {
       400: unknown;
       401: unknown;
       403: unknown;
+    };
+  };
+  export type get_ListDirectChannels = {
+    method: "GET";
+    path: "/api/v1/chat/organizations/{organization_id}/direct-channels";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          channel_id: Schemas.ChannelId;
+          created_at: string;
+          organization_id: Schemas.OrganizationId;
+          peer_user_id: Schemas.UserId;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_OpenDirectChannel = {
+    method: "POST";
+    path: "/api/v1/chat/organizations/{organization_id}/direct-channels";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.OpenDirectChannelRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          channel_id: Schemas.ChannelId;
+          created_at: string;
+          organization_id: Schemas.OrganizationId;
+          peer_user_id: Schemas.UserId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
     };
   };
   export type get_ListChatDirectory = {
@@ -13205,6 +13258,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.get_ListReactors;
     "/api/v1/chat/organizations/{organization_id}/categories": Endpoints.get_ListCategories;
     "/api/v1/chat/organizations/{organization_id}/channels": Endpoints.get_ListChannels;
+    "/api/v1/chat/organizations/{organization_id}/direct-channels": Endpoints.get_ListDirectChannels;
     "/api/v1/chat/organizations/{organization_id}/directory": Endpoints.get_ListChatDirectory;
     "/api/v1/chat/organizations/{organization_id}/notifications": Endpoints.get_ListNotifications;
     "/api/v1/chat/organizations/{organization_id}/unread": Endpoints.get_ListUnreadChannels;
@@ -13338,6 +13392,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/channels/{channel_id}/webhooks": Endpoints.post_CreateWebhook;
     "/api/v1/chat/organizations/{organization_id}/categories": Endpoints.post_CreateCategory;
     "/api/v1/chat/organizations/{organization_id}/channels": Endpoints.post_CreateChannel;
+    "/api/v1/chat/organizations/{organization_id}/direct-channels": Endpoints.post_OpenDirectChannel;
     "/api/v1/chat/webhooks/{webhook_id}/{token}": Endpoints.post_ExecuteWebhook;
     "/api/v1/customers/{customer_id}/contacts": Endpoints.post_CreateCustomerContact;
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.post_CreateCustomerContext;

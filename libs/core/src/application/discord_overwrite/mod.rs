@@ -1,8 +1,9 @@
 use common::CoreError;
 use discord::domain::overwrite::ports::OverwriteRepository;
 use discord::{
-    Channel, ChannelId, ChannelPermissionOverwrite, ChannelRepository, DeleteChannelOverwrite,
-    OrganizationId, OverwriteTarget, UpsertChannelOverwrite, UserId,
+    Channel, ChannelId, ChannelPermissionOverwrite, ChannelRepository, ChannelType,
+    DeleteChannelOverwrite, DirectChannelRepository, OrganizationId, OverwriteTarget,
+    UpsertChannelOverwrite, UserId,
 };
 use mestier_macros::transactional;
 
@@ -18,7 +19,7 @@ impl MestierUseCase {
     /// 3. base = aggregated | VIEW_CHANNEL | SEND_MESSAGES.
     /// 4. Load channel overwrites; pick EVERYONE / caller's roles / caller's MEMBER.
     /// 5. Call pure `discord::resolve_channel_permissions`; wrap as `Permissions`.
-    #[transactional(member, role, overwrite, channel)]
+    #[transactional(member, role, overwrite, channel, direct_channel)]
     pub async fn resolve_channel_permissions(
         &self,
         user_id: UserId,
@@ -40,6 +41,22 @@ impl MestierUseCase {
             .ok_or(CoreError::Forbidden {
                 reason: Some("not a member of this organization".to_owned()),
             })?;
+
+        // A direct channel belongs to its two people and to nobody else, whatever
+        // their org roles or overwrites say. Anyone else gets `NotFound`, so a
+        // conversation cannot be told apart from one that does not exist.
+        if channel.channel_type == ChannelType::Direct {
+            let mut direct_channel_repository = direct_channel_repository;
+            let direct = direct_channel_repository
+                .find_by_channel(channel_id)
+                .await?
+                .ok_or(CoreError::NotFound)?;
+            return if direct.pair.includes(user_id) {
+                Ok(Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES)
+            } else {
+                Err(CoreError::NotFound)
+            };
+        }
 
         let member_role_ids = member_repository.list_role_ids(member.id).await?;
         let org_roles = role_repository.list_by_organization(org_id).await?;

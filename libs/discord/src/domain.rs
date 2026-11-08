@@ -210,6 +210,7 @@ mod overwrite_tests {
 
 pub mod category;
 pub mod channel;
+pub mod direct;
 pub mod message;
 pub mod notification;
 pub mod overwrite;

@@ -10,6 +10,7 @@ pub mod customer_contact;
 pub mod customer_context;
 pub mod day_override;
 pub mod deal;
+pub mod direct_channel;
 pub mod doe;
 pub mod doe_model;
 pub mod employee;
