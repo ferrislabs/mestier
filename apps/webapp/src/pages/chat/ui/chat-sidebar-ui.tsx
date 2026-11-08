@@ -2,7 +2,6 @@ import { Link } from '@tanstack/react-router'
 import {
 	AlertCircle,
 	ChevronRight,
-	MoreHorizontal,
 	Plus,
 	Settings,
 } from 'lucide-react'
@@ -12,12 +11,6 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from '#/components/ui/collapsible'
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from '#/components/ui/dropdown-menu'
 import { Skeleton } from '#/components/ui/skeleton'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
@@ -260,23 +253,14 @@ function CategoryGroup({
 							<span className="min-w-0 flex-1 truncate">{chan.name}</span>
 							<UnreadBadge count={unreadCount} />
 						</Link>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<button
-									type="button"
-									aria-label={`Gérer le canal ${chan.name}`}
-									className="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-nav-muted opacity-0 outline-none hover:bg-nav-active hover:text-nav-foreground focus-visible:opacity-100 group-hover/channel:opacity-100 data-[state=open]:opacity-100"
-								>
-									<MoreHorizontal className="size-3.5" />
-								</button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="start">
-								<DropdownMenuItem onSelect={() => onOpenChannelAdmin(chan.id)}>
-									<Settings className="size-4" />
-									Paramètres du canal
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
+						<button
+							type="button"
+							aria-label={`Paramètres du canal ${chan.name}`}
+							onClick={() => onOpenChannelAdmin(chan.id)}
+							className="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-nav-muted opacity-0 outline-none hover:bg-nav-active hover:text-nav-foreground focus-visible:opacity-100 group-hover/channel:opacity-100"
+						>
+							<Settings className="size-3.5" />
+						</button>
 					</li>
 				)
 			})}

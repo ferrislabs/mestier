@@ -168,7 +168,7 @@ describe('ChatSidebarUI — channel creation in a category', () => {
 })
 
 describe('ChatSidebarUI — per-channel management (#372)', () => {
-	it('opens the channel admin sheet for that channel from the sidebar itself', async () => {
+	it('opens the channel admin dialog for that channel from the sidebar itself', async () => {
 		const user = userEvent.setup()
 		const onOpenChannelAdmin = vi.fn()
 		const groups = [
@@ -179,10 +179,7 @@ describe('ChatSidebarUI — per-channel management (#372)', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: 'Gérer le canal ch-1' }),
-		)
-		await user.click(
-			screen.getByRole('menuitem', { name: /Paramètres du canal/ }),
+			screen.getByRole('button', { name: 'Paramètres du canal ch-1' }),
 		)
 
 		expect(onOpenChannelAdmin).toHaveBeenCalledWith('ch-1')
