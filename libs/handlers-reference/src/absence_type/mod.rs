@@ -56,7 +56,6 @@ pub struct RestoreAbsenceTypePath {
     pub absence_type_id: AbsenceTypeId,
 }
 
-/// `account_id` is stored as given until the leave accounts exist.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AbsenceTypeRequest {
     pub name: String,

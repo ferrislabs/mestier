@@ -399,6 +399,7 @@ mod tests {
         for table in [
             "absences",
             "absence_types",
+            "leave_accounts",
             "work_slots",
             "task_assignments",
             "tasks",

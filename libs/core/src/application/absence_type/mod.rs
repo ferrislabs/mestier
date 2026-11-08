@@ -40,16 +40,17 @@ where
 }
 
 impl MestierUseCase {
-    #[transactional(absence_type)]
+    #[transactional(absence_type, leave_account)]
     pub async fn list_absence_types(
         &self,
         command: ListAbsenceTypesCommand,
     ) -> Result<Vec<AbsenceType>, CoreError> {
-        let mut service = AbsenceTypeService::new(absence_type_repository);
+        let mut service =
+            AbsenceTypeService::new(absence_type_repository, leave_account_repository);
         service.list(command.organization_id).await
     }
 
-    #[transactional(absence_type, role, member, authz)]
+    #[transactional(absence_type, leave_account, role, member, authz)]
     pub async fn create_absence_type(
         &self,
         command: CreateAbsenceTypeCommand,
@@ -65,13 +66,14 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = AbsenceTypeService::new(absence_type_repository);
+        let mut service =
+            AbsenceTypeService::new(absence_type_repository, leave_account_repository);
         service
             .create(command.organization_id, &command.draft)
             .await
     }
 
-    #[transactional(absence_type, role, member, authz)]
+    #[transactional(absence_type, leave_account, role, member, authz)]
     pub async fn update_absence_type(
         &self,
         command: UpdateAbsenceTypeCommand,
@@ -87,13 +89,14 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = AbsenceTypeService::new(absence_type_repository);
+        let mut service =
+            AbsenceTypeService::new(absence_type_repository, leave_account_repository);
         service
             .update(command.organization_id, command.id, &command.draft)
             .await
     }
 
-    #[transactional(absence_type, role, member, authz)]
+    #[transactional(absence_type, leave_account, role, member, authz)]
     pub async fn archive_absence_type(
         &self,
         command: ArchiveAbsenceTypeCommand,
@@ -109,7 +112,8 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = AbsenceTypeService::new(absence_type_repository);
+        let mut service =
+            AbsenceTypeService::new(absence_type_repository, leave_account_repository);
         service
             .set_archived(command.organization_id, command.id, command.archived)
             .await

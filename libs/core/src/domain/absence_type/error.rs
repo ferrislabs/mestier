@@ -4,6 +4,10 @@ pub enum AbsenceTypeError {
     NameEmpty,
     #[error("hue: must be between 0 and 360")]
     HueOutOfRange,
+    #[error("account_id: no such leave account in the organization")]
+    AccountUnknown,
+    #[error("account_id: the leave account is archived")]
+    AccountArchived,
 }
 
 impl AbsenceTypeError {
@@ -11,6 +15,7 @@ impl AbsenceTypeError {
         match self {
             Self::NameEmpty => "name",
             Self::HueOutOfRange => "hue",
+            Self::AccountUnknown | Self::AccountArchived => "account_id",
         }
     }
 }

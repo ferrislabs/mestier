@@ -9,6 +9,8 @@ pub mod cost_basis;
 pub mod custom_unit;
 pub mod employee;
 pub mod equipment;
+pub mod leave_account;
+pub mod leave_adjustment;
 pub mod member_contract;
 pub mod member_document;
 pub mod member_profile;
@@ -53,6 +55,8 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(custom_unit::create::handler)
         .merge(absence::router(state))
         .merge(absence_type::router(state))
+        .merge(leave_account::router(state))
+        .merge(leave_adjustment::router(state))
         .merge(member_profile::router(state))
         .merge(member_contract::router(state))
         .merge(member_document::router(state))

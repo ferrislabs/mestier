@@ -16,7 +16,15 @@ use crate::{
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(absence, absence_type, organization, role, member, authz)]
+    #[transactional(
+        absence,
+        absence_type,
+        leave_account,
+        organization,
+        role,
+        member,
+        authz
+    )]
     pub async fn create_absence(
         &self,
         command: CreateAbsenceCommand,
@@ -43,24 +51,36 @@ impl MestierUseCase {
         let timezone =
             resolve_timezone(&mut organization_repository, command.organization_id).await?;
         let creator = policy::subject_member_id(&actor);
-        let mut service = AbsenceService::new(absence_repository, absence_type_repository);
+        let mut service = AbsenceService::new(
+            absence_repository,
+            absence_type_repository,
+            leave_account_repository,
+        );
         service.create_absence(command, creator, timezone).await
     }
 
-    #[transactional(absence, absence_type)]
+    #[transactional(absence, absence_type, leave_account)]
     pub async fn get_absence(&self, id: AbsenceId) -> Result<Absence, CoreError> {
-        let mut service = AbsenceService::new(absence_repository, absence_type_repository);
+        let mut service = AbsenceService::new(
+            absence_repository,
+            absence_type_repository,
+            leave_account_repository,
+        );
         service.get_absence(id).await
     }
 
-    #[transactional(absence, absence_type)]
+    #[transactional(absence, absence_type, leave_account)]
     pub async fn list_absences(
         &self,
         organization_id: OrganizationId,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Absence>, u64), CoreError> {
-        let mut service = AbsenceService::new(absence_repository, absence_type_repository);
+        let mut service = AbsenceService::new(
+            absence_repository,
+            absence_type_repository,
+            leave_account_repository,
+        );
         service.list_absences(organization_id, limit, offset).await
     }
 
@@ -69,13 +89,25 @@ impl MestierUseCase {
     /// bare `/absences/{id}` route has no organization to trust otherwise
     /// (CLAUDE.md's "bare ids derive their organization from the loaded
     /// row" rule).
-    #[transactional(absence, absence_type, organization, role, member, authz)]
+    #[transactional(
+        absence,
+        absence_type,
+        leave_account,
+        organization,
+        role,
+        member,
+        authz
+    )]
     pub async fn patch_absence(&self, command: PatchAbsenceCommand) -> Result<Absence, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
         let mut organization_repository = organization_repository;
 
-        let mut service = AbsenceService::new(absence_repository, absence_type_repository);
+        let mut service = AbsenceService::new(
+            absence_repository,
+            absence_type_repository,
+            leave_account_repository,
+        );
         let existing = service.get_absence(command.id).await?;
 
         let actor = policy::enrich_for_organization(
@@ -102,7 +134,7 @@ impl MestierUseCase {
     /// rule as [`Self::patch_absence`] — there is no domain command to
     /// carry an `actor` for a bare-id delete, so it is threaded as its own
     /// parameter instead, the same way `remove_employee_profile` does.
-    #[transactional(absence, absence_type, role, member, authz)]
+    #[transactional(absence, absence_type, leave_account, role, member, authz)]
     pub async fn soft_delete_absence(
         &self,
         actor: Subject,
@@ -111,7 +143,11 @@ impl MestierUseCase {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
 
-        let mut service = AbsenceService::new(absence_repository, absence_type_repository);
+        let mut service = AbsenceService::new(
+            absence_repository,
+            absence_type_repository,
+            leave_account_repository,
+        );
         let existing = service.get_absence(id).await?;
 
         let actor = policy::enrich_for_organization(
@@ -132,7 +168,7 @@ impl MestierUseCase {
         service.soft_delete_absence(id).await
     }
 
-    #[transactional(absence, absence_type, role, member, authz)]
+    #[transactional(absence, absence_type, leave_account, role, member, authz)]
     pub async fn approve_absence(
         &self,
         command: DecideAbsenceCommand,
@@ -155,7 +191,11 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = AbsenceService::new(absence_repository, absence_type_repository);
+        let mut service = AbsenceService::new(
+            absence_repository,
+            absence_type_repository,
+            leave_account_repository,
+        );
         service
             .approve(
                 command.organization_id,
@@ -165,7 +205,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(absence, absence_type, role, member, authz)]
+    #[transactional(absence, absence_type, leave_account, role, member, authz)]
     pub async fn reject_absence(
         &self,
         command: RejectAbsenceCommand,
@@ -188,7 +228,11 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = AbsenceService::new(absence_repository, absence_type_repository);
+        let mut service = AbsenceService::new(
+            absence_repository,
+            absence_type_repository,
+            leave_account_repository,
+        );
         service
             .reject(
                 command.organization_id,
@@ -201,7 +245,7 @@ impl MestierUseCase {
 
     /// The creator may withdraw their own request; anyone else needs
     /// `planning.manage`.
-    #[transactional(absence, absence_type, role, member, authz)]
+    #[transactional(absence, absence_type, leave_account, role, member, authz)]
     pub async fn cancel_absence(
         &self,
         command: DecideAbsenceCommand,
@@ -229,7 +273,11 @@ impl MestierUseCase {
             Err(other) => return Err(other),
         };
 
-        let mut service = AbsenceService::new(absence_repository, absence_type_repository);
+        let mut service = AbsenceService::new(
+            absence_repository,
+            absence_type_repository,
+            leave_account_repository,
+        );
         service
             .cancel(
                 command.organization_id,
