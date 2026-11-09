@@ -23,6 +23,14 @@ pub struct FileStorageArgs {
     pub endpoint: String,
 
     #[arg(
+        long = "file-storage-public-endpoint",
+        env = "FILE_STORAGE_PUBLIC_ENDPOINT",
+        name = "FILE_STORAGE_PUBLIC_ENDPOINT",
+        long_help = "S3-compatible endpoint URL reachable from the browser, used to sign download URLs; defaults to FILE_STORAGE_ENDPOINT when unset or empty"
+    )]
+    pub public_endpoint: Option<String>,
+
+    #[arg(
         long = "file-storage-region",
         env = "FILE_STORAGE_REGION",
         default_value = "us-east-1",
@@ -97,6 +105,7 @@ impl Default for FileStorageArgs {
         Self {
             bucket: "mestier-files".to_owned(),
             endpoint: "http://localhost:9000".to_owned(),
+            public_endpoint: None,
             region: "us-east-1".to_owned(),
             access_key_id: "rustfsadmin".to_owned(),
             secret_access_key: "rustfsadmin".to_owned(),
@@ -113,6 +122,7 @@ impl From<FileStorageArgs> for FileStorageConfig {
         Self {
             bucket: value.bucket,
             endpoint: value.endpoint,
+            public_endpoint: value.public_endpoint.filter(|url| !url.trim().is_empty()),
             region: value.region,
             access_key_id: value.access_key_id,
             secret_access_key: value.secret_access_key,
@@ -134,6 +144,7 @@ mod tests {
 
         assert_eq!(args.bucket, "mestier-files");
         assert_eq!(args.endpoint, "http://localhost:9000");
+        assert_eq!(args.public_endpoint, None);
         assert_eq!(args.region, "us-east-1");
         assert_eq!(args.access_key_id, "rustfsadmin");
         assert_eq!(args.secret_access_key, "rustfsadmin");
@@ -141,5 +152,15 @@ mod tests {
         assert!(args.auto_create_bucket);
         assert_eq!(args.key_prefix, "uploads");
         assert_eq!(args.max_upload_bytes, DEFAULT_MAX_UPLOAD_BYTES);
+    }
+
+    #[test]
+    fn an_empty_public_endpoint_is_treated_as_unset() {
+        let args = FileStorageArgs {
+            public_endpoint: Some(String::new()),
+            ..FileStorageArgs::default()
+        };
+
+        assert_eq!(FileStorageConfig::from(args).public_endpoint, None);
     }
 }

@@ -77,6 +77,7 @@ File storage defaults target the local RustFS service:
 | -------------------------------- | -------------------------------------- | ----------------------- |
 | `FILE_STORAGE_BUCKET`            | `--file-storage-bucket`                | `mestier-files`         |
 | `FILE_STORAGE_ENDPOINT`          | `--file-storage-endpoint`              | `http://localhost:9000` |
+| `FILE_STORAGE_PUBLIC_ENDPOINT`   | `--file-storage-public-endpoint`       | unset (uses endpoint)   |
 | `FILE_STORAGE_REGION`            | `--file-storage-region`                | `us-east-1`             |
 | `FILE_STORAGE_ACCESS_KEY_ID`     | `--file-storage-access-key-id`         | `rustfsadmin`           |
 | `FILE_STORAGE_SECRET_ACCESS_KEY` | `--file-storage-secret-access-key`     | `rustfsadmin`           |

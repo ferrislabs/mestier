@@ -16,6 +16,9 @@ use crate::domain::file_storage::{
 #[derive(Clone)]
 pub struct S3FileStorage {
     client: Client,
+    // Signs download URLs. The host is part of the SigV4 signature, so it has
+    // to be the one the browser will call; built once here, not per request.
+    signing_client: Client,
     bucket: String,
 }
 
@@ -28,16 +31,27 @@ impl S3FileStorage {
             None,
             "mestier",
         );
-        let s3_config = S3ConfigBuilder::new()
-            .behavior_version(BehaviorVersion::latest())
-            .region(Region::new(config.region.clone()))
-            .endpoint_url(config.endpoint.clone())
-            .credentials_provider(credentials)
-            .force_path_style(config.force_path_style)
-            .build();
+        let build_client = |endpoint: &str| {
+            Client::from_conf(
+                S3ConfigBuilder::new()
+                    .behavior_version(BehaviorVersion::latest())
+                    .region(Region::new(config.region.clone()))
+                    .endpoint_url(endpoint)
+                    .credentials_provider(credentials.clone())
+                    .force_path_style(config.force_path_style)
+                    .build(),
+            )
+        };
+
+        let client = build_client(&config.endpoint);
+        let signing_client = match config.public_endpoint.as_deref() {
+            Some(public) => build_client(public),
+            None => client.clone(),
+        };
 
         Self {
-            client: Client::from_conf(s3_config),
+            client,
+            signing_client,
             bucket: config.bucket.clone(),
         }
     }
@@ -132,7 +146,7 @@ impl FileStorage for S3FileStorage {
         let expires_at = chrono::DateTime::<chrono::Utc>::from(config.start_time() + expires_in);
 
         let request = self
-            .client
+            .signing_client
             .get_object()
             .bucket(&self.bucket)
             .key(key)
@@ -260,6 +274,50 @@ mod tests {
         assert!(!is_not_found_error(&err));
         assert!(
             matches!(map_s3_error(err), CoreError::Internal(msg) if msg.contains("InternalError"))
+        );
+    }
+
+    fn config(public_endpoint: Option<&str>) -> FileStorageConfig {
+        FileStorageConfig {
+            bucket: "mestier-files".to_owned(),
+            endpoint: "http://mestier-rustfs:9000".to_owned(),
+            public_endpoint: public_endpoint.map(str::to_owned),
+            region: "us-east-1".to_owned(),
+            access_key_id: "access".to_owned(),
+            secret_access_key: "secret".to_owned(),
+            force_path_style: true,
+            auto_create_bucket: false,
+            key_prefix: "uploads".to_owned(),
+            max_upload_bytes: 1024,
+        }
+    }
+
+    async fn signed_url(config: &FileStorageConfig) -> String {
+        S3FileStorage::from_config(config)
+            .presigned_get_url("uploads/a.png", std::time::Duration::from_secs(60))
+            .await
+            .expect("signing happens offline")
+            .url
+    }
+
+    #[tokio::test]
+    async fn presigned_url_uses_the_public_endpoint_when_set() {
+        let url = signed_url(&config(Some("https://files.example.com"))).await;
+
+        assert!(
+            url.starts_with("https://files.example.com/mestier-files/uploads/a.png?"),
+            "{url}"
+        );
+        assert!(!url.contains("mestier-rustfs"), "{url}");
+    }
+
+    #[tokio::test]
+    async fn presigned_url_uses_the_internal_endpoint_otherwise() {
+        let url = signed_url(&config(None)).await;
+
+        assert!(
+            url.starts_with("http://mestier-rustfs:9000/mestier-files/uploads/a.png?"),
+            "{url}"
         );
     }
 }

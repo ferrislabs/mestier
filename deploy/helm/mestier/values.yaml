@@ -100,6 +100,10 @@ api:
     RATE_LIMIT_PER_MINUTE: "120"
     FILE_STORAGE_BUCKET: "mestier-files"
     FILE_STORAGE_ENDPOINT: "http://rustfs:9000"
+    # URL the browser can reach the object store on. Download URLs are signed
+    # with this host; the API keeps using FILE_STORAGE_ENDPOINT for everything
+    # else. Empty = sign with FILE_STORAGE_ENDPOINT.
+    FILE_STORAGE_PUBLIC_ENDPOINT: ""
     FILE_STORAGE_REGION: "us-east-1"
     FILE_STORAGE_FORCE_PATH_STYLE: "true"
     FILE_STORAGE_AUTO_CREATE_BUCKET: "true"
