@@ -1,10 +1,13 @@
+use std::collections::HashMap;
+
 use chrono::{Duration, Utc};
 use common::{CoreError, generate_uuid_v7};
 use events::EventEmitter;
 
 use crate::{
-    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, OrganizationId, Participant,
-    ParticipantDetail, ParticipantId, ParticipantInvite, ParticipantKind, ParticipantStatus,
+    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, HostCompanyId,
+    OrganizationId, Participant, ParticipantDetail, ParticipantId, ParticipantInvite,
+    ParticipantKind, ParticipantListItem, ParticipantStatus,
     domain::{
         cursus_participant::{
             INVITATION_VALIDITY_DAYS,
@@ -156,12 +159,50 @@ where
         organization_id: OrganizationId,
         kind: Option<ParticipantKind>,
         status: Option<ParticipantStatus>,
+        host_company_id: Option<HostCompanyId>,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<Participant>, u64), CoreError> {
-        self.repo
-            .list_participants(organization_id, kind, status, limit, offset)
-            .await
+    ) -> Result<(Vec<ParticipantListItem>, u64), CoreError> {
+        let (participants, total) = self
+            .repo
+            .list_participants(
+                organization_id,
+                kind,
+                status,
+                host_company_id,
+                limit,
+                offset,
+            )
+            .await?;
+        let ids: Vec<ParticipantId> = participants.iter().map(|p| p.id).collect();
+        let mut apprentice_ids: HashMap<ParticipantId, ApprenticeId> = self
+            .repo
+            .list_apprentice_ids(organization_id, &ids)
+            .await?
+            .into_iter()
+            .collect();
+        let mut tutors: HashMap<ParticipantId, Vec<CompanyTutorRecord>> = HashMap::new();
+        for record in self
+            .repo
+            .list_company_tutors_of(organization_id, &ids)
+            .await?
+        {
+            tutors
+                .entry(record.tutor.participant_id)
+                .or_default()
+                .push(record);
+        }
+
+        let items = participants
+            .into_iter()
+            .map(|participant| ParticipantListItem {
+                apprentice_id: apprentice_ids.remove(&participant.id),
+                company_tutors: tutors.remove(&participant.id).unwrap_or_default(),
+                participant,
+            })
+            .collect();
+
+        Ok((items, total))
     }
 
     pub async fn update(
@@ -699,6 +740,62 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(CoreError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn list_attaches_the_batched_records_to_their_participants() {
+        let organization_id = org();
+        let apprentice = participant_in(organization_id);
+        let tutor = participant_in(organization_id);
+        let bare = participant_in(organization_id);
+        let apprentice_record = ApprenticeId(Uuid::new_v4());
+        let tutor_record = CompanyTutorRecord {
+            tutor: CompanyTutor {
+                id: CompanyTutorId(Uuid::new_v4()),
+                organization_id,
+                participant_id: tutor.id,
+                host_company_id: HostCompanyId(Uuid::new_v4()),
+                job_title: None,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            },
+            host_company_name: "Durand".to_owned(),
+        };
+        let page = vec![apprentice.clone(), tutor.clone(), bare.clone()];
+        let apprentice_id = apprentice.id;
+        let expected_tutor = tutor_record.clone();
+        let mut repo = MockCursusParticipantRepository::new();
+        repo.expect_list_participants()
+            .times(1)
+            .returning(move |_, _, _, _, _, _| {
+                let page = page.clone();
+                Box::pin(async move { Ok((page, 3)) })
+            });
+        repo.expect_list_apprentice_ids()
+            .times(1)
+            .returning(move |_, ids| {
+                assert_eq!(ids.len(), 3);
+                Box::pin(async move { Ok(vec![(apprentice_id, apprentice_record)]) })
+            });
+        repo.expect_list_company_tutors_of()
+            .times(1)
+            .returning(move |_, _| {
+                let record = tutor_record.clone();
+                Box::pin(async move { Ok(vec![record]) })
+            });
+
+        let (items, total) = service(repo)
+            .list(organization_id, None, None, None, 10, 0)
+            .await
+            .unwrap();
+
+        assert_eq!(total, 3);
+        assert_eq!(items[0].apprentice_id, Some(apprentice_record));
+        assert!(items[0].company_tutors.is_empty());
+        assert_eq!(items[1].apprentice_id, None);
+        assert_eq!(items[1].company_tutors, vec![expected_tutor]);
+        assert_eq!(items[2].apprentice_id, None);
+        assert!(items[2].company_tutors.is_empty());
     }
 
     #[tokio::test]

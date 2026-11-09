@@ -28,6 +28,10 @@ const ALL_PERMISSION_NAMES: PermissionName[] = [
 	'VIEW_QUOTES',
 	'VIEW_SUPPORT',
 	'MANAGE_SUPPORT',
+	'VIEW_CURSUS',
+	'MANAGE_CURSUS_CATALOG',
+	'MANAGE_CURSUS_TRIADS',
+	'MANAGE_CURSUS_PARTICIPANTS',
 ]
 
 describe('PERMISSION_CATALOG', () => {
@@ -94,6 +98,7 @@ describe('permissionsByArea', () => {
 			'reference',
 			'chat',
 			'support',
+			'cursus',
 			'administration',
 		])
 	})

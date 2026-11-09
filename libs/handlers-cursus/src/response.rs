@@ -3,9 +3,9 @@ use mestier_core::{
     Apprentice, ApprenticeId, ClosureReason, ClosureReasonId, CompanyTutorId, CompanyTutorRecord,
     ContractId, ContractTutorView, ContractView, CursusContractKind, CursusSpace, Establishment,
     EstablishmentId, HostCompany, HostCompanyId, MemberId, MyTriad, MyTriadDetail, OrganizationId,
-    Participant, ParticipantDetail, ParticipantId, ParticipantInvite, ParticipantStatus, Promotion,
-    PromotionId, Training, TrainingId, Triad, TriadAccess, TriadDetail, TriadId, TriadRole,
-    TriadSummary, TutorRank, UserId,
+    Participant, ParticipantDetail, ParticipantId, ParticipantInvite, ParticipantListItem,
+    ParticipantStatus, Promotion, PromotionId, Training, TrainingId, Triad, TriadAccess,
+    TriadDetail, TriadId, TriadRole, TriadSummary, TutorRank, UserId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -190,6 +190,24 @@ impl From<Participant> for ParticipantResponse {
             deactivated_at: value.deactivated_at,
             created_at: value.created_at,
             updated_at: value.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ParticipantListItemResponse {
+    #[serde(flatten)]
+    pub participant: ParticipantResponse,
+    pub apprentice_id: Option<ApprenticeId>,
+    pub company_tutors: Vec<CompanyTutorResponse>,
+}
+
+impl From<ParticipantListItem> for ParticipantListItemResponse {
+    fn from(value: ParticipantListItem) -> Self {
+        Self {
+            participant: value.participant.into(),
+            apprentice_id: value.apprentice_id,
+            company_tutors: value.company_tutors.into_iter().map(Into::into).collect(),
         }
     }
 }

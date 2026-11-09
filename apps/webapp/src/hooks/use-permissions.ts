@@ -34,6 +34,10 @@ export type PermissionName =
 	| 'MANAGE_AUTOMATION'
 	| 'VIEW_SUPPORT'
 	| 'MANAGE_SUPPORT'
+	| 'VIEW_CURSUS'
+	| 'MANAGE_CURSUS_CATALOG'
+	| 'MANAGE_CURSUS_TRIADS'
+	| 'MANAGE_CURSUS_PARTICIPANTS'
 
 /**
  * The caller's own granted bits in the active organization (#307) —

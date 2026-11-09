@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_macros::repository;
+use uuid::Uuid;
 
 use crate::{
-    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, OrganizationId,
-    Participant, ParticipantId, ParticipantKind, ParticipantStatus, UserId,
+    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, HostCompanyId,
+    OrganizationId, Participant, ParticipantId, ParticipantKind, ParticipantStatus, UserId,
     domain::cursus_participant::ports::CursusParticipantRepository,
     infrastructure::{
         cursus_participant::postgres::model::{
@@ -176,12 +177,14 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
         organization_id: OrganizationId,
         kind: Option<ParticipantKind>,
         status: Option<ParticipantStatus>,
+        host_company_id: Option<HostCompanyId>,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Participant>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
         let kind = kind.map(ParticipantKind::as_str);
         let status = status.map(ParticipantStatus::as_str);
+        let host_company_id = host_company_id.map(|id| id.0);
         let rows = sqlx::query_as!(
             ParticipantRow,
             r#"
@@ -199,12 +202,17 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
                        WHEN p.user_id IS NULL THEN 'pending'
                        ELSE 'active'
                    END)
+              AND ($4::uuid IS NULL
+                   OR EXISTS (
+                       SELECT 1 FROM cursus.company_tutor h
+                       WHERE h.org_id = p.org_id AND h.participant_id = p.id AND h.host_company_id = $4))
             ORDER BY lower(p.last_name) ASC, lower(coalesce(p.first_name, '')) ASC, p.created_at ASC
-            LIMIT $4 OFFSET $5
+            LIMIT $5 OFFSET $6
             "#,
             organization_id.0,
             kind,
             status,
+            host_company_id,
             limit as i64,
             offset as i64,
         )
@@ -228,16 +236,74 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
                        WHEN p.user_id IS NULL THEN 'pending'
                        ELSE 'active'
                    END)
+              AND ($4::uuid IS NULL
+                   OR EXISTS (
+                       SELECT 1 FROM cursus.company_tutor h
+                       WHERE h.org_id = p.org_id AND h.participant_id = p.id AND h.host_company_id = $4))
             "#,
             organization_id.0,
             kind,
             status,
+            host_company_id,
         )
         .fetch_one(&mut ***tx)
         .await
         .map_err(map_sqlx_error)?;
 
         Ok((rows.into_iter().map(Into::into).collect(), total as u64))
+    }
+
+    async fn list_apprentice_ids(
+        &mut self,
+        organization_id: OrganizationId,
+        participant_ids: &[ParticipantId],
+    ) -> Result<Vec<(ParticipantId, ApprenticeId)>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<Uuid> = participant_ids.iter().map(|id| id.0).collect();
+        let rows = sqlx::query!(
+            r#"
+            SELECT participant_id, id
+            FROM cursus.apprentice
+            WHERE org_id = $1 AND participant_id = ANY($2)
+            "#,
+            organization_id.0,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| (ParticipantId(row.participant_id), ApprenticeId(row.id)))
+            .collect())
+    }
+
+    async fn list_company_tutors_of(
+        &mut self,
+        organization_id: OrganizationId,
+        participant_ids: &[ParticipantId],
+    ) -> Result<Vec<CompanyTutorRecord>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let ids: Vec<Uuid> = participant_ids.iter().map(|id| id.0).collect();
+        let rows = sqlx::query_as!(
+            CompanyTutorRecordRow,
+            r#"
+            SELECT t.id, t.org_id, t.participant_id, t.host_company_id, t.job_title,
+                   t.created_at, t.updated_at, h.name AS host_company_name
+            FROM cursus.company_tutor t
+            JOIN cursus.host_company h ON h.org_id = t.org_id AND h.id = t.host_company_id
+            WHERE t.org_id = $1 AND t.participant_id = ANY($2)
+            ORDER BY h.name ASC, t.created_at ASC
+            "#,
+            organization_id.0,
+            &ids,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     async fn update_participant(

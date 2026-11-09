@@ -138,6 +138,13 @@ pub struct ParticipantDetail {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ParticipantListItem {
+    pub participant: Participant,
+    pub apprentice_id: Option<ApprenticeId>,
+    pub company_tutors: Vec<CompanyTutorRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParticipantInvite {
     pub participant: Participant,
     pub token: String,

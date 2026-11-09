@@ -488,11 +488,11 @@ async fn without_the_participants_bit_every_participant_write_is_forbidden() {
 
     let (listed, total) = world
         .usecase
-        .list_participants(tenant.organization_id, None, None, 10, 0)
+        .list_participants(tenant.organization_id, None, None, None, 10, 0)
         .await
         .unwrap();
     assert_eq!((listed.len(), total), (1, 1));
-    assert_eq!(listed[0].status(), ParticipantStatus::Pending);
+    assert_eq!(listed[0].participant.status(), ParticipantStatus::Pending);
 
     world.cleanup(&[]).await;
 }
@@ -630,7 +630,7 @@ async fn records_are_upserted_added_once_per_company_and_removed() {
     let by_kind = |kind| {
         world
             .usecase
-            .list_participants(tenant.organization_id, Some(kind), None, 10, 0)
+            .list_participants(tenant.organization_id, Some(kind), None, None, 10, 0)
     };
     assert_eq!(by_kind(ParticipantKind::Apprentice).await.unwrap().1, 1);
     assert_eq!(by_kind(ParticipantKind::CompanyTutor).await.unwrap().1, 1);
@@ -658,7 +658,7 @@ async fn records_are_upserted_added_once_per_company_and_removed() {
     let by_status = |status| {
         world
             .usecase
-            .list_participants(tenant.organization_id, None, Some(status), 10, 0)
+            .list_participants(tenant.organization_id, None, Some(status), None, 10, 0)
     };
     assert_eq!(by_status(ParticipantStatus::Pending).await.unwrap().1, 1);
     assert_eq!(by_status(ParticipantStatus::Active).await.unwrap().1, 0);
@@ -681,6 +681,96 @@ async fn records_are_upserted_added_once_per_company_and_removed() {
 
 #[tokio::test]
 #[ignore = "requires live postgres"]
+async fn the_list_embeds_the_records_and_filters_by_host_company_within_the_organization() {
+    let world = World::new().await;
+    let tenant = &world.first;
+    let durand = world.company(tenant, "Durand").await;
+    let petit = world.company(tenant, "Petit").await;
+    let foreign = world.company(&world.second, "Ailleurs").await;
+    let apprentice = world.apprentice(tenant, "lea@example.com").await;
+    let tutor_input = |host_company_id| CompanyTutorInput {
+        host_company_id,
+        job_title: Some("Chef d'équipe".to_owned()),
+    };
+    let tutor = world
+        .usecase
+        .create_participant(world.new_participant(
+            tenant,
+            "paul@example.com",
+            None,
+            Some(tutor_input(durand.id)),
+        ))
+        .await
+        .unwrap();
+    world
+        .usecase
+        .add_company_tutor(AddCompanyTutorCommand {
+            actor: tenant.manager.subject(),
+            organization_id: tenant.organization_id,
+            participant_id: tutor.participant.id,
+            company_tutor: tutor_input(petit.id),
+        })
+        .await
+        .unwrap();
+    world
+        .usecase
+        .create_participant(world.new_participant(
+            &world.second,
+            "autre@example.com",
+            None,
+            Some(tutor_input(foreign.id)),
+        ))
+        .await
+        .unwrap();
+
+    let (listed, total) = world
+        .usecase
+        .list_participants(tenant.organization_id, None, None, None, 10, 0)
+        .await
+        .unwrap();
+    assert_eq!((listed.len(), total), (2, 2));
+    let lea = listed
+        .iter()
+        .find(|item| item.participant.id == apprentice.participant.id)
+        .unwrap();
+    assert_eq!(
+        lea.apprentice_id,
+        apprentice.apprentice.as_ref().map(|a| a.id)
+    );
+    assert!(lea.company_tutors.is_empty());
+    let paul = listed
+        .iter()
+        .find(|item| item.participant.id == tutor.participant.id)
+        .unwrap();
+    assert_eq!(paul.apprentice_id, None);
+    let names: Vec<&str> = paul
+        .company_tutors
+        .iter()
+        .map(|record| record.host_company_name.as_str())
+        .collect();
+    assert_eq!(names, ["Durand", "Petit"]);
+
+    let at = |host_company_id| {
+        world.usecase.list_participants(
+            tenant.organization_id,
+            None,
+            None,
+            Some(host_company_id),
+            10,
+            0,
+        )
+    };
+    let (at_petit, total) = at(petit.id).await.unwrap();
+    assert_eq!(total, 1);
+    assert_eq!(at_petit[0].participant.id, tutor.participant.id);
+    assert_eq!(at_petit[0].company_tutors.len(), 2);
+    assert_eq!(at(foreign.id).await.unwrap().1, 0);
+
+    world.cleanup(&[]).await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
 async fn spec_cur_12_one_organization_never_sees_or_touches_another_ones_participants() {
     let world = World::new().await;
     let created = world.apprentice(&world.first, "lea@example.com").await;
@@ -695,7 +785,7 @@ async fn spec_cur_12_one_organization_never_sees_or_touches_another_ones_partici
 
     let (listed, total) = world
         .usecase
-        .list_participants(second.organization_id, None, None, 10, 0)
+        .list_participants(second.organization_id, None, None, None, 10, 0)
         .await
         .unwrap();
     assert_eq!((listed, total), (vec![], 0));

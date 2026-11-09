@@ -83,6 +83,22 @@ export namespace Schemas {
   export type AllocateReceiptRequest = { invoice_id: InvoiceId };
   export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
   export type ApiKeyLocationDto = "header" | "query" | "cookie";
+  export type ApprenticeId = string;
+  export type ApprenticeRequest = Partial<{
+    address: string | null;
+    birth_date: string | null;
+    ine_code: string | null;
+  }>;
+  export type ParticipantId = string;
+  export type ApprenticeResponse = {
+    address?: (string | null) | undefined;
+    birth_date?: (string | null) | undefined;
+    created_at: string;
+    id: ApprenticeId;
+    ine_code?: (string | null) | undefined;
+    participant_id: ParticipantId;
+    updated_at: string;
+  };
   export type ArchiveMemberRequest = Partial<{ reassign_reports_to: null | MemberId }>;
   export type RoleId = string;
   export type AssignRoleRequest = { role_id: RoleId };
@@ -282,6 +298,19 @@ export namespace Schemas {
     updated_at: string;
   };
   export type ChatRoleResponse = { name: string; role_id: RoleId };
+  export type ClosureReasonId = string;
+  export type CloseRequest = {
+    closed_at: string;
+    closure_note?: (string | null) | undefined;
+    closure_reason_id: ClosureReasonId;
+  };
+  export type ClosureReasonResponse = {
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    id: ClosureReasonId;
+    label: string;
+    organization_id: OrganizationId;
+  };
   export type HttpMethodDto = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   export type ParameterLocationDto = "path" | "query" | "header";
   export type ParameterDto = {
@@ -355,6 +384,18 @@ export namespace Schemas {
     title: string;
     version: string;
   };
+  export type CompanyTutorId = string;
+  export type HostCompanyId = string;
+  export type CompanyTutorRequest = { host_company_id: HostCompanyId; job_title?: (string | null) | undefined };
+  export type CompanyTutorResponse = {
+    created_at: string;
+    host_company_id: HostCompanyId;
+    host_company_name: string;
+    id: CompanyTutorId;
+    job_title?: (string | null) | undefined;
+    participant_id: ParticipantId;
+    updated_at: string;
+  };
   export type MediaItem = { description?: (string | null) | undefined; url: string };
   export type SeparatorSpacing = "Small" | "Large";
   export type Component =
@@ -404,8 +445,47 @@ export namespace Schemas {
     season: SeasonRequest;
     status?: (null | ContractStatus) | undefined;
   };
+  export type ContractFileUrlResponse = { url: string };
+  export type ContractId = string;
   export type ContractKindDto = "Text" | "Number" | "Boolean" | "Object" | "List";
   export type ContractKeyDto = { example?: string | undefined; kind: ContractKindDto; name: string; required: boolean };
+  export type ContractKind = "APPRENTICESHIP" | "PROFESSIONALIZATION";
+  export type ContractRequest = {
+    end_date: string;
+    host_company_id: HostCompanyId;
+    kind: ContractKind;
+    number?: (string | null) | undefined;
+    start_date: string;
+  };
+  export type TriadId = string;
+  export type TutorRank = "main" | "secondary";
+  export type ContractTutorResponse = {
+    archived_at?: (string | null) | undefined;
+    company_tutor_id: CompanyTutorId;
+    name: string;
+    participant_id: ParticipantId;
+    rank: TutorRank;
+  };
+  export type ContractResponse = {
+    closed_at?: (string | null) | undefined;
+    closure_note?: (string | null) | undefined;
+    closure_reason_id?: (null | ClosureReasonId) | undefined;
+    closure_reason_label?: (string | null) | undefined;
+    created_at: string;
+    end_date: string;
+    has_cerfa_file: boolean;
+    has_mission_sheet_file: boolean;
+    host_company_id: HostCompanyId;
+    host_company_name: string;
+    id: ContractId;
+    kind: ContractKind;
+    number?: (string | null) | undefined;
+    organization_id: OrganizationId;
+    start_date: string;
+    triad_id: TriadId;
+    tutors: Array<ContractTutorResponse>;
+    updated_at: string;
+  };
   export type SiteContact = { email?: (string | null) | undefined; name: string; phone?: (string | null) | undefined };
   export type ContractSite = {
     address_line?: (string | null) | undefined;
@@ -451,6 +531,7 @@ export namespace Schemas {
     position: number;
     topic?: (string | null) | undefined;
   };
+  export type CreateClosureReasonRequest = { label: string };
   export type CredentialOriginRequest = "supplied" | "generated";
   export type CreateCredentialRequest = {
     data?: (Record<string, unknown> | null) | undefined;
@@ -569,6 +650,13 @@ export namespace Schemas {
   export type DoeModelId = string;
   export type CreateDoeRequest = { model_id: DoeModelId };
   export type CreateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type CreateEstablishmentRequest = {
+    address?: (string | null) | undefined;
+    is_main_site?: boolean | undefined;
+    name: string;
+    siret?: (string | null) | undefined;
+    uai?: (string | null) | undefined;
+  };
   export type ExpenseCategoryId = string;
   export type SupplierId = string;
   export type CreateExpenseRequest = {
@@ -598,6 +686,15 @@ export namespace Schemas {
     surcharge_id?: (null | SurchargeId) | undefined;
   };
   export type CreateFolderRequest = { name: string; parent_id?: (string | null) | undefined };
+  export type CreateHostCompanyRequest = {
+    address?: (string | null) | undefined;
+    director_name?: (string | null) | undefined;
+    employee_count?: (number | null) | undefined;
+    legal_form?: (string | null) | undefined;
+    naf_code?: (string | null) | undefined;
+    name: string;
+    siret?: (string | null) | undefined;
+  };
   export type CreateIntakeTicketRequest = {
     body: string;
     custom_fields: Record<string, unknown>;
@@ -662,6 +759,14 @@ export namespace Schemas {
   };
   export type CreateMessageRequest = { attachments?: Array<CreateMessageAttachment> | undefined; content: string };
   export type CreateOrganizationRequest = { name: string; slug: string };
+  export type CreateParticipantRequest = {
+    apprentice?: (null | ApprenticeRequest) | undefined;
+    company_tutor?: (null | CompanyTutorRequest) | undefined;
+    email: string;
+    first_name?: (string | null) | undefined;
+    last_name: string;
+    phone?: (string | null) | undefined;
+  };
   export type CreateProductRequest = {
     archived?: (boolean | null) | undefined;
     billing_frequency?: (null | BillingFrequency) | undefined;
@@ -703,6 +808,8 @@ export namespace Schemas {
     name: string;
     tasks?: Array<ProjectTemplateTaskShapeRequest> | undefined;
   };
+  export type TrainingId = string;
+  export type CreatePromotionRequest = { end_year: number; label: string; start_year: number; training_id: TrainingId };
   export type QuoteLineId = string;
   export type PlannedTaskRequest = {
     all_day?: boolean | undefined;
@@ -830,6 +937,21 @@ export namespace Schemas {
     title: string;
   };
   export type CreateThreadRequest = { name: string; origin_message_id?: (null | MessageId) | undefined };
+  export type EstablishmentId = string;
+  export type CreateTrainingRequest = {
+    degree_type?: (string | null) | undefined;
+    establishment_id: EstablishmentId;
+    level?: (string | null) | undefined;
+    name: string;
+    rncp_code?: (string | null) | undefined;
+    rncp_label?: (string | null) | undefined;
+  };
+  export type PromotionId = string;
+  export type CreateTriadRequest = {
+    apprentice_id: ApprenticeId;
+    pedagogic_tutor_member_id?: (null | MemberId) | undefined;
+    promotion_id: PromotionId;
+  };
   export type CreateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
   export type CreateWorkflowRequest = {
     description?: (string | null) | undefined;
@@ -903,6 +1025,7 @@ export namespace Schemas {
   export type CredentialWithSecretResponse = CredentialResponse & { secret: unknown };
   export type InvoiceLineId = string;
   export type CreditLineBody = { quantity: string; source_line_id: InvoiceLineId };
+  export type CursusSpaceResponse = { is_member: boolean; name: string; organization_id: OrganizationId; slug: string };
   export type CustomUnitId = string;
   export type CustomUnitResponse = {
     code: string;
@@ -1233,6 +1356,18 @@ export namespace Schemas {
     organization_id: OrganizationId;
     updated_at: string;
   };
+  export type EstablishmentResponse = {
+    address?: (string | null) | undefined;
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    id: EstablishmentId;
+    is_main_site: boolean;
+    name: string;
+    organization_id: OrganizationId;
+    siret?: (string | null) | undefined;
+    uai?: (string | null) | undefined;
+    updated_at: string;
+  };
   export type LoopFrameBody = { index: number; item: unknown };
   export type EvaluateContextBody = Partial<{
     loop: null | LoopFrameBody;
@@ -1378,6 +1513,20 @@ export namespace Schemas {
     status: ContractStatus;
   };
   export type Grid = { contracts: Array<GridContract>; year: number };
+  export type HostCompanyResponse = {
+    address?: (string | null) | undefined;
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    director_name?: (string | null) | undefined;
+    employee_count?: (number | null) | undefined;
+    id: HostCompanyId;
+    legal_form?: (string | null) | undefined;
+    naf_code?: (string | null) | undefined;
+    name: string;
+    organization_id: OrganizationId;
+    siret?: (string | null) | undefined;
+    updated_at: string;
+  };
   export type MemberContractId = string;
   export type ScheduleInput =
     | { kind: "weekly"; week: Array<null | WorkDayInput> }
@@ -1822,8 +1971,49 @@ export namespace Schemas {
   };
   export type MinuteIntervalResponse = { ends_minute: number; starts_minute: number };
   export type MoveDealRequest = { lost_reason?: (string | null) | undefined; stage: DealStageName };
+  export type MyContractTutorResponse = { archived_at?: (string | null) | undefined; name: string; rank: TutorRank };
+  export type MyContractResponse = {
+    closed_at?: (string | null) | undefined;
+    closure_note?: (string | null) | undefined;
+    closure_reason_label?: (string | null) | undefined;
+    end_date: string;
+    host_company_name: string;
+    id: ContractId;
+    kind: ContractKind;
+    number?: (string | null) | undefined;
+    start_date: string;
+    tutors: Array<MyContractTutorResponse>;
+  };
   export type MyMemberResponse = { display_name: string; member_id: MemberId; organization_id: OrganizationId };
   export type MyPermissionsResponse = { permissions: Array<string> };
+  export type TriadAccessResponse = { kind: "active" } | { kind: "read_only"; since: string };
+  export type TriadRoleResponse = "apprentice" | "main_tutor" | "secondary_tutor";
+  export type MyTriadDetailResponse = {
+    access: TriadAccessResponse;
+    apprentice_email: string;
+    apprentice_name: string;
+    closed_at?: (string | null) | undefined;
+    closure_note?: (string | null) | undefined;
+    closure_reason_label?: (string | null) | undefined;
+    contracts: Array<MyContractResponse>;
+    pedagogic_tutor_name?: (string | null) | undefined;
+    promotion_end_year: number;
+    promotion_id: PromotionId;
+    promotion_label: string;
+    promotion_start_year: number;
+    role: TriadRoleResponse;
+    training_name: string;
+    triad_id: TriadId;
+  };
+  export type MyTriadResponse = {
+    access: TriadAccessResponse;
+    apprentice_name: string;
+    closed_at?: (string | null) | undefined;
+    promotion_label: string;
+    role: TriadRoleResponse;
+    training_name: string;
+    triad_id: TriadId;
+  };
   export type NodePositionDto = { x: number; y: number };
   export type NoteInvoiceRequest = { note: string };
   export type NotificationLevel = "ALL" | "MENTIONS" | "NOTHING";
@@ -1882,6 +2072,30 @@ export namespace Schemas {
     per_page: number;
     prev_page?: (number | null) | undefined;
     total?: (number | null) | undefined;
+  };
+  export type ParticipantStatus = "pending" | "active" | "inactive";
+  export type ParticipantResponse = {
+    created_at: string;
+    deactivated_at?: (string | null) | undefined;
+    email: string;
+    first_name?: (string | null) | undefined;
+    id: ParticipantId;
+    invitation_expires_at?: (string | null) | undefined;
+    last_name: string;
+    organization_id: OrganizationId;
+    phone?: (string | null) | undefined;
+    status: ParticipantStatus;
+    updated_at: string;
+    user_id?: (null | UserId) | undefined;
+  };
+  export type ParticipantDetailResponse = ParticipantResponse & {
+    apprentice?: (null | ApprenticeResponse) | undefined;
+    company_tutors: Array<CompanyTutorResponse>;
+  };
+  export type ParticipantInviteResponse = { expires_at: string; token: string };
+  export type ParticipantListItemResponse = ParticipantResponse & {
+    apprentice_id?: (null | ApprenticeId) | undefined;
+    company_tutors: Array<CompanyTutorResponse>;
   };
   export type PatchTaskResponse = { detached: boolean; task: TaskResponse };
   export type PayExpenseRequest = { method: PaymentMethod; paid_on: string };
@@ -2074,6 +2288,17 @@ export namespace Schemas {
     starts_minute?: (number | null) | undefined;
     template_id: ProjectTemplateId;
     title: string;
+  };
+  export type PromotionResponse = {
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    end_year: number;
+    id: PromotionId;
+    label: string;
+    organization_id: OrganizationId;
+    start_year: number;
+    training_id: TrainingId;
+    updated_at: string;
   };
   export type ProposeInterventionRequest = { done_on: string };
   export type PutDayOverrideRequest = {
@@ -2349,6 +2574,8 @@ export namespace Schemas {
     usage_count: number;
   };
   export type ServiceRateUnit = "FLAT_RATE" | "HOUR" | "DAY" | "UNIT" | "ML" | "M2" | "M3" | "KG" | "TONNE" | "LITRE";
+  export type SetContractFileRequest = Partial<{ file_key: string | null }>;
+  export type SetContractTutorsRequest = Partial<{ main: null | CompanyTutorId; secondary: null | CompanyTutorId }>;
   export type SetEmployeeCostBasisRequest = {
     effective_from: string;
     hourly_rate_cents?: (number | null) | undefined;
@@ -2505,7 +2732,48 @@ export namespace Schemas {
     task_id: TaskId;
     worked_minutes?: (number | null) | undefined;
   };
+  export type TrainingResponse = {
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    degree_type?: (string | null) | undefined;
+    establishment_id: EstablishmentId;
+    id: TrainingId;
+    level?: (string | null) | undefined;
+    name: string;
+    organization_id: OrganizationId;
+    rncp_code?: (string | null) | undefined;
+    rncp_label?: (string | null) | undefined;
+    updated_at: string;
+  };
   export type TransitionTicketRequest = { status: string };
+  export type TriadResponse = {
+    apprentice_id: ApprenticeId;
+    closed_at?: (string | null) | undefined;
+    closure_note?: (string | null) | undefined;
+    closure_reason_id?: (null | ClosureReasonId) | undefined;
+    created_at: string;
+    id: TriadId;
+    organization_id: OrganizationId;
+    pedagogic_tutor_member_id?: (null | MemberId) | undefined;
+    promotion_id: PromotionId;
+    updated_at: string;
+  };
+  export type TriadDetailResponse = TriadResponse & {
+    apprentice_email: string;
+    apprentice_name: string;
+    closure_reason_label?: (string | null) | undefined;
+    contracts: Array<ContractResponse>;
+    pedagogic_tutor_name?: (string | null) | undefined;
+    promotion: PromotionResponse;
+    training_name: string;
+  };
+  export type TriadSummaryResponse = TriadResponse & {
+    apprentice_name: string;
+    current_host_company_name?: (string | null) | undefined;
+    pedagogic_tutor_name?: (string | null) | undefined;
+    promotion_label: string;
+    training_name: string;
+  };
   export type UnreadChannelResponse = {
     channel_id: ChannelId;
     first_unread_message_id: MessageId;
@@ -2527,6 +2795,7 @@ export namespace Schemas {
     position: number;
     topic?: (string | null) | undefined;
   };
+  export type UpdateClosureReasonRequest = { label: string };
   export type UpdateCredentialRequest = Partial<{
     data: Record<string, unknown> | null;
     description: string | null;
@@ -2597,6 +2866,13 @@ export namespace Schemas {
   };
   export type UpdateDoeSettingsRequest = { style: DoeStyle };
   export type UpdateEquipmentRequest = { hourly_rate_cents: number; name: string };
+  export type UpdateEstablishmentRequest = {
+    address?: (string | null) | undefined;
+    is_main_site?: boolean | undefined;
+    name: string;
+    siret?: (string | null) | undefined;
+    uai?: (string | null) | undefined;
+  };
   export type UpdateExpenseRequest = {
     amount_ht_cents: number;
     category_id: ExpenseCategoryId;
@@ -2611,6 +2887,15 @@ export namespace Schemas {
     vat_cents?: number | undefined;
   };
   export type UpdateFolderRequest = Partial<{ name: string | null; parent_id: string | null }>;
+  export type UpdateHostCompanyRequest = {
+    address?: (string | null) | undefined;
+    director_name?: (string | null) | undefined;
+    employee_count?: (number | null) | undefined;
+    legal_form?: (string | null) | undefined;
+    naf_code?: (string | null) | undefined;
+    name: string;
+    siret?: (string | null) | undefined;
+  };
   export type UpdateInvoiceRequest = {
     customer_context_id: CustomerContextId;
     customer_id: CustomerId;
@@ -2648,6 +2933,12 @@ export namespace Schemas {
     name: string;
     slug: string;
   };
+  export type UpdateParticipantRequest = {
+    email: string;
+    first_name?: (string | null) | undefined;
+    last_name: string;
+    phone?: (string | null) | undefined;
+  };
   export type UpdateProductRequest = {
     archived?: (boolean | null) | undefined;
     billing_frequency?: (null | BillingFrequency) | undefined;
@@ -2672,6 +2963,7 @@ export namespace Schemas {
     quote_id?: (null | QuoteId) | undefined;
   };
   export type UpdateProjectTemplateRequest = { description?: (string | null) | undefined; name: string };
+  export type UpdatePromotionRequest = { end_year: number; label: string; start_year: number; training_id: TrainingId };
   export type UpdateQuoteRequest = {
     billing_address_id?: (null | CustomerContextId) | undefined;
     billing_contact_id?: (null | CustomerContactId) | undefined;
@@ -2751,6 +3043,15 @@ export namespace Schemas {
     title: string | null;
   }>;
   export type UpdateThreadRequest = { archived: boolean; name: string };
+  export type UpdateTrainingRequest = {
+    degree_type?: (string | null) | undefined;
+    establishment_id: EstablishmentId;
+    level?: (string | null) | undefined;
+    name: string;
+    rncp_code?: (string | null) | undefined;
+    rncp_label?: (string | null) | undefined;
+  };
+  export type UpdateTriadRequest = Partial<{ pedagogic_tutor_member_id: null | MemberId }>;
   export type UpdateWebhookRequest = { avatar_url?: (string | null) | undefined; name: string };
   export type UpdateWorkflowRequest = Partial<{
     archived: boolean | null;
@@ -3861,6 +4162,36 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+    };
+  };
+  export type post_AcceptCursusInvitation = {
+    method: "POST";
+    path: "/api/v1/cursus/invitations/{token}/accept";
+    requestFormat: "json";
+    parameters: {
+      path: { token: string };
+    };
+    responses: {
+      200: {
+        data: { is_member: boolean; name: string; organization_id: Schemas.OrganizationId; slug: string };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      409: unknown;
+      410: unknown;
+    };
+  };
+  export type get_ListMyCursusSpaces = {
+    method: "GET";
+    path: "/api/v1/cursus/me/spaces";
+    requestFormat: "json";
+    parameters: never;
+    responses: {
+      200: {
+        data: Array<{ is_member: boolean; name: string; organization_id: Schemas.OrganizationId; slug: string }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
     };
   };
   export type get_GetCustomerContact = {
@@ -7156,6 +7487,1395 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       422: unknown;
+    };
+  };
+  export type get_ListCursusClosureReasons = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/closure-reasons";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ archived: boolean }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.ClosureReasonId;
+          label: string;
+          organization_id: Schemas.OrganizationId;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCursusClosureReason = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/closure-reasons";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateClosureReasonRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.ClosureReasonId;
+          label: string;
+          organization_id: Schemas.OrganizationId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type patch_UpdateCursusClosureReason = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/cursus/closure-reasons/{closure_reason_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; closure_reason_id: string };
+
+      body: Schemas.UpdateClosureReasonRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.ClosureReasonId;
+          label: string;
+          organization_id: Schemas.OrganizationId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_ArchiveCursusClosureReason = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/closure-reasons/{closure_reason_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; closure_reason_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.ClosureReasonId;
+          label: string;
+          organization_id: Schemas.OrganizationId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_RemoveCursusCompanyTutor = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/cursus/company-tutors/{company_tutor_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; company_tutor_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type get_GetCursusContract = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          closed_at?: (string | null) | undefined;
+          closure_note?: (string | null) | undefined;
+          closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
+          closure_reason_label?: (string | null) | undefined;
+          created_at: string;
+          end_date: string;
+          has_cerfa_file: boolean;
+          has_mission_sheet_file: boolean;
+          host_company_id: Schemas.HostCompanyId;
+          host_company_name: string;
+          id: Schemas.ContractId;
+          kind: Schemas.ContractKind;
+          number?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          start_date: string;
+          triad_id: Schemas.TriadId;
+          tutors: Array<Schemas.ContractTutorResponse>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateCursusContract = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string };
+
+      body: Schemas.ContractRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          closed_at?: (string | null) | undefined;
+          closure_note?: (string | null) | undefined;
+          closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
+          closure_reason_label?: (string | null) | undefined;
+          created_at: string;
+          end_date: string;
+          has_cerfa_file: boolean;
+          has_mission_sheet_file: boolean;
+          host_company_id: Schemas.HostCompanyId;
+          host_company_name: string;
+          id: Schemas.ContractId;
+          kind: Schemas.ContractKind;
+          number?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          start_date: string;
+          triad_id: Schemas.TriadId;
+          tutors: Array<Schemas.ContractTutorResponse>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_CloseCursusContract = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/close";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string };
+
+      body: Schemas.CloseRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          closed_at?: (string | null) | undefined;
+          closure_note?: (string | null) | undefined;
+          closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
+          closure_reason_label?: (string | null) | undefined;
+          created_at: string;
+          end_date: string;
+          has_cerfa_file: boolean;
+          has_mission_sheet_file: boolean;
+          host_company_id: Schemas.HostCompanyId;
+          host_company_name: string;
+          id: Schemas.ContractId;
+          kind: Schemas.ContractKind;
+          number?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          start_date: string;
+          triad_id: Schemas.TriadId;
+          tutors: Array<Schemas.ContractTutorResponse>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetCursusContractFileUrl = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/files/{kind}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string; kind: "cerfa" | "mission_sheet" };
+    };
+    responses: {
+      200: { data: { url: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_SetCursusContractFile = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/files/{kind}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string; kind: "cerfa" | "mission_sheet" };
+
+      body: Schemas.SetContractFileRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          closed_at?: (string | null) | undefined;
+          closure_note?: (string | null) | undefined;
+          closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
+          closure_reason_label?: (string | null) | undefined;
+          created_at: string;
+          end_date: string;
+          has_cerfa_file: boolean;
+          has_mission_sheet_file: boolean;
+          host_company_id: Schemas.HostCompanyId;
+          host_company_name: string;
+          id: Schemas.ContractId;
+          kind: Schemas.ContractKind;
+          number?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          start_date: string;
+          triad_id: Schemas.TriadId;
+          tutors: Array<Schemas.ContractTutorResponse>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type put_SetCursusContractTutors = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/tutors";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; contract_id: string };
+
+      body: Schemas.SetContractTutorsRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          closed_at?: (string | null) | undefined;
+          closure_note?: (string | null) | undefined;
+          closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
+          closure_reason_label?: (string | null) | undefined;
+          created_at: string;
+          end_date: string;
+          has_cerfa_file: boolean;
+          has_mission_sheet_file: boolean;
+          host_company_id: Schemas.HostCompanyId;
+          host_company_name: string;
+          id: Schemas.ContractId;
+          kind: Schemas.ContractKind;
+          number?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          start_date: string;
+          triad_id: Schemas.TriadId;
+          tutors: Array<Schemas.ContractTutorResponse>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListCursusEstablishments = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/establishments";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ archived: boolean }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.EstablishmentId;
+          is_main_site: boolean;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          uai?: (string | null) | undefined;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCursusEstablishment = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/establishments";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateEstablishmentRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.EstablishmentId;
+          is_main_site: boolean;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          uai?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetCursusEstablishment = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/establishments/{establishment_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; establishment_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.EstablishmentId;
+          is_main_site: boolean;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          uai?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateCursusEstablishment = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/cursus/establishments/{establishment_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; establishment_id: string };
+
+      body: Schemas.UpdateEstablishmentRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.EstablishmentId;
+          is_main_site: boolean;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          uai?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_ArchiveCursusEstablishment = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/establishments/{establishment_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; establishment_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.EstablishmentId;
+          is_main_site: boolean;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          uai?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListCursusHostCompanies = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/host-companies";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ archived: boolean; page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          director_name?: (string | null) | undefined;
+          employee_count?: (number | null) | undefined;
+          id: Schemas.HostCompanyId;
+          legal_form?: (string | null) | undefined;
+          naf_code?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCursusHostCompany = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/host-companies";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateHostCompanyRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          director_name?: (string | null) | undefined;
+          employee_count?: (number | null) | undefined;
+          id: Schemas.HostCompanyId;
+          legal_form?: (string | null) | undefined;
+          naf_code?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetCursusHostCompany = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/host-companies/{host_company_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; host_company_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          director_name?: (string | null) | undefined;
+          employee_count?: (number | null) | undefined;
+          id: Schemas.HostCompanyId;
+          legal_form?: (string | null) | undefined;
+          naf_code?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateCursusHostCompany = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/cursus/host-companies/{host_company_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; host_company_id: string };
+
+      body: Schemas.UpdateHostCompanyRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          director_name?: (string | null) | undefined;
+          employee_count?: (number | null) | undefined;
+          id: Schemas.HostCompanyId;
+          legal_form?: (string | null) | undefined;
+          naf_code?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_ArchiveCursusHostCompany = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/host-companies/{host_company_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; host_company_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          address?: (string | null) | undefined;
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          director_name?: (string | null) | undefined;
+          employee_count?: (number | null) | undefined;
+          id: Schemas.HostCompanyId;
+          legal_form?: (string | null) | undefined;
+          naf_code?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          siret?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListMyCursusTriads = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/me/triads";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          access: Schemas.TriadAccessResponse;
+          apprentice_name: string;
+          closed_at?: (string | null) | undefined;
+          promotion_label: string;
+          role: Schemas.TriadRoleResponse;
+          training_name: string;
+          triad_id: Schemas.TriadId;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_GetMyCursusTriad = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/me/triads/{triad_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; triad_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          access: Schemas.TriadAccessResponse;
+          apprentice_email: string;
+          apprentice_name: string;
+          closed_at?: (string | null) | undefined;
+          closure_note?: (string | null) | undefined;
+          closure_reason_label?: (string | null) | undefined;
+          contracts: Array<Schemas.MyContractResponse>;
+          pedagogic_tutor_name?: (string | null) | undefined;
+          promotion_end_year: number;
+          promotion_id: Schemas.PromotionId;
+          promotion_label: string;
+          promotion_start_year: number;
+          role: Schemas.TriadRoleResponse;
+          training_name: string;
+          triad_id: Schemas.TriadId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListCursusParticipants = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/participants";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{
+        kind: "apprentice" | "company_tutor";
+        status: "pending" | "active" | "inactive";
+        host_company_id: string;
+        page: number;
+        per_page: number;
+      }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<
+          Schemas.ParticipantResponse & {
+            apprentice_id?: (null | Schemas.ApprenticeId) | undefined;
+            company_tutors: Array<Schemas.CompanyTutorResponse>;
+          }
+        >;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCursusParticipant = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/participants";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateParticipantRequest;
+    };
+    responses: {
+      201: {
+        data: Schemas.ParticipantResponse & {
+          apprentice?: (null | Schemas.ApprenticeResponse) | undefined;
+          company_tutors: Array<Schemas.CompanyTutorResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetCursusParticipant = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; participant_id: string };
+    };
+    responses: {
+      200: {
+        data: Schemas.ParticipantResponse & {
+          apprentice?: (null | Schemas.ApprenticeResponse) | undefined;
+          company_tutors: Array<Schemas.CompanyTutorResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateCursusParticipant = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; participant_id: string };
+
+      body: Schemas.UpdateParticipantRequest;
+    };
+    responses: {
+      200: {
+        data: Schemas.ParticipantResponse & {
+          apprentice?: (null | Schemas.ApprenticeResponse) | undefined;
+          company_tutors: Array<Schemas.CompanyTutorResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type put_UpsertCursusApprentice = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/apprentice";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; participant_id: string };
+
+      body: Schemas.ApprenticeRequest;
+    };
+    responses: {
+      200: {
+        data: Schemas.ParticipantResponse & {
+          apprentice?: (null | Schemas.ApprenticeResponse) | undefined;
+          company_tutors: Array<Schemas.CompanyTutorResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_AddCursusCompanyTutor = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/company-tutors";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; participant_id: string };
+
+      body: Schemas.CompanyTutorRequest;
+    };
+    responses: {
+      201: {
+        data: Schemas.ParticipantResponse & {
+          apprentice?: (null | Schemas.ApprenticeResponse) | undefined;
+          company_tutors: Array<Schemas.CompanyTutorResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_DeactivateCursusParticipant = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/deactivate";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; participant_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          deactivated_at?: (string | null) | undefined;
+          email: string;
+          first_name?: (string | null) | undefined;
+          id: Schemas.ParticipantId;
+          invitation_expires_at?: (string | null) | undefined;
+          last_name: string;
+          organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
+          status: Schemas.ParticipantStatus;
+          updated_at: string;
+          user_id?: (null | Schemas.UserId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_InviteCursusParticipant = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/invitation";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; participant_id: string };
+    };
+    responses: {
+      201: {
+        data: { expires_at: string; token: string };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_ReactivateCursusParticipant = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/reactivate";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; participant_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          deactivated_at?: (string | null) | undefined;
+          email: string;
+          first_name?: (string | null) | undefined;
+          id: Schemas.ParticipantId;
+          invitation_expires_at?: (string | null) | undefined;
+          last_name: string;
+          organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
+          status: Schemas.ParticipantStatus;
+          updated_at: string;
+          user_id?: (null | Schemas.UserId) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListCursusPromotions = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/promotions";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ training_id: string; archived: boolean; page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          end_year: number;
+          id: Schemas.PromotionId;
+          label: string;
+          organization_id: Schemas.OrganizationId;
+          start_year: number;
+          training_id: Schemas.TrainingId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCursusPromotion = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/promotions";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreatePromotionRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          end_year: number;
+          id: Schemas.PromotionId;
+          label: string;
+          organization_id: Schemas.OrganizationId;
+          start_year: number;
+          training_id: Schemas.TrainingId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetCursusPromotion = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; promotion_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          end_year: number;
+          id: Schemas.PromotionId;
+          label: string;
+          organization_id: Schemas.OrganizationId;
+          start_year: number;
+          training_id: Schemas.TrainingId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateCursusPromotion = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; promotion_id: string };
+
+      body: Schemas.UpdatePromotionRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          end_year: number;
+          id: Schemas.PromotionId;
+          label: string;
+          organization_id: Schemas.OrganizationId;
+          start_year: number;
+          training_id: Schemas.TrainingId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_ArchiveCursusPromotion = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; promotion_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          end_year: number;
+          id: Schemas.PromotionId;
+          label: string;
+          organization_id: Schemas.OrganizationId;
+          start_year: number;
+          training_id: Schemas.TrainingId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListCursusTrainings = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/trainings";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ establishment_id: string; archived: boolean; page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          degree_type?: (string | null) | undefined;
+          establishment_id: Schemas.EstablishmentId;
+          id: Schemas.TrainingId;
+          level?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rncp_code?: (string | null) | undefined;
+          rncp_label?: (string | null) | undefined;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCursusTraining = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/trainings";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateTrainingRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          degree_type?: (string | null) | undefined;
+          establishment_id: Schemas.EstablishmentId;
+          id: Schemas.TrainingId;
+          level?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rncp_code?: (string | null) | undefined;
+          rncp_label?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetCursusTraining = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/trainings/{training_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; training_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          degree_type?: (string | null) | undefined;
+          establishment_id: Schemas.EstablishmentId;
+          id: Schemas.TrainingId;
+          level?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rncp_code?: (string | null) | undefined;
+          rncp_label?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateCursusTraining = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/cursus/trainings/{training_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; training_id: string };
+
+      body: Schemas.UpdateTrainingRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          degree_type?: (string | null) | undefined;
+          establishment_id: Schemas.EstablishmentId;
+          id: Schemas.TrainingId;
+          level?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rncp_code?: (string | null) | undefined;
+          rncp_label?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_ArchiveCursusTraining = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/trainings/{training_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; training_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          degree_type?: (string | null) | undefined;
+          establishment_id: Schemas.EstablishmentId;
+          id: Schemas.TrainingId;
+          level?: (string | null) | undefined;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          rncp_code?: (string | null) | undefined;
+          rncp_label?: (string | null) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_ListCursusTriads = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/triads";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ promotion_id: string; closed: boolean; page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<
+          Schemas.TriadResponse & {
+            apprentice_name: string;
+            current_host_company_name?: (string | null) | undefined;
+            pedagogic_tutor_name?: (string | null) | undefined;
+            promotion_label: string;
+            training_name: string;
+          }
+        >;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCursusTriad = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/triads";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateTriadRequest;
+    };
+    responses: {
+      201: {
+        data: Schemas.TriadResponse & {
+          apprentice_email: string;
+          apprentice_name: string;
+          closure_reason_label?: (string | null) | undefined;
+          contracts: Array<Schemas.ContractResponse>;
+          pedagogic_tutor_name?: (string | null) | undefined;
+          promotion: Schemas.PromotionResponse;
+          training_name: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetCursusTriad = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; triad_id: string };
+    };
+    responses: {
+      200: {
+        data: Schemas.TriadResponse & {
+          apprentice_email: string;
+          apprentice_name: string;
+          closure_reason_label?: (string | null) | undefined;
+          contracts: Array<Schemas.ContractResponse>;
+          pedagogic_tutor_name?: (string | null) | undefined;
+          promotion: Schemas.PromotionResponse;
+          training_name: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateCursusTriad = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; triad_id: string };
+
+      body: Schemas.UpdateTriadRequest;
+    };
+    responses: {
+      200: {
+        data: Schemas.TriadResponse & {
+          apprentice_email: string;
+          apprentice_name: string;
+          closure_reason_label?: (string | null) | undefined;
+          contracts: Array<Schemas.ContractResponse>;
+          pedagogic_tutor_name?: (string | null) | undefined;
+          promotion: Schemas.PromotionResponse;
+          training_name: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_CloseCursusTriad = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}/close";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; triad_id: string };
+
+      body: Schemas.CloseRequest;
+    };
+    responses: {
+      200: {
+        data: Schemas.TriadResponse & {
+          apprentice_email: string;
+          apprentice_name: string;
+          closure_reason_label?: (string | null) | undefined;
+          contracts: Array<Schemas.ContractResponse>;
+          pedagogic_tutor_name?: (string | null) | undefined;
+          promotion: Schemas.PromotionResponse;
+          training_name: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListCursusContracts = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}/contracts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; triad_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          closed_at?: (string | null) | undefined;
+          closure_note?: (string | null) | undefined;
+          closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
+          closure_reason_label?: (string | null) | undefined;
+          created_at: string;
+          end_date: string;
+          has_cerfa_file: boolean;
+          has_mission_sheet_file: boolean;
+          host_company_id: Schemas.HostCompanyId;
+          host_company_name: string;
+          id: Schemas.ContractId;
+          kind: Schemas.ContractKind;
+          number?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          start_date: string;
+          triad_id: Schemas.TriadId;
+          tutors: Array<Schemas.ContractTutorResponse>;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateCursusContract = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}/contracts";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; triad_id: string };
+
+      body: Schemas.ContractRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          closed_at?: (string | null) | undefined;
+          closure_note?: (string | null) | undefined;
+          closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
+          closure_reason_label?: (string | null) | undefined;
+          created_at: string;
+          end_date: string;
+          has_cerfa_file: boolean;
+          has_mission_sheet_file: boolean;
+          host_company_id: Schemas.HostCompanyId;
+          host_company_name: string;
+          id: Schemas.ContractId;
+          kind: Schemas.ContractKind;
+          number?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          start_date: string;
+          triad_id: Schemas.TriadId;
+          tutors: Array<Schemas.ContractTutorResponse>;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
     };
   };
   export type get_ListCustomUnits = {
@@ -13295,6 +15015,14 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.patch_UpdateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.patch_UpdateWorkflowFolder;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.patch_UpdateWorkflow;
+    "/api/v1/organizations/{organization_id}/cursus/closure-reasons/{closure_reason_id}": Endpoints.patch_UpdateCursusClosureReason;
+    "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}": Endpoints.patch_UpdateCursusContract;
+    "/api/v1/organizations/{organization_id}/cursus/establishments/{establishment_id}": Endpoints.patch_UpdateCursusEstablishment;
+    "/api/v1/organizations/{organization_id}/cursus/host-companies/{host_company_id}": Endpoints.patch_UpdateCursusHostCompany;
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}": Endpoints.patch_UpdateCursusParticipant;
+    "/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}": Endpoints.patch_UpdateCursusPromotion;
+    "/api/v1/organizations/{organization_id}/cursus/trainings/{training_id}": Endpoints.patch_UpdateCursusTraining;
+    "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}": Endpoints.patch_UpdateCursusTriad;
     "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.patch_PatchProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.patch_PatchProject;
@@ -13340,6 +15068,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.delete_DeleteWorkflowFolder;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
+    "/api/v1/organizations/{organization_id}/cursus/company-tutors/{company_tutor_id}": Endpoints.delete_RemoveCursusCompanyTutor;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
     "/api/v1/organizations/{organization_id}/leave-adjustments/{adjustment_id}": Endpoints.delete_DeleteLeaveAdjustment;
@@ -13376,6 +15105,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/organizations/{organization_id}/notifications": Endpoints.get_ListNotifications;
     "/api/v1/chat/organizations/{organization_id}/roles": Endpoints.get_ListChatRoles;
     "/api/v1/chat/organizations/{organization_id}/unread": Endpoints.get_ListUnreadChannels;
+    "/api/v1/cursus/me/spaces": Endpoints.get_ListMyCursusSpaces;
     "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.get_GetCustomerContact;
     "/api/v1/customer-contexts/{customer_context_id}": Endpoints.get_GetCustomerContext;
     "/api/v1/customers/{customer_id}": Endpoints.get_GetCustomer;
@@ -13412,6 +15142,24 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.get_ListWorkflows;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.get_GetWorkflow;
     "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.get_GetOrganizationBillingSettings;
+    "/api/v1/organizations/{organization_id}/cursus/closure-reasons": Endpoints.get_ListCursusClosureReasons;
+    "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}": Endpoints.get_GetCursusContract;
+    "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/files/{kind}": Endpoints.get_GetCursusContractFileUrl;
+    "/api/v1/organizations/{organization_id}/cursus/establishments": Endpoints.get_ListCursusEstablishments;
+    "/api/v1/organizations/{organization_id}/cursus/establishments/{establishment_id}": Endpoints.get_GetCursusEstablishment;
+    "/api/v1/organizations/{organization_id}/cursus/host-companies": Endpoints.get_ListCursusHostCompanies;
+    "/api/v1/organizations/{organization_id}/cursus/host-companies/{host_company_id}": Endpoints.get_GetCursusHostCompany;
+    "/api/v1/organizations/{organization_id}/cursus/me/triads": Endpoints.get_ListMyCursusTriads;
+    "/api/v1/organizations/{organization_id}/cursus/me/triads/{triad_id}": Endpoints.get_GetMyCursusTriad;
+    "/api/v1/organizations/{organization_id}/cursus/participants": Endpoints.get_ListCursusParticipants;
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}": Endpoints.get_GetCursusParticipant;
+    "/api/v1/organizations/{organization_id}/cursus/promotions": Endpoints.get_ListCursusPromotions;
+    "/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}": Endpoints.get_GetCursusPromotion;
+    "/api/v1/organizations/{organization_id}/cursus/trainings": Endpoints.get_ListCursusTrainings;
+    "/api/v1/organizations/{organization_id}/cursus/trainings/{training_id}": Endpoints.get_GetCursusTraining;
+    "/api/v1/organizations/{organization_id}/cursus/triads": Endpoints.get_ListCursusTriads;
+    "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}": Endpoints.get_GetCursusTriad;
+    "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}/contracts": Endpoints.get_ListCursusContracts;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
     "/api/v1/organizations/{organization_id}/day-overrides": Endpoints.get_ListDayOverrides;
@@ -13508,6 +15256,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/organizations/{organization_id}/channels": Endpoints.post_CreateChannel;
     "/api/v1/chat/organizations/{organization_id}/direct-channels": Endpoints.post_OpenDirectChannel;
     "/api/v1/chat/webhooks/{webhook_id}/{token}": Endpoints.post_ExecuteWebhook;
+    "/api/v1/cursus/invitations/{token}/accept": Endpoints.post_AcceptCursusInvitation;
     "/api/v1/customers/{customer_id}/contacts": Endpoints.post_CreateCustomerContact;
     "/api/v1/customers/{customer_id}/customer-contexts": Endpoints.post_CreateCustomerContext;
     "/api/v1/deals/{deal_id}/stage": Endpoints.post_MoveDealStage;
@@ -13546,6 +15295,25 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows": Endpoints.post_CreateWorkflow;
     "/api/v1/organizations/{organization_id}/automation/workflows/dry-run": Endpoints.post_DryRunWorkflow;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
+    "/api/v1/organizations/{organization_id}/cursus/closure-reasons": Endpoints.post_CreateCursusClosureReason;
+    "/api/v1/organizations/{organization_id}/cursus/closure-reasons/{closure_reason_id}/archive": Endpoints.post_ArchiveCursusClosureReason;
+    "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/close": Endpoints.post_CloseCursusContract;
+    "/api/v1/organizations/{organization_id}/cursus/establishments": Endpoints.post_CreateCursusEstablishment;
+    "/api/v1/organizations/{organization_id}/cursus/establishments/{establishment_id}/archive": Endpoints.post_ArchiveCursusEstablishment;
+    "/api/v1/organizations/{organization_id}/cursus/host-companies": Endpoints.post_CreateCursusHostCompany;
+    "/api/v1/organizations/{organization_id}/cursus/host-companies/{host_company_id}/archive": Endpoints.post_ArchiveCursusHostCompany;
+    "/api/v1/organizations/{organization_id}/cursus/participants": Endpoints.post_CreateCursusParticipant;
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/company-tutors": Endpoints.post_AddCursusCompanyTutor;
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/deactivate": Endpoints.post_DeactivateCursusParticipant;
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/invitation": Endpoints.post_InviteCursusParticipant;
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/reactivate": Endpoints.post_ReactivateCursusParticipant;
+    "/api/v1/organizations/{organization_id}/cursus/promotions": Endpoints.post_CreateCursusPromotion;
+    "/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}/archive": Endpoints.post_ArchiveCursusPromotion;
+    "/api/v1/organizations/{organization_id}/cursus/trainings": Endpoints.post_CreateCursusTraining;
+    "/api/v1/organizations/{organization_id}/cursus/trainings/{training_id}/archive": Endpoints.post_ArchiveCursusTraining;
+    "/api/v1/organizations/{organization_id}/cursus/triads": Endpoints.post_CreateCursusTriad;
+    "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}/close": Endpoints.post_CloseCursusTriad;
+    "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}/contracts": Endpoints.post_CreateCursusContract;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.post_CreateCustomUnit;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
     "/api/v1/organizations/{organization_id}/deals": Endpoints.post_CreateDeal;
@@ -13645,6 +15413,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;
     "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.put_ReplaceOrganizationBillingSettings;
+    "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/files/{kind}": Endpoints.put_SetCursusContractFile;
+    "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/tutors": Endpoints.put_SetCursusContractTutors;
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/apprentice": Endpoints.put_UpsertCursusApprentice;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;

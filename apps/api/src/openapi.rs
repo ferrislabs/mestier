@@ -927,6 +927,7 @@ impl Modify for SecurityAddon {
         cursus::host_company::create::CreateHostCompanyRequest,
         cursus::host_company::update::UpdateHostCompanyRequest,
         cursus::response::ParticipantResponse,
+        cursus::response::ParticipantListItemResponse,
         cursus::response::ParticipantDetailResponse,
         cursus::response::ApprenticeResponse,
         cursus::response::CompanyTutorResponse,
