@@ -150,7 +150,7 @@ export function ChannelPermissionsSectionUI({
 								>
 									<SelectTrigger
 										aria-label="Ajouter un rôle ou un membre"
-										className="size-6 justify-center border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-accent [&>svg:last-child]:hidden"
+										className="size-6 shrink-0 justify-center border-0 data-[size=default]:h-6 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-accent [&>svg:last-child]:hidden"
 									>
 										<Plus className="size-3.5" />
 									</SelectTrigger>
