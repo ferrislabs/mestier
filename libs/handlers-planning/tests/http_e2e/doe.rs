@@ -372,6 +372,27 @@ async fn spec_doe_7_a_member_without_planning_manage_reads_but_cannot_write() {
     let bytes = pdf.bytes().await.expect("pdf bytes");
     assert!(bytes.starts_with(b"%PDF"));
 
+    let docx = client
+        .get(doe_url(&app, app.organization_id, &doe_id, "/docx"))
+        .bearer_auth(&app.no_permission_token)
+        .send()
+        .await
+        .expect("docx");
+    assert_eq!(docx.status(), 200);
+    assert_eq!(
+        docx.headers()["content-type"].to_str().unwrap(),
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+    let disposition = docx.headers()["content-disposition"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        disposition.contains("filename=\"DOE - Avenue du 8 mai - A.docx\""),
+        "{disposition}"
+    );
+    assert!(docx.bytes().await.expect("docx bytes").starts_with(b"PK"));
+
     cleanup(&app).await;
 }
 

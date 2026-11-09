@@ -173,7 +173,7 @@ pub(crate) async fn render_svg_off_the_executor(
     .await
 }
 
-async fn off_the_executor<T: Send + 'static>(
+pub(crate) async fn off_the_executor<T: Send + 'static>(
     render: impl FnOnce() -> Result<T, ApiError> + Send + 'static,
 ) -> Result<T, ApiError> {
     let permit = RENDER_PERMITS
@@ -204,27 +204,35 @@ fn render_with<R: DoeRenderer>(
 ) -> Result<Vec<u8>, ApiError> {
     renderer
         .render(document, files)
-        .map_err(|error| match error {
-            DoeRenderError::MissingFile { key } => missing_file(document, &key),
-            DoeRenderError::UnsupportedFile { key, .. } => {
-                let place = owner_of(document, &key)
-                    .map(|owner| format!(" of {owner}"))
-                    .unwrap_or_default();
-                ApiError::Conflict(format!(
-                    "file `{key}`{place} is not an image or a PDF and cannot be placed in a DOE"
-                ))
-            }
-            DoeRenderError::TooLarge(reason) => {
-                ApiError::Conflict(format!("this DOE is too large to export: {reason}"))
-            }
-            other => {
-                tracing::error!(error = %other, "DOE rendering failed");
-                ApiError::Internal
-            }
-        })
+        .map_err(|error| render_error(document, error))
+}
+
+pub(crate) fn render_error(document: &DoeDocument, error: DoeRenderError) -> ApiError {
+    match error {
+        DoeRenderError::MissingFile { key } => missing_file(document, &key),
+        DoeRenderError::UnsupportedFile { key, .. } => {
+            let place = owner_of(document, &key)
+                .map(|owner| format!(" of {owner}"))
+                .unwrap_or_default();
+            ApiError::Conflict(format!(
+                "file `{key}`{place} is not an image or a PDF and cannot be placed in a DOE"
+            ))
+        }
+        DoeRenderError::TooLarge(reason) => {
+            ApiError::Conflict(format!("this DOE is too large to export: {reason}"))
+        }
+        other => {
+            tracing::error!(error = %other, "DOE rendering failed");
+            ApiError::Internal
+        }
+    }
 }
 
 fn pdf_filename(title: &str, revision: &str) -> String {
+    export_filename(title, revision, "pdf")
+}
+
+pub(crate) fn export_filename(title: &str, revision: &str, extension: &str) -> String {
     let clean = |text: &str| {
         text.chars()
             .map(|c| {
@@ -241,10 +249,10 @@ fn pdf_filename(title: &str, revision: &str) -> String {
             .collect::<Vec<_>>()
             .join(" ")
     };
-    format!("DOE - {} - {}.pdf", clean(title), clean(revision))
+    format!("DOE - {} - {}.{extension}", clean(title), clean(revision))
 }
 
-fn content_disposition(filename: &str) -> String {
+pub(crate) fn content_disposition(filename: &str) -> String {
     let ascii: String = filename
         .chars()
         .map(|c| if c.is_ascii() { c } else { '_' })

@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use chrono::NaiveDate;
-use doc_render::TypstDoeRenderer;
+use doc_render::{DocxDoeRenderer, TypstDoeRenderer};
 use image::{ImageEncoder, codecs::jpeg::JpegEncoder, codecs::png::PngEncoder};
 use lopdf::{Document, Object, Stream, dictionary};
 use mestier_core::{
@@ -576,4 +576,76 @@ fn fewer_columns_print_bigger_supply_photos_on_more_pages() {
 
     assert!(three < two, "{three} pages in 3 columns, {two} in 2");
     assert!(two < one, "{two} pages in 2 columns, {one} in 1");
+}
+
+fn docx_text(bytes: &[u8]) -> String {
+    docx_rs::read_docx(bytes)
+        .expect("the output is a readable .docx")
+        .json()
+}
+
+#[test]
+fn the_docx_carries_the_content_of_the_document() {
+    let (document, bundle) = fixture();
+    let bytes = DocxDoeRenderer.render(&document, &bundle).unwrap();
+    assert!(bytes.starts_with(b"PK"));
+    let text = docx_text(&bytes);
+    for expected in [
+        "Aménagement du parvis",
+        "Ville d’Angers",
+        "1.1 Plantation d’arbres",
+        "Sujet livré",
+        "Vue 4",
+        "Réseaux",
+    ] {
+        assert!(text.contains(expected), "missing `{expected}`");
+    }
+}
+
+#[test]
+fn every_page_of_a_pdf_plan_or_datasheet_becomes_a_picture() {
+    let (document, bundle) = fixture();
+    let with_pdfs = docx_text(&DocxDoeRenderer.render(&document, &bundle).unwrap());
+
+    let mut without = bundle.clone();
+    for key in ["sheet", "plan1", "plan2"] {
+        without.0.remove(key);
+    }
+    let mut document_without = document.clone();
+    for section in &mut document_without.sections {
+        match &mut section.content {
+            NumberedContent::Supplies { supplies, .. } => {
+                for numbered in supplies {
+                    numbered.supply.datasheet_keys.clear();
+                }
+            }
+            NumberedContent::Plans { plans } => plans.clear(),
+            _ => {}
+        }
+    }
+    let baseline = docx_text(&DocxDoeRenderer.render(&document_without, &without).unwrap());
+
+    let pictures = |json: &str| json.matches("\"type\": \"drawing\"").count();
+    assert!(!with_pdfs.contains("fichier PDF"));
+    assert_eq!(pictures(&with_pdfs), pictures(&baseline) + 4);
+}
+
+#[test]
+fn the_docx_refuses_a_missing_file() {
+    let (document, mut bundle) = fixture();
+    bundle.0.remove("p1");
+    assert_eq!(
+        DocxDoeRenderer.render(&document, &bundle),
+        Err(DoeRenderError::MissingFile { key: "p1".into() })
+    );
+}
+
+#[test]
+fn the_docx_refuses_a_picture_it_cannot_decode_instead_of_panicking() {
+    let (document, mut bundle) = fixture();
+    bundle.insert("p1".into(), file("image/png", b"not an image".to_vec()));
+    assert!(matches!(
+        DocxDoeRenderer.render(&document, &bundle),
+        Err(DoeRenderError::UnsupportedFile { key, .. }) if key == "p1"
+    ));
 }

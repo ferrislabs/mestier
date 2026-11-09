@@ -9,13 +9,15 @@ mestier-core = { workspace = true }
 typst = "0.15.1"
 typst-pdf = "0.15.1"
 typst-svg = "0.15.1"
+typst-render = "0.15.1"
 typst-layout = "0.15.1"
 comemo = "0.5.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 lopdf = { version = "0.44.0", default-features = false }
+docx-rs = "0.4.22"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 
 [dev-dependencies]
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 uuid = { workspace = true }

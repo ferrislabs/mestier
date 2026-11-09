@@ -2,7 +2,12 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useUploadFile } from '#/hooks/use-customers'
 import { useDirtyBaseline } from '#/hooks/use-dirty'
-import { type Doe, downloadDoePdf, useUpdateDoe } from '#/hooks/use-doe'
+import {
+	type Doe,
+	downloadDoeDocx,
+	downloadDoePdf,
+	useUpdateDoe,
+} from '#/hooks/use-doe'
 import { useFileUrls } from '#/hooks/use-file-url'
 import type { PlacementResponse } from '#/hooks/use-photo-library'
 import { mutationErrorMessage } from '#/lib/api-error'
@@ -427,6 +432,10 @@ export function DoeEditorFeature({
 					onDownload: () =>
 						void runPdf(() =>
 							downloadDoePdf(organizationId, doe.id, `DOE-${form.title}.pdf`),
+						),
+					onDownloadWord: () =>
+						void runPdf(() =>
+							downloadDoeDocx(organizationId, doe.id, `DOE-${form.title}.docx`),
 						),
 					onDelete: () => setDeleteOpen(true),
 				}}

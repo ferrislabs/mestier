@@ -282,6 +282,7 @@ impl Modify for SecurityAddon {
         planning::doe::update::handler,
         planning::doe::draft_supply::handler,
         planning::doe::pdf::handler,
+        planning::doe::docx::handler,
         planning::doe::delete::handler,
         planning::photo_library::upload::handler,
         planning::photo_library::list::handler,

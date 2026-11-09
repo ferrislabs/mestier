@@ -51,6 +51,7 @@ export interface DoeSidebarProps {
 	selected: string
 	onSave: () => void
 	onDownload: () => void
+	onDownloadWord: () => void
 	onDelete: () => void
 }
 
@@ -71,6 +72,7 @@ export function DoeSidebar({
 	selected,
 	onSave,
 	onDownload,
+	onDownloadWord,
 	onDelete,
 }: DoeSidebarProps) {
 	return (
@@ -144,6 +146,20 @@ export function DoeSidebar({
 							Télécharger le PDF
 						</Button>
 					</div>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={isDownloading}
+						onClick={onDownloadWord}
+					>
+						{isDownloading ? (
+							<Loader2 className="animate-spin" aria-hidden />
+						) : (
+							<FileText aria-hidden />
+						)}
+						Télécharger en Word
+					</Button>
 					<RequirePermission permission="MANAGE_PLANNING">
 						<Button
 							type="button"

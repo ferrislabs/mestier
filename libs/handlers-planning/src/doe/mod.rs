@@ -12,6 +12,7 @@ use crate::require_org_membership;
 
 pub mod create;
 pub mod delete;
+pub mod docx;
 pub mod draft_supply;
 pub mod get_one;
 pub mod get_project;
@@ -30,6 +31,7 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_delete(delete::handler)
         .typed_post(draft_supply::handler)
         .typed_get(pdf::handler)
+        .typed_get(docx::handler)
 }
 
 #[derive(TypedPath, Deserialize)]
@@ -62,6 +64,13 @@ pub struct DoeDraftSupplyPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/does/{doe_id}/pdf")]
 pub struct DoePdfPath {
+    pub organization_id: OrganizationId,
+    pub doe_id: DoeId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/does/{doe_id}/docx")]
+pub struct DoeDocxPath {
     pub organization_id: OrganizationId,
     pub doe_id: DoeId,
 }
