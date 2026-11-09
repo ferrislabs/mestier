@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, user_id, last_name, first_name, email, phone, invitation_token_hash, invitation_expires_at, deactivated_at, created_at, updated_at\n            FROM cursus.participant p\n            WHERE p.org_id = $1\n              AND ($2::text IS NULL\n                   OR ($2 = 'apprentice' AND EXISTS (\n                           SELECT 1 FROM cursus.apprentice a WHERE a.participant_id = p.id))\n                   OR ($2 = 'company_tutor' AND EXISTS (\n                           SELECT 1 FROM cursus.company_tutor t WHERE t.participant_id = p.id)))\n              AND ($3::text IS NULL\n                   OR $3 = CASE\n                       WHEN p.deactivated_at IS NOT NULL THEN 'inactive'\n                       WHEN p.user_id IS NULL THEN 'pending'\n                       ELSE 'active'\n                   END)\n            ORDER BY lower(p.last_name) ASC, lower(coalesce(p.first_name, '')) ASC, p.created_at ASC\n            LIMIT $4 OFFSET $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "phone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "invitation_token_hash",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "invitation_expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "deactivated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c35137dfe84fcbeb39f9c2e22960c40870376e6c99ef212c594bbf58c0a8bf66"
+}

@@ -100,6 +100,10 @@ pub enum ApiError {
     #[error("Conflict: {0}")]
     Conflict(String),
 
+    // 410
+    #[error("Resource is gone")]
+    Gone,
+
     // 422
     #[error("Unprocessable entity: {0}")]
     UnprocessableEntity(String),
@@ -140,6 +144,7 @@ impl ApiError {
             }
             Self::NotFound | Self::ResourceNotFound(_, _) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
+            Self::Gone => StatusCode::GONE,
             Self::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal | Self::Database | Self::ExternalService(_) => {
@@ -162,6 +167,7 @@ impl ApiError {
             Self::NotFound => "E_NOT_FOUND",
             Self::ResourceNotFound(_, _) => "E_RESOURCE_NOT_FOUND",
             Self::Conflict(_) => "E_CONFLICT",
+            Self::Gone => "E_GONE",
             Self::UnprocessableEntity(_) => "E_UNPROCESSABLE_ENTITY",
             Self::TooManyRequests => "E_TOO_MANY_REQUESTS",
             Self::Internal => "E_INTERNAL",
@@ -176,6 +182,7 @@ impl From<CoreError> for ApiError {
         match err {
             CoreError::NotFound => Self::NotFound,
             CoreError::Conflict(msg) => Self::Conflict(msg),
+            CoreError::Gone => Self::Gone,
             CoreError::Forbidden { .. } => Self::Forbidden,
             CoreError::Database(msg) => {
                 tracing::error!(error = %msg, "core database error");
@@ -362,6 +369,12 @@ mod tests {
             StatusCode::INTERNAL_SERVER_ERROR,
             "E_EXTERNAL_SERVICE"
         );
+    }
+
+    #[tokio::test]
+    async fn from_core_error_gone_maps_to_410() {
+        let api: ApiError = CoreError::Gone.into();
+        assert_error!(api, StatusCode::GONE, "E_GONE");
     }
 
     #[tokio::test]

@@ -136,7 +136,7 @@ Portail et « Mes trinômes », sans bit :
 - `GET /organizations/{organization_id}/cursus/me/triads/{triad_id}` → trinôme, promotion, formation, apprenti, contrats et tuteurs ; 404 hors périmètre
 - `POST /cursus/invitations/{token}/accept`
 
-Listes paginées avec le crate `pagination`. Clôture : `{closed_at: date, closure_reason_id, closure_note?}`.
+`POST /participants` accepte un bloc facultatif `apprentice` ou `company_tutor` (`host_company_id`, `job_title`) créé dans la même transaction. Listes paginées avec le crate `pagination` (référentiels courts : liste simple). Clôture : `{closed_at: date, closure_reason_id, closure_note?}`.
 
 ### Événements (`libs/events`, descripteurs ajoutés à `automation::catalogue`)
 
@@ -221,3 +221,5 @@ cargo test --workspace
 cargo test -p mestier-core -- --ignored
 cd apps/webapp && pnpm check && pnpm test && pnpm build
 ```
+
+Amended: 2026-11-09 `POST /participants` crée la fiche apprenti ou tuteur dans la même transaction, pour ne jamais laisser un participant sans rôle.
