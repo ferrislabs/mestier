@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, name, siret, address, legal_form, naf_code, employee_count, director_name, archived_at, created_at, updated_at\n            FROM cursus.host_company\n            WHERE org_id = $1 AND id = $2\n            ",
+  "query": "\n            SELECT id, org_id, name, group_name, siret, legal_form, naf_code, capital, employee_count, group_employee_count, director_name, phone, email, website, activity_domains, missions, archived_at, created_at, updated_at\n            FROM cursus.host_company\n            WHERE org_id = $1 AND id = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,12 @@
       },
       {
         "ordinal": 3,
-        "name": "siret",
+        "name": "group_name",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "address",
+        "name": "siret",
         "type_info": "Text"
       },
       {
@@ -40,26 +40,61 @@
       },
       {
         "ordinal": 7,
+        "name": "capital",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "employee_count",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
+        "name": "group_employee_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
         "name": "director_name",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
+        "name": "phone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "website",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "activity_domains",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "missions",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
         "name": "archived_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 17,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 18,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -81,9 +116,16 @@
       true,
       true,
       true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "c0b2d824b0e85fdf6de4f2b001829316e40733059c1ed21f9aacc589bd311451"
+  "hash": "b8a87cad696f0de0b482a88a06473d6f1229fd07d93bc42c29daf7abdd418354"
 }

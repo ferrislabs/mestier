@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO cursus.contract\n                (id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, cerfa_file_key, mission_sheet_file_key, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)\n            RETURNING id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, cerfa_file_key, mission_sheet_file_key, created_at, updated_at\n            ",
+  "query": "\n            INSERT INTO cursus.contract\n                (id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, comment, mission_sheet_file_key, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)\n            RETURNING id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, comment, mission_sheet_file_key, created_at, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -60,7 +60,7 @@
       },
       {
         "ordinal": 11,
-        "name": "cerfa_file_key",
+        "name": "comment",
         "type_info": "Text"
       },
       {
@@ -116,5 +116,5 @@
       false
     ]
   },
-  "hash": "65d82e5d424940ad4938a41c0f6eab0c6a9d4de6921a87283ec67e155c18acdd"
+  "hash": "1a04a7f9d35230d080ab0cc731098cfb73deabfb5e436d573d563e1b1e7871dd"
 }

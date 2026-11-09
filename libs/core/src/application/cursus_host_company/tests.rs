@@ -5,7 +5,8 @@ use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use crate::{
-    CreateHostCompanyCommand, HostCompany, Permissions, UpdateHostCompanyCommand,
+    CreateHostCompanyCommand, HostCompany, HostCompanyAddress, Permissions,
+    UpdateHostCompanyCommand,
     application::{
         MestierUseCase, default_authorizer, policy,
         test_support::{purge, scratch_pool},
@@ -140,12 +141,20 @@ impl World {
                 actor: tenant.manager.subject(),
                 organization_id: tenant.organization_id,
                 name: name.to_owned(),
+                group_name: None,
                 siret: None,
-                address: None,
                 legal_form: None,
                 naf_code: None,
+                capital: None,
                 employee_count: None,
+                group_employee_count: None,
                 director_name: None,
+                phone: None,
+                email: None,
+                website: None,
+                activity_domains: None,
+                missions: None,
+                addresses: Vec::new(),
             })
             .await
             .unwrap()
@@ -188,12 +197,20 @@ async fn a_triads_manager_manages_host_companies_and_archived_ones_are_hidden_by
             organization_id: tenant.organization_id,
             id: company.id,
             name: "Durand SAS".to_owned(),
+            group_name: None,
             siret: Some("12345678901234".to_owned()),
-            address: None,
             legal_form: Some("SAS".to_owned()),
             naf_code: None,
+            capital: None,
             employee_count: Some(8),
+            group_employee_count: None,
             director_name: None,
+            phone: None,
+            email: None,
+            website: None,
+            activity_domains: None,
+            missions: None,
+            addresses: Vec::new(),
         })
         .await
         .unwrap();
@@ -236,12 +253,20 @@ async fn without_the_triads_bit_every_host_company_write_is_forbidden() {
             actor: tenant.reader.subject(),
             organization_id: tenant.organization_id,
             name: "Intrus".to_owned(),
+            group_name: None,
             siret: None,
-            address: None,
             legal_form: None,
             naf_code: None,
+            capital: None,
             employee_count: None,
+            group_employee_count: None,
             director_name: None,
+            phone: None,
+            email: None,
+            website: None,
+            activity_domains: None,
+            missions: None,
+            addresses: Vec::new(),
         })
         .await;
     assert!(matches!(created, Err(CoreError::Forbidden { .. })));
@@ -290,12 +315,20 @@ async fn spec_cur_12_one_organization_never_sees_or_touches_another_ones_host_co
             actor: world.second.manager.subject(),
             organization_id: world.first.organization_id,
             name: "Intrus".to_owned(),
+            group_name: None,
             siret: None,
-            address: None,
             legal_form: None,
             naf_code: None,
+            capital: None,
             employee_count: None,
+            group_employee_count: None,
             director_name: None,
+            phone: None,
+            email: None,
+            website: None,
+            activity_domains: None,
+            missions: None,
+            addresses: Vec::new(),
         })
         .await;
     assert!(matches!(foreign_write, Err(CoreError::Forbidden { .. })));
@@ -306,6 +339,129 @@ async fn spec_cur_12_one_organization_never_sees_or_touches_another_ones_host_co
         .await
         .unwrap();
     assert_eq!(intact.archived_at, None);
+
+    world.cleanup().await;
+}
+
+fn address(line1: &str, is_main: bool) -> HostCompanyAddress {
+    HostCompanyAddress {
+        label: None,
+        line1: line1.to_owned(),
+        line2: None,
+        postal_code: Some("69000".to_owned()),
+        city: Some("Lyon".to_owned()),
+        is_main,
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn addresses_are_replaced_as_a_whole_ordered_and_returned_by_every_read() {
+    let world = World::new().await;
+    let tenant = &world.first;
+    let company = world.company(tenant, "Paysages Durand").await;
+    assert!(company.addresses.is_empty());
+
+    let update = |addresses: Vec<HostCompanyAddress>| UpdateHostCompanyCommand {
+        actor: tenant.manager.subject(),
+        organization_id: tenant.organization_id,
+        id: company.id,
+        name: company.name.clone(),
+        group_name: Some("Groupe Durand".to_owned()),
+        siret: None,
+        legal_form: None,
+        naf_code: None,
+        capital: Some("10 000 EUR".to_owned()),
+        employee_count: None,
+        group_employee_count: Some(40),
+        director_name: None,
+        phone: Some("04 00 00 00 00".to_owned()),
+        email: Some("contact@durand.fr".to_owned()),
+        website: Some("durand.fr".to_owned()),
+        activity_domains: Some("Paysage".to_owned()),
+        missions: Some("- tonte\n- taille".to_owned()),
+        addresses,
+    };
+
+    let two = world
+        .usecase
+        .update_host_company(update(vec![
+            address("2 rue B", false),
+            address("1 rue A", true),
+        ]))
+        .await
+        .unwrap();
+    let lines: Vec<_> = two.addresses.iter().map(|a| a.line1.as_str()).collect();
+    assert_eq!(lines, ["2 rue B", "1 rue A"]);
+    assert_eq!(two.group_employee_count, Some(40));
+    assert_eq!(two.missions.as_deref(), Some("- tonte\n- taille"));
+
+    let (listed, _) = world
+        .usecase
+        .list_host_companies(tenant.organization_id, false, 10, 0)
+        .await
+        .unwrap();
+    assert_eq!(listed[0].addresses, two.addresses);
+
+    let one = world
+        .usecase
+        .update_host_company(update(vec![address("9 rue C", true)]))
+        .await
+        .unwrap();
+    let fetched = world
+        .usecase
+        .get_host_company(tenant.organization_id, company.id)
+        .await
+        .unwrap();
+    assert_eq!(one.addresses.len(), 1);
+    assert_eq!(fetched.addresses, one.addresses);
+
+    let refused = world
+        .usecase
+        .update_host_company(update(vec![address("a", true), address("b", true)]))
+        .await;
+    assert!(matches!(refused, Err(CoreError::Conflict(_))));
+    let unchanged = world
+        .usecase
+        .get_host_company(tenant.organization_id, company.id)
+        .await
+        .unwrap();
+    assert_eq!(unchanged.addresses, one.addresses);
+
+    let cleared = world
+        .usecase
+        .update_host_company(update(Vec::new()))
+        .await
+        .unwrap();
+    assert!(cleared.addresses.is_empty());
+
+    world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn the_database_refuses_a_second_main_address_for_one_company() {
+    let world = World::new().await;
+    let tenant = &world.first;
+    let company = world.company(tenant, "Paysages Durand").await;
+
+    let insert = |is_main: bool| {
+        sqlx::query(
+            "INSERT INTO cursus.host_company_address \
+             (id, org_id, host_company_id, line1, is_main, position) \
+             VALUES ($1, $2, $3, 'rue', $4, 0)",
+        )
+        .bind(generate_uuid_v7())
+        .bind(tenant.organization_id.0)
+        .bind(company.id.0)
+        .bind(is_main)
+        .execute(&world.pool)
+    };
+    insert(true).await.unwrap();
+    insert(false).await.unwrap();
+    let second_main = insert(true).await;
+
+    assert!(second_main.is_err());
 
     world.cleanup().await;
 }

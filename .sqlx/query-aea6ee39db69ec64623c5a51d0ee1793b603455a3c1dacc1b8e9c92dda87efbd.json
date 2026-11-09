@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO cursus.contract_tutor (contract_id, company_tutor_id, org_id, is_main, position, archived_at)\n                VALUES ($1, $2, $3, $4, $5, $6)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aea6ee39db69ec64623c5a51d0ee1793b603455a3c1dacc1b8e9c92dda87efbd"
+}

@@ -28,17 +28,35 @@ impl Display for HostCompanyId {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostCompanyAddress {
+    pub label: Option<String>,
+    pub line1: String,
+    pub line2: Option<String>,
+    pub postal_code: Option<String>,
+    pub city: Option<String>,
+    pub is_main: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HostCompany {
     pub id: HostCompanyId,
     pub organization_id: OrganizationId,
     pub name: String,
+    pub group_name: Option<String>,
     pub siret: Option<String>,
-    pub address: Option<String>,
     pub legal_form: Option<String>,
     pub naf_code: Option<String>,
+    pub capital: Option<String>,
     pub employee_count: Option<i32>,
+    pub group_employee_count: Option<i32>,
     pub director_name: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub website: Option<String>,
+    pub activity_domains: Option<String>,
+    pub missions: Option<String>,
+    pub addresses: Vec<HostCompanyAddress>,
     pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

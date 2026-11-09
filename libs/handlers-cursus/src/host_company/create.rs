@@ -6,18 +6,27 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    paths::HostCompanyCollectionPath, require_org_membership, response::HostCompanyResponse,
+    paths::HostCompanyCollectionPath, request::HostCompanyAddressRequest, require_org_membership,
+    response::HostCompanyResponse,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateHostCompanyRequest {
     pub name: String,
+    pub group_name: Option<String>,
     pub siret: Option<String>,
-    pub address: Option<String>,
     pub legal_form: Option<String>,
     pub naf_code: Option<String>,
+    pub capital: Option<String>,
     pub employee_count: Option<i32>,
+    pub group_employee_count: Option<i32>,
     pub director_name: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub website: Option<String>,
+    pub activity_domains: Option<String>,
+    pub missions: Option<String>,
+    pub addresses: Vec<HostCompanyAddressRequest>,
 }
 
 #[utoipa::path(
@@ -53,12 +62,20 @@ pub async fn handler(
             actor,
             organization_id: path.organization_id,
             name: payload.name,
+            group_name: payload.group_name,
             siret: payload.siret,
-            address: payload.address,
             legal_form: payload.legal_form,
             naf_code: payload.naf_code,
+            capital: payload.capital,
             employee_count: payload.employee_count,
+            group_employee_count: payload.group_employee_count,
             director_name: payload.director_name,
+            phone: payload.phone,
+            email: payload.email,
+            website: payload.website,
+            activity_domains: payload.activity_domains,
+            missions: payload.missions,
+            addresses: payload.addresses.into_iter().map(Into::into).collect(),
         })
         .await?;
 

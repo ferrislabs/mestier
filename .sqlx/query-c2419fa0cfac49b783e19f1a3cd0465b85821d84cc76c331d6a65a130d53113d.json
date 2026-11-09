@@ -1,0 +1,146 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE cursus.host_company\n            SET name = $3, group_name = $4, siret = $5, legal_form = $6, naf_code = $7,\n                capital = $8, employee_count = $9, group_employee_count = $10,\n                director_name = $11, phone = $12, email = $13, website = $14,\n                activity_domains = $15, missions = $16, updated_at = $17\n            WHERE org_id = $1 AND id = $2\n            RETURNING id, org_id, name, group_name, siret, legal_form, naf_code, capital, employee_count, group_employee_count, director_name, phone, email, website, activity_domains, missions, archived_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "group_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "siret",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "legal_form",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "naf_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "capital",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "employee_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "group_employee_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "director_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "phone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "website",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "activity_domains",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "missions",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c2419fa0cfac49b783e19f1a3cd0465b85821d84cc76c331d6a65a130d53113d"
+}

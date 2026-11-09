@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT c.id, c.org_id, c.triad_id, c.host_company_id, c.kind, c.number, c.start_date, c.end_date,\n                       c.closed_at, c.closure_reason_id, c.closure_note, c.cerfa_file_key, c.mission_sheet_file_key,\n                       c.created_at, c.updated_at,\n                       h.name AS host_company_name, cr.label AS \"closure_reason_label?\"\n                FROM cursus.contract c\n                JOIN cursus.host_company h ON h.org_id = c.org_id AND h.id = c.host_company_id\n                LEFT JOIN cursus.closure_reason cr ON cr.org_id = c.org_id AND cr.id = c.closure_reason_id\n                WHERE c.org_id = $1 AND c.triad_id = $2\n                ORDER BY c.start_date ASC, c.created_at ASC\n                ",
+  "query": "\n                SELECT c.id, c.org_id, c.triad_id, c.host_company_id, c.kind, c.number, c.start_date, c.end_date,\n                       c.closed_at, c.closure_reason_id, c.closure_note, c.comment, c.mission_sheet_file_key,\n                       c.created_at, c.updated_at,\n                       h.name AS host_company_name, cr.label AS \"closure_reason_label?\"\n                FROM cursus.contract c\n                JOIN cursus.host_company h ON h.org_id = c.org_id AND h.id = c.host_company_id\n                LEFT JOIN cursus.closure_reason cr ON cr.org_id = c.org_id AND cr.id = c.closure_reason_id\n                WHERE c.org_id = $1 AND c.triad_id = $2\n                ORDER BY c.start_date ASC, c.created_at ASC\n                ",
   "describe": {
     "columns": [
       {
@@ -60,7 +60,7 @@
       },
       {
         "ordinal": 11,
-        "name": "cerfa_file_key",
+        "name": "comment",
         "type_info": "Text"
       },
       {
@@ -115,5 +115,5 @@
       false
     ]
   },
-  "hash": "63fc4d1fd3490a35eea71c12ad0616d5ad02ca86ca3990701c53574b70b332e8"
+  "hash": "42a3640e937a795b9e3e1533d8d0bb9860c7dce340abf1ae48c8e46ac9800516"
 }
