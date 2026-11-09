@@ -259,10 +259,16 @@ async fn support_backfill_grants_both_bits_to_admin_and_none_to_member() {
     assert!(admin_permissions.contains(Permissions::VIEW_SUPPORT));
     assert!(admin_permissions.contains(Permissions::MANAGE_SUPPORT));
     assert!(admin_permissions.contains(Permissions::MANAGE_AUTOMATION));
+    assert!(admin_permissions.contains(Permissions::VIEW_CURSUS));
+    assert!(admin_permissions.contains(Permissions::MANAGE_CURSUS_CATALOG));
+    assert!(admin_permissions.contains(Permissions::MANAGE_CURSUS_TRIADS));
+    assert!(admin_permissions.contains(Permissions::MANAGE_CURSUS_PARTICIPANTS));
 
     let member_permissions = permissions_of(member_role_id).await;
     assert!(!member_permissions.contains(Permissions::VIEW_SUPPORT));
     assert!(!member_permissions.contains(Permissions::MANAGE_SUPPORT));
+    assert!(!member_permissions.contains(Permissions::VIEW_CURSUS));
+    assert!(!member_permissions.contains(Permissions::MANAGE_CURSUS_CATALOG));
     assert!(member_permissions.contains(Permissions::VIEW_PLANNING));
 
     scratch_pool.close().await;
@@ -275,7 +281,12 @@ async fn support_backfill_grants_both_bits_to_admin_and_none_to_member() {
 fn default_admin_business_permissions_before_support() -> Permissions {
     Permissions(
         crate::domain::role::default_admin_business_permissions().bits()
-            & !(Permissions::VIEW_SUPPORT.bits() | Permissions::MANAGE_SUPPORT.bits()),
+            & !(Permissions::VIEW_SUPPORT.bits()
+                | Permissions::MANAGE_SUPPORT.bits()
+                | Permissions::VIEW_CURSUS.bits()
+                | Permissions::MANAGE_CURSUS_CATALOG.bits()
+                | Permissions::MANAGE_CURSUS_TRIADS.bits()
+                | Permissions::MANAGE_CURSUS_PARTICIPANTS.bits()),
     )
 }
 
