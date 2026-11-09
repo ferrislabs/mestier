@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO knowledge_links (article_id, org_id, resource_type, resource_id)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (article_id, resource_type, resource_id)\n              DO UPDATE SET resource_id = EXCLUDED.resource_id\n              WHERE knowledge_links.org_id = EXCLUDED.org_id\n            RETURNING article_id, resource_type, resource_id, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "article_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "resource_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "resource_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "807024dec08cff306badf891b4fd1312657802afe827707a8d9839d00706670f"
+}
