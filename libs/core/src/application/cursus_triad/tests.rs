@@ -191,7 +191,7 @@ impl World {
             .create_training(CreateTrainingCommand {
                 actor: actor.clone(),
                 organization_id: tenant.organization_id,
-                establishment_id: establishment.id,
+                establishment_id: Some(establishment.id),
                 name: "BTS Aménagements paysagers".to_owned(),
                 rncp_code: None,
                 rncp_label: None,

@@ -958,7 +958,7 @@ export namespace Schemas {
   export type EstablishmentId = string;
   export type CreateTrainingRequest = {
     degree_type?: (string | null) | undefined;
-    establishment_id: EstablishmentId;
+    establishment_id?: (null | EstablishmentId) | undefined;
     level?: (string | null) | undefined;
     name: string;
     rncp_code?: (string | null) | undefined;
@@ -2772,7 +2772,7 @@ export namespace Schemas {
     archived_at?: (string | null) | undefined;
     created_at: string;
     degree_type?: (string | null) | undefined;
-    establishment_id: EstablishmentId;
+    establishment_id?: (null | EstablishmentId) | undefined;
     id: TrainingId;
     level?: (string | null) | undefined;
     name: string;
@@ -3089,7 +3089,7 @@ export namespace Schemas {
   export type UpdateThreadRequest = { archived: boolean; name: string };
   export type UpdateTrainingRequest = {
     degree_type?: (string | null) | undefined;
-    establishment_id: EstablishmentId;
+    establishment_id?: (null | EstablishmentId) | undefined;
     level?: (string | null) | undefined;
     name: string;
     rncp_code?: (string | null) | undefined;
@@ -8621,7 +8621,7 @@ export namespace Endpoints {
           archived_at?: (string | null) | undefined;
           created_at: string;
           degree_type?: (string | null) | undefined;
-          establishment_id: Schemas.EstablishmentId;
+          establishment_id?: (null | Schemas.EstablishmentId) | undefined;
           id: Schemas.TrainingId;
           level?: (string | null) | undefined;
           name: string;
@@ -8651,7 +8651,7 @@ export namespace Endpoints {
           archived_at?: (string | null) | undefined;
           created_at: string;
           degree_type?: (string | null) | undefined;
-          establishment_id: Schemas.EstablishmentId;
+          establishment_id?: (null | Schemas.EstablishmentId) | undefined;
           id: Schemas.TrainingId;
           level?: (string | null) | undefined;
           name: string;
@@ -8681,7 +8681,7 @@ export namespace Endpoints {
           archived_at?: (string | null) | undefined;
           created_at: string;
           degree_type?: (string | null) | undefined;
-          establishment_id: Schemas.EstablishmentId;
+          establishment_id?: (null | Schemas.EstablishmentId) | undefined;
           id: Schemas.TrainingId;
           level?: (string | null) | undefined;
           name: string;
@@ -8712,7 +8712,7 @@ export namespace Endpoints {
           archived_at?: (string | null) | undefined;
           created_at: string;
           degree_type?: (string | null) | undefined;
-          establishment_id: Schemas.EstablishmentId;
+          establishment_id?: (null | Schemas.EstablishmentId) | undefined;
           id: Schemas.TrainingId;
           level?: (string | null) | undefined;
           name: string;
@@ -8742,7 +8742,7 @@ export namespace Endpoints {
           archived_at?: (string | null) | undefined;
           created_at: string;
           degree_type?: (string | null) | undefined;
-          establishment_id: Schemas.EstablishmentId;
+          establishment_id?: (null | Schemas.EstablishmentId) | undefined;
           id: Schemas.TrainingId;
           level?: (string | null) | undefined;
           name: string;

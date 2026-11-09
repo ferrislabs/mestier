@@ -109,8 +109,10 @@ where
         command: CreateTrainingCommand,
     ) -> Result<Training, CoreError> {
         let name = required("training name", &command.name)?;
-        self.get_establishment(command.organization_id, command.establishment_id)
-            .await?;
+        if let Some(establishment_id) = command.establishment_id {
+            self.get_establishment(command.organization_id, establishment_id)
+                .await?;
+        }
 
         let now = Utc::now();
         self.repo
@@ -170,8 +172,10 @@ where
         let mut training = self
             .get_training(command.organization_id, command.id)
             .await?;
-        if training.establishment_id != command.establishment_id {
-            self.get_establishment(command.organization_id, command.establishment_id)
+        if let Some(establishment_id) = command.establishment_id
+            && training.establishment_id != command.establishment_id
+        {
+            self.get_establishment(command.organization_id, establishment_id)
                 .await?;
         }
         training.establishment_id = command.establishment_id;
@@ -408,7 +412,7 @@ mod tests {
         Training {
             id,
             organization_id,
-            establishment_id: EstablishmentId(Uuid::new_v4()),
+            establishment_id: Some(EstablishmentId(Uuid::new_v4())),
             name: "BTS".to_owned(),
             rncp_code: None,
             rncp_label: None,
@@ -462,7 +466,7 @@ mod tests {
 
     fn create_training(
         organization_id: OrganizationId,
-        establishment_id: EstablishmentId,
+        establishment_id: Option<EstablishmentId>,
     ) -> CreateTrainingCommand {
         CreateTrainingCommand {
             actor: authz::Subject::system(),
@@ -655,11 +659,11 @@ mod tests {
         });
 
         let created = CursusCatalogService::new(repo)
-            .create_training(create_training(organization_id, establishment_id))
+            .create_training(create_training(organization_id, Some(establishment_id)))
             .await
             .unwrap();
 
-        assert_eq!(created.establishment_id, establishment_id);
+        assert_eq!(created.establishment_id, Some(establishment_id));
         assert_eq!(created.organization_id, organization_id);
     }
 
@@ -670,7 +674,10 @@ mod tests {
             .returning(|_, _| Box::pin(async { Ok(None) }));
 
         let err = CursusCatalogService::new(repo)
-            .create_training(create_training(org(), EstablishmentId(Uuid::new_v4())))
+            .create_training(create_training(
+                org(),
+                Some(EstablishmentId(Uuid::new_v4())),
+            ))
             .await
             .unwrap_err();
 
@@ -686,11 +693,28 @@ mod tests {
         });
 
         let err = CursusCatalogService::new(repo)
-            .create_training(create_training(org(), establishment_id))
+            .create_training(create_training(org(), Some(establishment_id)))
             .await
             .unwrap_err();
 
         assert!(matches!(err, CoreError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn create_training_without_an_establishment_skips_the_lookup() {
+        let mut repo = MockCursusCatalogRepository::new();
+        repo.expect_find_establishment().never();
+        repo.expect_insert_training().times(1).returning(|t| {
+            let training = t.clone();
+            Box::pin(async move { Ok(training) })
+        });
+
+        let created = CursusCatalogService::new(repo)
+            .create_training(create_training(org(), None))
+            .await
+            .unwrap();
+
+        assert_eq!(created.establishment_id, None);
     }
 
     #[tokio::test]
@@ -711,7 +735,7 @@ mod tests {
                 actor: authz::Subject::system(),
                 organization_id,
                 id,
-                establishment_id: target,
+                establishment_id: Some(target),
                 name: "BTS".to_owned(),
                 rncp_code: None,
                 rncp_label: None,

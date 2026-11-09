@@ -41,7 +41,7 @@ impl From<EstablishmentRow> for Establishment {
 pub struct TrainingRow {
     pub id: Uuid,
     pub org_id: Uuid,
-    pub establishment_id: Uuid,
+    pub establishment_id: Option<Uuid>,
     pub name: String,
     pub rncp_code: Option<String>,
     pub rncp_label: Option<String>,
@@ -57,7 +57,7 @@ impl From<TrainingRow> for Training {
         Self {
             id: TrainingId(row.id),
             organization_id: OrganizationId(row.org_id),
-            establishment_id: EstablishmentId(row.establishment_id),
+            establishment_id: row.establishment_id.map(EstablishmentId),
             name: row.name,
             rncp_code: row.rncp_code,
             rncp_label: row.rncp_label,
