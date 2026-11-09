@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use common::{OrganizationId, ProjectId, RoleId, UserId};
+use common::{CoreError, OrganizationId, ProjectId, RoleId, UserId};
 use discord::components::Component;
 use discord::{
     Attachment, AuthorType, Category, CategoryId, Channel, ChannelId, ChannelPermissionOverwrite,
@@ -244,6 +244,31 @@ pub fn webhook_created_response(w: Webhook) -> WebhookCreatedResponse {
 }
 
 // ── Presence ──────────────────────────────────────────────────────────────────
+
+/// One of the caller's direct messages, seen from the caller: `peer_user_id` is
+/// the other person, the only thing a client needs to name the conversation.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct DirectChannelResponse {
+    pub channel_id: ChannelId,
+    pub organization_id: OrganizationId,
+    pub peer_user_id: UserId,
+    pub created_at: DateTime<Utc>,
+}
+
+impl DirectChannelResponse {
+    pub fn for_user(direct: discord::DirectChannel, user: UserId) -> Result<Self, CoreError> {
+        let peer_user_id = direct
+            .pair
+            .peer_of(user)
+            .ok_or_else(|| CoreError::Internal("caller is not in the direct pair".to_owned()))?;
+        Ok(Self {
+            channel_id: direct.channel.id,
+            organization_id: direct.channel.organization_id,
+            peer_user_id,
+            created_at: direct.channel.created_at,
+        })
+    }
+}
 
 /// A seated member as chat knows them. `user_id` is the id already carried by
 /// `author_user_id`, reactions and presence; it is deliberately served here and

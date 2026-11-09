@@ -7,6 +7,7 @@ use utoipa::ToSchema;
 pub enum ChannelType {
     Text,
     Thread,
+    Direct,
 }
 
 impl ChannelType {
@@ -14,6 +15,7 @@ impl ChannelType {
         match self {
             Self::Text => "TEXT",
             Self::Thread => "THREAD",
+            Self::Direct => "DIRECT",
         }
     }
 }
@@ -30,6 +32,7 @@ impl FromStr for ChannelType {
         match s {
             "TEXT" => Ok(Self::Text),
             "THREAD" => Ok(Self::Thread),
+            "DIRECT" => Ok(Self::Direct),
             other => Err(format!("invalid channel type `{other}`")),
         }
     }

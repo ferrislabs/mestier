@@ -37,6 +37,9 @@ pub use domain::channel::{
     ChannelRepository, ChannelService, CreateChannelCommand, CreateProjectChannelCommand,
     CreateThreadCommand, UpdateChannelCommand, UpdateThreadCommand,
 };
+pub use domain::direct::{
+    DirectChannel, DirectChannelRepository, DirectChannelService, DirectPair,
+};
 pub use domain::message::{
     AddReactionCommand, AttachmentInput, CreateMessageCommand, MessageAuthor, MessageRepository,
     MessageService, RemoveReactionCommand, UpdateMessageCommand,

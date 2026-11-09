@@ -84,6 +84,9 @@ impl<'tx> ReadStateRepository for PgReadStateRepository<'tx> {
             SELECT c.id AS "id!"
             FROM chat.channels c
             WHERE c.org_id = $1
+              AND (c.channel_type <> 'DIRECT' OR EXISTS (
+                  SELECT 1 FROM chat.direct_channels d
+                  WHERE d.channel_id = c.id AND ($2 = d.user_low OR $2 = d.user_high)))
               AND EXISTS (
                   SELECT 1 FROM chat.messages m
                   WHERE m.channel_id = c.id
@@ -118,6 +121,9 @@ impl<'tx> ReadStateRepository for PgReadStateRepository<'tx> {
             FROM chat.channels c
             JOIN chat.messages m ON m.channel_id = c.id
             WHERE c.org_id = $1
+              AND (c.channel_type <> 'DIRECT' OR EXISTS (
+                  SELECT 1 FROM chat.direct_channels d
+                  WHERE d.channel_id = c.id AND ($2 = d.user_low OR $2 = d.user_high)))
               AND m.id > COALESCE(
                   (SELECT rs.last_read_message_id
                    FROM chat.channel_read_state rs
