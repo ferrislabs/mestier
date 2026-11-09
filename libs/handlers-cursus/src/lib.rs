@@ -6,15 +6,18 @@ use mestier_core::{OrganizationId, Permissions};
 pub mod apprentice;
 pub mod closure_reason;
 pub mod company_tutor;
+pub mod contract;
 pub mod establishment;
 pub mod host_company;
 pub mod invitation;
+pub mod me;
 pub mod participant;
 pub mod paths;
 pub mod promotion;
 pub mod request;
 pub mod response;
 pub mod training;
+pub mod triad;
 
 pub const TAG: &str = "cursus";
 
@@ -68,6 +71,9 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(apprentice::router(state))
         .merge(company_tutor::router(state))
         .merge(invitation::router(state))
+        .merge(triad::router(state))
+        .merge(contract::router(state))
+        .merge(me::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

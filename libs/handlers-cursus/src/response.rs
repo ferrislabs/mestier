@@ -1,9 +1,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
     Apprentice, ApprenticeId, ClosureReason, ClosureReasonId, CompanyTutorId, CompanyTutorRecord,
-    CursusSpace, Establishment, EstablishmentId, HostCompany, HostCompanyId, OrganizationId,
+    ContractId, ContractTutorView, ContractView, CursusContractKind, CursusSpace, Establishment,
+    EstablishmentId, HostCompany, HostCompanyId, MemberId, MyTriad, MyTriadDetail, OrganizationId,
     Participant, ParticipantDetail, ParticipantId, ParticipantInvite, ParticipantStatus, Promotion,
-    PromotionId, Training, TrainingId, UserId,
+    PromotionId, Training, TrainingId, Triad, TriadAccess, TriadDetail, TriadId, TriadRole,
+    TriadSummary, TutorRank, UserId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -280,6 +282,7 @@ pub struct CursusSpaceResponse {
     pub organization_id: OrganizationId,
     pub slug: String,
     pub name: String,
+    pub is_member: bool,
 }
 
 impl From<CursusSpace> for CursusSpaceResponse {
@@ -288,6 +291,340 @@ impl From<CursusSpace> for CursusSpaceResponse {
             organization_id: value.organization_id,
             slug: value.slug,
             name: value.name,
+            is_member: value.is_member,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct TriadResponse {
+    pub id: TriadId,
+    pub organization_id: OrganizationId,
+    pub promotion_id: PromotionId,
+    pub apprentice_id: ApprenticeId,
+    pub pedagogic_tutor_member_id: Option<MemberId>,
+    pub closed_at: Option<NaiveDate>,
+    pub closure_reason_id: Option<ClosureReasonId>,
+    pub closure_note: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<Triad> for TriadResponse {
+    fn from(value: Triad) -> Self {
+        let (closed_at, closure_reason_id, closure_note) = match value.closure {
+            Some(closure) => (
+                Some(closure.closed_at),
+                Some(closure.reason_id),
+                closure.note,
+            ),
+            None => (None, None, None),
+        };
+
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            promotion_id: value.promotion_id,
+            apprentice_id: value.apprentice_id,
+            pedagogic_tutor_member_id: value.pedagogic_tutor_member_id,
+            closed_at,
+            closure_reason_id,
+            closure_note,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct TriadSummaryResponse {
+    #[serde(flatten)]
+    pub triad: TriadResponse,
+    pub promotion_label: String,
+    pub training_name: String,
+    pub apprentice_name: String,
+    pub pedagogic_tutor_name: Option<String>,
+    pub current_host_company_name: Option<String>,
+}
+
+impl From<TriadSummary> for TriadSummaryResponse {
+    fn from(value: TriadSummary) -> Self {
+        Self {
+            triad: value.triad.into(),
+            promotion_label: value.promotion_label,
+            training_name: value.training_name,
+            apprentice_name: value.apprentice_name,
+            pedagogic_tutor_name: value.pedagogic_tutor_name,
+            current_host_company_name: value.current_host_company_name,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ContractTutorResponse {
+    pub company_tutor_id: CompanyTutorId,
+    pub participant_id: ParticipantId,
+    pub name: String,
+    pub rank: TutorRank,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+impl From<ContractTutorView> for ContractTutorResponse {
+    fn from(value: ContractTutorView) -> Self {
+        Self {
+            company_tutor_id: value.company_tutor_id,
+            participant_id: value.participant_id,
+            name: value.name,
+            rank: value.rank,
+            archived_at: value.archived_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ContractResponse {
+    pub id: ContractId,
+    pub organization_id: OrganizationId,
+    pub triad_id: TriadId,
+    pub host_company_id: HostCompanyId,
+    pub host_company_name: String,
+    pub kind: CursusContractKind,
+    pub number: Option<String>,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+    pub closed_at: Option<NaiveDate>,
+    pub closure_reason_id: Option<ClosureReasonId>,
+    pub closure_reason_label: Option<String>,
+    pub closure_note: Option<String>,
+    pub has_cerfa_file: bool,
+    pub has_mission_sheet_file: bool,
+    pub tutors: Vec<ContractTutorResponse>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<ContractView> for ContractResponse {
+    fn from(value: ContractView) -> Self {
+        let contract = value.contract;
+        let (closed_at, closure_reason_id, closure_note) = match contract.closure {
+            Some(closure) => (
+                Some(closure.closed_at),
+                Some(closure.reason_id),
+                closure.note,
+            ),
+            None => (None, None, None),
+        };
+
+        Self {
+            id: contract.id,
+            organization_id: contract.organization_id,
+            triad_id: contract.triad_id,
+            host_company_id: contract.host_company_id,
+            host_company_name: value.host_company_name,
+            kind: contract.kind,
+            number: contract.number,
+            start_date: contract.period.start(),
+            end_date: contract.period.end(),
+            closed_at,
+            closure_reason_id,
+            closure_reason_label: value.closure_reason_label,
+            closure_note,
+            has_cerfa_file: contract.cerfa_file_key.is_some(),
+            has_mission_sheet_file: contract.mission_sheet_file_key.is_some(),
+            tutors: value.tutors.into_iter().map(Into::into).collect(),
+            created_at: contract.created_at,
+            updated_at: contract.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ContractFileUrlResponse {
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct TriadDetailResponse {
+    #[serde(flatten)]
+    pub triad: TriadResponse,
+    pub promotion: PromotionResponse,
+    pub training_name: String,
+    pub apprentice_name: String,
+    pub apprentice_email: String,
+    pub pedagogic_tutor_name: Option<String>,
+    pub closure_reason_label: Option<String>,
+    pub contracts: Vec<ContractResponse>,
+}
+
+impl From<TriadDetail> for TriadDetailResponse {
+    fn from(value: TriadDetail) -> Self {
+        Self {
+            triad: value.triad.into(),
+            promotion: value.promotion.into(),
+            training_name: value.training_name,
+            apprentice_name: value.apprentice_name,
+            apprentice_email: value.apprentice_email,
+            pedagogic_tutor_name: value.pedagogic_tutor_name,
+            closure_reason_label: value.closure_reason_label,
+            contracts: value.contracts.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TriadRoleResponse {
+    Apprentice,
+    MainTutor,
+    SecondaryTutor,
+}
+
+impl From<TriadRole> for TriadRoleResponse {
+    fn from(value: TriadRole) -> Self {
+        match value {
+            TriadRole::Apprentice => Self::Apprentice,
+            TriadRole::MainTutor => Self::MainTutor,
+            TriadRole::SecondaryTutor => Self::SecondaryTutor,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TriadAccessResponse {
+    Active,
+    ReadOnly { since: DateTime<Utc> },
+}
+
+impl From<TriadAccess> for TriadAccessResponse {
+    fn from(value: TriadAccess) -> Self {
+        match value {
+            TriadAccess::Active => Self::Active,
+            TriadAccess::ReadOnly { since } => Self::ReadOnly { since },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct MyTriadResponse {
+    pub triad_id: TriadId,
+    pub promotion_label: String,
+    pub training_name: String,
+    pub apprentice_name: String,
+    pub role: TriadRoleResponse,
+    pub access: TriadAccessResponse,
+    pub closed_at: Option<NaiveDate>,
+}
+
+impl From<MyTriad> for MyTriadResponse {
+    fn from(value: MyTriad) -> Self {
+        Self {
+            triad_id: value.summary.triad.id,
+            promotion_label: value.summary.promotion_label,
+            training_name: value.summary.training_name,
+            apprentice_name: value.summary.apprentice_name,
+            role: value.link.role.into(),
+            access: value.link.access.into(),
+            closed_at: value.summary.triad.closure.map(|closure| closure.closed_at),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct MyContractTutorResponse {
+    pub name: String,
+    pub rank: TutorRank,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct MyContractResponse {
+    pub id: ContractId,
+    pub host_company_name: String,
+    pub kind: CursusContractKind,
+    pub number: Option<String>,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
+    pub closed_at: Option<NaiveDate>,
+    pub closure_reason_label: Option<String>,
+    pub closure_note: Option<String>,
+    pub tutors: Vec<MyContractTutorResponse>,
+}
+
+impl From<ContractView> for MyContractResponse {
+    fn from(value: ContractView) -> Self {
+        let contract = value.contract;
+        let (closed_at, closure_note) = match contract.closure {
+            Some(closure) => (Some(closure.closed_at), closure.note),
+            None => (None, None),
+        };
+
+        Self {
+            id: contract.id,
+            host_company_name: value.host_company_name,
+            kind: contract.kind,
+            number: contract.number,
+            start_date: contract.period.start(),
+            end_date: contract.period.end(),
+            closed_at,
+            closure_reason_label: value.closure_reason_label,
+            closure_note,
+            tutors: value
+                .tutors
+                .into_iter()
+                .map(|tutor| MyContractTutorResponse {
+                    name: tutor.name,
+                    rank: tutor.rank,
+                    archived_at: tutor.archived_at,
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct MyTriadDetailResponse {
+    pub triad_id: TriadId,
+    pub promotion_id: PromotionId,
+    pub promotion_label: String,
+    pub promotion_start_year: i32,
+    pub promotion_end_year: i32,
+    pub training_name: String,
+    pub apprentice_name: String,
+    pub apprentice_email: String,
+    pub pedagogic_tutor_name: Option<String>,
+    pub closed_at: Option<NaiveDate>,
+    pub closure_reason_label: Option<String>,
+    pub closure_note: Option<String>,
+    pub contracts: Vec<MyContractResponse>,
+    pub role: TriadRoleResponse,
+    pub access: TriadAccessResponse,
+}
+
+impl From<MyTriadDetail> for MyTriadDetailResponse {
+    fn from(value: MyTriadDetail) -> Self {
+        let detail = value.detail;
+        let (closed_at, closure_note) = match detail.triad.closure {
+            Some(closure) => (Some(closure.closed_at), closure.note),
+            None => (None, None),
+        };
+
+        Self {
+            triad_id: detail.triad.id,
+            promotion_id: detail.promotion.id,
+            promotion_label: detail.promotion.label,
+            promotion_start_year: detail.promotion.start_year,
+            promotion_end_year: detail.promotion.end_year,
+            training_name: detail.training_name,
+            apprentice_name: detail.apprentice_name,
+            apprentice_email: detail.apprentice_email,
+            pedagogic_tutor_name: detail.pedagogic_tutor_name,
+            closed_at,
+            closure_reason_label: detail.closure_reason_label,
+            closure_note,
+            contracts: detail.contracts.into_iter().map(Into::into).collect(),
+            role: value.link.role.into(),
+            access: value.link.access.into(),
         }
     }
 }

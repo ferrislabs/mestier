@@ -97,6 +97,51 @@ where
             .ok_or(CoreError::NotFound)
     }
 
+    pub async fn get_apprentice(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ApprenticeId,
+    ) -> Result<Apprentice, CoreError> {
+        self.repo
+            .find_apprentice_by_id(organization_id, id)
+            .await?
+            .filter(|found| found.organization_id == organization_id)
+            .ok_or(CoreError::NotFound)
+    }
+
+    pub async fn get_company_tutor(
+        &mut self,
+        organization_id: OrganizationId,
+        id: CompanyTutorId,
+    ) -> Result<CompanyTutor, CoreError> {
+        self.repo
+            .find_company_tutor(organization_id, id)
+            .await?
+            .filter(|found| found.organization_id == organization_id)
+            .ok_or(CoreError::NotFound)
+    }
+
+    pub async fn active_participant(
+        &mut self,
+        organization_id: OrganizationId,
+        user_id: crate::UserId,
+    ) -> Result<Participant, CoreError> {
+        self.repo
+            .find_participant_by_user(organization_id, user_id)
+            .await?
+            .filter(|found| {
+                found.organization_id == organization_id && found.deactivated_at.is_none()
+            })
+            .ok_or(CoreError::Forbidden { reason: None })
+    }
+
+    pub async fn list_active_participations(
+        &mut self,
+        user_id: crate::UserId,
+    ) -> Result<Vec<Participant>, CoreError> {
+        self.repo.list_active_participants_by_user(user_id).await
+    }
+
     pub async fn get_detail(
         &mut self,
         organization_id: OrganizationId,

@@ -1,0 +1,122 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id, t.org_id, t.promotion_id, t.apprentice_id, t.pedagogic_tutor_member_id,\n                   t.closed_at, t.closure_reason_id, t.closure_note, t.created_at, t.updated_at,\n                   p.label AS promotion_label, tr.name AS training_name,\n                   ap.last_name AS apprentice_last_name, ap.first_name AS apprentice_first_name,\n                   m.last_name AS \"tutor_last_name?\", m.first_name AS \"tutor_first_name?\",\n                   (SELECT h.name\n                      FROM cursus.contract c\n                      JOIN cursus.host_company h ON h.org_id = c.org_id AND h.id = c.host_company_id\n                     WHERE c.org_id = t.org_id AND c.triad_id = t.id AND c.closed_at IS NULL\n                     ORDER BY c.start_date DESC\n                     LIMIT 1) AS \"current_host_company_name?\"\n            FROM cursus.triad t\n            JOIN cursus.promotion p ON p.org_id = t.org_id AND p.id = t.promotion_id\n            JOIN cursus.training tr ON tr.org_id = p.org_id AND tr.id = p.training_id\n            JOIN cursus.apprentice a ON a.org_id = t.org_id AND a.id = t.apprentice_id\n            JOIN cursus.participant ap ON ap.org_id = a.org_id AND ap.id = a.participant_id\n            LEFT JOIN organization_members m\n                   ON m.id = t.pedagogic_tutor_member_id AND m.organization_id = t.org_id\n            WHERE t.org_id = $1\n              AND ($2::uuid IS NULL OR t.promotion_id = $2)\n              AND ($3::bool IS NULL OR (t.closed_at IS NOT NULL) = $3)\n            ORDER BY lower(ap.last_name) ASC, lower(coalesce(ap.first_name, '')) ASC, t.created_at ASC\n            LIMIT $4 OFFSET $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "promotion_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "apprentice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "pedagogic_tutor_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "closed_at",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "closure_reason_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "closure_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "promotion_label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "training_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "apprentice_last_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "apprentice_first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "tutor_last_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "tutor_first_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "current_host_company_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "fccf56c07a87dbce97081377300f1c32640f53b1a1a5aed1aba54eabc0ca6827"
+}

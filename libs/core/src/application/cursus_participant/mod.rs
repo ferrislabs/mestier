@@ -16,6 +16,8 @@ use crate::{
             },
             service::CursusParticipantService,
         },
+        cursus_triad::service::CursusTriadService,
+        member::ports::MemberRepository,
         organization::ports::OrganizationRepository,
     },
 };
@@ -240,7 +242,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(cursus_participant, role, member, authz, emitter)]
+    #[transactional(cursus_participant, cursus_triad, role, member, authz, emitter)]
     pub async fn remove_company_tutor(
         &self,
         command: RemoveCompanyTutorCommand,
@@ -256,17 +258,28 @@ impl MestierUseCase {
         )
         .await?;
 
+        if CursusTriadService::new(cursus_triad_repository, emitter)
+            .company_tutor_is_linked(command.organization_id, command.id)
+            .await?
+        {
+            return Err(CoreError::Conflict(
+                "company tutor is linked to a contract".to_owned(),
+            ));
+        }
+
         CursusParticipantService::new(cursus_participant_repository, emitter)
             .remove_company_tutor(command)
             .await
     }
 
-    #[transactional(cursus_participant, organization, emitter)]
+    #[transactional(cursus_participant, organization, member, emitter)]
     pub async fn accept_participant_invitation(
         &self,
         command: AcceptParticipantInvitationCommand,
     ) -> Result<CursusSpace, CoreError> {
         let mut organization_repository = organization_repository;
+        let mut member_repository = member_repository;
+        let command_user_id = command.user_id;
         let participant = CursusParticipantService::new(cursus_participant_repository, emitter)
             .accept(command)
             .await?;
@@ -276,10 +289,16 @@ impl MestierUseCase {
             .await?
             .ok_or(CoreError::Gone)?;
 
+        let is_member = member_repository
+            .find_by_org_and_user(organization.id, command_user_id)
+            .await?
+            .is_some();
+
         Ok(CursusSpace {
             organization_id: organization.id,
             slug: organization.slug,
             name: organization.name,
+            is_member,
         })
     }
 }

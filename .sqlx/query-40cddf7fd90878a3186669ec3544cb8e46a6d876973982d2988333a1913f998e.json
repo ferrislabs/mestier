@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, promotion_id, apprentice_id, pedagogic_tutor_member_id, closed_at, closure_reason_id, closure_note, created_at, updated_at\n            FROM cursus.triad\n            WHERE org_id = $1 AND id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "promotion_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "apprentice_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "pedagogic_tutor_member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "closed_at",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "closure_reason_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "closure_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "40cddf7fd90878a3186669ec3544cb8e46a6d876973982d2988333a1913f998e"
+}

@@ -465,6 +465,22 @@ impl Modify for SecurityAddon {
         cursus::company_tutor::add::handler,
         cursus::company_tutor::remove::handler,
         cursus::invitation::accept::handler,
+        cursus::triad::list::handler,
+        cursus::triad::create::handler,
+        cursus::triad::get_one::handler,
+        cursus::triad::update::handler,
+        cursus::triad::close::handler,
+        cursus::contract::list::handler,
+        cursus::contract::create::handler,
+        cursus::contract::get_one::handler,
+        cursus::contract::update::handler,
+        cursus::contract::close::handler,
+        cursus::contract::set_tutors::handler,
+        cursus::contract::set_file::handler,
+        cursus::contract::file_url::handler,
+        cursus::me::spaces::handler,
+        cursus::me::triads::handler,
+        cursus::me::triad::handler,
     ),
     components(schemas(
         support::response::TicketResponse,
@@ -920,6 +936,24 @@ impl Modify for SecurityAddon {
         cursus::request::CompanyTutorRequest,
         cursus::participant::create::CreateParticipantRequest,
         cursus::participant::update::UpdateParticipantRequest,
+        cursus::response::TriadResponse,
+        cursus::response::TriadSummaryResponse,
+        cursus::response::TriadDetailResponse,
+        cursus::response::ContractResponse,
+        cursus::response::ContractTutorResponse,
+        cursus::response::ContractFileUrlResponse,
+        cursus::response::MyTriadResponse,
+        cursus::response::MyTriadDetailResponse,
+        cursus::response::MyContractResponse,
+        cursus::response::MyContractTutorResponse,
+        cursus::response::TriadRoleResponse,
+        cursus::response::TriadAccessResponse,
+        cursus::request::CloseRequest,
+        cursus::request::CreateTriadRequest,
+        cursus::request::UpdateTriadRequest,
+        cursus::request::ContractRequest,
+        cursus::request::SetContractTutorsRequest,
+        cursus::request::SetContractFileRequest,
     )),
     modifiers(&SecurityAddon),
     tags(
@@ -938,7 +972,7 @@ impl Modify for SecurityAddon {
         (name = "reference", description = "Reference cost catalog"),
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),
         (name = "support", description = "Support tickets — kanban, thread, intake by organization API key"),
-        (name = "cursus", description = "Cursus — establishments, trainings, promotions, closure reasons, host companies and participants of an apprenticeship centre"),
+        (name = "cursus", description = "Cursus — establishments, trainings, promotions, closure reasons, host companies, participants, triads and contracts of an apprenticeship centre"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
 )]
@@ -1018,6 +1052,63 @@ mod tests {
             serde_json::to_string(&document["components"]["schemas"]["ParticipantStatus"]).unwrap();
         for variant in ["pending", "active", "inactive"] {
             assert!(statuses.contains(variant), "{statuses}");
+        }
+    }
+
+    #[test]
+    fn every_cursus_triad_contract_and_me_route_reaches_the_document() {
+        let document = serde_json::to_value(ApiDoc::openapi()).expect("the document serializes");
+        let org = "/api/v1/organizations/{organization_id}/cursus";
+
+        for (path, methods) in [
+            (format!("{org}/triads"), &["get", "post"][..]),
+            (format!("{org}/triads/{{triad_id}}"), &["get", "patch"][..]),
+            (format!("{org}/triads/{{triad_id}}/close"), &["post"][..]),
+            (
+                format!("{org}/triads/{{triad_id}}/contracts"),
+                &["get", "post"][..],
+            ),
+            (
+                format!("{org}/contracts/{{contract_id}}"),
+                &["get", "patch"][..],
+            ),
+            (
+                format!("{org}/contracts/{{contract_id}}/close"),
+                &["post"][..],
+            ),
+            (
+                format!("{org}/contracts/{{contract_id}}/tutors"),
+                &["put"][..],
+            ),
+            (
+                format!("{org}/contracts/{{contract_id}}/files/{{kind}}"),
+                &["get", "put"][..],
+            ),
+            (format!("{org}/me/triads"), &["get"][..]),
+            (format!("{org}/me/triads/{{triad_id}}"), &["get"][..]),
+            ("/api/v1/cursus/me/spaces".to_owned(), &["get"][..]),
+        ] {
+            for method in methods {
+                assert!(
+                    document["paths"][path.as_str()][method].is_object(),
+                    "{method} {path} is missing from the document"
+                );
+            }
+        }
+
+        let kinds = serde_json::to_string(
+            &document["paths"][format!("{org}/contracts/{{contract_id}}/files/{{kind}}").as_str()]
+                ["put"]["parameters"],
+        )
+        .unwrap();
+        for variant in ["cerfa", "mission_sheet"] {
+            assert!(kinds.contains(variant), "{kinds}");
+        }
+        let access =
+            serde_json::to_string(&document["components"]["schemas"]["TriadAccessResponse"])
+                .unwrap();
+        for variant in ["active", "read_only"] {
+            assert!(access.contains(variant), "{access}");
         }
     }
 

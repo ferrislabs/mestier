@@ -137,6 +137,7 @@ pub use domain::{
     cursus_catalog::ports::MockCursusCatalogRepository,
     cursus_host_company::ports::MockCursusHostCompanyRepository,
     cursus_participant::ports::MockCursusParticipantRepository,
+    cursus_triad::ports::MockCursusTriadRepository,
     custom_unit::ports::MockCustomUnitRepository,
     customer::ports::MockCustomerRepository,
     customer_contact::ports::MockCustomerContactRepository,
@@ -252,6 +253,15 @@ pub use domain::{
     PlanningPeriodError,
 };
 
+pub use domain::cursus_triad::{
+    ContractKind as CursusContractKind, ContractPeriod as CursusContractPeriod,
+};
+pub use domain::{
+    Closure, Contract, ContractFileKind, ContractId, ContractTutor, ContractTutorView,
+    ContractView, MyTriad, MyTriadDetail, ParticipantScope, Triad, TriadAccess, TriadDetail,
+    TriadId, TriadLink, TriadRole, TriadSummary, TutorRank, TutorTriadLink, merge_links,
+};
+
 pub use domain::{
     DefaultSurcharge, ExtraPeriod, ExtraPeriodDraft, ExtraPeriodError, ExtraPeriodFilter,
     ExtraPeriodId, ExtraPeriodOutcome, ExtraPeriodService, ExtraReason, ExtraStatus, MAX_RATE_BP,
@@ -342,6 +352,11 @@ pub use domain::{
         AcceptParticipantInvitationCommand, AddCompanyTutorCommand, ApprenticeInput,
         CompanyTutorInput, CreateParticipantCommand, RemoveCompanyTutorCommand,
         UpdateParticipantCommand, UpsertApprenticeCommand,
+    },
+    cursus_triad::commands::{
+        CloseContractCommand, CloseTriadCommand, CreateContractCommand, CreateTriadCommand,
+        SetContractFileCommand, SetContractTutorsCommand, UpdateContractCommand,
+        UpdateTriadCommand,
     },
     custom_unit::commands::CreateCustomUnitCommand,
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},
