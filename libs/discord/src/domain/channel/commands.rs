@@ -25,6 +25,14 @@ pub struct CreateProjectChannelCommand {
     pub name: String,
 }
 
+/// Where a channel sits in the side nav: its category and its rank in it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelPlacement {
+    pub channel_id: ChannelId,
+    pub category_id: Option<CategoryId>,
+    pub position: i32,
+}
+
 pub struct UpdateChannelCommand {
     pub id: ChannelId,
     pub category_id: Option<CategoryId>,

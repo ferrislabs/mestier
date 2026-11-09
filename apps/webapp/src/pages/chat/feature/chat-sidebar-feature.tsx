@@ -5,6 +5,9 @@ import {
 	useCategories,
 	useChannels,
 	useDeleteChannel,
+	useNotificationLevels,
+	useReorderChannels,
+	useSetNotificationLevel,
 	useChatDirectory,
 	useChatListGatewaySync,
 	useDirectChannels,
@@ -12,10 +15,12 @@ import {
 	useUnreadMentionCount,
 	useUnreadSummaries,
 } from '#/hooks/use-chat'
+import { useHasPermission } from '#/hooks/use-permissions'
 import { usePresenceStatuses } from '#/hooks/use-presence'
 import { buildDirectMessageItems } from '#/pages/chat/lib/direct-messages'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
 import { Plus } from 'lucide-react'
+import { type DropHint, planMove } from '#/pages/chat/lib/reorder-channels'
 import {
 	addButtonClassName,
 	ChatSidebarUI,
@@ -46,6 +51,12 @@ export function ChatSidebarFeature() {
 	const directory = useChatDirectory(organizationId)
 	const presenceStatuses = usePresenceStatuses()
 	const deleteChannel = useDeleteChannel(organizationId)
+	const notificationLevels = useNotificationLevels(organizationId)
+	const setNotificationLevel = useSetNotificationLevel(organizationId)
+	const reorderChannels = useReorderChannels(organizationId)
+	const canReorder = useHasPermission('MANAGE_CHANNELS')
+	const [draggingId, setDraggingId] = useState<string | null>(null)
+	const [dropHint, setDropHint] = useState<DropHint | null>(null)
 
 	const unreadCounts = useMemo(
 		() =>
@@ -75,6 +86,24 @@ export function ChatSidebarFeature() {
 			else next.delete(categoryId)
 			return next
 		})
+	}
+
+	function endDrag() {
+		setDraggingId(null)
+		setDropHint(null)
+	}
+
+	function dropChannel() {
+		if (draggingId && dropHint) {
+			const placements = planMove(groups, draggingId, dropHint)
+			if (placements.length > 0) {
+				reorderChannels.mutate({
+					path: { organization_id: organizationId },
+					body: { placements },
+				} as never)
+			}
+		}
+		endDrag()
 	}
 
 	function duplicateChannel(id: string) {
@@ -120,6 +149,27 @@ export function ChatSidebarFeature() {
 			}
 			onOpenChannelAdmin={openChannelAdmin}
 			onDuplicateChannel={duplicateChannel}
+			moveError={reorderChannels.isError ? reorderChannels.error.message : null}
+			dnd={
+				canReorder
+					? {
+							draggingId,
+							hint: dropHint,
+							// Re-rendering inside `dragstart` cancels the drag in Chrome.
+							onDragStart: (id) => setTimeout(() => setDraggingId(id), 0),
+							onDragEnd: endDrag,
+							onHint: setDropHint,
+							onDrop: dropChannel,
+						}
+					: undefined
+			}
+			notificationLevels={notificationLevels.data ?? new Map()}
+			onChangeNotificationLevel={(id, level) =>
+				setNotificationLevel.mutate({
+					path: { channel_id: id },
+					body: { level },
+				} as never)
+			}
 			onDeleteChannel={(id) =>
 				deleteChannel.mutate({ path: { channel_id: id } } as never)
 			}

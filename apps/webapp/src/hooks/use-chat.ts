@@ -25,6 +25,14 @@ const ORG_UNREAD_PATH = '/api/v1/chat/organizations/{organization_id}/unread'
 const CHANNEL_READ_PATH = '/api/v1/chat/channels/{channel_id}/read'
 const ORG_NOTIFICATIONS_PATH =
 	'/api/v1/chat/organizations/{organization_id}/notifications'
+const ORG_CHANNEL_ORDER_PATH =
+	'/api/v1/chat/organizations/{organization_id}/channels/order'
+const ORG_ACTIVITY_PATH =
+	'/api/v1/chat/organizations/{organization_id}/activity'
+const ORG_NOTIFICATION_LEVELS_PATH =
+	'/api/v1/chat/organizations/{organization_id}/notification-levels'
+const CHANNEL_NOTIFICATION_LEVEL_PATH =
+	'/api/v1/chat/channels/{channel_id}/notification-level'
 const NOTIFICATION_READ_PATH =
 	'/api/v1/chat/notifications/{notification_id}/read'
 const ORG_NOTIFICATIONS_READ_ALL_PATH =
@@ -40,6 +48,8 @@ export type Channel = Schemas.ChannelResponse
 export type Message = Schemas.MessageResponse
 export type MessageAttachment = Schemas.CreateMessageAttachment
 export type Notification = Schemas.NotificationResponse
+export type ActivityEntry = Schemas.ActivityEntryResponse
+export type NotificationLevel = Schemas.NotificationLevel
 
 function categoriesKey(organizationId: string) {
 	return window.tanstackApi.get(ORG_CATEGORIES_PATH, {
@@ -609,6 +619,71 @@ export function useUnreadMentionCount(organizationId: string): number {
 	).length
 }
 
+function activityKey(organizationId: string) {
+	return window.tanstackApi.get(ORG_ACTIVITY_PATH, {
+		path: { organization_id: organizationId },
+	} as never).queryKey
+}
+
+/** What the person has to read: mentions, and the unread messages of the
+ * channels they follow. The server decides, from their notification levels. */
+export function useActivity(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(ORG_ACTIVITY_PATH, {
+			path: { organization_id: organizationId },
+		} as never).queryOptions,
+		select: (response: { data: ActivityEntry[] }) => response.data,
+		enabled: Boolean(organizationId),
+		refetchInterval: 30_000,
+	})
+}
+
+/** Refetches the activity after something the page did changes what is unread. */
+export function useRefreshActivity(organizationId: string) {
+	const queryClient = useQueryClient()
+	return () => {
+		void queryClient.invalidateQueries({
+			queryKey: activityKey(organizationId),
+		})
+		void queryClient.invalidateQueries({
+			queryKey: notificationsKey(organizationId),
+		})
+	}
+}
+
+/** The channels the person set a notification level on; the others have
+ * their default, see `effectiveNotificationLevel`. */
+export function useNotificationLevels(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(ORG_NOTIFICATION_LEVELS_PATH, {
+			path: { organization_id: organizationId },
+		} as never).queryOptions,
+		select: (response: {
+			data: { channel_id: string; level: NotificationLevel }[]
+		}) =>
+			new Map(response.data.map((entry) => [entry.channel_id, entry.level])),
+		enabled: Boolean(organizationId),
+	})
+}
+
+export function useSetNotificationLevel(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('put', CHANNEL_NOTIFICATION_LEVEL_PATH)
+			.mutationOptions,
+		onSuccess: () => {
+			void queryClient.invalidateQueries({
+				queryKey: window.tanstackApi.get(ORG_NOTIFICATION_LEVELS_PATH, {
+					path: { organization_id: organizationId },
+				} as never).queryKey,
+			})
+			void queryClient.invalidateQueries({
+				queryKey: activityKey(organizationId),
+			})
+		},
+	})
+}
+
 export function useMarkNotificationRead() {
 	return useMutation({
 		...window.tanstackApi.mutation('put', NOTIFICATION_READ_PATH)
@@ -635,6 +710,9 @@ export function useReadStateGatewaySync(organizationId: string) {
 
 	useGatewayEvent('CHANNEL_READ', (event) => {
 		if (event.data.organization_id !== organizationId) return
+		void queryClient.invalidateQueries({
+			queryKey: activityKey(organizationId),
+		})
 		queryClient.setQueryData<Schemas.UnreadResponse>(
 			unreadKey(organizationId),
 			(old) =>
@@ -651,8 +729,18 @@ export function useReadStateGatewaySync(organizationId: string) {
 		)
 	})
 
+	useGatewayEvent('MESSAGE_CREATE', (event) => {
+		if (event.data.organization_id !== organizationId) return
+		void queryClient.invalidateQueries({
+			queryKey: activityKey(organizationId),
+		})
+	})
+
 	useGatewayEvent('NOTIFICATION_CREATE', (event) => {
 		if (event.data.organization_id !== organizationId) return
+		void queryClient.invalidateQueries({
+			queryKey: activityKey(organizationId),
+		})
 		const notification: Notification = {
 			id: event.data.id,
 			channel_id: event.data.channel_id,
@@ -774,6 +862,55 @@ export function useCreateChannel(organizationId: string) {
 	return useMutation({
 		...window.tanstackApi.mutation('post', ORG_CHANNELS_PATH).mutationOptions,
 		onSuccess: invalidateOnSettled(queryClient, channelsKey(organizationId)),
+	})
+}
+
+export interface ChannelPlacementInput {
+	channel_id: string
+	category_id: string | null
+	position: number
+}
+
+/**
+ * Places channels in their categories. The side nav moves at once: the cached
+ * list is rewritten before the server answers, and put back by a refetch if
+ * the server refuses.
+ */
+export function useReorderChannels(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('put', ORG_CHANNEL_ORDER_PATH)
+			.mutationOptions,
+		onMutate: async (variables) => {
+			const { placements } = (
+				variables as unknown as {
+					body: { placements: ChannelPlacementInput[] }
+				}
+			).body
+			await queryClient.cancelQueries({ queryKey: channelsKey(organizationId) })
+			const byId = new Map(
+				placements.map((placement) => [placement.channel_id, placement]),
+			)
+			queryClient.setQueryData<{ data: Channel[] }>(
+				channelsKey(organizationId),
+				(old) =>
+					old && {
+						...old,
+						data: old.data.map((channel) => {
+							const placement = byId.get(channel.id)
+							return placement
+								? {
+										...channel,
+										category_id: placement.category_id,
+										position: placement.position,
+									}
+								: channel
+						}),
+					},
+			)
+		},
+		onSettled: () =>
+			queryClient.invalidateQueries({ queryKey: channelsKey(organizationId) }),
 	})
 }
 

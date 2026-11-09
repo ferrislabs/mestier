@@ -1,12 +1,18 @@
+use std::collections::HashSet;
+
 use common::CoreError;
 use discord::{
-    Channel, ChannelId, ChannelRepository, ChannelService, CreateChannelCommand,
-    CreateThreadCommand, OrganizationId, UpdateChannelCommand, UpdateThreadCommand,
+    CategoryId, CategoryRepository, Channel, ChannelId, ChannelPlacement, ChannelRepository,
+    ChannelService, CreateChannelCommand, CreateThreadCommand, OrganizationId,
+    UpdateChannelCommand, UpdateThreadCommand,
 };
 use mestier_macros::transactional;
 
 use crate::application::MestierUseCase;
 use crate::domain::chat::events::ChatChannelCreated;
+
+#[cfg(test)]
+mod tests;
 
 impl MestierUseCase {
     #[transactional(channel, events, emitter)]
@@ -20,6 +26,26 @@ impl MestierUseCase {
             },
         )?;
         Ok(result)
+    }
+
+    /// Moves channels between categories and ranks them, in one transaction.
+    #[transactional(channel, category, events)]
+    pub async fn reorder_channels(
+        &self,
+        organization_id: OrganizationId,
+        placements: Vec<ChannelPlacement>,
+    ) -> Result<Vec<Channel>, CoreError> {
+        let mut category_repository = category_repository;
+        let categories: HashSet<CategoryId> = category_repository
+            .list_by_organization(organization_id)
+            .await?
+            .into_iter()
+            .map(|category| category.id)
+            .collect();
+        let mut service = ChannelService::new(channel_repository, &events);
+        service
+            .reorder_channels(organization_id, &placements, &categories)
+            .await
     }
 
     #[transactional(channel, events)]

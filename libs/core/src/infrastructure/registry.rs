@@ -71,6 +71,7 @@ pub mod domain {
     pub struct ReadState;
     pub struct Overwrite;
     pub struct Notification;
+    pub struct NotificationPreference;
     pub struct Task;
     pub struct TaskComment;
     pub struct TaskLabel;

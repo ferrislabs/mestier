@@ -45,6 +45,7 @@ import { Route as AppOOrganizationSlugPlanificationProjectTemplatesRouteImport }
 import { Route as AppOOrganizationSlugPlanificationDoesRouteImport } from './routes/_app.o.$organizationSlug.planification.does'
 import { Route as AppOOrganizationSlugPlanificationBoardRouteImport } from './routes/_app.o.$organizationSlug.planification.board'
 import { Route as AppOOrganizationSlugHrSplatRouteImport } from './routes/_app.o.$organizationSlug.hr.$'
+import { Route as AppOOrganizationSlugDiscussionsActiviteRouteImport } from './routes/_app.o.$organizationSlug.discussions.activite'
 import { Route as AppOOrganizationSlugDiscussionsChannelIdRouteImport } from './routes/_app.o.$organizationSlug.discussions.$channelId'
 import { Route as AppOOrganizationSlugCrmTresorerieRouteImport } from './routes/_app.o.$organizationSlug.crm.tresorerie'
 import { Route as AppOOrganizationSlugCrmStripeRouteImport } from './routes/_app.o.$organizationSlug.crm.stripe'
@@ -312,6 +313,12 @@ const AppOOrganizationSlugHrSplatRoute =
     id: '/hr/$',
     path: '/hr/$',
     getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugDiscussionsActiviteRoute =
+  AppOOrganizationSlugDiscussionsActiviteRouteImport.update({
+    id: '/activite',
+    path: '/activite',
+    getParentRoute: () => AppOOrganizationSlugDiscussionsRoute,
   } as any)
 const AppOOrganizationSlugDiscussionsChannelIdRoute =
   AppOOrganizationSlugDiscussionsChannelIdRouteImport.update({
@@ -676,6 +683,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/crm/stripe': typeof AppOOrganizationSlugCrmStripeRoute
   '/o/$organizationSlug/crm/tresorerie': typeof AppOOrganizationSlugCrmTresorerieRoute
   '/o/$organizationSlug/discussions/$channelId': typeof AppOOrganizationSlugDiscussionsChannelIdRoute
+  '/o/$organizationSlug/discussions/activite': typeof AppOOrganizationSlugDiscussionsActiviteRoute
   '/o/$organizationSlug/hr/$': typeof AppOOrganizationSlugHrSplatRoute
   '/o/$organizationSlug/planification/board': typeof AppOOrganizationSlugPlanificationBoardRoute
   '/o/$organizationSlug/planification/does': typeof AppOOrganizationSlugPlanificationDoesRoute
@@ -767,6 +775,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/crm/stripe': typeof AppOOrganizationSlugCrmStripeRoute
   '/o/$organizationSlug/crm/tresorerie': typeof AppOOrganizationSlugCrmTresorerieRoute
   '/o/$organizationSlug/discussions/$channelId': typeof AppOOrganizationSlugDiscussionsChannelIdRoute
+  '/o/$organizationSlug/discussions/activite': typeof AppOOrganizationSlugDiscussionsActiviteRoute
   '/o/$organizationSlug/hr/$': typeof AppOOrganizationSlugHrSplatRoute
   '/o/$organizationSlug/planification/board': typeof AppOOrganizationSlugPlanificationBoardRoute
   '/o/$organizationSlug/planification/does': typeof AppOOrganizationSlugPlanificationDoesRoute
@@ -862,6 +871,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/crm/stripe': typeof AppOOrganizationSlugCrmStripeRoute
   '/_app/o/$organizationSlug/crm/tresorerie': typeof AppOOrganizationSlugCrmTresorerieRoute
   '/_app/o/$organizationSlug/discussions/$channelId': typeof AppOOrganizationSlugDiscussionsChannelIdRoute
+  '/_app/o/$organizationSlug/discussions/activite': typeof AppOOrganizationSlugDiscussionsActiviteRoute
   '/_app/o/$organizationSlug/hr/$': typeof AppOOrganizationSlugHrSplatRoute
   '/_app/o/$organizationSlug/planification/board': typeof AppOOrganizationSlugPlanificationBoardRoute
   '/_app/o/$organizationSlug/planification/does': typeof AppOOrganizationSlugPlanificationDoesRoute
@@ -957,6 +967,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/stripe'
     | '/o/$organizationSlug/crm/tresorerie'
     | '/o/$organizationSlug/discussions/$channelId'
+    | '/o/$organizationSlug/discussions/activite'
     | '/o/$organizationSlug/hr/$'
     | '/o/$organizationSlug/planification/board'
     | '/o/$organizationSlug/planification/does'
@@ -1048,6 +1059,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/stripe'
     | '/o/$organizationSlug/crm/tresorerie'
     | '/o/$organizationSlug/discussions/$channelId'
+    | '/o/$organizationSlug/discussions/activite'
     | '/o/$organizationSlug/hr/$'
     | '/o/$organizationSlug/planification/board'
     | '/o/$organizationSlug/planification/does'
@@ -1142,6 +1154,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/crm/stripe'
     | '/_app/o/$organizationSlug/crm/tresorerie'
     | '/_app/o/$organizationSlug/discussions/$channelId'
+    | '/_app/o/$organizationSlug/discussions/activite'
     | '/_app/o/$organizationSlug/hr/$'
     | '/_app/o/$organizationSlug/planification/board'
     | '/_app/o/$organizationSlug/planification/does'
@@ -1474,6 +1487,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/o/$organizationSlug/hr/$'
       preLoaderRoute: typeof AppOOrganizationSlugHrSplatRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/discussions/activite': {
+      id: '/_app/o/$organizationSlug/discussions/activite'
+      path: '/activite'
+      fullPath: '/o/$organizationSlug/discussions/activite'
+      preLoaderRoute: typeof AppOOrganizationSlugDiscussionsActiviteRouteImport
+      parentRoute: typeof AppOOrganizationSlugDiscussionsRoute
     }
     '/_app/o/$organizationSlug/discussions/$channelId': {
       id: '/_app/o/$organizationSlug/discussions/$channelId'
@@ -1872,6 +1892,7 @@ declare module '@tanstack/react-router' {
 
 interface AppOOrganizationSlugDiscussionsRouteChildren {
   AppOOrganizationSlugDiscussionsChannelIdRoute: typeof AppOOrganizationSlugDiscussionsChannelIdRoute
+  AppOOrganizationSlugDiscussionsActiviteRoute: typeof AppOOrganizationSlugDiscussionsActiviteRoute
   AppOOrganizationSlugDiscussionsIndexRoute: typeof AppOOrganizationSlugDiscussionsIndexRoute
 }
 
@@ -1879,6 +1900,8 @@ const AppOOrganizationSlugDiscussionsRouteChildren: AppOOrganizationSlugDiscussi
   {
     AppOOrganizationSlugDiscussionsChannelIdRoute:
       AppOOrganizationSlugDiscussionsChannelIdRoute,
+    AppOOrganizationSlugDiscussionsActiviteRoute:
+      AppOOrganizationSlugDiscussionsActiviteRoute,
     AppOOrganizationSlugDiscussionsIndexRoute:
       AppOOrganizationSlugDiscussionsIndexRoute,
   }

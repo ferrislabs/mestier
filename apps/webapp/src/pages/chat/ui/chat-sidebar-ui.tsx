@@ -1,9 +1,10 @@
 import { Link } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import type { DragEvent, ReactNode } from 'react'
 import {
 	AlertCircle,
 	ChevronRight,
 	Copy,
+	Bell,
 	Fingerprint,
 	Plus,
 	Settings,
@@ -20,18 +21,39 @@ import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
+	ContextMenuRadioGroup,
+	ContextMenuRadioItem,
 	ContextMenuSeparator,
+	ContextMenuSub,
+	ContextMenuSubContent,
+	ContextMenuSubTrigger,
 	ContextMenuTrigger,
 } from '#/components/ui/context-menu'
 import { Skeleton } from '#/components/ui/skeleton'
+import type { NotificationLevel } from '#/hooks/use-chat'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import { channelKindIcon } from '#/pages/chat/lib/channel-kinds'
+import {
+	effectiveNotificationLevel,
+	NOTIFICATION_LEVELS,
+} from '#/pages/chat/lib/notification-levels'
 import type { DirectMessageItem } from '#/pages/chat/lib/direct-messages'
 import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
+import type { DropHint } from '#/pages/chat/lib/reorder-channels'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
 
 const ITEM = 'gap-2 px-2 py-1 text-xs [&_svg]:size-3.5'
+
+/** Dragging a channel to reorder it or to move it to another category. */
+export interface ChannelDnd {
+	draggingId: string | null
+	hint: DropHint | null
+	onDragStart: (channelId: string) => void
+	onDragEnd: () => void
+	onHint: (hint: DropHint) => void
+	onDrop: () => void
+}
 
 export interface ChatSidebarUIProps {
 	organizationSlug: string
@@ -52,7 +74,17 @@ export interface ChatSidebarUIProps {
 	 * management starts here, not only from inside the channel itself. */
 	onOpenChannelAdmin: (channelId: string) => void
 	onDuplicateChannel: (channelId: string) => void
+	/** The levels the person chose per channel; the others have the default. */
+	notificationLevels: ReadonlyMap<string, NotificationLevel>
+	onChangeNotificationLevel: (
+		channelId: string,
+		level: NotificationLevel,
+	) => void
 	onDeleteChannel: (channelId: string) => void
+	/** Set only for someone who may manage channels. */
+	dnd?: ChannelDnd
+	/** Why the last move was refused, shown under the channels. */
+	moveError?: string | null
 }
 
 const headingClassName =
@@ -84,7 +116,11 @@ export function ChatSidebarUI({
 	newDirectMessage,
 	onOpenChannelAdmin,
 	onDuplicateChannel,
+	notificationLevels,
+	onChangeNotificationLevel,
 	onDeleteChannel,
+	dnd,
+	moveError,
 }: ChatSidebarUIProps) {
 	return (
 		<nav
@@ -150,10 +186,38 @@ export function ChatSidebarUI({
 								unreadCounts={unreadCounts}
 								onOpenChannelAdmin={onOpenChannelAdmin}
 								onDuplicateChannel={onDuplicateChannel}
+								notificationLevels={notificationLevels}
+								onChangeNotificationLevel={onChangeNotificationLevel}
 								onDeleteChannel={onDeleteChannel}
 								onRequestNewChannelInCategory={onRequestNewChannelInCategory}
+								dnd={dnd}
 							/>
 						))}
+						{moveError ? (
+							<p role="alert" className="px-2 text-destructive text-xs">
+								Déplacement impossible : {moveError}
+							</p>
+						) : null}
+						{dnd?.draggingId && !groups.some((group) => !group.category) ? (
+							<div
+								onDragOver={(event) => {
+									event.preventDefault()
+									dnd.onHint({ kind: 'category', categoryId: null })
+								}}
+								onDrop={(event) => {
+									event.preventDefault()
+									dnd.onDrop()
+								}}
+								className={cn(
+									'rounded-md border border-nav-border border-dashed px-2 py-1.5 text-nav-muted text-xs',
+									dnd.hint?.kind === 'category' &&
+										dnd.hint.categoryId === null &&
+										'bg-nav-active/60 text-nav-foreground',
+								)}
+							>
+								Sans catégorie
+							</div>
+						) : null}
 					</div>
 				) : null}
 			</section>
@@ -233,8 +297,15 @@ interface CategoryGroupProps {
 	unreadCounts: ReadonlyMap<string, number>
 	onOpenChannelAdmin: (channelId: string) => void
 	onDuplicateChannel: (channelId: string) => void
+	/** The levels the person chose per channel; the others have the default. */
+	notificationLevels: ReadonlyMap<string, NotificationLevel>
+	onChangeNotificationLevel: (
+		channelId: string,
+		level: NotificationLevel,
+	) => void
 	onDeleteChannel: (channelId: string) => void
 	onRequestNewChannelInCategory: (categoryId: string) => void
+	dnd?: ChannelDnd
 }
 
 function CategoryGroup({
@@ -246,8 +317,11 @@ function CategoryGroup({
 	unreadCounts,
 	onOpenChannelAdmin,
 	onDuplicateChannel,
+	notificationLevels,
+	onChangeNotificationLevel,
 	onDeleteChannel,
 	onRequestNewChannelInCategory,
+	dnd,
 }: CategoryGroupProps) {
 	const channelList = (
 		<ul className="flex flex-col gap-0.5">
@@ -256,9 +330,48 @@ function CategoryGroup({
 				return (
 					<ContextMenu key={chan.id}>
 						<ContextMenuTrigger asChild>
-							<li className="group/channel relative">
+							<li
+								className={cn(
+									'group/channel relative',
+									dnd?.draggingId === chan.id && 'opacity-40',
+									dnd?.hint?.kind === 'before' &&
+										dnd.hint.channelId === chan.id &&
+										'shadow-[inset_0_2px_0_0_var(--nav-primary)]',
+									dnd?.hint?.kind === 'after' &&
+										dnd.hint.channelId === chan.id &&
+										'shadow-[inset_0_-2px_0_0_var(--nav-primary)]',
+								)}
+								draggable={dnd ? true : undefined}
+								onDragStart={(event) => {
+									if (!dnd) return
+									event.dataTransfer.effectAllowed = 'move'
+									event.dataTransfer.setData('text/plain', chan.id)
+									dnd.onDragStart(chan.id)
+								}}
+								onDragEnd={dnd?.onDragEnd}
+								onDragOver={(event) => {
+									if (!dnd?.draggingId) return
+									event.preventDefault()
+									event.stopPropagation()
+									const box = event.currentTarget.getBoundingClientRect()
+									dnd.onHint({
+										kind:
+											event.clientY < box.top + box.height / 2
+												? 'before'
+												: 'after',
+										channelId: chan.id,
+									})
+								}}
+								onDrop={(event) => {
+									if (!dnd?.draggingId) return
+									event.preventDefault()
+									event.stopPropagation()
+									dnd.onDrop()
+								}}
+							>
 								<Link
 									to={buildOrgPath(organizationSlug, `/discussions/${chan.id}`)}
+									draggable={dnd ? false : undefined}
 									data-status={
 										chan.id === activeChannelId ? 'active' : undefined
 									}
@@ -309,6 +422,36 @@ function CategoryGroup({
 								<Fingerprint className="size-3.5" />
 								Copier l’identifiant du canal
 							</ContextMenuItem>
+							<ContextMenuSub>
+								<ContextMenuSubTrigger className={ITEM}>
+									<Bell className="size-3.5" />
+									Notifications
+								</ContextMenuSubTrigger>
+								<ContextMenuSubContent className="w-52 min-w-0 p-0.5">
+									<ContextMenuRadioGroup
+										value={effectiveNotificationLevel(
+											notificationLevels,
+											chan.id,
+										)}
+										onValueChange={(level) =>
+											onChangeNotificationLevel(
+												chan.id,
+												level as NotificationLevel,
+											)
+										}
+									>
+										{NOTIFICATION_LEVELS.map((option) => (
+											<ContextMenuRadioItem
+												key={option.value}
+												value={option.value}
+												className={ITEM}
+											>
+												{option.label}
+											</ContextMenuRadioItem>
+										))}
+									</ContextMenuRadioGroup>
+								</ContextMenuSubContent>
+							</ContextMenuSub>
 							<RequirePermission permission="MANAGE_CHANNELS">
 								<ContextMenuSeparator className="my-0.5" />
 								<div>
@@ -330,18 +473,44 @@ function CategoryGroup({
 		</ul>
 	)
 
+	// The whole group takes a drop: the gaps between rows and the space below
+	// the last one put the channel at the end of the category.
+	const categoryId = group.category?.id ?? null
+	const groupDrop = dnd
+		? {
+				onDragOver: (event: DragEvent<HTMLElement>) => {
+					if (!dnd.draggingId) return
+					event.preventDefault()
+					dnd.onHint({ kind: 'category', categoryId })
+				},
+				onDrop: (event: DragEvent<HTMLElement>) => {
+					if (!dnd.draggingId) return
+					event.preventDefault()
+					dnd.onDrop()
+				},
+			}
+		: {}
+
 	if (!group.category) {
-		return channelList
+		return <div {...groupDrop}>{channelList}</div>
 	}
 
 	return (
 		<Collapsible
+			{...groupDrop}
 			open={!collapsed}
 			onOpenChange={(open) => {
 				if (group.category) onToggleCategory(group.category.id, !open)
 			}}
 		>
-			<div className="group/category flex items-center pr-1 pb-1">
+			<div
+				className={cn(
+					'group/category flex items-center rounded-md pr-1 pb-1',
+					dnd?.hint?.kind === 'category' &&
+						dnd.hint.categoryId === group.category.id &&
+						'bg-nav-active/60',
+				)}
+			>
 				<CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-2 font-semibold text-nav-muted text-xs uppercase tracking-wide outline-none hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary">
 					<ChevronRight
 						className={cn(

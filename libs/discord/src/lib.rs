@@ -35,8 +35,8 @@ pub use domain::category::{
 };
 pub use domain::category_access::{CategoryAccess, CategoryAccessRepository};
 pub use domain::channel::{
-    ChannelRepository, ChannelService, CreateChannelCommand, CreateProjectChannelCommand,
-    CreateThreadCommand, UpdateChannelCommand, UpdateThreadCommand,
+    ChannelPlacement, ChannelRepository, ChannelService, CreateChannelCommand,
+    CreateProjectChannelCommand, CreateThreadCommand, UpdateChannelCommand, UpdateThreadCommand,
 };
 pub use domain::direct::{
     DirectChannel, DirectChannelRepository, DirectChannelService, DirectPair,
@@ -48,6 +48,9 @@ pub use domain::message::{
 pub use domain::notification::{
     CreateNotification, MarkNotificationRead, NotificationRepository,
     mention_notification_recipients, notification_should_deliver,
+};
+pub use domain::notification_level::{
+    NotificationLevel, NotificationPreferenceRepository, effective_level,
 };
 pub use domain::overwrite::{
     DeleteChannelOverwrite, OverwriteRepository, UpsertChannelOverwrite,

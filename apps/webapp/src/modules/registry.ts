@@ -21,6 +21,7 @@ import {
 	LayoutTemplate,
 	Library,
 	LifeBuoy,
+	Bell,
 	MessagesSquare,
 	Package,
 	PlugZap,
@@ -46,6 +47,7 @@ import {
 	newWorkflowPath,
 	workflowsPath,
 } from '#/pages/automation/lib/automation-paths'
+import { ActivityBadgeFeature } from '#/pages/chat/feature/activity-badge-feature'
 import { ChatSidebarFeature } from '#/pages/chat/feature/chat-sidebar-feature'
 import { CrmSidebarFeature } from '#/pages/crm-nav/feature/crm-sidebar-feature'
 import { ProjetSidebarFeature } from '#/pages/projet/feature/projet-sidebar-feature'
@@ -285,7 +287,12 @@ export const MODULES: AppModule[] = [
 		basePath: '/discussions',
 		status: 'available',
 		hasOverview: true,
-		primaryAction: { label: 'Nouveau message', to: '/discussions' },
+		primaryAction: {
+			label: 'Activité',
+			to: '/discussions/activite',
+			icon: Bell,
+			badge: ActivityBadgeFeature,
+		},
 		sidebar: ChatSidebarFeature,
 		sections: [
 			{

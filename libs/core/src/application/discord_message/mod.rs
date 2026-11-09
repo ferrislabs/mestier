@@ -2,8 +2,9 @@ use common::CoreError;
 use discord::{
     AddReactionCommand, ChannelId, ChannelRepository, ChannelType, CreateMessageCommand,
     CreateNotification, DomainEvent, EventPublisher, Message, MessageId, MessageService,
-    NotificationKind, NotificationRepository, PresenceRepository, RemoveReactionCommand,
-    UpdateMessageCommand, mention_notification_recipients, notification_should_deliver,
+    NotificationKind, NotificationLevel, NotificationPreferenceRepository, NotificationRepository,
+    PresenceRepository, RemoveReactionCommand, UpdateMessageCommand,
+    mention_notification_recipients, notification_should_deliver,
 };
 use mestier_macros::transactional;
 
@@ -13,13 +14,29 @@ use crate::domain::chat::events::ChatMessagePosted;
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(message, channel, notification, presence, events, emitter)]
+    #[transactional(
+        message,
+        channel,
+        notification,
+        notification_preference,
+        presence,
+        events,
+        emitter
+    )]
     pub async fn create_message(&self, cmd: CreateMessageCommand) -> Result<Message, CoreError> {
         let mut service = MessageService::new(message_repository, &events);
         let message = service.create_message(cmd).await?;
 
         let mut presence_repository = presence_repository;
-        for recipient in mention_notification_recipients(&message) {
+        let recipients = mention_notification_recipients(&message);
+        let mut notification_preference_repository = notification_preference_repository;
+        let levels = notification_preference_repository
+            .list_for_channel(message.channel_id, &recipients)
+            .await?;
+        for recipient in recipients {
+            if levels.get(&recipient) == Some(&NotificationLevel::Nothing) {
+                continue;
+            }
             let notif = notification_repository
                 .create(CreateNotification {
                     organization_id: message.organization_id,

@@ -32,6 +32,7 @@ pub mod member_document;
 pub mod member_profile;
 pub mod message;
 pub mod notification;
+pub mod notification_preference;
 pub mod organization;
 pub mod overwrite;
 pub mod planning;

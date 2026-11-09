@@ -1,10 +1,14 @@
-import { screen } from '@testing-library/react'
+import { createEvent, fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderWithRouter } from '#/test/render-with-router'
 import { wrapWithPermissions } from '#/test/with-permissions'
-import { ChatSidebarUI, type ChatSidebarUIProps } from './chat-sidebar-ui'
+import {
+	type ChannelDnd,
+	ChatSidebarUI,
+	type ChatSidebarUIProps,
+} from './chat-sidebar-ui'
 
 /**
  * The sidebar's create-channel affordances are gated on MANAGE_CHANNELS
@@ -64,6 +68,8 @@ function baseProps(
 		onRequestNewChannelInCategory: vi.fn(),
 		onOpenChannelAdmin: vi.fn(),
 		onDuplicateChannel: vi.fn(),
+		notificationLevels: new Map(),
+		onChangeNotificationLevel: vi.fn(),
 		onDeleteChannel: vi.fn(),
 		...overrides,
 	}
@@ -226,6 +232,34 @@ describe('ChatSidebarUI — context menu', () => {
 		expect(onDuplicateChannel).toHaveBeenCalledWith('ch-1')
 	})
 
+	it('sets the notification level of the channel from the menu', async () => {
+		const onChangeNotificationLevel = vi.fn()
+		const user = await openMenu({ onChangeNotificationLevel })
+
+		await user.click(await screen.findByText('Notifications'))
+		const muted = await screen.findByRole('menuitemradio', {
+			name: 'Aucune notification',
+		})
+		muted.focus()
+		await user.keyboard('{Enter}')
+
+		expect(onChangeNotificationLevel).toHaveBeenCalledWith('ch-1', 'NOTHING')
+	})
+
+	it('shows mentions only as the default level', async () => {
+		const user = await openMenu()
+
+		await user.click(await screen.findByText('Notifications'))
+
+		expect(
+			(
+				await screen.findByRole('menuitemradio', {
+					name: 'Mentions uniquement',
+				})
+			).getAttribute('aria-checked'),
+		).toBe('true')
+	})
+
 	it('deletes the channel only on the second click', async () => {
 		const onDeleteChannel = vi.fn()
 		const user = await openMenu({ onDeleteChannel })
@@ -239,6 +273,105 @@ describe('ChatSidebarUI — context menu', () => {
 		)
 
 		expect(onDeleteChannel).toHaveBeenCalledWith('ch-1')
+	})
+})
+
+describe('ChatSidebarUI — drag and drop', () => {
+	function dnd(overrides: Partial<ChannelDnd> = {}): ChannelDnd {
+		return {
+			draggingId: null,
+			hint: null,
+			onDragStart: vi.fn(),
+			onDragEnd: vi.fn(),
+			onHint: vi.fn(),
+			onDrop: vi.fn(),
+			...overrides,
+		}
+	}
+	const groups = [
+		{
+			category: category('cat-1'),
+			channels: [channel('ch-1', 'cat-1'), channel('ch-2', 'cat-1', 1)],
+		},
+	]
+	// jsdom has no `DragEvent`, so the pointer's height is set by hand.
+	function dragOverAt(element: HTMLElement, clientY: number) {
+		const event = createEvent.dragOver(element)
+		Object.defineProperty(event, 'clientY', { value: clientY })
+		fireEvent(element, event)
+	}
+	const row = (name: string) =>
+		screen
+			.getByRole('link', { name: new RegExp(name) })
+			.closest('li') as HTMLElement
+
+	it('does not make channels draggable without the right to manage them', async () => {
+		await renderSidebar(<ChatSidebarUI {...baseProps({ groups })} />)
+
+		expect(row('ch-1').getAttribute('draggable')).toBeNull()
+	})
+
+	it('starts a drag with the channel id', async () => {
+		const handlers = dnd()
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ groups, dnd: handlers })} />,
+		)
+
+		fireEvent.dragStart(row('ch-1'), {
+			dataTransfer: { setData: vi.fn(), effectAllowed: '' },
+		})
+
+		expect(handlers.onDragStart).toHaveBeenCalledWith('ch-1')
+	})
+
+	it('hints before or after a row depending on the half under the pointer', async () => {
+		const handlers = dnd({ draggingId: 'ch-1' })
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ groups, dnd: handlers })} />,
+		)
+
+		dragOverAt(row('ch-2'), -1)
+		dragOverAt(row('ch-2'), 5)
+
+		expect(handlers.onHint).toHaveBeenNthCalledWith(1, {
+			kind: 'before',
+			channelId: 'ch-2',
+		})
+		expect(handlers.onHint).toHaveBeenNthCalledWith(2, {
+			kind: 'after',
+			channelId: 'ch-2',
+		})
+	})
+
+	it('hints the end of a category when hovering its header, and drops', async () => {
+		const handlers = dnd({ draggingId: 'ch-1' })
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ groups, dnd: handlers })} />,
+		)
+		const header = screen.getByText('cat-1').closest('div') as HTMLElement
+
+		fireEvent.dragOver(header)
+		fireEvent.drop(header)
+
+		expect(handlers.onHint).toHaveBeenCalledWith({
+			kind: 'category',
+			categoryId: 'cat-1',
+		})
+		expect(handlers.onDrop).toHaveBeenCalledTimes(1)
+	})
+
+	it('offers a "Sans catégorie" target while dragging when none exists', async () => {
+		const handlers = dnd({ draggingId: 'ch-1' })
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ groups, dnd: handlers })} />,
+		)
+
+		fireEvent.dragOver(screen.getByText('Sans catégorie'))
+
+		expect(handlers.onHint).toHaveBeenCalledWith({
+			kind: 'category',
+			categoryId: null,
+		})
 	})
 })
 
