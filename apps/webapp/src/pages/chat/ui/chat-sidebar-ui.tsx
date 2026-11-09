@@ -1,10 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import {
-	AlertCircle,
-	ChevronRight,
-	Plus,
-	Settings,
-} from 'lucide-react'
+import { AlertCircle, ChevronRight, Plus, Settings } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import {
 	Collapsible,

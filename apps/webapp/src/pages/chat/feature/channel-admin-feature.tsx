@@ -4,11 +4,13 @@ import {
 	useChannel,
 	useChannelPermissions,
 	useChannelWebhooks,
+	useChatDirectory,
 	useCreateWebhook,
 	useDeleteChannel,
 	useDeleteTargetOverwrite,
 	useDeleteWebhook,
 	useUpdateChannel,
+	useUpdateWebhook,
 	useUpsertEveryoneOverwrite,
 } from '#/hooks/use-chat'
 import type {
@@ -41,6 +43,8 @@ export function ChannelAdminFeature({
 	const webhooks = useChannelWebhooks(channelId)
 	const createWebhook = useCreateWebhook(channelId)
 	const deleteWebhook = useDeleteWebhook(channelId)
+	const updateWebhook = useUpdateWebhook(channelId)
+	const directory = useChatDirectory(organizationId)
 
 	const [nameDraft, setNameDraft] = useState('')
 	const [topicDraft, setTopicDraft] = useState('')
@@ -162,6 +166,15 @@ export function ChannelAdminFeature({
 			isCreatingWebhook={createWebhook.isPending}
 			createdWebhookToken={createdWebhookToken}
 			onDismissCreatedToken={() => setCreatedWebhookToken(null)}
+			creatorName={(userId) =>
+				directory.data?.find((entry) => entry.user_id === userId)?.display_name
+			}
+			onRenameWebhook={(id, name) =>
+				updateWebhook.mutate({
+					path: { webhook_id: id },
+					body: { name },
+				} as never)
+			}
 			onDeleteWebhook={(id) =>
 				deleteWebhook.mutate({ path: { webhook_id: id } } as never)
 			}

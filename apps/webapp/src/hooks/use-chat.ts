@@ -881,6 +881,14 @@ export function useCreateWebhook(channelId: string) {
 	})
 }
 
+export function useUpdateWebhook(channelId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('patch', WEBHOOK_PATH).mutationOptions,
+		onSuccess: invalidateOnSettled(queryClient, channelWebhooksKey(channelId)),
+	})
+}
+
 export function useDeleteWebhook(channelId: string) {
 	const queryClient = useQueryClient()
 	return useMutation({

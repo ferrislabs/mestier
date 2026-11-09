@@ -1,4 +1,4 @@
-import { Copy, Globe, Loader2, Lock, Trash2, X } from 'lucide-react'
+import { Globe, Loader2, Lock, Trash2, X } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
@@ -31,6 +31,7 @@ import {
 import { Textarea } from '#/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import type { Category, Channel, Overwrite, Webhook } from '#/hooks/use-chat'
+import { ChannelWebhooksSectionUI } from '#/pages/chat/ui/channel-webhooks-section-ui'
 import { NEW_ITEM_KINDS } from '#/pages/chat/lib/channel-kinds'
 import {
 	type OverwriteBitName,
@@ -76,6 +77,8 @@ export interface ChannelAdminDialogUIProps {
 	createdWebhookToken: string | null
 	onDismissCreatedToken: () => void
 	onDeleteWebhook: (id: string) => void
+	onRenameWebhook: (id: string, name: string) => void
+	creatorName: (userId: string) => string | undefined
 }
 
 export function ChannelAdminDialogUI({
@@ -110,6 +113,8 @@ export function ChannelAdminDialogUI({
 	createdWebhookToken,
 	onDismissCreatedToken,
 	onDeleteWebhook,
+	onRenameWebhook,
+	creatorName,
 }: ChannelAdminDialogUIProps) {
 	const kind = NEW_ITEM_KINDS.find((k) => k.value === channel?.channel_type)
 	const isPrivate = bitStateOf(everyoneOverwrite, 'VIEW_CHANNEL') === 'deny'
@@ -362,85 +367,20 @@ export function ChannelAdminDialogUI({
 								</TabsContent>
 
 								<TabsContent value="webhooks" className="flex flex-col gap-6">
-									<h2 className="font-semibold text-lg">Intégrations</h2>
-									{createdWebhookToken ? (
-										<div className="flex flex-col gap-2 rounded-md border border-warning bg-warning-soft p-3 text-xs">
-											<p className="font-semibold text-warning">
-												Copiez ce jeton maintenant — il ne sera plus jamais
-												affiché.
-											</p>
-											<div className="flex items-center gap-2">
-												<code className="flex-1 truncate rounded bg-background px-2 py-1">
-													{createdWebhookToken}
-												</code>
-												<button
-													type="button"
-													aria-label="Copier le jeton"
-													onClick={() =>
-														navigator.clipboard?.writeText(createdWebhookToken)
-													}
-												>
-													<Copy className="size-3.5" />
-												</button>
-											</div>
-											<button
-												type="button"
-												className="self-end underline"
-												onClick={onDismissCreatedToken}
-											>
-												J’ai copié le jeton
-											</button>
-										</div>
-									) : null}
-
-									<div className="flex items-end gap-2">
-										<div className="flex flex-1 flex-col gap-1.5">
-											<Label htmlFor="new-webhook-name">Nouveau webhook</Label>
-											<Input
-												id="new-webhook-name"
-												placeholder="Nom du webhook"
-												value={newWebhookName}
-												onChange={(event) =>
-													onChangeNewWebhookName(event.target.value)
-												}
-											/>
-										</div>
-										<Button
-											type="button"
-											onClick={onCreateWebhook}
-											disabled={
-												isCreatingWebhook || newWebhookName.trim().length === 0
-											}
-										>
-											Créer
-										</Button>
-									</div>
-
-									{isLoadingWebhooks ? (
-										<Loader2 className="size-4 animate-spin text-muted-foreground" />
-									) : null}
-									{!isLoadingWebhooks && webhooks.length === 0 ? (
-										<p className="text-xs text-muted-foreground">
-											Aucun webhook pour ce canal.
-										</p>
-									) : null}
-									<ul className="flex flex-col gap-2">
-										{webhooks.map((webhook) => (
-											<li
-												key={webhook.id}
-												className="flex items-center justify-between rounded-md border px-2 py-1.5 text-sm"
-											>
-												<span>{webhook.name}</span>
-												<button
-													type="button"
-													aria-label={`Révoquer ${webhook.name}`}
-													onClick={() => onDeleteWebhook(webhook.id)}
-												>
-													<Trash2 className="size-3.5" />
-												</button>
-											</li>
-										))}
-									</ul>
+									<ChannelWebhooksSectionUI
+										channelName={channel?.name}
+										webhooks={webhooks}
+										isLoading={isLoadingWebhooks}
+										creatorName={creatorName}
+										newWebhookName={newWebhookName}
+										onChangeNewWebhookName={onChangeNewWebhookName}
+										onCreate={onCreateWebhook}
+										isCreating={isCreatingWebhook}
+										createdToken={createdWebhookToken}
+										onDismissCreatedToken={onDismissCreatedToken}
+										onRename={onRenameWebhook}
+										onDelete={onDeleteWebhook}
+									/>
 								</TabsContent>
 							</div>
 							<div className="sticky top-0 shrink-0">

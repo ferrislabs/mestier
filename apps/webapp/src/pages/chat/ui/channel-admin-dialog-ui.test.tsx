@@ -65,6 +65,8 @@ function baseProps(
 		createdWebhookToken: null,
 		onDismissCreatedToken: vi.fn(),
 		onDeleteWebhook: vi.fn(),
+		onRenameWebhook: vi.fn(),
+		creatorName: () => undefined,
 		...overrides,
 	}
 }
@@ -257,6 +259,7 @@ describe('ChannelAdminDialogUI — webhooks', () => {
 		)
 		await switchToTab(user, 'Intégrations')
 
+		await user.click(screen.getByText('CI bot'))
 		await user.click(screen.getByLabelText('Révoquer CI bot'))
 		expect(onDeleteWebhook).toHaveBeenCalledWith('wh-1')
 	})
