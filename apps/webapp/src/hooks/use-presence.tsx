@@ -8,6 +8,7 @@ import {
 	useState,
 } from 'react'
 import type { Schemas } from '#/api/api.client'
+import { useChatDirectory } from '#/hooks/use-chat'
 import { useGatewayConnectionState, useGatewayEvent } from '#/hooks/use-gateway'
 
 const ORG_PRESENCE_PATH =
@@ -32,15 +33,12 @@ function useSetPresenceMutation() {
  * off the gateway, and publishes the caller's own status on the three
  * moments the issue calls out — connect, visibility change, and disconnect.
  *
- * There is no REST snapshot of "who is online right now" (`presence/` only
- * exposes `PUT .../presence`, not a list — `list_presence` exists on the
- * core use case but was never wired to a route). So this map only knows
- * about a member once a `PRESENCE_UPDATE` has crossed the wire since this
- * tab connected; there is no cold-start snapshot. Flagged rather than
- * worked around — adding the route is backend work, out of scope here.
+ * The cold start comes from the chat directory (`GET .../directory`), which
+ * carries each member's stored status; a `PRESENCE_UPDATE` that arrived
+ * first is newer than that snapshot and is never overwritten by it.
  *
- * Ephemeral by design: plain component state, never a query cache entry,
- * gone on reload. A `PRESENCE_UPDATE` naturally repopulates it.
+ * Ephemeral by design: plain component state, never a query cache entry
+ * of its own, gone on reload.
  */
 export function PresenceProvider({
 	organizationId,
@@ -52,6 +50,7 @@ export function PresenceProvider({
 	const [statuses, setStatuses] = useState<Map<string, PresenceStatus>>(
 		new Map(),
 	)
+	const directory = useChatDirectory(organizationId)
 	const connectionState = useGatewayConnectionState()
 	const setPresence = useSetPresenceMutation()
 	const setPresenceRef = useRef(setPresence.mutate)
@@ -65,6 +64,17 @@ export function PresenceProvider({
 			return next
 		})
 	})
+
+	useEffect(() => {
+		if (!directory.data) return
+		setStatuses((previous) => {
+			const next = new Map(previous)
+			for (const entry of directory.data) {
+				if (!next.has(entry.user_id)) next.set(entry.user_id, entry.presence)
+			}
+			return next
+		})
+	}, [directory.data])
 
 	const publish = useCallback(
 		(status: PresenceStatus) => {
@@ -117,6 +127,13 @@ export function usePresenceStatus(
 	if (!context || !userId) return 'UNKNOWN'
 	return context.statuses.get(userId) ?? 'UNKNOWN'
 }
+
+/** Every known status by `user_id`; empty outside a `PresenceProvider`. */
+export function usePresenceStatuses(): ReadonlyMap<string, PresenceStatus> {
+	return useContext(PresenceContext)?.statuses ?? NO_STATUSES
+}
+
+const NO_STATUSES: ReadonlyMap<string, PresenceStatus> = new Map()
 
 /** How many known members are currently `ONLINE`. */
 export function useOnlineCount(): number {

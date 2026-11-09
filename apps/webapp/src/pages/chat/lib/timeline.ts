@@ -10,8 +10,14 @@ const fullDayFormatter = new Intl.DateTimeFormat('fr-FR', {
 	month: 'long',
 })
 
+export interface UnreadMarker {
+	messageId: string
+	count: number
+}
+
 export type TimelineEntry =
 	| { kind: 'day'; key: string; label: string }
+	| { kind: 'unread'; key: string; count: number }
 	| {
 			kind: 'message'
 			key: string
@@ -63,6 +69,7 @@ export function entryKey(entry: DisplayMessage): string {
 
 export function buildTimeline(
 	messages: readonly DisplayMessage[],
+	unread?: UnreadMarker,
 ): TimelineEntry[] {
 	const entries: TimelineEntry[] = []
 	let previous: DisplayMessage | undefined
@@ -80,12 +87,22 @@ export function buildTimeline(
 				label: formatDayLabel(sentAt, new Date()),
 			})
 		}
+		const startsUnread =
+			unread !== undefined && entry.message.id === unread.messageId
+		if (startsUnread) {
+			entries.push({
+				kind: 'unread',
+				key: `unread-${unread.messageId}`,
+				count: unread.count,
+			})
+		}
 		entries.push({
 			kind: 'message',
 			key: entryKey(entry),
 			entry,
 			continuation:
 				!startsNewDay &&
+				!startsUnread &&
 				previous !== undefined &&
 				isContinuation(previous, entry),
 		})

@@ -2,7 +2,7 @@ use std::future::Future;
 
 use common::{CoreError, OrganizationId, UserId};
 
-use crate::{ChannelId, domain::ChannelReadState};
+use crate::{ChannelId, UnreadChannel, domain::ChannelReadState};
 
 use super::commands::MarkChannelReadCommand;
 
@@ -22,6 +22,13 @@ pub trait ReadStateRepository: Send + Sync {
         user_id: UserId,
         organization_id: OrganizationId,
     ) -> impl Future<Output = Result<Vec<ChannelId>, CoreError>> + Send;
+    /// Same predicate as `unread_channels`, with the count and the first
+    /// unread message of each channel.
+    fn unread_summaries(
+        &self,
+        user_id: UserId,
+        organization_id: OrganizationId,
+    ) -> impl Future<Output = Result<Vec<UnreadChannel>, CoreError>> + Send;
 }
 
 #[cfg(test)]

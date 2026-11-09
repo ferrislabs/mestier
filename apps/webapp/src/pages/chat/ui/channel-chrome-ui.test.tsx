@@ -103,27 +103,36 @@ describe('PinnedMessagesPopover', () => {
 })
 
 describe('MemberList', () => {
-	it('counts the members and the people online', () => {
+	it('groups members by presence and marks the current user', () => {
 		render(
 			<MemberList
+				currentUserId="m-1"
 				members={[
-					{ id: 'm-1', name: 'Alix Martin', hue: 10 },
-					{ id: 'm-2', name: 'Jo Durand', hue: 80 },
+					{ id: 'm-1', name: 'Alix Martin', hue: 10, presence: 'ONLINE' },
+					{ id: 'm-2', name: 'Jo Durand', hue: 80, presence: 'OFFLINE' },
+					{ id: 'm-3', name: 'Sam Roux', hue: 120, presence: 'DND' },
 				]}
-				onlineCount={1}
 			/>,
 		)
 
-		expect(screen.getByText('Alix Martin')).toBeDefined()
-		expect(screen.getByText('Jo Durand')).toBeDefined()
-		expect(screen.getByText('· 2')).toBeDefined()
-		expect(screen.getByText('1 en ligne')).toBeDefined()
+		expect(screen.getByText('· 3')).toBeDefined()
+		expect(screen.getByLabelText('En ligne, 1')).toBeDefined()
+		expect(screen.getByLabelText('Absent, 1')).toBeDefined()
+		expect(screen.getByLabelText('Hors ligne, 1')).toBeDefined()
+		expect(screen.getByText('(vous)')).toBeDefined()
 	})
 
-	it('hides the online line when nobody is online', () => {
-		render(<MemberList members={[]} onlineCount={0} />)
+	it('omits a presence group nobody belongs to', () => {
+		render(
+			<MemberList
+				currentUserId={null}
+				members={[
+					{ id: 'm-1', name: 'Alix Martin', hue: 10, presence: 'ONLINE' },
+				]}
+			/>,
+		)
 
-		expect(screen.queryByText(/en ligne/)).toBeNull()
+		expect(screen.queryByLabelText(/Hors ligne/)).toBeNull()
 	})
 })
 

@@ -252,6 +252,7 @@ pub fn webhook_created_response(w: Webhook) -> WebhookCreatedResponse {
 pub struct DirectoryEntryResponse {
     pub user_id: UserId,
     pub display_name: String,
+    pub presence: PresenceStatus,
 }
 
 impl From<mestier_core::application::discord_directory::ChatDirectoryEntry>
@@ -261,6 +262,7 @@ impl From<mestier_core::application::discord_directory::ChatDirectoryEntry>
         Self {
             user_id: entry.user_id,
             display_name: entry.display_name,
+            presence: entry.presence,
         }
     }
 }
@@ -347,12 +349,14 @@ mod tests {
         let entry = mestier_core::application::discord_directory::ChatDirectoryEntry {
             user_id,
             display_name: "Benali Karim".to_owned(),
+            presence: PresenceStatus::Dnd,
         };
 
         let response = DirectoryEntryResponse::from(entry);
 
         assert_eq!(response.user_id, user_id);
         assert_eq!(response.display_name, "Benali Karim");
+        assert_eq!(response.presence, PresenceStatus::Dnd);
     }
 
     #[test]

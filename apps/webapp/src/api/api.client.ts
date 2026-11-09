@@ -1013,8 +1013,9 @@ export namespace Schemas {
     line2?: (string | null) | undefined;
     postal_code: string;
   };
+  export type PresenceStatus = "ONLINE" | "OFFLINE" | "DND";
   export type UserId = string;
-  export type DirectoryEntryResponse = { display_name: string; user_id: UserId };
+  export type DirectoryEntryResponse = { display_name: string; presence: PresenceStatus; user_id: UserId };
   export type DoeFile = { caption?: (string | null) | undefined; key: string };
   export type DoeId = string;
   export type DoeModelResponse = {
@@ -1927,7 +1928,6 @@ export namespace Schemas {
     postal_code: string | null;
     street: string | null;
   }>;
-  export type PresenceStatus = "ONLINE" | "OFFLINE" | "DND";
   export type PresenceResponse = {
     organization_id: OrganizationId;
     status: PresenceStatus;
@@ -2471,7 +2471,12 @@ export namespace Schemas {
     worked_minutes?: (number | null) | undefined;
   };
   export type TransitionTicketRequest = { status: string };
-  export type UnreadResponse = { channel_ids: Array<ChannelId> };
+  export type UnreadChannelResponse = {
+    channel_id: ChannelId;
+    first_unread_message_id: MessageId;
+    unread_count: number;
+  };
+  export type UnreadResponse = { channel_ids: Array<ChannelId>; channels: Array<UnreadChannelResponse> };
   export type UpdateAbsenceRequest = Partial<{
     all_day: boolean | null;
     ends_at: string | null;
@@ -3471,7 +3476,7 @@ export namespace Endpoints {
     };
     responses: {
       200: {
-        data: Array<{ display_name: string; user_id: Schemas.UserId }>;
+        data: Array<{ display_name: string; presence: Schemas.PresenceStatus; user_id: Schemas.UserId }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       401: unknown;

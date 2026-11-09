@@ -1,14 +1,15 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useChannel,
+	useChatDirectory,
 	useCreateThread,
 	useThreads,
 	useThreadsGatewaySync,
+	useUnreadSummaries,
 } from '#/hooks/use-chat'
-import { useOnlineCount } from '#/hooks/use-presence'
-import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
+import { usePresenceStatuses } from '#/hooks/use-presence'
 import { buildOrgPath } from '#/modules/org-path'
 import {
 	toggleMessagePin,
@@ -20,6 +21,7 @@ import { formatTime, userHue } from '#/pages/chat/lib/format'
 import {
 	filterMessagesByQuery,
 	formatDayLabel,
+	type UnreadMarker,
 } from '#/pages/chat/lib/timeline'
 import { ChannelNotFoundUI } from '#/pages/chat/ui/channel-not-found-ui'
 import { ChannelSearchBar } from '#/pages/chat/ui/channel-search-bar'
@@ -49,17 +51,33 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 	const navigate = useNavigate()
 	const channel = useChannel(channelId)
-	const { authors, messageListProps, composerProps, typingCount } =
-		useMessageThreadUi(channelId)
+	const {
+		authors,
+		currentUserId,
+		messageListProps,
+		composerProps,
+		typingCount,
+	} = useMessageThreadUi(channelId)
 	const { openChannelAdmin } = useChannelAdminDialog()
-	const onlineCount = useOnlineCount()
-	const catalog = useReferenceCatalog(activeOrganization.id, {
-		employeeProfiles: false,
-		equipment: false,
-		serviceRates: false,
-		products: false,
-		customUnits: false,
-	})
+	const directory = useChatDirectory(activeOrganization.id)
+	const presenceStatuses = usePresenceStatuses()
+	const unreadSummaries = useUnreadSummaries(activeOrganization.id)
+	const [unreadMarker, setUnreadMarker] = useState<UnreadMarker | undefined>()
+	const [unreadCaptured, setUnreadCaptured] = useState(false)
+
+	// The line is drawn from what was unread when the channel opened: reading
+	// advances the server's marker, and the line must not vanish under the reader.
+	useEffect(() => {
+		if (unreadCaptured || !unreadSummaries.data) return
+		const summary = unreadSummaries.data.get(channelId)
+		if (summary) {
+			setUnreadMarker({
+				messageId: summary.first_unread_message_id,
+				count: summary.unread_count,
+			})
+		}
+		setUnreadCaptured(true)
+	}, [channelId, unreadCaptured, unreadSummaries.data])
 	const flags = useMessageFlags()
 
 	const threads = useThreads(channelId)
@@ -141,10 +159,11 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 				text: message.content,
 			}
 		})
-	const members = (catalog.members.data?.data ?? []).map((member) => ({
-		id: member.id,
-		name: member.display_name,
-		hue: userHue(member.id),
+	const members = (directory.data ?? []).map((entry) => ({
+		id: entry.user_id,
+		name: entry.display_name,
+		hue: userHue(entry.user_id),
+		presence: presenceStatuses.get(entry.user_id) ?? entry.presence,
 	}))
 
 	return (
@@ -178,6 +197,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 				<MessageListUI
 					{...messageListProps}
 					messages={visibleMessages}
+					unread={isFiltering ? undefined : unreadMarker}
 					label={`Messages de ${channelLabel}`}
 					emptyLabel={
 						isFiltering
@@ -207,7 +227,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 				/>
 			) : null}
 			{membersOpen ? (
-				<MemberList members={members} onlineCount={onlineCount} />
+				<MemberList members={members} currentUserId={currentUserId} />
 			) : null}
 		</div>
 	)

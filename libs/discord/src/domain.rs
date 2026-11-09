@@ -121,6 +121,15 @@ pub struct ChannelReadState {
     pub updated_at: DateTime<Utc>,
 }
 
+/// What a reader has not seen in one channel: how many messages, and which is
+/// the first. The first is what lets the UI draw its "new messages" line.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct UnreadChannel {
+    pub channel_id: ChannelId,
+    pub unread_count: i64,
+    pub first_unread_message_id: MessageId,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum OverwriteTarget {
     Everyone,

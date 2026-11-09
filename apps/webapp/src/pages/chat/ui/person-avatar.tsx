@@ -1,23 +1,29 @@
 import type { CSSProperties } from 'react'
 import { Avatar, AvatarFallback } from '#/components/ui/avatar'
+import type { PresenceStatus } from '#/hooks/use-presence'
 import { cn } from '#/lib/utils'
 import { getInitials } from '#/pages/chat/lib/format'
+import { PresenceDot } from '#/pages/chat/ui/presence-dot'
 
 const SIZE_CLASSES = {
-	xs: { avatar: 'size-5', text: 'text-[9px]' },
-	sm: { avatar: 'size-6', text: 'text-[10px]' },
-	md: { avatar: 'size-9', text: 'text-xs' },
+	xs: { avatar: 'size-5', text: 'text-[9px]', dot: 'size-2' },
+	sm: { avatar: 'size-6', text: 'text-[10px]', dot: 'size-2' },
+	md: { avatar: 'size-9', text: 'text-xs', dot: 'size-2.5' },
 }
 
 export function PersonAvatar({
 	name,
 	hue,
 	size = 'md',
+	presence,
+	surface = 'content',
 	className,
 }: {
 	name: string
 	hue: number
 	size?: keyof typeof SIZE_CLASSES
+	presence?: PresenceStatus
+	surface?: 'content' | 'card'
 	className?: string
 }) {
 	const sizeClasses = SIZE_CLASSES[size]
@@ -36,6 +42,13 @@ export function PersonAvatar({
 					{getInitials(name)}
 				</AvatarFallback>
 			</Avatar>
+			{presence ? (
+				<PresenceDot
+					status={presence}
+					surface={surface}
+					className={cn('absolute -right-0.5 -bottom-0.5', sizeClasses.dot)}
+				/>
+			) : null}
 		</span>
 	)
 }
