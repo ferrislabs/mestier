@@ -86,7 +86,6 @@ export function TrainingsFeature() {
 	const canManage = useHasPermission('MANAGE_CURSUS_CATALOG')
 	const [editor, setEditor] = useState<EditorState>(null)
 	const list = useTrainings(activeOrganizationId)
-	const establishments = useEstablishments(activeOrganizationId)
 	const create = useCreateTraining()
 	const update = useUpdateTraining()
 	const archive = useArchiveTraining()
@@ -95,12 +94,6 @@ export function TrainingsFeature() {
 	return (
 		<TrainingsBlock
 			items={list.data?.data ?? []}
-			establishments={(establishments.data?.data ?? []).map(
-				(establishment) => ({
-					id: establishment.id,
-					name: establishment.name,
-				}),
-			)}
 			isLoading={list.isLoading}
 			error={mutationErrorMessage(list.error ?? archive.error)}
 			canManage={canManage}

@@ -2,15 +2,7 @@ import { useForm } from '@tanstack/react-form'
 import { useState } from 'react'
 import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
-import { Field } from '#/components/ui/field'
 import { Label } from '#/components/ui/label'
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
 import {
 	FieldInput,
 	FormError,
@@ -151,17 +143,12 @@ export function EstablishmentForm({
 	)
 }
 
-export interface TrainingFormProps extends CatalogFormProps<TrainingValues> {
-	establishments: { id: string; name: string }[]
-}
-
 export function TrainingForm({
 	initialValues,
-	establishments,
 	isPending,
 	error,
 	onSubmit,
-}: TrainingFormProps) {
+}: CatalogFormProps<TrainingValues>) {
 	const [formError, setFormError] = useState<string | null>(null)
 	const form = useForm({
 		defaultValues: initialValues,
@@ -180,27 +167,6 @@ export function TrainingForm({
 			submitLabel="Enregistrer"
 			onSubmit={() => void form.handleSubmit()}
 		>
-			<form.Field name="establishmentId">
-				{(field) => (
-					<Field label="Établissement" htmlFor="training-establishment">
-						<Select
-							value={field.state.value}
-							onValueChange={field.handleChange}
-						>
-							<SelectTrigger id="training-establishment">
-								<SelectValue placeholder="Choisir…" />
-							</SelectTrigger>
-							<SelectContent>
-								{establishments.map((establishment) => (
-									<SelectItem key={establishment.id} value={establishment.id}>
-										{establishment.name}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</Field>
-				)}
-			</form.Field>
 			<form.Field name="name">
 				{(field) => (
 					<FieldInput

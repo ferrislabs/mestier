@@ -98,7 +98,6 @@ export function EstablishmentsBlock({
 
 export function TrainingsBlock({
 	items,
-	establishments,
 	isLoading,
 	error,
 	canManage,
@@ -109,12 +108,8 @@ export function TrainingsBlock({
 	onCloseEditor,
 	onSave,
 	onArchive,
-}: BlockProps<Schemas.TrainingResponse, TrainingValues> & {
-	establishments: { id: string; name: string }[]
-}) {
+}: BlockProps<Schemas.TrainingResponse, TrainingValues>) {
 	const editing = items.find((item) => item.id === editor?.id)
-	const establishmentName = (id: string) =>
-		establishments.find((establishment) => establishment.id === id)?.name ?? ''
 
 	return (
 		<CatalogBlock
@@ -131,12 +126,7 @@ export function TrainingsBlock({
 				<CatalogRow
 					key={item.id}
 					title={item.name}
-					subtitle={[
-						establishmentName(item.establishment_id),
-						item.rncp_code,
-						item.level,
-						item.degree_type,
-					]
+					subtitle={[item.rncp_code, item.level, item.degree_type]
 						.filter(Boolean)
 						.join(' · ')}
 					archived={Boolean(item.archived_at)}
@@ -149,14 +139,13 @@ export function TrainingsBlock({
 				<CatalogDialog
 					open
 					title={editing ? 'Modifier la formation' : 'Nouvelle formation'}
-					description="Formation rattachée à un établissement."
+					description="Intitulé et référentiel RNCP de la formation."
 					onOpenChange={(open) => {
 						if (!open) onCloseEditor()
 					}}
 				>
 					<TrainingForm
 						initialValues={editing ? toTrainingValues(editing) : EMPTY_TRAINING}
-						establishments={establishments}
 						isPending={isSaving}
 						error={saveError}
 						onSubmit={(values) => onSave(values, editor.id)}

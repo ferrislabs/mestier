@@ -50,7 +50,7 @@ export function toEstablishmentRequest(
 }
 
 export interface TrainingValues {
-	establishmentId: string
+	establishmentId: string | null
 	name: string
 	rncpCode: string
 	rncpLabel: string
@@ -59,7 +59,7 @@ export interface TrainingValues {
 }
 
 export const EMPTY_TRAINING: TrainingValues = {
-	establishmentId: '',
+	establishmentId: null,
 	name: '',
 	rncpCode: '',
 	rncpLabel: '',
@@ -71,7 +71,7 @@ export function toTrainingValues(
 	training: Schemas.TrainingResponse,
 ): TrainingValues {
 	return {
-		establishmentId: training.establishment_id,
+		establishmentId: training.establishment_id ?? null,
 		name: training.name,
 		rncpCode: training.rncp_code ?? '',
 		rncpLabel: training.rncp_label ?? '',
@@ -81,7 +81,6 @@ export function toTrainingValues(
 }
 
 export function validateTraining(values: TrainingValues): string | null {
-	if (values.establishmentId === '') return 'Choisissez un établissement.'
 	if (values.name.trim() === '')
 		return 'Le nom de la formation est obligatoire.'
 	return null
@@ -91,7 +90,9 @@ export function toTrainingRequest(
 	values: TrainingValues,
 ): Schemas.CreateTrainingRequest {
 	return {
-		establishment_id: values.establishmentId,
+		...(values.establishmentId === null
+			? {}
+			: { establishment_id: values.establishmentId }),
 		name: values.name.trim(),
 		rncp_code: emptyToNull(values.rncpCode),
 		rncp_label: emptyToNull(values.rncpLabel),

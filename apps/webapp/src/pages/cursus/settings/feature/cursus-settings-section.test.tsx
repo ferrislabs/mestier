@@ -69,6 +69,32 @@ describe('CursusSettingsSection', () => {
 		})
 	})
 
+	it('creates a training without an establishment field or id', async () => {
+		const user = userEvent.setup()
+		api.mockMutation('post', TRAININGS, () => ({ data: {} }))
+		renderSection(['VIEW_CURSUS', 'MANAGE_CURSUS_CATALOG'])
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle formation' }),
+		)
+		expect(screen.queryByText('Établissement')).toBeNull()
+		await user.click(screen.getByLabelText('Nom'))
+		await user.paste('CAP Menuiserie')
+		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() => expect(callsTo(api, 'post', TRAININGS)).toHaveLength(1))
+		expect(callsTo(api, 'post', TRAININGS)[0]?.params).toEqual({
+			path: { organization_id: 'org-1' },
+			body: {
+				name: 'CAP Menuiserie',
+				rncp_code: null,
+				rncp_label: null,
+				level: null,
+				degree_type: null,
+			},
+		})
+	})
+
 	it('creates a closure reason', async () => {
 		const user = userEvent.setup()
 		api.mockMutation('post', CLOSURE_REASONS, () => ({ data: {} }))
