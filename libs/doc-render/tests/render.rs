@@ -8,6 +8,7 @@ use mestier_core::{
     BundledFile, DocumentStyle, DoeDocument, DoeFile, DoeFont, DoeLabel, DoeParty, DoeRenderError,
     DoeRenderer, DoeStyle, DoeSupply, DoeTemplate, FileBundle, HexColor, LogoPosition, LogoSize,
     NumberedContent, NumberedSection, NumberedSupply, PartyRole, PhotosPerPage, SupplierSnapshot,
+    SupplyPhotoColumns,
 };
 use uuid::Uuid;
 
@@ -110,6 +111,7 @@ fn supply(
         maker: Some("Pépinières Lenoir".to_owned()),
         specs: Some("Hauteur 3 m\nCirconférence 16/18\nÉlevé en conteneur".to_owned()),
         photos,
+        photo_columns: Default::default(),
         datasheet_keys: datasheets,
     }
 }
@@ -552,4 +554,26 @@ fn layout_manual_look() {
     ]"##;
     let (document, bundle) = decorated(decorations);
     std::fs::write(path, TypstDoeRenderer.render(&document, &bundle).unwrap()).unwrap();
+}
+
+fn pages_with_supply_photos(columns: SupplyPhotoColumns) -> usize {
+    let (mut document, bundle) = fixture();
+    if let NumberedContent::Supplies { supplies, .. } = &mut document.sections[0].content {
+        supplies[0].supply.photos = (0..6)
+            .map(|n| caption(&format!("ph{}", n % 5), &format!("Page {n}")))
+            .collect();
+        supplies[0].supply.photo_columns = columns;
+    }
+    let bytes = TypstDoeRenderer.render(&document, &bundle).unwrap();
+    text_of(&bytes).0
+}
+
+#[test]
+fn fewer_columns_print_bigger_supply_photos_on_more_pages() {
+    let three = pages_with_supply_photos(SupplyPhotoColumns::Three);
+    let two = pages_with_supply_photos(SupplyPhotoColumns::Two);
+    let one = pages_with_supply_photos(SupplyPhotoColumns::One);
+
+    assert!(three < two, "{three} pages in 3 columns, {two} in 2");
+    assert!(two < one, "{two} pages in 2 columns, {one} in 1");
 }

@@ -513,6 +513,7 @@ export namespace Schemas {
   export type CreateDoeModelFromStarterRequest = { starter: StarterModel };
   export type MakerLabel = "manufacturer" | "nursery";
   export type PhotosPerPage = "one" | "two" | "four";
+  export type SupplyPhotoColumns = "one" | "two" | "three";
   export type DoeModelSectionKind =
     | { kind: "supplies"; maker_label: MakerLabel }
     | { kind: "photos"; per_page: PhotosPerPage }
@@ -1089,6 +1090,7 @@ export namespace Schemas {
     dpgf_ref?: (string | null) | undefined;
     id: string;
     maker?: (string | null) | undefined;
+    photo_columns?: SupplyPhotoColumns | undefined;
     photos: Array<DoeFile>;
     source_product_id?: (null | ProductId) | undefined;
     specs?: (string | null) | undefined;

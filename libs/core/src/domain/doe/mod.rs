@@ -129,6 +129,17 @@ impl PhotosPerPage {
     }
 }
 
+/// How many photos of a supply sheet sit side by side. Fewer columns means
+/// bigger photos: a scanned A4 datasheet needs two or one to be readable.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SupplyPhotoColumns {
+    One,
+    Two,
+    #[default]
+    Three,
+}
+
 /// What the "made by" row of a supply sheet is called. A plant comes from a
 /// nursery, a bench from a manufacturer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -211,6 +222,8 @@ pub struct DoeSupply {
     pub maker: Option<String>,
     pub specs: Option<String>,
     pub photos: Vec<DoeFile>,
+    #[serde(default)]
+    pub photo_columns: SupplyPhotoColumns,
     /// The supplier's own documents, inserted page by page after the sheet.
     pub datasheet_keys: Vec<String>,
 }

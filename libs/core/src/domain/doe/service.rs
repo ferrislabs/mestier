@@ -101,6 +101,7 @@ fn clean_supply(supply: DoeSupply) -> Result<DoeSupply, CoreError> {
         maker: blank_to_none(supply.maker),
         specs: blank_to_none(supply.specs),
         photos: supply.photos.into_iter().map(clean_file).collect(),
+        photo_columns: supply.photo_columns,
         datasheet_keys: supply.datasheet_keys,
     })
 }
@@ -440,6 +441,7 @@ where
                 .into_iter()
                 .map(|key| DoeFile { key, caption: None })
                 .collect(),
+            photo_columns: Default::default(),
             datasheet_keys: product.datasheet_keys,
         })
     }
@@ -704,6 +706,7 @@ mod tests {
             maker: None,
             specs: None,
             photos: Vec::new(),
+            photo_columns: Default::default(),
             datasheet_keys: Vec::new(),
         }
     }
@@ -1622,6 +1625,7 @@ mod placement_tests {
                     maker: None,
                     specs: None,
                     photos: Vec::new(),
+                    photo_columns: Default::default(),
                     datasheet_keys: Vec::new(),
                 }],
             },

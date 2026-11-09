@@ -118,6 +118,7 @@ impl DoeDocument {
             maker: Some("Pépinières d'exemple".to_owned()),
             specs: Some(specs.to_owned()),
             photos: Vec::new(),
+            photo_columns: Default::default(),
             datasheet_keys: Vec::new(),
         };
         let section = |title: &str, content: DoeSectionContent| DoeSection {
@@ -239,6 +240,7 @@ mod tests {
             maker: None,
             specs: None,
             photos: Vec::new(),
+            photo_columns: Default::default(),
             datasheet_keys: Vec::new(),
         }
     }

@@ -919,6 +919,21 @@ async fn updating_a_supply_changes_only_the_given_fields() {
 }
 
 #[tokio::test]
+async fn a_supply_can_print_its_photos_one_per_row() {
+    let (mcp, fake) = start().await;
+    let result = rich_call(
+        &mcp,
+        "update_doe_supply",
+        json!({"supply_id": SUPPLY, "photo_columns": "one"}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let supply = &last_put(&fake)["sections"][0]["content"]["supplies"][0];
+    assert_eq!(supply["photo_columns"], "one");
+    assert_eq!(supply["designation"], "Banc");
+}
+
+#[tokio::test]
 async fn an_empty_supplier_name_removes_the_supplier() {
     let (mcp, fake) = start().await;
     let result = rich_call(

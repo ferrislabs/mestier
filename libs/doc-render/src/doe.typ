@@ -233,10 +233,12 @@
       )
       if supply.photos.len() > 0 {
         v(12pt)
+        let count = (one: 1, two: 2, three: 3).at(supply.photo_columns, default: 3)
+        let height = (one: 15cm, two: 9cm, three: 4.6cm).at(supply.photo_columns, default: 4.6cm)
         grid(
-          columns: (1fr, 1fr, 1fr),
+          columns: range(count).map(_ => 1fr),
           gutter: 10pt,
-          ..supply.photos.map(photo => captioned(photo, 4.6cm)),
+          ..supply.photos.map(photo => captioned(photo, height)),
         )
       }
       for key in supply.datasheet_keys { full_pages(key) }

@@ -9,6 +9,7 @@ export type DoeParty = Schemas.DoeParty
 export type PartyRole = Schemas.PartyRole
 export type MakerLabel = Schemas.MakerLabel
 export type PhotosPerPage = Schemas.PhotosPerPage
+export type SupplyPhotoColumns = Schemas.SupplyPhotoColumns
 export type SupplierSnapshot = Schemas.SupplierSnapshot
 export type UpdateDoeRequest = Schemas.UpdateDoeRequest
 

@@ -301,6 +301,7 @@ mod tests {
                                 key: key.to_owned(),
                                 caption: None,
                             }],
+                            photo_columns: Default::default(),
                             datasheet_keys: Vec::new(),
                         },
                     }],
