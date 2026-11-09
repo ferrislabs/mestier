@@ -225,3 +225,13 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 Amended: 2026-11-09 `POST /participants` crée la fiche apprenti ou tuteur dans la même transaction, pour ne jamais laisser un participant sans rôle.
 Amended: 2026-11-09 les fichiers de contrat suivent le motif de `member_document` (envoi par `POST /files`, puis rattachement par clé) au lieu d'un multipart.
 Amended: 2026-11-09 sur `/me`, un tuteur ne voit que ses propres contrats d'un trinôme, pour ne pas exposer ceux d'une autre entreprise.
+
+## Amendement 2026-11-09 — fiche entreprise et contrat complets (PR 6)
+
+- Entreprise d'accueil : ajoute `group_name`, `capital` (texte), `phone`, `email`, `website`, `group_employee_count`, `activity_domains` (texte), `missions` (texte riche, Markdown). L'adresse unique devient N adresses `cursus.host_company_address` (`label?`, `line1`, `line2?`, `postal_code?`, `city?`, `is_main`), au plus une principale [test : index unique partiel], envoyées en remplacement complet avec l'entreprise.
+- Contrat : ajoute `comment` (texte riche, Markdown). La durée en mois est calculée à partir des dates, jamais saisie ni stockée. Le CERFA visé est retiré (`cerfa_file_key` supprimé) ; seule la fiche mission reste.
+- Tuteurs : N tuteurs par contrat (`cursus.contract_tutor` clé `(contract_id, company_tutor_id)`, `is_main`), exactement un principal dès qu'il y a un tuteur [test]. `PUT /contracts/{id}/tutors` reçoit `{tutors: [{company_tutor_id, is_main}]}`. `TriadRole` devient `Apprentice | MainTutor | Tutor`.
+- Rupture : inchangée (motif choisi dans la liste + note).
+- Hors périmètre : gestionnaire entreprise.
+- Texte riche : éditeur Tiptap, contenu stocké en Markdown (export Typst plus simple pour le livret).
+- Formations et établissements : gérés dans le module (`/cursus/formations`, `/cursus/etablissements`), plus dans Paramètres, qui ne garde que les motifs de clôture. Une formation n'a plus d'établissement obligatoire (`establishment_id` facultatif).

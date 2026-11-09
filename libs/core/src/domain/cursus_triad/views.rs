@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-use crate::{CompanyTutorId, Contract, ParticipantId, Promotion, Triad, TriadLink, TutorRank};
+use crate::{CompanyTutorId, Contract, ParticipantId, Promotion, Triad, TriadLink};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TriadSummary {
@@ -17,7 +17,7 @@ pub struct ContractTutorView {
     pub company_tutor_id: CompanyTutorId,
     pub participant_id: ParticipantId,
     pub name: String,
-    pub rank: TutorRank,
+    pub is_main: bool,
     pub archived_at: Option<DateTime<Utc>>,
 }
 

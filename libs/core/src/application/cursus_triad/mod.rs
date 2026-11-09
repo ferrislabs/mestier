@@ -367,31 +367,17 @@ impl MestierUseCase {
 
         let mut participants =
             CursusParticipantService::new(cursus_participant_repository, emitter);
-        let main = match command.main {
-            Some(id) => Some(
-                participants
-                    .get_company_tutor(command.organization_id, id)
-                    .await?,
-            ),
-            None => None,
-        };
-        let secondary = match command.secondary {
-            Some(id) => Some(
-                participants
-                    .get_company_tutor(command.organization_id, id)
-                    .await?,
-            ),
-            None => None,
-        };
+        let mut tutors = Vec::with_capacity(command.tutors.len());
+        for input in &command.tutors {
+            let tutor = participants
+                .get_company_tutor(command.organization_id, input.company_tutor_id)
+                .await?;
+            tutors.push((tutor, input.is_main));
+        }
 
         let mut service = CursusTriadService::new(cursus_triad_repository, emitter);
         service
-            .set_tutors(
-                command.organization_id,
-                command.contract_id,
-                main.as_ref(),
-                secondary.as_ref(),
-            )
+            .set_tutors(command.organization_id, command.contract_id, &tutors)
             .await?;
 
         service

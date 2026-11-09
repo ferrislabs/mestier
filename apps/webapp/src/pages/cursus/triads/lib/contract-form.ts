@@ -4,6 +4,7 @@ export interface ContractFormValues {
 	hostCompanyId: string
 	kind: Schemas.ContractKind
 	number: string
+	comment: string
 	startDate: string
 	endDate: string
 }
@@ -18,6 +19,7 @@ export const EMPTY_CONTRACT_FORM: ContractFormValues = {
 	hostCompanyId: '',
 	kind: 'APPRENTICESHIP',
 	number: '',
+	comment: '',
 	startDate: '',
 	endDate: '',
 }
@@ -29,6 +31,7 @@ export function contractToForm(
 		hostCompanyId: contract.host_company_id,
 		kind: contract.kind,
 		number: contract.number ?? '',
+		comment: contract.comment ?? '',
 		startDate: contract.start_date,
 		endDate: contract.end_date,
 	}
@@ -55,6 +58,7 @@ export function toContractRequest(
 		host_company_id: values.hostCompanyId,
 		kind: values.kind,
 		number: number === '' ? null : number,
+		comment: values.comment.trim() === '' ? null : values.comment,
 		start_date: values.startDate,
 		end_date: values.endDate,
 	}

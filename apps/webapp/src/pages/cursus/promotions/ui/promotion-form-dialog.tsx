@@ -27,6 +27,7 @@ interface PromotionFormDialogProps {
 	error: string | null
 	onOpenChange: (open: boolean) => void
 	onSubmit: (values: PromotionFormValues) => void
+	onManageTrainings?: () => void
 }
 
 export function PromotionFormDialog({
@@ -57,6 +58,7 @@ function PromotionFormBody({
 	error,
 	onCancel,
 	onSubmit,
+	onManageTrainings,
 }: PromotionFormBodyProps) {
 	const [values, setValues] = useState(initial)
 	const [revealed, setRevealed] = useState(false)
@@ -95,6 +97,20 @@ function PromotionFormBody({
 					placeholder="Choisir une formation"
 					onChange={(next) => patch({ trainingId: next ?? '' })}
 				/>
+				{onManageTrainings ? (
+					<p className="text-muted-foreground text-xs">
+						{trainings.length === 0
+							? 'Aucune formation pour l’instant. '
+							: 'Une formation manque ? '}
+						<button
+							type="button"
+							className="text-foreground underline underline-offset-2"
+							onClick={onManageTrainings}
+						>
+							Gérer les formations
+						</button>
+					</p>
+				) : null}
 			</FormField>
 			<FormField
 				id="promotion-label"

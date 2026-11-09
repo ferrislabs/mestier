@@ -22,10 +22,15 @@ const TRIAD: MyTriadDetail = {
 			kind: 'PROFESSIONALIZATION',
 			start_date: '2026-09-01',
 			end_date: '2027-08-31',
+			duration_months: 12,
+			comment: 'Port des **EPI**',
 			closed_at: '2027-02-01',
 			closure_reason_label: 'Rupture',
 			closure_note: 'Accord des parties',
-			tutors: [{ name: 'Jo Durand', rank: 'main' }],
+			tutors: [
+				{ name: 'Jo Durand', is_main: true },
+				{ name: 'Mia Roche', is_main: false },
+			],
 		},
 	],
 }
@@ -39,6 +44,10 @@ describe('MyTriadView', () => {
 		expect(screen.getByText('Atelier Bois')).toBeDefined()
 		expect(screen.getByText('Professionnalisation')).toBeDefined()
 		expect(screen.getByText('Jo Durand')).toBeDefined()
+		expect(screen.getByText('Mia Roche')).toBeDefined()
+		expect(screen.getByText('Principal')).toBeDefined()
+		expect(screen.getByText('12 mois')).toBeDefined()
+		expect(screen.getByText('EPI')).toBeDefined()
 		expect(screen.getByText('Accord des parties')).toBeDefined()
 		expect(screen.getByText(/Rupture/)).toBeDefined()
 	})

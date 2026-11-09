@@ -198,7 +198,7 @@ async fn spec_cur_1_a_manager_builds_the_catalog_chain_and_lists_it() {
         .create_training(CreateTrainingCommand {
             actor: tenant.manager.subject(),
             organization_id: tenant.organization_id,
-            establishment_id: establishment.id,
+            establishment_id: Some(establishment.id),
             name: "BTS Aménagements paysagers".to_owned(),
             rncp_code: Some("RNCP35214".to_owned()),
             rncp_label: None,
@@ -341,7 +341,7 @@ async fn spec_cur_12_one_organization_never_sees_or_touches_another_ones_catalog
         .create_training(CreateTrainingCommand {
             actor: world.second.manager.subject(),
             organization_id: world.second.organization_id,
-            establishment_id: establishment.id,
+            establishment_id: Some(establishment.id),
             name: "BTS".to_owned(),
             rncp_code: None,
             rncp_label: None,
@@ -449,7 +449,7 @@ async fn the_database_refuses_a_promotion_ending_before_it_starts_and_a_cross_or
         .create_training(CreateTrainingCommand {
             actor: world.first.manager.subject(),
             organization_id: world.first.organization_id,
-            establishment_id: establishment.id,
+            establishment_id: Some(establishment.id),
             name: "BTS".to_owned(),
             rncp_code: None,
             rncp_label: None,
@@ -470,4 +470,34 @@ async fn the_database_refuses_a_promotion_ending_before_it_starts_and_a_cross_or
     assert!(backwards.is_err());
 
     world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_training_is_created_without_an_establishment() {
+    let world = World::new().await;
+    let tenant = &world.first;
+
+    let training = world
+        .usecase
+        .create_training(CreateTrainingCommand {
+            actor: tenant.manager.subject(),
+            organization_id: tenant.organization_id,
+            establishment_id: None,
+            name: "CAP Menuiserie".to_owned(),
+            rncp_code: None,
+            rncp_label: None,
+            level: None,
+            degree_type: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(training.establishment_id, None);
+
+    let found = world
+        .usecase
+        .get_training(tenant.organization_id, training.id)
+        .await
+        .unwrap();
+    assert_eq!(found, training);
 }

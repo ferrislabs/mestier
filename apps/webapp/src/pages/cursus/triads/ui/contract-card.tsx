@@ -1,5 +1,6 @@
 import { ExternalLink, Pencil, Users, XCircle } from 'lucide-react'
 import { FileUploadButton } from '#/components/file-upload-button'
+import { RichTextView } from '#/components/rich-text'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import {
@@ -14,16 +15,13 @@ import type {
 import { isClosed } from '#/pages/cursus/triads/lib/triad-form'
 
 const FILE_LABELS: Record<ContractFileKind, string> = {
-	cerfa: 'CERFA',
 	mission_sheet: 'Fiche mission',
 }
 
-const FILE_KINDS: ContractFileKind[] = ['cerfa', 'mission_sheet']
+const FILE_KINDS: ContractFileKind[] = ['mission_sheet']
 
 function hasFile(contract: Contract, kind: ContractFileKind): boolean {
-	return kind === 'cerfa'
-		? contract.has_cerfa_file
-		: contract.has_mission_sheet_file
+	return kind === 'mission_sheet' && contract.has_mission_sheet_file
 }
 
 interface ContractCardProps {
@@ -49,8 +47,6 @@ export function ContractCard({
 }: ContractCardProps) {
 	const closed = isClosed(contract)
 	const editable = canManage && !closed
-	const main = contract.tutors.find((tutor) => tutor.rank === 'main')
-	const secondary = contract.tutors.find((tutor) => tutor.rank === 'secondary')
 
 	return (
 		<article className="grid gap-3 rounded-lg border bg-card p-4">
@@ -70,14 +66,37 @@ export function ContractCard({
 
 			<dl className="grid gap-1 text-[13px] sm:grid-cols-2">
 				<div>
-					<dt className="text-muted-foreground">Tuteur principal</dt>
-					<dd>{main?.name ?? '—'}</dd>
+					<dt className="text-muted-foreground">Durée</dt>
+					<dd>{contract.duration_months} mois</dd>
 				</div>
 				<div>
-					<dt className="text-muted-foreground">Tuteur secondaire</dt>
-					<dd>{secondary?.name ?? '—'}</dd>
+					<dt className="text-muted-foreground">Tuteurs entreprise</dt>
+					<dd>
+						{contract.tutors.length === 0 ? (
+							'—'
+						) : (
+							<ul className="grid gap-1">
+								{contract.tutors.map((tutor) => (
+									<li
+										key={tutor.company_tutor_id}
+										className="flex items-center gap-2"
+									>
+										{tutor.name}
+										{tutor.is_main ? <Badge>Principal</Badge> : null}
+									</li>
+								))}
+							</ul>
+						)}
+					</dd>
 				</div>
 			</dl>
+
+			{contract.comment ? (
+				<div className="grid gap-1 text-[13px]">
+					<p className="text-muted-foreground">Commentaire</p>
+					<RichTextView markdown={contract.comment} />
+				</div>
+			) : null}
 
 			{closed ? (
 				<div className="rounded-md bg-muted px-3 py-2 text-[13px]">

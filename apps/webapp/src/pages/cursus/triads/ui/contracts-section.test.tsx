@@ -15,14 +15,21 @@ function contract(overrides: Partial<Contract> = {}): Contract {
 		number: 'C-42',
 		start_date: '2026-09-01',
 		end_date: '2028-08-31',
-		has_cerfa_file: true,
-		has_mission_sheet_file: false,
+		duration_months: 24,
+		comment: 'Visite **annuelle**',
+		has_mission_sheet_file: true,
 		tutors: [
 			{
 				company_tutor_id: 'tutor-1',
 				participant_id: 'p-1',
 				name: 'Jo Durand',
-				rank: 'main',
+				is_main: true,
+			},
+			{
+				company_tutor_id: 'tutor-2',
+				participant_id: 'p-2',
+				name: 'Léa Martin',
+				is_main: false,
 			},
 		],
 		created_at: '2026-01-01T00:00:00Z',
@@ -56,6 +63,10 @@ describe('ContractsSection', () => {
 		expect(screen.getByText(/n° C-42/)).toBeDefined()
 		expect(screen.getByText(/01\/09\/2026 → 31\/08\/2028/)).toBeDefined()
 		expect(screen.getByText('Jo Durand')).toBeDefined()
+		expect(screen.getByText('Léa Martin')).toBeDefined()
+		expect(screen.getAllByText('Principal')).toHaveLength(1)
+		expect(screen.getByText('24 mois')).toBeDefined()
+		expect(screen.getByText('annuelle')).toBeDefined()
 	})
 
 	it('offers edit, tutors, close and add on an open contract with the bit', async () => {
@@ -81,9 +92,14 @@ describe('ContractsSection', () => {
 		const p = props([contract()], false)
 		render(<ContractsSection {...p} />)
 
-		await user.click(screen.getByRole('button', { name: 'Ouvrir CERFA' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Ouvrir Fiche mission' }),
+		)
 
-		expect(p.onOpenFile).toHaveBeenCalledWith(expect.anything(), 'cerfa')
+		expect(p.onOpenFile).toHaveBeenCalledWith(
+			expect.anything(),
+			'mission_sheet',
+		)
 	})
 
 	it('hides every write button without the triads bit', () => {

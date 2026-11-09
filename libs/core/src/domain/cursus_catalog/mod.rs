@@ -55,7 +55,7 @@ pub struct Establishment {
 pub struct Training {
     pub id: TrainingId,
     pub organization_id: OrganizationId,
-    pub establishment_id: EstablishmentId,
+    pub establishment_id: Option<EstablishmentId>,
     pub name: String,
     pub rncp_code: Option<String>,
     pub rncp_label: Option<String>,

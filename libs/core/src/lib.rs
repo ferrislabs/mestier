@@ -259,7 +259,7 @@ pub use domain::cursus_triad::{
 pub use domain::{
     Closure, Contract, ContractFileKind, ContractId, ContractTutor, ContractTutorView,
     ContractView, MyTriad, MyTriadDetail, ParticipantScope, Triad, TriadAccess, TriadDetail,
-    TriadId, TriadLink, TriadRole, TriadSummary, TutorRank, TutorTriadLink, merge_links,
+    TriadId, TriadLink, TriadRole, TriadSummary, TutorTriadLink, merge_links,
 };
 
 pub use domain::{
@@ -297,12 +297,12 @@ pub use domain::{
     DocumentName, DraftInvoice, ElectronicInvoicingFacts, Employee, EmployeeCostBasis,
     EmployeeCostBasisId, EmployeeId, EmployeeRhythm, EmployeeRhythmId, Equipment, EquipmentId,
     Establishment, EstablishmentId, FileKey, FileObject, GeneratedInvoiceDocument, HostCompany,
-    HostCompanyId, Hue, Invitation, InvitationId, Invoice, InvoiceCollection, InvoiceDerived,
-    InvoiceDisplayState, InvoiceError, InvoiceEvent, InvoiceEventId, InvoiceEventKind,
-    InvoiceField, InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId, InvoiceNumberSeries,
-    InvoiceOutcome, InvoicePayment, InvoicePaymentId, InvoiceSettlement, InvoiceStatus,
-    InvoiceVatBreakdownLine, IssuerBilling, IssuerSnapshot, LatePenalty, LeadSource, LegalIdentity,
-    LostReason, LunchBreak, LunchInput, Member, MemberContract, MemberContractError,
+    HostCompanyAddress, HostCompanyId, Hue, Invitation, InvitationId, Invoice, InvoiceCollection,
+    InvoiceDerived, InvoiceDisplayState, InvoiceError, InvoiceEvent, InvoiceEventId,
+    InvoiceEventKind, InvoiceField, InvoiceId, InvoiceKind, InvoiceLine, InvoiceLineId,
+    InvoiceNumberSeries, InvoiceOutcome, InvoicePayment, InvoicePaymentId, InvoiceSettlement,
+    InvoiceStatus, InvoiceVatBreakdownLine, IssuerBilling, IssuerSnapshot, LatePenalty, LeadSource,
+    LegalIdentity, LostReason, LunchBreak, LunchInput, Member, MemberContract, MemberContractError,
     MemberContractId, MemberContractInput, MemberContractOutcome, MemberContractService,
     MemberDocument, MemberDocumentError, MemberDocumentId, MemberDocumentOutcome,
     MemberDocumentService, MemberId, MemberProfile, MemberProfileError, MemberProfileField,
@@ -355,9 +355,9 @@ pub use domain::{
         UpdateParticipantCommand, UpsertApprenticeCommand,
     },
     cursus_triad::commands::{
-        CloseContractCommand, CloseTriadCommand, CreateContractCommand, CreateTriadCommand,
-        SetContractFileCommand, SetContractTutorsCommand, UpdateContractCommand,
-        UpdateTriadCommand,
+        CloseContractCommand, CloseTriadCommand, ContractTutorInput, CreateContractCommand,
+        CreateTriadCommand, SetContractFileCommand, SetContractTutorsCommand,
+        UpdateContractCommand, UpdateTriadCommand,
     },
     custom_unit::commands::CreateCustomUnitCommand,
     customer::commands::{CreateCustomerCommand, UpdateCustomerCommand},

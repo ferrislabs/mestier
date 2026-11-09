@@ -1,10 +1,6 @@
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
-import {
-	ClosureReasonsFeature,
-	EstablishmentsFeature,
-	TrainingsFeature,
-} from '#/pages/cursus/settings/feature/cursus-catalog-features'
+import { ClosureReasonsFeature } from '#/pages/cursus/catalog/feature/cursus-catalog-features'
 
 export function CursusSettingsSection() {
 	const { activeOrganization } = useActiveOrganization()
@@ -20,8 +16,6 @@ export function CursusSettingsSection() {
 
 	return (
 		<div className="flex flex-col gap-6" key={activeOrganization.id}>
-			<EstablishmentsFeature />
-			<TrainingsFeature />
 			<ClosureReasonsFeature />
 		</div>
 	)

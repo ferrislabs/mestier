@@ -16,7 +16,7 @@ use crate::{
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
         ("contract_id" = mestier_core::ContractId, Path, description = "Contract identifier"),
-        ("kind" = inline(mestier_core::ContractFileKind), Path, description = "File slot: cerfa or mission_sheet"),
+        ("kind" = inline(mestier_core::ContractFileKind), Path, description = "File slot: mission_sheet"),
     ),
     request_body = SetContractFileRequest,
     responses(

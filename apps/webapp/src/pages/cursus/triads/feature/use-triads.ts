@@ -19,7 +19,7 @@ const CONTRACT_TUTORS_PATH =
 const CONTRACT_FILE_PATH =
 	'/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/files/{kind}'
 
-export type ContractFileKind = 'cerfa' | 'mission_sheet'
+export type ContractFileKind = 'mission_sheet'
 
 export interface TriadFilters {
 	promotionId: string | undefined

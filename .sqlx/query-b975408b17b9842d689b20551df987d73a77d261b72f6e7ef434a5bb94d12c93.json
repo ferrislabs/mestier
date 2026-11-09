@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT host_company_id, label, line1, line2, postal_code, city, is_main\n        FROM cursus.host_company_address\n        WHERE org_id = $1 AND host_company_id = ANY($2)\n        ORDER BY host_company_id, position ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "host_company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "line1",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "line2",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "postal_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "city",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_main",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "b975408b17b9842d689b20551df987d73a77d261b72f6e7ef434a5bb94d12c93"
+}

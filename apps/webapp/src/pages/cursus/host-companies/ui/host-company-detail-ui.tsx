@@ -1,4 +1,5 @@
 import type { Schemas } from '#/api/api.client'
+import { RichTextView } from '#/components/rich-text'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import {
@@ -28,6 +29,74 @@ export interface HostCompanyDetailUIProps {
 	onSave: (values: HostCompanyValues) => void
 	onArchive: () => void
 	onOpenParticipant: (participantId: string) => void
+}
+
+function HostCompanySummary({
+	company,
+}: {
+	company: Schemas.HostCompanyResponse
+}) {
+	const rows: [string, string | number | null | undefined][] = [
+		['Groupe', company.group_name],
+		['Numéro de SIRET', company.siret],
+		['Code NAF', company.naf_code],
+		['Forme juridique', company.legal_form],
+		['Capital', company.capital],
+		['Nom du directeur', company.director_name],
+		['Téléphone', company.phone],
+		['Email', company.email],
+		['URL site internet', company.website],
+		["Nombre d'employés dans l'entreprise", company.employee_count],
+		["Nombre d'employés dans le groupe", company.group_employee_count],
+		["Domaines d'activité", company.activity_domains],
+	]
+	return (
+		<div className="flex flex-col gap-4">
+			<dl className="grid grid-cols-2 gap-3 text-sm">
+				{rows.map(([label, value]) => (
+					<div key={label}>
+						<dt className="text-muted-foreground">{label}</dt>
+						<dd>{value ?? '—'}</dd>
+					</div>
+				))}
+			</dl>
+			<div className="flex flex-col gap-1">
+				<h2 className="text-sm font-medium">Missions et objectifs</h2>
+				{company.missions ? (
+					<RichTextView markdown={company.missions} />
+				) : (
+					<p className="text-sm text-muted-foreground">—</p>
+				)}
+			</div>
+			<div className="flex flex-col gap-2">
+				<h2 className="text-sm font-medium">Adresses</h2>
+				{company.addresses.length === 0 ? (
+					<p className="text-sm text-muted-foreground">Aucune adresse.</p>
+				) : (
+					<ul className="flex flex-col gap-2">
+						{company.addresses.map((address) => (
+							<li
+								key={`${address.line1}-${address.postal_code}-${address.city}`}
+								className="flex flex-col rounded-lg border p-3 text-sm"
+							>
+								<span className="flex items-center gap-2 font-medium">
+									{address.label ?? 'Adresse'}
+									{address.is_main ? <Badge>Principale</Badge> : null}
+								</span>
+								<span>{address.line1}</span>
+								{address.line2 ? <span>{address.line2}</span> : null}
+								<span>
+									{[address.postal_code, address.city]
+										.filter(Boolean)
+										.join(' ')}
+								</span>
+							</li>
+						))}
+					</ul>
+				)}
+			</div>
+		</div>
+	)
 }
 
 export function HostCompanyDetailUI({
@@ -82,15 +151,18 @@ export function HostCompanyDetailUI({
 			<FormError message={archiveError} />
 
 			<section className="rounded-lg border p-4">
-				<HostCompanyForm
-					key={company.updated_at}
-					initialValues={toHostCompanyValues(company)}
-					disabled={!canManage || archived}
-					submitLabel="Enregistrer"
-					isPending={isSaving}
-					error={saveError}
-					onSubmit={onSave}
-				/>
+				{canManage && !archived ? (
+					<HostCompanyForm
+						key={company.updated_at}
+						initialValues={toHostCompanyValues(company)}
+						submitLabel="Enregistrer"
+						isPending={isSaving}
+						error={saveError}
+						onSubmit={onSave}
+					/>
+				) : (
+					<HostCompanySummary company={company} />
+				)}
 			</section>
 
 			<section className="flex flex-col gap-3 rounded-lg border p-4">

@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.triad_id, ct.is_main, ct.archived_at\n            FROM cursus.contract_tutor ct\n            JOIN cursus.contract c ON c.org_id = ct.org_id AND c.id = ct.contract_id\n            JOIN cursus.company_tutor t ON t.org_id = ct.org_id AND t.id = ct.company_tutor_id\n            WHERE ct.org_id = $1 AND t.participant_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "triad_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_main",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "2b4c237b9bd9f389d405be2a384a20141e2c2af3e1071d3592a7b4f71ac8967b"
+}

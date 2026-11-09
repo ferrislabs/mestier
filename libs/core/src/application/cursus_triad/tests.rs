@@ -10,12 +10,12 @@ use uuid::Uuid;
 use crate::{
     AcceptParticipantInvitationCommand, ApprenticeId, ApprenticeInput, CloseContractCommand,
     CloseTriadCommand, ClosureReason, CompanyTutorId, CompanyTutorInput, ContractFileKind,
-    ContractView, CreateClosureReasonCommand, CreateContractCommand, CreateEstablishmentCommand,
-    CreateHostCompanyCommand, CreateParticipantCommand, CreatePromotionCommand,
-    CreateTrainingCommand, CreateTriadCommand, CursusContractKind, HostCompany, MemberId,
-    Permissions, Promotion, RemoveCompanyTutorCommand, SetContractFileCommand,
-    SetContractTutorsCommand, Triad, TriadAccess, TriadRole, UpdateContractCommand,
-    UpdateTriadCommand,
+    ContractTutorInput, ContractView, CreateClosureReasonCommand, CreateContractCommand,
+    CreateEstablishmentCommand, CreateHostCompanyCommand, CreateParticipantCommand,
+    CreatePromotionCommand, CreateTrainingCommand, CreateTriadCommand, CursusContractKind,
+    HostCompany, MemberId, Permissions, Promotion, RemoveCompanyTutorCommand,
+    SetContractFileCommand, SetContractTutorsCommand, Triad, TriadAccess, TriadRole,
+    UpdateContractCommand, UpdateTriadCommand,
     application::{
         MestierUseCase, default_authorizer, policy,
         test_support::{purge, scratch_pool},
@@ -191,7 +191,7 @@ impl World {
             .create_training(CreateTrainingCommand {
                 actor: actor.clone(),
                 organization_id: tenant.organization_id,
-                establishment_id: establishment.id,
+                establishment_id: Some(establishment.id),
                 name: "BTS Aménagements paysagers".to_owned(),
                 rncp_code: None,
                 rncp_label: None,
@@ -234,12 +234,20 @@ impl World {
                 actor: tenant.manager.subject(),
                 organization_id: tenant.organization_id,
                 name: name.to_owned(),
+                group_name: None,
                 siret: None,
-                address: None,
                 legal_form: None,
                 naf_code: None,
+                capital: None,
                 employee_count: None,
+                group_employee_count: None,
                 director_name: None,
+                phone: None,
+                email: None,
+                website: None,
+                activity_domains: None,
+                missions: None,
+                addresses: Vec::new(),
             })
             .await
             .unwrap()
@@ -351,6 +359,7 @@ impl World {
                 host_company_id: company.id,
                 kind: CursusContractKind::Apprenticeship,
                 number: Some("C-1".to_owned()),
+                comment: Some("**Note**".to_owned()),
                 start_date: day(2026, 9, 1),
                 end_date: day(2028, 8, 31),
             })
@@ -364,8 +373,13 @@ impl World {
                 actor: tenant.manager.subject(),
                 organization_id: tenant.organization_id,
                 contract_id: contract.contract.id,
-                main,
-                secondary: None,
+                tutors: main
+                    .into_iter()
+                    .map(|company_tutor_id| ContractTutorInput {
+                        company_tutor_id,
+                        is_main: true,
+                    })
+                    .collect(),
             })
             .await
             .unwrap();
@@ -577,6 +591,7 @@ async fn without_the_triads_bit_every_triad_and_contract_write_is_forbidden() {
             host_company_id: company.id,
             kind: CursusContractKind::Apprenticeship,
             number: None,
+            comment: None,
             start_date: day(2026, 9, 1),
             end_date: day(2028, 8, 31),
         })
@@ -590,6 +605,7 @@ async fn without_the_triads_bit_every_triad_and_contract_write_is_forbidden() {
             host_company_id: company.id,
             kind: CursusContractKind::Apprenticeship,
             number: None,
+            comment: None,
             start_date: day(2026, 9, 1),
             end_date: day(2028, 8, 31),
         })
@@ -614,8 +630,7 @@ async fn without_the_triads_bit_every_triad_and_contract_write_is_forbidden() {
             actor: reader.clone(),
             organization_id: tenant.organization_id,
             contract_id: contract.contract.id,
-            main: None,
-            secondary: None,
+            tutors: Vec::new(),
         })
         .await;
     let file = world
@@ -624,8 +639,8 @@ async fn without_the_triads_bit_every_triad_and_contract_write_is_forbidden() {
             actor: reader,
             organization_id: tenant.organization_id,
             contract_id: contract.contract.id,
-            kind: ContractFileKind::Cerfa,
-            file_key: Some("uploads/cerfa".to_owned()),
+            kind: ContractFileKind::MissionSheet,
+            file_key: Some("uploads/mission".to_owned()),
         })
         .await;
 
@@ -734,8 +749,10 @@ async fn spec_cur_8_a_tutor_of_company_a_never_sees_a_triad_whose_contract_is_at
             actor: tenant.manager.subject(),
             organization_id: tenant.organization_id,
             contract_id: world.contract(tenant, &at_b, &company_b).await.contract.id,
-            main: Some(tutor_a),
-            secondary: None,
+            tutors: vec![ContractTutorInput {
+                company_tutor_id: tutor_a,
+                is_main: true,
+            }],
         })
         .await;
     assert!(matches!(refused, Err(CoreError::Conflict(_))));
@@ -795,8 +812,7 @@ async fn spec_cur_9_closing_a_contract_archives_its_tutor_links_and_the_tutor_ke
             actor: tenant.manager.subject(),
             organization_id: tenant.organization_id,
             contract_id: contract.contract.id,
-            main: None,
-            secondary: None,
+            tutors: Vec::new(),
         })
         .await;
     assert!(matches!(retutor, Err(CoreError::Conflict(_))));
@@ -874,6 +890,7 @@ async fn spec_cur_10_closing_a_triad_closes_its_open_contracts_and_a_second_clos
             host_company_id: company.id,
             kind: CursusContractKind::Professionalization,
             number: None,
+            comment: None,
             start_date: day(2027, 9, 1),
             end_date: day(2028, 8, 31),
         })
@@ -971,6 +988,7 @@ async fn contract_rules_period_host_company_tutors_and_files_hold_in_the_databas
     let other_company = world.company(tenant, "Jardins Petit").await;
     let (main_id, _) = world.tutor(tenant, &company, "main@example.com").await;
     let (secondary_id, _) = world.tutor(tenant, &company, "secondary@example.com").await;
+    let (extra_id, _) = world.tutor(tenant, &company, "extra@example.com").await;
     let (elsewhere_id, _) = world
         .tutor(tenant, &other_company, "else@example.com")
         .await;
@@ -983,6 +1001,7 @@ async fn contract_rules_period_host_company_tutors_and_files_hold_in_the_databas
         host_company_id: company.id,
         kind: CursusContractKind::Apprenticeship,
         number: None,
+        comment: None,
         start_date: start,
         end_date: end,
     };
@@ -1013,38 +1032,76 @@ async fn contract_rules_period_host_company_tutors_and_files_hold_in_the_databas
     assert!(matches!(backwards, Err(CoreError::Conflict(_))));
     assert!(matches!(archived_company, Err(CoreError::Conflict(_))));
 
-    let set = |main, secondary| SetContractTutorsCommand {
+    assert_eq!(contract.contract.comment.as_deref(), Some("**Note**"));
+    assert_eq!(contract.contract.duration_months(), 24);
+
+    let set = |tutors: &[(CompanyTutorId, bool)]| SetContractTutorsCommand {
         actor: tenant.manager.subject(),
         organization_id: tenant.organization_id,
         contract_id: contract.contract.id,
-        main,
-        secondary,
+        tutors: tutors
+            .iter()
+            .map(|&(company_tutor_id, is_main)| ContractTutorInput {
+                company_tutor_id,
+                is_main,
+            })
+            .collect(),
     };
-    let both = world
+    let three = world
         .usecase
-        .set_contract_tutors(set(Some(main_id), Some(secondary_id)))
+        .set_contract_tutors(set(&[
+            (secondary_id, false),
+            (main_id, true),
+            (extra_id, false),
+        ]))
         .await
         .unwrap();
-    assert_eq!(both.tutors.len(), 2);
-    assert_eq!(both.tutors[0].rank, crate::TutorRank::Main);
-    assert_eq!(both.tutors[0].company_tutor_id, main_id);
+    let order: Vec<_> = three
+        .tutors
+        .iter()
+        .map(|tutor| (tutor.company_tutor_id, tutor.is_main))
+        .collect();
+    assert_eq!(
+        order,
+        [(secondary_id, false), (main_id, true), (extra_id, false)]
+    );
     let same = world
         .usecase
-        .set_contract_tutors(set(Some(main_id), Some(main_id)))
+        .set_contract_tutors(set(&[(main_id, true), (main_id, false)]))
+        .await;
+    let no_main = world
+        .usecase
+        .set_contract_tutors(set(&[(main_id, false), (secondary_id, false)]))
+        .await;
+    let two_mains = world
+        .usecase
+        .set_contract_tutors(set(&[(main_id, true), (secondary_id, true)]))
         .await;
     let foreign = world
         .usecase
-        .set_contract_tutors(set(Some(elsewhere_id), None))
+        .set_contract_tutors(set(&[(elsewhere_id, true)]))
         .await;
-    let swapped = world
+    assert!(matches!(same, Err(CoreError::Conflict(_))));
+    assert!(matches!(no_main, Err(CoreError::Conflict(_))));
+    assert!(matches!(two_mains, Err(CoreError::Conflict(_))));
+    assert!(matches!(foreign, Err(CoreError::Conflict(_))));
+    let unchanged = world
         .usecase
-        .set_contract_tutors(set(Some(secondary_id), None))
+        .get_contract(tenant.organization_id, contract.contract.id)
         .await
         .unwrap();
-    assert!(matches!(same, Err(CoreError::Conflict(_))));
-    assert!(matches!(foreign, Err(CoreError::Conflict(_))));
+    assert_eq!(unchanged.tutors.len(), 3);
+
+    let cleared = world.usecase.set_contract_tutors(set(&[])).await.unwrap();
+    assert!(cleared.tutors.is_empty());
+    let swapped = world
+        .usecase
+        .set_contract_tutors(set(&[(secondary_id, true)]))
+        .await
+        .unwrap();
     assert_eq!(swapped.tutors.len(), 1);
     assert_eq!(swapped.tutors[0].company_tutor_id, secondary_id);
+    assert!(swapped.tutors[0].is_main);
 
     let removal = |id| RemoveCompanyTutorCommand {
         actor: tenant.manager.subject(),
@@ -1071,6 +1128,7 @@ async fn contract_rules_period_host_company_tutors_and_files_hold_in_the_databas
             host_company_id: world.company(tenant, "Autre").await.id,
             kind: CursusContractKind::Professionalization,
             number: None,
+            comment: None,
             start_date: day(2026, 9, 1),
             end_date: day(2028, 8, 31),
         })
@@ -1082,7 +1140,7 @@ async fn contract_rules_period_host_company_tutors_and_files_hold_in_the_databas
         .get_contract_file_key(
             tenant.organization_id,
             contract.contract.id,
-            ContractFileKind::Cerfa,
+            ContractFileKind::MissionSheet,
         )
         .await;
     assert!(matches!(missing, Err(CoreError::NotFound)));
@@ -1090,26 +1148,25 @@ async fn contract_rules_period_host_company_tutors_and_files_hold_in_the_databas
         actor: tenant.manager.subject(),
         organization_id: tenant.organization_id,
         contract_id: contract.contract.id,
-        kind: ContractFileKind::Cerfa,
+        kind: ContractFileKind::MissionSheet,
         file_key: file_key.map(str::to_owned),
     };
     let attached = world
         .usecase
-        .set_contract_file(attach(Some("uploads/cerfa-1")))
+        .set_contract_file(attach(Some("uploads/mission-1")))
         .await
         .unwrap();
-    assert!(attached.contract.cerfa_file_key.is_some());
-    assert!(attached.contract.mission_sheet_file_key.is_none());
+    assert!(attached.contract.mission_sheet_file_key.is_some());
     let key = world
         .usecase
         .get_contract_file_key(
             tenant.organization_id,
             contract.contract.id,
-            ContractFileKind::Cerfa,
+            ContractFileKind::MissionSheet,
         )
         .await
         .unwrap();
-    assert_eq!(key.as_str(), "uploads/cerfa-1");
+    assert_eq!(key.as_str(), "uploads/mission-1");
     let invalid = world
         .usecase
         .set_contract_file(attach(Some("/absolute")))
@@ -1121,7 +1178,7 @@ async fn contract_rules_period_host_company_tutors_and_files_hold_in_the_databas
         .get_contract_file_key(
             tenant.organization_id,
             contract.contract.id,
-            ContractFileKind::Cerfa,
+            ContractFileKind::MissionSheet,
         )
         .await;
     assert!(matches!(cleared, Err(CoreError::NotFound)));

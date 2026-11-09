@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM cursus.host_company_address WHERE org_id = $1 AND host_company_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "862db1511e27867b5dcc4764c6e41e2aaed01c04a031aad32f861b9f00fd96a5"
+}

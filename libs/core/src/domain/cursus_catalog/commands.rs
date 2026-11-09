@@ -27,7 +27,7 @@ pub struct UpdateEstablishmentCommand {
 pub struct CreateTrainingCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,
-    pub establishment_id: EstablishmentId,
+    pub establishment_id: Option<EstablishmentId>,
     pub name: String,
     pub rncp_code: Option<String>,
     pub rncp_label: Option<String>,
@@ -40,7 +40,7 @@ pub struct UpdateTrainingCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,
     pub id: TrainingId,
-    pub establishment_id: EstablishmentId,
+    pub establishment_id: Option<EstablishmentId>,
     pub name: String,
     pub rncp_code: Option<String>,
     pub rncp_label: Option<String>,

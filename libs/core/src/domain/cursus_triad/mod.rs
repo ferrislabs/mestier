@@ -1,6 +1,6 @@
-use std::{fmt::Display, str::FromStr};
+use std::{collections::HashSet, fmt::Display, str::FromStr};
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Datelike, Months, NaiveDate, Utc};
 use common::CoreError;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -79,43 +79,13 @@ impl FromStr for ContractKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum TutorRank {
-    Main,
-    Secondary,
-}
-
-impl TutorRank {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Main => "MAIN",
-            Self::Secondary => "SECONDARY",
-        }
-    }
-}
-
-impl FromStr for TutorRank {
-    type Err = ();
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "MAIN" => Ok(Self::Main),
-            "SECONDARY" => Ok(Self::Secondary),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
 pub enum ContractFileKind {
-    Cerfa,
     MissionSheet,
 }
 
 impl ContractFileKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Cerfa => "cerfa",
             Self::MissionSheet => "mission_sheet",
         }
     }
@@ -150,6 +120,23 @@ impl ContractPeriod {
 
     pub fn end(&self) -> NaiveDate {
         self.end
+    }
+
+    pub fn months(&self) -> i32 {
+        let exclusive_end = self.end.succ_opt().unwrap_or(self.end);
+        let mut months = (exclusive_end.year() - self.start.year()) * 12
+            + exclusive_end.month() as i32
+            - self.start.month() as i32;
+        while months > 0
+            && self
+                .start
+                .checked_add_months(Months::new(months as u32))
+                .is_none_or(|reached| reached > exclusive_end)
+        {
+            months -= 1;
+        }
+
+        months.max(0)
     }
 }
 
@@ -230,7 +217,7 @@ pub struct Contract {
     pub number: Option<String>,
     pub period: ContractPeriod,
     pub closure: Option<Closure>,
-    pub cerfa_file_key: Option<FileKey>,
+    pub comment: Option<String>,
     pub mission_sheet_file_key: Option<FileKey>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -257,53 +244,59 @@ impl Contract {
         Ok(())
     }
 
+    pub fn duration_months(&self) -> i32 {
+        self.period.months()
+    }
+
     pub fn file_key(&self, kind: ContractFileKind) -> Option<&FileKey> {
         match kind {
-            ContractFileKind::Cerfa => self.cerfa_file_key.as_ref(),
             ContractFileKind::MissionSheet => self.mission_sheet_file_key.as_ref(),
         }
     }
 
     pub fn assign_tutors(
         &self,
-        main: Option<&CompanyTutor>,
-        secondary: Option<&CompanyTutor>,
+        tutors: &[(CompanyTutor, bool)],
     ) -> Result<Vec<ContractTutor>, CoreError> {
         self.ensure_open()?;
-        if let (Some(first), Some(second)) = (main, secondary)
-            && first.id == second.id
-        {
+
+        let mut seen = HashSet::new();
+        if !tutors.iter().all(|(tutor, _)| seen.insert(tutor.id)) {
             return Err(CoreError::Conflict(
-                "a contract cannot have the same tutor as main and secondary".to_owned(),
+                "a tutor cannot be linked twice to the same contract".to_owned(),
+            ));
+        }
+        if tutors.iter().any(|(tutor, _)| {
+            tutor.organization_id != self.organization_id
+                || tutor.host_company_id != self.host_company_id
+        }) {
+            return Err(CoreError::Conflict(
+                "a contract tutor must belong to the contract's host company".to_owned(),
+            ));
+        }
+        let mains = tutors.iter().filter(|(_, is_main)| *is_main).count();
+        if !tutors.is_empty() && mains != 1 {
+            return Err(CoreError::Conflict(
+                "a contract with tutors must have exactly one main tutor".to_owned(),
             ));
         }
 
-        [(TutorRank::Main, main), (TutorRank::Secondary, secondary)]
-            .into_iter()
-            .filter_map(|(rank, tutor)| tutor.map(|tutor| (rank, tutor)))
-            .map(|(rank, tutor)| {
-                if tutor.organization_id != self.organization_id
-                    || tutor.host_company_id != self.host_company_id
-                {
-                    return Err(CoreError::Conflict(
-                        "a contract tutor must belong to the contract's host company".to_owned(),
-                    ));
-                }
-
-                Ok(ContractTutor {
-                    contract_id: self.id,
-                    company_tutor_id: tutor.id,
-                    organization_id: self.organization_id,
-                    rank,
-                    archived_at: None,
-                })
+        Ok(tutors
+            .iter()
+            .enumerate()
+            .map(|(position, (tutor, is_main))| ContractTutor {
+                contract_id: self.id,
+                company_tutor_id: tutor.id,
+                organization_id: self.organization_id,
+                is_main: *is_main,
+                position: position as i32,
+                archived_at: None,
             })
-            .collect()
+            .collect())
     }
 
     pub fn set_file_key(&mut self, kind: ContractFileKind, key: Option<FileKey>) {
         match kind {
-            ContractFileKind::Cerfa => self.cerfa_file_key = key,
             ContractFileKind::MissionSheet => self.mission_sheet_file_key = key,
         }
     }
@@ -314,7 +307,8 @@ pub struct ContractTutor {
     pub contract_id: ContractId,
     pub company_tutor_id: CompanyTutorId,
     pub organization_id: OrganizationId,
-    pub rank: TutorRank,
+    pub is_main: bool,
+    pub position: i32,
     pub archived_at: Option<DateTime<Utc>>,
 }
 

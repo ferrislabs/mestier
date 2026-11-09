@@ -9,7 +9,7 @@ use crate::{paths::TrainingCollectionPath, require_org_membership, response::Tra
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateTrainingRequest {
-    pub establishment_id: EstablishmentId,
+    pub establishment_id: Option<EstablishmentId>,
     pub name: String,
     pub rncp_code: Option<String>,
     pub rncp_label: Option<String>,

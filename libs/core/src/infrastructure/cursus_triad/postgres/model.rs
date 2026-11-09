@@ -6,7 +6,7 @@ use crate::{
     ApprenticeId, Closure, ClosureReasonId, CompanyTutorId, Contract, ContractId, ContractTutor,
     ContractTutorView, ContractView, FileKey, HostCompanyId, MemberId, OrganizationId,
     ParticipantId, Promotion, PromotionId, TrainingId, Triad, TriadDetail, TriadId, TriadSummary,
-    TutorRank, TutorTriadLink,
+    TutorTriadLink,
     domain::{
         cursus_triad::{ContractKind, ContractPeriod},
         member::format_person_name,
@@ -25,12 +25,6 @@ fn closure_of(
             reason_id: ClosureReasonId(reason_id),
             note,
         })
-}
-
-fn rank_of(value: &str) -> Result<TutorRank, CoreError> {
-    value
-        .parse()
-        .map_err(|()| CoreError::Internal(format!("unknown tutor rank `{value}`")))
 }
 
 #[derive(Debug, Clone)]
@@ -192,7 +186,7 @@ pub struct ContractRow {
     pub closed_at: Option<NaiveDate>,
     pub closure_reason_id: Option<Uuid>,
     pub closure_note: Option<String>,
-    pub cerfa_file_key: Option<String>,
+    pub comment: Option<String>,
     pub mission_sheet_file_key: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -221,7 +215,7 @@ impl TryFrom<ContractRow> for Contract {
             number: row.number,
             period: ContractPeriod::new(row.start_date, row.end_date)?,
             closure: closure_of(row.closed_at, row.closure_reason_id, row.closure_note),
-            cerfa_file_key: file_key_of(row.cerfa_file_key)?,
+            comment: row.comment,
             mission_sheet_file_key: file_key_of(row.mission_sheet_file_key)?,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -242,7 +236,7 @@ pub struct ContractViewRow {
     pub closed_at: Option<NaiveDate>,
     pub closure_reason_id: Option<Uuid>,
     pub closure_note: Option<String>,
-    pub cerfa_file_key: Option<String>,
+    pub comment: Option<String>,
     pub mission_sheet_file_key: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -257,7 +251,7 @@ pub struct ContractTutorViewRow {
     pub participant_id: Uuid,
     pub last_name: String,
     pub first_name: Option<String>,
-    pub rank: String,
+    pub is_main: bool,
     pub archived_at: Option<DateTime<Utc>>,
 }
 
@@ -276,16 +270,14 @@ pub fn assemble_contract_views(
 
             let tutors = mine
                 .into_iter()
-                .map(|tutor| {
-                    Ok(ContractTutorView {
-                        company_tutor_id: CompanyTutorId(tutor.company_tutor_id),
-                        participant_id: ParticipantId(tutor.participant_id),
-                        name: format_person_name(&tutor.last_name, tutor.first_name.as_deref()),
-                        rank: rank_of(&tutor.rank)?,
-                        archived_at: tutor.archived_at,
-                    })
+                .map(|tutor| ContractTutorView {
+                    company_tutor_id: CompanyTutorId(tutor.company_tutor_id),
+                    participant_id: ParticipantId(tutor.participant_id),
+                    name: format_person_name(&tutor.last_name, tutor.first_name.as_deref()),
+                    is_main: tutor.is_main,
+                    archived_at: tutor.archived_at,
                 })
-                .collect::<Result<Vec<_>, CoreError>>()?;
+                .collect();
 
             let contract = Contract::try_from(ContractRow {
                 id: row.id,
@@ -299,7 +291,7 @@ pub fn assemble_contract_views(
                 closed_at: row.closed_at,
                 closure_reason_id: row.closure_reason_id,
                 closure_note: row.closure_note,
-                cerfa_file_key: row.cerfa_file_key,
+                comment: row.comment,
                 mission_sheet_file_key: row.mission_sheet_file_key,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
@@ -320,39 +312,37 @@ pub struct ContractTutorRow {
     pub contract_id: Uuid,
     pub company_tutor_id: Uuid,
     pub org_id: Uuid,
-    pub rank: String,
+    pub is_main: bool,
+    pub position: i32,
     pub archived_at: Option<DateTime<Utc>>,
 }
 
-impl TryFrom<ContractTutorRow> for ContractTutor {
-    type Error = CoreError;
-
-    fn try_from(row: ContractTutorRow) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<ContractTutorRow> for ContractTutor {
+    fn from(row: ContractTutorRow) -> Self {
+        Self {
             contract_id: ContractId(row.contract_id),
             company_tutor_id: CompanyTutorId(row.company_tutor_id),
             organization_id: OrganizationId(row.org_id),
-            rank: rank_of(&row.rank)?,
+            is_main: row.is_main,
+            position: row.position,
             archived_at: row.archived_at,
-        })
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct TutorLinkRow {
     pub triad_id: Uuid,
-    pub rank: String,
+    pub is_main: bool,
     pub archived_at: Option<DateTime<Utc>>,
 }
 
-impl TryFrom<TutorLinkRow> for TutorTriadLink {
-    type Error = CoreError;
-
-    fn try_from(row: TutorLinkRow) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<TutorLinkRow> for TutorTriadLink {
+    fn from(row: TutorLinkRow) -> Self {
+        Self {
             triad_id: TriadId(row.triad_id),
-            rank: rank_of(&row.rank)?,
+            is_main: row.is_main,
             archived_at: row.archived_at,
-        })
+        }
     }
 }

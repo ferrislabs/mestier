@@ -40,6 +40,7 @@ pub struct CreateContractCommand {
     pub host_company_id: HostCompanyId,
     pub kind: ContractKind,
     pub number: Option<String>,
+    pub comment: Option<String>,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
 }
@@ -52,6 +53,7 @@ pub struct UpdateContractCommand {
     pub host_company_id: HostCompanyId,
     pub kind: ContractKind,
     pub number: Option<String>,
+    pub comment: Option<String>,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
 }
@@ -71,8 +73,13 @@ pub struct SetContractTutorsCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,
     pub contract_id: ContractId,
-    pub main: Option<CompanyTutorId>,
-    pub secondary: Option<CompanyTutorId>,
+    pub tutors: Vec<ContractTutorInput>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ContractTutorInput {
+    pub company_tutor_id: CompanyTutorId,
+    pub is_main: bool,
 }
 
 #[derive(Debug, Clone)]

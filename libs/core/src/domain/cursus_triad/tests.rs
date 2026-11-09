@@ -59,7 +59,7 @@ fn contract(organization_id: OrganizationId, host_company_id: HostCompanyId) -> 
         number: None,
         period: ContractPeriod::new(day(2026, 9, 1), day(2028, 8, 31)).unwrap(),
         closure: None,
-        cerfa_file_key: None,
+        comment: None,
         mission_sheet_file_key: None,
         created_at: now,
         updated_at: now,
@@ -167,99 +167,144 @@ fn closing_a_contract_twice_is_a_conflict() {
 #[test]
 fn a_contract_file_key_is_set_and_read_by_kind() {
     let mut subject = contract(org(), HostCompanyId(Uuid::new_v4()));
-    let key = FileKey::try_from("uploads/cerfa-1").unwrap();
+    let key = FileKey::try_from("uploads/mission-1").unwrap();
 
-    subject.set_file_key(ContractFileKind::Cerfa, Some(key.clone()));
-
-    assert_eq!(subject.file_key(ContractFileKind::Cerfa), Some(&key));
     assert_eq!(subject.file_key(ContractFileKind::MissionSheet), None);
+    subject.set_file_key(ContractFileKind::MissionSheet, Some(key.clone()));
 
-    subject.set_file_key(ContractFileKind::Cerfa, None);
-    assert_eq!(subject.file_key(ContractFileKind::Cerfa), None);
+    assert_eq!(subject.file_key(ContractFileKind::MissionSheet), Some(&key));
+
+    subject.set_file_key(ContractFileKind::MissionSheet, None);
+    assert_eq!(subject.file_key(ContractFileKind::MissionSheet), None);
+}
+
+fn company_of(subject: &Contract) -> CompanyTutor {
+    tutor(subject.organization_id, subject.host_company_id)
 }
 
 #[test]
-fn tutors_of_the_contract_company_become_ranked_links() {
-    let organization_id = org();
-    let company = HostCompanyId(Uuid::new_v4());
-    let subject = contract(organization_id, company);
-    let main = tutor(organization_id, company);
-    let secondary = tutor(organization_id, company);
+fn tutors_of_the_contract_company_keep_their_order_and_the_main_flag() {
+    let subject = contract(org(), HostCompanyId(Uuid::new_v4()));
+    let first = company_of(&subject);
+    let second = company_of(&subject);
+    let third = company_of(&subject);
 
     let links = subject
-        .assign_tutors(Some(&main), Some(&secondary))
+        .assign_tutors(&[
+            (first.clone(), false),
+            (second.clone(), true),
+            (third.clone(), false),
+        ])
         .unwrap();
 
-    assert_eq!(links.len(), 2);
-    assert_eq!(links[0].rank, TutorRank::Main);
-    assert_eq!(links[0].company_tutor_id, main.id);
-    assert_eq!(links[1].rank, TutorRank::Secondary);
-    assert_eq!(links[1].company_tutor_id, secondary.id);
+    let summary: Vec<_> = links
+        .iter()
+        .map(|link| (link.company_tutor_id, link.is_main, link.position))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            (first.id, false, 0),
+            (second.id, true, 1),
+            (third.id, false, 2)
+        ]
+    );
     assert!(links.iter().all(|link| link.archived_at.is_none()));
 }
 
 #[test]
-fn clearing_both_ranks_yields_no_links() {
+fn clearing_the_tutors_yields_no_links() {
     let subject = contract(org(), HostCompanyId(Uuid::new_v4()));
 
-    assert_eq!(subject.assign_tutors(None, None).unwrap(), vec![]);
+    assert_eq!(subject.assign_tutors(&[]).unwrap(), vec![]);
 }
 
 #[test]
 fn a_tutor_of_another_company_is_a_conflict() {
     let organization_id = org();
     let subject = contract(organization_id, HostCompanyId(Uuid::new_v4()));
+    let mine = company_of(&subject);
     let elsewhere = tutor(organization_id, HostCompanyId(Uuid::new_v4()));
 
     assert!(matches!(
-        subject.assign_tutors(Some(&elsewhere), None),
-        Err(CoreError::Conflict(_))
-    ));
-    assert!(matches!(
-        subject.assign_tutors(None, Some(&elsewhere)),
+        subject.assign_tutors(&[(mine, true), (elsewhere, false)]),
         Err(CoreError::Conflict(_))
     ));
 }
 
 #[test]
-fn the_same_tutor_cannot_hold_both_ranks() {
-    let organization_id = org();
-    let company = HostCompanyId(Uuid::new_v4());
-    let subject = contract(organization_id, company);
-    let only = tutor(organization_id, company);
+fn the_same_tutor_twice_is_a_conflict() {
+    let subject = contract(org(), HostCompanyId(Uuid::new_v4()));
+    let only = company_of(&subject);
 
     assert!(matches!(
-        subject.assign_tutors(Some(&only), Some(&only)),
+        subject.assign_tutors(&[(only.clone(), true), (only, false)]),
         Err(CoreError::Conflict(_))
     ));
+}
+
+#[test]
+fn a_non_empty_list_needs_exactly_one_main_tutor() {
+    let subject = contract(org(), HostCompanyId(Uuid::new_v4()));
+    let first = company_of(&subject);
+    let second = company_of(&subject);
+
+    assert!(matches!(
+        subject.assign_tutors(&[(first.clone(), false), (second.clone(), false)]),
+        Err(CoreError::Conflict(_))
+    ));
+    assert!(matches!(
+        subject.assign_tutors(&[(first.clone(), true), (second, true)]),
+        Err(CoreError::Conflict(_))
+    ));
+    assert!(subject.assign_tutors(&[(first, true)]).is_ok());
 }
 
 #[test]
 fn a_closed_contract_refuses_tutor_changes() {
-    let organization_id = org();
-    let company = HostCompanyId(Uuid::new_v4());
-    let mut subject = contract(organization_id, company);
+    let mut subject = contract(org(), HostCompanyId(Uuid::new_v4()));
     subject.close(closure(), Utc::now()).unwrap();
 
     assert!(matches!(
-        subject.assign_tutors(None, None),
+        subject.assign_tutors(&[]),
         Err(CoreError::Conflict(_))
     ));
 }
 
 #[test]
-fn contract_kind_and_rank_round_trip_their_storage_literals() {
+fn contract_kind_round_trips_its_storage_literals() {
     for kind in [
         ContractKind::Apprenticeship,
         ContractKind::Professionalization,
     ] {
         assert_eq!(kind.as_str().parse::<ContractKind>(), Ok(kind));
     }
-    for rank in [TutorRank::Main, TutorRank::Secondary] {
-        assert_eq!(rank.as_str().parse::<TutorRank>(), Ok(rank));
-    }
     assert!("OTHER".parse::<ContractKind>().is_err());
-    assert!("TERTIARY".parse::<TutorRank>().is_err());
+}
+
+#[test]
+fn the_duration_counts_whole_calendar_months_up_to_the_day_after_the_end() {
+    let months =
+        |start: NaiveDate, end: NaiveDate| ContractPeriod::new(start, end).unwrap().months();
+
+    assert_eq!(months(day(2025, 9, 1), day(2027, 8, 31)), 24);
+    assert_eq!(months(day(2025, 9, 1), day(2026, 8, 31)), 12);
+    assert_eq!(months(day(2025, 9, 15), day(2026, 9, 14)), 12);
+    assert_eq!(months(day(2025, 9, 15), day(2026, 9, 13)), 11);
+    assert_eq!(months(day(2025, 9, 1), day(2025, 9, 30)), 1);
+    assert_eq!(months(day(2025, 9, 1), day(2025, 9, 1)), 0);
+    assert_eq!(months(day(2025, 9, 1), day(2025, 10, 14)), 1);
+    assert_eq!(months(day(2025, 1, 31), day(2025, 2, 27)), 1);
+    assert_eq!(months(day(2025, 1, 31), day(2025, 2, 26)), 0);
+    assert_eq!(months(day(2024, 2, 29), day(2025, 2, 28)), 12);
+    assert_eq!(months(day(2025, 11, 1), day(2026, 1, 31)), 3);
+}
+
+#[test]
+fn a_contract_exposes_the_duration_of_its_period() {
+    let subject = contract(org(), HostCompanyId(Uuid::new_v4()));
+
+    assert_eq!(subject.duration_months(), 24);
 }
 
 #[test]
@@ -301,7 +346,7 @@ fn an_archived_tutor_link_is_read_only_since_its_archival() {
     let archived_at = since(3);
     let links = [TutorTriadLink {
         triad_id,
-        rank: TutorRank::Secondary,
+        is_main: false,
         archived_at: Some(archived_at),
     }];
 
@@ -311,7 +356,7 @@ fn an_archived_tutor_link_is_read_only_since_its_archival() {
         scope.link(triad_id).copied(),
         Some(TriadLink {
             triad_id,
-            role: TriadRole::SecondaryTutor,
+            role: TriadRole::Tutor,
             access: TriadAccess::ReadOnly { since: archived_at },
         })
     );
@@ -323,12 +368,12 @@ fn an_active_link_beats_a_read_only_one_whatever_the_role() {
     let links = [
         TutorTriadLink {
             triad_id,
-            rank: TutorRank::Main,
+            is_main: true,
             archived_at: Some(since(10)),
         },
         TutorTriadLink {
             triad_id,
-            rank: TutorRank::Secondary,
+            is_main: false,
             archived_at: None,
         },
     ];
@@ -336,21 +381,21 @@ fn an_active_link_beats_a_read_only_one_whatever_the_role() {
     let merged = merge_links(links.iter().copied().map(TriadLink::from));
 
     assert_eq!(merged.len(), 1);
-    assert_eq!(merged[0].role, TriadRole::SecondaryTutor);
+    assert_eq!(merged[0].role, TriadRole::Tutor);
     assert_eq!(merged[0].access, TriadAccess::Active);
 }
 
 #[test]
-fn on_equal_access_the_apprentice_beats_the_main_tutor_who_beats_the_secondary() {
+fn on_equal_access_the_apprentice_beats_the_main_tutor_who_beats_the_tutor() {
     let triad_id = TriadId(Uuid::new_v4());
-    let as_tutor = |rank| TutorTriadLink {
+    let as_tutor = |is_main| TutorTriadLink {
         triad_id,
-        rank,
+        is_main,
         archived_at: None,
     };
 
     let tutors_only = merge_links(
-        [as_tutor(TutorRank::Secondary), as_tutor(TutorRank::Main)]
+        [as_tutor(false), as_tutor(true)]
             .into_iter()
             .map(TriadLink::from),
     );
@@ -358,7 +403,7 @@ fn on_equal_access_the_apprentice_beats_the_main_tutor_who_beats_the_secondary()
         ParticipantId(Uuid::new_v4()),
         org(),
         &[triad_id],
-        &[as_tutor(TutorRank::Main)],
+        &[as_tutor(true)],
     );
 
     assert_eq!(tutors_only[0].role, TriadRole::MainTutor);
@@ -374,12 +419,12 @@ fn between_two_read_only_links_the_stronger_role_wins() {
     let links = [
         TutorTriadLink {
             triad_id,
-            rank: TutorRank::Secondary,
+            is_main: false,
             archived_at: Some(since(1)),
         },
         TutorTriadLink {
             triad_id,
-            rank: TutorRank::Main,
+            is_main: true,
             archived_at: Some(since(5)),
         },
     ];
@@ -396,7 +441,7 @@ fn links_to_different_triads_stay_separate() {
     let second = TriadId(Uuid::new_v4());
     let links = [TutorTriadLink {
         triad_id: second,
-        rank: TutorRank::Main,
+        is_main: true,
         archived_at: None,
     }];
 
@@ -433,7 +478,7 @@ fn view_with_tutor(participant_id: ParticipantId) -> ContractView {
             company_tutor_id: CompanyTutorId(Uuid::new_v4()),
             participant_id,
             name: "Martin Paul".to_owned(),
-            rank: TutorRank::Main,
+            is_main: true,
             archived_at: None,
         }],
     }

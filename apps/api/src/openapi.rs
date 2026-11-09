@@ -1102,9 +1102,8 @@ mod tests {
                 ["put"]["parameters"],
         )
         .unwrap();
-        for variant in ["cerfa", "mission_sheet"] {
-            assert!(kinds.contains(variant), "{kinds}");
-        }
+        assert!(kinds.contains("mission_sheet"), "{kinds}");
+        assert!(!kinds.contains("cerfa"), "{kinds}");
         let access =
             serde_json::to_string(&document["components"]["schemas"]["TriadAccessResponse"])
                 .unwrap();

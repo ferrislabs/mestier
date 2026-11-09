@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 
-use crate::{OrganizationId, ParticipantId, TriadId, TutorRank};
+use crate::{OrganizationId, ParticipantId, TriadId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TriadRole {
     Apprentice,
     MainTutor,
-    SecondaryTutor,
+    Tutor,
 }
 
 impl TriadRole {
@@ -14,16 +14,7 @@ impl TriadRole {
         match self {
             Self::Apprentice => 2,
             Self::MainTutor => 1,
-            Self::SecondaryTutor => 0,
-        }
-    }
-}
-
-impl From<TutorRank> for TriadRole {
-    fn from(rank: TutorRank) -> Self {
-        match rank {
-            TutorRank::Main => Self::MainTutor,
-            TutorRank::Secondary => Self::SecondaryTutor,
+            Self::Tutor => 0,
         }
     }
 }
@@ -60,7 +51,7 @@ impl TriadLink {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TutorTriadLink {
     pub triad_id: TriadId,
-    pub rank: TutorRank,
+    pub is_main: bool,
     pub archived_at: Option<DateTime<Utc>>,
 }
 
@@ -68,7 +59,11 @@ impl From<TutorTriadLink> for TriadLink {
     fn from(link: TutorTriadLink) -> Self {
         Self {
             triad_id: link.triad_id,
-            role: link.rank.into(),
+            role: if link.is_main {
+                TriadRole::MainTutor
+            } else {
+                TriadRole::Tutor
+            },
             access: match link.archived_at {
                 Some(since) => TriadAccess::ReadOnly { since },
                 None => TriadAccess::Active,

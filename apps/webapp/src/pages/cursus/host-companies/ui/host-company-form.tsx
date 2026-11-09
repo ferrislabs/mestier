@@ -1,11 +1,15 @@
 import { useForm } from '@tanstack/react-form'
 import { useState } from 'react'
+import { RichTextEditor } from '#/components/rich-text'
 import { Button } from '#/components/ui/button'
+import { Field } from '#/components/ui/field'
+import { Textarea } from '#/components/ui/textarea'
 import {
 	EMPTY_HOST_COMPANY,
 	type HostCompanyValues,
 	validateHostCompany,
 } from '#/pages/cursus/host-companies/lib/host-companies'
+import { AddressListEditor } from '#/pages/cursus/host-companies/ui/address-list-editor'
 import {
 	FieldInput,
 	FormError,
@@ -52,7 +56,7 @@ export function HostCompanyForm({
 						{(field) => (
 							<FieldInput
 								id="host-company-name"
-								label="Raison sociale"
+								label="Nom de l'entreprise"
 								value={field.state.value}
 								disabled={disabled}
 								onChange={field.handleChange}
@@ -64,7 +68,7 @@ export function HostCompanyForm({
 					{(field) => (
 						<FieldInput
 							id="host-company-siret"
-							label="SIRET"
+							label="Numéro de SIRET"
 							value={field.state.value}
 							disabled={disabled}
 							onChange={field.handleChange}
@@ -93,12 +97,22 @@ export function HostCompanyForm({
 						/>
 					)}
 				</form.Field>
-				<form.Field name="employeeCount">
+				<form.Field name="groupName">
 					{(field) => (
 						<FieldInput
-							id="host-company-employees"
-							label="Effectif"
-							type="number"
+							id="host-company-group"
+							label="Groupe"
+							value={field.state.value}
+							disabled={disabled}
+							onChange={field.handleChange}
+						/>
+					)}
+				</form.Field>
+				<form.Field name="capital">
+					{(field) => (
+						<FieldInput
+							id="host-company-capital"
+							label="Capital"
 							value={field.state.value}
 							disabled={disabled}
 							onChange={field.handleChange}
@@ -109,25 +123,117 @@ export function HostCompanyForm({
 					{(field) => (
 						<FieldInput
 							id="host-company-director"
-							label="Dirigeant"
+							label="Nom du directeur"
 							value={field.state.value}
 							disabled={disabled}
 							onChange={field.handleChange}
 						/>
 					)}
 				</form.Field>
-				<form.Field name="address">
+				<form.Field name="phone">
 					{(field) => (
 						<FieldInput
-							id="host-company-address"
-							label="Adresse"
+							id="host-company-phone"
+							label="Téléphone"
+							type="tel"
 							value={field.state.value}
 							disabled={disabled}
 							onChange={field.handleChange}
 						/>
 					)}
 				</form.Field>
+				<form.Field name="email">
+					{(field) => (
+						<FieldInput
+							id="host-company-email"
+							label="Email"
+							type="email"
+							value={field.state.value}
+							disabled={disabled}
+							onChange={field.handleChange}
+						/>
+					)}
+				</form.Field>
+				<form.Field name="website">
+					{(field) => (
+						<FieldInput
+							id="host-company-website"
+							label="URL site internet"
+							value={field.state.value}
+							disabled={disabled}
+							onChange={field.handleChange}
+						/>
+					)}
+				</form.Field>
+				<form.Field name="employeeCount">
+					{(field) => (
+						<FieldInput
+							id="host-company-employees"
+							label="Nombre d'employés dans l'entreprise"
+							type="number"
+							value={field.state.value}
+							disabled={disabled}
+							onChange={field.handleChange}
+						/>
+					)}
+				</form.Field>
+				<form.Field name="groupEmployeeCount">
+					{(field) => (
+						<FieldInput
+							id="host-company-group-employees"
+							label="Nombre d'employés dans le groupe"
+							type="number"
+							value={field.state.value}
+							disabled={disabled}
+							onChange={field.handleChange}
+						/>
+					)}
+				</form.Field>
+				<div className="col-span-2">
+					<form.Field name="activityDomains">
+						{(field) => (
+							<Field
+								label="Domaines d'activité"
+								htmlFor="host-company-activities"
+							>
+								<Textarea
+									id="host-company-activities"
+									value={field.state.value}
+									disabled={disabled}
+									onChange={(event) => field.handleChange(event.target.value)}
+								/>
+							</Field>
+						)}
+					</form.Field>
+				</div>
+				<div className="col-span-2">
+					<form.Field name="missions">
+						{(field) => (
+							<Field
+								label="Missions et objectifs"
+								htmlFor="host-company-missions"
+							>
+								<RichTextEditor
+									id="host-company-missions"
+									aria-label="Missions et objectifs"
+									value={field.state.value}
+									disabled={disabled}
+									onChange={field.handleChange}
+								/>
+							</Field>
+						)}
+					</form.Field>
+				</div>
 			</div>
+			<form.Field name="addresses">
+				{(field) => (
+					<AddressListEditor
+						addresses={field.state.value}
+						disabled={disabled}
+						onChange={field.handleChange}
+					/>
+				)}
+			</form.Field>
 			<FormError message={formError ?? error} />
 			{disabled ? null : (
 				<div>

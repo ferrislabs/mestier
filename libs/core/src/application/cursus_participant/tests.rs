@@ -159,12 +159,20 @@ impl World {
                 actor: tenant.manager.subject(),
                 organization_id: tenant.organization_id,
                 name: name.to_owned(),
+                group_name: None,
                 siret: None,
-                address: None,
                 legal_form: None,
                 naf_code: None,
+                capital: None,
                 employee_count: None,
+                group_employee_count: None,
                 director_name: None,
+                phone: None,
+                email: None,
+                website: None,
+                activity_domains: None,
+                missions: None,
+                addresses: Vec::new(),
             })
             .await
             .unwrap()
