@@ -4,6 +4,17 @@ import {
 	Loader2,
 	Webhook as WebhookIcon,
 } from 'lucide-react'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from '#/components/ui/alert-dialog'
 import { Button } from '#/components/ui/button'
 import {
 	Collapsible,
@@ -224,16 +235,39 @@ export function ChannelWebhooksSectionUI({
 												<Button type="submit" size="sm">
 													Enregistrer
 												</Button>
-												<Button
-													type="button"
-													size="sm"
-													variant="outline"
-													aria-label={`Révoquer ${webhook.name}`}
-													className="text-destructive"
-													onClick={() => onDelete(webhook.id)}
-												>
-													Suppression de webhook
-												</Button>
+												<AlertDialog>
+													<AlertDialogTrigger asChild>
+														<Button
+															type="button"
+															size="sm"
+															variant="outline"
+															aria-label={`Révoquer ${webhook.name}`}
+															className="text-destructive"
+														>
+															Suppression de webhook
+														</Button>
+													</AlertDialogTrigger>
+													<AlertDialogContent>
+														<AlertDialogHeader>
+															<AlertDialogTitle>
+																Supprimer le webhook ?
+															</AlertDialogTitle>
+															<AlertDialogDescription>
+																Le webhook « {webhook.name} » sera supprimé
+																définitivement. Les applications qui l’appellent
+																ne pourront plus poster dans ce canal.
+															</AlertDialogDescription>
+														</AlertDialogHeader>
+														<AlertDialogFooter>
+															<AlertDialogCancel>Annuler</AlertDialogCancel>
+															<AlertDialogAction
+																onClick={() => onDelete(webhook.id)}
+															>
+																Supprimer
+															</AlertDialogAction>
+														</AlertDialogFooter>
+													</AlertDialogContent>
+												</AlertDialog>
 											</div>
 										</form>
 									</CollapsibleContent>

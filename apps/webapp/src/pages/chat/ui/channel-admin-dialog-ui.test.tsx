@@ -297,6 +297,8 @@ describe('ChannelAdminDialogUI — webhooks', () => {
 
 		await user.click(screen.getByText('CI bot'))
 		await user.click(screen.getByLabelText('Révoquer CI bot'))
+		expect(onDeleteWebhook).not.toHaveBeenCalled()
+		await user.click(screen.getByRole('button', { name: 'Supprimer' }))
 		expect(onDeleteWebhook).toHaveBeenCalledWith('wh-1')
 	})
 })
