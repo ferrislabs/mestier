@@ -6,6 +6,7 @@ import {
 	Fingerprint,
 	Plus,
 	Settings,
+	Trash2,
 } from 'lucide-react'
 import { DoubleClickConfirmButton } from '#/components/double-click-confirm-button'
 import { RequirePermission } from '#/components/require-permission'
@@ -320,6 +321,7 @@ function CategoryGroup({
 										variant="ghost"
 										size="sm"
 										className="w-full justify-start text-destructive hover:text-destructive"
+										icon={<Trash2 className="size-3.5" />}
 										label="Supprimer le canal"
 										confirmLabel="Confirmer la suppression"
 										onConfirm={() => onDeleteChannel(chan.id)}

@@ -1,4 +1,4 @@
-import { Globe, Loader2, Lock, X } from 'lucide-react'
+import { Globe, Loader2, Lock, Trash2, X } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import { DoubleClickConfirmButton } from '#/components/double-click-confirm-button'
 import { Button } from '#/components/ui/button'
@@ -160,6 +160,7 @@ export function ChannelAdminDialogUI({
 										variant="ghost"
 										size="sm"
 										className="h-7 w-full justify-start px-2.5 text-red-300 text-xs hover:bg-red-500/15 hover:text-red-200"
+										icon={<Trash2 className="size-3.5" />}
 										label="Supprimer le canal"
 										disabled={isDeleting}
 										confirmLabel="Confirmer la suppression"

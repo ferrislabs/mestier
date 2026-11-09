@@ -1,4 +1,4 @@
-import { type ComponentProps, useEffect, useState } from 'react'
+import { type ComponentProps, type ReactNode, useEffect, useState } from 'react'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
 
@@ -7,6 +7,7 @@ const DISARM_AFTER_MS = 4000
 export interface DoubleClickConfirmButtonProps
 	extends Omit<ComponentProps<typeof Button>, 'onClick' | 'children'> {
 	label: string
+	icon?: ReactNode
 	confirmLabel?: string
 	onConfirm: () => void
 }
@@ -15,6 +16,7 @@ export interface DoubleClickConfirmButtonProps
  * second one confirms. It disarms by itself after a few seconds. */
 export function DoubleClickConfirmButton({
 	label,
+	icon,
 	confirmLabel = 'Cliquer à nouveau pour confirmer',
 	onConfirm,
 	...props
@@ -47,6 +49,7 @@ export function DoubleClickConfirmButton({
 			}}
 			onBlur={() => setArmed(false)}
 		>
+			{icon}
 			{armed ? confirmLabel : label}
 		</Button>
 	)
