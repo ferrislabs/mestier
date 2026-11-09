@@ -95,6 +95,10 @@ export interface AppModule {
 		label: string
 		to: string
 		search?: Readonly<Record<string, string>>
+		/** Replaces the "+" that precedes the label. */
+		icon?: LucideIcon
+		/** Drawn after the label, e.g. a count of what waits. */
+		badge?: ComponentType
 	}
 	requiredPermission?: PermissionName
 }

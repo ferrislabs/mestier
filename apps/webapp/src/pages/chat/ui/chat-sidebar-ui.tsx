@@ -4,6 +4,7 @@ import {
 	AlertCircle,
 	ChevronRight,
 	Copy,
+	Bell,
 	Fingerprint,
 	Plus,
 	Settings,
@@ -20,13 +21,23 @@ import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
+	ContextMenuRadioGroup,
+	ContextMenuRadioItem,
 	ContextMenuSeparator,
+	ContextMenuSub,
+	ContextMenuSubContent,
+	ContextMenuSubTrigger,
 	ContextMenuTrigger,
 } from '#/components/ui/context-menu'
 import { Skeleton } from '#/components/ui/skeleton'
+import type { NotificationLevel } from '#/hooks/use-chat'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import { channelKindIcon } from '#/pages/chat/lib/channel-kinds'
+import {
+	effectiveNotificationLevel,
+	NOTIFICATION_LEVELS,
+} from '#/pages/chat/lib/notification-levels'
 import type { DirectMessageItem } from '#/pages/chat/lib/direct-messages'
 import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
@@ -52,6 +63,12 @@ export interface ChatSidebarUIProps {
 	 * management starts here, not only from inside the channel itself. */
 	onOpenChannelAdmin: (channelId: string) => void
 	onDuplicateChannel: (channelId: string) => void
+	/** The levels the person chose per channel; the others have the default. */
+	notificationLevels: ReadonlyMap<string, NotificationLevel>
+	onChangeNotificationLevel: (
+		channelId: string,
+		level: NotificationLevel,
+	) => void
 	onDeleteChannel: (channelId: string) => void
 }
 
@@ -84,6 +101,8 @@ export function ChatSidebarUI({
 	newDirectMessage,
 	onOpenChannelAdmin,
 	onDuplicateChannel,
+	notificationLevels,
+	onChangeNotificationLevel,
 	onDeleteChannel,
 }: ChatSidebarUIProps) {
 	return (
@@ -150,6 +169,8 @@ export function ChatSidebarUI({
 								unreadCounts={unreadCounts}
 								onOpenChannelAdmin={onOpenChannelAdmin}
 								onDuplicateChannel={onDuplicateChannel}
+								notificationLevels={notificationLevels}
+								onChangeNotificationLevel={onChangeNotificationLevel}
 								onDeleteChannel={onDeleteChannel}
 								onRequestNewChannelInCategory={onRequestNewChannelInCategory}
 							/>
@@ -233,6 +254,12 @@ interface CategoryGroupProps {
 	unreadCounts: ReadonlyMap<string, number>
 	onOpenChannelAdmin: (channelId: string) => void
 	onDuplicateChannel: (channelId: string) => void
+	/** The levels the person chose per channel; the others have the default. */
+	notificationLevels: ReadonlyMap<string, NotificationLevel>
+	onChangeNotificationLevel: (
+		channelId: string,
+		level: NotificationLevel,
+	) => void
 	onDeleteChannel: (channelId: string) => void
 	onRequestNewChannelInCategory: (categoryId: string) => void
 }
@@ -246,6 +273,8 @@ function CategoryGroup({
 	unreadCounts,
 	onOpenChannelAdmin,
 	onDuplicateChannel,
+	notificationLevels,
+	onChangeNotificationLevel,
 	onDeleteChannel,
 	onRequestNewChannelInCategory,
 }: CategoryGroupProps) {
@@ -309,6 +338,36 @@ function CategoryGroup({
 								<Fingerprint className="size-3.5" />
 								Copier l’identifiant du canal
 							</ContextMenuItem>
+							<ContextMenuSub>
+								<ContextMenuSubTrigger className={ITEM}>
+									<Bell className="size-3.5" />
+									Notifications
+								</ContextMenuSubTrigger>
+								<ContextMenuSubContent className="w-52 min-w-0 p-0.5">
+									<ContextMenuRadioGroup
+										value={effectiveNotificationLevel(
+											notificationLevels,
+											chan.id,
+										)}
+										onValueChange={(level) =>
+											onChangeNotificationLevel(
+												chan.id,
+												level as NotificationLevel,
+											)
+										}
+									>
+										{NOTIFICATION_LEVELS.map((option) => (
+											<ContextMenuRadioItem
+												key={option.value}
+												value={option.value}
+												className={ITEM}
+											>
+												{option.label}
+											</ContextMenuRadioItem>
+										))}
+									</ContextMenuRadioGroup>
+								</ContextMenuSubContent>
+							</ContextMenuSub>
 							<RequirePermission permission="MANAGE_CHANNELS">
 								<ContextMenuSeparator className="my-0.5" />
 								<div>

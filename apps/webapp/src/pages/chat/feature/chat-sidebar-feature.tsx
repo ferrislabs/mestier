@@ -5,6 +5,8 @@ import {
 	useCategories,
 	useChannels,
 	useDeleteChannel,
+	useNotificationLevels,
+	useSetNotificationLevel,
 	useChatDirectory,
 	useChatListGatewaySync,
 	useDirectChannels,
@@ -46,6 +48,8 @@ export function ChatSidebarFeature() {
 	const directory = useChatDirectory(organizationId)
 	const presenceStatuses = usePresenceStatuses()
 	const deleteChannel = useDeleteChannel(organizationId)
+	const notificationLevels = useNotificationLevels(organizationId)
+	const setNotificationLevel = useSetNotificationLevel(organizationId)
 
 	const unreadCounts = useMemo(
 		() =>
@@ -120,6 +124,13 @@ export function ChatSidebarFeature() {
 			}
 			onOpenChannelAdmin={openChannelAdmin}
 			onDuplicateChannel={duplicateChannel}
+			notificationLevels={notificationLevels.data ?? new Map()}
+			onChangeNotificationLevel={(id, level) =>
+				setNotificationLevel.mutate({
+					path: { channel_id: id },
+					body: { level },
+				} as never)
+			}
 			onDeleteChannel={(id) =>
 				deleteChannel.mutate({ path: { channel_id: id } } as never)
 			}

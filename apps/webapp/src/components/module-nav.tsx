@@ -112,8 +112,19 @@ export function ModuleNav({
 						search={activeModule.primaryAction.search}
 						className="flex h-9 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-nav-primary px-3 font-medium text-[13px] text-nav-primary-foreground outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-nav"
 					>
-						<Plus className="size-4" strokeWidth={2} aria-hidden />
+						{activeModule.primaryAction.icon ? (
+							<activeModule.primaryAction.icon
+								className="size-4"
+								strokeWidth={2}
+								aria-hidden
+							/>
+						) : (
+							<Plus className="size-4" strokeWidth={2} aria-hidden />
+						)}
 						<span className="truncate">{activeModule.primaryAction.label}</span>
+						{activeModule.primaryAction.badge ? (
+							<activeModule.primaryAction.badge />
+						) : null}
 					</Link>
 				</div>
 			) : null}

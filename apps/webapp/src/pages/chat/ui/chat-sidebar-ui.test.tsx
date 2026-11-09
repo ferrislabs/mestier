@@ -64,6 +64,8 @@ function baseProps(
 		onRequestNewChannelInCategory: vi.fn(),
 		onOpenChannelAdmin: vi.fn(),
 		onDuplicateChannel: vi.fn(),
+		notificationLevels: new Map(),
+		onChangeNotificationLevel: vi.fn(),
 		onDeleteChannel: vi.fn(),
 		...overrides,
 	}
@@ -224,6 +226,34 @@ describe('ChatSidebarUI — context menu', () => {
 		)
 
 		expect(onDuplicateChannel).toHaveBeenCalledWith('ch-1')
+	})
+
+	it('sets the notification level of the channel from the menu', async () => {
+		const onChangeNotificationLevel = vi.fn()
+		const user = await openMenu({ onChangeNotificationLevel })
+
+		await user.click(await screen.findByText('Notifications'))
+		const muted = await screen.findByRole('menuitemradio', {
+			name: 'Aucune notification',
+		})
+		muted.focus()
+		await user.keyboard('{Enter}')
+
+		expect(onChangeNotificationLevel).toHaveBeenCalledWith('ch-1', 'NOTHING')
+	})
+
+	it('shows mentions only as the default level', async () => {
+		const user = await openMenu()
+
+		await user.click(await screen.findByText('Notifications'))
+
+		expect(
+			(
+				await screen.findByRole('menuitemradio', {
+					name: 'Mentions uniquement',
+				})
+			).getAttribute('aria-checked'),
+		).toBe('true')
 	})
 
 	it('deletes the channel only on the second click', async () => {
