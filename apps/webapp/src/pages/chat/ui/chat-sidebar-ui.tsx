@@ -29,6 +29,8 @@ import type { DirectMessageItem } from '#/pages/chat/lib/direct-messages'
 import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
 
+const ITEM = 'gap-2 px-2 py-1 text-xs [&_svg]:size-3.5'
+
 export interface ChatSidebarUIProps {
 	organizationSlug: string
 	groups: ChannelGroup[]
@@ -287,26 +289,33 @@ function CategoryGroup({
 								</button>
 							</li>
 						</ContextMenuTrigger>
-						<ContextMenuContent className="w-56">
+						<ContextMenuContent className="w-48 min-w-0 p-0.5">
 							<RequirePermission permission="MANAGE_CHANNELS">
-								<ContextMenuItem onSelect={() => onOpenChannelAdmin(chan.id)}>
+								<ContextMenuItem
+									className={ITEM}
+									onSelect={() => onOpenChannelAdmin(chan.id)}
+								>
 									<Settings className="size-4" />
 									Modifier le canal
 								</ContextMenuItem>
-								<ContextMenuItem onSelect={() => onDuplicateChannel(chan.id)}>
-									<Copy className="size-4" />
+								<ContextMenuItem
+									className={ITEM}
+									onSelect={() => onDuplicateChannel(chan.id)}
+								>
+									<Copy className="size-3.5" />
 									Dupliquer le canal
 								</ContextMenuItem>
 							</RequirePermission>
 							<ContextMenuItem
+								className={ITEM}
 								onSelect={() => navigator.clipboard?.writeText(chan.id)}
 							>
-								<Fingerprint className="size-4" />
+								<Fingerprint className="size-3.5" />
 								Copier l’identifiant du canal
 							</ContextMenuItem>
 							<RequirePermission permission="MANAGE_CHANNELS">
-								<ContextMenuSeparator />
-								<div className="p-1">
+								<ContextMenuSeparator className="my-0.5" />
+								<div>
 									<DoubleClickConfirmButton
 										variant="ghost"
 										size="sm"
