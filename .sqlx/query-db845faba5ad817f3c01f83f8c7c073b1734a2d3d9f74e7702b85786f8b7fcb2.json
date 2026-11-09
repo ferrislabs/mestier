@@ -1,0 +1,111 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE library_photos\n            SET caption = $3, tags = $4, project_id = $5, updated_at = $6\n            WHERE id = $1 AND org_id = $2\n            RETURNING id, org_id, file_key, thumbnail_key, mime_type, width, height, size_bytes, content_hash, caption, tags, project_id, taken_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "thumbnail_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "height",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "size_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "content_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "caption",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "tags",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "taken_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "TextArray",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "db845faba5ad817f3c01f83f8c7c073b1734a2d3d9f74e7702b85786f8b7fcb2"
+}

@@ -109,6 +109,9 @@ Politique Cerbos v1 : tout outil `read` autorisé avec le scope `mestier.read` ;
 | `add_doe_supply` | write | doe | `GET` puis `PUT /does/{id}` : fourniture saisie (désignation, DPGF, destination, fournisseur, fabricant, caractéristiques), sans produit du catalogue |
 | `update_doe_header` | write | doe | `PUT /does/{id}` (titre, lieu, lot, date, rédacteur, indice) |
 | `export_doe_pdf` | read | doe | `GET /does/{id}/pdf`, renvoyé en ressource intégrée `application/pdf` (plafond 10 Mo, sinon erreur explicite) |
+| `search_photo_library` | read | doe | `GET /photo-library/photos` puis `GET /photo-library/photos/{id}/thumbnail` : texte JSON `{photos, page, total}` suivi d'une image JPEG par photo, dans l'ordre (`limit` 8 par défaut, 12 au plus avec miniatures, 50 sans ; `include_thumbnails=false` ne renvoie aucune image) |
+| `tag_library_photos` | write | doe | `GET` puis `PATCH /photo-library/photos/{id}` par élément (50 au plus) : légende, étiquettes ajoutées ou retirées (20 au plus) ; un échec n'arrête pas les autres, `{results:[{photo_id, status, error?}]}` |
+| `place_doe_files` | write | doe | `POST /does/{id}/photos/place` (50 placements au plus ; `target` : `section`, `supply`, `cover`) : copie les photos de la photothèque dans le DOE, `{doe, results}` ; aucun outil ne supprime ni ne téléverse dans la photothèque |
 
 ### Composants
 

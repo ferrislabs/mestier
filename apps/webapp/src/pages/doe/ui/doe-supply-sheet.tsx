@@ -1,4 +1,4 @@
-import { FileText, ImageIcon, Loader2, X } from 'lucide-react'
+import { FileText, ImageIcon, Images, Loader2, X } from 'lucide-react'
 import { type ReactNode, useId } from 'react'
 import { FormField } from '#/components/form-field'
 import { Button } from '#/components/ui/button'
@@ -22,6 +22,8 @@ interface DoeSupplySheetProps {
 	isUploadingPhotos: boolean
 	isUploadingDatasheets: boolean
 	error: string | null
+	libraryBlockedReason: string | null
+	onPickFromLibrary: () => void
 	onOpenChange: (open: boolean) => void
 	onChange: (patch: Partial<SupplyFormValues>) => void
 	onUploadPhotos: (files: File[]) => void
@@ -58,6 +60,8 @@ export function DoeSupplySheet({
 	isUploadingPhotos,
 	isUploadingDatasheets,
 	error,
+	libraryBlockedReason,
+	onPickFromLibrary,
 	onOpenChange,
 	onChange,
 	onUploadPhotos,
@@ -229,6 +233,23 @@ export function DoeSupplySheet({
 								isUploading={isUploadingPhotos}
 								onFiles={onUploadPhotos}
 							/>
+							<div className="flex flex-wrap items-center gap-3">
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									disabled={libraryBlockedReason !== null}
+									onClick={onPickFromLibrary}
+								>
+									<Images aria-hidden />
+									Choisir dans la photothèque
+								</Button>
+								{libraryBlockedReason ? (
+									<span className="text-muted-foreground text-xs">
+										{libraryBlockedReason}
+									</span>
+								) : null}
+							</div>
 							{values.photos.length === 0 ? (
 								<p className="text-muted-foreground text-xs">Aucune photo.</p>
 							) : (

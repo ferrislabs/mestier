@@ -33,6 +33,9 @@ tracing = { workspace = true }
 aws-credential-types = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 bytes = { workspace = true }
+image = { workspace = true }
+kamadak-exif = { workspace = true }
+sha2 = { workspace = true }
 mockall = { workspace = true, optional = true }
 
 # #337: Factur-X reception. Pinned directly here (not `workspace = true`) per

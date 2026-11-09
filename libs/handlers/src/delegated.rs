@@ -61,6 +61,26 @@ const DELEGATED_ROUTES: &[(Method, &str)] = &[
     (Method::POST, "/api/v1/files"),
     (
         Method::GET,
+        "/api/v1/organizations/{organization_id}/photo-library/photos",
+    ),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}",
+    ),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}/thumbnail",
+    ),
+    (
+        Method::PATCH,
+        "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}",
+    ),
+    (
+        Method::POST,
+        "/api/v1/organizations/{organization_id}/does/{doe_id}/photos/place",
+    ),
+    (
+        Method::GET,
         "/api/v1/organizations/{organization_id}/maintenance/recap",
     ),
     (
@@ -176,5 +196,57 @@ mod tests {
             let path = format!("{MAINTENANCE_PREFIX}{suffix}");
             assert!(!delegated_route_allowed(&method, &path), "{method} {path}");
         }
+    }
+
+    #[test]
+    fn the_photo_library_opens_reads_one_patch_and_the_placement_only() {
+        const LIBRARY: &str = "/api/v1/organizations/{organization_id}/photo-library";
+        let mut open: Vec<(String, &str)> = DELEGATED_ROUTES
+            .iter()
+            .filter(|(_, template)| {
+                template.starts_with(LIBRARY) || template.ends_with("/photos/place")
+            })
+            .map(|(method, template)| (method.to_string(), *template))
+            .collect();
+        open.sort();
+
+        let mut expected = vec![
+            (
+                "GET".to_owned(),
+                "/api/v1/organizations/{organization_id}/photo-library/photos",
+            ),
+            (
+                "GET".to_owned(),
+                "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}",
+            ),
+            (
+                "GET".to_owned(),
+                "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}/thumbnail",
+            ),
+            (
+                "PATCH".to_owned(),
+                "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}",
+            ),
+            (
+                "POST".to_owned(),
+                "/api/v1/organizations/{organization_id}/does/{doe_id}/photos/place",
+            ),
+        ];
+        expected.sort();
+        assert_eq!(open, expected);
+    }
+
+    #[test]
+    fn the_assistant_can_neither_upload_nor_delete_a_library_photo() {
+        const PHOTOS: &str = "/api/v1/organizations/{organization_id}/photo-library/photos";
+        assert!(!delegated_route_allowed(&Method::POST, PHOTOS));
+        assert!(!delegated_route_allowed(
+            &Method::DELETE,
+            &format!("{PHOTOS}/{{photo_id}}")
+        ));
+        assert!(!delegated_route_allowed(
+            &Method::PUT,
+            &format!("{PHOTOS}/{{photo_id}}")
+        ));
     }
 }

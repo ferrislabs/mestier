@@ -63,6 +63,7 @@ pub mod member_contract;
 pub mod member_document;
 pub mod member_profile;
 pub mod organization;
+pub mod photo_library;
 pub mod planning;
 pub mod policy;
 pub mod product;

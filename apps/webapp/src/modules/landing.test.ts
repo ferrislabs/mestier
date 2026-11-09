@@ -147,7 +147,11 @@ describe('module routability', () => {
 			'/planification/maintenance',
 			'/planification/board',
 		])
-		expect(sectionsOf('projet')).toEqual(['/projet', '/projet/doe-models'])
+		expect(sectionsOf('projet')).toEqual([
+			'/projet',
+			'/projet/doe-models',
+			'/projet/photos',
+		])
 	})
 
 	it('registers the board now that its screen exists', () => {

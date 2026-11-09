@@ -4,6 +4,7 @@ pub mod crm;
 pub mod edit;
 pub mod files;
 pub mod maintenance;
+pub mod photos;
 pub mod planning;
 pub mod quote;
 pub mod reference;

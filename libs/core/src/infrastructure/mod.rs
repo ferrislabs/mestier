@@ -35,6 +35,7 @@ pub mod notification;
 pub mod notification_preference;
 pub mod organization;
 pub mod overwrite;
+pub mod photo_library;
 pub mod planning;
 pub mod postgres;
 pub mod presence;

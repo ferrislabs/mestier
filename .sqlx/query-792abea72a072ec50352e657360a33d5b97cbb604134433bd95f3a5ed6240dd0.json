@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM library_photos\n            WHERE org_id = $1\n              AND ($2::text IS NULL\n                   OR caption ILIKE $2\n                   OR EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE tag ILIKE $2))\n              AND tags @> $3::text[]\n              AND ($4::uuid IS NULL OR project_id = $4)\n              AND (NOT $5::boolean OR (caption IS NULL AND cardinality(tags) = 0))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "792abea72a072ec50352e657360a33d5b97cbb604134433bd95f3a5ed6240dd0"
+}

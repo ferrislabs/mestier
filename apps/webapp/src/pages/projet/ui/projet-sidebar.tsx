@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import {
 	FileText,
+	Images,
 	Layers,
 	LayoutTemplate,
 	type LucideIcon,
@@ -97,6 +98,13 @@ export function ProjetSidebar({
 					icon={LayoutTemplate}
 					label="Modèles de DOE"
 					count={modelsCount}
+				/>
+				<Entry
+					organizationSlug={organizationSlug}
+					to="/projet/photos"
+					active={active.has(ENTRY.photos)}
+					icon={Images}
+					label="Photothèque"
 				/>
 			</ul>
 			{selected && (

@@ -11,6 +11,8 @@ import { DoeSuppliesTab } from '#/pages/doe/ui/doe-supplies-tab'
 
 export interface SectionActions {
 	uploadingSectionId: string | null
+	libraryBlockedReason: string | null
+	onPickPhotosFromLibrary: (sectionId: string) => void
 	onMakerLabelChange: (sectionId: string, label: MakerLabel) => void
 	onPickFromCatalog: (sectionId: string) => void
 	onCreateSupply: (sectionId: string) => void
@@ -95,6 +97,8 @@ export function DoeSectionTab({
 					photos={content.photos}
 					fileUrls={fileUrls}
 					isUploading={isUploading}
+					libraryBlockedReason={actions.libraryBlockedReason}
+					onPickFromLibrary={() => actions.onPickPhotosFromLibrary(section.id)}
 					onPerPageChange={(perPage) =>
 						actions.onPerPageChange(section.id, perPage)
 					}

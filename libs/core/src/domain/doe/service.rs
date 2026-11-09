@@ -1,5 +1,6 @@
 use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
+use uuid::Uuid;
 
 use crate::{
     Customer, DoeSummary, Organization, OrganizationId, Project, ProjectId,
@@ -8,7 +9,7 @@ use crate::{
         customer_context::ports::CustomerContextRepository,
         doe::{
             Doe, DoeFile, DoeId, DoeParty, DoeSection, DoeSectionContent, DoeSupply, PartyRole,
-            Revision, SupplierSnapshot,
+            PhotosPerPage, Revision, SupplierSnapshot,
             commands::{CreateDoeCommand, DraftSupplyFromProductCommand, UpdateDoeCommand},
             ports::DoeRepository,
             render::DoeDocument,
@@ -473,6 +474,145 @@ where
                 .unwrap_or_default(),
         };
         Ok(DoeDocument::from_doe(&doe, &style))
+    }
+}
+
+pub const PHOTOS_SECTION_TITLE: &str = "Photos générales du chantier";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileTarget<'a> {
+    Section {
+        id: Option<Uuid>,
+        title: Option<&'a str>,
+    },
+    Supply {
+        id: Uuid,
+    },
+    Cover,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlacementRefusal {
+    SectionNotFound,
+    SectionAmbiguous,
+    SectionLimit,
+    SupplyNotFound,
+    FileLimit,
+}
+
+impl std::fmt::Display for PlacementRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SectionNotFound => f.write_str("photo section not found"),
+            Self::SectionAmbiguous => {
+                f.write_str("several photo sections: name one by section_id or section_title")
+            }
+            Self::SectionLimit => write!(f, "a DOE holds at most {MAX_SECTIONS} sections"),
+            Self::SupplyNotFound => f.write_str("supply not found"),
+            Self::FileLimit => write!(f, "a DOE references at most {MAX_FILES} files"),
+        }
+    }
+}
+
+pub fn place_file(
+    doe: &Doe,
+    target: FileTarget<'_>,
+    key: String,
+    caption: Option<String>,
+) -> Result<Doe, PlacementRefusal> {
+    let mut placed = doe.clone();
+    let file = clean_file(DoeFile { key, caption });
+
+    match target {
+        FileTarget::Cover => placed.cover_photo_key = Some(file.key),
+        FileTarget::Supply { id } => {
+            let supply = placed
+                .sections
+                .iter_mut()
+                .find_map(|section| match &mut section.content {
+                    DoeSectionContent::Supplies { supplies, .. } => {
+                        supplies.iter_mut().find(|supply| supply.id == id)
+                    }
+                    _ => None,
+                })
+                .ok_or(PlacementRefusal::SupplyNotFound)?;
+            supply.photos.push(file);
+        }
+        FileTarget::Section { id, title } => {
+            let index = photos_section_index(&mut placed, id, title)?;
+            if let DoeSectionContent::Photos { photos, .. } = &mut placed.sections[index].content {
+                photos.push(file);
+            }
+        }
+    }
+
+    if distinct_file_keys(&placed) > MAX_FILES {
+        return Err(PlacementRefusal::FileLimit);
+    }
+    Ok(placed)
+}
+
+fn photos_section_index(
+    doe: &mut Doe,
+    id: Option<Uuid>,
+    title: Option<&str>,
+) -> Result<usize, PlacementRefusal> {
+    let photo_sections: Vec<usize> = doe
+        .sections
+        .iter()
+        .enumerate()
+        .filter(|(_, section)| matches!(section.content, DoeSectionContent::Photos { .. }))
+        .map(|(index, _)| index)
+        .collect();
+
+    if let Some(id) = id {
+        return photo_sections
+            .into_iter()
+            .find(|index| doe.sections[*index].id == id)
+            .ok_or(PlacementRefusal::SectionNotFound);
+    }
+
+    let wanted = title.map(str::trim).filter(|title| !title.is_empty());
+    if photo_sections.is_empty() {
+        if doe.sections.len() >= MAX_SECTIONS {
+            return Err(PlacementRefusal::SectionLimit);
+        }
+        doe.sections.push(DoeSection {
+            id: generate_uuid_v7(),
+            title: wanted.unwrap_or(PHOTOS_SECTION_TITLE).to_owned(),
+            enabled: true,
+            content: DoeSectionContent::Photos {
+                per_page: PhotosPerPage::Two,
+                photos: Vec::new(),
+            },
+        });
+        return Ok(doe.sections.len() - 1);
+    }
+
+    let candidates: Vec<usize> = match wanted {
+        Some(wanted) => photo_sections
+            .into_iter()
+            .filter(|index| {
+                doe.sections[*index].title.trim().to_lowercase() == wanted.to_lowercase()
+            })
+            .collect(),
+        None => {
+            let enabled: Vec<usize> = photo_sections
+                .iter()
+                .copied()
+                .filter(|index| doe.sections[*index].enabled)
+                .collect();
+            if photo_sections.len() == 1 || enabled.is_empty() {
+                photo_sections
+            } else {
+                enabled
+            }
+        }
+    };
+    match candidates.as_slice() {
+        [] => Err(PlacementRefusal::SectionNotFound),
+        [only] => Ok(*only),
+        _ => Err(PlacementRefusal::SectionAmbiguous),
     }
 }
 
@@ -1415,5 +1555,270 @@ mod tests {
         ];
 
         assert_eq!(distinct_file_keys(&doe), 3);
+    }
+}
+
+#[cfg(test)]
+mod placement_tests {
+    use chrono::NaiveDate;
+
+    use super::*;
+    use crate::{OrganizationId, ProjectId, domain::doe::MakerLabel};
+
+    fn doe_with(sections: Vec<DoeSection>) -> Doe {
+        let now = chrono::Utc::now();
+        Doe {
+            id: DoeId(Uuid::new_v4()),
+            organization_id: OrganizationId(Uuid::new_v4()),
+            project_id: ProjectId(Uuid::new_v4()),
+            model_id: None,
+            title: "Avenue".to_owned(),
+            place: None,
+            lot: None,
+            issued_on: NaiveDate::from_ymd_opt(2026, 11, 9).unwrap(),
+            author: None,
+            revision: Revision::try_from("A".to_owned()).unwrap(),
+            cover_photo_key: None,
+            parties: Vec::new(),
+            sections,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn photos_section(title: &str, enabled: bool, keys: &[&str]) -> DoeSection {
+        DoeSection {
+            id: Uuid::new_v4(),
+            title: title.to_owned(),
+            enabled,
+            content: DoeSectionContent::Photos {
+                per_page: PhotosPerPage::Two,
+                photos: keys
+                    .iter()
+                    .map(|key| DoeFile {
+                        key: (*key).to_owned(),
+                        caption: None,
+                    })
+                    .collect(),
+            },
+        }
+    }
+
+    fn supply_section(supply_id: Uuid) -> DoeSection {
+        DoeSection {
+            id: Uuid::new_v4(),
+            title: "Végétaux".to_owned(),
+            enabled: true,
+            content: DoeSectionContent::Supplies {
+                maker_label: MakerLabel::Nursery,
+                supplies: vec![DoeSupply {
+                    id: supply_id,
+                    source_product_id: None,
+                    title: None,
+                    designation: "Rosier".to_owned(),
+                    dpgf_ref: None,
+                    destination: None,
+                    supplier: None,
+                    maker: None,
+                    specs: None,
+                    photos: Vec::new(),
+                    datasheet_keys: Vec::new(),
+                }],
+            },
+        }
+    }
+
+    fn any_section() -> FileTarget<'static> {
+        FileTarget::Section {
+            id: None,
+            title: None,
+        }
+    }
+
+    fn photos_of(doe: &Doe, index: usize) -> &[DoeFile] {
+        match &doe.sections[index].content {
+            DoeSectionContent::Photos { photos, .. } => photos,
+            other => panic!("not a photos section: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_doe_without_photo_section_gets_the_general_one() {
+        let doe = doe_with(vec![supply_section(Uuid::new_v4())]);
+
+        let placed = place_file(&doe, any_section(), "doe/a".to_owned(), None).unwrap();
+
+        assert_eq!(placed.sections.len(), 2);
+        assert_eq!(placed.sections[1].title, PHOTOS_SECTION_TITLE);
+        assert_eq!(photos_of(&placed, 1)[0].key, "doe/a");
+        assert_eq!(doe.sections.len(), 1);
+    }
+
+    #[test]
+    fn the_only_photo_section_is_chosen_without_naming_it() {
+        let doe = doe_with(vec![photos_section("Réception", true, &[])]);
+
+        let placed = place_file(
+            &doe,
+            any_section(),
+            "doe/a".to_owned(),
+            Some("  Massif  ".to_owned()),
+        )
+        .unwrap();
+
+        assert_eq!(placed.sections.len(), 1);
+        assert_eq!(photos_of(&placed, 0)[0].caption.as_deref(), Some("Massif"));
+    }
+
+    #[test]
+    fn several_photo_sections_need_a_name_unless_only_one_is_enabled() {
+        let doe = doe_with(vec![
+            photos_section("Avant", true, &[]),
+            photos_section("Après", true, &[]),
+        ]);
+        assert_eq!(
+            place_file(&doe, any_section(), "doe/a".to_owned(), None),
+            Err(PlacementRefusal::SectionAmbiguous)
+        );
+
+        let doe = doe_with(vec![
+            photos_section("Avant", false, &[]),
+            photos_section("Après", true, &[]),
+        ]);
+        let placed = place_file(&doe, any_section(), "doe/a".to_owned(), None).unwrap();
+        assert_eq!(photos_of(&placed, 1).len(), 1);
+    }
+
+    #[test]
+    fn a_section_is_found_by_id_or_by_title() {
+        let doe = doe_with(vec![
+            photos_section("Avant", true, &[]),
+            photos_section("Après", true, &[]),
+        ]);
+        let second = doe.sections[1].id;
+
+        let by_id = place_file(
+            &doe,
+            FileTarget::Section {
+                id: Some(second),
+                title: None,
+            },
+            "doe/a".to_owned(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(photos_of(&by_id, 1).len(), 1);
+
+        let by_title = place_file(
+            &doe,
+            FileTarget::Section {
+                id: None,
+                title: Some(" avant "),
+            },
+            "doe/a".to_owned(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(photos_of(&by_title, 0).len(), 1);
+
+        assert_eq!(
+            place_file(
+                &doe,
+                FileTarget::Section {
+                    id: Some(Uuid::new_v4()),
+                    title: None,
+                },
+                "doe/a".to_owned(),
+                None,
+            ),
+            Err(PlacementRefusal::SectionNotFound)
+        );
+        assert_eq!(
+            place_file(
+                &doe,
+                FileTarget::Section {
+                    id: None,
+                    title: Some("Inconnue"),
+                },
+                "doe/a".to_owned(),
+                None,
+            ),
+            Err(PlacementRefusal::SectionNotFound)
+        );
+    }
+
+    #[test]
+    fn a_supply_receives_the_photo() {
+        let supply_id = Uuid::new_v4();
+        let doe = doe_with(vec![supply_section(supply_id)]);
+
+        let placed = place_file(
+            &doe,
+            FileTarget::Supply { id: supply_id },
+            "doe/a".to_owned(),
+            None,
+        )
+        .unwrap();
+
+        match &placed.sections[0].content {
+            DoeSectionContent::Supplies { supplies, .. } => {
+                assert_eq!(supplies[0].photos[0].key, "doe/a");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(
+            place_file(
+                &doe,
+                FileTarget::Supply { id: Uuid::new_v4() },
+                "doe/a".to_owned(),
+                None,
+            ),
+            Err(PlacementRefusal::SupplyNotFound)
+        );
+    }
+
+    #[test]
+    fn the_cover_replaces_the_previous_one() {
+        let mut doe = doe_with(Vec::new());
+        doe.cover_photo_key = Some("doe/old".to_owned());
+
+        let placed = place_file(&doe, FileTarget::Cover, "doe/new".to_owned(), None).unwrap();
+
+        assert_eq!(placed.cover_photo_key.as_deref(), Some("doe/new"));
+    }
+
+    #[test]
+    fn the_file_ceiling_is_enforced() {
+        let keys: Vec<String> = (0..MAX_FILES).map(|n| format!("doe/{n}")).collect();
+        let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let doe = doe_with(vec![photos_section("Photos", true, &refs)]);
+
+        assert_eq!(
+            place_file(&doe, any_section(), "doe/extra".to_owned(), None),
+            Err(PlacementRefusal::FileLimit)
+        );
+    }
+
+    #[test]
+    fn replacing_the_cover_at_the_ceiling_stays_within_it() {
+        let keys: Vec<String> = (0..MAX_FILES - 1).map(|n| format!("doe/{n}")).collect();
+        let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+        let mut doe = doe_with(vec![photos_section("Photos", true, &refs)]);
+        doe.cover_photo_key = Some("doe/cover".to_owned());
+
+        assert!(place_file(&doe, FileTarget::Cover, "doe/new".to_owned(), None).is_ok());
+    }
+
+    #[test]
+    fn the_section_ceiling_is_enforced_when_creating_the_general_section() {
+        let sections = (0..MAX_SECTIONS)
+            .map(|_| supply_section(Uuid::new_v4()))
+            .collect();
+        let doe = doe_with(sections);
+
+        assert_eq!(
+            place_file(&doe, any_section(), "doe/a".to_owned(), None),
+            Err(PlacementRefusal::SectionLimit)
+        );
     }
 }
