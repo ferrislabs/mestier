@@ -3,12 +3,24 @@ import { type ReactNode, useId } from 'react'
 import { FormField } from '#/components/form-field'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '#/components/ui/select'
 import { Textarea } from '#/components/ui/textarea'
 import {
 	canSubmitSupply,
 	type SupplyFormValues,
 } from '#/pages/doe/lib/supply-form'
-import { MAKER_LABEL_TEXT, type MakerLabel } from '#/pages/doe/types'
+import {
+	MAKER_LABEL_TEXT,
+	type MakerLabel,
+	type SupplyPhotoColumns,
+} from '#/pages/doe/types'
 import { FileDropZone } from '#/pages/doe/ui/file-drop-zone'
 import { IconButton } from '#/pages/doe/ui/icon-button'
 import { SideSheet } from '#/pages/doe/ui/side-sheet'
@@ -29,6 +41,19 @@ interface DoeSupplySheetProps {
 	onUploadPhotos: (files: File[]) => void
 	onUploadDatasheets: (files: File[]) => void
 	onSubmit: () => void
+}
+
+const PHOTO_COLUMN_OPTIONS: Array<{
+	value: SupplyPhotoColumns
+	label: string
+}> = [
+	{ value: 'three', label: '3 par ligne (petites)' },
+	{ value: 'two', label: '2 par ligne' },
+	{ value: 'one', label: '1 par ligne (grandes)' },
+]
+
+function isPhotoColumns(value: string): value is SupplyPhotoColumns {
+	return PHOTO_COLUMN_OPTIONS.some((option) => option.value === value)
 }
 
 function FormSection({
@@ -249,6 +274,35 @@ export function DoeSupplySheet({
 										{libraryBlockedReason}
 									</span>
 								) : null}
+							</div>
+							<div className="flex items-center gap-2">
+								<Label
+									htmlFor={id('photo-columns')}
+									className="text-muted-foreground"
+								>
+									Taille des photos
+								</Label>
+								<Select
+									value={values.photoColumns}
+									onValueChange={(value) => {
+										if (isPhotoColumns(value)) onChange({ photoColumns: value })
+									}}
+								>
+									<SelectTrigger
+										id={id('photo-columns')}
+										size="sm"
+										className="w-48"
+									>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{PHOTO_COLUMN_OPTIONS.map((option) => (
+											<SelectItem key={option.value} value={option.value}>
+												{option.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 							{values.photos.length === 0 ? (
 								<p className="text-muted-foreground text-xs">Aucune photo.</p>

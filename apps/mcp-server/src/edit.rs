@@ -71,8 +71,28 @@ impl PerPage {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+#[serde(rename_all = "snake_case")]
+pub enum PhotoColumns {
+    One,
+    Two,
+    Three,
+}
+
+impl PhotoColumns {
+    fn tag(self) -> &'static str {
+        match self {
+            Self::One => "one",
+            Self::Two => "two",
+            Self::Three => "three",
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct SupplyPatch<'a> {
+    pub photo_columns: Option<PhotoColumns>,
     pub title: Option<&'a str>,
     pub designation: Option<&'a str>,
     pub dpgf_ref: Option<&'a str>,
@@ -269,6 +289,9 @@ pub fn update_supply(
     let supply = &mut doe["sections"][section]["content"]["supplies"][index];
     if let Some(designation) = patch.designation {
         supply["designation"] = json!(designation);
+    }
+    if let Some(columns) = patch.photo_columns {
+        supply["photo_columns"] = json!(columns.tag());
     }
     for (name, value) in [
         ("title", patch.title),

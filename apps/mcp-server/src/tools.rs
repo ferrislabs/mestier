@@ -15,7 +15,10 @@ use serde_json::{Value, json};
 
 use crate::{
     api::{ApiClient, Fault},
-    edit::{MakerLabel, NewSection, PerPage, SectionKind, SectionPatch, SectionRef, SupplyPatch},
+    edit::{
+        MakerLabel, NewSection, PerPage, PhotoColumns, SectionKind, SectionPatch, SectionRef,
+        SupplyPatch,
+    },
     files::{FileFetcher, FileParam, Source, Target},
     maintenance::ContractDraft,
     session::{FileRequest, HeaderPatch, ManualSupply, Paging, PdfOutcome, Session, SupplyRequest},
@@ -257,6 +260,10 @@ pub struct UpdateSupplyArgs {
         description = "Technical characteristics, one per line. An empty string clears them."
     )]
     pub specs: Option<String>,
+    #[schemars(
+        description = "Photos per row on the supply sheet: three (small, the default), two, or one (large, for scanned documents)."
+    )]
+    pub photo_columns: Option<PhotoColumns>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -992,6 +999,7 @@ impl MestierTools {
                             supplier_email: args.supplier_email.as_deref(),
                             maker: args.maker.as_deref(),
                             specs: args.specs.as_deref(),
+                            photo_columns: args.photo_columns,
                         },
                     )
                     .await?;

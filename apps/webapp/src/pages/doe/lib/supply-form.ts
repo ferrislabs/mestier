@@ -1,4 +1,4 @@
-import type { DoeFile, DoeSupply } from '#/pages/doe/types'
+import type { DoeFile, DoeSupply, SupplyPhotoColumns } from '#/pages/doe/types'
 
 export interface SupplyFormValues {
 	title: string
@@ -12,6 +12,7 @@ export interface SupplyFormValues {
 	maker: string
 	specs: string
 	photos: DoeFile[]
+	photoColumns: SupplyPhotoColumns
 	datasheetKeys: string[]
 }
 
@@ -27,6 +28,7 @@ export const EMPTY_SUPPLY_FORM: SupplyFormValues = {
 	maker: '',
 	specs: '',
 	photos: [],
+	photoColumns: 'three',
 	datasheetKeys: [],
 }
 
@@ -43,6 +45,7 @@ export function supplyToForm(supply: DoeSupply): SupplyFormValues {
 		maker: supply.maker ?? '',
 		specs: supply.specs ?? '',
 		photos: supply.photos,
+		photoColumns: supply.photo_columns ?? 'three',
 		datasheetKeys: supply.datasheet_keys,
 	}
 }
@@ -79,6 +82,7 @@ export function formToSupply(
 			key: photo.key,
 			caption: orNull(photo.caption ?? ''),
 		})),
+		photo_columns: form.photoColumns,
 		datasheet_keys: form.datasheetKeys,
 	}
 }

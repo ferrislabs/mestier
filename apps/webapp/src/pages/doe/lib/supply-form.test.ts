@@ -30,6 +30,15 @@ describe('supply form', () => {
 		expect(rebuilt.photos).toEqual([{ key: 'k1', caption: 'Vue' }])
 	})
 
+	it('keeps three photos per row for a supply saved before the choice existed', () => {
+		expect(supplyToForm(SUPPLY).photoColumns).toBe('three')
+	})
+
+	it('writes the chosen number of photos per row back', () => {
+		const form = { ...supplyToForm(SUPPLY), photoColumns: 'one' as const }
+		expect(formToSupply(SUPPLY, form).photo_columns).toBe('one')
+	})
+
 	it('drops the supplier snapshot when the name is blank', () => {
 		const supply = formToSupply(
 			{ id: 'n', source_product_id: null },
