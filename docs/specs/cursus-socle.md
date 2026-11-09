@@ -127,7 +127,7 @@ Opérateurs, sous `/organizations/{organization_id}/cursus` ; `GET` demande `VIE
 | Participants | `GET/POST /participants` (`?kind=apprentice|company_tutor&status`), `GET/PATCH /participants/{id}`, `POST /participants/{id}/invitation`, `POST /participants/{id}/deactivate`, `POST /participants/{id}/reactivate` | PARTICIPANTS |
 | Fiches | `PUT /participants/{id}/apprentice`, `POST /participants/{id}/company-tutors`, `DELETE /company-tutors/{id}` | PARTICIPANTS |
 | Trinômes | `GET/POST /triads` (`?promotion_id&closed`), `GET/PATCH /triads/{id}`, `POST /triads/{id}/close` | TRIADS |
-| Contrats | `GET/POST /triads/{id}/contracts`, `GET/PATCH /contracts/{id}`, `POST /contracts/{id}/close`, `PUT /contracts/{id}/tutors` (`{main, secondary}`), `PUT /contracts/{id}/files/{cerfa|mission_sheet}` (multipart), `GET /contracts/{id}/files/{kind}` (URL présignée) | TRIADS |
+| Contrats | `GET/POST /triads/{id}/contracts`, `GET/PATCH /contracts/{id}`, `POST /contracts/{id}/close`, `PUT /contracts/{id}/tutors` (`{main, secondary}`), `PUT /contracts/{id}/files/{cerfa|mission_sheet}` (`{file_key}` d'un fichier déjà envoyé par `POST /files`, `null` pour retirer), `GET /contracts/{id}/files/{kind}` (URL présignée) | TRIADS |
 
 Portail et « Mes trinômes », sans bit :
 
@@ -223,3 +223,4 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 ```
 
 Amended: 2026-11-09 `POST /participants` crée la fiche apprenti ou tuteur dans la même transaction, pour ne jamais laisser un participant sans rôle.
+Amended: 2026-11-09 les fichiers de contrat suivent le motif de `member_document` (envoi par `POST /files`, puis rattachement par clé) au lieu d'un multipart.
