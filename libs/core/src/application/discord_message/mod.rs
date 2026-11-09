@@ -1,18 +1,19 @@
 use common::CoreError;
 use discord::{
-    AddReactionCommand, ChannelId, CreateMessageCommand, CreateNotification, DomainEvent,
-    EventPublisher, Message, MessageId, MessageService, NotificationKind, NotificationRepository,
-    PresenceRepository, RemoveReactionCommand, UpdateMessageCommand,
-    mention_notification_recipients, notification_should_deliver,
+    AddReactionCommand, ChannelId, ChannelRepository, ChannelType, CreateMessageCommand,
+    CreateNotification, DomainEvent, EventPublisher, Message, MessageId, MessageService,
+    NotificationKind, NotificationRepository, PresenceRepository, RemoveReactionCommand,
+    UpdateMessageCommand, mention_notification_recipients, notification_should_deliver,
 };
 use mestier_macros::transactional;
 
 use crate::application::MestierUseCase;
+use crate::domain::chat::events::ChatMessagePosted;
 
 mod tests;
 
 impl MestierUseCase {
-    #[transactional(message, notification, presence, events)]
+    #[transactional(message, channel, notification, presence, events, emitter)]
     pub async fn create_message(&self, cmd: CreateMessageCommand) -> Result<Message, CoreError> {
         let mut service = MessageService::new(message_repository, &events);
         let message = service.create_message(cmd).await?;
@@ -36,6 +37,20 @@ impl MestierUseCase {
                     .publish(DomainEvent::NotificationCreated(notif))
                     .await?;
             }
+        }
+
+        let mut channel_repository = channel_repository;
+        let channel = channel_repository
+            .find_by_id(message.channel_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        if channel.channel_type != ChannelType::Direct {
+            emitter.emit(
+                message.organization_id,
+                &ChatMessagePosted {
+                    message: message.clone(),
+                },
+            )?;
         }
 
         Ok(message)

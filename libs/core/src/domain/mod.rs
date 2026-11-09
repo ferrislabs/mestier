@@ -2,6 +2,7 @@ pub(crate) mod absence;
 pub(crate) mod absence_type;
 pub(crate) mod assignment_report;
 pub(crate) mod automation;
+pub(crate) mod chat;
 pub(crate) mod custom_unit;
 pub(crate) mod customer;
 pub(crate) mod customer_contact;

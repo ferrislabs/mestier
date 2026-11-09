@@ -7,7 +7,11 @@ use mestier_macros::transactional;
 use crate::{
     UserId,
     application::MestierUseCase,
-    domain::{member::ports::MemberRepository, organization::OrganizationId},
+    domain::{
+        member::ports::MemberRepository,
+        organization::OrganizationId,
+        role::{RoleId, ports::RoleRepository},
+    },
 };
 
 /// One seated member as chat sees them: the `users.id` that message authors,
@@ -20,7 +24,35 @@ pub struct ChatDirectoryEntry {
     pub presence: PresenceStatus,
 }
 
+/// A role as a channel's access list names it: nothing of its permissions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatRoleEntry {
+    pub role_id: RoleId,
+    pub name: String,
+}
+
 impl MestierUseCase {
+    /// The organization's roles, by id and name only. The full role list is
+    /// gated on `role.manage` because it shows how roles are defined; choosing
+    /// who may see a channel needs only who the roles are.
+    #[transactional(role)]
+    pub async fn list_chat_roles(
+        &self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<ChatRoleEntry>, CoreError> {
+        let mut role_repository = role_repository;
+        let roles = role_repository
+            .list_by_organization(organization_id)
+            .await?;
+        Ok(roles
+            .into_iter()
+            .map(|role| ChatRoleEntry {
+                role_id: role.id,
+                name: role.name,
+            })
+            .collect())
+    }
+
     /// Active members that someone occupies. A vacant seat has no `user_id`
     /// and so can neither write nor be present — it has no place here. A
     /// member with no presence row has never connected: `OFFLINE`.

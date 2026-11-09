@@ -28,25 +28,40 @@ where
         &mut self,
         cmd: CreateCategoryCommand,
     ) -> Result<Category, CoreError> {
+        let category = Self::build(cmd)?;
+        let saved = self.repo.insert(&category).await?;
+        self.events
+            .publish(DomainEvent::CategoryCreated(saved.clone()))
+            .await?;
+        Ok(saved)
+    }
+
+    /// Creates a category without announcing it: the gateway fans category
+    /// events out to the whole organization, and a private category's name must
+    /// not be among them. The caller restricts it before the transaction ends.
+    pub async fn create_category_unannounced(
+        &mut self,
+        cmd: CreateCategoryCommand,
+    ) -> Result<Category, CoreError> {
+        let category = Self::build(cmd)?;
+        self.repo.insert(&category).await
+    }
+
+    fn build(cmd: CreateCategoryCommand) -> Result<Category, CoreError> {
         if cmd.name.trim().is_empty() {
             return Err(CoreError::Conflict(
                 "category name cannot be blank".to_owned(),
             ));
         }
         let now = Utc::now();
-        let category = Category {
+        Ok(Category {
             id: CategoryId(generate_uuid_v7()),
             organization_id: cmd.organization_id,
             name: cmd.name,
             position: cmd.position,
             created_at: now,
             updated_at: now,
-        };
-        let saved = self.repo.insert(&category).await?;
-        self.events
-            .publish(DomainEvent::CategoryCreated(saved.clone()))
-            .await?;
-        Ok(saved)
+        })
     }
 
     pub async fn update_category(

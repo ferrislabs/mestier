@@ -36,11 +36,19 @@ where
                 "channel name cannot be blank".to_owned(),
             ));
         }
+        if !matches!(
+            cmd.channel_type,
+            ChannelType::Text | ChannelType::Announcement | ChannelType::Voice
+        ) {
+            return Err(CoreError::Conflict(
+                "a channel is a text, announcement or voice channel".to_owned(),
+            ));
+        }
         let now = Utc::now();
         let ch = Channel {
             id: ChannelId(generate_uuid_v7()),
             organization_id: cmd.organization_id,
-            channel_type: ChannelType::Text,
+            channel_type: cmd.channel_type,
             name: cmd.name,
             topic: cmd.topic,
             position: cmd.position,
@@ -353,6 +361,7 @@ mod tests {
         let result = svc
             .create_channel(CreateChannelCommand {
                 organization_id: org,
+                channel_type: ChannelType::Text,
                 category_id: None,
                 name: "general".to_owned(),
                 topic: None,
@@ -362,6 +371,55 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.channel_type, ChannelType::Text);
+    }
+
+    #[tokio::test]
+    async fn create_channel_keeps_the_requested_kind() {
+        let org = OrganizationId(Uuid::new_v4());
+        let mut repo = MockChannelRepository::new();
+        repo.expect_insert().times(1).returning(|c| {
+            let c = c.clone();
+            Box::pin(async move { Ok(c) })
+        });
+        let mut events = MockEventPublisher::new();
+        events
+            .expect_publish()
+            .returning(|_| Box::pin(async { Ok(()) }));
+
+        let mut svc = ChannelService::new(repo, events);
+        let result = svc
+            .create_channel(CreateChannelCommand {
+                organization_id: org,
+                channel_type: ChannelType::Announcement,
+                category_id: None,
+                name: "annonces".to_owned(),
+                topic: None,
+                position: 0,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.channel_type, ChannelType::Announcement);
+    }
+
+    #[tokio::test]
+    async fn create_channel_refuses_a_thread_or_direct_kind() {
+        for kind in [ChannelType::Thread, ChannelType::Direct] {
+            let mut svc =
+                ChannelService::new(MockChannelRepository::new(), MockEventPublisher::new());
+            let result = svc
+                .create_channel(CreateChannelCommand {
+                    organization_id: OrganizationId(Uuid::new_v4()),
+                    channel_type: kind,
+                    category_id: None,
+                    name: "x".to_owned(),
+                    topic: None,
+                    position: 0,
+                })
+                .await;
+
+            assert!(matches!(result, Err(CoreError::Conflict(_))), "{kind:?}");
+        }
     }
 
     #[tokio::test]

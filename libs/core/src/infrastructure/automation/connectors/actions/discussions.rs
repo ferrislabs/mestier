@@ -304,6 +304,7 @@ async fn create_channel(context: &ActionContext<'_>) -> Result<Value, String> {
         .usecase
         .create_channel(CreateChannelCommand {
             organization_id: context.organization_id,
+            channel_type: ChannelType::Text,
             category_id,
             name,
             topic,

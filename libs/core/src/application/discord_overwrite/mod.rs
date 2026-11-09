@@ -1,15 +1,40 @@
 use common::CoreError;
 use discord::domain::overwrite::ports::OverwriteRepository;
 use discord::{
-    Channel, ChannelId, ChannelPermissionOverwrite, ChannelRepository, ChannelType,
-    DeleteChannelOverwrite, DirectChannelRepository, OrganizationId, OverwriteTarget,
-    UpsertChannelOverwrite, UserId,
+    CategoryAccessRepository, Channel, ChannelId, ChannelPermissionOverwrite, ChannelRepository,
+    ChannelService, ChannelType, CreateChannelCommand, DeleteChannelOverwrite,
+    DirectChannelRepository, OrganizationId, OverwriteTarget, RoleId, UpsertChannelOverwrite,
+    UserId,
 };
 use mestier_macros::transactional;
 
 use crate::application::{MestierUseCase, policy::resolve_org_permissions};
+use crate::domain::chat::events::ChatChannelCreated;
 use crate::domain::member::ports::MemberRepository;
 use crate::domain::role::{Permissions, ports::RoleRepository};
+
+#[cfg(test)]
+mod tests;
+
+fn without_access(effective: Permissions) -> Permissions {
+    Permissions(
+        effective.bits() & !(Permissions::VIEW_CHANNEL.bits() | Permissions::SEND_MESSAGES.bits()),
+    )
+}
+
+/// What the kind of channel takes away, whatever the overwrites say: nobody
+/// types in a voice channel, and only those who manage channels write in an
+/// announcement channel.
+fn restrict_by_channel_type(channel_type: ChannelType, effective: Permissions) -> Permissions {
+    let without_sending = Permissions(effective.bits() & !Permissions::SEND_MESSAGES.bits());
+    match channel_type {
+        ChannelType::Voice => without_sending,
+        ChannelType::Announcement if !effective.contains(Permissions::MANAGE_CHANNELS) => {
+            without_sending
+        }
+        _ => effective,
+    }
+}
 
 impl MestierUseCase {
     /// Resolves the caller's effective [`Permissions`] for a specific channel.
@@ -19,7 +44,7 @@ impl MestierUseCase {
     /// 3. base = aggregated | VIEW_CHANNEL | SEND_MESSAGES.
     /// 4. Load channel overwrites; pick EVERYONE / caller's roles / caller's MEMBER.
     /// 5. Call pure `discord::resolve_channel_permissions`; wrap as `Permissions`.
-    #[transactional(member, role, overwrite, channel, direct_channel)]
+    #[transactional(member, role, overwrite, channel, direct_channel, category_access)]
     pub async fn resolve_channel_permissions(
         &self,
         user_id: UserId,
@@ -89,14 +114,26 @@ impl MestierUseCase {
             member_overwrite,
         );
 
-        Ok(Permissions(effective))
+        // A private category is a gate on every channel in it, whatever the
+        // channel's own overwrites grant.
+        let mut effective = Permissions(effective);
+        if let Some(category_id) = channel.category_id {
+            let mut category_access_repository = category_access_repository;
+            if let Some(access) = category_access_repository.find(category_id).await?
+                && !access.admits(user_id, &member_role_ids)
+            {
+                effective = without_access(effective);
+            }
+        }
+
+        Ok(restrict_by_channel_type(channel.channel_type, effective))
     }
 
     /// Returns the channels in `organization_id` that `user_id` can view (VIEW_CHANNEL set).
     ///
     /// Loads all channels + the user's base bits + all overwrites for those channels;
     /// resolves per channel; keeps those where VIEW_CHANNEL is set.
-    #[transactional(member, role, overwrite, channel)]
+    #[transactional(member, role, overwrite, channel, category_access)]
     pub async fn list_visible_channels(
         &self,
         user_id: UserId,
@@ -124,8 +161,21 @@ impl MestierUseCase {
             .list_by_organization(organization_id)
             .await?;
 
+        let mut category_access_repository = category_access_repository;
+        let private_categories = category_access_repository
+            .list_for_organization(organization_id)
+            .await?;
+
         let mut visible = Vec::new();
         for ch in all_channels {
+            if let Some(access) = ch
+                .category_id
+                .and_then(|category_id| private_categories.get(&category_id))
+                && !access.admits(user_id, &member_role_ids)
+            {
+                continue;
+            }
+
             let overwrites = overwrite_repository.list_for_channel(ch.id).await?;
 
             let everyone = overwrites
@@ -159,6 +209,72 @@ impl MestierUseCase {
         Ok(visible)
     }
 
+    /// Creates a channel only `role_ids` (and its creator) can see and write in.
+    ///
+    /// The channel and its overwrites land in one transaction, so a private
+    /// channel is never visible, even for an instant, before it is closed.
+    /// `creator` gets a member overwrite of their own: whatever roles they hold,
+    /// they cannot lock themselves out of what they just made.
+    #[transactional(channel, overwrite, role, events, emitter)]
+    pub async fn create_private_channel(
+        &self,
+        command: CreateChannelCommand,
+        creator: UserId,
+        role_ids: Vec<RoleId>,
+    ) -> Result<Channel, CoreError> {
+        if role_ids.is_empty() {
+            return Err(CoreError::Conflict(
+                "a private channel needs at least one role".to_owned(),
+            ));
+        }
+        let organization_id = command.organization_id;
+        let mut role_repository = role_repository;
+        let org_roles = role_repository
+            .list_by_organization(organization_id)
+            .await?;
+        if let Some(unknown) = role_ids
+            .iter()
+            .find(|role_id| !org_roles.iter().any(|role| role.id == **role_id))
+        {
+            return Err(CoreError::Conflict(format!(
+                "role {} does not belong to this organization",
+                unknown.0
+            )));
+        }
+
+        let mut service = ChannelService::new(channel_repository, &events);
+        let channel = service.create_channel(command).await?;
+
+        let access = (Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES).bits();
+        let overwrite = |target, allow, deny| UpsertChannelOverwrite {
+            channel_id: channel.id,
+            organization_id,
+            target,
+            allow,
+            deny,
+        };
+        overwrite_repository
+            .upsert(overwrite(OverwriteTarget::Everyone, 0, access))
+            .await?;
+        for role_id in role_ids {
+            overwrite_repository
+                .upsert(overwrite(OverwriteTarget::Role(role_id), access, 0))
+                .await?;
+        }
+        overwrite_repository
+            .upsert(overwrite(OverwriteTarget::Member(creator), access, 0))
+            .await?;
+
+        emitter.emit(
+            organization_id,
+            &ChatChannelCreated {
+                channel: channel.clone(),
+            },
+        )?;
+
+        Ok(channel)
+    }
+
     /// Upserts a channel permission overwrite (EVERYONE, ROLE, or MEMBER).
     #[transactional(overwrite)]
     pub async fn upsert_channel_overwrite(
@@ -186,5 +302,37 @@ impl MestierUseCase {
         channel_id: ChannelId,
     ) -> Result<Vec<ChannelPermissionOverwrite>, CoreError> {
         overwrite_repository.list_for_channel(channel_id).await
+    }
+}
+
+#[cfg(test)]
+mod restriction_tests {
+    use super::*;
+
+    const MEMBER: Permissions =
+        Permissions(Permissions::VIEW_CHANNEL.0 | Permissions::SEND_MESSAGES.0);
+    const MANAGER: Permissions = Permissions(MEMBER.0 | Permissions::MANAGE_CHANNELS.0);
+
+    #[test]
+    fn a_text_channel_is_left_as_resolved() {
+        assert_eq!(restrict_by_channel_type(ChannelType::Text, MEMBER), MEMBER);
+    }
+
+    #[test]
+    fn nobody_sends_in_a_voice_channel() {
+        let restricted = restrict_by_channel_type(ChannelType::Voice, MANAGER);
+
+        assert!(restricted.contains(Permissions::VIEW_CHANNEL));
+        assert!(!restricted.contains(Permissions::SEND_MESSAGES));
+    }
+
+    #[test]
+    fn only_a_manager_sends_in_an_announcement_channel() {
+        let member = restrict_by_channel_type(ChannelType::Announcement, MEMBER);
+        let manager = restrict_by_channel_type(ChannelType::Announcement, MANAGER);
+
+        assert!(member.contains(Permissions::VIEW_CHANNEL));
+        assert!(!member.contains(Permissions::SEND_MESSAGES));
+        assert!(manager.contains(Permissions::SEND_MESSAGES));
     }
 }

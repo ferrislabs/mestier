@@ -10,6 +10,7 @@ import {
 	useThreadsGatewaySync,
 	useUnreadSummaries,
 } from '#/hooks/use-chat'
+import { useHasPermission } from '#/hooks/use-permissions'
 import { usePresenceStatuses } from '#/hooks/use-presence'
 import { buildOrgPath } from '#/modules/org-path'
 import {
@@ -24,10 +25,14 @@ import {
 	formatDayLabel,
 	type UnreadMarker,
 } from '#/pages/chat/lib/timeline'
+import { ChannelMembersDialogUI } from '#/pages/chat/ui/channel-members-dialog-ui'
 import { ChannelNotFoundUI } from '#/pages/chat/ui/channel-not-found-ui'
+import {
+	ReadOnlyNoticeUI,
+	VoiceChannelUI,
+} from '#/pages/chat/ui/channel-notice-ui'
 import { ChannelSearchBar } from '#/pages/chat/ui/channel-search-bar'
 import { ChatChannelHeaderUI } from '#/pages/chat/ui/chat-channel-header-ui'
-import { MemberList } from '#/pages/chat/ui/member-list'
 import { MessageComposerUI } from '#/pages/chat/ui/message-composer-ui'
 import { MessageListUI } from '#/pages/chat/ui/message-list-ui'
 import {
@@ -80,6 +85,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 		setUnreadCaptured(true)
 	}, [channelId, unreadCaptured, unreadSummaries.data])
 	const flags = useMessageFlags()
+	const canManageChannels = useHasPermission('MANAGE_CHANNELS')
 
 	const threads = useThreads(channelId)
 	useThreadsGatewaySync(channelId)
@@ -88,8 +94,8 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 		null,
 	)
 	const [searchOpen, setSearchOpen] = useState(false)
+	const [membersDialogOpen, setMembersDialogOpen] = useState(false)
 	const [searchQuery, setSearchQuery] = useState('')
-	const [membersOpen, setMembersOpen] = useState(true)
 
 	const threadByOriginMessageId = useMemo(() => {
 		const map = new Map<string, string>()
@@ -144,6 +150,9 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 	}
 
 	const isDirect = channel.data?.channel_type === 'DIRECT'
+	const isVoice = channel.data?.channel_type === 'VOICE'
+	const isAnnouncement = channel.data?.channel_type === 'ANNOUNCEMENT'
+	const canWrite = !isVoice && (!isAnnouncement || canManageChannels)
 	const peerUserId = directChannels.data?.find(
 		(direct) => direct.channel_id === channelId,
 	)?.peer_user_id
@@ -203,16 +212,16 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 			>
 				<ChatChannelHeaderUI
 					name={channel.data?.name}
+					channelType={channel.data?.channel_type}
 					topic={channel.data?.topic}
 					peer={peer}
-					memberCount={members.length}
+					members={members}
+					onOpenMembers={() => setMembersDialogOpen(true)}
 					isLoading={channel.isLoading}
 					searchOpen={searchOpen}
 					onSearchOpenChange={(open) =>
 						open ? setSearchOpen(true) : closeSearch()
 					}
-					membersOpen={membersOpen}
-					onMembersOpenChange={setMembersOpen}
 					pinned={<PinnedMessagesPopover items={pinnedItems} />}
 					onOpenAdmin={() => openChannelAdmin(channelId)}
 				/>
@@ -225,35 +234,47 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 						onClose={closeSearch}
 					/>
 				) : null}
-				<MessageListUI
-					{...messageListProps}
-					messages={visibleMessages}
-					unread={isFiltering ? undefined : unreadMarker}
-					label={`Messages de ${channelLabel}`}
-					emptyLabel={
-						isFiltering
-							? `Aucun message ne correspond à « ${searchQuery.trim()} ».`
-							: undefined
-					}
-					pinnedMessageIds={flags.data.pinned}
-					savedMessageIds={flags.data.saved}
-					threadsEnabled={!isDirect}
-					threadedMessageIds={new Set(threadByOriginMessageId.keys())}
-					onOpenThread={handleOpenThread}
-					onCopyLink={handleCopyLink}
-					onTogglePin={(messageId) => void toggleMessagePin(messageId)}
-					onToggleSaved={(messageId) => void toggleMessageSaved(messageId)}
-				/>
-				<TypingIndicatorUI typingCount={typingCount} />
-				<MessageComposerUI
-					{...composerProps}
-					label={`Message dans ${channelLabel}`}
-					placeholder={
-						isDirect
-							? `Écrire à ${channelLabel}`
-							: `Écrire dans ${channelLabel}`
-					}
-				/>
+				{isVoice ? (
+					<VoiceChannelUI />
+				) : (
+					<>
+						<MessageListUI
+							{...messageListProps}
+							messages={visibleMessages}
+							unread={isFiltering ? undefined : unreadMarker}
+							label={`Messages de ${channelLabel}`}
+							emptyLabel={
+								isFiltering
+									? `Aucun message ne correspond à « ${searchQuery.trim()} ».`
+									: undefined
+							}
+							pinnedMessageIds={flags.data.pinned}
+							savedMessageIds={flags.data.saved}
+							threadsEnabled={!isDirect}
+							threadedMessageIds={new Set(threadByOriginMessageId.keys())}
+							onOpenThread={handleOpenThread}
+							onCopyLink={handleCopyLink}
+							onTogglePin={(messageId) => void toggleMessagePin(messageId)}
+							onToggleSaved={(messageId) => void toggleMessageSaved(messageId)}
+						/>
+					</>
+				)}
+				{canWrite ? (
+					<>
+						<TypingIndicatorUI typingCount={typingCount} />
+						<MessageComposerUI
+							{...composerProps}
+							label={`Message dans ${channelLabel}`}
+							placeholder={
+								isDirect
+									? `Écrire à ${channelLabel}`
+									: `Écrire dans ${channelLabel}`
+							}
+						/>
+					</>
+				) : isVoice ? null : (
+					<ReadOnlyNoticeUI label="Seuls les gestionnaires de canaux peuvent publier ici." />
+				)}
 			</section>
 			{openThreadChannelId ? (
 				<ChatThreadPanelFeature
@@ -262,9 +283,13 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 					onClose={() => setOpenThreadChannelId(null)}
 				/>
 			) : null}
-			{membersOpen ? (
-				<MemberList members={members} currentUserId={currentUserId} />
-			) : null}
+			<ChannelMembersDialogUI
+				open={membersDialogOpen}
+				onOpenChange={setMembersDialogOpen}
+				channelLabel={channelLabel}
+				members={members}
+				currentUserId={currentUserId}
+			/>
 		</div>
 	)
 }

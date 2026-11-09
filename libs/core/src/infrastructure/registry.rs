@@ -62,6 +62,7 @@ pub mod domain {
     pub struct SupplierInvoiceAllocation;
     pub struct User;
     pub struct Category;
+    pub struct CategoryAccess;
     pub struct Channel;
     pub struct DirectChannel;
     pub struct Message;

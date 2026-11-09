@@ -270,6 +270,23 @@ impl DirectChannelResponse {
     }
 }
 
+/// A role a channel can be restricted to. Id and name only: how the role is
+/// defined is `role.manage`'s business, not a channel manager's.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct ChatRoleResponse {
+    pub role_id: RoleId,
+    pub name: String,
+}
+
+impl From<mestier_core::application::discord_directory::ChatRoleEntry> for ChatRoleResponse {
+    fn from(entry: mestier_core::application::discord_directory::ChatRoleEntry) -> Self {
+        Self {
+            role_id: entry.role_id,
+            name: entry.name,
+        }
+    }
+}
+
 /// A seated member as chat knows them. `user_id` is the id already carried by
 /// `author_user_id`, reactions and presence; it is deliberately served here and
 /// not on `MemberResponse`, whose own contract keeps `users.id` out.

@@ -7,6 +7,7 @@ export const PRESENCE_LABELS: Record<PresenceStatus, string> = {
 	OFFLINE: 'Hors ligne',
 }
 
+/** Groups of the members dialog, most reachable first. */
 export const PRESENCE_ORDER: readonly PresenceStatus[] = [
 	'ONLINE',
 	'DND',

@@ -10,10 +10,19 @@ function baseProps(
 	return {
 		open: true,
 		onOpenChange: vi.fn(),
-		kind: 'channel',
-		onChangeKind: vi.fn(),
 		name: '',
 		onChangeName: vi.fn(),
+		channelKind: 'TEXT',
+		onChangeChannelKind: vi.fn(),
+		isPrivate: false,
+		onChangePrivate: vi.fn(),
+		roles: [
+			{ id: 'r-1', name: 'Chefs de chantier' },
+			{ id: 'r-2', name: 'Administration' },
+		],
+		rolesLoading: false,
+		selectedRoleIds: new Set<string>(),
+		onToggleRole: vi.fn(),
 		onSubmit: vi.fn(),
 		isSubmitting: false,
 		...overrides,
@@ -45,14 +54,46 @@ describe('NewChannelDialogUI', () => {
 		expect(onSubmit).toHaveBeenCalledTimes(1)
 	})
 
-	it('switches between channel and category kind', async () => {
+	it('offers the category as a type card, not as a tab', () => {
+		render(<NewChannelDialogUI {...baseProps()} />)
+
+		expect(screen.getByRole('radio', { name: /Catégorie/ })).toBeDefined()
+		expect(screen.queryByRole('tab')).toBeNull()
+	})
+
+	it('reports the category when its card is picked', async () => {
 		const user = userEvent.setup()
-		const onChangeKind = vi.fn()
-		render(<NewChannelDialogUI {...baseProps({ onChangeKind })} />)
+		const onChangeChannelKind = vi.fn()
+		render(<NewChannelDialogUI {...baseProps({ onChangeChannelKind })} />)
 
-		await user.click(screen.getByRole('tab', { name: 'Catégorie' }))
+		await user.click(screen.getByRole('radio', { name: /Catégorie/ }))
 
-		expect(onChangeKind).toHaveBeenCalledWith('category')
+		expect(onChangeChannelKind).toHaveBeenCalledWith('CATEGORY')
+	})
+
+	it('asks for a category name and keeps the private switch for a category', () => {
+		render(<NewChannelDialogUI {...baseProps({ channelKind: 'CATEGORY' })} />)
+
+		expect(screen.getByLabelText('Nom de la catégorie')).toBeDefined()
+		expect(screen.getByText('Salon privé')).toBeDefined()
+		expect(screen.getByText(/voir les canaux de cette catégorie/)).toBeDefined()
+	})
+
+	it('asks for roles on a private category, like on a channel', () => {
+		render(
+			<NewChannelDialogUI
+				{...baseProps({
+					channelKind: 'CATEGORY',
+					name: 'Direction',
+					isPrivate: true,
+				})}
+			/>,
+		)
+
+		expect(screen.getByText('Rôles autorisés')).toBeDefined()
+		expect(
+			screen.getByRole('button', { name: 'Créer' }).hasAttribute('disabled'),
+		).toBe(true)
 	})
 
 	it('offers no category choice for a channel', () => {
@@ -70,6 +111,77 @@ describe('NewChannelDialogUI', () => {
 		)
 
 		expect(screen.getByText('Nouveau canal dans Chantiers')).toBeDefined()
-		expect(screen.queryByRole('tab', { name: 'Catégorie' })).toBeNull()
+		expect(screen.queryByRole('radio', { name: /Catégorie/ })).toBeNull()
+	})
+
+	it('offers the three channel types as cards with a title and a description', () => {
+		render(<NewChannelDialogUI {...baseProps()} />)
+
+		expect(screen.getByRole('radio', { name: /Texte/ })).toBeDefined()
+		expect(screen.getByRole('radio', { name: /Annonces/ })).toBeDefined()
+		expect(screen.getByRole('radio', { name: /Vocal/ })).toBeDefined()
+		expect(
+			screen.getByText(/Seuls les gestionnaires de canaux publient/),
+		).toBeDefined()
+	})
+
+	it('reports the type picked', async () => {
+		const user = userEvent.setup()
+		const onChangeChannelKind = vi.fn()
+		render(<NewChannelDialogUI {...baseProps({ onChangeChannelKind })} />)
+
+		await user.click(screen.getByRole('radio', { name: /Annonces/ }))
+
+		expect(onChangeChannelKind).toHaveBeenCalledWith('ANNOUNCEMENT')
+	})
+
+	it('hides the roles until the channel is private', () => {
+		const { rerender } = render(<NewChannelDialogUI {...baseProps()} />)
+		expect(screen.queryByText('Rôles autorisés')).toBeNull()
+
+		rerender(<NewChannelDialogUI {...baseProps({ isPrivate: true })} />)
+
+		expect(screen.getByText('Rôles autorisés')).toBeDefined()
+		expect(screen.getByText('Chefs de chantier')).toBeDefined()
+	})
+
+	it('reports the toggle of a role', async () => {
+		const user = userEvent.setup()
+		const onToggleRole = vi.fn()
+		render(
+			<NewChannelDialogUI {...baseProps({ isPrivate: true, onToggleRole })} />,
+		)
+
+		await user.click(screen.getByRole('checkbox', { name: 'Administration' }))
+
+		expect(onToggleRole).toHaveBeenCalledWith('r-2', true)
+	})
+
+	it('refuses a private channel with no role', () => {
+		render(
+			<NewChannelDialogUI
+				{...baseProps({ name: 'direction', isPrivate: true })}
+			/>,
+		)
+
+		expect(
+			screen.getByRole('button', { name: 'Créer' }).hasAttribute('disabled'),
+		).toBe(true)
+	})
+
+	it('accepts a private channel once a role is chosen', () => {
+		render(
+			<NewChannelDialogUI
+				{...baseProps({
+					name: 'direction',
+					isPrivate: true,
+					selectedRoleIds: new Set(['r-1']),
+				})}
+			/>,
+		)
+
+		expect(
+			screen.getByRole('button', { name: 'Créer' }).hasAttribute('disabled'),
+		).toBe(false)
 	})
 })

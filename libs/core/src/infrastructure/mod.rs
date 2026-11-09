@@ -3,6 +3,7 @@ pub mod absence_type;
 pub mod assignment_report;
 pub mod automation;
 pub mod category;
+pub mod category_access;
 pub mod channel;
 pub mod custom_unit;
 pub mod customer;

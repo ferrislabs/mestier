@@ -8,7 +8,6 @@ import {
 } from 'lucide-react'
 import { useLayoutEffect, useRef } from 'react'
 import { Button } from '#/components/ui/button'
-import { Kbd } from '#/components/ui/kbd'
 import { cn } from '#/lib/utils'
 import { EmojiPopover } from '#/pages/chat/ui/emoji-popover'
 import { IconButton } from '#/pages/chat/ui/icon-button'
@@ -163,21 +162,12 @@ export function MessageComposerUI({
 					<EmojiPopover side="top" align="start" onSelect={appendEmoji}>
 						<IconButton label="Insérer un emoji" icon={Smile} />
 					</EmojiPopover>
-					<p className="ml-auto mr-2 hidden items-center gap-1 text-muted-foreground text-xs sm:flex">
-						<Kbd>Entrée</Kbd>
-						<span>envoyer</span>
-						<span aria-hidden>·</span>
-						<Kbd>Maj</Kbd>
-						<span aria-hidden>+</span>
-						<Kbd>Entrée</Kbd>
-						<span>nouvelle ligne</span>
-					</p>
 					<Button
 						type="submit"
 						size="icon-sm"
 						aria-label="Envoyer le message"
 						disabled={!canSend}
-						className="max-sm:ml-auto"
+						className="ml-auto shrink-0"
 					>
 						<SendHorizontal aria-hidden />
 					</Button>

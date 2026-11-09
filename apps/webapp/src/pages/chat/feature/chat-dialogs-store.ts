@@ -1,17 +1,24 @@
 import { Store } from '@tanstack/store'
+import type { NewItemKind } from '#/pages/chat/lib/channel-kinds'
+
+export interface NewChannelPreset {
+	name: string
+	kind: NewItemKind
+}
 
 interface ChatDialogsState {
 	newChannelOpen: boolean
 	/** The category a channel is being created in, from its own "+". */
 	newChannelCategoryId: string | null
-	newDirectOpen: boolean
+	/** What a duplicated channel starts from, when the dialog opens for it. */
+	newChannelPreset: NewChannelPreset | null
 	adminChannelId: string | null
 }
 
 const initialState: ChatDialogsState = {
 	newChannelOpen: false,
 	newChannelCategoryId: null,
-	newDirectOpen: false,
+	newChannelPreset: null,
 	adminChannelId: null,
 }
 
@@ -23,24 +30,17 @@ const initialState: ChatDialogsState = {
  */
 export const chatDialogsStore = new Store<ChatDialogsState>(initialState)
 
-export function openNewChannel(categoryId?: string) {
+export function openNewChannel(categoryId?: string, preset?: NewChannelPreset) {
 	chatDialogsStore.setState((prev) => ({
 		...prev,
 		newChannelOpen: true,
 		newChannelCategoryId: categoryId ?? null,
+		newChannelPreset: preset ?? null,
 	}))
 }
 
 export function setNewChannelOpen(open: boolean) {
 	chatDialogsStore.setState((prev) => ({ ...prev, newChannelOpen: open }))
-}
-
-export function openNewDirect() {
-	chatDialogsStore.setState((prev) => ({ ...prev, newDirectOpen: true }))
-}
-
-export function setNewDirectOpen(open: boolean) {
-	chatDialogsStore.setState((prev) => ({ ...prev, newDirectOpen: open }))
 }
 
 export function openChannelAdmin(channelId: string) {

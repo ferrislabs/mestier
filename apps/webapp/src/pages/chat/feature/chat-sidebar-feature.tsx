@@ -4,6 +4,7 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useCategories,
 	useChannels,
+	useDeleteChannel,
 	useChatDirectory,
 	useChatListGatewaySync,
 	useDirectChannels,
@@ -14,12 +15,13 @@ import {
 import { usePresenceStatuses } from '#/hooks/use-presence'
 import { buildDirectMessageItems } from '#/pages/chat/lib/direct-messages'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
-import { ChatSidebarUI } from '#/pages/chat/ui/chat-sidebar-ui'
+import { Plus } from 'lucide-react'
 import {
-	openChannelAdmin,
-	openNewChannel,
-	openNewDirect,
-} from './chat-dialogs-store'
+	addButtonClassName,
+	ChatSidebarUI,
+} from '#/pages/chat/ui/chat-sidebar-ui'
+import { openChannelAdmin, openNewChannel } from './chat-dialogs-store'
+import { NewDirectMessageFeature } from './new-direct-message-feature'
 
 /**
  * The module's side nav for Discussions: categories and channels, then direct
@@ -43,6 +45,7 @@ export function ChatSidebarFeature() {
 	const directChannels = useDirectChannels(organizationId)
 	const directory = useChatDirectory(organizationId)
 	const presenceStatuses = usePresenceStatuses()
+	const deleteChannel = useDeleteChannel(organizationId)
 
 	const unreadCounts = useMemo(
 		() =>
@@ -74,6 +77,19 @@ export function ChatSidebarFeature() {
 		})
 	}
 
+	function duplicateChannel(id: string) {
+		const source = (channels.data ?? []).find((channel) => channel.id === id)
+		if (!source) return
+		openNewChannel(source.category_id ?? undefined, {
+			name: `${source.name} (copie)`,
+			kind:
+				source.channel_type === 'ANNOUNCEMENT' ||
+				source.channel_type === 'VOICE'
+					? source.channel_type
+					: 'TEXT',
+		})
+	}
+
 	return (
 		<ChatSidebarUI
 			organizationSlug={activeOrganization.slug}
@@ -88,8 +104,25 @@ export function ChatSidebarFeature() {
 			directMessages={directMessages}
 			onRequestNewChannel={() => openNewChannel()}
 			onRequestNewChannelInCategory={openNewChannel}
-			onRequestNewDirectMessage={openNewDirect}
+			newDirectMessage={
+				<NewDirectMessageFeature
+					organizationId={organizationId}
+					organizationSlug={activeOrganization.slug}
+				>
+					<button
+						type="button"
+						aria-label="Nouveau message direct"
+						className={addButtonClassName}
+					>
+						<Plus className="size-3.5" />
+					</button>
+				</NewDirectMessageFeature>
+			}
 			onOpenChannelAdmin={openChannelAdmin}
+			onDuplicateChannel={duplicateChannel}
+			onDeleteChannel={(id) =>
+				deleteChannel.mutate({ path: { channel_id: id } } as never)
+			}
 		/>
 	)
 }

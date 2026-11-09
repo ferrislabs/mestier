@@ -58,11 +58,13 @@ function baseProps(
 		isError: false,
 		unreadCounts: new Map(),
 		directMessages: [],
-		onRequestNewDirectMessage: vi.fn(),
+		newDirectMessage: null,
 		mentionCount: 0,
 		onRequestNewChannel: vi.fn(),
 		onRequestNewChannelInCategory: vi.fn(),
 		onOpenChannelAdmin: vi.fn(),
+		onDuplicateChannel: vi.fn(),
+		onDeleteChannel: vi.fn(),
 		...overrides,
 	}
 }
@@ -168,7 +170,7 @@ describe('ChatSidebarUI — channel creation in a category', () => {
 })
 
 describe('ChatSidebarUI — per-channel management (#372)', () => {
-	it('opens the channel admin sheet for that channel from the sidebar itself', async () => {
+	it('opens the channel admin dialog for that channel from the sidebar itself', async () => {
 		const user = userEvent.setup()
 		const onOpenChannelAdmin = vi.fn()
 		const groups = [
@@ -179,13 +181,64 @@ describe('ChatSidebarUI — per-channel management (#372)', () => {
 		)
 
 		await user.click(
-			screen.getByRole('button', { name: 'Gérer le canal ch-1' }),
-		)
-		await user.click(
-			screen.getByRole('menuitem', { name: /Paramètres du canal/ }),
+			screen.getByRole('button', { name: 'Paramètres du canal ch-1' }),
 		)
 
 		expect(onOpenChannelAdmin).toHaveBeenCalledWith('ch-1')
+	})
+})
+
+describe('ChatSidebarUI — context menu', () => {
+	async function openMenu(overrides: Parameters<typeof baseProps>[0] = {}) {
+		const user = userEvent.setup()
+		const groups = [
+			{ category: category('cat-1'), channels: [channel('ch-1', 'cat-1')] },
+		]
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ groups, ...overrides })} />,
+		)
+		await user.pointer({
+			keys: '[MouseRight]',
+			target: screen.getByRole('link', { name: /ch-1/ }),
+		})
+		return user
+	}
+
+	it('edits the channel from the menu', async () => {
+		const onOpenChannelAdmin = vi.fn()
+		const user = await openMenu({ onOpenChannelAdmin })
+
+		await user.click(
+			await screen.findByRole('menuitem', { name: 'Modifier le canal' }),
+		)
+
+		expect(onOpenChannelAdmin).toHaveBeenCalledWith('ch-1')
+	})
+
+	it('duplicates the channel from the menu', async () => {
+		const onDuplicateChannel = vi.fn()
+		const user = await openMenu({ onDuplicateChannel })
+
+		await user.click(
+			await screen.findByRole('menuitem', { name: 'Dupliquer le canal' }),
+		)
+
+		expect(onDuplicateChannel).toHaveBeenCalledWith('ch-1')
+	})
+
+	it('deletes the channel only on the second click', async () => {
+		const onDeleteChannel = vi.fn()
+		const user = await openMenu({ onDeleteChannel })
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Supprimer le canal' }),
+		)
+		expect(onDeleteChannel).not.toHaveBeenCalled()
+		await user.click(
+			screen.getByRole('button', { name: 'Confirmer la suppression' }),
+		)
+
+		expect(onDeleteChannel).toHaveBeenCalledWith('ch-1')
 	})
 })
 
@@ -261,17 +314,21 @@ describe('ChatSidebarUI — direct messages', () => {
 		expect(screen.getByText('En ligne')).toBeDefined()
 	})
 
-	it('asks for a new direct message from the plus button', async () => {
-		const user = userEvent.setup()
-		const onRequestNewDirectMessage = vi.fn()
+	it('renders the new direct message action next to the section title', async () => {
 		await renderSidebar(
-			<ChatSidebarUI {...baseProps({ onRequestNewDirectMessage })} />,
+			<ChatSidebarUI
+				{...baseProps({
+					newDirectMessage: (
+						<button type="button" aria-label="Nouveau message direct">
+							+
+						</button>
+					),
+				})}
+			/>,
 		)
 
-		await user.click(
+		expect(
 			screen.getByRole('button', { name: 'Nouveau message direct' }),
-		)
-
-		expect(onRequestNewDirectMessage).toHaveBeenCalledTimes(1)
+		).toBeDefined()
 	})
 })

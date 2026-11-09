@@ -33,6 +33,7 @@ pub use common::{OrganizationId, ProjectId, RoleId, UserId};
 pub use domain::category::{
     CategoryRepository, CategoryService, CreateCategoryCommand, UpdateCategoryCommand,
 };
+pub use domain::category_access::{CategoryAccess, CategoryAccessRepository};
 pub use domain::channel::{
     ChannelRepository, ChannelService, CreateChannelCommand, CreateProjectChannelCommand,
     CreateThreadCommand, UpdateChannelCommand, UpdateThreadCommand,

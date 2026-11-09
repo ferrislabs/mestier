@@ -93,7 +93,7 @@ impl<'tx> ChannelRepository for PgChannelRepository<'tx> {
 			ChannelRow,
 			r#"
             SELECT id, org_id, channel_type::text AS "channel_type!", name, topic, position, category_id, parent_id, origin_message_id, archived, project_id, created_at, updated_at
-            FROM chat.channels WHERE org_id = $1 AND channel_type = 'TEXT'
+            FROM chat.channels WHERE org_id = $1 AND channel_type IN ('TEXT', 'ANNOUNCEMENT', 'VOICE')
             ORDER BY position ASC, id ASC
             "#,
 			org.0,

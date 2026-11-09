@@ -1,12 +1,15 @@
 import { Link } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 import {
 	AlertCircle,
 	ChevronRight,
-	Hash,
-	MoreHorizontal,
+	Copy,
+	Fingerprint,
 	Plus,
 	Settings,
+	Trash2,
 } from 'lucide-react'
+import { DoubleClickConfirmButton } from '#/components/double-click-confirm-button'
 import { RequirePermission } from '#/components/require-permission'
 import {
 	Collapsible,
@@ -14,17 +17,21 @@ import {
 	CollapsibleTrigger,
 } from '#/components/ui/collapsible'
 import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from '#/components/ui/dropdown-menu'
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from '#/components/ui/context-menu'
 import { Skeleton } from '#/components/ui/skeleton'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import { channelKindIcon } from '#/pages/chat/lib/channel-kinds'
 import type { DirectMessageItem } from '#/pages/chat/lib/direct-messages'
 import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
+
+const ITEM = 'gap-2 px-2 py-1 text-xs [&_svg]:size-3.5'
 
 export interface ChatSidebarUIProps {
 	organizationSlug: string
@@ -39,10 +46,13 @@ export interface ChatSidebarUIProps {
 	directMessages: readonly DirectMessageItem[]
 	onRequestNewChannel: () => void
 	onRequestNewChannelInCategory: (categoryId: string) => void
-	onRequestNewDirectMessage: () => void
+	/** The "+" of the direct messages section, with the member picker it opens. */
+	newDirectMessage: ReactNode
 	/** Opens the channel admin sheet for one channel — see #372: channel
 	 * management starts here, not only from inside the channel itself. */
 	onOpenChannelAdmin: (channelId: string) => void
+	onDuplicateChannel: (channelId: string) => void
+	onDeleteChannel: (channelId: string) => void
 }
 
 const headingClassName =
@@ -51,7 +61,7 @@ const headingClassName =
 const linkClassName =
 	'flex h-8 items-center gap-2 rounded-md px-2 text-nav-foreground/80 text-sm outline-none transition-colors hover:bg-nav-active/60 hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary data-[status=active]:bg-nav-active data-[status=active]:text-nav-active-foreground'
 
-const addButtonClassName =
+export const addButtonClassName =
 	'flex size-6 items-center justify-center rounded-md text-nav-muted outline-none transition-colors hover:bg-nav-active/60 hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary'
 
 /**
@@ -71,8 +81,10 @@ export function ChatSidebarUI({
 	directMessages,
 	onRequestNewChannel,
 	onRequestNewChannelInCategory,
-	onRequestNewDirectMessage,
+	newDirectMessage,
 	onOpenChannelAdmin,
+	onDuplicateChannel,
+	onDeleteChannel,
 }: ChatSidebarUIProps) {
 	return (
 		<nav
@@ -137,6 +149,8 @@ export function ChatSidebarUI({
 								onToggleCategory={onToggleCategory}
 								unreadCounts={unreadCounts}
 								onOpenChannelAdmin={onOpenChannelAdmin}
+								onDuplicateChannel={onDuplicateChannel}
+								onDeleteChannel={onDeleteChannel}
 								onRequestNewChannelInCategory={onRequestNewChannelInCategory}
 							/>
 						))}
@@ -149,14 +163,7 @@ export function ChatSidebarUI({
 					<h2 id="discussions-direct-heading" className={headingClassName}>
 						Messages directs
 					</h2>
-					<button
-						type="button"
-						aria-label="Nouveau message direct"
-						className={addButtonClassName}
-						onClick={onRequestNewDirectMessage}
-					>
-						<Plus className="size-3.5" />
-					</button>
+					{newDirectMessage}
 				</div>
 				<ul className="flex flex-col gap-0.5">
 					{directMessages.map((item) => (
@@ -187,6 +194,11 @@ export function ChatSidebarUI({
 			</section>
 		</nav>
 	)
+}
+
+function ChannelIcon({ type, className }: { type: string; className: string }) {
+	const Icon = channelKindIcon(type)
+	return <Icon aria-hidden className={className} />
 }
 
 function UnreadBadge({ count }: { count: number }) {
@@ -220,6 +232,8 @@ interface CategoryGroupProps {
 	onToggleCategory: (categoryId: string, collapsed: boolean) => void
 	unreadCounts: ReadonlyMap<string, number>
 	onOpenChannelAdmin: (channelId: string) => void
+	onDuplicateChannel: (channelId: string) => void
+	onDeleteChannel: (channelId: string) => void
 	onRequestNewChannelInCategory: (categoryId: string) => void
 }
 
@@ -231,6 +245,8 @@ function CategoryGroup({
 	onToggleCategory,
 	unreadCounts,
 	onOpenChannelAdmin,
+	onDuplicateChannel,
+	onDeleteChannel,
 	onRequestNewChannelInCategory,
 }: CategoryGroupProps) {
 	const channelList = (
@@ -238,38 +254,77 @@ function CategoryGroup({
 			{group.channels.map((chan) => {
 				const unreadCount = unreadCounts.get(chan.id) ?? 0
 				return (
-					<li key={chan.id} className="group/channel relative">
-						<Link
-							to={buildOrgPath(organizationSlug, `/discussions/${chan.id}`)}
-							data-status={chan.id === activeChannelId ? 'active' : undefined}
-							className={cn(
-								linkClassName,
-								'pr-8',
-								unreadCount > 0 && 'font-semibold text-nav-foreground',
-							)}
-						>
-							<Hash aria-hidden className="size-4 shrink-0 text-nav-muted" />
-							<span className="min-w-0 flex-1 truncate">{chan.name}</span>
-							<UnreadBadge count={unreadCount} />
-						</Link>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
+					<ContextMenu key={chan.id}>
+						<ContextMenuTrigger asChild>
+							<li className="group/channel relative">
+								<Link
+									to={buildOrgPath(organizationSlug, `/discussions/${chan.id}`)}
+									data-status={
+										chan.id === activeChannelId ? 'active' : undefined
+									}
+									className={cn(
+										linkClassName,
+										'pr-8',
+										unreadCount > 0 && 'font-semibold text-nav-foreground',
+									)}
+								>
+									<ChannelIcon
+										type={chan.channel_type}
+										className="size-4 shrink-0 text-nav-muted"
+									/>
+									<span className="min-w-0 flex-1 truncate">{chan.name}</span>
+									<UnreadBadge count={unreadCount} />
+								</Link>
 								<button
 									type="button"
-									aria-label={`Gérer le canal ${chan.name}`}
-									className="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-nav-muted opacity-0 outline-none hover:bg-nav-active hover:text-nav-foreground focus-visible:opacity-100 group-hover/channel:opacity-100 data-[state=open]:opacity-100"
+									aria-label={`Paramètres du canal ${chan.name}`}
+									onClick={() => onOpenChannelAdmin(chan.id)}
+									className="absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-nav-muted opacity-0 outline-none hover:bg-nav-active hover:text-nav-foreground focus-visible:opacity-100 group-hover/channel:opacity-100"
 								>
-									<MoreHorizontal className="size-3.5" />
+									<Settings className="size-3.5" />
 								</button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="start">
-								<DropdownMenuItem onSelect={() => onOpenChannelAdmin(chan.id)}>
+							</li>
+						</ContextMenuTrigger>
+						<ContextMenuContent className="w-56 min-w-0 p-0.5">
+							<RequirePermission permission="MANAGE_CHANNELS">
+								<ContextMenuItem
+									className={ITEM}
+									onSelect={() => onOpenChannelAdmin(chan.id)}
+								>
 									<Settings className="size-4" />
-									Paramètres du canal
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-					</li>
+									Modifier le canal
+								</ContextMenuItem>
+								<ContextMenuItem
+									className={ITEM}
+									onSelect={() => onDuplicateChannel(chan.id)}
+								>
+									<Copy className="size-3.5" />
+									Dupliquer le canal
+								</ContextMenuItem>
+							</RequirePermission>
+							<ContextMenuItem
+								className={ITEM}
+								onSelect={() => navigator.clipboard?.writeText(chan.id)}
+							>
+								<Fingerprint className="size-3.5" />
+								Copier l’identifiant du canal
+							</ContextMenuItem>
+							<RequirePermission permission="MANAGE_CHANNELS">
+								<ContextMenuSeparator className="my-0.5" />
+								<div>
+									<DoubleClickConfirmButton
+										variant="ghost"
+										size="sm"
+										className="h-7 w-full justify-start gap-2 overflow-hidden px-2 text-destructive text-xs hover:text-destructive"
+										icon={<Trash2 className="size-3.5" />}
+										label="Supprimer le canal"
+										confirmLabel="Confirmer la suppression"
+										onConfirm={() => onDeleteChannel(chan.id)}
+									/>
+								</div>
+							</RequirePermission>
+						</ContextMenuContent>
+					</ContextMenu>
 				)
 			})}
 		</ul>
