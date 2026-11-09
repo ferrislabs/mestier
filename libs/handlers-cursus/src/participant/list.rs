@@ -6,11 +6,13 @@ use axum::{
 use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
 };
-use mestier_core::{ParticipantKind, ParticipantStatus};
+use mestier_core::{HostCompanyId, ParticipantKind, ParticipantStatus};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
-use crate::{paths::ParticipantCollectionPath, require_view_cursus, response::ParticipantResponse};
+use crate::{
+    paths::ParticipantCollectionPath, require_view_cursus, response::ParticipantListItemResponse,
+};
 
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -19,6 +21,7 @@ pub struct ListParticipantsQuery {
     pub kind: Option<ParticipantKind>,
     #[param(inline)]
     pub status: Option<ParticipantStatus>,
+    pub host_company_id: Option<HostCompanyId>,
 }
 
 #[utoipa::path(
@@ -32,7 +35,7 @@ pub struct ListParticipantsQuery {
         PaginationParams,
     ),
     responses(
-        (status = 200, description = "A page of participants, filtered by kind and status", body = inline(DataEnvelope<Vec<ParticipantResponse>>)),
+        (status = 200, description = "A page of participants, filtered by kind, status and host company, with their apprentice and company tutor records", body = inline(DataEnvelope<Vec<ParticipantListItemResponse>>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -44,7 +47,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Query(query): Query<ListParticipantsQuery>,
     Query(pagination): Query<PaginationParams>,
-) -> Result<Response<ParticipantResponse>, ApiError> {
+) -> Result<Response<ParticipantListItemResponse>, ApiError> {
     require_view_cursus(&state, &identity, path.organization_id).await?;
 
     let per_page = pagination.per_page();
@@ -55,13 +58,16 @@ pub async fn handler(
             path.organization_id,
             query.kind,
             query.status,
+            query.host_company_id,
             per_page,
             pagination.offset(),
         )
         .await?;
 
-    let items: Vec<ParticipantResponse> =
-        items.into_iter().map(ParticipantResponse::from).collect();
+    let items: Vec<ParticipantListItemResponse> = items
+        .into_iter()
+        .map(ParticipantListItemResponse::from)
+        .collect();
     let is_empty = items.is_empty();
     let meta = PaginationMetadata::new(per_page, current_page, Some(total), is_empty);
 

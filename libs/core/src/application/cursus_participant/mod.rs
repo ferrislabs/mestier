@@ -4,7 +4,7 @@ use mestier_macros::transactional;
 
 use crate::{
     CursusSpace, HostCompanyId, OrganizationId, Participant, ParticipantDetail, ParticipantId,
-    ParticipantInvite, ParticipantKind, ParticipantStatus,
+    ParticipantInvite, ParticipantKind, ParticipantListItem, ParticipantStatus,
     application::{MestierUseCase, policy},
     domain::{
         cursus_host_company::service::CursusHostCompanyService,
@@ -95,11 +95,19 @@ impl MestierUseCase {
         organization_id: OrganizationId,
         kind: Option<ParticipantKind>,
         status: Option<ParticipantStatus>,
+        host_company_id: Option<HostCompanyId>,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<Participant>, u64), CoreError> {
+    ) -> Result<(Vec<ParticipantListItem>, u64), CoreError> {
         CursusParticipantService::new(cursus_participant_repository, emitter)
-            .list(organization_id, kind, status, limit, offset)
+            .list(
+                organization_id,
+                kind,
+                status,
+                host_company_id,
+                limit,
+                offset,
+            )
             .await
     }
 

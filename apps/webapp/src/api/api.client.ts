@@ -2093,6 +2093,10 @@ export namespace Schemas {
     company_tutors: Array<CompanyTutorResponse>;
   };
   export type ParticipantInviteResponse = { expires_at: string; token: string };
+  export type ParticipantListItemResponse = ParticipantResponse & {
+    apprentice_id?: (null | ApprenticeId) | undefined;
+    company_tutors: Array<CompanyTutorResponse>;
+  };
   export type PatchTaskResponse = { detached: boolean; task: TaskResponse };
   export type PayExpenseRequest = { method: PaymentMethod; paid_on: string };
   export type PlanMaintenanceLinesRequest = { line_ids: Array<MaintenanceLineId>; week: string };
@@ -8164,6 +8168,7 @@ export namespace Endpoints {
       query: Partial<{
         kind: "apprentice" | "company_tutor";
         status: "pending" | "active" | "inactive";
+        host_company_id: string;
         page: number;
         per_page: number;
       }>;
@@ -8171,20 +8176,12 @@ export namespace Endpoints {
     };
     responses: {
       200: {
-        data: Array<{
-          created_at: string;
-          deactivated_at?: (string | null) | undefined;
-          email: string;
-          first_name?: (string | null) | undefined;
-          id: Schemas.ParticipantId;
-          invitation_expires_at?: (string | null) | undefined;
-          last_name: string;
-          organization_id: Schemas.OrganizationId;
-          phone?: (string | null) | undefined;
-          status: Schemas.ParticipantStatus;
-          updated_at: string;
-          user_id?: (null | Schemas.UserId) | undefined;
-        }>;
+        data: Array<
+          Schemas.ParticipantResponse & {
+            apprentice_id?: (null | Schemas.ApprenticeId) | undefined;
+            company_tutors: Array<Schemas.CompanyTutorResponse>;
+          }
+        >;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       401: unknown;

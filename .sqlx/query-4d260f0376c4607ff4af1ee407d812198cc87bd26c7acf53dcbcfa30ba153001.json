@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM cursus.participant p\n            WHERE p.org_id = $1\n              AND ($2::text IS NULL\n                   OR ($2 = 'apprentice' AND EXISTS (\n                           SELECT 1 FROM cursus.apprentice a WHERE a.participant_id = p.id))\n                   OR ($2 = 'company_tutor' AND EXISTS (\n                           SELECT 1 FROM cursus.company_tutor t WHERE t.participant_id = p.id)))\n              AND ($3::text IS NULL\n                   OR $3 = CASE\n                       WHEN p.deactivated_at IS NOT NULL THEN 'inactive'\n                       WHEN p.user_id IS NULL THEN 'pending'\n                       ELSE 'active'\n                   END)\n              AND ($4::uuid IS NULL\n                   OR EXISTS (\n                       SELECT 1 FROM cursus.company_tutor h\n                       WHERE h.org_id = p.org_id AND h.participant_id = p.id AND h.host_company_id = $4))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4d260f0376c4607ff4af1ee407d812198cc87bd26c7acf53dcbcfa30ba153001"
+}
