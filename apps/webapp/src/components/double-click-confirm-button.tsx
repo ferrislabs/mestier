@@ -32,7 +32,11 @@ export function DoubleClickConfirmButton({
 			type="button"
 			{...props}
 			variant={armed ? 'destructive' : props.variant}
-			className={cn(props.className, armed && 'text-white')}
+			className={cn(
+				props.className,
+				armed &&
+					'bg-destructive text-white hover:bg-destructive/90 hover:text-white',
+			)}
 			onClick={() => {
 				if (!armed) {
 					setArmed(true)

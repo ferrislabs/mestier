@@ -158,7 +158,8 @@ export function ChannelAdminDialogUI({
 								<div className="mt-1 border-nav-border border-t pt-3">
 									<DoubleClickConfirmButton
 										variant="ghost"
-										className="w-full justify-start px-2.5 text-red-300 hover:bg-red-500/15 hover:text-red-200"
+										size="sm"
+										className="h-7 w-full justify-start px-2.5 text-red-300 text-xs hover:bg-red-500/15 hover:text-red-200"
 										label="Supprimer le canal"
 										disabled={isDeleting}
 										confirmLabel="Confirmer la suppression"
