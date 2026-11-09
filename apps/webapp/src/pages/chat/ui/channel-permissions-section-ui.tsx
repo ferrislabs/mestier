@@ -7,7 +7,6 @@ import {
 	SelectItem,
 	SelectLabel,
 	SelectTrigger,
-	SelectValue,
 } from '#/components/ui/select'
 import { Switch } from '#/components/ui/switch'
 import { cn } from '#/lib/utils'
@@ -138,6 +137,50 @@ export function ChannelPermissionsSectionUI({
 					<div className="flex flex-col gap-2">
 						<div className="flex items-center justify-between text-muted-foreground text-xs">
 							<span>Rôles/Membres</span>
+							{addableRoles.length + addableMembers.length > 0 ? (
+								<Select
+									value=""
+									onValueChange={(value) => {
+										const [type, ...rest] = value.split(':')
+										onAddTarget(
+											type === 'role' ? 'role' : 'member',
+											rest.join(':'),
+										)
+									}}
+								>
+									<SelectTrigger
+										aria-label="Ajouter un rôle ou un membre"
+										className="size-6 justify-center border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-accent [&>svg:last-child]:hidden"
+									>
+										<Plus className="size-3.5" />
+									</SelectTrigger>
+									<SelectContent align="end">
+										{addableRoles.length > 0 ? (
+											<SelectGroup>
+												<SelectLabel>Rôles</SelectLabel>
+												{addableRoles.map((role) => (
+													<SelectItem key={role.id} value={`role:${role.id}`}>
+														{role.name}
+													</SelectItem>
+												))}
+											</SelectGroup>
+										) : null}
+										{addableMembers.length > 0 ? (
+											<SelectGroup>
+												<SelectLabel>Membres</SelectLabel>
+												{addableMembers.map((member) => (
+													<SelectItem
+														key={member.id}
+														value={`member:${member.id}`}
+													>
+														{member.name}
+													</SelectItem>
+												))}
+											</SelectGroup>
+										) : null}
+									</SelectContent>
+								</Select>
+							) : null}
 						</div>
 						<ul className="flex flex-col gap-0.5">
 							{targets.map((target) => (
@@ -156,51 +199,6 @@ export function ChannelPermissionsSectionUI({
 								</li>
 							))}
 						</ul>
-						{addableRoles.length + addableMembers.length > 0 ? (
-							<Select
-								value=""
-								onValueChange={(value) => {
-									const [type, ...rest] = value.split(':')
-									onAddTarget(
-										type === 'role' ? 'role' : 'member',
-										rest.join(':'),
-									)
-								}}
-							>
-								<SelectTrigger
-									aria-label="Ajouter un rôle ou un membre"
-									className="h-8 w-full text-xs"
-								>
-									<Plus className="size-3.5" />
-									<SelectValue placeholder="Ajouter" />
-								</SelectTrigger>
-								<SelectContent>
-									{addableRoles.length > 0 ? (
-										<SelectGroup>
-											<SelectLabel>Rôles</SelectLabel>
-											{addableRoles.map((role) => (
-												<SelectItem key={role.id} value={`role:${role.id}`}>
-													{role.name}
-												</SelectItem>
-											))}
-										</SelectGroup>
-									) : null}
-									{addableMembers.length > 0 ? (
-										<SelectGroup>
-											<SelectLabel>Membres</SelectLabel>
-											{addableMembers.map((member) => (
-												<SelectItem
-													key={member.id}
-													value={`member:${member.id}`}
-												>
-													{member.name}
-												</SelectItem>
-											))}
-										</SelectGroup>
-									) : null}
-								</SelectContent>
-							</Select>
-						) : null}
 					</div>
 
 					{selected ? (
