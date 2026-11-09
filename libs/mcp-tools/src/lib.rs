@@ -118,10 +118,13 @@ pub enum Tool {
     ListOutstandingInvoices,
     GetProfitability,
     GetWorkedHours,
+    SearchPhotoLibrary,
+    TagLibraryPhotos,
+    PlaceDoeFiles,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 63] = [
+    pub const ALL: [Tool; 66] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -185,6 +188,9 @@ impl Tool {
         Tool::ListOutstandingInvoices,
         Tool::GetProfitability,
         Tool::GetWorkedHours,
+        Tool::SearchPhotoLibrary,
+        Tool::TagLibraryPhotos,
+        Tool::PlaceDoeFiles,
     ];
 
     /// The name MCP clients call the tool by.
@@ -253,6 +259,9 @@ impl Tool {
             Self::ListOutstandingInvoices => "list_outstanding_invoices",
             Self::GetProfitability => "get_profitability",
             Self::GetWorkedHours => "get_worked_hours",
+            Self::SearchPhotoLibrary => "search_photo_library",
+            Self::TagLibraryPhotos => "tag_library_photos",
+            Self::PlaceDoeFiles => "place_doe_files",
         }
     }
 
@@ -293,7 +302,9 @@ impl Tool {
             | Self::CreateProduct
             | Self::UpdateProduct
             | Self::CreateSupplier
-            | Self::UpdateSupplier => Access::Write,
+            | Self::UpdateSupplier
+            | Self::TagLibraryPhotos
+            | Self::PlaceDoeFiles => Access::Write,
             Self::ListOrganizations
             | Self::ListProjects
             | Self::GetProject
@@ -322,7 +333,8 @@ impl Tool {
             | Self::ListExpenses
             | Self::ListOutstandingInvoices
             | Self::GetProfitability
-            | Self::GetWorkedHours => Access::Read,
+            | Self::GetWorkedHours
+            | Self::SearchPhotoLibrary => Access::Read,
         }
     }
 
@@ -363,7 +375,10 @@ impl Tool {
             | Self::UpdateDoeFile
             | Self::DeleteDoeFile
             | Self::UpdateDoeHeader
-            | Self::ExportDoePdf => "doe",
+            | Self::ExportDoePdf
+            | Self::SearchPhotoLibrary
+            | Self::TagLibraryPhotos
+            | Self::PlaceDoeFiles => "doe",
             Self::SearchProducts | Self::GetProduct => "catalog",
             Self::ListQuotes
             | Self::GetQuote
@@ -497,8 +512,10 @@ mod tests {
                 "delete_doe_section",
                 "delete_doe_supply",
                 "move_deal_stage",
+                "place_doe_files",
                 "reorder_doe_sections",
                 "set_quote_status",
+                "tag_library_photos",
                 "update_customer",
                 "update_customer_contact",
                 "update_deal",
@@ -627,6 +644,26 @@ mod tests {
             Tool::ListExpenses,
         ] {
             assert_eq!(tool.access(), Access::Read, "{tool}");
+        }
+    }
+
+    #[test]
+    fn the_photo_library_tools_live_in_the_doe_domain_and_never_delete() {
+        let expected = [
+            (Tool::SearchPhotoLibrary, Access::Read),
+            (Tool::TagLibraryPhotos, Access::Write),
+            (Tool::PlaceDoeFiles, Access::Write),
+        ];
+        for (tool, access) in expected {
+            assert_eq!(tool.access(), access, "{tool}");
+            assert_eq!(tool.domain(), "doe", "{tool}");
+            assert!(tool.is_organization_scoped(), "{tool}");
+        }
+        for tool in Tool::ALL {
+            let name = tool.name();
+            if name.contains("photo_library") || name.contains("library_photos") {
+                assert!(!name.contains("delete"), "{name}");
+            }
         }
     }
 }

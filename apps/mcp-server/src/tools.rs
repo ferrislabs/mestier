@@ -484,7 +484,8 @@ impl MestierTools {
                 + Self::crm_router()
                 + Self::quote_router()
                 + Self::planning_router()
-                + Self::reference_router(),
+                + Self::reference_router()
+                + Self::photo_router(),
         }
     }
 

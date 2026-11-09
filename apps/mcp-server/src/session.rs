@@ -76,8 +76,8 @@ pub enum PdfOutcome {
 /// One tool call: the API client and the delegated token of the request that
 /// carries it. Dropped when the call ends.
 pub struct Session<'a> {
-    api: &'a ApiClient,
-    token: &'a str,
+    pub(crate) api: &'a ApiClient,
+    pub(crate) token: &'a str,
 }
 
 impl<'a> Session<'a> {

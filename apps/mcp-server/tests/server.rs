@@ -42,6 +42,8 @@ const FOREIGN_QUOTE: &str = "d2222222-2222-4222-8222-222222222222";
 const TASK: &str = "c1111111-1111-4111-8111-111111111111";
 const OWN_SUPPLIER: &str = "b1111111-1111-4111-8111-111111111111";
 const OWN_PRODUCT: &str = "b3333333-3333-4333-8333-333333333333";
+const LIBRARY_TOTAL: usize = 60;
+const FAILING_PHOTO: usize = 59;
 const UPDATED_AT: &str = "2026-10-10T08:00:00Z";
 const JPEG: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, b'J', b'F', b'I', b'F'];
 
@@ -121,6 +123,40 @@ fn rich_doe() -> Value {
              "content": {"kind": "blank_pages", "count": 2}}
         ]
     })
+}
+
+fn photo_id(index: usize) -> String {
+    format!("00000000-0000-4000-8000-{index:012}")
+}
+
+fn library_photo(index: usize) -> Value {
+    json!({
+        "id": photo_id(index), "file_key": format!("library/{ORG_A}/{index}.jpg"),
+        "thumbnail_key": format!("library/{ORG_A}/{index}.thumb.jpg"), "mime_type": "image/jpeg",
+        "width": 2400, "height": 1600, "size_bytes": 812345,
+        "caption": "old", "tags": ["a", "b"], "project_id": PROJECT,
+        "taken_at": "2026-10-01T09:30:00Z", "created_at": UPDATED_AT, "updated_at": UPDATED_AT
+    })
+}
+
+fn thumbnail(index: usize) -> Vec<u8> {
+    let mut bytes = JPEG.to_vec();
+    bytes.push(index as u8);
+    bytes
+}
+
+fn library_index(path: &str, suffix: &str) -> Option<usize> {
+    let prefix = format!("organizations/{ORG_A}/photo-library/photos/");
+    let id = path.strip_prefix(&prefix)?.strip_suffix(suffix)?;
+    let index = id.strip_prefix("00000000-0000-4000-8000-")?.parse().ok()?;
+    (1..=LIBRARY_TOTAL).contains(&index).then_some(index)
+}
+
+fn query_value(query: &str, key: &str) -> Option<usize> {
+    query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix(&format!("{key}=")))
+        .and_then(|value| value.parse().ok())
 }
 
 fn fail(status: StatusCode, message: &str) -> Response {
@@ -433,6 +469,56 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
             vec![b'x'; 11 * 1024 * 1024],
         )
             .into_response(),
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/photo-library/photos") => {
+            let query = parts.uri.query().unwrap_or("");
+            let per_page = query_value(query, "per_page").unwrap_or(20);
+            let page = query_value(query, "page").unwrap_or(1);
+            let first = (page - 1) * per_page;
+            let photos: Vec<Value> = (first..(first + per_page).min(LIBRARY_TOTAL))
+                .map(|offset| library_photo(offset + 1))
+                .collect();
+            Json(json!({
+                "data": photos,
+                "meta": {"per_page": per_page, "current_page": page, "total": LIBRARY_TOTAL}
+            }))
+            .into_response()
+        }
+        (&Method::GET, p) if library_index(p, "/thumbnail").is_some() => {
+            let index = library_index(p, "/thumbnail").unwrap();
+            ([(header::CONTENT_TYPE, "image/jpeg")], thumbnail(index)).into_response()
+        }
+        (&Method::GET, p) if library_index(p, "").is_some() => {
+            Json(json!({"data": library_photo(library_index(p, "").unwrap())})).into_response()
+        }
+        (&Method::PATCH, p) if library_index(p, "") == Some(FAILING_PHOTO) => fail(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "étiquette invalide",
+        ),
+        (&Method::PATCH, p) if library_index(p, "").is_some() => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            let mut photo = library_photo(library_index(p, "").unwrap());
+            for (key, value) in sent.as_object().unwrap() {
+                photo[key] = value.clone();
+            }
+            Json(json!({"data": photo})).into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/does/{DOE}/photos/place") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            let results: Vec<Value> = sent["placements"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|placement| {
+                    let id = placement["photo_id"].as_str().unwrap();
+                    if id == photo_id(FAILING_PHOTO) {
+                        json!({"photo_id": id, "status": "failed", "error": "photo introuvable"})
+                    } else {
+                        json!({"photo_id": id, "status": "placed", "key": format!("doe/copy-{id}.jpg")})
+                    }
+                })
+                .collect();
+            Json(json!({"doe": doe(), "results": results})).into_response()
+        }
         _ => fail(StatusCode::NOT_FOUND, "introuvable"),
     }
 }
@@ -2203,4 +2289,327 @@ async fn the_purchase_expense_and_reporting_reads_hit_their_endpoints() {
         );
     }
     assert!(writes(&fake).is_empty());
+}
+
+fn images(result: &Value) -> Vec<Vec<u8>> {
+    use base64::Engine;
+    result["content"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|block| block["type"] == "image")
+        .map(|block| {
+            assert_eq!(block["mimeType"], "image/jpeg");
+            base64::engine::general_purpose::STANDARD
+                .decode(block["data"].as_str().unwrap())
+                .unwrap()
+        })
+        .collect()
+}
+
+fn library_requests(fake: &Fake, suffix: &str) -> Vec<Seen> {
+    fake.seen()
+        .into_iter()
+        .filter(|s| s.path.contains("/photo-library/") && s.path.ends_with(suffix))
+        .collect()
+}
+
+#[tokio::test]
+async fn searching_the_library_returns_the_text_then_one_thumbnail_per_photo_in_order() {
+    let (mcp, fake) = start().await;
+    let result = call(&mcp, "solo", "search_photo_library", json!({"limit": 3})).await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let content = result["content"].as_array().unwrap();
+    assert_eq!(content.len(), 4);
+    assert_eq!(content[0]["type"], "text");
+    let listing: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(listing["page"], 1);
+    assert_eq!(listing["total"], LIBRARY_TOTAL);
+    let photos = listing["photos"].as_array().unwrap();
+    assert_eq!(photos.len(), 3);
+    assert_eq!(
+        photos[0],
+        json!({
+            "id": photo_id(1), "caption": "old", "tags": ["a", "b"], "project_id": PROJECT,
+            "taken_at": "2026-10-01T09:30:00Z", "width": 2400, "height": 1600
+        })
+    );
+    assert!(photos[0].get("file_key").is_none());
+    let thumbnails = images(&result);
+    assert_eq!(thumbnails, vec![thumbnail(1), thumbnail(2), thumbnail(3)]);
+    let asked: Vec<String> = library_requests(&fake, "/thumbnail")
+        .into_iter()
+        .map(|s| s.path)
+        .collect();
+    assert_eq!(asked.len(), 3);
+    assert!(asked[2].contains(&photo_id(3)));
+}
+
+#[tokio::test]
+async fn searching_without_thumbnails_returns_no_image() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "search_photo_library",
+        json!({"include_thumbnails": false, "limit": 5}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    assert_eq!(result["content"].as_array().unwrap().len(), 1);
+    let listing: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(listing["photos"].as_array().unwrap().len(), 5);
+    assert!(library_requests(&fake, "/thumbnail").is_empty());
+}
+
+#[tokio::test]
+async fn the_search_limit_defaults_to_eight_and_is_capped_by_the_thumbnails() {
+    let (mcp, fake) = start().await;
+    let by_default = call(&mcp, "solo", "search_photo_library", json!({})).await;
+    assert_eq!(images(&by_default).len(), 8);
+
+    let capped = call(&mcp, "solo", "search_photo_library", json!({"limit": 40})).await;
+    assert_eq!(images(&capped).len(), 12);
+
+    let without = call(
+        &mcp,
+        "solo",
+        "search_photo_library",
+        json!({"limit": 100, "include_thumbnails": false}),
+    )
+    .await;
+    let listing: Value = serde_json::from_str(&text(&without)).unwrap();
+    assert_eq!(listing["photos"].as_array().unwrap().len(), 50);
+
+    let sent: Vec<usize> = library_requests(&fake, "/photos")
+        .iter()
+        .filter_map(|s| query_value(&s.query, "per_page"))
+        .collect();
+    assert_eq!(sent, vec![8, 12, 50]);
+}
+
+#[tokio::test]
+async fn the_search_filters_reach_the_api() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "search_photo_library",
+        json!({
+            "query": "Rosier", "tags": ["Terrasse", "buis"], "project_id": PROJECT,
+            "to_sort": true, "page": 2, "limit": 4, "include_thumbnails": false
+        }),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let listing: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(listing["page"], 2);
+    let request = library_requests(&fake, "/photos").pop().unwrap();
+    assert_eq!(request.method, "GET");
+    for expected in [
+        "q=Rosier",
+        "tag=terrasse",
+        "tag=buis",
+        &format!("project_id={PROJECT}"),
+        "to_sort=true",
+        "page=2",
+        "per_page=4",
+    ] {
+        assert!(
+            request.query.contains(expected),
+            "{expected} in {}",
+            request.query
+        );
+    }
+}
+
+#[tokio::test]
+async fn tagging_reports_each_photo_and_a_failure_does_not_stop_the_others() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "tag_library_photos",
+        json!({"items": [
+            {"photo_id": photo_id(1), "add_tags": [" Rosier ", "B"], "remove_tags": ["a"]},
+            {"photo_id": photo_id(FAILING_PHOTO), "add_tags": ["x"]},
+            {"photo_id": photo_id(3), "caption": ""},
+            {"photo_id": "not-a-uuid", "add_tags": ["x"]},
+            {"photo_id": photo_id(4)},
+            {"photo_id": photo_id(5), "caption": "Allée", "add_tags": ["allée"]}
+        ]}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let report: Value = serde_json::from_str(&text(&result)).unwrap();
+    let results = report["results"].as_array().unwrap();
+    let statuses: Vec<&str> = results
+        .iter()
+        .map(|r| r["status"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        statuses,
+        [
+            "updated", "failed", "updated", "failed", "failed", "updated"
+        ]
+    );
+    assert_eq!(results[0]["photo_id"], photo_id(1));
+    assert!(results[0].get("error").is_none());
+    assert_eq!(results[1]["error"], "étiquette invalide");
+    assert!(results[3]["error"].as_str().unwrap().contains("not-a-uuid"));
+
+    let patches: Vec<Seen> = fake
+        .seen()
+        .into_iter()
+        .filter(|s| s.method == "PATCH")
+        .collect();
+    assert_eq!(patches.len(), 4);
+    assert_eq!(patches[0].body, json!({"tags": ["b", "rosier"]}));
+    assert_eq!(patches[2].body, json!({"tags": ["a", "b"], "caption": ""}));
+    assert_eq!(
+        patches[3].body,
+        json!({"tags": ["a", "b", "allée"], "caption": "Allée"})
+    );
+}
+
+#[tokio::test]
+async fn a_twenty_first_tag_fails_that_photo_before_any_patch() {
+    let (mcp, fake) = start().await;
+    let many: Vec<String> = (0..19).map(|n| format!("t{n}")).collect();
+    let result = call(
+        &mcp,
+        "solo",
+        "tag_library_photos",
+        json!({"items": [{"photo_id": photo_id(1), "add_tags": many}]}),
+    )
+    .await;
+    let report: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(report["results"][0]["status"], "failed");
+    assert!(fake.seen().iter().all(|s| s.method != "PATCH"));
+}
+
+#[tokio::test]
+async fn more_than_fifty_items_are_refused_without_touching_the_library() {
+    let (mcp, fake) = start().await;
+    let items: Vec<Value> = (1..=51)
+        .map(|n| json!({"photo_id": photo_id(n), "add_tags": ["x"]}))
+        .collect();
+    let result = call(&mcp, "solo", "tag_library_photos", json!({"items": items})).await;
+    assert_eq!(result["isError"], json!(true));
+    assert!(text(&result).contains("50"));
+    let placements: Vec<Value> = (1..=51)
+        .map(|n| json!({"photo_id": photo_id(n), "target": "cover"}))
+        .collect();
+    let result = call(
+        &mcp,
+        "solo",
+        "place_doe_files",
+        json!({"doe_id": DOE, "placements": placements}),
+    )
+    .await;
+    assert_eq!(result["isError"], json!(true));
+    assert!(
+        fake.seen()
+            .iter()
+            .all(|s| !s.path.contains("/photo-library/") && s.method == "GET")
+    );
+}
+
+#[tokio::test]
+async fn placing_reports_each_photo_and_a_failure_does_not_stop_the_others() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "place_doe_files",
+        json!({"doe_id": DOE, "placements": [
+            {"photo_id": photo_id(1), "target": "section", "section_title": "Photos"},
+            {"photo_id": photo_id(FAILING_PHOTO), "target": "supply", "supply_id": SUPPLY},
+            {"photo_id": photo_id(3), "target": "cover", "caption": "Façade"}
+        ]}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let outcome: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(outcome["doe"]["id"], DOE);
+    let statuses: Vec<&str> = outcome["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["status"].as_str().unwrap())
+        .collect();
+    assert_eq!(statuses, ["placed", "failed", "placed"]);
+    assert_eq!(outcome["results"][1]["error"], "photo introuvable");
+
+    let post = fake
+        .seen()
+        .into_iter()
+        .find(|s| s.path.ends_with("/photos/place"))
+        .unwrap();
+    assert_eq!(
+        post.body,
+        json!({"placements": [
+            {"photo_id": photo_id(1), "target": "section", "section_title": "Photos"},
+            {"photo_id": photo_id(FAILING_PHOTO), "target": "supply", "supply_id": SUPPLY},
+            {"photo_id": photo_id(3), "target": "cover", "caption": "Façade"}
+        ]})
+    );
+    assert!(fake.seen().iter().all(|s| s.method != "PUT"));
+}
+
+#[tokio::test]
+async fn an_unknown_placement_target_is_refused() {
+    let (mcp, fake) = start().await;
+    let (_, _, body) = rpc(
+        &mcp,
+        Some("solo"),
+        "tools/call",
+        json!({"name": "place_doe_files", "arguments": {
+            "doe_id": DOE,
+            "placements": [{"photo_id": photo_id(1), "target": "plan"}]
+        }}),
+    )
+    .await;
+    assert!(
+        body["error"].is_object() || body["result"]["isError"] == json!(true),
+        "{body}"
+    );
+    assert!(
+        fake.seen()
+            .iter()
+            .all(|s| !s.path.ends_with("/photos/place"))
+    );
+}
+
+#[tokio::test]
+async fn no_photo_library_tool_uploads_or_deletes() {
+    let (mcp, fake) = start().await;
+    call(&mcp, "solo", "search_photo_library", json!({"limit": 2})).await;
+    call(
+        &mcp,
+        "solo",
+        "tag_library_photos",
+        json!({"items": [{"photo_id": photo_id(1), "add_tags": ["x"]}]}),
+    )
+    .await;
+    call(
+        &mcp,
+        "solo",
+        "place_doe_files",
+        json!({"doe_id": DOE, "placements": [{"photo_id": photo_id(1), "target": "cover"}]}),
+    )
+    .await;
+    for seen in fake.seen() {
+        assert_ne!(seen.method, "DELETE", "{}", seen.path);
+        assert!(
+            !(seen.method == "POST" && seen.path.ends_with("/photo-library/photos")),
+            "{}",
+            seen.path
+        );
+    }
+    for tool in Tool::ALL {
+        if tool.name().contains("photo") && tool.name().contains("library") {
+            assert!(!tool.name().contains("delete"));
+        }
+    }
 }
