@@ -78,6 +78,8 @@ export interface ChannelAdminDialogUIProps {
 	onDismissCreatedToken: () => void
 	onDeleteWebhook: (id: string) => void
 	onRenameWebhook: (id: string, name: string) => void
+	webhookCallUrlBase: string
+	createdWebhookCallUrl: string | null
 	creatorName: (userId: string) => string | undefined
 }
 
@@ -114,6 +116,8 @@ export function ChannelAdminDialogUI({
 	onDismissCreatedToken,
 	onDeleteWebhook,
 	onRenameWebhook,
+	webhookCallUrlBase,
+	createdWebhookCallUrl,
 	creatorName,
 }: ChannelAdminDialogUIProps) {
 	const kind = NEW_ITEM_KINDS.find((k) => k.value === channel?.channel_type)
@@ -377,6 +381,8 @@ export function ChannelAdminDialogUI({
 										onCreate={onCreateWebhook}
 										isCreating={isCreatingWebhook}
 										createdToken={createdWebhookToken}
+										callUrlBase={webhookCallUrlBase}
+										createdCallUrl={createdWebhookCallUrl}
 										onDismissCreatedToken={onDismissCreatedToken}
 										onRename={onRenameWebhook}
 										onDelete={onDeleteWebhook}

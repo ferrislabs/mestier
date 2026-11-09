@@ -24,6 +24,10 @@ export interface ChannelWebhooksSectionUIProps {
 	onCreate: () => void
 	isCreating: boolean
 	createdToken: string | null
+	/** Where webhooks are called, up to and excluding the webhook id. */
+	callUrlBase: string
+	/** The full call URL of the webhook just created, token included. */
+	createdCallUrl: string | null
 	onDismissCreatedToken: () => void
 	onRename: (id: string, name: string) => void
 	onDelete: (id: string) => void
@@ -57,6 +61,8 @@ export function ChannelWebhooksSectionUI({
 	onCreate,
 	isCreating,
 	createdToken,
+	callUrlBase,
+	createdCallUrl,
 	onDismissCreatedToken,
 	onRename,
 	onDelete,
@@ -98,6 +104,26 @@ export function ChannelWebhooksSectionUI({
 					<p className="font-semibold text-warning">
 						Copiez ce jeton maintenant — il ne sera plus jamais affiché.
 					</p>
+					{createdCallUrl ? (
+						<div className="flex flex-col gap-1">
+							<span className="text-muted-foreground">
+								URL à appeler (POST)
+							</span>
+							<div className="flex items-center gap-2">
+								<code className="flex-1 truncate rounded bg-background px-2 py-1">
+									{createdCallUrl}
+								</code>
+								<button
+									type="button"
+									aria-label="Copier l’URL du webhook"
+									onClick={() => navigator.clipboard?.writeText(createdCallUrl)}
+								>
+									<Copy className="size-3.5" />
+								</button>
+							</div>
+						</div>
+					) : null}
+					<span className="text-muted-foreground">Jeton</span>
 					<div className="flex items-center gap-2">
 						<code className="flex-1 truncate rounded bg-background px-2 py-1">
 							{createdToken}
@@ -179,6 +205,20 @@ export function ChannelWebhooksSectionUI({
 													name="name"
 													defaultValue={webhook.name}
 												/>
+											</div>
+											<div className="flex flex-col gap-1.5">
+												<Label htmlFor={`webhook-url-${webhook.id}`}>
+													URL à appeler (POST)
+												</Label>
+												<Input
+													id={`webhook-url-${webhook.id}`}
+													readOnly
+													className="font-mono text-xs"
+													value={`${callUrlBase}/${webhook.id}/{jeton}`}
+												/>
+												<p className="text-muted-foreground text-xs">
+													Remplace {'{jeton}'} par le jeton reçu à la création.
+												</p>
 											</div>
 											<div className="flex gap-2">
 												<Button type="submit" size="sm">

@@ -66,6 +66,8 @@ function baseProps(
 		onDismissCreatedToken: vi.fn(),
 		onDeleteWebhook: vi.fn(),
 		onRenameWebhook: vi.fn(),
+		webhookCallUrlBase: 'https://api.test/api/v1/chat/webhooks',
+		createdWebhookCallUrl: null,
 		creatorName: () => undefined,
 		...overrides,
 	}
@@ -233,6 +235,40 @@ describe('ChannelAdminDialogUI — webhooks', () => {
 		expect(screen.getByText('secret-token-123')).toBeDefined()
 		await user.click(screen.getByText('J’ai copié le jeton'))
 		expect(onDismissCreatedToken).toHaveBeenCalledTimes(1)
+	})
+
+	it('shows the full call URL of a webhook just created, and the template for the others', async () => {
+		const user = userEvent.setup()
+		renderWithPermissions(
+			<ChannelAdminDialogUI
+				{...baseProps({
+					createdWebhookToken: 'tok',
+					createdWebhookCallUrl:
+						'https://api.test/api/v1/chat/webhooks/wh-9/tok',
+					webhooks: [
+						{
+							id: 'wh-1',
+							organization_id: 'org-1',
+							channel_id: 'ch-1',
+							name: 'CI bot',
+							avatar_url: null,
+							created_by: 'me',
+							created_at: '',
+							updated_at: '',
+						},
+					],
+				})}
+			/>,
+		)
+		await switchToTab(user, 'Intégrations')
+
+		expect(
+			screen.getByText('https://api.test/api/v1/chat/webhooks/wh-9/tok'),
+		).toBeDefined()
+		await user.click(screen.getByText('CI bot'))
+		expect(
+			(screen.getByLabelText('URL à appeler (POST)') as HTMLInputElement).value,
+		).toBe('https://api.test/api/v1/chat/webhooks/wh-1/{jeton}')
 	})
 
 	it('lists webhooks with a revoke action', async () => {

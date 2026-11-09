@@ -54,6 +54,8 @@ export function ChannelAdminFeature({
 	const [createdWebhookToken, setCreatedWebhookToken] = useState<string | null>(
 		null,
 	)
+	const [createdWebhookId, setCreatedWebhookId] = useState<string | null>(null)
+	const webhookCallUrlBase = `${window.apiUrl || window.location.origin}/api/v1/chat/webhooks`
 
 	// Re-seed the drafts from the server every time the sheet opens, so an
 	// edit abandoned by closing without saving never lingers into the next
@@ -125,9 +127,10 @@ export function ChannelAdminFeature({
 			} as never,
 			{
 				onSuccess: (response) => {
-					setCreatedWebhookToken(
-						(response as { data: { token: string } }).data.token,
-					)
+					const created = (response as { data: { id: string; token: string } })
+						.data
+					setCreatedWebhookToken(created.token)
+					setCreatedWebhookId(created.id)
 					setNewWebhookName('')
 				},
 			},
@@ -165,6 +168,12 @@ export function ChannelAdminFeature({
 			onCreateWebhook={handleCreateWebhook}
 			isCreatingWebhook={createWebhook.isPending}
 			createdWebhookToken={createdWebhookToken}
+			webhookCallUrlBase={webhookCallUrlBase}
+			createdWebhookCallUrl={
+				createdWebhookToken && createdWebhookId
+					? `${webhookCallUrlBase}/${createdWebhookId}/${createdWebhookToken}`
+					: null
+			}
 			onDismissCreatedToken={() => setCreatedWebhookToken(null)}
 			creatorName={(userId) =>
 				directory.data?.find((entry) => entry.user_id === userId)?.display_name
