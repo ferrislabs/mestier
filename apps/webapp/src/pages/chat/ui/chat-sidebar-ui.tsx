@@ -290,7 +290,7 @@ function CategoryGroup({
 								</button>
 							</li>
 						</ContextMenuTrigger>
-						<ContextMenuContent className="w-48 min-w-0 p-0.5">
+						<ContextMenuContent className="w-56 min-w-0 p-0.5">
 							<RequirePermission permission="MANAGE_CHANNELS">
 								<ContextMenuItem
 									className={ITEM}
