@@ -12,6 +12,15 @@ async function switchToTab(user: UserEvent, label: string) {
 	await user.click(screen.getByRole('tab', { name: label }))
 }
 
+const EVERYONE = {
+	key: 'everyone',
+	type: 'everyone' as const,
+	id: null,
+	name: '@everyone',
+	allow: 0,
+	deny: 0,
+}
+
 function channel(overrides: Partial<Record<string, unknown>> = {}) {
 	return {
 		id: 'ch-1',
@@ -49,10 +58,15 @@ function baseProps(
 		onConfirmDelete: vi.fn(),
 		isDeleting: false,
 		isLoadingOverwrites: false,
-		everyoneOverwrite: undefined,
-		roleAndMemberOverwrites: [],
-		onChangeEveryoneBit: vi.fn(),
-		onDeleteTargetOverwrite: vi.fn(),
+		isPrivate: false,
+		onTogglePrivate: vi.fn(),
+		permissionTargets: [EVERYONE],
+		selectedPermissionKey: 'everyone',
+		onSelectPermissionKey: vi.fn(),
+		addableRoles: [],
+		onAddRole: vi.fn(),
+		onChangeTargetBit: vi.fn(),
+		onRemoveTarget: vi.fn(),
 		webhooks: [],
 		isLoadingWebhooks: false,
 		newWebhookName: '',
@@ -99,82 +113,100 @@ describe('ChannelAdminDialogUI — general', () => {
 })
 
 describe('ChannelAdminDialogUI — permissions', () => {
-	it('shows the everyone overwrite as inherited with no overwrite', async () => {
+	it('shows every permission of @everyone as inherited without an overwrite', async () => {
 		const user = userEvent.setup()
 		renderWithPermissions(<ChannelAdminDialogUI {...baseProps()} />)
 		await switchToTab(user, 'Permissions')
 
-		const buttons = screen
-			.getAllByText('Hérité')
-			.map((el) => el.closest('button'))
-		for (const button of buttons) {
-			expect(button?.getAttribute('aria-pressed')).toBe('true')
+		for (const name of [
+			'Hériter : Voir le canal',
+			'Hériter : Envoyer des messages',
+		]) {
+			expect(
+				screen.getByRole('button', { name }).getAttribute('aria-pressed'),
+			).toBe('true')
 		}
 	})
 
-	it('calls onChangeEveryoneBit with the clicked state', async () => {
+	it('calls onChangeTargetBit with the target, the bit and the clicked state', async () => {
 		const user = userEvent.setup()
-		const onChangeEveryoneBit = vi.fn()
+		const onChangeTargetBit = vi.fn()
 		renderWithPermissions(
-			<ChannelAdminDialogUI {...baseProps({ onChangeEveryoneBit })} />,
+			<ChannelAdminDialogUI {...baseProps({ onChangeTargetBit })} />,
 		)
 		await switchToTab(user, 'Permissions')
 
-		const allowButtons = screen.getAllByText('Autorisé')
-		await user.click(allowButtons[0] as HTMLElement)
+		await user.click(
+			screen.getByRole('button', { name: 'Autoriser : Voir le canal' }),
+		)
 
-		expect(onChangeEveryoneBit).toHaveBeenCalledWith('VIEW_CHANNEL', 'allow')
+		expect(onChangeTargetBit).toHaveBeenCalledWith(
+			'everyone',
+			'VIEW_CHANNEL',
+			'allow',
+		)
 	})
 
-	it('reflects an existing everyone overwrite', async () => {
+	it('reflects the stored bits of the selected target', async () => {
 		const user = userEvent.setup()
 		renderWithPermissions(
 			<ChannelAdminDialogUI
+				{...baseProps({ permissionTargets: [{ ...EVERYONE, deny: 32 }] })}
+			/>,
+		)
+		await switchToTab(user, 'Permissions')
+
+		expect(
+			screen
+				.getByRole('button', { name: 'Refuser : Voir le canal' })
+				.getAttribute('aria-pressed'),
+		).toBe('true')
+	})
+
+	it('toggles the private switch', async () => {
+		const user = userEvent.setup()
+		const onTogglePrivate = vi.fn()
+		renderWithPermissions(
+			<ChannelAdminDialogUI {...baseProps({ onTogglePrivate })} />,
+		)
+		await switchToTab(user, 'Permissions')
+
+		await user.click(screen.getByRole('switch', { name: 'Canal privé' }))
+
+		expect(onTogglePrivate).toHaveBeenCalledWith(true)
+	})
+
+	it('selects a role and lets it be removed', async () => {
+		const user = userEvent.setup()
+		const onSelectPermissionKey = vi.fn()
+		const onRemoveTarget = vi.fn()
+		const role = {
+			key: 'role:r1',
+			type: 'role' as const,
+			id: 'r1',
+			name: 'Chefs de chantier',
+			allow: 32,
+			deny: 0,
+		}
+		renderWithPermissions(
+			<ChannelAdminDialogUI
 				{...baseProps({
-					everyoneOverwrite: {
-						target_type: 'everyone',
-						target_id: null,
-						allow: 0,
-						deny: 32,
-						created_at: '',
-						updated_at: '',
-					},
+					permissionTargets: [EVERYONE, role],
+					selectedPermissionKey: 'role:r1',
+					onSelectPermissionKey,
+					onRemoveTarget,
 				})}
 			/>,
 		)
 		await switchToTab(user, 'Permissions')
 
-		const denyButtons = screen
-			.getAllByText('Refusé')
-			.map((el) => el.closest('button'))
-		expect(denyButtons[0]?.getAttribute('aria-pressed')).toBe('true')
-	})
+		await user.click(screen.getByRole('button', { name: '@everyone' }))
+		expect(onSelectPermissionKey).toHaveBeenCalledWith('everyone')
 
-	it('lists existing role/member overwrites with a way to remove them', async () => {
-		const user = userEvent.setup()
-		const onDeleteTargetOverwrite = vi.fn()
-		renderWithPermissions(
-			<ChannelAdminDialogUI
-				{...baseProps({
-					roleAndMemberOverwrites: [
-						{
-							target_type: 'role',
-							target_id: 'role-1',
-							allow: 32,
-							deny: 0,
-							created_at: '',
-							updated_at: '',
-						},
-					],
-					onDeleteTargetOverwrite,
-				})}
-			/>,
+		await user.click(
+			screen.getByRole('button', { name: 'Retirer Chefs de chantier' }),
 		)
-		await switchToTab(user, 'Permissions')
-
-		expect(screen.getByText(/role-1/)).toBeDefined()
-		await user.click(screen.getByLabelText('Retirer ce remplacement'))
-		expect(onDeleteTargetOverwrite).toHaveBeenCalledWith('role', 'role-1')
+		expect(onRemoveTarget).toHaveBeenCalledWith('role:r1')
 	})
 })
 

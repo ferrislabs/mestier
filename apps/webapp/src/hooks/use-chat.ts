@@ -844,6 +844,18 @@ export function useDeleteEveryoneOverwrite(channelId: string) {
 	})
 }
 
+export function useUpsertTargetOverwrite(channelId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('put', CHANNEL_PERMISSIONS_TARGET_PATH)
+			.mutationOptions,
+		onSuccess: invalidateOnSettled(
+			queryClient,
+			channelPermissionsKey(channelId),
+		),
+	})
+}
+
 export function useDeleteTargetOverwrite(channelId: string) {
 	const queryClient = useQueryClient()
 	return useMutation({

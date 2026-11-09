@@ -5,19 +5,28 @@ import {
 	useChannelPermissions,
 	useChannelWebhooks,
 	useChatDirectory,
+	useChatRoles,
 	useCreateWebhook,
 	useDeleteChannel,
 	useDeleteTargetOverwrite,
 	useDeleteWebhook,
 	useUpdateChannel,
 	useUpdateWebhook,
+	useUpsertTargetOverwrite,
 	useUpsertEveryoneOverwrite,
 } from '#/hooks/use-chat'
-import type {
-	OverwriteBitName,
-	TriState,
+import {
+	buildPermissionTargets,
+	EVERYONE_KEY,
+	type PermissionTargetType,
+} from '#/pages/chat/lib/permission-targets'
+import {
+	OVERWRITE_BITS,
+	type OverwriteBitName,
+	readBitState,
+	type TriState,
+	withBitState,
 } from '#/pages/chat/lib/permission-bits'
-import { withBitState } from '#/pages/chat/lib/permission-bits'
 import { ChannelAdminDialogUI } from '#/pages/chat/ui/channel-admin-dialog-ui'
 
 export interface ChannelAdminFeatureProps {
@@ -40,6 +49,10 @@ export function ChannelAdminFeature({
 	const overwrites = useChannelPermissions(channelId)
 	const upsertEveryone = useUpsertEveryoneOverwrite(channelId)
 	const deleteTargetOverwrite = useDeleteTargetOverwrite(channelId)
+	const upsertTarget = useUpsertTargetOverwrite(channelId)
+	const roles = useChatRoles(organizationId, open)
+	const [selectedPermissionKey, setSelectedPermissionKey] =
+		useState(EVERYONE_KEY)
 	const webhooks = useChannelWebhooks(channelId)
 	const createWebhook = useCreateWebhook(channelId)
 	const deleteWebhook = useDeleteWebhook(channelId)
@@ -87,34 +100,81 @@ export function ChannelAdminFeature({
 		})
 	}
 
-	const everyoneOverwrite = overwrites.data?.find(
-		(overwrite) => overwrite.target_type === 'everyone',
+	const permissionTargets = buildPermissionTargets(
+		overwrites.data ?? [],
+		(id) => roles.data?.find((role) => role.role_id === id)?.name,
+		(id) => directory.data?.find((entry) => entry.user_id === id)?.display_name,
 	)
-	const roleAndMemberOverwrites = (overwrites.data ?? []).filter(
-		(overwrite) => overwrite.target_type !== 'everyone',
-	)
-
-	function handleChangeEveryoneBit(bit: OverwriteBitName, state: TriState) {
-		const { allow, deny } = withBitState(
-			everyoneOverwrite?.allow ?? 0,
-			everyoneOverwrite?.deny ?? 0,
-			bit,
-			state,
+	const everyoneTarget = permissionTargets[0]
+	const isPrivate =
+		readBitState(
+			everyoneTarget?.allow ?? 0,
+			everyoneTarget?.deny ?? 0,
+			'VIEW_CHANNEL',
+		) === 'deny'
+	const addableRoles = (roles.data ?? [])
+		.filter(
+			(role) =>
+				!permissionTargets.some(
+					(target) => target.key === `role:${role.role_id}`,
+				),
 		)
-		upsertEveryone.mutate({
-			path: { channel_id: channelId },
+		.map((role) => ({ id: role.role_id, name: role.name }))
+
+	function saveTarget(
+		type: PermissionTargetType,
+		id: string | null,
+		allow: number,
+		deny: number,
+	) {
+		if (type === 'everyone') {
+			upsertEveryone.mutate({
+				path: { channel_id: channelId },
+				body: { allow, deny },
+			} as never)
+			return
+		}
+		upsertTarget.mutate({
+			path: { channel_id: channelId, target_type: type, target_id: id },
 			body: { allow, deny },
 		} as never)
 	}
 
-	function handleDeleteTargetOverwrite(targetType: string, targetId: string) {
+	function handleChangeTargetBit(
+		key: string,
+		bit: OverwriteBitName,
+		state: TriState,
+	) {
+		const target = permissionTargets.find((candidate) => candidate.key === key)
+		if (!target) return
+		const { allow, deny } = withBitState(target.allow, target.deny, bit, state)
+		saveTarget(target.type, target.id, allow, deny)
+	}
+
+	function handleTogglePrivate(next: boolean) {
+		handleChangeTargetBit(
+			EVERYONE_KEY,
+			'VIEW_CHANNEL',
+			next ? 'deny' : 'inherit',
+		)
+	}
+
+	function handleAddRole(roleId: string) {
+		saveTarget('role', roleId, OVERWRITE_BITS.VIEW_CHANNEL, 0)
+		setSelectedPermissionKey(`role:${roleId}`)
+	}
+
+	function handleRemoveTarget(key: string) {
+		const target = permissionTargets.find((candidate) => candidate.key === key)
+		if (!target?.id) return
 		deleteTargetOverwrite.mutate({
 			path: {
 				channel_id: channelId,
-				target_type: targetType,
-				target_id: targetId,
+				target_type: target.type,
+				target_id: target.id,
 			},
 		} as never)
+		setSelectedPermissionKey(EVERYONE_KEY)
 	}
 
 	function handleCreateWebhook() {
@@ -152,10 +212,15 @@ export function ChannelAdminFeature({
 			onConfirmDelete={handleConfirmDelete}
 			isDeleting={deleteChannel.isPending}
 			isLoadingOverwrites={overwrites.isLoading}
-			everyoneOverwrite={everyoneOverwrite}
-			roleAndMemberOverwrites={roleAndMemberOverwrites}
-			onChangeEveryoneBit={handleChangeEveryoneBit}
-			onDeleteTargetOverwrite={handleDeleteTargetOverwrite}
+			isPrivate={isPrivate}
+			onTogglePrivate={handleTogglePrivate}
+			permissionTargets={permissionTargets}
+			selectedPermissionKey={selectedPermissionKey}
+			onSelectPermissionKey={setSelectedPermissionKey}
+			addableRoles={addableRoles}
+			onAddRole={handleAddRole}
+			onChangeTargetBit={handleChangeTargetBit}
+			onRemoveTarget={handleRemoveTarget}
 			webhooks={webhooks.data ?? []}
 			isLoadingWebhooks={webhooks.isLoading}
 			newWebhookName={newWebhookName}

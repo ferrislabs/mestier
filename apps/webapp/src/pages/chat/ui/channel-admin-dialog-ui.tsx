@@ -1,4 +1,4 @@
-import { Globe, Loader2, Lock, Trash2, X } from 'lucide-react'
+import { Globe, Loader2, Lock, X } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import { DoubleClickConfirmButton } from '#/components/double-click-confirm-button'
 import { Button } from '#/components/ui/button'
@@ -21,14 +21,15 @@ import {
 } from '#/components/ui/select'
 import { Textarea } from '#/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import type { Category, Channel, Overwrite, Webhook } from '#/hooks/use-chat'
+import type { Category, Channel, Webhook } from '#/hooks/use-chat'
+import { ChannelPermissionsSectionUI } from '#/pages/chat/ui/channel-permissions-section-ui'
 import { ChannelWebhooksSectionUI } from '#/pages/chat/ui/channel-webhooks-section-ui'
 import { NEW_ITEM_KINDS } from '#/pages/chat/lib/channel-kinds'
-import {
-	type OverwriteBitName,
-	readBitState,
-	type TriState,
+import type {
+	OverwriteBitName,
+	TriState,
 } from '#/pages/chat/lib/permission-bits'
+import type { PermissionTarget } from '#/pages/chat/lib/permission-targets'
 
 const NO_CATEGORY_VALUE = '__none__'
 
@@ -51,10 +52,19 @@ export interface ChannelAdminDialogUIProps {
 	isDeleting: boolean
 
 	isLoadingOverwrites: boolean
-	everyoneOverwrite: Overwrite | undefined
-	roleAndMemberOverwrites: Overwrite[]
-	onChangeEveryoneBit: (bit: OverwriteBitName, state: TriState) => void
-	onDeleteTargetOverwrite: (targetType: string, targetId: string) => void
+	isPrivate: boolean
+	onTogglePrivate: (next: boolean) => void
+	permissionTargets: PermissionTarget[]
+	selectedPermissionKey: string
+	onSelectPermissionKey: (key: string) => void
+	addableRoles: { id: string; name: string }[]
+	onAddRole: (roleId: string) => void
+	onChangeTargetBit: (
+		key: string,
+		bit: OverwriteBitName,
+		state: TriState,
+	) => void
+	onRemoveTarget: (key: string) => void
 
 	webhooks: Webhook[]
 	isLoadingWebhooks: boolean
@@ -87,10 +97,15 @@ export function ChannelAdminDialogUI({
 	onConfirmDelete,
 	isDeleting,
 	isLoadingOverwrites,
-	everyoneOverwrite,
-	roleAndMemberOverwrites,
-	onChangeEveryoneBit,
-	onDeleteTargetOverwrite,
+	isPrivate,
+	onTogglePrivate,
+	permissionTargets,
+	selectedPermissionKey,
+	onSelectPermissionKey,
+	addableRoles,
+	onAddRole,
+	onChangeTargetBit,
+	onRemoveTarget,
 	webhooks,
 	isLoadingWebhooks,
 	newWebhookName,
@@ -106,7 +121,6 @@ export function ChannelAdminDialogUI({
 	creatorName,
 }: ChannelAdminDialogUIProps) {
 	const kind = NEW_ITEM_KINDS.find((k) => k.value === channel?.channel_type)
-	const isPrivate = bitStateOf(everyoneOverwrite, 'VIEW_CHANNEL') === 'deny'
 	const createdOn = channel?.created_at
 		? new Date(channel.created_at).toLocaleDateString('fr-FR', {
 				dateStyle: 'long',
@@ -273,86 +287,18 @@ export function ChannelAdminDialogUI({
 									value="permissions"
 									className="flex flex-col gap-6"
 								>
-									<h2 className="font-semibold text-lg">Permissions</h2>
-									<div>
-										<h3 className="text-sm font-semibold text-foreground">
-											Tout le monde
-										</h3>
-										<p className="mt-1 text-xs text-muted-foreground">
-											Permission par défaut pour ce canal.
-										</p>
-										<div className="mt-3 flex flex-col gap-3">
-											<BitRow
-												label="Voir le canal"
-												state={bitStateOf(everyoneOverwrite, 'VIEW_CHANNEL')}
-												onChange={(state) =>
-													onChangeEveryoneBit('VIEW_CHANNEL', state)
-												}
-											/>
-											<BitRow
-												label="Envoyer des messages"
-												state={bitStateOf(everyoneOverwrite, 'SEND_MESSAGES')}
-												onChange={(state) =>
-													onChangeEveryoneBit('SEND_MESSAGES', state)
-												}
-											/>
-										</div>
-									</div>
-
-									<div className="border-t pt-4">
-										<h3 className="text-sm font-semibold text-foreground">
-											Autres remplacements
-										</h3>
-										{/* No REST endpoint lists organization roles, and the member
-									    directory never carries a `user_id` (see
-									    `libs/handlers-member/src/response.rs`) — a role or member
-									    can't be picked to create a new overwrite from here.
-									    Existing ones (created elsewhere) still show and can be
-									    removed. */}
-										<p className="mt-1 text-xs text-muted-foreground">
-											Ajouter un remplacement par rôle ou par membre n’est pas
-											possible depuis cet écran : l’API ne fournit pas la liste
-											des rôles de l’organisation. Les remplacements déjà créés
-											restent visibles et peuvent être retirés.
-										</p>
-										{isLoadingOverwrites ? (
-											<Loader2 className="mt-3 size-4 animate-spin text-muted-foreground" />
-										) : null}
-										{!isLoadingOverwrites &&
-										roleAndMemberOverwrites.length === 0 ? (
-											<p className="mt-3 text-xs text-muted-foreground">
-												Aucun remplacement par rôle ou par membre.
-											</p>
-										) : null}
-										<ul className="mt-3 flex flex-col gap-2">
-											{roleAndMemberOverwrites.map((overwrite) => (
-												<li
-													key={`${overwrite.target_type}-${overwrite.target_id}`}
-													className="flex items-center justify-between rounded-md border px-2 py-1.5 text-xs"
-												>
-													<span>
-														{overwrite.target_type === 'role'
-															? 'Rôle'
-															: 'Membre'}{' '}
-														{overwrite.target_id}
-													</span>
-													<button
-														type="button"
-														aria-label="Retirer ce remplacement"
-														onClick={() =>
-															overwrite.target_id &&
-															onDeleteTargetOverwrite(
-																overwrite.target_type,
-																overwrite.target_id,
-															)
-														}
-													>
-														<Trash2 className="size-3.5" />
-													</button>
-												</li>
-											))}
-										</ul>
-									</div>
+									<ChannelPermissionsSectionUI
+										isLoading={isLoadingOverwrites}
+										isPrivate={isPrivate}
+										onTogglePrivate={onTogglePrivate}
+										targets={permissionTargets}
+										selectedKey={selectedPermissionKey}
+										onSelectKey={onSelectPermissionKey}
+										addableRoles={addableRoles}
+										onAddRole={onAddRole}
+										onChangeBit={onChangeTargetBit}
+										onRemoveTarget={onRemoveTarget}
+									/>
 								</TabsContent>
 
 								<TabsContent value="webhooks" className="flex flex-col gap-6">
@@ -391,48 +337,5 @@ export function ChannelAdminDialogUI({
 				</DialogClose>
 			</DialogContent>
 		</Dialog>
-	)
-}
-
-function bitStateOf(
-	overwrite: Overwrite | undefined,
-	bit: OverwriteBitName,
-): TriState {
-	if (!overwrite) return 'inherit'
-	return readBitState(overwrite.allow, overwrite.deny, bit)
-}
-
-interface BitRowProps {
-	label: string
-	state: TriState
-	onChange: (state: TriState) => void
-}
-
-function BitRow({ label, state, onChange }: BitRowProps) {
-	return (
-		<div className="flex items-center justify-between text-sm">
-			<span>{label}</span>
-			<div className="flex overflow-hidden rounded-md border text-xs">
-				{(['inherit', 'allow', 'deny'] as const).map((option) => (
-					<button
-						key={option}
-						type="button"
-						onClick={() => onChange(option)}
-						aria-pressed={state === option}
-						className={
-							state === option
-								? 'bg-primary px-2 py-1 font-medium text-primary-foreground'
-								: 'px-2 py-1 text-muted-foreground hover:bg-accent'
-						}
-					>
-						{option === 'inherit'
-							? 'Hérité'
-							: option === 'allow'
-								? 'Autorisé'
-								: 'Refusé'}
-					</button>
-				))}
-			</div>
-		</div>
 	)
 }
