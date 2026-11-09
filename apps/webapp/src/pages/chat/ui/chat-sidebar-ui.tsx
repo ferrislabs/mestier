@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import type { DragEvent, ReactNode } from 'react'
 import {
 	AlertCircle,
 	ChevronRight,
@@ -344,6 +344,7 @@ function CategoryGroup({
 								onDragOver={(event) => {
 									if (!dnd?.draggingId) return
 									event.preventDefault()
+									event.stopPropagation()
 									const box = event.currentTarget.getBoundingClientRect()
 									dnd.onHint({
 										kind:
@@ -356,6 +357,7 @@ function CategoryGroup({
 								onDrop={(event) => {
 									if (!dnd?.draggingId) return
 									event.preventDefault()
+									event.stopPropagation()
 									dnd.onDrop()
 								}}
 							>
@@ -463,12 +465,31 @@ function CategoryGroup({
 		</ul>
 	)
 
+	// The whole group takes a drop: the gaps between rows and the space below
+	// the last one put the channel at the end of the category.
+	const categoryId = group.category?.id ?? null
+	const groupDrop = dnd
+		? {
+				onDragOver: (event: DragEvent<HTMLElement>) => {
+					if (!dnd.draggingId) return
+					event.preventDefault()
+					dnd.onHint({ kind: 'category', categoryId })
+				},
+				onDrop: (event: DragEvent<HTMLElement>) => {
+					if (!dnd.draggingId) return
+					event.preventDefault()
+					dnd.onDrop()
+				},
+			}
+		: {}
+
 	if (!group.category) {
-		return channelList
+		return <div {...groupDrop}>{channelList}</div>
 	}
 
 	return (
 		<Collapsible
+			{...groupDrop}
 			open={!collapsed}
 			onOpenChange={(open) => {
 				if (group.category) onToggleCategory(group.category.id, !open)
@@ -481,16 +502,6 @@ function CategoryGroup({
 						dnd.hint.categoryId === group.category.id &&
 						'bg-nav-active/60',
 				)}
-				onDragOver={(event) => {
-					if (!dnd?.draggingId || !group.category) return
-					event.preventDefault()
-					dnd.onHint({ kind: 'category', categoryId: group.category.id })
-				}}
-				onDrop={(event) => {
-					if (!dnd?.draggingId) return
-					event.preventDefault()
-					dnd.onDrop()
-				}}
 			>
 				<CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-2 font-semibold text-nav-muted text-xs uppercase tracking-wide outline-none hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary">
 					<ChevronRight

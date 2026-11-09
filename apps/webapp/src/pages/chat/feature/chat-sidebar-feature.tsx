@@ -154,7 +154,8 @@ export function ChatSidebarFeature() {
 					? {
 							draggingId,
 							hint: dropHint,
-							onDragStart: setDraggingId,
+							// Re-rendering inside `dragstart` cancels the drag in Chrome.
+							onDragStart: (id) => setTimeout(() => setDraggingId(id), 0),
 							onDragEnd: endDrag,
 							onHint: setDropHint,
 							onDrop: dropChannel,
