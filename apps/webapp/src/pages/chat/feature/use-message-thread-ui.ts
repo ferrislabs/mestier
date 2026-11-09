@@ -1,7 +1,9 @@
 import type { UIEvent } from 'react'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type MessageAttachment,
+	useChatDirectory,
 	useMarkChannelRead,
 	useMessages,
 } from '#/hooks/use-chat'
@@ -9,6 +11,7 @@ import { useUploadFile } from '#/hooks/use-customers'
 import { useFileUrls } from '#/hooks/use-file-url'
 import { useGatewayUserId } from '#/hooks/use-gateway'
 import { useSendTyping, useTypingUsers } from '#/hooks/use-typing'
+import { userHue } from '#/pages/chat/lib/format'
 import type { PendingAttachment } from '#/pages/chat/ui/message-composer-ui'
 
 interface PendingAttachmentState extends PendingAttachment {
@@ -30,6 +33,18 @@ const NEAR_TOP_THRESHOLD_PX = 60
  */
 export function useMessageThreadUi(channelId: string) {
 	const currentUserId = useGatewayUserId()
+	const { activeOrganization } = useActiveOrganization()
+	const directory = useChatDirectory(activeOrganization.id)
+	const authors = useMemo(
+		() =>
+			new Map(
+				(directory.data ?? []).map((entry) => [
+					entry.user_id,
+					{ name: entry.display_name, hue: userHue(entry.user_id) },
+				]),
+			),
+		[directory.data],
+	)
 	const {
 		messages,
 		hasMoreOlder,
@@ -227,10 +242,12 @@ export function useMessageThreadUi(channelId: string) {
 
 	return {
 		currentUserId,
+		authors,
 		typingCount: typingUserIds.size,
 		messageListProps: {
 			messages,
 			currentUserId,
+			authors,
 			isLoadingInitial,
 			initialError,
 			isLoadingOlder,

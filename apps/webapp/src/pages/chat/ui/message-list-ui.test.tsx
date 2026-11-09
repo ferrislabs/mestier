@@ -49,6 +49,10 @@ function baseProps(
 	return {
 		messages: [],
 		currentUserId: 'me',
+		authors: new Map([
+			['me', { name: 'Baptiste Parmantier', hue: 10 }],
+			['other', { name: 'Karim Benali', hue: 200 }],
+		]),
 		isLoadingInitial: false,
 		initialError: null,
 		isLoadingOlder: false,
@@ -86,15 +90,45 @@ describe('MessageListUI', () => {
 		expect(screen.getByText(/Impossible de charger les messages/)).toBeDefined()
 	})
 
-	it('renders own messages differently from others', () => {
+	it('shows each author by their directory name', () => {
 		const messages = [
 			displayMessage({ message: { id: 'm-1', author_user_id: 'me' } }),
 			displayMessage({ message: { id: 'm-2', author_user_id: 'other' } }),
 		]
 		renderList(<MessageListUI {...baseProps({ messages })} />)
 
-		expect(screen.getByText('Vous')).toBeDefined()
-		expect(screen.getByText('Membre')).toBeDefined()
+		expect(screen.getByText('Baptiste Parmantier')).toBeDefined()
+		expect(screen.getByText('Karim Benali')).toBeDefined()
+	})
+
+	it('names an author missing from the directory instead of hiding them', () => {
+		const messages = [
+			displayMessage({ message: { id: 'm-1', author_user_id: 'gone' } }),
+		]
+		renderList(<MessageListUI {...baseProps({ messages })} />)
+
+		expect(screen.getByText('Ancien membre')).toBeDefined()
+	})
+
+	it('highlights a message that mentions the current user', () => {
+		const messages = [
+			displayMessage({
+				message: {
+					id: 'm-1',
+					author_user_id: 'other',
+					content: 'salut @Baptiste Parmantier',
+					mention_user_ids: ['me'],
+				},
+			}),
+			displayMessage({
+				message: { id: 'm-2', author_user_id: 'other', content: 'rien' },
+			}),
+		]
+		renderList(<MessageListUI {...baseProps({ messages })} />)
+
+		const [mentioning, other] = screen.getAllByRole('article')
+		expect(mentioning?.className).toContain('bg-highlight/10')
+		expect(other?.className).not.toContain('bg-highlight/10')
 	})
 
 	it('shows a retry action on a failed send', async () => {
@@ -153,7 +187,7 @@ describe('MessageListUI', () => {
 		]
 		renderList(<MessageListUI {...baseProps({ messages })} />)
 
-		expect(screen.getAllByText('Vous')).toHaveLength(1)
+		expect(screen.getAllByText('Baptiste Parmantier')).toHaveLength(1)
 	})
 
 	it('opens each day with a separator', () => {

@@ -41,7 +41,7 @@ export function DiscussionsUI({
 			<header className="flex items-center justify-between border-b px-4 py-2.5">
 				<h3 className="font-medium text-[13px]">Discussions</h3>
 				<Link
-					to={buildOrgPath(organizationSlug, '/chat')}
+					to={buildOrgPath(organizationSlug, '/discussions')}
 					className="text-[12px] text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					Ouvrir le chat →

@@ -65,6 +65,6 @@ describe('DiscussionsUI', () => {
 		)
 
 		const link = screen.getByRole('link', { name: /Ouvrir le chat/ })
-		expect(link.getAttribute('href')).toBe('/o/atelier-bois/chat')
+		expect(link.getAttribute('href')).toBe('/o/atelier-bois/discussions')
 	})
 })

@@ -11,6 +11,8 @@ const ORG_CATEGORIES_PATH =
 	'/api/v1/chat/organizations/{organization_id}/categories'
 const ORG_CHANNELS_PATH =
 	'/api/v1/chat/organizations/{organization_id}/channels'
+const ORG_DIRECTORY_PATH =
+	'/api/v1/chat/organizations/{organization_id}/directory'
 const CHANNEL_PATH = '/api/v1/chat/channels/{channel_id}'
 const CHANNEL_MESSAGES_PATH = '/api/v1/chat/channels/{channel_id}/messages'
 const MESSAGE_PATH = '/api/v1/chat/messages/{message_id}'
@@ -489,6 +491,21 @@ function unreadKey(organizationId: string) {
 	return window.tanstackApi.get(ORG_UNREAD_PATH, {
 		path: { organization_id: organizationId },
 	}).queryKey
+}
+
+/**
+ * Seated members keyed by the `user_id` chat uses (message authors,
+ * reactions, presence). The member API deliberately never carries it, so this
+ * is the one place a `user_id` becomes a name.
+ */
+export function useChatDirectory(organizationId: string) {
+	return useQuery({
+		...window.tanstackApi.get(ORG_DIRECTORY_PATH, {
+			path: { organization_id: organizationId },
+		}).queryOptions,
+		select: (response) => response.data,
+		enabled: Boolean(organizationId),
+	})
 }
 
 /** Channels with unread content, for this member, in this org. */

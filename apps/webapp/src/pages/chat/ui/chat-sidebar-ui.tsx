@@ -186,7 +186,7 @@ function CategoryGroup({
 				return (
 					<li key={chan.id} className="group/channel relative">
 						<Link
-							to={buildOrgPath(organizationSlug, `/chat/${chan.id}`)}
+							to={buildOrgPath(organizationSlug, `/discussions/${chan.id}`)}
 							className={cn(
 								'flex h-8 items-center gap-2 rounded-md pr-8 pl-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
 								chan.id === activeChannelId &&

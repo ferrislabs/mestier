@@ -15,6 +15,7 @@ import {
 	toggleMessageSaved,
 	useMessageFlags,
 } from '#/pages/chat/feature/mocks/message-flags'
+import { resolveAuthor } from '#/pages/chat/lib/authors'
 import { formatTime, userHue } from '#/pages/chat/lib/format'
 import {
 	filterMessagesByQuery,
@@ -48,7 +49,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 	const { activeOrganization } = useActiveOrganization()
 	const navigate = useNavigate()
 	const channel = useChannel(channelId)
-	const { currentUserId, messageListProps, composerProps, typingCount } =
+	const { authors, messageListProps, composerProps, typingCount } =
 		useMessageThreadUi(channelId)
 	const { openChannelAdmin } = useChannelAdminDialog()
 	const onlineCount = useOnlineCount()
@@ -115,7 +116,9 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 		return (
 			<ChannelNotFoundUI
 				onBack={() =>
-					void navigate({ to: buildOrgPath(activeOrganization.slug, '/chat') })
+					void navigate({
+						to: buildOrgPath(activeOrganization.slug, '/discussions'),
+					})
 				}
 			/>
 		)
@@ -133,10 +136,7 @@ export function ChatChannelFeature({ channelId }: ChatChannelFeatureProps) {
 			const sentAt = new Date(message.created_at)
 			return {
 				id: message.id,
-				authorName:
-					currentUserId !== null && message.author_user_id === currentUserId
-						? 'Vous'
-						: 'Membre',
+				authorName: resolveAuthor(authors, message.author_user_id).name,
 				whenLabel: `${formatDayLabel(sentAt, now)} à ${formatTime(sentAt)}`,
 				text: message.content,
 			}

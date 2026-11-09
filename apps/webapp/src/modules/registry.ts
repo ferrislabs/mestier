@@ -281,15 +281,15 @@ export const MODULES: AppModule[] = [
 		icon: MessagesSquare,
 		hue: 345,
 		description: 'Canaux et messages de l’équipe',
-		basePath: '/chat',
+		basePath: '/discussions',
 		status: 'available',
 		hasOverview: true,
-		primaryAction: { label: 'Nouveau message', to: '/chat' },
+		primaryAction: { label: 'Nouveau message', to: '/discussions' },
 		sections: [
 			{
 				id: 'channels',
 				label: 'Canaux',
-				to: '/chat',
+				to: '/discussions',
 				icon: MessagesSquare,
 			},
 		],

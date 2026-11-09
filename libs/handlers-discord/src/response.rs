@@ -245,6 +245,26 @@ pub fn webhook_created_response(w: Webhook) -> WebhookCreatedResponse {
 
 // ── Presence ──────────────────────────────────────────────────────────────────
 
+/// A seated member as chat knows them. `user_id` is the id already carried by
+/// `author_user_id`, reactions and presence; it is deliberately served here and
+/// not on `MemberResponse`, whose own contract keeps `users.id` out.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct DirectoryEntryResponse {
+    pub user_id: UserId,
+    pub display_name: String,
+}
+
+impl From<mestier_core::application::discord_directory::ChatDirectoryEntry>
+    for DirectoryEntryResponse
+{
+    fn from(entry: mestier_core::application::discord_directory::ChatDirectoryEntry) -> Self {
+        Self {
+            user_id: entry.user_id,
+            display_name: entry.display_name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct PresenceResponse {
     pub organization_id: OrganizationId,
@@ -320,6 +340,20 @@ mod tests {
     const UUID_B: &str = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
     const UUID_C: &str = "6ba7b811-9dad-11d1-80b4-00c04fd430c8";
     const UUID_D: &str = "6ba7b812-9dad-11d1-80b4-00c04fd430c8";
+
+    #[test]
+    fn directory_entry_response_keeps_the_user_id_and_the_name() {
+        let user_id = UserId::from_str(UUID_A).unwrap();
+        let entry = mestier_core::application::discord_directory::ChatDirectoryEntry {
+            user_id,
+            display_name: "Benali Karim".to_owned(),
+        };
+
+        let response = DirectoryEntryResponse::from(entry);
+
+        assert_eq!(response.user_id, user_id);
+        assert_eq!(response.display_name, "Benali Karim");
+    }
 
     #[test]
     fn category_response_from_domain() {
