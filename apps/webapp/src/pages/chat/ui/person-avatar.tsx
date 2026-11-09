@@ -23,7 +23,7 @@ export function PersonAvatar({
 	hue: number
 	size?: keyof typeof SIZE_CLASSES
 	presence?: PresenceStatus
-	surface?: 'content' | 'card'
+	surface?: 'content' | 'card' | 'nav'
 	className?: string
 }) {
 	const sizeClasses = SIZE_CLASSES[size]

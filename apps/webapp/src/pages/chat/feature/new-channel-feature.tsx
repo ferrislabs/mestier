@@ -10,12 +10,15 @@ import { NewChannelDialogUI } from '#/pages/chat/ui/new-channel-dialog-ui'
 export interface NewChannelFeatureProps {
 	organizationId: string
 	open: boolean
+	/** The category to create the channel in, when opened from one. */
+	categoryId: string | null
 	onOpenChange: (open: boolean) => void
 }
 
 export function NewChannelFeature({
 	organizationId,
 	open,
+	categoryId,
 	onOpenChange,
 }: NewChannelFeatureProps) {
 	const categories = useCategories(organizationId)
@@ -25,15 +28,18 @@ export function NewChannelFeature({
 
 	const [kind, setKind] = useState<'channel' | 'category'>('channel')
 	const [name, setName] = useState('')
-	const [categoryId, setCategoryId] = useState<string | null>(null)
+
+	const parentCategory = (categories.data ?? []).find(
+		(category) => category.id === categoryId,
+	)
 
 	function reset() {
 		setName('')
-		setCategoryId(null)
+		setKind('channel')
 	}
 
 	function handleSubmit() {
-		if (kind === 'channel') {
+		if (categoryId !== null || kind === 'channel') {
 			const position = channels.data?.length ?? 0
 			createChannel.mutate(
 				{
@@ -69,13 +75,11 @@ export function NewChannelFeature({
 		<NewChannelDialogUI
 			open={open}
 			onOpenChange={onOpenChange}
-			kind={kind}
+			kind={categoryId === null ? kind : 'channel'}
 			onChangeKind={setKind}
 			name={name}
 			onChangeName={setName}
-			categories={categories.data ?? []}
-			categoryId={categoryId}
-			onChangeCategoryId={setCategoryId}
+			parentCategoryName={parentCategory?.name}
 			onSubmit={handleSubmit}
 			isSubmitting={createChannel.isPending || createCategory.isPending}
 		/>

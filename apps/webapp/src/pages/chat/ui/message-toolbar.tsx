@@ -19,6 +19,7 @@ import { EmojiPopover } from '#/pages/chat/ui/emoji-popover'
 import { IconButton } from '#/pages/chat/ui/icon-button'
 
 export function MessageToolbar({
+	threadsEnabled = true,
 	hasThread,
 	isOwn,
 	pinned,
@@ -31,6 +32,7 @@ export function MessageToolbar({
 	onEdit,
 	onDelete,
 }: {
+	threadsEnabled?: boolean
 	hasThread: boolean
 	isOwn: boolean
 	pinned: boolean
@@ -52,11 +54,13 @@ export function MessageToolbar({
 			<EmojiPopover onSelect={onReact} align="end">
 				<IconButton label="Ajouter une réaction" icon={SmilePlus} />
 			</EmojiPopover>
-			<IconButton
-				label={hasThread ? 'Ouvrir le fil' : 'Répondre dans un fil'}
-				icon={MessageSquareReply}
-				onClick={onOpenThread}
-			/>
+			{threadsEnabled ? (
+				<IconButton
+					label={hasThread ? 'Ouvrir le fil' : 'Répondre dans un fil'}
+					icon={MessageSquareReply}
+					onClick={onOpenThread}
+				/>
+			) : null}
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<IconButton label="Plus d’actions" icon={Ellipsis} />

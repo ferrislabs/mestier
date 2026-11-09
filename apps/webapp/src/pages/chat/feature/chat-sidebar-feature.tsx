@@ -1,0 +1,95 @@
+import { useParams } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
+import { useActiveOrganization } from '#/hooks/use-active-organization'
+import {
+	useCategories,
+	useChannels,
+	useChatDirectory,
+	useChatListGatewaySync,
+	useDirectChannels,
+	useReadStateGatewaySync,
+	useUnreadMentionCount,
+	useUnreadSummaries,
+} from '#/hooks/use-chat'
+import { usePresenceStatuses } from '#/hooks/use-presence'
+import { buildDirectMessageItems } from '#/pages/chat/lib/direct-messages'
+import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
+import { ChatSidebarUI } from '#/pages/chat/ui/chat-sidebar-ui'
+import {
+	openChannelAdmin,
+	openNewChannel,
+	openNewDirect,
+} from './chat-dialogs-store'
+
+/**
+ * The module's side nav for Discussions: categories and channels, then direct
+ * messages. Mounted by `ModuleNav` for the whole time the chat module is
+ * active, so the gateway subscriptions that keep the lists live live here.
+ */
+export function ChatSidebarFeature() {
+	const { activeOrganization } = useActiveOrganization()
+	const organizationId = activeOrganization.id
+	const { channelId } = useParams({ strict: false })
+	const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Set<string>>(
+		new Set(),
+	)
+
+	const categories = useCategories(organizationId)
+	const channels = useChannels(organizationId)
+	useChatListGatewaySync(organizationId)
+	useReadStateGatewaySync(organizationId)
+	const unreadSummaries = useUnreadSummaries(organizationId)
+	const mentionCount = useUnreadMentionCount(organizationId)
+	const directChannels = useDirectChannels(organizationId)
+	const directory = useChatDirectory(organizationId)
+	const presenceStatuses = usePresenceStatuses()
+
+	const unreadCounts = useMemo(
+		() =>
+			new Map(
+				[...(unreadSummaries.data ?? [])].map(([id, unread]) => [
+					id,
+					unread.unread_count,
+				]),
+			),
+		[unreadSummaries.data],
+	)
+	const directMessages = buildDirectMessageItems(
+		directChannels.data ?? [],
+		directory.data ?? [],
+		presenceStatuses,
+		unreadCounts,
+	)
+	const groups = groupChannelsByCategory(
+		categories.data ?? [],
+		channels.data ?? [],
+	)
+
+	function toggleCategory(categoryId: string, collapsed: boolean) {
+		setCollapsedCategoryIds((previous) => {
+			const next = new Set(previous)
+			if (collapsed) next.add(categoryId)
+			else next.delete(categoryId)
+			return next
+		})
+	}
+
+	return (
+		<ChatSidebarUI
+			organizationSlug={activeOrganization.slug}
+			groups={groups}
+			collapsedCategoryIds={collapsedCategoryIds}
+			onToggleCategory={toggleCategory}
+			activeChannelId={channelId}
+			isLoading={categories.isLoading || channels.isLoading}
+			isError={categories.isError || channels.isError}
+			unreadCounts={unreadCounts}
+			mentionCount={mentionCount}
+			directMessages={directMessages}
+			onRequestNewChannel={() => openNewChannel()}
+			onRequestNewChannelInCategory={openNewChannel}
+			onRequestNewDirectMessage={openNewDirect}
+			onOpenChannelAdmin={openChannelAdmin}
+		/>
+	)
+}

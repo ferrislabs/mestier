@@ -14,9 +14,6 @@ function baseProps(
 		onChangeKind: vi.fn(),
 		name: '',
 		onChangeName: vi.fn(),
-		categories: [],
-		categoryId: null,
-		onChangeCategoryId: vi.fn(),
 		onSubmit: vi.fn(),
 		isSubmitting: false,
 		...overrides,
@@ -56,5 +53,23 @@ describe('NewChannelDialogUI', () => {
 		await user.click(screen.getByRole('tab', { name: 'Catégorie' }))
 
 		expect(onChangeKind).toHaveBeenCalledWith('category')
+	})
+
+	it('offers no category choice for a channel', () => {
+		render(<NewChannelDialogUI {...baseProps()} />)
+
+		expect(screen.queryByRole('combobox')).toBeNull()
+		expect(screen.queryByText('Sans catégorie')).toBeNull()
+	})
+
+	it('names the category it was opened from and offers only a channel', () => {
+		render(
+			<NewChannelDialogUI
+				{...baseProps({ parentCategoryName: 'Chantiers' })}
+			/>,
+		)
+
+		expect(screen.getByText('Nouveau canal dans Chantiers')).toBeDefined()
+		expect(screen.queryByRole('tab', { name: 'Catégorie' })).toBeNull()
 	})
 })

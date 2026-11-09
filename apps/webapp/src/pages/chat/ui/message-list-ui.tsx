@@ -25,6 +25,7 @@ export interface MessageListUIProps {
 	emptyLabel?: string
 	pinnedMessageIds?: ReadonlySet<string>
 	savedMessageIds?: ReadonlySet<string>
+	threadsEnabled?: boolean
 	threadedMessageIds: ReadonlySet<string>
 	scrollContainerRef: RefObject<HTMLDivElement | null>
 	onScroll: (event: React.UIEvent<HTMLDivElement>) => void
@@ -67,6 +68,7 @@ export function MessageListUI({
 	emptyLabel = 'Aucun message. Soyez le premier à écrire.',
 	pinnedMessageIds = NO_IDS,
 	savedMessageIds = NO_IDS,
+	threadsEnabled = true,
 	threadedMessageIds,
 	scrollContainerRef,
 	onScroll,
@@ -155,6 +157,7 @@ export function MessageListUI({
 						}
 						isEditing={editingMessageId === entry.message.id}
 						editDraft={editDraft}
+						threadsEnabled={threadsEnabled}
 						hasThread={threadedMessageIds.has(entry.message.id)}
 						pinned={pinnedMessageIds.has(entry.message.id)}
 						saved={savedMessageIds.has(entry.message.id)}

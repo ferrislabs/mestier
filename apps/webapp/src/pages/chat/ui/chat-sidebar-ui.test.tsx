@@ -56,10 +56,12 @@ function baseProps(
 		onToggleCategory: vi.fn(),
 		isLoading: false,
 		isError: false,
-		onlineCount: 0,
 		unreadCounts: new Map(),
+		directMessages: [],
+		onRequestNewDirectMessage: vi.fn(),
 		mentionCount: 0,
 		onRequestNewChannel: vi.fn(),
+		onRequestNewChannelInCategory: vi.fn(),
 		onOpenChannelAdmin: vi.fn(),
 		...overrides,
 	}
@@ -81,14 +83,16 @@ describe('ChatSidebarUI', () => {
 		expect(screen.getByText(/Aucun canal pour le moment/)).toBeDefined()
 	})
 
-	it('lets a request for a new channel start right from the empty state', async () => {
+	it('lets a request for a new channel start from the channels heading', async () => {
 		const user = userEvent.setup()
 		const onRequestNewChannel = vi.fn()
 		await renderSidebar(
 			<ChatSidebarUI {...baseProps({ onRequestNewChannel })} />,
 		)
 
-		await user.click(screen.getByRole('button', { name: 'Créer un canal' }))
+		await user.click(
+			screen.getByRole('button', { name: 'Créer un canal ou une catégorie' }),
+		)
 
 		expect(onRequestNewChannel).toHaveBeenCalled()
 	})
@@ -116,7 +120,7 @@ describe('ChatSidebarUI', () => {
 		)
 
 		const link = screen.getByText('ch-1').closest('a')
-		expect(link?.className).toContain('bg-accent')
+		expect(link?.getAttribute('data-status')).toBe('active')
 	})
 
 	it('renders uncategorized channels without a category header', async () => {
@@ -139,6 +143,27 @@ describe('ChatSidebarUI', () => {
 		await user.click(screen.getByText('cat-1'))
 
 		expect(onToggleCategory).toHaveBeenCalledWith('cat-1', true)
+	})
+})
+
+describe('ChatSidebarUI — channel creation in a category', () => {
+	it('creates a channel from the plus button of its category', async () => {
+		const user = userEvent.setup()
+		const onRequestNewChannelInCategory = vi.fn()
+		const groups = [
+			{ category: category('cat-1'), channels: [channel('ch-1', 'cat-1')] },
+		]
+		await renderSidebar(
+			<ChatSidebarUI
+				{...baseProps({ groups, onRequestNewChannelInCategory })}
+			/>,
+		)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Créer un canal dans cat-1' }),
+		)
+
+		expect(onRequestNewChannelInCategory).toHaveBeenCalledWith('cat-1')
 	})
 })
 
@@ -213,5 +238,40 @@ describe('ChatSidebarUI permission gating (#407)', () => {
 		expect(
 			screen.queryByRole('button', { name: /créer un canal$/i }),
 		).toBeNull()
+	})
+})
+
+describe('ChatSidebarUI — direct messages', () => {
+	const karim = {
+		channelId: 'dm-1',
+		name: 'Karim Benali',
+		hue: 200,
+		presence: 'ONLINE' as const,
+		unreadCount: 2,
+	}
+
+	it('lists each conversation by its peer, with the unread count', async () => {
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ directMessages: [karim] })} />,
+		)
+
+		const link = screen.getByRole('link', { name: /Karim Benali/ })
+		expect(link.getAttribute('href')).toBe('/o/acme/discussions/dm-1')
+		expect(screen.getByText(/messages non lus/)).toBeDefined()
+		expect(screen.getByText('En ligne')).toBeDefined()
+	})
+
+	it('asks for a new direct message from the plus button', async () => {
+		const user = userEvent.setup()
+		const onRequestNewDirectMessage = vi.fn()
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ onRequestNewDirectMessage })} />,
+		)
+
+		await user.click(
+			screen.getByRole('button', { name: 'Nouveau message direct' }),
+		)
+
+		expect(onRequestNewDirectMessage).toHaveBeenCalledTimes(1)
 	})
 })
