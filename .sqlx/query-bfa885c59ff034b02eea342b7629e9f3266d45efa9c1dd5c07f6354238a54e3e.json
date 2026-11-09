@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id, t.org_id, t.participant_id, t.host_company_id, t.job_title,\n                   t.created_at, t.updated_at, h.name AS host_company_name\n            FROM cursus.company_tutor t\n            JOIN cursus.host_company h ON h.org_id = t.org_id AND h.id = t.host_company_id\n            WHERE t.org_id = $1 AND t.participant_id = $2\n            ORDER BY h.name ASC, t.created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "participant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "host_company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "job_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "host_company_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bfa885c59ff034b02eea342b7629e9f3266d45efa9c1dd5c07f6354238a54e3e"
+}

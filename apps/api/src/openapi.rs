@@ -454,6 +454,17 @@ impl Modify for SecurityAddon {
         cursus::host_company::get_one::handler,
         cursus::host_company::update::handler,
         cursus::host_company::archive::handler,
+        cursus::participant::list::handler,
+        cursus::participant::create::handler,
+        cursus::participant::get_one::handler,
+        cursus::participant::update::handler,
+        cursus::participant::invite::handler,
+        cursus::participant::deactivate::handler,
+        cursus::participant::reactivate::handler,
+        cursus::apprentice::upsert::handler,
+        cursus::company_tutor::add::handler,
+        cursus::company_tutor::remove::handler,
+        cursus::invitation::accept::handler,
     ),
     components(schemas(
         support::response::TicketResponse,
@@ -899,6 +910,16 @@ impl Modify for SecurityAddon {
         cursus::response::HostCompanyResponse,
         cursus::host_company::create::CreateHostCompanyRequest,
         cursus::host_company::update::UpdateHostCompanyRequest,
+        cursus::response::ParticipantResponse,
+        cursus::response::ParticipantDetailResponse,
+        cursus::response::ApprenticeResponse,
+        cursus::response::CompanyTutorResponse,
+        cursus::response::ParticipantInviteResponse,
+        cursus::response::CursusSpaceResponse,
+        cursus::request::ApprenticeRequest,
+        cursus::request::CompanyTutorRequest,
+        cursus::participant::create::CreateParticipantRequest,
+        cursus::participant::update::UpdateParticipantRequest,
     )),
     modifiers(&SecurityAddon),
     tags(
@@ -917,7 +938,7 @@ impl Modify for SecurityAddon {
         (name = "reference", description = "Reference cost catalog"),
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),
         (name = "support", description = "Support tickets — kanban, thread, intake by organization API key"),
-        (name = "cursus", description = "Cursus — establishments, trainings, promotions, closure reasons and host companies of an apprenticeship centre"),
+        (name = "cursus", description = "Cursus — establishments, trainings, promotions, closure reasons, host companies and participants of an apprenticeship centre"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
 )]
@@ -966,6 +987,37 @@ mod tests {
                 json.contains(&format!("\"operationId\":\"{operation_id}\"")),
                 "{operation_id} is missing from the document"
             );
+        }
+    }
+
+    #[test]
+    fn every_cursus_host_company_and_participant_route_reaches_the_document() {
+        let document = serde_json::to_value(ApiDoc::openapi()).expect("the document serializes");
+        let org = "/api/v1/organizations/{organization_id}/cursus";
+
+        for path in [
+            format!("{org}/host-companies"),
+            format!("{org}/host-companies/{{host_company_id}}/archive"),
+            format!("{org}/participants"),
+            format!("{org}/participants/{{participant_id}}"),
+            format!("{org}/participants/{{participant_id}}/invitation"),
+            format!("{org}/participants/{{participant_id}}/deactivate"),
+            format!("{org}/participants/{{participant_id}}/reactivate"),
+            format!("{org}/participants/{{participant_id}}/apprentice"),
+            format!("{org}/participants/{{participant_id}}/company-tutors"),
+            format!("{org}/company-tutors/{{company_tutor_id}}"),
+            "/api/v1/cursus/invitations/{token}/accept".to_owned(),
+        ] {
+            assert!(
+                document["paths"][path.as_str()].is_object(),
+                "{path} is missing from the document"
+            );
+        }
+
+        let statuses =
+            serde_json::to_string(&document["components"]["schemas"]["ParticipantStatus"]).unwrap();
+        for variant in ["pending", "active", "inactive"] {
+            assert!(statuses.contains(variant), "{statuses}");
         }
     }
 

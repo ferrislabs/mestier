@@ -1,6 +1,7 @@
 use axum_extra::routing::TypedPath;
 use mestier_core::{
-    ClosureReasonId, EstablishmentId, HostCompanyId, OrganizationId, PromotionId, TrainingId,
+    ClosureReasonId, CompanyTutorId, EstablishmentId, HostCompanyId, OrganizationId, ParticipantId,
+    PromotionId, TrainingId,
 };
 use serde::Deserialize;
 
@@ -108,4 +109,75 @@ pub struct HostCompanyPath {
 pub struct HostCompanyArchivePath {
     pub organization_id: OrganizationId,
     pub host_company_id: HostCompanyId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/participants")]
+pub struct ParticipantCollectionPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}")]
+pub struct ParticipantPath {
+    pub organization_id: OrganizationId,
+    pub participant_id: ParticipantId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/invitation"
+)]
+pub struct ParticipantInvitationPath {
+    pub organization_id: OrganizationId,
+    pub participant_id: ParticipantId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/deactivate"
+)]
+pub struct ParticipantDeactivatePath {
+    pub organization_id: OrganizationId,
+    pub participant_id: ParticipantId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/reactivate"
+)]
+pub struct ParticipantReactivatePath {
+    pub organization_id: OrganizationId,
+    pub participant_id: ParticipantId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/apprentice"
+)]
+pub struct ParticipantApprenticePath {
+    pub organization_id: OrganizationId,
+    pub participant_id: ParticipantId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/company-tutors"
+)]
+pub struct ParticipantCompanyTutorsPath {
+    pub organization_id: OrganizationId,
+    pub participant_id: ParticipantId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/company-tutors/{company_tutor_id}")]
+pub struct CompanyTutorPath {
+    pub organization_id: OrganizationId,
+    pub company_tutor_id: CompanyTutorId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/cursus/invitations/{token}/accept")]
+pub struct AcceptInvitationPath {
+    pub token: String,
 }

@@ -30,6 +30,7 @@ pub mod authorization;
 pub mod automation;
 pub mod cursus_catalog;
 pub mod cursus_host_company;
+pub mod cursus_participant;
 pub mod custom_unit;
 pub mod customer;
 pub mod customer_contact;

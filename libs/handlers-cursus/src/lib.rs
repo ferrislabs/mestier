@@ -3,15 +3,23 @@ use axum::{Router, middleware::from_fn_with_state};
 use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit_middleware};
 use mestier_core::{OrganizationId, Permissions};
 
+pub mod apprentice;
 pub mod closure_reason;
+pub mod company_tutor;
 pub mod establishment;
 pub mod host_company;
+pub mod invitation;
+pub mod participant;
 pub mod paths;
 pub mod promotion;
+pub mod request;
 pub mod response;
 pub mod training;
 
 pub const TAG: &str = "cursus";
+
+#[derive(Debug, serde::Serialize, PartialEq)]
+pub struct EmptyResponse;
 
 pub use handlers::membership::require_org_membership;
 
@@ -56,6 +64,10 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(promotion::router(state))
         .merge(closure_reason::router(state))
         .merge(host_company::router(state))
+        .merge(participant::router(state))
+        .merge(apprentice::router(state))
+        .merge(company_tutor::router(state))
+        .merge(invitation::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

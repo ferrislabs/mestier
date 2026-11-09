@@ -72,6 +72,9 @@ pub enum CoreError {
     #[error("conflict: {0}")]
     Conflict(String),
 
+    #[error("resource is gone")]
+    Gone,
+
     /// The actor was authenticated but the policy engine refused the
     /// action. `reason` carries an optional, human-readable explanation
     /// for logs and (when safe) for the API response.
