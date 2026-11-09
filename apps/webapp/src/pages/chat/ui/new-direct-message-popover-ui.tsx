@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import {
 	Command,
 	CommandEmpty,
@@ -7,39 +8,37 @@ import {
 	CommandList,
 } from '#/components/ui/command'
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from '#/components/ui/dialog'
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from '#/components/ui/popover'
 import type { MemberItem } from '#/pages/chat/lib/members'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
 
-export interface NewDirectMessageDialogUIProps {
+export interface NewDirectMessagePopoverUIProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
 	members: readonly MemberItem[]
 	isSubmitting: boolean
 	onSelect: (userId: string) => void
+	/** The button that opens the popover. */
+	children: ReactNode
 }
 
-export function NewDirectMessageDialogUI({
+/** Pick who to write to: a search field over the members, anchored to the
+ * "+" of the direct messages section. */
+export function NewDirectMessagePopoverUI({
 	open,
 	onOpenChange,
 	members,
 	isSubmitting,
 	onSelect,
-}: NewDirectMessageDialogUIProps) {
+	children,
+}: NewDirectMessagePopoverUIProps) {
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="gap-0 p-0">
-				<DialogHeader className="px-4 pt-4 pb-2">
-					<DialogTitle>Nouveau message direct</DialogTitle>
-					<DialogDescription>
-						Choisissez la personne à qui écrire.
-					</DialogDescription>
-				</DialogHeader>
+		<Popover open={open} onOpenChange={onOpenChange}>
+			<PopoverTrigger asChild>{children}</PopoverTrigger>
+			<PopoverContent align="start" className="w-64 p-0">
 				<Command>
 					<CommandInput placeholder="Rechercher un membre" />
 					<CommandList>
@@ -68,7 +67,7 @@ export function NewDirectMessageDialogUI({
 						<Loader2 className="size-4 animate-spin text-muted-foreground" />
 					</div>
 				) : null}
-			</DialogContent>
-		</Dialog>
+			</PopoverContent>
+		</Popover>
 	)
 }

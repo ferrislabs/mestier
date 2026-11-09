@@ -12,7 +12,6 @@ interface ChatDialogsState {
 	newChannelCategoryId: string | null
 	/** What a duplicated channel starts from, when the dialog opens for it. */
 	newChannelPreset: NewChannelPreset | null
-	newDirectOpen: boolean
 	adminChannelId: string | null
 }
 
@@ -20,7 +19,6 @@ const initialState: ChatDialogsState = {
 	newChannelOpen: false,
 	newChannelCategoryId: null,
 	newChannelPreset: null,
-	newDirectOpen: false,
 	adminChannelId: null,
 }
 
@@ -43,14 +41,6 @@ export function openNewChannel(categoryId?: string, preset?: NewChannelPreset) {
 
 export function setNewChannelOpen(open: boolean) {
 	chatDialogsStore.setState((prev) => ({ ...prev, newChannelOpen: open }))
-}
-
-export function openNewDirect() {
-	chatDialogsStore.setState((prev) => ({ ...prev, newDirectOpen: true }))
-}
-
-export function setNewDirectOpen(open: boolean) {
-	chatDialogsStore.setState((prev) => ({ ...prev, newDirectOpen: open }))
 }
 
 export function openChannelAdmin(channelId: string) {

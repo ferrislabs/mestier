@@ -15,12 +15,13 @@ import {
 import { usePresenceStatuses } from '#/hooks/use-presence'
 import { buildDirectMessageItems } from '#/pages/chat/lib/direct-messages'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
-import { ChatSidebarUI } from '#/pages/chat/ui/chat-sidebar-ui'
+import { Plus } from 'lucide-react'
 import {
-	openChannelAdmin,
-	openNewChannel,
-	openNewDirect,
-} from './chat-dialogs-store'
+	addButtonClassName,
+	ChatSidebarUI,
+} from '#/pages/chat/ui/chat-sidebar-ui'
+import { openChannelAdmin, openNewChannel } from './chat-dialogs-store'
+import { NewDirectMessageFeature } from './new-direct-message-feature'
 
 /**
  * The module's side nav for Discussions: categories and channels, then direct
@@ -103,7 +104,20 @@ export function ChatSidebarFeature() {
 			directMessages={directMessages}
 			onRequestNewChannel={() => openNewChannel()}
 			onRequestNewChannelInCategory={openNewChannel}
-			onRequestNewDirectMessage={openNewDirect}
+			newDirectMessage={
+				<NewDirectMessageFeature
+					organizationId={organizationId}
+					organizationSlug={activeOrganization.slug}
+				>
+					<button
+						type="button"
+						aria-label="Nouveau message direct"
+						className={addButtonClassName}
+					>
+						<Plus className="size-3.5" />
+					</button>
+				</NewDirectMessageFeature>
+			}
 			onOpenChannelAdmin={openChannelAdmin}
 			onDuplicateChannel={duplicateChannel}
 			onDeleteChannel={(id) =>

@@ -58,7 +58,7 @@ function baseProps(
 		isError: false,
 		unreadCounts: new Map(),
 		directMessages: [],
-		onRequestNewDirectMessage: vi.fn(),
+		newDirectMessage: null,
 		mentionCount: 0,
 		onRequestNewChannel: vi.fn(),
 		onRequestNewChannelInCategory: vi.fn(),
@@ -314,17 +314,21 @@ describe('ChatSidebarUI — direct messages', () => {
 		expect(screen.getByText('En ligne')).toBeDefined()
 	})
 
-	it('asks for a new direct message from the plus button', async () => {
-		const user = userEvent.setup()
-		const onRequestNewDirectMessage = vi.fn()
+	it('renders the new direct message action next to the section title', async () => {
 		await renderSidebar(
-			<ChatSidebarUI {...baseProps({ onRequestNewDirectMessage })} />,
+			<ChatSidebarUI
+				{...baseProps({
+					newDirectMessage: (
+						<button type="button" aria-label="Nouveau message direct">
+							+
+						</button>
+					),
+				})}
+			/>,
 		)
 
-		await user.click(
+		expect(
 			screen.getByRole('button', { name: 'Nouveau message direct' }),
-		)
-
-		expect(onRequestNewDirectMessage).toHaveBeenCalledTimes(1)
+		).toBeDefined()
 	})
 })

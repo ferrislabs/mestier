@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 import {
 	AlertCircle,
 	ChevronRight,
@@ -45,7 +46,8 @@ export interface ChatSidebarUIProps {
 	directMessages: readonly DirectMessageItem[]
 	onRequestNewChannel: () => void
 	onRequestNewChannelInCategory: (categoryId: string) => void
-	onRequestNewDirectMessage: () => void
+	/** The "+" of the direct messages section, with the member picker it opens. */
+	newDirectMessage: ReactNode
 	/** Opens the channel admin sheet for one channel — see #372: channel
 	 * management starts here, not only from inside the channel itself. */
 	onOpenChannelAdmin: (channelId: string) => void
@@ -59,7 +61,7 @@ const headingClassName =
 const linkClassName =
 	'flex h-8 items-center gap-2 rounded-md px-2 text-nav-foreground/80 text-sm outline-none transition-colors hover:bg-nav-active/60 hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary data-[status=active]:bg-nav-active data-[status=active]:text-nav-active-foreground'
 
-const addButtonClassName =
+export const addButtonClassName =
 	'flex size-6 items-center justify-center rounded-md text-nav-muted outline-none transition-colors hover:bg-nav-active/60 hover:text-nav-foreground focus-visible:ring-2 focus-visible:ring-nav-primary'
 
 /**
@@ -79,7 +81,7 @@ export function ChatSidebarUI({
 	directMessages,
 	onRequestNewChannel,
 	onRequestNewChannelInCategory,
-	onRequestNewDirectMessage,
+	newDirectMessage,
 	onOpenChannelAdmin,
 	onDuplicateChannel,
 	onDeleteChannel,
@@ -161,14 +163,7 @@ export function ChatSidebarUI({
 					<h2 id="discussions-direct-heading" className={headingClassName}>
 						Messages directs
 					</h2>
-					<button
-						type="button"
-						aria-label="Nouveau message direct"
-						className={addButtonClassName}
-						onClick={onRequestNewDirectMessage}
-					>
-						<Plus className="size-3.5" />
-					</button>
+					{newDirectMessage}
 				</div>
 				<ul className="flex flex-col gap-0.5">
 					{directMessages.map((item) => (

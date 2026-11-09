@@ -5,10 +5,8 @@ import {
 	chatDialogsStore,
 	closeChannelAdmin,
 	setNewChannelOpen,
-	setNewDirectOpen,
 } from './chat-dialogs-store'
 import { NewChannelFeature } from './new-channel-feature'
-import { NewDirectMessageFeature } from './new-direct-message-feature'
 
 /** The chat dialogs, mounted once by the chat route and driven by
  * `chatDialogsStore` from the side nav and from the channel header. */
@@ -18,7 +16,6 @@ export function ChatDialogsFeature() {
 		newChannelOpen,
 		newChannelCategoryId,
 		newChannelPreset,
-		newDirectOpen,
 		adminChannelId,
 	} = useStore(chatDialogsStore)
 
@@ -30,12 +27,6 @@ export function ChatDialogsFeature() {
 				categoryId={newChannelCategoryId}
 				preset={newChannelPreset}
 				onOpenChange={setNewChannelOpen}
-			/>
-			<NewDirectMessageFeature
-				organizationId={activeOrganization.id}
-				organizationSlug={activeOrganization.slug}
-				open={newDirectOpen}
-				onOpenChange={setNewDirectOpen}
 			/>
 			{adminChannelId ? (
 				<ChannelAdminFeature
