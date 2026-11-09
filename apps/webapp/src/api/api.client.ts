@@ -451,6 +451,7 @@ export namespace Schemas {
   export type ContractKeyDto = { example?: string | undefined; kind: ContractKindDto; name: string; required: boolean };
   export type ContractKind = "APPRENTICESHIP" | "PROFESSIONALIZATION";
   export type ContractRequest = {
+    comment?: (string | null) | undefined;
     end_date: string;
     host_company_id: HostCompanyId;
     kind: ContractKind;
@@ -458,22 +459,22 @@ export namespace Schemas {
     start_date: string;
   };
   export type TriadId = string;
-  export type TutorRank = "main" | "secondary";
   export type ContractTutorResponse = {
     archived_at?: (string | null) | undefined;
     company_tutor_id: CompanyTutorId;
+    is_main: boolean;
     name: string;
     participant_id: ParticipantId;
-    rank: TutorRank;
   };
   export type ContractResponse = {
     closed_at?: (string | null) | undefined;
     closure_note?: (string | null) | undefined;
     closure_reason_id?: (null | ClosureReasonId) | undefined;
     closure_reason_label?: (string | null) | undefined;
+    comment?: (string | null) | undefined;
     created_at: string;
+    duration_months: number;
     end_date: string;
-    has_cerfa_file: boolean;
     has_mission_sheet_file: boolean;
     host_company_id: HostCompanyId;
     host_company_name: string;
@@ -495,6 +496,7 @@ export namespace Schemas {
     postal_code?: (string | null) | undefined;
     site_label: string;
   };
+  export type ContractTutorRequest = { company_tutor_id: CompanyTutorId; is_main: boolean };
   export type ContractType = "CDI" | "CDD" | "APPRENTICESHIP" | "INTERIM" | "MANAGER";
   export type CorrectEmployeeCostBasisRequest = {
     effective_from: string;
@@ -686,14 +688,30 @@ export namespace Schemas {
     surcharge_id?: (null | SurchargeId) | undefined;
   };
   export type CreateFolderRequest = { name: string; parent_id?: (string | null) | undefined };
+  export type HostCompanyAddressRequest = {
+    city?: (string | null) | undefined;
+    is_main: boolean;
+    label?: (string | null) | undefined;
+    line1: string;
+    line2?: (string | null) | undefined;
+    postal_code?: (string | null) | undefined;
+  };
   export type CreateHostCompanyRequest = {
-    address?: (string | null) | undefined;
+    activity_domains?: (string | null) | undefined;
+    addresses: Array<HostCompanyAddressRequest>;
+    capital?: (string | null) | undefined;
     director_name?: (string | null) | undefined;
+    email?: (string | null) | undefined;
     employee_count?: (number | null) | undefined;
+    group_employee_count?: (number | null) | undefined;
+    group_name?: (string | null) | undefined;
     legal_form?: (string | null) | undefined;
+    missions?: (string | null) | undefined;
     naf_code?: (string | null) | undefined;
     name: string;
+    phone?: (string | null) | undefined;
     siret?: (string | null) | undefined;
+    website?: (string | null) | undefined;
   };
   export type CreateIntakeTicketRequest = {
     body: string;
@@ -1513,19 +1531,35 @@ export namespace Schemas {
     status: ContractStatus;
   };
   export type Grid = { contracts: Array<GridContract>; year: number };
+  export type HostCompanyAddressResponse = {
+    city?: (string | null) | undefined;
+    is_main: boolean;
+    label?: (string | null) | undefined;
+    line1: string;
+    line2?: (string | null) | undefined;
+    postal_code?: (string | null) | undefined;
+  };
   export type HostCompanyResponse = {
-    address?: (string | null) | undefined;
+    activity_domains?: (string | null) | undefined;
+    addresses: Array<HostCompanyAddressResponse>;
     archived_at?: (string | null) | undefined;
+    capital?: (string | null) | undefined;
     created_at: string;
     director_name?: (string | null) | undefined;
+    email?: (string | null) | undefined;
     employee_count?: (number | null) | undefined;
+    group_employee_count?: (number | null) | undefined;
+    group_name?: (string | null) | undefined;
     id: HostCompanyId;
     legal_form?: (string | null) | undefined;
+    missions?: (string | null) | undefined;
     naf_code?: (string | null) | undefined;
     name: string;
     organization_id: OrganizationId;
+    phone?: (string | null) | undefined;
     siret?: (string | null) | undefined;
     updated_at: string;
+    website?: (string | null) | undefined;
   };
   export type MemberContractId = string;
   export type ScheduleInput =
@@ -1971,11 +2005,13 @@ export namespace Schemas {
   };
   export type MinuteIntervalResponse = { ends_minute: number; starts_minute: number };
   export type MoveDealRequest = { lost_reason?: (string | null) | undefined; stage: DealStageName };
-  export type MyContractTutorResponse = { archived_at?: (string | null) | undefined; name: string; rank: TutorRank };
+  export type MyContractTutorResponse = { archived_at?: (string | null) | undefined; is_main: boolean; name: string };
   export type MyContractResponse = {
     closed_at?: (string | null) | undefined;
     closure_note?: (string | null) | undefined;
     closure_reason_label?: (string | null) | undefined;
+    comment?: (string | null) | undefined;
+    duration_months: number;
     end_date: string;
     host_company_name: string;
     id: ContractId;
@@ -1987,7 +2023,7 @@ export namespace Schemas {
   export type MyMemberResponse = { display_name: string; member_id: MemberId; organization_id: OrganizationId };
   export type MyPermissionsResponse = { permissions: Array<string> };
   export type TriadAccessResponse = { kind: "active" } | { kind: "read_only"; since: string };
-  export type TriadRoleResponse = "apprentice" | "main_tutor" | "secondary_tutor";
+  export type TriadRoleResponse = "apprentice" | "main_tutor" | "tutor";
   export type MyTriadDetailResponse = {
     access: TriadAccessResponse;
     apprentice_email: string;
@@ -2575,7 +2611,7 @@ export namespace Schemas {
   };
   export type ServiceRateUnit = "FLAT_RATE" | "HOUR" | "DAY" | "UNIT" | "ML" | "M2" | "M3" | "KG" | "TONNE" | "LITRE";
   export type SetContractFileRequest = Partial<{ file_key: string | null }>;
-  export type SetContractTutorsRequest = Partial<{ main: null | CompanyTutorId; secondary: null | CompanyTutorId }>;
+  export type SetContractTutorsRequest = { tutors: Array<ContractTutorRequest> };
   export type SetEmployeeCostBasisRequest = {
     effective_from: string;
     hourly_rate_cents?: (number | null) | undefined;
@@ -2888,13 +2924,21 @@ export namespace Schemas {
   };
   export type UpdateFolderRequest = Partial<{ name: string | null; parent_id: string | null }>;
   export type UpdateHostCompanyRequest = {
-    address?: (string | null) | undefined;
+    activity_domains?: (string | null) | undefined;
+    addresses: Array<HostCompanyAddressRequest>;
+    capital?: (string | null) | undefined;
     director_name?: (string | null) | undefined;
+    email?: (string | null) | undefined;
     employee_count?: (number | null) | undefined;
+    group_employee_count?: (number | null) | undefined;
+    group_name?: (string | null) | undefined;
     legal_form?: (string | null) | undefined;
+    missions?: (string | null) | undefined;
     naf_code?: (string | null) | undefined;
     name: string;
+    phone?: (string | null) | undefined;
     siret?: (string | null) | undefined;
+    website?: (string | null) | undefined;
   };
   export type UpdateInvoiceRequest = {
     customer_context_id: CustomerContextId;
@@ -7610,9 +7654,10 @@ export namespace Endpoints {
           closure_note?: (string | null) | undefined;
           closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
           closure_reason_label?: (string | null) | undefined;
+          comment?: (string | null) | undefined;
           created_at: string;
+          duration_months: number;
           end_date: string;
-          has_cerfa_file: boolean;
           has_mission_sheet_file: boolean;
           host_company_id: Schemas.HostCompanyId;
           host_company_name: string;
@@ -7648,9 +7693,10 @@ export namespace Endpoints {
           closure_note?: (string | null) | undefined;
           closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
           closure_reason_label?: (string | null) | undefined;
+          comment?: (string | null) | undefined;
           created_at: string;
+          duration_months: number;
           end_date: string;
-          has_cerfa_file: boolean;
           has_mission_sheet_file: boolean;
           host_company_id: Schemas.HostCompanyId;
           host_company_name: string;
@@ -7687,9 +7733,10 @@ export namespace Endpoints {
           closure_note?: (string | null) | undefined;
           closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
           closure_reason_label?: (string | null) | undefined;
+          comment?: (string | null) | undefined;
           created_at: string;
+          duration_months: number;
           end_date: string;
-          has_cerfa_file: boolean;
           has_mission_sheet_file: boolean;
           host_company_id: Schemas.HostCompanyId;
           host_company_name: string;
@@ -7715,7 +7762,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/files/{kind}";
     requestFormat: "json";
     parameters: {
-      path: { organization_id: string; contract_id: string; kind: "cerfa" | "mission_sheet" };
+      path: { organization_id: string; contract_id: string; kind: "mission_sheet" };
     };
     responses: {
       200: { data: { url: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
@@ -7729,7 +7776,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/files/{kind}";
     requestFormat: "json";
     parameters: {
-      path: { organization_id: string; contract_id: string; kind: "cerfa" | "mission_sheet" };
+      path: { organization_id: string; contract_id: string; kind: "mission_sheet" };
 
       body: Schemas.SetContractFileRequest;
     };
@@ -7740,9 +7787,10 @@ export namespace Endpoints {
           closure_note?: (string | null) | undefined;
           closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
           closure_reason_label?: (string | null) | undefined;
+          comment?: (string | null) | undefined;
           created_at: string;
+          duration_months: number;
           end_date: string;
-          has_cerfa_file: boolean;
           has_mission_sheet_file: boolean;
           host_company_id: Schemas.HostCompanyId;
           host_company_name: string;
@@ -7779,9 +7827,10 @@ export namespace Endpoints {
           closure_note?: (string | null) | undefined;
           closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
           closure_reason_label?: (string | null) | undefined;
+          comment?: (string | null) | undefined;
           created_at: string;
+          duration_months: number;
           end_date: string;
-          has_cerfa_file: boolean;
           has_mission_sheet_file: boolean;
           host_company_id: Schemas.HostCompanyId;
           host_company_name: string;
@@ -7959,18 +8008,26 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
-          address?: (string | null) | undefined;
+          activity_domains?: (string | null) | undefined;
+          addresses: Array<Schemas.HostCompanyAddressResponse>;
           archived_at?: (string | null) | undefined;
+          capital?: (string | null) | undefined;
           created_at: string;
           director_name?: (string | null) | undefined;
+          email?: (string | null) | undefined;
           employee_count?: (number | null) | undefined;
+          group_employee_count?: (number | null) | undefined;
+          group_name?: (string | null) | undefined;
           id: Schemas.HostCompanyId;
           legal_form?: (string | null) | undefined;
+          missions?: (string | null) | undefined;
           naf_code?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
           siret?: (string | null) | undefined;
           updated_at: string;
+          website?: (string | null) | undefined;
         }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -7990,18 +8047,26 @@ export namespace Endpoints {
     responses: {
       201: {
         data: {
-          address?: (string | null) | undefined;
+          activity_domains?: (string | null) | undefined;
+          addresses: Array<Schemas.HostCompanyAddressResponse>;
           archived_at?: (string | null) | undefined;
+          capital?: (string | null) | undefined;
           created_at: string;
           director_name?: (string | null) | undefined;
+          email?: (string | null) | undefined;
           employee_count?: (number | null) | undefined;
+          group_employee_count?: (number | null) | undefined;
+          group_name?: (string | null) | undefined;
           id: Schemas.HostCompanyId;
           legal_form?: (string | null) | undefined;
+          missions?: (string | null) | undefined;
           naf_code?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
           siret?: (string | null) | undefined;
           updated_at: string;
+          website?: (string | null) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -8020,18 +8085,26 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
-          address?: (string | null) | undefined;
+          activity_domains?: (string | null) | undefined;
+          addresses: Array<Schemas.HostCompanyAddressResponse>;
           archived_at?: (string | null) | undefined;
+          capital?: (string | null) | undefined;
           created_at: string;
           director_name?: (string | null) | undefined;
+          email?: (string | null) | undefined;
           employee_count?: (number | null) | undefined;
+          group_employee_count?: (number | null) | undefined;
+          group_name?: (string | null) | undefined;
           id: Schemas.HostCompanyId;
           legal_form?: (string | null) | undefined;
+          missions?: (string | null) | undefined;
           naf_code?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
           siret?: (string | null) | undefined;
           updated_at: string;
+          website?: (string | null) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -8052,18 +8125,26 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
-          address?: (string | null) | undefined;
+          activity_domains?: (string | null) | undefined;
+          addresses: Array<Schemas.HostCompanyAddressResponse>;
           archived_at?: (string | null) | undefined;
+          capital?: (string | null) | undefined;
           created_at: string;
           director_name?: (string | null) | undefined;
+          email?: (string | null) | undefined;
           employee_count?: (number | null) | undefined;
+          group_employee_count?: (number | null) | undefined;
+          group_name?: (string | null) | undefined;
           id: Schemas.HostCompanyId;
           legal_form?: (string | null) | undefined;
+          missions?: (string | null) | undefined;
           naf_code?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
           siret?: (string | null) | undefined;
           updated_at: string;
+          website?: (string | null) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -8083,18 +8164,26 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
-          address?: (string | null) | undefined;
+          activity_domains?: (string | null) | undefined;
+          addresses: Array<Schemas.HostCompanyAddressResponse>;
           archived_at?: (string | null) | undefined;
+          capital?: (string | null) | undefined;
           created_at: string;
           director_name?: (string | null) | undefined;
+          email?: (string | null) | undefined;
           employee_count?: (number | null) | undefined;
+          group_employee_count?: (number | null) | undefined;
+          group_name?: (string | null) | undefined;
           id: Schemas.HostCompanyId;
           legal_form?: (string | null) | undefined;
+          missions?: (string | null) | undefined;
           naf_code?: (string | null) | undefined;
           name: string;
           organization_id: Schemas.OrganizationId;
+          phone?: (string | null) | undefined;
           siret?: (string | null) | undefined;
           updated_at: string;
+          website?: (string | null) | undefined;
         };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
@@ -8817,9 +8906,10 @@ export namespace Endpoints {
           closure_note?: (string | null) | undefined;
           closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
           closure_reason_label?: (string | null) | undefined;
+          comment?: (string | null) | undefined;
           created_at: string;
+          duration_months: number;
           end_date: string;
-          has_cerfa_file: boolean;
           has_mission_sheet_file: boolean;
           host_company_id: Schemas.HostCompanyId;
           host_company_name: string;
@@ -8855,9 +8945,10 @@ export namespace Endpoints {
           closure_note?: (string | null) | undefined;
           closure_reason_id?: (null | Schemas.ClosureReasonId) | undefined;
           closure_reason_label?: (string | null) | undefined;
+          comment?: (string | null) | undefined;
           created_at: string;
+          duration_months: number;
           end_date: string;
-          has_cerfa_file: boolean;
           has_mission_sheet_file: boolean;
           host_company_id: Schemas.HostCompanyId;
           host_company_name: string;
