@@ -6,7 +6,10 @@ import {
 	useCreateHostCompany,
 	useHostCompanies,
 } from '#/pages/cursus/host-companies/feature/use-host-companies'
-import { toHostCompanyRequest } from '#/pages/cursus/host-companies/lib/host-companies'
+import {
+	mainAddress,
+	toHostCompanyRequest,
+} from '#/pages/cursus/host-companies/lib/host-companies'
 import {
 	HostCompaniesListUI,
 	type HostCompanyRowVM,
@@ -37,6 +40,7 @@ export function HostCompaniesListFeature({
 		name: company.name,
 		siret: company.siret ?? '—',
 		nafCode: company.naf_code ?? '—',
+		city: mainAddress(company.addresses)?.city ?? '—',
 		employeeCount:
 			company.employee_count == null ? '—' : String(company.employee_count),
 		archived: Boolean(company.archived_at),

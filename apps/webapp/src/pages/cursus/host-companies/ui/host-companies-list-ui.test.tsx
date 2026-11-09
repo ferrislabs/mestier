@@ -14,6 +14,7 @@ function renderList(overrides: Partial<HostCompaniesListUIProps> = {}) {
 					name: 'Menuiserie Roux',
 					siret: '12345678900011',
 					nafCode: '1623Z',
+					city: 'Lyon',
 					employeeCount: '12',
 					archived: false,
 				},
@@ -22,6 +23,7 @@ function renderList(overrides: Partial<HostCompaniesListUIProps> = {}) {
 					name: 'Ancienne Scierie',
 					siret: '—',
 					nafCode: '—',
+					city: '—',
 					employeeCount: '—',
 					archived: true,
 				},
@@ -49,6 +51,7 @@ describe('HostCompaniesListUI', () => {
 		expect(screen.getByText('Menuiserie Roux')).toBeTruthy()
 		expect(screen.getByText('12345678900011')).toBeTruthy()
 		expect(screen.getByText('1623Z')).toBeTruthy()
+		expect(screen.getByText('Lyon')).toBeTruthy()
 		expect(screen.getByText('12')).toBeTruthy()
 		expect(screen.getByText('Archivée')).toBeTruthy()
 	})

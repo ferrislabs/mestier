@@ -20,6 +20,7 @@ const COMPANY = {
 	organization_id: 'org-1',
 	name: 'Menuiserie Roux',
 	siret: '12345678900011',
+	addresses: [],
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
 }
@@ -57,12 +58,21 @@ describe('HostCompaniesListFeature', () => {
 		await user.click(
 			await screen.findByRole('button', { name: 'Nouvelle entreprise' }),
 		)
-		await user.click(screen.getByLabelText('Raison sociale'))
+		await user.click(screen.getByLabelText("Nom de l'entreprise"))
 		await user.paste('Charpente Blanc')
-		await user.click(screen.getByLabelText('SIRET'))
+		await user.click(screen.getByLabelText('Numéro de SIRET'))
 		await user.paste('98765432100022')
-		await user.click(screen.getByLabelText('Effectif'))
+		await user.click(
+			screen.getByLabelText("Nombre d'employés dans l'entreprise"),
+		)
 		await user.paste('8')
+		await user.click(
+			screen.getByRole('button', { name: 'Ajouter une adresse' }),
+		)
+		await user.click(screen.getByLabelText('Adresse'))
+		await user.paste('1 rue des Lilas')
+		await user.click(screen.getByLabelText('Ville'))
+		await user.paste('Lyon')
 		await user.click(screen.getByRole('button', { name: "Créer l'entreprise" }))
 
 		await waitFor(() =>
@@ -73,11 +83,28 @@ describe('HostCompaniesListFeature', () => {
 			body: {
 				name: 'Charpente Blanc',
 				siret: '98765432100022',
+				group_name: null,
 				naf_code: null,
 				legal_form: null,
+				capital: null,
 				director_name: null,
+				phone: null,
+				email: null,
+				website: null,
 				employee_count: 8,
-				address: null,
+				group_employee_count: null,
+				activity_domains: null,
+				missions: null,
+				addresses: [
+					{
+						label: null,
+						line1: '1 rue des Lilas',
+						line2: null,
+						postal_code: null,
+						city: 'Lyon',
+						is_main: true,
+					},
+				],
 			},
 		})
 		await waitFor(() => expect(onOpen).toHaveBeenCalledWith('hc-1'))

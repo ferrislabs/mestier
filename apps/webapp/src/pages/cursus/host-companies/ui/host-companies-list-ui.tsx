@@ -37,6 +37,7 @@ export interface HostCompanyRowVM {
 	name: string
 	siret: string
 	nafCode: string
+	city: string
 	employeeCount: string
 	archived: boolean
 }
@@ -74,7 +75,7 @@ export function HostCompaniesListUI({
 }: HostCompaniesListUIProps) {
 	const columns = [
 		columnHelper.accessor('name', {
-			header: 'Raison sociale',
+			header: "Nom de l'entreprise",
 			cell: (info) => (
 				<button
 					type="button"
@@ -85,9 +86,10 @@ export function HostCompaniesListUI({
 				</button>
 			),
 		}),
-		columnHelper.accessor('siret', { header: 'SIRET' }),
+		columnHelper.accessor('siret', { header: 'Numéro de SIRET' }),
 		columnHelper.accessor('nafCode', { header: 'NAF' }),
-		columnHelper.accessor('employeeCount', { header: 'Effectif' }),
+		columnHelper.accessor('city', { header: 'Ville' }),
+		columnHelper.accessor('employeeCount', { header: 'Employés' }),
 		columnHelper.accessor('archived', {
 			header: 'Statut',
 			cell: (info) =>
@@ -168,7 +170,7 @@ export function HostCompaniesListUI({
 
 			{canManage ? (
 				<Dialog open={createOpen} onOpenChange={onCreateOpenChange}>
-					<DialogContent className="sm:max-w-lg">
+					<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
 						<DialogHeader>
 							<DialogTitle>Nouvelle entreprise d'accueil</DialogTitle>
 							<DialogDescription>
