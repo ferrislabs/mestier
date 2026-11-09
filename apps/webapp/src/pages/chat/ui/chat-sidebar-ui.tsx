@@ -320,7 +320,7 @@ function CategoryGroup({
 									<DoubleClickConfirmButton
 										variant="ghost"
 										size="sm"
-										className="w-full justify-start text-destructive hover:text-destructive"
+										className="h-7 w-full justify-start gap-2 overflow-hidden px-2 text-destructive text-xs hover:text-destructive"
 										icon={<Trash2 className="size-3.5" />}
 										label="Supprimer le canal"
 										confirmLabel="Confirmer la suppression"
