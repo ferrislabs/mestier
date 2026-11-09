@@ -234,3 +234,4 @@ Amended: 2026-11-09 sur `/me`, un tuteur ne voit que ses propres contrats d'un t
 - Rupture : inchangée (motif choisi dans la liste + note).
 - Hors périmètre : gestionnaire entreprise.
 - Texte riche : éditeur Tiptap, contenu stocké en Markdown (export Typst plus simple pour le livret).
+- Formations et établissements : gérés dans le module (`/cursus/formations`, `/cursus/etablissements`), plus dans Paramètres, qui ne garde que les motifs de clôture. Une formation n'a plus d'établissement obligatoire (`establishment_id` facultatif).
