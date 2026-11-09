@@ -1,4 +1,4 @@
-import { Copy, Loader2, Trash2, X } from 'lucide-react'
+import { Copy, Globe, Loader2, Lock, Trash2, X } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import {
 	AlertDialog,
@@ -31,6 +31,7 @@ import {
 import { Textarea } from '#/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import type { Category, Channel, Overwrite, Webhook } from '#/hooks/use-chat'
+import { NEW_ITEM_KINDS } from '#/pages/chat/lib/channel-kinds'
 import {
 	type OverwriteBitName,
 	readBitState,
@@ -110,6 +111,13 @@ export function ChannelAdminDialogUI({
 	onDismissCreatedToken,
 	onDeleteWebhook,
 }: ChannelAdminDialogUIProps) {
+	const kind = NEW_ITEM_KINDS.find((k) => k.value === channel?.channel_type)
+	const isPrivate = bitStateOf(everyoneOverwrite, 'VIEW_CHANNEL') === 'deny'
+	const createdOn = channel?.created_at
+		? new Date(channel.created_at).toLocaleDateString('fr-FR', {
+				dateStyle: 'long',
+			})
+		: null
 	const TRIGGER =
 		'h-auto flex-none justify-start rounded-md px-2.5 py-1.5 text-left data-[state=active]:bg-accent data-[state=active]:shadow-none dark:data-[state=active]:bg-accent dark:data-[state=active]:border-transparent after:hidden'
 	return (
@@ -214,6 +222,44 @@ export function ChannelAdminDialogUI({
 											</SelectContent>
 										</Select>
 									</div>
+									<section className="flex flex-col gap-3 border-t pt-6">
+										<h3 className="font-semibold text-sm">Informations</h3>
+										{kind ? (
+											<div className="flex items-start gap-3 rounded-lg border bg-card p-3">
+												<kind.icon className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+												<div className="min-w-0">
+													<p className="font-medium text-sm">
+														Canal {kind.title.toLowerCase()}
+													</p>
+													<p className="text-muted-foreground text-xs">
+														{kind.description}
+													</p>
+												</div>
+											</div>
+										) : null}
+										<div className="flex items-start gap-3 rounded-lg border bg-card p-3">
+											{isPrivate ? (
+												<Lock className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+											) : (
+												<Globe className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+											)}
+											<div className="min-w-0">
+												<p className="font-medium text-sm">
+													{isPrivate ? 'Canal privé' : 'Canal public'}
+												</p>
+												<p className="text-muted-foreground text-xs">
+													{isPrivate
+														? 'Seuls les rôles et membres autorisés le voient. Gère-les dans Permissions.'
+														: 'Tous les membres de l’organisation le voient.'}
+												</p>
+											</div>
+										</div>
+										{createdOn ? (
+											<p className="text-muted-foreground text-xs">
+												Créé le {createdOn}
+											</p>
+										) : null}
+									</section>
 									<RequirePermission permission="MANAGE_CHANNELS">
 										<Button
 											type="button"
