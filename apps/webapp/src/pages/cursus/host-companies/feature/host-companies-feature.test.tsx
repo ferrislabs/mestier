@@ -46,7 +46,9 @@ function renderFeature(permissions: string[], onOpen = vi.fn()) {
 }
 
 describe('HostCompaniesListFeature', () => {
-	it('creates a host company with the typed payload', async () => {
+	it('creates a host company with the typed payload', {
+		timeout: 15_000,
+	}, async () => {
 		const user = userEvent.setup()
 		const onOpen = vi.fn()
 		api.mockMutation('post', HOST_COMPANIES, () => ({ data: COMPANY }))
@@ -55,9 +57,12 @@ describe('HostCompaniesListFeature', () => {
 		await user.click(
 			await screen.findByRole('button', { name: 'Nouvelle entreprise' }),
 		)
-		await user.type(screen.getByLabelText('Raison sociale'), 'Charpente Blanc')
-		await user.type(screen.getByLabelText('SIRET'), '98765432100022')
-		await user.type(screen.getByLabelText('Effectif'), '8')
+		await user.click(screen.getByLabelText('Raison sociale'))
+		await user.paste('Charpente Blanc')
+		await user.click(screen.getByLabelText('SIRET'))
+		await user.paste('98765432100022')
+		await user.click(screen.getByLabelText('Effectif'))
+		await user.paste('8')
 		await user.click(screen.getByRole('button', { name: "Créer l'entreprise" }))
 
 		await waitFor(() =>

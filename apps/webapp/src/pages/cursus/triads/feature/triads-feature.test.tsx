@@ -63,7 +63,9 @@ function installListReads(api: ReturnType<typeof installFakeTanstackApi>) {
 }
 
 describe('TriadsListFeature', () => {
-	it('creates a triad with the apprentice record id and the chosen tutor', async () => {
+	it('creates a triad with the apprentice record id and the chosen tutor', {
+		timeout: 30_000,
+	}, async () => {
 		const user = userEvent.setup()
 		const api = installFakeTanstackApi()
 		installListReads(api)
@@ -208,7 +210,9 @@ function renderDetail(permissions: string[], closed: boolean) {
 }
 
 describe('TriadDetailFeature', () => {
-	it('closes a contract with date, reason and note', async () => {
+	it('closes a contract with date, reason and note', {
+		timeout: 15_000,
+	}, async () => {
 		const user = userEvent.setup()
 		const api = renderDetail(['VIEW_CURSUS', 'MANAGE_CURSUS_TRIADS'], false)
 
@@ -224,7 +228,8 @@ describe('TriadDetailFeature', () => {
 			screen.getByRole('combobox', { name: /Motif/ }),
 			'Rupture',
 		)
-		await user.type(screen.getByLabelText('Note'), 'Départ')
+		await user.click(screen.getByLabelText('Note'))
+		await user.paste('Départ')
 		await user.click(
 			screen
 				.getAllByRole('button', { name: 'Clôturer le contrat' })

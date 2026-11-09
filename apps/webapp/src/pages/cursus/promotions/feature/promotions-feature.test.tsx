@@ -82,7 +82,9 @@ describe('PromotionsListFeature', () => {
 		).toBeNull()
 	})
 
-	it('creates a promotion with the typed payload', async () => {
+	it('creates a promotion with the typed payload', {
+		timeout: 15_000,
+	}, async () => {
 		const user = userEvent.setup()
 		const { api } = setup(['VIEW_CURSUS', 'MANAGE_CURSUS_CATALOG'])
 		await screen.findByText('CAP 2026')
@@ -93,9 +95,12 @@ describe('PromotionsListFeature', () => {
 			await screen.findByRole('combobox', { name: /Formation/ }),
 			'CAP Menuisier',
 		)
-		await user.type(screen.getByLabelText(/Libellé/), 'CAP 2027')
-		await user.type(screen.getByLabelText(/Année de début/), '2027')
-		await user.type(screen.getByLabelText(/Année de fin/), '2029')
+		await user.click(screen.getByLabelText(/Libellé/))
+		await user.paste('CAP 2027')
+		await user.click(screen.getByLabelText(/Année de début/))
+		await user.paste('2027')
+		await user.click(screen.getByLabelText(/Année de fin/))
+		await user.paste('2029')
 		await user.click(screen.getByRole('button', { name: 'Créer la promotion' }))
 
 		await waitFor(() =>

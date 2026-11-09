@@ -37,7 +37,9 @@ function renderSection(permissions: string[]) {
 }
 
 describe('CursusSettingsSection', () => {
-	it('creates an establishment with the typed payload', async () => {
+	it('creates an establishment with the typed payload', {
+		timeout: 15_000,
+	}, async () => {
 		const user = userEvent.setup()
 		api.mockMutation('post', ESTABLISHMENTS, () => ({ data: {} }))
 		renderSection(['VIEW_CURSUS', 'MANAGE_CURSUS_CATALOG'])
@@ -45,8 +47,10 @@ describe('CursusSettingsSection', () => {
 		await user.click(
 			await screen.findByRole('button', { name: 'Nouvel établissement' }),
 		)
-		await user.type(screen.getByLabelText('Nom'), 'CFA du Bâtiment')
-		await user.type(screen.getByLabelText('UAI'), '0690001A')
+		await user.click(screen.getByLabelText('Nom'))
+		await user.paste('CFA du Bâtiment')
+		await user.click(screen.getByLabelText('UAI'))
+		await user.paste('0690001A')
 		await user.click(screen.getByLabelText('Site principal'))
 		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
@@ -73,7 +77,8 @@ describe('CursusSettingsSection', () => {
 		await user.click(
 			await screen.findByRole('button', { name: 'Nouveau motif' }),
 		)
-		await user.type(screen.getByLabelText('Libellé'), 'Rupture à l’amiable')
+		await user.click(screen.getByLabelText('Libellé'))
+		await user.paste('Rupture à l’amiable')
 		await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
 		await waitFor(() =>

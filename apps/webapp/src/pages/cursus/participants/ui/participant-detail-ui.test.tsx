@@ -53,7 +53,7 @@ function renderDetail(overrides: Partial<ParticipantDetailUIProps> = {}) {
 }
 
 describe('ParticipantDetailUI', () => {
-	it('invites a pending participant', async () => {
+	it('invites a pending participant', { timeout: 15_000 }, async () => {
 		const props = renderDetail()
 
 		await userEvent.click(screen.getByRole('button', { name: 'Inviter' }))

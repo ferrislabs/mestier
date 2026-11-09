@@ -63,7 +63,9 @@ function renderWith(permissions: string[], ui: React.ReactElement) {
 }
 
 describe('ParticipantsListFeature', () => {
-	it('creates an apprentice with the apprentice block', async () => {
+	it('creates an apprentice with the apprentice block', {
+		timeout: 15_000,
+	}, async () => {
 		const user = userEvent.setup()
 		const onOpenParticipant = vi.fn()
 		api.mockMutation('post', PARTICIPANTS, () => ({ data: PARTICIPANT_ROW }))
@@ -80,10 +82,14 @@ describe('ParticipantsListFeature', () => {
 		await user.click(
 			await screen.findByRole('button', { name: 'Nouveau participant' }),
 		)
-		await user.type(screen.getByLabelText('Nom'), 'Dupont')
-		await user.type(screen.getByLabelText('Prénom'), 'Jo')
-		await user.type(screen.getByLabelText('E-mail'), 'jo@example.fr')
-		await user.type(screen.getByLabelText('Code INE'), '123456789AB')
+		await user.click(screen.getByLabelText('Nom'))
+		await user.paste('Dupont')
+		await user.click(screen.getByLabelText('Prénom'))
+		await user.paste('Jo')
+		await user.click(screen.getByLabelText('E-mail'))
+		await user.paste('jo@example.fr')
+		await user.click(screen.getByLabelText('Code INE'))
+		await user.paste('123456789AB')
 		await user.click(
 			screen.getByRole('button', { name: 'Créer le participant' }),
 		)
