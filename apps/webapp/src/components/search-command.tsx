@@ -12,9 +12,9 @@ import {
 	CommandList,
 } from '#/components/ui/command'
 import { Kbd } from '#/components/ui/kbd'
-import { usePermissions } from '#/hooks/use-permissions'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import { useSectionVisibility } from '#/modules/use-section-visibility'
 import { useVisibleModules } from '#/modules/use-visible-modules'
 
 interface SearchCommandProps {
@@ -30,9 +30,7 @@ export function SearchCommand({
 	const [open, setOpen] = useState(false)
 	const navigate = useNavigate()
 	const modules = useVisibleModules()
-	const { data: permissionsData, isSuccess: permissionsLoaded } =
-		usePermissions()
-	const granted = permissionsData?.data.permissions ?? []
+	const isVisible = useSectionVisibility()
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
@@ -100,10 +98,7 @@ export function SearchCommand({
 								module.sections
 									.filter(
 										(section) =>
-											section.status !== 'coming-soon' &&
-											(!section.requiredPermission ||
-												(permissionsLoaded &&
-													granted.includes(section.requiredPermission))),
+											section.status !== 'coming-soon' && isVisible(section),
 									)
 									.map((section) => {
 										const Icon = section.icon ?? module.icon

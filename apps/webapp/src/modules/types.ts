@@ -43,6 +43,12 @@ export interface NavTarget {
 	 * doc comment.
 	 */
 	requiredPermission?: PermissionName
+	/**
+	 * Visible only to a person holding a participant seat in the active
+	 * organization, whatever their permission bits (ADR 0015). Takes over from
+	 * `requiredPermission` when both are set.
+	 */
+	visibleWhen?: 'cursus-participant'
 }
 
 /** Second level: horizontal tabs, under the breadcrumb. */

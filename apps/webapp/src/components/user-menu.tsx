@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { LogOut, Settings } from 'lucide-react'
+import { GraduationCap, LogOut, Settings } from 'lucide-react'
 import { useAuth } from 'react-oidc-context'
 
 import {
@@ -13,6 +13,7 @@ import {
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import { useHasPortalSpace } from '#/pages/cursus/me/feature/use-cursus-participation'
 
 interface UserMenuProps {
 	className?: string
@@ -29,6 +30,7 @@ export function UserMenu({
 }: UserMenuProps) {
 	const auth = useAuth()
 	const { activeOrganization } = useActiveOrganization()
+	const hasPortalSpace = useHasPortalSpace()
 	const profile = auth.user?.profile
 	const displayName =
 		profile?.name ||
@@ -80,6 +82,14 @@ export function UserMenu({
 						Paramètres
 					</Link>
 				</DropdownMenuItem>
+				{hasPortalSpace ? (
+					<DropdownMenuItem asChild>
+						<Link to="/portail">
+							<GraduationCap />
+							Mon portail Cursus
+						</Link>
+					</DropdownMenuItem>
+				) : null}
 				<DropdownMenuItem
 					onClick={() => {
 						void auth.signoutRedirect()

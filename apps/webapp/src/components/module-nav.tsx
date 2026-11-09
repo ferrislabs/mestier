@@ -14,11 +14,11 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from '#/components/ui/sidebar'
-import { usePermissions } from '#/hooks/use-permissions'
 import { cn } from '#/lib/utils'
 import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 import { resolveModule } from '#/modules/resolve-module'
 import type { AppModule, NavTarget } from '#/modules/types'
+import { useSectionVisibility } from '#/modules/use-section-visibility'
 
 interface ModuleNavProps extends React.ComponentProps<typeof Sidebar> {
 	organizationSlug: string
@@ -48,20 +48,12 @@ export function ModuleNav({
 	const location = useLocation()
 	const activeModule = resolveModule(splitOrgPath(location.pathname).path)
 
-	// One read for every section's `requiredPermission` at once, rather than
-	// a `useHasPermission` call per section: that would call a hook a
-	// varying number of times across renders, which React disallows.
-	// Absent while the read is still loading — a section gated by a bit is
-	// hidden by default, the same call `usePermissions` itself makes.
-	const { data: permissionsData, isSuccess: permissionsLoaded } =
-		usePermissions()
-	const grantedPermissions = permissionsData?.data.permissions ?? []
-	const visibleSections = activeModule.sections.filter(
-		(section) =>
-			!section.requiredPermission ||
-			(permissionsLoaded &&
-				grantedPermissions.includes(section.requiredPermission)),
-	)
+	// One hook for every section's gate at once, rather than a call per
+	// section: that would call a hook a varying number of times across
+	// renders, which React disallows. A gated section is hidden until its
+	// gate is confirmed.
+	const isVisible = useSectionVisibility()
+	const visibleSections = activeModule.sections.filter(isVisible)
 
 	const sections = (
 		<SidebarGroup className="p-0">
