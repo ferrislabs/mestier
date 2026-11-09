@@ -72,6 +72,14 @@ pub enum InsertOutcome {
     Existing(LibraryPhoto),
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BackfillReport {
+    pub imported: u32,
+    pub already_present: u32,
+    pub skipped: u32,
+    pub failed: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UploadedPhoto {
     pub photo: LibraryPhoto,

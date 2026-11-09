@@ -2,7 +2,8 @@ use chrono::Utc;
 use common::{CoreError, generate_uuid_v7};
 
 use crate::{
-    Doe, LibraryPhoto, LibraryPhotoId, OrganizationId, PhotoFilter, Project, ProjectId,
+    Doe, DoeFile, DoeSectionContent, LibraryPhoto, LibraryPhotoId, OrganizationId, PhotoFilter,
+    Project, ProjectId,
     domain::{
         doe::{
             ports::DoeRepository,
@@ -12,20 +13,49 @@ use crate::{
             commands::UploadFileCommand, ports::FileStorage, service::FileStorageService,
         },
         photo_library::{
-            InsertOutcome, PhotoLibraryError, PhotoLibraryOutcome, PlacementReport,
+            BackfillReport, InsertOutcome, PhotoLibraryError, PhotoLibraryOutcome, PlacementReport,
             PlacementResult, PlacementStatus, UploadedPhoto,
             commands::{
                 ListLibraryPhotosCommand, MAX_PLACEMENTS, PlaceLibraryPhotosCommand,
                 PlacementRequest, PlacementTargetKind, UpdateLibraryPhotoCommand,
                 UploadLibraryPhotoCommand,
             },
-            normalize::STORED_MIME_TYPE,
+            normalize::{NormalizedImage, STORED_MIME_TYPE, hex_digest, normalize_image},
             ports::LibraryPhotoRepository,
             tags::{normalize_caption, normalize_tag, normalize_tags},
         },
         project::ports::ProjectRepository,
     },
 };
+
+/// Every photo a DOE prints: the cover, the photo sections, the supply sheets.
+/// Plans and datasheets are documents, not photos. A key listed twice is read
+/// once, with the first legend.
+fn doe_photos(doe: &Doe) -> Vec<DoeFile> {
+    let mut files: Vec<DoeFile> = Vec::new();
+    let mut push = |file: DoeFile| {
+        if !files.iter().any(|known| known.key == file.key) {
+            files.push(file);
+        }
+    };
+    if let Some(key) = &doe.cover_photo_key {
+        push(DoeFile {
+            key: key.clone(),
+            caption: None,
+        });
+    }
+    for section in &doe.sections {
+        match &section.content {
+            DoeSectionContent::Photos { photos, .. } => photos.iter().cloned().for_each(&mut push),
+            DoeSectionContent::Supplies { supplies, .. } => supplies
+                .iter()
+                .flat_map(|supply| supply.photos.iter().cloned())
+                .for_each(&mut push),
+            DoeSectionContent::Plans { .. } | DoeSectionContent::BlankPages { .. } => {}
+        }
+    }
+    files
+}
 
 const DOE_FILE_FOLDER: &str = "doe";
 
@@ -135,6 +165,21 @@ where
             require_project(projects, organization_id, project_id).await?;
         }
 
+        self.store_image(organization_id, project_id, None, image, storage)
+            .await
+    }
+
+    async fn store_image<S>(
+        &mut self,
+        organization_id: OrganizationId,
+        project_id: Option<ProjectId>,
+        caption: Option<String>,
+        image: NormalizedImage,
+        storage: &FileStorageService<S>,
+    ) -> Result<UploadedPhoto, CoreError>
+    where
+        S: FileStorage,
+    {
         if let Some(photo) = self
             .photos
             .find_by_hash(organization_id, &image.content_hash)
@@ -183,7 +228,7 @@ where
             height: image.height,
             size_bytes,
             content_hash: image.content_hash,
-            caption: None,
+            caption,
             tags: Vec::new(),
             project_id,
             taken_at: image.taken_at,
@@ -208,6 +253,75 @@ where
                 Err(error)
             }
         }
+    }
+
+    /// Copies every photo of an existing DOE into the library, keeping its
+    /// legend and the project it came from. A photo already in the library
+    /// (same normalized content) is left as it is.
+    pub async fn backfill_doe<S>(
+        &mut self,
+        doe: &Doe,
+        storage: &FileStorageService<S>,
+    ) -> BackfillReport
+    where
+        S: FileStorage,
+    {
+        let mut report = BackfillReport::default();
+        for file in doe_photos(doe) {
+            let object = match storage.get(&file.key).await {
+                Ok(object) => object,
+                Err(error) => {
+                    tracing::warn!(key = %file.key, error = %error, "backfill: cannot read the DOE photo");
+                    report.failed += 1;
+                    continue;
+                }
+            };
+            // A copy placed from the library is already normalized: re-encoding
+            // it would change its hash and import it a second time.
+            match self
+                .photos
+                .find_by_hash(doe.organization_id, &hex_digest(&object.bytes))
+                .await
+            {
+                Ok(Some(_)) => {
+                    report.already_present += 1;
+                    continue;
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    tracing::warn!(key = %file.key, error = %error, "backfill: cannot look the photo up");
+                    report.failed += 1;
+                    continue;
+                }
+            }
+            let image = match normalize_image(&object.bytes) {
+                Ok(image) => image,
+                Err(error) => {
+                    tracing::warn!(key = %file.key, error = %error, "backfill: not an importable image");
+                    report.skipped += 1;
+                    continue;
+                }
+            };
+            let caption = normalize_caption(file.caption.as_deref());
+            match self
+                .store_image(
+                    doe.organization_id,
+                    Some(doe.project_id),
+                    caption,
+                    image,
+                    storage,
+                )
+                .await
+            {
+                Ok(uploaded) if uploaded.created => report.imported += 1,
+                Ok(_) => report.already_present += 1,
+                Err(error) => {
+                    tracing::warn!(key = %file.key, error = %error, "backfill: cannot store the photo");
+                    report.failed += 1;
+                }
+            }
+        }
+        report
     }
 
     pub async fn update<PR>(
@@ -1183,5 +1297,145 @@ mod tests {
             .unwrap();
 
         assert_eq!(removed, photo);
+    }
+
+    fn real_jpeg(seed: u8) -> Vec<u8> {
+        let image = image::RgbImage::from_fn(40, 30, |x, y| {
+            image::Rgb([seed, (x * 6) as u8, (y * 8) as u8])
+        });
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(image)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Jpeg,
+            )
+            .unwrap();
+        bytes
+    }
+
+    fn stored(storage: &FakeStorage, key: &str, bytes: Vec<u8>) {
+        storage
+            .objects
+            .lock()
+            .unwrap()
+            .insert(key.to_owned(), bytes);
+    }
+
+    fn photo_file(key: &str, caption: Option<&str>) -> DoeFile {
+        DoeFile {
+            key: key.to_owned(),
+            caption: caption.map(str::to_owned),
+        }
+    }
+
+    fn doe_with_every_kind_of_photo(organization_id: OrganizationId) -> Doe {
+        let mut doe = doe_in(
+            organization_id,
+            vec![
+                DoeSection {
+                    id: Uuid::new_v4(),
+                    title: "Photos".to_owned(),
+                    enabled: true,
+                    content: DoeSectionContent::Photos {
+                        per_page: PhotosPerPage::Two,
+                        photos: vec![
+                            photo_file("doe/a.jpg", Some("Massif")),
+                            photo_file("doe/cover.jpg", Some("Doublon de la couverture")),
+                        ],
+                    },
+                },
+                DoeSection {
+                    id: Uuid::new_v4(),
+                    title: "Plans".to_owned(),
+                    enabled: true,
+                    content: DoeSectionContent::Plans {
+                        plans: vec![photo_file("doe/plan.pdf", None)],
+                    },
+                },
+            ],
+        );
+        doe.cover_photo_key = Some("doe/cover.jpg".to_owned());
+        doe
+    }
+
+    #[test]
+    fn the_photos_of_a_doe_are_the_cover_and_the_photo_sections_without_duplicates() {
+        let doe = doe_with_every_kind_of_photo(organization());
+
+        let keys: Vec<String> = doe_photos(&doe).into_iter().map(|file| file.key).collect();
+
+        assert_eq!(keys, vec!["doe/cover.jpg", "doe/a.jpg"]);
+    }
+
+    #[tokio::test]
+    async fn the_backfill_imports_each_photo_with_its_legend_and_its_project() {
+        let organization_id = organization();
+        let doe = doe_with_every_kind_of_photo(organization_id);
+        let storage = FakeStorage::default();
+        stored(&storage, "doe/cover.jpg", real_jpeg(10));
+        stored(&storage, "doe/a.jpg", real_jpeg(200));
+        let project_id = doe.project_id;
+        let mut repository = MockLibraryPhotoRepository::new();
+        repository
+            .expect_find_by_hash()
+            .returning(|_, _| Box::pin(async { Ok(None) }));
+        repository
+            .expect_insert_if_absent()
+            .returning(move |photo| {
+                assert_eq!(photo.project_id, Some(project_id));
+                let photo = photo.clone();
+                Box::pin(async move { Ok(InsertOutcome::Inserted(photo)) })
+            });
+
+        let report = PhotoLibraryService::new(repository)
+            .backfill_doe(&doe, &storage_service(storage.clone()))
+            .await;
+
+        assert_eq!(
+            report,
+            BackfillReport {
+                imported: 2,
+                ..BackfillReport::default()
+            }
+        );
+        assert_eq!(storage.keys().len(), 2 + 4);
+    }
+
+    #[tokio::test]
+    async fn a_photo_already_in_the_library_is_counted_and_not_stored_again() {
+        let organization_id = organization();
+        let doe = doe_with_every_kind_of_photo(organization_id);
+        let storage = FakeStorage::default();
+        stored(&storage, "doe/cover.jpg", real_jpeg(10));
+        stored(&storage, "doe/a.jpg", real_jpeg(200));
+        let existing = photo(organization_id, "library/x.jpg");
+        let mut repository = MockLibraryPhotoRepository::new();
+        repository.expect_find_by_hash().returning(move |_, _| {
+            let existing = existing.clone();
+            Box::pin(async move { Ok(Some(existing)) })
+        });
+
+        let report = PhotoLibraryService::new(repository)
+            .backfill_doe(&doe, &storage_service(storage.clone()))
+            .await;
+
+        assert_eq!(report.already_present, 2);
+        assert_eq!(report.imported, 0);
+        assert_eq!(storage.keys().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_missing_object_or_a_non_image_does_not_stop_the_others() {
+        let organization_id = organization();
+        let doe = doe_with_every_kind_of_photo(organization_id);
+        let storage = FakeStorage::default();
+        stored(&storage, "doe/cover.jpg", b"%PDF-1.4".to_vec());
+        let report = PhotoLibraryService::new(inserting())
+            .backfill_doe(&doe, &storage_service(storage.clone()))
+            .await;
+
+        assert_eq!(report.skipped, 1);
+        assert_eq!(report.failed, 1);
+        assert_eq!(report.imported, 0);
     }
 }

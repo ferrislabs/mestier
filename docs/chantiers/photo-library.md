@@ -117,7 +117,7 @@ Un fichier n'a qu'un seul propriétaire. Aucun lot ne commit : l'orchestrateur c
 | W1 backend | `libs/core/src/{domain,application,infrastructure}/photo_library/**` (+ une méthode de placement dans le contexte `doe`), `libs/core/src/infrastructure/registry.rs`, `libs/core/src/lib.rs`, `libs/handlers-planning/src/photo_library/**` et les 2 lignes de son `lib.rs`, `apps/api/src/{router,openapi}.rs`, `.sqlx/`, `Cargo.toml` (workspace et crates), tests | W0 |
 | W2 webapp | `apps/webapp/src/pages/photo-library/**`, `apps/webapp/src/hooks/use-photo-library.ts`, `apps/webapp/src/routes/**` (routes photothèque), `apps/webapp/src/modules/registry.ts`, sélecteurs dans `apps/webapp/src/pages/doe/**` | contrat HTTP (types écrits à la main depuis cette spec) |
 | W3 MCP | `apps/mcp-server/**`, `libs/mcp-tools/**`, `libs/handlers/src/delegated.rs`, `docs/chantiers/mcp.md` | contrat HTTP (le faux serveur des tests suit cette spec) |
-| W4 données | Sous-commande ou tâche de reprise dans `apps/api` (idempotente via `content_hash`), ses tests | W1 mergé |
+| W4 données | Binaire `apps/api/src/bin/backfill_photo_library.rs` (idempotent via `content_hash`), cas d'usage `backfill_organization_photos`, ses tests | W1 mergé |
 
 W2 et W3 démarrent en parallèle de W1. Un écart entre un lot et le contrat se règle en amendant cette spec, pas en divergeant.
 
@@ -141,6 +141,16 @@ W2 et W3 démarrent en parallèle de W1. Un écart entre un lot et le contrat se
 16. Webapp : déposer 5 fichiers dont 1 HEIC et 1 PDF : 4 envoyés (le HEIC converti), le PDF refusé avec son message, états visibles par fichier.
 17. Webapp : « Choisir dans la photothèque » dans l'onglet photos place la sélection et rafraîchit l'éditeur.
 18. Reprise (W4) : relancée deux fois, elle ne crée aucun doublon ; chaque photo des DOE existants (sections, fournitures, couverture) a son entrée avec le projet d'origine.
+
+## Lancer la reprise (W4)
+
+Une organisation à la fois, avec la même configuration que l'API (base, stockage) :
+
+```bash
+PHOTO_BACKFILL_ORGANIZATION=<uuid> cargo run -p api --bin backfill_photo_library
+```
+
+Elle lit chaque DOE de l'organisation, une transaction par DOE. Reprend la couverture, les sections photos et les photos des fournitures, avec la légende et le projet d'origine. Les plans et fiches techniques ne sont pas des photos et restent en place. Une copie placée depuis la photothèque est reconnue par son hash et n'est pas dupliquée. Le binaire sort en erreur si une photo n'a pas pu être copiée ; le relancer reprend les manquantes.
 
 ## Vérification (sortie)
 

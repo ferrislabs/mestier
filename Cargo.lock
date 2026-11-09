@@ -134,6 +134,7 @@ dependencies = [
  "handlers-reporting",
  "handlers-support",
  "http 1.4.0",
+ "mestier-core",
  "serde_json",
  "server",
  "telemetry",
@@ -145,6 +146,7 @@ dependencies = [
  "utoipa",
  "utoipa-scalar",
  "utoipa-swagger-ui",
+ "uuid",
 ]
 
 [[package]]

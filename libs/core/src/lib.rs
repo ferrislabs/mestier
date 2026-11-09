@@ -217,7 +217,7 @@ pub use domain::maintenance::overview::{
 };
 
 pub use domain::{
-    InsertOutcome, LibraryPhoto, LibraryPhotoId, PhotoFilter, PhotoLibraryError,
+    BackfillReport, InsertOutcome, LibraryPhoto, LibraryPhotoId, PhotoFilter, PhotoLibraryError,
     PhotoLibraryOutcome, PlacementReport, PlacementResult, PlacementStatus, UploadedPhoto,
     doe::service::PHOTOS_SECTION_TITLE,
     photo_library::commands::{

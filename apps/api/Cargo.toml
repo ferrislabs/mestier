@@ -22,6 +22,7 @@ handlers-support = { workspace = true }
 handlers-reference = { workspace = true }
 server = { workspace = true }
 args = { workspace = true }
+mestier-core = { workspace = true }
 telemetry = { workspace = true }
 
 axum = { workspace = true }
@@ -36,6 +37,7 @@ utoipa = { workspace = true }
 utoipa-scalar = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 thiserror = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
