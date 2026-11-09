@@ -119,7 +119,7 @@ export function ChannelAdminDialogUI({
 			})
 		: null
 	const TRIGGER =
-		'h-auto flex-none justify-start rounded-md px-2.5 py-1.5 text-left data-[state=active]:bg-accent data-[state=active]:shadow-none dark:data-[state=active]:bg-accent dark:data-[state=active]:border-transparent after:hidden'
+		'h-auto flex-none justify-start rounded-md px-2.5 py-1.5 text-left text-nav-foreground/80 hover:bg-nav-active/60 hover:text-nav-foreground data-[state=active]:bg-nav-active data-[state=active]:text-nav-active-foreground data-[state=active]:shadow-none dark:text-nav-foreground/80 dark:hover:text-nav-foreground dark:data-[state=active]:bg-nav-active dark:data-[state=active]:text-nav-active-foreground dark:data-[state=active]:border-transparent after:hidden'
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
@@ -131,13 +131,13 @@ export function ChannelAdminDialogUI({
 					orientation="vertical"
 					className="h-full min-h-0 gap-0 overflow-hidden rounded-[inherit]"
 				>
-					<aside className="flex w-[37%] shrink-0 justify-end bg-muted/40 pt-[3.25rem]">
+					<aside className="flex w-[37%] shrink-0 justify-end bg-nav pt-[3.25rem] text-nav-foreground">
 						<div className="flex w-[13.5rem] flex-col gap-3 pr-3">
 							<DialogHeader className="flex-row items-baseline gap-2 px-2.5 text-left">
-								<DialogTitle className="truncate font-normal text-muted-foreground text-xs">
+								<DialogTitle className="truncate font-normal text-nav-muted text-xs">
 									{channel ? `# ${channel.name}` : 'Canal'}
 								</DialogTitle>
-								<DialogDescription className="whitespace-nowrap font-semibold text-foreground text-xs">
+								<DialogDescription className="whitespace-nowrap font-semibold text-nav-foreground text-xs">
 									Paramètres du canal
 								</DialogDescription>
 							</DialogHeader>
@@ -160,11 +160,11 @@ export function ChannelAdminDialogUI({
 								</RequirePermission>
 							</TabsList>
 							<RequirePermission permission="MANAGE_CHANNELS">
-								<div className="mt-1 border-t pt-3">
+								<div className="mt-1 border-nav-border border-t pt-3">
 									<button
 										type="button"
 										onClick={onRequestDelete}
-										className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left font-medium text-destructive text-sm hover:bg-destructive/10"
+										className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left font-medium text-red-300 text-sm hover:bg-red-500/15"
 									>
 										Supprimer le canal
 										<Trash2 className="size-4" />
