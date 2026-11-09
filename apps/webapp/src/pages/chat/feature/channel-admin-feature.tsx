@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-	useCategories,
 	useChannel,
 	useChannelPermissions,
 	useChannelWebhooks,
@@ -43,7 +42,6 @@ export function ChannelAdminFeature({
 	onOpenChange,
 }: ChannelAdminFeatureProps) {
 	const channel = useChannel(channelId)
-	const categories = useCategories(organizationId)
 	const updateChannel = useUpdateChannel(organizationId)
 	const deleteChannel = useDeleteChannel(organizationId)
 	const overwrites = useChannelPermissions(channelId)
@@ -61,7 +59,6 @@ export function ChannelAdminFeature({
 
 	const [nameDraft, setNameDraft] = useState('')
 	const [topicDraft, setTopicDraft] = useState('')
-	const [categoryIdDraft, setCategoryIdDraft] = useState<string | null>(null)
 	const [newWebhookName, setNewWebhookName] = useState('')
 	const [createdWebhookToken, setCreatedWebhookToken] = useState<string | null>(
 		null,
@@ -76,7 +73,6 @@ export function ChannelAdminFeature({
 		if (open && channel.data) {
 			setNameDraft(channel.data.name)
 			setTopicDraft(channel.data.topic ?? '')
-			setCategoryIdDraft(channel.data.category_id ?? null)
 		}
 	}, [open, channel.data])
 
@@ -86,7 +82,7 @@ export function ChannelAdminFeature({
 			body: {
 				name: nameDraft,
 				topic: topicDraft.length > 0 ? topicDraft : null,
-				category_id: categoryIdDraft,
+				category_id: channel.data?.category_id ?? null,
 				position: channel.data?.position ?? 0,
 			},
 		} as never)
@@ -208,13 +204,10 @@ export function ChannelAdminFeature({
 			open={open}
 			onOpenChange={onOpenChange}
 			channel={channel.data}
-			categories={categories.data ?? []}
 			nameDraft={nameDraft}
 			topicDraft={topicDraft}
-			categoryIdDraft={categoryIdDraft}
 			onChangeName={setNameDraft}
 			onChangeTopic={setTopicDraft}
-			onChangeCategory={setCategoryIdDraft}
 			onSaveGeneral={handleSaveGeneral}
 			isSavingGeneral={updateChannel.isPending}
 			onConfirmDelete={handleConfirmDelete}

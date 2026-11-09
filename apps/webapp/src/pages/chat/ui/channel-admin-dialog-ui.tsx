@@ -12,16 +12,9 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
 import { Textarea } from '#/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
-import type { Category, Channel, Webhook } from '#/hooks/use-chat'
+import type { Channel, Webhook } from '#/hooks/use-chat'
 import { ChannelPermissionsSectionUI } from '#/pages/chat/ui/channel-permissions-section-ui'
 import { ChannelWebhooksSectionUI } from '#/pages/chat/ui/channel-webhooks-section-ui'
 import { NEW_ITEM_KINDS } from '#/pages/chat/lib/channel-kinds'
@@ -31,20 +24,15 @@ import type {
 } from '#/pages/chat/lib/permission-bits'
 import type { PermissionTarget } from '#/pages/chat/lib/permission-targets'
 
-const NO_CATEGORY_VALUE = '__none__'
-
 export interface ChannelAdminDialogUIProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
 
 	channel: Channel | undefined
-	categories: Category[]
 	nameDraft: string
 	topicDraft: string
-	categoryIdDraft: string | null
 	onChangeName: (value: string) => void
 	onChangeTopic: (value: string) => void
-	onChangeCategory: (value: string | null) => void
 	onSaveGeneral: () => void
 	isSavingGeneral: boolean
 
@@ -86,13 +74,10 @@ export function ChannelAdminDialogUI({
 	open,
 	onOpenChange,
 	channel,
-	categories,
 	nameDraft,
 	topicDraft,
-	categoryIdDraft,
 	onChangeName,
 	onChangeTopic,
-	onChangeCategory,
 	onSaveGeneral,
 	isSavingGeneral,
 	onConfirmDelete,
@@ -206,31 +191,6 @@ export function ChannelAdminDialogUI({
 											value={topicDraft}
 											onChange={(event) => onChangeTopic(event.target.value)}
 										/>
-									</div>
-									<div className="flex flex-col gap-1.5">
-										<Label htmlFor="channel-category">Catégorie</Label>
-										<Select
-											value={categoryIdDraft ?? NO_CATEGORY_VALUE}
-											onValueChange={(value) =>
-												onChangeCategory(
-													value === NO_CATEGORY_VALUE ? null : value,
-												)
-											}
-										>
-											<SelectTrigger id="channel-category" className="w-full">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value={NO_CATEGORY_VALUE}>
-													Sans catégorie
-												</SelectItem>
-												{categories.map((category) => (
-													<SelectItem key={category.id} value={category.id}>
-														{category.name}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
 									</div>
 									<section className="flex flex-col gap-3 border-t pt-6">
 										<h3 className="font-semibold text-sm">Informations</h3>
