@@ -171,7 +171,7 @@ function triadDetail(closed: boolean) {
 					kind: 'PROFESSIONALIZATION',
 					start_date: '2026-09-01',
 					end_date: '2028-08-31',
-					has_cerfa_file: false,
+					duration_months: 24,
 					has_mission_sheet_file: false,
 					tutors: [],
 					...STAMPS,

@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import { FormField } from '#/components/form-field'
+import { RichTextEditor } from '#/components/rich-text'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -45,7 +46,7 @@ export function ContractFormDialog({
 }: ContractFormDialogProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-md">
+			<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
 				<ContractFormBody {...body} onCancel={() => onOpenChange(false)} />
 			</DialogContent>
 		</Dialog>
@@ -117,7 +118,7 @@ function ContractFormBody({
 					}}
 				/>
 			</FormField>
-			<FormField id="contract-number" label="Numéro">
+			<FormField id="contract-number" label="Numéro de contrat">
 				<Input
 					id="contract-number"
 					value={values.number}
@@ -127,7 +128,7 @@ function ContractFormBody({
 			<div className="grid grid-cols-2 gap-3">
 				<FormField
 					id="contract-start"
-					label="Début"
+					label="Date de début"
 					required
 					error={shown.startDate}
 				>
@@ -138,7 +139,12 @@ function ContractFormBody({
 						onChange={(event) => patch({ startDate: event.target.value })}
 					/>
 				</FormField>
-				<FormField id="contract-end" label="Fin" required error={shown.endDate}>
+				<FormField
+					id="contract-end"
+					label="Date de fin"
+					required
+					error={shown.endDate}
+				>
 					<Input
 						id="contract-end"
 						type="date"
@@ -147,6 +153,19 @@ function ContractFormBody({
 					/>
 				</FormField>
 			</div>
+			<FormField id="contract-duration" label="Durée (en mois)">
+				<p id="contract-duration" className="text-[13px] text-muted-foreground">
+					Calculée à partir des dates
+				</p>
+			</FormField>
+			<FormField id="contract-comment" label="Commentaire">
+				<RichTextEditor
+					id="contract-comment"
+					aria-label="Commentaire"
+					value={values.comment}
+					onChange={(comment) => patch({ comment })}
+				/>
+			</FormField>
 			{error ? (
 				<p role="alert" className="text-[13px] text-state-alert">
 					{error}

@@ -1,4 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
+import { RichTextView } from '#/components/rich-text'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
@@ -111,17 +112,37 @@ export function MyTriadView({ triad, onBack }: MyTriadViewProps) {
 								</Badge>
 							</div>
 							<dl className="grid gap-1 text-[13px] sm:grid-cols-2">
-								{contract.tutors.map((tutor) => (
-									<div key={`${tutor.rank}-${tutor.name}`}>
-										<dt className="text-muted-foreground">
-											{tutor.rank === 'main'
-												? 'Tuteur principal'
-												: 'Tuteur secondaire'}
-										</dt>
-										<dd>{tutor.name}</dd>
-									</div>
-								))}
+								<div>
+									<dt className="text-muted-foreground">Durée</dt>
+									<dd>{contract.duration_months} mois</dd>
+								</div>
+								<div>
+									<dt className="text-muted-foreground">Tuteurs entreprise</dt>
+									<dd>
+										{contract.tutors.length === 0 ? (
+											'—'
+										) : (
+											<ul className="grid gap-1">
+												{contract.tutors.map((tutor) => (
+													<li
+														key={tutor.name}
+														className="flex items-center gap-2"
+													>
+														{tutor.name}
+														{tutor.is_main ? <Badge>Principal</Badge> : null}
+													</li>
+												))}
+											</ul>
+										)}
+									</dd>
+								</div>
 							</dl>
+							{contract.comment ? (
+								<div className="grid gap-1 text-[13px]">
+									<p className="text-muted-foreground">Commentaire</p>
+									<RichTextView markdown={contract.comment} />
+								</div>
+							) : null}
 							{contract.closed_at ? (
 								<div className="rounded-md bg-muted px-3 py-2 text-[13px]">
 									<p>

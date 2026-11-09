@@ -28,6 +28,7 @@ describe('contract form', () => {
 				hostCompanyId: 'h-1',
 				kind: 'PROFESSIONALIZATION',
 				number: ' ',
+				comment: '  ',
 				startDate: '2026-09-01',
 				endDate: '2027-08-31',
 			}),
@@ -35,8 +36,21 @@ describe('contract form', () => {
 			host_company_id: 'h-1',
 			kind: 'PROFESSIONALIZATION',
 			number: null,
+			comment: null,
 			start_date: '2026-09-01',
 			end_date: '2027-08-31',
 		})
+	})
+
+	it('keeps the markdown comment as typed', () => {
+		expect(
+			toContractRequest({
+				...EMPTY_CONTRACT_FORM,
+				hostCompanyId: 'h-1',
+				comment: '**Important**',
+				startDate: '2026-09-01',
+				endDate: '2027-08-31',
+			}).comment,
+		).toBe('**Important**')
 	})
 })

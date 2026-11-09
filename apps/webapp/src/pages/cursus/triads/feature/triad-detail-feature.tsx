@@ -32,6 +32,10 @@ import {
 	EMPTY_CONTRACT_FORM,
 	toContractRequest,
 } from '#/pages/cursus/triads/lib/contract-form'
+import {
+	toTutorsRequest,
+	tutorsToEntries,
+} from '#/pages/cursus/triads/lib/contract-tutors'
 import { isClosed } from '#/pages/cursus/triads/lib/triad-form'
 import { ContractFormDialog } from '#/pages/cursus/triads/ui/contract-form-dialog'
 import { ContractTutorsDialog } from '#/pages/cursus/triads/ui/contract-tutors-dialog'
@@ -137,13 +141,6 @@ export function TriadDetailFeature({
 	const closeDialog = () => setDialog({ kind: 'none' })
 	const org = activeOrganizationId
 	const triadClosed = isClosed(triad)
-	const contractMain = (contract: Contract) =>
-		contract.tutors.find((tutor) => tutor.rank === 'main' && !tutor.archived_at)
-			?.company_tutor_id ?? null
-	const contractSecondary = (contract: Contract) =>
-		contract.tutors.find(
-			(tutor) => tutor.rank === 'secondary' && !tutor.archived_at,
-		)?.company_tutor_id ?? null
 
 	return (
 		<PageShell>
@@ -234,10 +231,7 @@ export function TriadDetailFeature({
 				<ContractTutorsDialog
 					open
 					hostCompanyName={dialog.contract.host_company_name}
-					initial={{
-						main: contractMain(dialog.contract),
-						secondary: contractSecondary(dialog.contract),
-					}}
+					initial={tutorsToEntries(dialog.contract.tutors)}
 					tutors={companyTutorOptions(
 						tutorParticipants.items,
 						dialog.contract.host_company_id,
@@ -255,7 +249,7 @@ export function TriadDetailFeature({
 						setTutors.mutate(
 							{
 								path: { organization_id: org, contract_id: dialog.contract.id },
-								body: { main: values.main, secondary: values.secondary },
+								body: toTutorsRequest(values),
 							},
 							{ onSuccess: closeDialog },
 						)

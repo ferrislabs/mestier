@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { FormField } from '#/components/form-field'
+import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -11,22 +12,23 @@ import {
 } from '#/components/ui/dialog'
 import type { SelectOption } from '#/pages/cursus/shared/lib/options'
 import { OptionSelect } from '#/pages/cursus/shared/ui/option-select'
-
-export interface ContractTutorsValues {
-	main: string | null
-	secondary: string | null
-}
+import {
+	addTutor,
+	removeTutor,
+	setMainTutor,
+	type TutorEntry,
+} from '#/pages/cursus/triads/lib/contract-tutors'
 
 interface ContractTutorsDialogProps {
 	open: boolean
 	hostCompanyName: string
-	initial: ContractTutorsValues
+	initial: TutorEntry[]
 	tutors: SelectOption[]
 	isLoadingOptions: boolean
 	isPending: boolean
 	error: string | null
 	onOpenChange: (open: boolean) => void
-	onSubmit: (values: ContractTutorsValues) => void
+	onSubmit: (tutors: TutorEntry[]) => void
 }
 
 export function ContractTutorsDialog({
@@ -58,8 +60,12 @@ function ContractTutorsBody({
 	onCancel,
 	onSubmit,
 }: ContractTutorsBodyProps) {
-	const [values, setValues] = useState(initial)
-	const sameTutor = values.main !== null && values.main === values.secondary
+	const [entries, setEntries] = useState(initial)
+	const labelOf = (id: string) =>
+		tutors.find((tutor) => tutor.value === id)?.label ?? id
+	const available = tutors.filter(
+		(tutor) => !entries.some((entry) => entry.companyTutorId === tutor.value),
+	)
 
 	return (
 		<form
@@ -67,8 +73,8 @@ function ContractTutorsBody({
 			className="grid gap-4"
 			onSubmit={(event) => {
 				event.preventDefault()
-				if (sameTutor || isPending) return
-				onSubmit(values)
+				if (isPending) return
+				onSubmit(entries)
 			}}
 		>
 			<DialogHeader>
@@ -78,8 +84,8 @@ function ContractTutorsBody({
 				</DialogDescription>
 			</DialogHeader>
 			<FormField
-				id="tutor-main"
-				label="Tuteur principal"
+				id="tutor-add"
+				label="Tuteurs entreprise"
 				hint={
 					isLoadingOptions
 						? 'Chargement des tuteurs…'
@@ -89,32 +95,62 @@ function ContractTutorsBody({
 				}
 			>
 				<OptionSelect
-					id="tutor-main"
-					value={values.main}
-					options={tutors}
-					placeholder="Aucun"
-					noneLabel="Aucun"
-					onChange={(next) =>
-						setValues((previous) => ({ ...previous, main: next }))
-					}
+					id="tutor-add"
+					value={null}
+					options={available}
+					placeholder="Ajouter un tuteur"
+					onChange={(next) => {
+						if (next) setEntries((previous) => addTutor(previous, next))
+					}}
 				/>
 			</FormField>
-			<FormField
-				id="tutor-secondary"
-				label="Tuteur secondaire"
-				error={sameTutor ? 'Choisissez deux tuteurs différents.' : undefined}
-			>
-				<OptionSelect
-					id="tutor-secondary"
-					value={values.secondary}
-					options={tutors}
-					placeholder="Aucun"
-					noneLabel="Aucun"
-					onChange={(next) =>
-						setValues((previous) => ({ ...previous, secondary: next }))
-					}
-				/>
-			</FormField>
+			{entries.length === 0 ? (
+				<p className="text-[13px] text-muted-foreground">Aucun tuteur.</p>
+			) : (
+				<ul className="grid gap-2">
+					{entries.map((entry) => (
+						<li
+							key={entry.companyTutorId}
+							className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-[13px]"
+						>
+							<span className="flex items-center gap-2">
+								{labelOf(entry.companyTutorId)}
+								{entry.isMain ? <Badge>Principal</Badge> : null}
+							</span>
+							<span className="flex gap-2">
+								{entry.isMain ? null : (
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										aria-label={`Rendre ${labelOf(entry.companyTutorId)} principal`}
+										onClick={() =>
+											setEntries((previous) =>
+												setMainTutor(previous, entry.companyTutorId),
+											)
+										}
+									>
+										Principal
+									</Button>
+								)}
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									aria-label={`Retirer ${labelOf(entry.companyTutorId)}`}
+									onClick={() =>
+										setEntries((previous) =>
+											removeTutor(previous, entry.companyTutorId),
+										)
+									}
+								>
+									Retirer
+								</Button>
+							</span>
+						</li>
+					))}
+				</ul>
+			)}
 			{error ? (
 				<p role="alert" className="text-[13px] text-state-alert">
 					{error}
@@ -124,7 +160,7 @@ function ContractTutorsBody({
 				<Button type="button" variant="outline" onClick={onCancel}>
 					Annuler
 				</Button>
-				<Button type="submit" disabled={isPending || sameTutor}>
+				<Button type="submit" disabled={isPending}>
 					Enregistrer
 				</Button>
 			</DialogFooter>

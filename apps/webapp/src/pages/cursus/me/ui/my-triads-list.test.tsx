@@ -17,7 +17,7 @@ const ARCHIVED: MyTriad = {
 	...ACTIVE,
 	triad_id: 'triad-2',
 	apprentice_name: 'Noe Petit',
-	role: 'secondary_tutor',
+	role: 'tutor',
 	closed_at: '2026-06-30',
 	access: { kind: 'read_only', since: '2026-07-01T00:00:00Z' },
 }
@@ -51,7 +51,7 @@ describe('MyTriadsList', () => {
 
 		expect(screen.getByText('Historique, lecture seule')).toBeDefined()
 		expect(screen.getByText('depuis le 01/07/2026')).toBeDefined()
-		expect(screen.getByText('Tuteur secondaire')).toBeDefined()
+		expect(screen.getByText('Tuteur')).toBeDefined()
 	})
 
 	it('opens a triad on row click', async () => {
