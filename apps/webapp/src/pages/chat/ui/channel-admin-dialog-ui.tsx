@@ -124,7 +124,7 @@ export function ChannelAdminDialogUI({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
 				showCloseButton={false}
-				className="h-[calc(100dvh-2.5rem)] w-[calc(100vw-2.5rem)] max-w-none gap-0 overflow-visible p-0 sm:max-w-none"
+				className="h-[calc(100dvh-2.5rem)] w-[calc(100vw-2.5rem)] max-w-none gap-0 overflow-visible border-0 p-0 sm:max-w-none"
 			>
 				<Tabs
 					defaultValue="general"
