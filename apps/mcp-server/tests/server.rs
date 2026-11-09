@@ -479,7 +479,7 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
                 .collect();
             Json(json!({
                 "data": photos,
-                "meta": {"per_page": per_page, "current_page": page, "total": LIBRARY_TOTAL}
+                "pagination": {"per_page": per_page, "current_page": page, "total": LIBRARY_TOTAL}
             }))
             .into_response()
         }

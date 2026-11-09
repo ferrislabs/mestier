@@ -31,7 +31,7 @@ Table `library_photos` : migration `migrations/20261109000008_photo_library.{up,
 
 | Colonne | Sens |
 |---|---|
-| `file_key`, `thumbnail_key` | Objets de stockage : `library/<org_id>/<photo_id>.jpg` et `.thumb.jpg` |
+| `file_key`, `thumbnail_key` | Objets de stockage, clés opaques : `<préfixe>/library-<org_id>/<uuid>` (le préfixe est celui du stockage) |
 | `mime_type`, `width`, `height`, `size_bytes` | De l'image normalisée |
 | `content_hash` | SHA-256 de l'image normalisée, unique par organisation |
 | `caption`, `tags` | Légende (nulle si vide), jusqu'à 20 étiquettes |
@@ -53,7 +53,7 @@ Table `library_photos` : migration `migrations/20261109000008_photo_library.{up,
 
 ## Contrat HTTP
 
-Préfixe `/api/v1/organizations/{organization_id}`. Permission `MANAGE_PLANNING` partout. `LibraryPhoto` :
+Préfixe `/api/v1/organizations/{organization_id}`. Permission `MANAGE_PLANNING` partout, lectures comprises : un membre sans ce droit reçoit 403 avant tout 404. Les réponses suivent l'enveloppe de l'API : `{"data": …}` ; la liste ajoute `"pagination"` (`per_page`, `current_page`, `total`, …) ; le placement renvoie `{"data": {"doe", "results"}}`. `LibraryPhoto` :
 
 ```json
 {

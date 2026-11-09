@@ -245,8 +245,8 @@ impl Session<'_> {
         let photos: Vec<Value> = body["data"].as_array().cloned().unwrap_or_default();
         let listing = json!({
             "photos": photos.iter().map(slim).collect::<Vec<_>>(),
-            "page": body["meta"]["current_page"].as_u64().unwrap_or(page),
-            "total": body["meta"]["total"],
+            "page": body["pagination"]["current_page"].as_u64().unwrap_or(page),
+            "total": body["pagination"]["total"],
         });
         let mut thumbnails = Vec::new();
         if filter.include_thumbnails {
