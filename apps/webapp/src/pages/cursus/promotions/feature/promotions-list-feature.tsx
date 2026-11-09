@@ -21,6 +21,7 @@ export interface PromotionsListFeatureProps {
 		trainingId: string | undefined
 	}) => void
 	onOpenPromotion: (promotionId: string) => void
+	onManageTrainings?: () => void
 }
 
 export function PromotionsListFeature({
@@ -28,6 +29,7 @@ export function PromotionsListFeature({
 	trainingId,
 	onFiltersChange,
 	onOpenPromotion,
+	onManageTrainings,
 }: PromotionsListFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const canManage = useHasPermission('MANAGE_CURSUS_CATALOG')
@@ -78,6 +80,7 @@ export function PromotionsListFeature({
 			/>
 			{canManage ? (
 				<PromotionDialogsFeature
+					onManageTrainings={onManageTrainings}
 					state={dialog}
 					trainings={trainingOptions}
 					onClose={() => setDialog({ kind: 'none' })}

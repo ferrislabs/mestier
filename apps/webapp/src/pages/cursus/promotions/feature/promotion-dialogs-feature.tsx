@@ -23,6 +23,7 @@ interface PromotionDialogsFeatureProps {
 	trainings: SelectOption[]
 	onClose: () => void
 	onCreated?: (promotionId: string) => void
+	onManageTrainings?: () => void
 }
 
 export function PromotionDialogsFeature({
@@ -30,6 +31,7 @@ export function PromotionDialogsFeature({
 	trainings,
 	onClose,
 	onCreated,
+	onManageTrainings,
 }: PromotionDialogsFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const create = useCreatePromotion()
@@ -47,6 +49,7 @@ export function PromotionDialogsFeature({
 					: EMPTY_PROMOTION_FORM
 			}
 			trainings={trainings}
+			onManageTrainings={onManageTrainings}
 			isPending={create.isPending || update.isPending}
 			error={mutationErrorMessage(editing ? update.error : create.error)}
 			onOpenChange={(next) => {
