@@ -383,23 +383,21 @@ export function ChannelAdminDialogUI({
 									/>
 								</TabsContent>
 							</div>
-							<div className="sticky top-0 shrink-0">
-								<DialogClose asChild>
-									<button
-										type="button"
-										aria-label="Fermer"
-										className="flex flex-col items-center gap-1 text-muted-foreground text-[10px] hover:text-foreground"
-									>
-										<span className="flex size-8 items-center justify-center rounded-full border">
-											<X className="size-4" />
-										</span>
-										ESC
-									</button>
-								</DialogClose>
-							</div>
 						</div>
 					</div>
 				</Tabs>
+				<DialogClose asChild>
+					<button
+						type="button"
+						aria-label="Fermer"
+						className="absolute top-4 right-4 z-10 flex flex-col items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+					>
+						<span className="flex size-8 items-center justify-center rounded-full border">
+							<X className="size-4" />
+						</span>
+						ESC
+					</button>
+				</DialogClose>
 
 				<AlertDialog
 					open={deleteDialogOpen}
