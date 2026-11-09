@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
 	useCategories,
 	useChannels,
@@ -7,6 +7,7 @@ import {
 	useCreateChannel,
 } from '#/hooks/use-chat'
 import type { NewItemKind } from '#/pages/chat/lib/channel-kinds'
+import type { NewChannelPreset } from './chat-dialogs-store'
 import { NewChannelDialogUI } from '#/pages/chat/ui/new-channel-dialog-ui'
 
 export interface NewChannelFeatureProps {
@@ -14,6 +15,8 @@ export interface NewChannelFeatureProps {
 	open: boolean
 	/** The category to create the channel in, when opened from one. */
 	categoryId: string | null
+	/** Name and kind to start from, when duplicating a channel. */
+	preset: NewChannelPreset | null
 	onOpenChange: (open: boolean) => void
 }
 
@@ -21,6 +24,7 @@ export function NewChannelFeature({
 	organizationId,
 	open,
 	categoryId,
+	preset,
 	onOpenChange,
 }: NewChannelFeatureProps) {
 	const categories = useCategories(organizationId)
@@ -37,6 +41,13 @@ export function NewChannelFeature({
 	const parentCategory = (categories.data ?? []).find(
 		(category) => category.id === categoryId,
 	)
+
+	useEffect(() => {
+		if (open && preset) {
+			setName(preset.name)
+			setChannelKind(preset.kind)
+		}
+	}, [open, preset])
 
 	function reset() {
 		setName('')

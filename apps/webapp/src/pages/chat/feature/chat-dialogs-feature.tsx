@@ -17,6 +17,7 @@ export function ChatDialogsFeature() {
 	const {
 		newChannelOpen,
 		newChannelCategoryId,
+		newChannelPreset,
 		newDirectOpen,
 		adminChannelId,
 	} = useStore(chatDialogsStore)
@@ -27,6 +28,7 @@ export function ChatDialogsFeature() {
 				organizationId={activeOrganization.id}
 				open={newChannelOpen}
 				categoryId={newChannelCategoryId}
+				preset={newChannelPreset}
 				onOpenChange={setNewChannelOpen}
 			/>
 			<NewDirectMessageFeature

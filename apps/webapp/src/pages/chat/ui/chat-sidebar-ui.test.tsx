@@ -63,6 +63,8 @@ function baseProps(
 		onRequestNewChannel: vi.fn(),
 		onRequestNewChannelInCategory: vi.fn(),
 		onOpenChannelAdmin: vi.fn(),
+		onDuplicateChannel: vi.fn(),
+		onDeleteChannel: vi.fn(),
 		...overrides,
 	}
 }
@@ -183,6 +185,60 @@ describe('ChatSidebarUI — per-channel management (#372)', () => {
 		)
 
 		expect(onOpenChannelAdmin).toHaveBeenCalledWith('ch-1')
+	})
+})
+
+describe('ChatSidebarUI — context menu', () => {
+	async function openMenu(overrides: Parameters<typeof baseProps>[0] = {}) {
+		const user = userEvent.setup()
+		const groups = [
+			{ category: category('cat-1'), channels: [channel('ch-1', 'cat-1')] },
+		]
+		await renderSidebar(
+			<ChatSidebarUI {...baseProps({ groups, ...overrides })} />,
+		)
+		await user.pointer({
+			keys: '[MouseRight]',
+			target: screen.getByRole('link', { name: /ch-1/ }),
+		})
+		return user
+	}
+
+	it('edits the channel from the menu', async () => {
+		const onOpenChannelAdmin = vi.fn()
+		const user = await openMenu({ onOpenChannelAdmin })
+
+		await user.click(
+			await screen.findByRole('menuitem', { name: 'Modifier le canal' }),
+		)
+
+		expect(onOpenChannelAdmin).toHaveBeenCalledWith('ch-1')
+	})
+
+	it('duplicates the channel from the menu', async () => {
+		const onDuplicateChannel = vi.fn()
+		const user = await openMenu({ onDuplicateChannel })
+
+		await user.click(
+			await screen.findByRole('menuitem', { name: 'Dupliquer le canal' }),
+		)
+
+		expect(onDuplicateChannel).toHaveBeenCalledWith('ch-1')
+	})
+
+	it('deletes the channel only on the second click', async () => {
+		const onDeleteChannel = vi.fn()
+		const user = await openMenu({ onDeleteChannel })
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Supprimer le canal' }),
+		)
+		expect(onDeleteChannel).not.toHaveBeenCalled()
+		await user.click(
+			screen.getByRole('button', { name: 'Confirmer la suppression' }),
+		)
+
+		expect(onDeleteChannel).toHaveBeenCalledWith('ch-1')
 	})
 })
 

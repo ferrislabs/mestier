@@ -4,6 +4,7 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useCategories,
 	useChannels,
+	useDeleteChannel,
 	useChatDirectory,
 	useChatListGatewaySync,
 	useDirectChannels,
@@ -43,6 +44,7 @@ export function ChatSidebarFeature() {
 	const directChannels = useDirectChannels(organizationId)
 	const directory = useChatDirectory(organizationId)
 	const presenceStatuses = usePresenceStatuses()
+	const deleteChannel = useDeleteChannel(organizationId)
 
 	const unreadCounts = useMemo(
 		() =>
@@ -74,6 +76,19 @@ export function ChatSidebarFeature() {
 		})
 	}
 
+	function duplicateChannel(id: string) {
+		const source = (channels.data ?? []).find((channel) => channel.id === id)
+		if (!source) return
+		openNewChannel(source.category_id ?? undefined, {
+			name: `${source.name} (copie)`,
+			kind:
+				source.channel_type === 'ANNOUNCEMENT' ||
+				source.channel_type === 'VOICE'
+					? source.channel_type
+					: 'TEXT',
+		})
+	}
+
 	return (
 		<ChatSidebarUI
 			organizationSlug={activeOrganization.slug}
@@ -90,6 +105,10 @@ export function ChatSidebarFeature() {
 			onRequestNewChannelInCategory={openNewChannel}
 			onRequestNewDirectMessage={openNewDirect}
 			onOpenChannelAdmin={openChannelAdmin}
+			onDuplicateChannel={duplicateChannel}
+			onDeleteChannel={(id) =>
+				deleteChannel.mutate({ path: { channel_id: id } } as never)
+			}
 		/>
 	)
 }
