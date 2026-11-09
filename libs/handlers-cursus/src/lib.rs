@@ -5,6 +5,7 @@ use mestier_core::{OrganizationId, Permissions};
 
 pub mod closure_reason;
 pub mod establishment;
+pub mod host_company;
 pub mod paths;
 pub mod promotion;
 pub mod response;
@@ -54,6 +55,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(training::router(state))
         .merge(promotion::router(state))
         .merge(closure_reason::router(state))
+        .merge(host_company::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

@@ -449,6 +449,11 @@ impl Modify for SecurityAddon {
         cursus::closure_reason::create::handler,
         cursus::closure_reason::update::handler,
         cursus::closure_reason::archive::handler,
+        cursus::host_company::list::handler,
+        cursus::host_company::create::handler,
+        cursus::host_company::get_one::handler,
+        cursus::host_company::update::handler,
+        cursus::host_company::archive::handler,
     ),
     components(schemas(
         support::response::TicketResponse,
@@ -891,6 +896,9 @@ impl Modify for SecurityAddon {
         cursus::response::ClosureReasonResponse,
         cursus::closure_reason::create::CreateClosureReasonRequest,
         cursus::closure_reason::update::UpdateClosureReasonRequest,
+        cursus::response::HostCompanyResponse,
+        cursus::host_company::create::CreateHostCompanyRequest,
+        cursus::host_company::update::UpdateHostCompanyRequest,
     )),
     modifiers(&SecurityAddon),
     tags(
@@ -909,7 +917,7 @@ impl Modify for SecurityAddon {
         (name = "reference", description = "Reference cost catalog"),
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),
         (name = "support", description = "Support tickets — kanban, thread, intake by organization API key"),
-        (name = "cursus", description = "Cursus — establishments, trainings, promotions and closure reasons of an apprenticeship centre"),
+        (name = "cursus", description = "Cursus — establishments, trainings, promotions, closure reasons and host companies of an apprenticeship centre"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
 )]

@@ -13,6 +13,7 @@ pub mod domain {
     pub struct AbsenceType;
     pub struct AssignmentReport;
     pub struct CursusCatalog;
+    pub struct CursusHostCompany;
     pub struct Customer;
     pub struct CustomerContact;
     pub struct CustomUnit;

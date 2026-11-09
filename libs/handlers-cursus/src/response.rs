@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    ClosureReason, ClosureReasonId, Establishment, EstablishmentId, OrganizationId, Promotion,
-    PromotionId, Training, TrainingId,
+    ClosureReason, ClosureReasonId, Establishment, EstablishmentId, HostCompany, HostCompanyId,
+    OrganizationId, Promotion, PromotionId, Training, TrainingId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -116,6 +116,41 @@ impl From<ClosureReason> for ClosureReasonResponse {
             label: value.label,
             archived_at: value.archived_at,
             created_at: value.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct HostCompanyResponse {
+    pub id: HostCompanyId,
+    pub organization_id: OrganizationId,
+    pub name: String,
+    pub siret: Option<String>,
+    pub address: Option<String>,
+    pub legal_form: Option<String>,
+    pub naf_code: Option<String>,
+    pub employee_count: Option<i32>,
+    pub director_name: Option<String>,
+    pub archived_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<HostCompany> for HostCompanyResponse {
+    fn from(value: HostCompany) -> Self {
+        Self {
+            id: value.id,
+            organization_id: value.organization_id,
+            name: value.name,
+            siret: value.siret,
+            address: value.address,
+            legal_form: value.legal_form,
+            naf_code: value.naf_code,
+            employee_count: value.employee_count,
+            director_name: value.director_name,
+            archived_at: value.archived_at,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
         }
     }
 }

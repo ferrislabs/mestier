@@ -1,5 +1,7 @@
 use axum_extra::routing::TypedPath;
-use mestier_core::{ClosureReasonId, EstablishmentId, OrganizationId, PromotionId, TrainingId};
+use mestier_core::{
+    ClosureReasonId, EstablishmentId, HostCompanyId, OrganizationId, PromotionId, TrainingId,
+};
 use serde::Deserialize;
 
 #[derive(TypedPath, Deserialize)]
@@ -84,4 +86,26 @@ pub struct ClosureReasonPath {
 pub struct ClosureReasonArchivePath {
     pub organization_id: OrganizationId,
     pub closure_reason_id: ClosureReasonId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/host-companies")]
+pub struct HostCompanyCollectionPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/host-companies/{host_company_id}")]
+pub struct HostCompanyPath {
+    pub organization_id: OrganizationId,
+    pub host_company_id: HostCompanyId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/cursus/host-companies/{host_company_id}/archive"
+)]
+pub struct HostCompanyArchivePath {
+    pub organization_id: OrganizationId,
+    pub host_company_id: HostCompanyId,
 }
