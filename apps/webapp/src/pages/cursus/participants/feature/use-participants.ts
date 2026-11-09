@@ -1,9 +1,4 @@
-import {
-	useMutation,
-	useQueries,
-	useQuery,
-	useQueryClient,
-} from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { invalidateCursus } from '#/pages/cursus/participants/lib/forms'
 
 export const PARTICIPANTS_PATH =
@@ -28,6 +23,7 @@ export const PARTICIPANTS_PER_PAGE = 25
 export interface ParticipantsQuery {
 	kind?: 'apprentice' | 'company_tutor'
 	status?: 'pending' | 'active' | 'inactive'
+	host_company_id?: string
 	page?: number
 	per_page?: number
 }
@@ -50,23 +46,6 @@ export function useParticipant(organizationId: string, participantId: string) {
 			path: { organization_id: organizationId, participant_id: participantId },
 		}).queryOptions,
 	)
-}
-
-export function useParticipantDetails(
-	organizationId: string,
-	participantIds: string[],
-) {
-	return useQueries({
-		queries: participantIds.map(
-			(participantId) =>
-				window.tanstackApi.get(PARTICIPANT_PATH, {
-					path: {
-						organization_id: organizationId,
-						participant_id: participantId,
-					},
-				}).queryOptions,
-		),
-	})
 }
 
 export function useCreateParticipant() {

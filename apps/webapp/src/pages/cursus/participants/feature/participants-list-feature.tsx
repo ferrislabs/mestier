@@ -6,7 +6,6 @@ import { useHostCompanies } from '#/pages/cursus/host-companies/feature/use-host
 import {
 	PARTICIPANTS_PER_PAGE,
 	useCreateParticipant,
-	useParticipantDetails,
 	useParticipants,
 } from '#/pages/cursus/participants/feature/use-participants'
 import {
@@ -50,23 +49,19 @@ export function ParticipantsListFeature({
 		per_page: PARTICIPANTS_PER_PAGE,
 	})
 	const participants = list.data?.data ?? []
-	const details = useParticipantDetails(
-		activeOrganizationId,
-		participants.map((participant) => participant.id),
-	)
 	const hostCompanies = useHostCompanies(activeOrganizationId, {
 		per_page: 100,
 	})
 	const createParticipant = useCreateParticipant()
 
-	const rows: ParticipantRowVM[] = participants.map((participant, index) => {
-		const info = kindInfo(details[index]?.data?.data)
+	const rows: ParticipantRowVM[] = participants.map((participant) => {
+		const info = kindInfo(participant)
 		return {
 			id: participant.id,
 			name: participantName(participant),
 			email: participant.email,
-			kinds: info?.kinds ?? null,
-			hostCompanyNames: info?.hostCompanyNames ?? null,
+			kinds: info.kinds,
+			hostCompanyNames: info.hostCompanyNames,
 			status: participant.status,
 		}
 	})

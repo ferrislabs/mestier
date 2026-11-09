@@ -3,7 +3,7 @@ import { mutationErrorMessage } from '#/lib/api-error'
 import { usePromotions } from '#/pages/cursus/promotions/feature/use-promotions'
 import {
 	useOrganizationMembers,
-	useParticipantDetails,
+	useParticipantRecords,
 } from '#/pages/cursus/shared/feature/cursus-queries'
 import {
 	apprenticeOptions,
@@ -27,9 +27,9 @@ export function TriadCreateFeature({
 	onCreated,
 }: TriadCreateFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
-	const apprentices = useParticipantDetails(
+	const apprentices = useParticipantRecords(
 		activeOrganizationId,
-		'apprentice',
+		{ kind: 'apprentice' },
 		open,
 	)
 	const members = useOrganizationMembers(activeOrganizationId, open)
@@ -53,7 +53,7 @@ export function TriadCreateFeature({
 			open={open}
 			fixedPromotionId={fixedPromotionId}
 			promotions={promotionOptions}
-			apprentices={apprenticeOptions(apprentices.details)}
+			apprentices={apprenticeOptions(apprentices.items)}
 			members={memberOptions}
 			isLoadingOptions={apprentices.isLoading}
 			isPending={createTriad.isPending}

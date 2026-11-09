@@ -14,28 +14,27 @@ export function participantName(
 }
 
 export function apprenticeOptions(
-	details: Schemas.ParticipantDetailResponse[],
+	items: Schemas.ParticipantListItemResponse[],
 ): SelectOption[] {
-	return details
-		.filter((detail) => detail.apprentice && detail.status !== 'inactive')
-		.map((detail) => ({
-			value: detail.apprentice?.id as string,
-			label: participantName(detail),
-		}))
+	return items.flatMap((item) =>
+		item.apprentice_id && item.status !== 'inactive'
+			? [{ value: item.apprentice_id, label: participantName(item) }]
+			: [],
+	)
 }
 
 export function companyTutorOptions(
-	details: Schemas.ParticipantDetailResponse[],
+	items: Schemas.ParticipantListItemResponse[],
 	hostCompanyId: string,
 ): SelectOption[] {
-	return details
-		.filter((detail) => detail.status !== 'inactive')
-		.flatMap((detail) =>
-			detail.company_tutors
+	return items
+		.filter((item) => item.status !== 'inactive')
+		.flatMap((item) =>
+			item.company_tutors
 				.filter((tutor) => tutor.host_company_id === hostCompanyId)
 				.map((tutor) => ({
 					value: tutor.id,
-					label: participantName(detail),
+					label: participantName(item),
 				})),
 		)
 }

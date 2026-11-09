@@ -38,15 +38,17 @@ export interface ParticipantKindInfo {
 }
 
 export function kindInfo(
-	detail: Schemas.ParticipantDetailResponse | undefined,
-): ParticipantKindInfo | null {
-	if (!detail) return null
+	item: Pick<
+		Schemas.ParticipantListItemResponse,
+		'apprentice_id' | 'company_tutors'
+	>,
+): ParticipantKindInfo {
 	const kinds: ParticipantKind[] = []
-	if (detail.apprentice) kinds.push('apprentice')
-	if (detail.company_tutors.length > 0) kinds.push('company_tutor')
+	if (item.apprentice_id) kinds.push('apprentice')
+	if (item.company_tutors.length > 0) kinds.push('company_tutor')
 	return {
 		kinds,
-		hostCompanyNames: detail.company_tutors.map(
+		hostCompanyNames: item.company_tutors.map(
 			(tutor) => tutor.host_company_name,
 		),
 	}

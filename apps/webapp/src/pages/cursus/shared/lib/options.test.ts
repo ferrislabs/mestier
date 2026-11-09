@@ -5,9 +5,9 @@ import {
 	companyTutorOptions,
 } from '#/pages/cursus/shared/lib/options'
 
-function detail(
-	overrides: Partial<Schemas.ParticipantDetailResponse>,
-): Schemas.ParticipantDetailResponse {
+function item(
+	overrides: Partial<Schemas.ParticipantListItemResponse>,
+): Schemas.ParticipantListItemResponse {
 	return {
 		id: 'p-1',
 		organization_id: 'org-1',
@@ -24,30 +24,16 @@ function detail(
 
 describe('apprenticeOptions', () => {
 	it('keys each option on the apprentice record id, not the participant id', () => {
-		const options = apprenticeOptions([
-			detail({
-				apprentice: {
-					id: 'a-1',
-					participant_id: 'p-1',
-					created_at: '',
-					updated_at: '',
-				},
-			}),
-		])
+		const options = apprenticeOptions([item({ apprentice_id: 'a-1' })])
 		expect(options).toEqual([{ value: 'a-1', label: 'Lea Martin' }])
 	})
 
 	it('skips participants without an apprentice record and inactive ones', () => {
 		const options = apprenticeOptions([
-			detail({}),
-			detail({
+			item({}),
+			item({
 				status: 'inactive',
-				apprentice: {
-					id: 'a-2',
-					participant_id: 'p-1',
-					created_at: '',
-					updated_at: '',
-				},
+				apprentice_id: 'a-2',
 			}),
 		])
 		expect(options).toEqual([])
@@ -58,7 +44,7 @@ describe('companyTutorOptions', () => {
 	it('keeps only tutor records of the given host company', () => {
 		const options = companyTutorOptions(
 			[
-				detail({
+				item({
 					company_tutors: [
 						{
 							id: 't-1',

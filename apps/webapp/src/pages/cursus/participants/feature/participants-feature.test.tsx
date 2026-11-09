@@ -45,7 +45,11 @@ beforeAll(installRadixPolyfills)
 
 beforeEach(() => {
 	api = installFakeTanstackApi()
-	api.mockGet(PARTICIPANTS, () => page([PARTICIPANT_ROW] as never))
+	api.mockGet(PARTICIPANTS, () =>
+		page([
+			{ ...PARTICIPANT_ROW, apprentice_id: 'a-1', company_tutors: [] },
+		] as never),
+	)
 	api.mockGet(PARTICIPANT, () => ({
 		data: { ...PARTICIPANT_ROW, apprentice: null, company_tutors: [] },
 	}))
@@ -136,6 +140,43 @@ describe('ParticipantsListFeature', () => {
 		expect(
 			(callsTo(api, 'get', PARTICIPANTS)[0]?.params as { query: object }).query,
 		).toMatchObject({ kind: 'company_tutor', status: 'pending' })
+	})
+})
+
+describe('ParticipantsListFeature records', () => {
+	it('shows the kind and host company from the list without detail calls', async () => {
+		api.mockGet(PARTICIPANTS, () =>
+			page([
+				{
+					...PARTICIPANT_ROW,
+					apprentice_id: null,
+					company_tutors: [
+						{
+							id: 't-1',
+							participant_id: 'p-1',
+							host_company_id: 'hc-1',
+							host_company_name: 'Menuiserie Roux',
+							job_title: null,
+							created_at: '2026-01-01T00:00:00Z',
+							updated_at: '2026-01-01T00:00:00Z',
+						},
+					],
+				},
+			] as never),
+		)
+		renderWith(
+			['VIEW_CURSUS'],
+			<ParticipantsListFeature
+				kind={undefined}
+				status={undefined}
+				onFiltersChange={vi.fn()}
+				onOpenParticipant={vi.fn()}
+			/>,
+		)
+
+		expect(await screen.findByText('Tuteur entreprise')).toBeTruthy()
+		expect(screen.getByText('Menuiserie Roux')).toBeTruthy()
+		expect(callsTo(api, 'get', PARTICIPANT)).toHaveLength(0)
 	})
 })
 

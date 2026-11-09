@@ -33,8 +33,8 @@ export interface ParticipantRowVM {
 	id: string
 	name: string
 	email: string
-	kinds: ParticipantKind[] | null
-	hostCompanyNames: string[] | null
+	kinds: ParticipantKind[]
+	hostCompanyNames: string[]
 	status: ParticipantStatus
 }
 
@@ -90,7 +90,6 @@ export function ParticipantsListUI({
 			header: 'Type',
 			cell: (info) => {
 				const kinds = info.getValue()
-				if (kinds === null) return '…'
 				if (kinds.length === 0) return '—'
 				return kinds.map((value) => KIND_LABELS[value]).join(', ')
 			},
@@ -99,7 +98,6 @@ export function ParticipantsListUI({
 			header: 'Entreprise',
 			cell: (info) => {
 				const names = info.getValue()
-				if (names === null) return '…'
 				return names.length === 0 ? '—' : names.join(', ')
 			},
 		}),

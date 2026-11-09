@@ -19,7 +19,6 @@ const TRIADS_PATH = `${BASE}/triads`
 const TRIAD_PATH = `${BASE}/triads/{triad_id}`
 const PROMOTIONS_PATH = `${BASE}/promotions`
 const PARTICIPANTS_PATH = `${BASE}/participants`
-const PARTICIPANT_PATH = `${BASE}/participants/{participant_id}`
 const CLOSURE_REASONS_PATH = `${BASE}/closure-reasons`
 const CONTRACT_CLOSE_PATH = `${BASE}/contracts/{contract_id}/close`
 
@@ -54,26 +53,11 @@ function installListReads(api: ReturnType<typeof installFakeTanstackApi>) {
 				first_name: 'Lea',
 				last_name: 'Martin',
 				status: 'active',
+				apprentice_id: 'apprentice-9',
+				company_tutors: [],
 				...STAMPS,
 			},
 		],
-	}))
-	api.mockGet(PARTICIPANT_PATH, () => ({
-		data: {
-			id: 'participant-1',
-			organization_id: 'org-1',
-			email: 'lea@example.fr',
-			first_name: 'Lea',
-			last_name: 'Martin',
-			status: 'active',
-			apprentice: {
-				id: 'apprentice-9',
-				participant_id: 'participant-1',
-				...STAMPS,
-			},
-			company_tutors: [],
-			...STAMPS,
-		},
 	}))
 	api.mockGet(MEMBERS_PATH, () => ({ data: MEMBERS }))
 }

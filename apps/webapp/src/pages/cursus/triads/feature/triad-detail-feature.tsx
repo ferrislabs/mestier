@@ -7,7 +7,7 @@ import {
 	useClosureReasons,
 	useHostCompanies,
 	useOrganizationMembers,
-	useParticipantDetails,
+	useParticipantRecords,
 } from '#/pages/cursus/shared/feature/cursus-queries'
 import { todayIso } from '#/pages/cursus/shared/lib/format'
 import {
@@ -75,9 +75,13 @@ export function TriadDetailFeature({
 			(dialog.kind === 'close-contract' || dialog.kind === 'close-triad'),
 	)
 	const tutorsOpen = dialog.kind === 'tutors'
-	const tutorParticipants = useParticipantDetails(
+	const tutorParticipants = useParticipantRecords(
 		activeOrganizationId,
-		'company_tutor',
+		{
+			kind: 'company_tutor',
+			host_company_id:
+				dialog.kind === 'tutors' ? dialog.contract.host_company_id : undefined,
+		},
 		tutorsOpen,
 	)
 
@@ -235,7 +239,7 @@ export function TriadDetailFeature({
 						secondary: contractSecondary(dialog.contract),
 					}}
 					tutors={companyTutorOptions(
-						tutorParticipants.details,
+						tutorParticipants.items,
 						dialog.contract.host_company_id,
 					)}
 					isLoadingOptions={tutorParticipants.isLoading}

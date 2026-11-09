@@ -11,10 +11,7 @@ import {
 	HostCompanyDetailUI,
 	type HostCompanyTutorVM,
 } from '#/pages/cursus/host-companies/ui/host-company-detail-ui'
-import {
-	useParticipantDetails,
-	useParticipants,
-} from '#/pages/cursus/participants/feature/use-participants'
+import { useParticipants } from '#/pages/cursus/participants/feature/use-participants'
 import { participantName } from '#/pages/cursus/participants/lib/participants'
 
 export interface HostCompanyDetailFeatureProps {
@@ -33,17 +30,14 @@ export function HostCompanyDetailFeature({
 	const archiveCompany = useArchiveHostCompany()
 	const tutorList = useParticipants(activeOrganizationId, {
 		kind: 'company_tutor',
+		host_company_id: hostCompanyId,
 		per_page: 100,
 	})
 	const tutorParticipants = tutorList.data?.data ?? []
-	const tutorDetails = useParticipantDetails(
-		activeOrganizationId,
-		tutorParticipants.map((participant) => participant.id),
-	)
 
 	const tutors: HostCompanyTutorVM[] = tutorParticipants.flatMap(
-		(participant, index) => {
-			const record = tutorDetails[index]?.data?.data.company_tutors.find(
+		(participant) => {
+			const record = participant.company_tutors.find(
 				(tutor) => tutor.host_company_id === hostCompanyId,
 			)
 			return record

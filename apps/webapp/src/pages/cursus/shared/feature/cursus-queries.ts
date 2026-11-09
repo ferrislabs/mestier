@@ -1,4 +1,4 @@
-import { type QueryClient, useQueries, useQuery } from '@tanstack/react-query'
+import { type QueryClient, useQuery } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 
@@ -10,8 +10,6 @@ const HOST_COMPANIES_PATH =
 	'/api/v1/organizations/{organization_id}/cursus/host-companies'
 const PARTICIPANTS_PATH =
 	'/api/v1/organizations/{organization_id}/cursus/participants'
-const PARTICIPANT_PATH =
-	'/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}'
 
 const PAGE = { page: 1, per_page: 100 }
 
@@ -68,37 +66,18 @@ export function useOrganizationMembers(organizationId: string, enabled = true) {
 	return catalog.members.data?.data ?? []
 }
 
-export function useParticipantDetails(
+export function useParticipantRecords(
 	organizationId: string,
-	kind: 'apprentice' | 'company_tutor',
+	query: { kind: 'apprentice' | 'company_tutor'; host_company_id?: string },
 	enabled: boolean,
-): { isLoading: boolean; details: Schemas.ParticipantDetailResponse[] } {
+): { isLoading: boolean; items: Schemas.ParticipantListItemResponse[] } {
 	const list = useQuery({
 		...window.tanstackApi.get(PARTICIPANTS_PATH, {
 			path: { organization_id: organizationId },
-			query: { kind, ...PAGE },
+			query: { ...query, ...PAGE },
 		}).queryOptions,
 		enabled,
 	})
-	const rows = list.data?.data ?? []
 
-	const details = useQueries({
-		queries: rows.map((row) => ({
-			...window.tanstackApi.get(PARTICIPANT_PATH, {
-				path: { organization_id: organizationId, participant_id: row.id },
-			}).queryOptions,
-			enabled,
-		})),
-		combine: (results) => ({
-			isLoading: results.some((result) => result.isLoading),
-			data: results.flatMap((result) =>
-				result.data?.data ? [result.data.data] : [],
-			),
-		}),
-	})
-
-	return {
-		isLoading: list.isLoading || details.isLoading,
-		details: details.data,
-	}
+	return { isLoading: list.isLoading, items: list.data?.data ?? [] }
 }
