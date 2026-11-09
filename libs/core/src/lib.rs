@@ -149,6 +149,7 @@ pub use domain::{
     maintenance::ports::{MockInterventionRepository, MockMaintenanceContractRepository},
     member::ports::MockMemberRepository,
     organization::ports::MockOrganizationRepository,
+    photo_library::ports::MockLibraryPhotoRepository,
     planning::ports::MockPlanningRepository,
     product::ports::MockProductRepository,
     project::ports::MockProjectRepository,
@@ -213,6 +214,18 @@ pub use domain::{
 pub use domain::maintenance::overview::{
     ContractSite, Grid, GridContract, GridLine, GridVisit, Recap, RecapGroup, RecapLine,
     SiteContact,
+};
+
+pub use domain::{
+    InsertOutcome, LibraryPhoto, LibraryPhotoId, PhotoFilter, PhotoLibraryError,
+    PhotoLibraryOutcome, PlacementReport, PlacementResult, PlacementStatus, UploadedPhoto,
+    doe::service::PHOTOS_SECTION_TITLE,
+    photo_library::commands::{
+        DeleteLibraryPhotoCommand, GetLibraryPhotoCommand, ListLibraryPhotosCommand,
+        MAX_PLACEMENTS, PlaceLibraryPhotosCommand, PlacementRequest, PlacementTargetKind,
+        UpdateLibraryPhotoCommand, UploadLibraryPhotoCommand,
+    },
+    photo_library::normalize::{NormalizedImage, normalize_image},
 };
 
 pub use domain::{

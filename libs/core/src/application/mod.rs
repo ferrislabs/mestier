@@ -53,6 +53,7 @@ pub mod maintenance_intervention;
 pub mod maintenance_overview;
 pub mod member;
 pub mod organization;
+pub mod photo_library;
 pub mod planning;
 pub mod policy;
 pub mod product;

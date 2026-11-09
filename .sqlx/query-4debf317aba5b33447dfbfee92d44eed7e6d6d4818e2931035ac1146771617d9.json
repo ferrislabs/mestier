@@ -1,0 +1,120 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO library_photos (id, org_id, file_key, thumbnail_key, mime_type, width, height, size_bytes, content_hash, caption, tags, project_id, taken_at, created_at, updated_at)\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)\n                ON CONFLICT (org_id, content_hash) DO NOTHING\n                RETURNING id, org_id, file_key, thumbnail_key, mime_type, width, height, size_bytes, content_hash, caption, tags, project_id, taken_at, created_at, updated_at\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "thumbnail_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "height",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "size_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "content_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "caption",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "tags",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "taken_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text",
+        "TextArray",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "4debf317aba5b33447dfbfee92d44eed7e6d6d4818e2931035ac1146771617d9"
+}

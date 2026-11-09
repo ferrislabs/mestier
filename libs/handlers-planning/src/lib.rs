@@ -21,6 +21,7 @@ pub mod maintenance_contract;
 pub mod maintenance_intervention;
 pub mod maintenance_overview;
 pub mod paths;
+pub mod photo_library;
 pub mod planning;
 pub mod project;
 pub mod project_template;
@@ -77,6 +78,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(project_template::router(state))
         .merge(doe::router(state))
         .merge(doe_model::router(state))
+        .merge(photo_library::router(state))
         .merge(maintenance_contract::router(state))
         .merge(recap_pdf::router(state))
         .merge(maintenance_intervention::router(state))

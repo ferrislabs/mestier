@@ -21,6 +21,7 @@ mod maintenance_contract;
 mod maintenance_draft;
 mod maintenance_intervention;
 mod mcp_access;
+mod photo_library;
 mod recap_pdf;
 mod work_time;
 

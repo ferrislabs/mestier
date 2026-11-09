@@ -1,0 +1,107 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, file_key, thumbnail_key, mime_type, width, height, size_bytes, content_hash, caption, tags, project_id, taken_at, created_at, updated_at\n            FROM library_photos\n            WHERE org_id = $1 AND content_hash = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "thumbnail_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "height",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "size_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "content_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "caption",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "tags",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "taken_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "2b0e71c9f1ed0bb4266e3ae1c7d73df4d9824f9f65be8636fc34b5ff7569de2c"
+}
