@@ -7,7 +7,7 @@ use typst::{
     foundations::{Bytes, Datetime, Duration},
     syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot},
     text::{Font, FontBook},
-    utils::LazyHash,
+    utils::{LazyHash, Scalar},
 };
 
 use typst_layout::PagedDocument;
@@ -92,6 +92,51 @@ impl DoeWorld {
         comemo::evict(0);
         svgs
     }
+}
+
+/// Pixels per point at 150 dpi, enough to read a datasheet.
+const RASTER_PIXELS_PER_POINT: f32 = 150.0 / 72.0;
+/// Longest side of a rasterized page, so a large plan does not weigh tens of megabytes.
+const RASTER_MAX_SIDE_PX: f32 = 1600.0;
+
+/// Every page of a PDF as a PNG, in order. The PDF is laid out by Typst, which
+/// embeds PDF pages, then drawn on a bitmap.
+pub fn rasterize_pdf(bytes: &[u8], pages: usize) -> Result<Vec<Vec<u8>>, DoeRenderError> {
+    let template = format!(
+        "#set page(width: auto, height: auto, margin: 0pt)\n\
+         #for number in range(1, {} + 1) {{\n\
+         \x20 page(width: auto, height: auto, margin: 0pt, image(\"/files/0\", page: number))\n\
+         }}\n",
+        pages
+    );
+    let prepared = Prepared {
+        data: b"{}".to_vec(),
+        files: vec![("/files/0".to_owned(), Bytes::new(bytes.to_vec()))],
+    };
+    let world = DoeWorld::with_template(&template, prepared);
+    let compiled = typst::compile::<PagedDocument>(&world).output;
+    let rendered = compiled.map_err(diagnostics).and_then(|document| {
+        document
+            .pages()
+            .iter()
+            .map(|page| {
+                let size = page.frame.size();
+                let longest = size.x.to_pt().max(size.y.to_pt()) as f32;
+                let scale = RASTER_PIXELS_PER_POINT.min(RASTER_MAX_SIDE_PX / longest.max(1.0));
+                typst_render::render(
+                    page,
+                    &typst_render::RenderOptions {
+                        pixel_per_pt: Scalar::new(f64::from(scale)),
+                        ..Default::default()
+                    },
+                )
+                .encode_png()
+                .map_err(|error| DoeRenderError::Typeset(format!("PNG encoding failed: {error}")))
+            })
+            .collect()
+    });
+    comemo::evict(0);
+    rendered
 }
 
 fn diagnostics(errors: impl IntoIterator<Item = typst::diag::SourceDiagnostic>) -> DoeRenderError {

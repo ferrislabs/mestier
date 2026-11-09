@@ -603,11 +603,31 @@ fn the_docx_carries_the_content_of_the_document() {
 }
 
 #[test]
-fn a_pdf_plan_or_datasheet_becomes_a_line_naming_it() {
+fn every_page_of_a_pdf_plan_or_datasheet_becomes_a_picture() {
     let (document, bundle) = fixture();
-    let text = docx_text(&DocxDoeRenderer.render(&document, &bundle).unwrap());
-    assert!(text.contains("Plan : Plan masse (fichier PDF"));
-    assert!(text.contains("Fiche technique : sheet (fichier PDF"));
+    let with_pdfs = docx_text(&DocxDoeRenderer.render(&document, &bundle).unwrap());
+
+    let mut without = bundle.clone();
+    for key in ["sheet", "plan1", "plan2"] {
+        without.0.remove(key);
+    }
+    let mut document_without = document.clone();
+    for section in &mut document_without.sections {
+        match &mut section.content {
+            NumberedContent::Supplies { supplies, .. } => {
+                for numbered in supplies {
+                    numbered.supply.datasheet_keys.clear();
+                }
+            }
+            NumberedContent::Plans { plans } => plans.clear(),
+            _ => {}
+        }
+    }
+    let baseline = docx_text(&DocxDoeRenderer.render(&document_without, &without).unwrap());
+
+    let pictures = |json: &str| json.matches("\"type\": \"drawing\"").count();
+    assert!(!with_pdfs.contains("fichier PDF"));
+    assert_eq!(pictures(&with_pdfs), pictures(&baseline) + 4);
 }
 
 #[test]

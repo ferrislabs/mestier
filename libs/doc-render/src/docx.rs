@@ -2,12 +2,13 @@
 //!
 //! Same content and numbering as the PDF, laid out with plain Word
 //! structures (headings, tables, inline pictures) so the reader can edit it.
-//! Pixel fidelity with the Typst layout is not a goal. PDF files (plans and
-//! supplier datasheets) cannot be placed in a .docx: each is replaced by a
-//! line naming it.
+//! Pixel fidelity with the Typst layout is not a goal. A .docx cannot hold a
+//! PDF page, so each page of a plan or supplier datasheet is drawn on a bitmap
+//! and placed as a picture.
 
 use std::io::Cursor;
 
+use crate::world::rasterize_pdf;
 use docx_rs::{
     AlignmentType, BreakType, Docx, Footer, Header, Paragraph, Pic, Run, RunFonts, Style,
     StyleType, Table, TableCell, TableRow,
@@ -23,6 +24,7 @@ use mestier_core::{
 const MAX_PICTURE_SIDE: u32 = 1200;
 const PICTURE_WIDTH_PX: u32 = 520;
 const HALF_PICTURE_WIDTH_PX: u32 = 250;
+const PAGE_PICTURE_WIDTH_PX: u32 = 600;
 const MAX_PICTURES: usize = 400;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -234,7 +236,7 @@ impl Layout<'_> {
             docx = docx.add_table(Table::new(supply_rows(&numbered.supply, maker_label)));
             docx = self.picture_grid(docx, &numbered.supply.photos, 2)?;
             for key in &numbered.supply.datasheet_keys {
-                docx = docx.add_paragraph(pdf_notice("Fiche technique", key));
+                docx = self.pdf_pages(docx, key, None)?;
             }
         }
         Ok(docx)
@@ -244,8 +246,7 @@ impl Layout<'_> {
         for plan in plans {
             let file = self.file(&plan.key)?;
             if file.mime_type == "application/pdf" {
-                let label = plan.caption.as_deref().unwrap_or(&plan.key);
-                docx = docx.add_paragraph(pdf_notice("Plan", label));
+                docx = self.pdf_pages(docx, &plan.key, plan.caption.as_deref())?;
                 continue;
             }
             let picture = self.picture(&plan.key, PICTURE_WIDTH_PX)?;
@@ -253,6 +254,46 @@ impl Layout<'_> {
             if let Some(caption) = &plan.caption {
                 docx = docx.add_paragraph(caption_line(caption));
             }
+        }
+        Ok(docx)
+    }
+
+    fn pdf_pages(
+        &mut self,
+        mut docx: Docx,
+        key: &str,
+        caption: Option<&str>,
+    ) -> Result<Docx, DoeRenderError> {
+        let file = self.file(key)?;
+        let pages = lopdf::Document::load_mem(&file.bytes)
+            .map_err(|error| DoeRenderError::Typeset(format!("unreadable PDF `{key}`: {error}")))?
+            .get_pages()
+            .len();
+        if pages == 0 {
+            return Err(DoeRenderError::Typeset(format!("PDF `{key}` has no page")));
+        }
+        if self.pictures + pages > MAX_PICTURES {
+            return Err(DoeRenderError::TooLarge(format!(
+                "more than {MAX_PICTURES} pictures"
+            )));
+        }
+        for png in rasterize_pdf(&file.bytes, pages)? {
+            self.pictures += 1;
+            let (width, height) = image::load_from_memory(&png)
+                .map_err(|error| {
+                    DoeRenderError::Typeset(format!("rasterized page of `{key}`: {error}"))
+                })?
+                .dimensions();
+            let shown_width = PAGE_PICTURE_WIDTH_PX.min(width).max(1);
+            let shown_height = ((u64::from(height) * u64::from(shown_width))
+                / u64::from(width.max(1)))
+            .max(1) as u32;
+            let picture = Pic::new_with_dimensions(png, width, height)
+                .size(shown_width * 9525, shown_height * 9525);
+            docx = docx.add_paragraph(Paragraph::new().add_run(Run::new().add_image(picture)));
+        }
+        if let Some(caption) = caption {
+            docx = docx.add_paragraph(caption_line(caption));
         }
         Ok(docx)
     }
@@ -379,16 +420,6 @@ fn text_line(text: &str, size: usize) -> Paragraph {
 
 fn caption_line(text: &str) -> Paragraph {
     Paragraph::new().add_run(Run::new().add_text(text).italic().size(18))
-}
-
-fn pdf_notice(kind: &str, label: &str) -> Paragraph {
-    Paragraph::new().add_run(
-        Run::new()
-            .add_text(format!(
-                "{kind} : {label} (fichier PDF, à consulter dans l’export PDF du DOE)"
-            ))
-            .italic(),
-    )
 }
 
 fn multiline(text: &str) -> Paragraph {
