@@ -28,6 +28,7 @@ pub mod absence_type;
 pub mod assignment_report;
 pub mod authorization;
 pub mod automation;
+pub mod cursus_catalog;
 pub mod custom_unit;
 pub mod customer;
 pub mod customer_contact;
@@ -116,7 +117,10 @@ pub fn default_authorizer() -> MestierAuthorizer {
         .action("webhook.manage", Permissions::MANAGE_WEBHOOKS.0)
         .action("planning.manage", Permissions::MANAGE_PLANNING.0)
         .action("support.manage", Permissions::MANAGE_SUPPORT.0)
-        .action("cursus.catalog.manage", Permissions::MANAGE_CURSUS_CATALOG.0)
+        .action(
+            "cursus.catalog.manage",
+            Permissions::MANAGE_CURSUS_CATALOG.0,
+        )
         .action("cursus.triads.manage", Permissions::MANAGE_CURSUS_TRIADS.0)
         .action(
             "cursus.participants.manage",
