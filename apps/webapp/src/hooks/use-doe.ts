@@ -104,15 +104,19 @@ export function doePdfPath(organizationId: string, doeId: string): string {
 	return `/api/v1/organizations/${organizationId}/does/${doeId}/pdf`
 }
 
-async function fetchDoePdf(organizationId: string, doeId: string) {
+export function doeDocxPath(organizationId: string, doeId: string): string {
+	return `/api/v1/organizations/${organizationId}/does/${doeId}/docx`
+}
+
+async function fetchDoeFile(path: string) {
 	const headers = new Headers()
 	const accessToken = authStore.state.accessToken
 	if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
 
-	const response = await fetch(
-		`${window.apiUrl}${doePdfPath(organizationId, doeId)}`,
-		{ headers, credentials: 'include' },
-	)
+	const response = await fetch(`${window.apiUrl}${path}`, {
+		headers,
+		credentials: 'include',
+	})
 	if (!response.ok) {
 		let message = `HTTP ${response.status}: ${response.statusText}`
 		try {
@@ -126,12 +130,27 @@ async function fetchDoePdf(organizationId: string, doeId: string) {
 	return response.blob()
 }
 
+function fetchDoePdf(organizationId: string, doeId: string) {
+	return fetchDoeFile(doePdfPath(organizationId, doeId))
+}
+
 export async function downloadDoePdf(
 	organizationId: string,
 	doeId: string,
 	filename: string,
 ): Promise<void> {
-	const blob = await fetchDoePdf(organizationId, doeId)
+	saveBlob(await fetchDoePdf(organizationId, doeId), filename)
+}
+
+export async function downloadDoeDocx(
+	organizationId: string,
+	doeId: string,
+	filename: string,
+): Promise<void> {
+	saveBlob(await fetchDoeFile(doeDocxPath(organizationId, doeId)), filename)
+}
+
+function saveBlob(blob: Blob, filename: string): void {
 	const objectUrl = URL.createObjectURL(blob)
 	try {
 		const link = document.createElement('a')

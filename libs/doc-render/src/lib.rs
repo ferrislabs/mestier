@@ -1,7 +1,9 @@
 mod bundle;
+mod docx;
 mod recap;
 mod world;
 
+pub use docx::DocxDoeRenderer;
 pub use recap::{MaintenanceRecap, RecapContact, RecapRow, TypstRecapRenderer};
 
 use mestier_core::{DoeDocument, DoeRenderError, DoeRenderer, FileBundle};
