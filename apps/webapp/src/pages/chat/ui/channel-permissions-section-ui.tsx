@@ -3,7 +3,9 @@ import { Button } from '#/components/ui/button'
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
@@ -19,6 +21,11 @@ import {
 	type PermissionTarget,
 } from '#/pages/chat/lib/permission-targets'
 
+export interface AddableTarget {
+	id: string
+	name: string
+}
+
 export interface ChannelPermissionsSectionUIProps {
 	isLoading: boolean
 	isPrivate: boolean
@@ -26,8 +33,9 @@ export interface ChannelPermissionsSectionUIProps {
 	targets: PermissionTarget[]
 	selectedKey: string
 	onSelectKey: (key: string) => void
-	addableRoles: { id: string; name: string }[]
-	onAddRole: (roleId: string) => void
+	addableRoles: AddableTarget[]
+	addableMembers: AddableTarget[]
+	onAddTarget: (type: 'role' | 'member', id: string) => void
 	onChangeBit: (key: string, bit: OverwriteBitName, state: TriState) => void
 	onRemoveTarget: (key: string) => void
 }
@@ -86,7 +94,8 @@ export function ChannelPermissionsSectionUI({
 	selectedKey,
 	onSelectKey,
 	addableRoles,
-	onAddRole,
+	addableMembers,
+	onAddTarget,
 	onChangeBit,
 	onRemoveTarget,
 }: ChannelPermissionsSectionUIProps) {
@@ -128,7 +137,7 @@ export function ChannelPermissionsSectionUI({
 				<div className="grid gap-6 sm:grid-cols-[12rem_minmax(0,1fr)]">
 					<div className="flex flex-col gap-2">
 						<div className="flex items-center justify-between text-muted-foreground text-xs">
-							<span>Rôles</span>
+							<span>Rôles/Membres</span>
 						</div>
 						<ul className="flex flex-col gap-0.5">
 							{targets.map((target) => (
@@ -147,21 +156,48 @@ export function ChannelPermissionsSectionUI({
 								</li>
 							))}
 						</ul>
-						{addableRoles.length > 0 ? (
-							<Select value="" onValueChange={onAddRole}>
+						{addableRoles.length + addableMembers.length > 0 ? (
+							<Select
+								value=""
+								onValueChange={(value) => {
+									const [type, ...rest] = value.split(':')
+									onAddTarget(
+										type === 'role' ? 'role' : 'member',
+										rest.join(':'),
+									)
+								}}
+							>
 								<SelectTrigger
-									aria-label="Ajouter un rôle"
+									aria-label="Ajouter un rôle ou un membre"
 									className="h-8 w-full text-xs"
 								>
 									<Plus className="size-3.5" />
-									<SelectValue placeholder="Ajouter un rôle" />
+									<SelectValue placeholder="Ajouter" />
 								</SelectTrigger>
 								<SelectContent>
-									{addableRoles.map((role) => (
-										<SelectItem key={role.id} value={role.id}>
-											{role.name}
-										</SelectItem>
-									))}
+									{addableRoles.length > 0 ? (
+										<SelectGroup>
+											<SelectLabel>Rôles</SelectLabel>
+											{addableRoles.map((role) => (
+												<SelectItem key={role.id} value={`role:${role.id}`}>
+													{role.name}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									) : null}
+									{addableMembers.length > 0 ? (
+										<SelectGroup>
+											<SelectLabel>Membres</SelectLabel>
+											{addableMembers.map((member) => (
+												<SelectItem
+													key={member.id}
+													value={`member:${member.id}`}
+												>
+													{member.name}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									) : null}
 								</SelectContent>
 							</Select>
 						) : null}

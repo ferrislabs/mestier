@@ -120,6 +120,14 @@ export function ChannelAdminFeature({
 				),
 		)
 		.map((role) => ({ id: role.role_id, name: role.name }))
+	const addableMembers = (directory.data ?? [])
+		.filter(
+			(entry) =>
+				!permissionTargets.some(
+					(target) => target.key === `member:${entry.user_id}`,
+				),
+		)
+		.map((entry) => ({ id: entry.user_id, name: entry.display_name }))
 
 	function saveTarget(
 		type: PermissionTargetType,
@@ -159,9 +167,9 @@ export function ChannelAdminFeature({
 		)
 	}
 
-	function handleAddRole(roleId: string) {
-		saveTarget('role', roleId, OVERWRITE_BITS.VIEW_CHANNEL, 0)
-		setSelectedPermissionKey(`role:${roleId}`)
+	function handleAddTarget(type: 'role' | 'member', id: string) {
+		saveTarget(type, id, OVERWRITE_BITS.VIEW_CHANNEL, 0)
+		setSelectedPermissionKey(`${type}:${id}`)
 	}
 
 	function handleRemoveTarget(key: string) {
@@ -218,7 +226,8 @@ export function ChannelAdminFeature({
 			selectedPermissionKey={selectedPermissionKey}
 			onSelectPermissionKey={setSelectedPermissionKey}
 			addableRoles={addableRoles}
-			onAddRole={handleAddRole}
+			addableMembers={addableMembers}
+			onAddTarget={handleAddTarget}
 			onChangeTargetBit={handleChangeTargetBit}
 			onRemoveTarget={handleRemoveTarget}
 			webhooks={webhooks.data ?? []}

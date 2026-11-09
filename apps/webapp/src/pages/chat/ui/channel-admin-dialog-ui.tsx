@@ -58,7 +58,8 @@ export interface ChannelAdminDialogUIProps {
 	selectedPermissionKey: string
 	onSelectPermissionKey: (key: string) => void
 	addableRoles: { id: string; name: string }[]
-	onAddRole: (roleId: string) => void
+	addableMembers: { id: string; name: string }[]
+	onAddTarget: (type: 'role' | 'member', id: string) => void
 	onChangeTargetBit: (
 		key: string,
 		bit: OverwriteBitName,
@@ -103,7 +104,8 @@ export function ChannelAdminDialogUI({
 	selectedPermissionKey,
 	onSelectPermissionKey,
 	addableRoles,
-	onAddRole,
+	addableMembers,
+	onAddTarget,
 	onChangeTargetBit,
 	onRemoveTarget,
 	webhooks,
@@ -295,7 +297,8 @@ export function ChannelAdminDialogUI({
 										selectedKey={selectedPermissionKey}
 										onSelectKey={onSelectPermissionKey}
 										addableRoles={addableRoles}
-										onAddRole={onAddRole}
+										addableMembers={addableMembers}
+										onAddTarget={onAddTarget}
 										onChangeBit={onChangeTargetBit}
 										onRemoveTarget={onRemoveTarget}
 									/>
