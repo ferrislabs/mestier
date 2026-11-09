@@ -105,6 +105,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_post(channel::create::handler)
         .typed_get(channel::get_one::handler)
         .typed_patch(channel::update::handler)
+        .typed_put(channel::reorder::handler)
         .typed_delete(channel::delete::handler)
         .typed_get(thread::list::handler)
         .typed_post(thread::create::handler)

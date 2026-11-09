@@ -35,8 +35,8 @@ pub use domain::category::{
 };
 pub use domain::category_access::{CategoryAccess, CategoryAccessRepository};
 pub use domain::channel::{
-    ChannelRepository, ChannelService, CreateChannelCommand, CreateProjectChannelCommand,
-    CreateThreadCommand, UpdateChannelCommand, UpdateThreadCommand,
+    ChannelPlacement, ChannelRepository, ChannelService, CreateChannelCommand,
+    CreateProjectChannelCommand, CreateThreadCommand, UpdateChannelCommand, UpdateThreadCommand,
 };
 pub use domain::direct::{
     DirectChannel, DirectChannelRepository, DirectChannelService, DirectPair,

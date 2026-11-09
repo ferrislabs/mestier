@@ -260,6 +260,11 @@ export namespace Schemas {
     position: number;
     updated_at: string;
   };
+  export type ChannelPlacementRequest = {
+    category_id?: (null | CategoryId) | undefined;
+    channel_id: ChannelId;
+    position: number;
+  };
   export type ChannelType = "TEXT" | "THREAD" | "DIRECT" | "ANNOUNCEMENT" | "VOICE";
   export type ChannelResponse = {
     archived: boolean;
@@ -2234,6 +2239,7 @@ export namespace Schemas {
   export type RejectExtraPeriodRequest = { comment: string };
   export type RejectInterventionRequest = Partial<{ note: string | null }>;
   export type RejectSupplierInvoiceRequest = Partial<{ notes: string | null }>;
+  export type ReorderChannelsRequest = { placements: Array<ChannelPlacementRequest> };
   export type ReplaceBillingSettingsRequest = {
     bic?: (string | null) | undefined;
     default_vat_rate_bp: number;
@@ -3535,6 +3541,17 @@ export namespace Endpoints {
       403: unknown;
       409: unknown;
     };
+  };
+  export type put_ReorderChannels = {
+    method: "PUT";
+    path: "/api/v1/chat/organizations/{organization_id}/channels/order";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.ReorderChannelsRequest;
+    };
+    responses: { 204: unknown; 400: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
   };
   export type get_ListDirectChannels = {
     method: "GET";
@@ -13617,6 +13634,7 @@ export type EndpointByMethod = {
     "/api/v1/chat/channels/{channel_id}/read": Endpoints.put_MarkChannelRead;
     "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.put_AddReaction;
     "/api/v1/chat/notifications/{notification_id}/read": Endpoints.put_MarkNotificationRead;
+    "/api/v1/chat/organizations/{organization_id}/channels/order": Endpoints.put_ReorderChannels;
     "/api/v1/chat/organizations/{organization_id}/notifications/read-all": Endpoints.put_MarkAllNotificationsRead;
     "/api/v1/chat/organizations/{organization_id}/presence": Endpoints.put_SetPresence;
     "/api/v1/members/{member_id}/employee-profile": Endpoints.put_UpsertEmployeeProfile;

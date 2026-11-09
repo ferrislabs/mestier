@@ -1,12 +1,14 @@
+use std::collections::HashSet;
+
 use chrono::Utc;
 use common::{CoreError, ProjectId, generate_uuid_v7};
 
 use crate::{
-    Channel, ChannelId, ChannelType, OrganizationId,
+    CategoryId, Channel, ChannelId, ChannelType, OrganizationId,
     domain::channel::{
         commands::{
-            CreateChannelCommand, CreateProjectChannelCommand, CreateThreadCommand,
-            UpdateChannelCommand, UpdateThreadCommand,
+            ChannelPlacement, CreateChannelCommand, CreateProjectChannelCommand,
+            CreateThreadCommand, UpdateChannelCommand, UpdateThreadCommand,
         },
         ports::ChannelRepository,
     },
@@ -176,6 +178,73 @@ where
             .publish(DomainEvent::ChannelUpdated(saved.clone()))
             .await?;
         Ok(saved)
+    }
+
+    /// Moves channels to new categories and ranks in one go.
+    ///
+    /// A channel of another organization is `NotFound`, like one that does not
+    /// exist; a thread or a direct channel has no place in the side nav, and a
+    /// category the organization does not have is refused. A placement that
+    /// changes nothing writes nothing and publishes nothing.
+    pub async fn reorder_channels(
+        &mut self,
+        organization_id: OrganizationId,
+        placements: &[ChannelPlacement],
+        categories: &HashSet<CategoryId>,
+    ) -> Result<Vec<Channel>, CoreError> {
+        let mut seen = HashSet::new();
+        if !placements
+            .iter()
+            .all(|placement| seen.insert(placement.channel_id))
+        {
+            return Err(CoreError::Conflict(
+                "a channel can only be placed once".to_owned(),
+            ));
+        }
+
+        let mut moved = Vec::new();
+        for placement in placements {
+            if let Some(category_id) = placement.category_id
+                && !categories.contains(&category_id)
+            {
+                return Err(CoreError::Conflict(
+                    "category does not belong to this organization".to_owned(),
+                ));
+            }
+            let existing = self
+                .repo
+                .find_by_id(placement.channel_id)
+                .await?
+                .filter(|channel| channel.organization_id == organization_id)
+                .ok_or(CoreError::NotFound)?;
+            if matches!(
+                existing.channel_type,
+                ChannelType::Thread | ChannelType::Direct
+            ) {
+                return Err(CoreError::Conflict(
+                    "only channels can be reordered".to_owned(),
+                ));
+            }
+            if existing.category_id == placement.category_id
+                && existing.position == placement.position
+            {
+                continue;
+            }
+            let saved = self
+                .repo
+                .update(&Channel {
+                    category_id: placement.category_id,
+                    position: placement.position,
+                    updated_at: Utc::now(),
+                    ..existing
+                })
+                .await?;
+            self.events
+                .publish(DomainEvent::ChannelUpdated(saved.clone()))
+                .await?;
+            moved.push(saved);
+        }
+        Ok(moved)
     }
 
     /// Refuses to hard-delete a project's channel. This codebase never
@@ -544,6 +613,130 @@ mod tests {
 
         assert_eq!(result.channel_type, ChannelType::Thread);
         assert_eq!(result.parent_id, Some(parent_id));
+    }
+
+    fn placement(id: ChannelId, category: Option<CategoryId>, position: i32) -> ChannelPlacement {
+        ChannelPlacement {
+            channel_id: id,
+            category_id: category,
+            position,
+        }
+    }
+
+    fn repo_holding(channel: Channel) -> MockChannelRepository {
+        let id = channel.id;
+        let mut repo = MockChannelRepository::new();
+        repo.expect_find_by_id().with(eq(id)).returning(move |_| {
+            let channel = channel.clone();
+            Box::pin(async move { Ok(Some(channel)) })
+        });
+        repo
+    }
+
+    #[tokio::test]
+    async fn reorder_channels_moves_a_channel_and_publishes_the_update() {
+        let org = OrganizationId(Uuid::new_v4());
+        let id = ChannelId(Uuid::new_v4());
+        let category = CategoryId(Uuid::new_v4());
+
+        let mut repo = repo_holding(text_channel(id, org));
+        repo.expect_update()
+            .withf(move |channel| channel.category_id == Some(category) && channel.position == 2)
+            .times(1)
+            .returning(|channel| {
+                let channel = channel.clone();
+                Box::pin(async move { Ok(channel) })
+            });
+        let mut events = MockEventPublisher::new();
+        events
+            .expect_publish()
+            .withf(|event| matches!(event, DomainEvent::ChannelUpdated(_)))
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(()) }));
+
+        let mut svc = ChannelService::new(repo, events);
+        let moved = svc
+            .reorder_channels(
+                org,
+                &[placement(id, Some(category), 2)],
+                &HashSet::from([category]),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(moved.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn reorder_channels_writes_nothing_for_a_placement_that_changes_nothing() {
+        let org = OrganizationId(Uuid::new_v4());
+        let id = ChannelId(Uuid::new_v4());
+
+        let repo = repo_holding(text_channel(id, org));
+        let mut svc = ChannelService::new(repo, MockEventPublisher::new());
+
+        let moved = svc
+            .reorder_channels(org, &[placement(id, None, 0)], &HashSet::new())
+            .await
+            .unwrap();
+
+        assert!(moved.is_empty());
+    }
+
+    #[tokio::test]
+    async fn reorder_channels_treats_a_channel_of_another_organization_as_missing() {
+        let org = OrganizationId(Uuid::new_v4());
+        let id = ChannelId(Uuid::new_v4());
+
+        let repo = repo_holding(text_channel(id, OrganizationId(Uuid::new_v4())));
+        let mut svc = ChannelService::new(repo, MockEventPublisher::new());
+
+        let result = svc
+            .reorder_channels(org, &[placement(id, None, 1)], &HashSet::new())
+            .await;
+
+        assert!(matches!(result, Err(CoreError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn reorder_channels_refuses_a_category_the_organization_does_not_have() {
+        let org = OrganizationId(Uuid::new_v4());
+        let id = ChannelId(Uuid::new_v4());
+        let foreign = CategoryId(Uuid::new_v4());
+
+        let mut svc = ChannelService::new(MockChannelRepository::new(), MockEventPublisher::new());
+
+        let result = svc
+            .reorder_channels(org, &[placement(id, Some(foreign), 0)], &HashSet::new())
+            .await;
+
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+    }
+
+    #[tokio::test]
+    async fn reorder_channels_refuses_a_thread_and_a_duplicate() {
+        let org = OrganizationId(Uuid::new_v4());
+        let id = ChannelId(Uuid::new_v4());
+        let thread = Channel {
+            channel_type: ChannelType::Thread,
+            ..text_channel(id, org)
+        };
+
+        let mut svc = ChannelService::new(repo_holding(thread), MockEventPublisher::new());
+        let result = svc
+            .reorder_channels(org, &[placement(id, None, 1)], &HashSet::new())
+            .await;
+        assert!(matches!(result, Err(CoreError::Conflict(_))));
+
+        let mut svc = ChannelService::new(MockChannelRepository::new(), MockEventPublisher::new());
+        let twice = svc
+            .reorder_channels(
+                org,
+                &[placement(id, None, 1), placement(id, None, 2)],
+                &HashSet::new(),
+            )
+            .await;
+        assert!(matches!(twice, Err(CoreError::Conflict(_))));
     }
 
     #[tokio::test]

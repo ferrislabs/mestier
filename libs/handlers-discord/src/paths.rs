@@ -177,6 +177,12 @@ pub struct OrgNotificationsReadAllPath {
 }
 
 #[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/organizations/{organization_id}/channels/order")]
+pub struct OrgChannelOrderPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/chat/organizations/{organization_id}/activity")]
 pub struct OrgActivityPath {
     pub organization_id: OrganizationId,
