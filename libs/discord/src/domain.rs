@@ -214,6 +214,7 @@ pub mod channel;
 pub mod direct;
 pub mod message;
 pub mod notification;
+pub mod notification_level;
 pub mod overwrite;
 pub mod presence;
 pub mod read_state;

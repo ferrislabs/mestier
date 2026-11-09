@@ -26,6 +26,22 @@ use uuid::Uuid;
 /// table name checked at run time instead of compile time — acceptable now that
 /// a mistake fails the test on the next run instead of being swallowed.
 pub async fn purge(pool: &PgPool, statement: &str, id: Uuid) {
+    // An organization cannot be deleted while its emitted events remain
+    // (`event_org_id_fkey`), and any use case that emits one leaves them behind.
+    // The events go first, selected by the same `WHERE` as the organization.
+    if let Some(filter) = statement
+        .trim_start()
+        .strip_prefix("DELETE FROM organizations")
+    {
+        let events = format!(
+            "DELETE FROM automation.event WHERE org_id IN (SELECT id FROM organizations{filter})"
+        );
+        sqlx::query(&events)
+            .bind(id)
+            .execute(pool)
+            .await
+            .unwrap_or_else(|error| panic!("cleanup failed on the organization's events: {error}"));
+    }
     sqlx::query(statement)
         .bind(id)
         .execute(pool)

@@ -175,3 +175,21 @@ pub struct NotificationReadPath {
 pub struct OrgNotificationsReadAllPath {
     pub organization_id: OrganizationId,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/organizations/{organization_id}/activity")]
+pub struct OrgActivityPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/organizations/{organization_id}/notification-levels")]
+pub struct OrgNotificationLevelsPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/chat/channels/{channel_id}/notification-level")]
+pub struct ChannelNotificationLevelPath {
+    pub channel_id: ChannelId,
+}

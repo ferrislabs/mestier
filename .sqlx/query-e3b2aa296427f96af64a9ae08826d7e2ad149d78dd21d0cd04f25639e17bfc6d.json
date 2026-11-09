@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO chat.notification_preference (user_id, channel_id, org_id, level, updated_at)\n            VALUES ($1, $2, $3, $4, now())\n            ON CONFLICT (user_id, channel_id)\n            DO UPDATE SET level = EXCLUDED.level, updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e3b2aa296427f96af64a9ae08826d7e2ad149d78dd21d0cd04f25639e17bfc6d"
+}

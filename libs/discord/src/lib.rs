@@ -49,6 +49,9 @@ pub use domain::notification::{
     CreateNotification, MarkNotificationRead, NotificationRepository,
     mention_notification_recipients, notification_should_deliver,
 };
+pub use domain::notification_level::{
+    NotificationLevel, NotificationPreferenceRepository, effective_level,
+};
 pub use domain::overwrite::{
     DeleteChannelOverwrite, OverwriteRepository, UpsertChannelOverwrite,
     resolve_channel_permissions,

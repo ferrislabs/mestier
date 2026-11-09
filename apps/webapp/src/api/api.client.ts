@@ -56,6 +56,23 @@ export namespace Schemas {
     paid: boolean;
   };
   export type AcquisitionBody = { kind: "MONTHLY"; per_month: number } | { days: number; kind: "ANNUAL" };
+  export type AuthorType = "USER" | "WEBHOOK" | "SYSTEM";
+  export type UserId = string;
+  export type ChannelId = string;
+  export type MessageId = string;
+  export type NotificationId = string;
+  export type ActivityEntryResponse = {
+    author_type: AuthorType;
+    author_user_id?: (null | UserId) | undefined;
+    channel_id: ChannelId;
+    created_at: string;
+    excerpt: string;
+    kind: string;
+    message_id: MessageId;
+    notification_id?: (null | NotificationId) | undefined;
+    read: boolean;
+    unread_count?: (number | null) | undefined;
+  };
   export type DocumentKind = "CONTRACT" | "IDENTITY" | "DIPLOMA" | "MEDICAL" | "OTHER";
   export type AddMemberDocumentRequest = { file_key: string; kind: DocumentKind; name: string };
   export type AddTicketBadgeRequest = { label: string; tone?: (string | null) | undefined };
@@ -116,7 +133,6 @@ export namespace Schemas {
     visible_when?: (null | VisibleWhenResponse) | undefined;
   };
   export type AuthSchemeResponse = { fields: Array<FieldResponse>; kind: string; label: string };
-  export type AuthorType = "USER" | "WEBHOOK" | "SYSTEM";
   export type AutomationSettingsBody = {
     disable_target_after?: (number | null) | undefined;
     event_retention_seconds: number;
@@ -244,9 +260,7 @@ export namespace Schemas {
     position: number;
     updated_at: string;
   };
-  export type ChannelId = string;
   export type ChannelType = "TEXT" | "THREAD" | "DIRECT" | "ANNOUNCEMENT" | "VOICE";
-  export type MessageId = string;
   export type ChannelResponse = {
     archived: boolean;
     category_id?: (null | CategoryId) | undefined;
@@ -1020,7 +1034,6 @@ export namespace Schemas {
     line2?: (string | null) | undefined;
     postal_code: string;
   };
-  export type UserId = string;
   export type DirectChannelResponse = {
     channel_id: ChannelId;
     created_at: string;
@@ -1808,7 +1821,8 @@ export namespace Schemas {
   export type MyPermissionsResponse = { permissions: Array<string> };
   export type NodePositionDto = { x: number; y: number };
   export type NoteInvoiceRequest = { note: string };
-  export type NotificationId = string;
+  export type NotificationLevel = "ALL" | "MENTIONS" | "NOTHING";
+  export type NotificationLevelResponse = { channel_id: ChannelId; level: NotificationLevel };
   export type NotificationResponse = {
     channel_id: ChannelId;
     created_at: string;
@@ -2337,6 +2351,7 @@ export namespace Schemas {
     weekly_contract_minutes: number;
   };
   export type SetNextNumberRequest = { next_number: number };
+  export type SetNotificationLevelRequest = { level: NotificationLevel };
   export type SetPresenceRequest = { status: PresenceStatus };
   export type StartOauthRequest = { redirect_uri: string; return_to: string };
   export type StartOauthResponse = { authorization_url: string };
@@ -3045,6 +3060,17 @@ export namespace Endpoints {
       403: unknown;
     };
   };
+  export type put_SetNotificationLevel = {
+    method: "PUT";
+    path: "/api/v1/chat/channels/{channel_id}/notification-level";
+    requestFormat: "json";
+    parameters: {
+      path: { channel_id: string };
+
+      body: Schemas.SetNotificationLevelRequest;
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type get_ListChannelPermissions = {
     method: "GET";
     path: "/api/v1/chat/channels/{channel_id}/permissions";
@@ -3369,6 +3395,33 @@ export namespace Endpoints {
     };
     responses: { 204: unknown; 401: unknown; 403: unknown };
   };
+  export type get_ListActivity = {
+    method: "GET";
+    path: "/api/v1/chat/organizations/{organization_id}/activity";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; limit: number | null };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          author_type: Schemas.AuthorType;
+          author_user_id?: (null | Schemas.UserId) | undefined;
+          channel_id: Schemas.ChannelId;
+          created_at: string;
+          excerpt: string;
+          kind: string;
+          message_id: Schemas.MessageId;
+          notification_id?: (null | Schemas.NotificationId) | undefined;
+          read: boolean;
+          unread_count?: (number | null) | undefined;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
   export type get_ListCategories = {
     method: "GET";
     path: "/api/v1/chat/organizations/{organization_id}/categories";
@@ -3539,6 +3592,22 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{ display_name: string; presence: Schemas.PresenceStatus; user_id: Schemas.UserId }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListNotificationLevels = {
+    method: "GET";
+    path: "/api/v1/chat/organizations/{organization_id}/notification-levels";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{ channel_id: Schemas.ChannelId; level: Schemas.NotificationLevel }>;
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       401: unknown;
@@ -13281,10 +13350,12 @@ export type EndpointByMethod = {
     "/api/v1/chat/channels/{channel_id}/threads": Endpoints.get_ListThreads;
     "/api/v1/chat/channels/{channel_id}/webhooks": Endpoints.get_ListWebhooks;
     "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.get_ListReactors;
+    "/api/v1/chat/organizations/{organization_id}/activity": Endpoints.get_ListActivity;
     "/api/v1/chat/organizations/{organization_id}/categories": Endpoints.get_ListCategories;
     "/api/v1/chat/organizations/{organization_id}/channels": Endpoints.get_ListChannels;
     "/api/v1/chat/organizations/{organization_id}/direct-channels": Endpoints.get_ListDirectChannels;
     "/api/v1/chat/organizations/{organization_id}/directory": Endpoints.get_ListChatDirectory;
+    "/api/v1/chat/organizations/{organization_id}/notification-levels": Endpoints.get_ListNotificationLevels;
     "/api/v1/chat/organizations/{organization_id}/notifications": Endpoints.get_ListNotifications;
     "/api/v1/chat/organizations/{organization_id}/roles": Endpoints.get_ListChatRoles;
     "/api/v1/chat/organizations/{organization_id}/unread": Endpoints.get_ListUnreadChannels;
@@ -13540,6 +13611,7 @@ export type EndpointByMethod = {
     "/webhooks/{path}": Endpoints.post_ReceiveWebhook;
   };
   put: {
+    "/api/v1/chat/channels/{channel_id}/notification-level": Endpoints.put_SetNotificationLevel;
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;
     "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}": Endpoints.put_UpsertTargetOverwrite;
     "/api/v1/chat/channels/{channel_id}/read": Endpoints.put_MarkChannelRead;
