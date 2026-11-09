@@ -8,7 +8,6 @@ import {
 } from 'lucide-react'
 import { useLayoutEffect, useRef } from 'react'
 import { Button } from '#/components/ui/button'
-import { Kbd } from '#/components/ui/kbd'
 import { cn } from '#/lib/utils'
 import { EmojiPopover } from '#/pages/chat/ui/emoji-popover'
 import { IconButton } from '#/pages/chat/ui/icon-button'
@@ -113,7 +112,7 @@ export function MessageComposerUI({
 					))}
 				</ul>
 			) : null}
-			<div className="@container rounded-lg border border-input bg-card transition-shadow focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+			<div className="rounded-lg border border-input bg-card transition-shadow focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
 				<textarea
 					ref={textareaRef}
 					rows={1}
@@ -163,21 +162,12 @@ export function MessageComposerUI({
 					<EmojiPopover side="top" align="start" onSelect={appendEmoji}>
 						<IconButton label="Insérer un emoji" icon={Smile} />
 					</EmojiPopover>
-					<p className="mr-2 ml-auto hidden items-center gap-1 whitespace-nowrap text-muted-foreground text-xs @lg:flex">
-						<Kbd>Entrée</Kbd>
-						<span>envoyer</span>
-						<span aria-hidden>·</span>
-						<Kbd>Maj</Kbd>
-						<span aria-hidden>+</span>
-						<Kbd>Entrée</Kbd>
-						<span>nouvelle ligne</span>
-					</p>
 					<Button
 						type="submit"
 						size="icon-sm"
 						aria-label="Envoyer le message"
 						disabled={!canSend}
-						className="ml-auto shrink-0 @lg:ml-0"
+						className="ml-auto shrink-0"
 					>
 						<SendHorizontal aria-hidden />
 					</Button>
