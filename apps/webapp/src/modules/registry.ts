@@ -1,6 +1,7 @@
 import {
 	AlarmClockPlus,
 	Bell,
+	BookUser,
 	Boxes,
 	Building2,
 	CalendarCheck,
@@ -382,6 +383,13 @@ export const MODULES: AppModule[] = [
 				to: '/cursus/entreprises',
 				icon: Building2,
 				requiredPermission: 'VIEW_CURSUS',
+			},
+			{
+				id: 'mes-trinomes',
+				label: 'Mes trinômes',
+				to: '/cursus/mes-trinomes',
+				icon: BookUser,
+				visibleWhen: 'cursus-participant',
 			},
 		],
 	},
