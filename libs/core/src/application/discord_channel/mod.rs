@@ -11,6 +11,9 @@ use mestier_macros::transactional;
 use crate::application::MestierUseCase;
 use crate::domain::chat::events::ChatChannelCreated;
 
+#[cfg(test)]
+mod tests;
+
 impl MestierUseCase {
     #[transactional(channel, events, emitter)]
     pub async fn create_channel(&self, cmd: CreateChannelCommand) -> Result<Channel, CoreError> {

@@ -83,6 +83,8 @@ export interface ChatSidebarUIProps {
 	onDeleteChannel: (channelId: string) => void
 	/** Set only for someone who may manage channels. */
 	dnd?: ChannelDnd
+	/** Why the last move was refused, shown under the channels. */
+	moveError?: string | null
 }
 
 const headingClassName =
@@ -118,6 +120,7 @@ export function ChatSidebarUI({
 	onChangeNotificationLevel,
 	onDeleteChannel,
 	dnd,
+	moveError,
 }: ChatSidebarUIProps) {
 	return (
 		<nav
@@ -190,6 +193,11 @@ export function ChatSidebarUI({
 								dnd={dnd}
 							/>
 						))}
+						{moveError ? (
+							<p role="alert" className="px-2 text-destructive text-xs">
+								Déplacement impossible : {moveError}
+							</p>
+						) : null}
 						{dnd?.draggingId && !groups.some((group) => !group.category) ? (
 							<div
 								onDragOver={(event) => {

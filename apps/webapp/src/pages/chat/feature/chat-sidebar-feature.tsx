@@ -149,6 +149,7 @@ export function ChatSidebarFeature() {
 			}
 			onOpenChannelAdmin={openChannelAdmin}
 			onDuplicateChannel={duplicateChannel}
+			moveError={reorderChannels.isError ? reorderChannels.error.message : null}
 			dnd={
 				canReorder
 					? {
