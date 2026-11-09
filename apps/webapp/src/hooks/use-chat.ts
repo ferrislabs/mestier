@@ -25,6 +25,8 @@ const ORG_UNREAD_PATH = '/api/v1/chat/organizations/{organization_id}/unread'
 const CHANNEL_READ_PATH = '/api/v1/chat/channels/{channel_id}/read'
 const ORG_NOTIFICATIONS_PATH =
 	'/api/v1/chat/organizations/{organization_id}/notifications'
+const ORG_CHANNEL_ORDER_PATH =
+	'/api/v1/chat/organizations/{organization_id}/channels/order'
 const ORG_ACTIVITY_PATH =
 	'/api/v1/chat/organizations/{organization_id}/activity'
 const ORG_NOTIFICATION_LEVELS_PATH =
@@ -860,6 +862,55 @@ export function useCreateChannel(organizationId: string) {
 	return useMutation({
 		...window.tanstackApi.mutation('post', ORG_CHANNELS_PATH).mutationOptions,
 		onSuccess: invalidateOnSettled(queryClient, channelsKey(organizationId)),
+	})
+}
+
+export interface ChannelPlacementInput {
+	channel_id: string
+	category_id: string | null
+	position: number
+}
+
+/**
+ * Places channels in their categories. The side nav moves at once: the cached
+ * list is rewritten before the server answers, and put back by a refetch if
+ * the server refuses.
+ */
+export function useReorderChannels(organizationId: string) {
+	const queryClient = useQueryClient()
+	return useMutation({
+		...window.tanstackApi.mutation('put', ORG_CHANNEL_ORDER_PATH)
+			.mutationOptions,
+		onMutate: async (variables) => {
+			const { placements } = (
+				variables as unknown as {
+					body: { placements: ChannelPlacementInput[] }
+				}
+			).body
+			await queryClient.cancelQueries({ queryKey: channelsKey(organizationId) })
+			const byId = new Map(
+				placements.map((placement) => [placement.channel_id, placement]),
+			)
+			queryClient.setQueryData<{ data: Channel[] }>(
+				channelsKey(organizationId),
+				(old) =>
+					old && {
+						...old,
+						data: old.data.map((channel) => {
+							const placement = byId.get(channel.id)
+							return placement
+								? {
+										...channel,
+										category_id: placement.category_id,
+										position: placement.position,
+									}
+								: channel
+						}),
+					},
+			)
+		},
+		onSettled: () =>
+			queryClient.invalidateQueries({ queryKey: channelsKey(organizationId) }),
 	})
 }
 
