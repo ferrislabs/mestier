@@ -55,6 +55,9 @@ pub struct AuthConfig {
 pub struct FileStorageConfig {
     pub bucket: String,
     pub endpoint: String,
+    /// Host the browser reaches the store on. Download URLs are signed with
+    /// it; every other operation keeps using `endpoint`.
+    pub public_endpoint: Option<String>,
     pub region: String,
     pub access_key_id: String,
     pub secret_access_key: String,

@@ -8,7 +8,9 @@ This chart does **not** provision Postgres, Redis, RustFS or the observability
 stack — those are external dependencies (see the root `docker-compose.yml`
 for what a local stack looks like). Point `api.env.DATABASE_HOST`,
 `api.env.RATE_LIMIT_REDIS_URL` and `api.env.FILE_STORAGE_ENDPOINT` at wherever
-you run them in your cluster.
+you run them in your cluster. If `FILE_STORAGE_ENDPOINT` is a cluster-internal
+name, also set `api.env.FILE_STORAGE_PUBLIC_ENDPOINT` to a URL the browser can
+reach: download links are signed with it.
 
 ## Install
 
