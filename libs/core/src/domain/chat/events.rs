@@ -19,7 +19,7 @@ pub struct ChatMessagePosted {
 
 impl DomainEvent for ChatMessagePosted {
     fn name(&self) -> &'static str {
-        "chat.message_posted"
+        "discussion.message.sended"
     }
 
     fn version(&self) -> u16 {
@@ -51,7 +51,7 @@ pub struct ChatChannelCreated {
 
 impl DomainEvent for ChatChannelCreated {
     fn name(&self) -> &'static str {
-        "chat.channel_created"
+        "discussion.channel.created"
     }
 
     fn version(&self) -> u16 {
@@ -79,13 +79,16 @@ impl DomainEvent for ChatChannelCreated {
 /// Test-only, mirrors `quote::events::emitted_events`.
 #[cfg(test)]
 pub fn emitted_events() -> Vec<(&'static str, u16)> {
-    vec![("chat.message_posted", 1), ("chat.channel_created", 1)]
+    vec![
+        ("discussion.message.sended", 1),
+        ("discussion.channel.created", 1),
+    ]
 }
 
 pub fn descriptors() -> Vec<EventDescriptor> {
     vec![
         EventDescriptor {
-            name: "chat.message_posted",
+            name: "discussion.message.sended",
             version: 1,
             label: "Message posté dans un canal",
             subject_kind: "chat_message",
@@ -101,7 +104,7 @@ pub fn descriptors() -> Vec<EventDescriptor> {
             }),
         },
         EventDescriptor {
-            name: "chat.channel_created",
+            name: "discussion.channel.created",
             version: 1,
             label: "Canal créé",
             subject_kind: "chat_channel",
