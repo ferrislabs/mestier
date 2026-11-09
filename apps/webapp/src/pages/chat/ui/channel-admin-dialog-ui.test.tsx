@@ -209,7 +209,7 @@ describe('ChannelAdminDialogUI — webhooks', () => {
 		renderWithPermissions(
 			<ChannelAdminDialogUI {...baseProps({ newWebhookName: '' })} />,
 		)
-		await switchToTab(user, 'Webhooks')
+		await switchToTab(user, 'Intégrations')
 
 		const button = screen.getByText('Créer').closest('button')
 		expect(button?.hasAttribute('disabled')).toBe(true)
@@ -226,7 +226,7 @@ describe('ChannelAdminDialogUI — webhooks', () => {
 				})}
 			/>,
 		)
-		await switchToTab(user, 'Webhooks')
+		await switchToTab(user, 'Intégrations')
 
 		expect(screen.getByText('secret-token-123')).toBeDefined()
 		await user.click(screen.getByText('J’ai copié le jeton'))
@@ -255,7 +255,7 @@ describe('ChannelAdminDialogUI — webhooks', () => {
 				})}
 			/>,
 		)
-		await switchToTab(user, 'Webhooks')
+		await switchToTab(user, 'Intégrations')
 
 		await user.click(screen.getByLabelText('Révoquer CI bot'))
 		expect(onDeleteWebhook).toHaveBeenCalledWith('wh-1')
@@ -268,7 +268,7 @@ describe('ChannelAdminDialogUI permission gating (#407)', () => {
 			permissions: ['MANAGE_CHANNELS', 'MANAGE_WEBHOOKS'],
 		})
 		expect(screen.getByRole('tab', { name: 'Permissions' })).toBeDefined()
-		expect(screen.getByRole('tab', { name: 'Webhooks' })).toBeDefined()
+		expect(screen.getByRole('tab', { name: 'Intégrations' })).toBeDefined()
 	})
 
 	it('hides the permissions tab without MANAGE_CHANNELS', () => {
@@ -285,7 +285,7 @@ describe('ChannelAdminDialogUI permission gating (#407)', () => {
 		renderWithPermissions(<ChannelAdminDialogUI {...baseProps()} />, {
 			permissions: ['MANAGE_CHANNELS'],
 		})
-		expect(screen.queryByRole('tab', { name: 'Webhooks' })).toBeNull()
+		expect(screen.queryByRole('tab', { name: 'Intégrations' })).toBeNull()
 	})
 
 	it('hides the save and delete controls without MANAGE_CHANNELS', () => {
