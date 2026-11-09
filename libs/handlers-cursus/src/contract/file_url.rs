@@ -12,7 +12,7 @@ use crate::{paths::ContractFilePath, require_view_cursus, response::ContractFile
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
         ("contract_id" = mestier_core::ContractId, Path, description = "Contract identifier"),
-        ("kind" = inline(mestier_core::ContractFileKind), Path, description = "File slot: cerfa or mission_sheet"),
+        ("kind" = inline(mestier_core::ContractFileKind), Path, description = "File slot: mission_sheet"),
     ),
     responses(
         (status = 200, description = "A short-lived presigned URL for the attached file", body = inline(DataEnvelope<ContractFileUrlResponse>)),

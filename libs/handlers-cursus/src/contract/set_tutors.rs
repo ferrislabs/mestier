@@ -23,7 +23,7 @@ use crate::{
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Contract or company tutor not found in the organization"),
-        (status = 409, description = "The contract is closed, a tutor belongs to another host company or main and secondary are the same tutor"),
+        (status = 409, description = "The contract is closed, a tutor is listed twice, belongs to another host company, or the list does not have exactly one main tutor"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -46,8 +46,7 @@ pub async fn handler(
             actor,
             organization_id,
             contract_id,
-            main: payload.main,
-            secondary: payload.secondary,
+            tutors: payload.tutors.into_iter().map(Into::into).collect(),
         })
         .await?;
 

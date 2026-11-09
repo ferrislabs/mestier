@@ -2,10 +2,10 @@ use chrono::{DateTime, NaiveDate, Utc};
 use mestier_core::{
     Apprentice, ApprenticeId, ClosureReason, ClosureReasonId, CompanyTutorId, CompanyTutorRecord,
     ContractId, ContractTutorView, ContractView, CursusContractKind, CursusSpace, Establishment,
-    EstablishmentId, HostCompany, HostCompanyId, MemberId, MyTriad, MyTriadDetail, OrganizationId,
-    Participant, ParticipantDetail, ParticipantId, ParticipantInvite, ParticipantListItem,
-    ParticipantStatus, Promotion, PromotionId, Training, TrainingId, Triad, TriadAccess,
-    TriadDetail, TriadId, TriadRole, TriadSummary, TutorRank, UserId,
+    EstablishmentId, HostCompany, HostCompanyAddress, HostCompanyId, MemberId, MyTriad,
+    MyTriadDetail, OrganizationId, Participant, ParticipantDetail, ParticipantId,
+    ParticipantInvite, ParticipantListItem, ParticipantStatus, Promotion, PromotionId, Training,
+    TrainingId, Triad, TriadAccess, TriadDetail, TriadId, TriadRole, TriadSummary, UserId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -129,15 +129,46 @@ pub struct HostCompanyResponse {
     pub id: HostCompanyId,
     pub organization_id: OrganizationId,
     pub name: String,
+    pub group_name: Option<String>,
     pub siret: Option<String>,
-    pub address: Option<String>,
     pub legal_form: Option<String>,
     pub naf_code: Option<String>,
+    pub capital: Option<String>,
     pub employee_count: Option<i32>,
+    pub group_employee_count: Option<i32>,
     pub director_name: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub website: Option<String>,
+    pub activity_domains: Option<String>,
+    pub missions: Option<String>,
+    pub addresses: Vec<HostCompanyAddressResponse>,
     pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct HostCompanyAddressResponse {
+    pub label: Option<String>,
+    pub line1: String,
+    pub line2: Option<String>,
+    pub postal_code: Option<String>,
+    pub city: Option<String>,
+    pub is_main: bool,
+}
+
+impl From<HostCompanyAddress> for HostCompanyAddressResponse {
+    fn from(value: HostCompanyAddress) -> Self {
+        Self {
+            label: value.label,
+            line1: value.line1,
+            line2: value.line2,
+            postal_code: value.postal_code,
+            city: value.city,
+            is_main: value.is_main,
+        }
+    }
 }
 
 impl From<HostCompany> for HostCompanyResponse {
@@ -146,12 +177,20 @@ impl From<HostCompany> for HostCompanyResponse {
             id: value.id,
             organization_id: value.organization_id,
             name: value.name,
+            group_name: value.group_name,
             siret: value.siret,
-            address: value.address,
             legal_form: value.legal_form,
             naf_code: value.naf_code,
+            capital: value.capital,
             employee_count: value.employee_count,
+            group_employee_count: value.group_employee_count,
             director_name: value.director_name,
+            phone: value.phone,
+            email: value.email,
+            website: value.website,
+            activity_domains: value.activity_domains,
+            missions: value.missions,
+            addresses: value.addresses.into_iter().map(Into::into).collect(),
             archived_at: value.archived_at,
             created_at: value.created_at,
             updated_at: value.updated_at,
@@ -383,7 +422,7 @@ pub struct ContractTutorResponse {
     pub company_tutor_id: CompanyTutorId,
     pub participant_id: ParticipantId,
     pub name: String,
-    pub rank: TutorRank,
+    pub is_main: bool,
     pub archived_at: Option<DateTime<Utc>>,
 }
 
@@ -393,7 +432,7 @@ impl From<ContractTutorView> for ContractTutorResponse {
             company_tutor_id: value.company_tutor_id,
             participant_id: value.participant_id,
             name: value.name,
-            rank: value.rank,
+            is_main: value.is_main,
             archived_at: value.archived_at,
         }
     }
@@ -408,13 +447,14 @@ pub struct ContractResponse {
     pub host_company_name: String,
     pub kind: CursusContractKind,
     pub number: Option<String>,
+    pub comment: Option<String>,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
+    pub duration_months: i32,
     pub closed_at: Option<NaiveDate>,
     pub closure_reason_id: Option<ClosureReasonId>,
     pub closure_reason_label: Option<String>,
     pub closure_note: Option<String>,
-    pub has_cerfa_file: bool,
     pub has_mission_sheet_file: bool,
     pub tutors: Vec<ContractTutorResponse>,
     pub created_at: DateTime<Utc>,
@@ -424,6 +464,7 @@ pub struct ContractResponse {
 impl From<ContractView> for ContractResponse {
     fn from(value: ContractView) -> Self {
         let contract = value.contract;
+        let duration_months = contract.duration_months();
         let (closed_at, closure_reason_id, closure_note) = match contract.closure {
             Some(closure) => (
                 Some(closure.closed_at),
@@ -440,14 +481,15 @@ impl From<ContractView> for ContractResponse {
             host_company_id: contract.host_company_id,
             host_company_name: value.host_company_name,
             kind: contract.kind,
+            duration_months,
             number: contract.number,
+            comment: contract.comment,
             start_date: contract.period.start(),
             end_date: contract.period.end(),
             closed_at,
             closure_reason_id,
             closure_reason_label: value.closure_reason_label,
             closure_note,
-            has_cerfa_file: contract.cerfa_file_key.is_some(),
             has_mission_sheet_file: contract.mission_sheet_file_key.is_some(),
             tutors: value.tutors.into_iter().map(Into::into).collect(),
             created_at: contract.created_at,
@@ -494,7 +536,7 @@ impl From<TriadDetail> for TriadDetailResponse {
 pub enum TriadRoleResponse {
     Apprentice,
     MainTutor,
-    SecondaryTutor,
+    Tutor,
 }
 
 impl From<TriadRole> for TriadRoleResponse {
@@ -502,7 +544,7 @@ impl From<TriadRole> for TriadRoleResponse {
         match value {
             TriadRole::Apprentice => Self::Apprentice,
             TriadRole::MainTutor => Self::MainTutor,
-            TriadRole::SecondaryTutor => Self::SecondaryTutor,
+            TriadRole::Tutor => Self::Tutor,
         }
     }
 }
@@ -551,7 +593,7 @@ impl From<MyTriad> for MyTriadResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct MyContractTutorResponse {
     pub name: String,
-    pub rank: TutorRank,
+    pub is_main: bool,
     pub archived_at: Option<DateTime<Utc>>,
 }
 
@@ -561,8 +603,10 @@ pub struct MyContractResponse {
     pub host_company_name: String,
     pub kind: CursusContractKind,
     pub number: Option<String>,
+    pub comment: Option<String>,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
+    pub duration_months: i32,
     pub closed_at: Option<NaiveDate>,
     pub closure_reason_label: Option<String>,
     pub closure_note: Option<String>,
@@ -572,6 +616,7 @@ pub struct MyContractResponse {
 impl From<ContractView> for MyContractResponse {
     fn from(value: ContractView) -> Self {
         let contract = value.contract;
+        let duration_months = contract.duration_months();
         let (closed_at, closure_note) = match contract.closure {
             Some(closure) => (Some(closure.closed_at), closure.note),
             None => (None, None),
@@ -581,7 +626,9 @@ impl From<ContractView> for MyContractResponse {
             id: contract.id,
             host_company_name: value.host_company_name,
             kind: contract.kind,
+            duration_months,
             number: contract.number,
+            comment: contract.comment,
             start_date: contract.period.start(),
             end_date: contract.period.end(),
             closed_at,
@@ -592,7 +639,7 @@ impl From<ContractView> for MyContractResponse {
                 .into_iter()
                 .map(|tutor| MyContractTutorResponse {
                     name: tutor.name,
-                    rank: tutor.rank,
+                    is_main: tutor.is_main,
                     archived_at: tutor.archived_at,
                 })
                 .collect(),

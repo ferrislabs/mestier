@@ -49,6 +49,7 @@ pub async fn handler(
             host_company_id: payload.host_company_id,
             kind: payload.kind,
             number: payload.number,
+            comment: payload.comment,
             start_date: payload.start_date,
             end_date: payload.end_date,
         })

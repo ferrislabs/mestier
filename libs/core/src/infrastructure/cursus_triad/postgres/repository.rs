@@ -36,12 +36,12 @@ impl<'tx> PgCursusTriadRepository<'tx> {
             ContractTutorViewRow,
             r#"
             SELECT ct.contract_id, ct.company_tutor_id, t.participant_id,
-                   p.last_name, p.first_name, ct.rank, ct.archived_at
+                   p.last_name, p.first_name, ct.is_main, ct.archived_at
             FROM cursus.contract_tutor ct
             JOIN cursus.company_tutor t ON t.org_id = ct.org_id AND t.id = ct.company_tutor_id
             JOIN cursus.participant p ON p.org_id = t.org_id AND p.id = t.participant_id
             WHERE ct.org_id = $1 AND ct.contract_id = ANY($2)
-            ORDER BY ct.rank ASC
+            ORDER BY ct.position ASC
             "#,
             organization_id.0,
             contract_ids,
@@ -290,9 +290,9 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
             ContractRow,
             r#"
             INSERT INTO cursus.contract
-                (id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, cerfa_file_key, mission_sheet_file_key, created_at, updated_at)
+                (id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, comment, mission_sheet_file_key, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            RETURNING id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, cerfa_file_key, mission_sheet_file_key, created_at, updated_at
+            RETURNING id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, comment, mission_sheet_file_key, created_at, updated_at
             "#,
             contract.id.0,
             contract.organization_id.0,
@@ -305,7 +305,7 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
             contract.closure.as_ref().map(|closure| closure.closed_at),
             contract.closure.as_ref().map(|closure| closure.reason_id.0),
             contract.closure.as_ref().and_then(|closure| closure.note.as_deref()),
-            contract.cerfa_file_key.as_ref().map(|key| key.as_str()),
+            contract.comment,
             contract.mission_sheet_file_key.as_ref().map(|key| key.as_str()),
             contract.created_at,
             contract.updated_at,
@@ -326,7 +326,7 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
         let row = sqlx::query_as!(
             ContractRow,
             r#"
-            SELECT id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, cerfa_file_key, mission_sheet_file_key, created_at, updated_at
+            SELECT id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, comment, mission_sheet_file_key, created_at, updated_at
             FROM cursus.contract
             WHERE org_id = $1 AND id = $2
             "#,
@@ -348,9 +348,9 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
             UPDATE cursus.contract
             SET host_company_id = $3, kind = $4, number = $5, start_date = $6, end_date = $7,
                 closed_at = $8, closure_reason_id = $9, closure_note = $10,
-                cerfa_file_key = $11, mission_sheet_file_key = $12, updated_at = $13
+                comment = $11, mission_sheet_file_key = $12, updated_at = $13
             WHERE org_id = $1 AND id = $2
-            RETURNING id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, cerfa_file_key, mission_sheet_file_key, created_at, updated_at
+            RETURNING id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, comment, mission_sheet_file_key, created_at, updated_at
             "#,
             contract.organization_id.0,
             contract.id.0,
@@ -362,7 +362,7 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
             contract.closure.as_ref().map(|closure| closure.closed_at),
             contract.closure.as_ref().map(|closure| closure.reason_id.0),
             contract.closure.as_ref().and_then(|closure| closure.note.as_deref()),
-            contract.cerfa_file_key.as_ref().map(|key| key.as_str()),
+            contract.comment,
             contract.mission_sheet_file_key.as_ref().map(|key| key.as_str()),
             contract.updated_at,
         )
@@ -384,7 +384,7 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
                 ContractViewRow,
                 r#"
                 SELECT c.id, c.org_id, c.triad_id, c.host_company_id, c.kind, c.number, c.start_date, c.end_date,
-                       c.closed_at, c.closure_reason_id, c.closure_note, c.cerfa_file_key, c.mission_sheet_file_key,
+                       c.closed_at, c.closure_reason_id, c.closure_note, c.comment, c.mission_sheet_file_key,
                        c.created_at, c.updated_at,
                        h.name AS host_company_name, cr.label AS "closure_reason_label?"
                 FROM cursus.contract c
@@ -413,7 +413,7 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
         let rows = sqlx::query_as!(
             ContractRow,
             r#"
-            SELECT id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, cerfa_file_key, mission_sheet_file_key, created_at, updated_at
+            SELECT id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, comment, mission_sheet_file_key, created_at, updated_at
             FROM cursus.contract
             WHERE org_id = $1 AND triad_id = $2
             ORDER BY start_date ASC, created_at ASC
@@ -439,7 +439,7 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
                 ContractViewRow,
                 r#"
                 SELECT c.id, c.org_id, c.triad_id, c.host_company_id, c.kind, c.number, c.start_date, c.end_date,
-                       c.closed_at, c.closure_reason_id, c.closure_note, c.cerfa_file_key, c.mission_sheet_file_key,
+                       c.closed_at, c.closure_reason_id, c.closure_note, c.comment, c.mission_sheet_file_key,
                        c.created_at, c.updated_at,
                        h.name AS host_company_name, cr.label AS "closure_reason_label?"
                 FROM cursus.contract c
@@ -470,10 +470,10 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
         let rows = sqlx::query_as!(
             ContractTutorRow,
             r#"
-            SELECT contract_id, company_tutor_id, org_id, rank, archived_at
+            SELECT contract_id, company_tutor_id, org_id, is_main, position, archived_at
             FROM cursus.contract_tutor
             WHERE org_id = $1 AND contract_id = $2
-            ORDER BY rank ASC
+            ORDER BY position ASC
             "#,
             organization_id.0,
             contract_id.0,
@@ -482,7 +482,7 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        rows.into_iter().map(ContractTutor::try_from).collect()
+        Ok(rows.into_iter().map(ContractTutor::from).collect())
     }
 
     async fn replace_contract_tutors(
@@ -507,13 +507,14 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
         for tutor in tutors {
             sqlx::query!(
                 r#"
-                INSERT INTO cursus.contract_tutor (contract_id, company_tutor_id, org_id, rank, archived_at)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO cursus.contract_tutor (contract_id, company_tutor_id, org_id, is_main, position, archived_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 "#,
                 tutor.contract_id.0,
                 tutor.company_tutor_id.0,
                 tutor.organization_id.0,
-                tutor.rank.as_str(),
+                tutor.is_main,
+                tutor.position,
                 tutor.archived_at,
             )
             .execute(&mut ***tx)
@@ -600,7 +601,7 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
         let rows = sqlx::query_as!(
             TutorLinkRow,
             r#"
-            SELECT c.triad_id, ct.rank, ct.archived_at
+            SELECT c.triad_id, ct.is_main, ct.archived_at
             FROM cursus.contract_tutor ct
             JOIN cursus.contract c ON c.org_id = ct.org_id AND c.id = ct.contract_id
             JOIN cursus.company_tutor t ON t.org_id = ct.org_id AND t.id = ct.company_tutor_id
@@ -613,6 +614,6 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        rows.into_iter().map(TutorTriadLink::try_from).collect()
+        Ok(rows.into_iter().map(TutorTriadLink::from).collect())
     }
 }

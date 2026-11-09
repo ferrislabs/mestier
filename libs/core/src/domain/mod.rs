@@ -59,7 +59,7 @@ pub use cursus_participant::*;
 pub use cursus_triad::{
     Closure, Contract, ContractFileKind, ContractId, ContractTutor, ContractTutorView,
     ContractView, MyTriad, MyTriadDetail, ParticipantScope, Triad, TriadAccess, TriadDetail,
-    TriadId, TriadLink, TriadRole, TriadSummary, TutorRank, TutorTriadLink, merge_links,
+    TriadId, TriadLink, TriadRole, TriadSummary, TutorTriadLink, merge_links,
 };
 pub use custom_unit::*;
 pub use customer::*;

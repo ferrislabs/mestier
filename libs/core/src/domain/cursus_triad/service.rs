@@ -174,7 +174,7 @@ where
                 number: optional(command.number),
                 period,
                 closure: None,
-                cerfa_file_key: None,
+                comment: optional(command.comment),
                 mission_sheet_file_key: None,
                 created_at: now,
                 updated_at: now,
@@ -251,6 +251,7 @@ where
         contract.host_company_id = command.host_company_id;
         contract.kind = command.kind;
         contract.number = optional(command.number);
+        contract.comment = optional(command.comment);
         contract.period = period;
         contract.updated_at = Utc::now();
 
@@ -286,11 +287,10 @@ where
         &mut self,
         organization_id: OrganizationId,
         contract_id: ContractId,
-        main: Option<&CompanyTutor>,
-        secondary: Option<&CompanyTutor>,
+        tutors: &[(CompanyTutor, bool)],
     ) -> Result<Vec<ContractTutor>, CoreError> {
         let contract = self.get_contract(organization_id, contract_id).await?;
-        let tutors = contract.assign_tutors(main, secondary)?;
+        let tutors = contract.assign_tutors(tutors)?;
         self.repo
             .replace_contract_tutors(organization_id, contract_id, &tutors)
             .await?;
@@ -402,7 +402,7 @@ where
             .await?;
         let detail = match link.role {
             TriadRole::Apprentice => detail,
-            TriadRole::MainTutor | TriadRole::SecondaryTutor => {
+            TriadRole::MainTutor | TriadRole::Tutor => {
                 detail.restricted_to_tutor(scope.participant_id)
             }
         };
@@ -422,7 +422,7 @@ mod tests {
     use super::*;
     use crate::{
         ApprenticeId, ClosureReasonId, CompanyTutorId, HostCompanyId, ParticipantId, TriadLink,
-        TutorRank, TutorTriadLink,
+        TutorTriadLink,
         domain::cursus_triad::{ContractKind, ports::MockCursusTriadRepository},
     };
     use chrono::NaiveDate;
@@ -475,7 +475,7 @@ mod tests {
             number: None,
             period: ContractPeriod::new(day(2026, 9, 1), day(2028, 8, 31)).unwrap(),
             closure: closed.then(closure),
-            cerfa_file_key: None,
+            comment: None,
             mission_sheet_file_key: None,
             created_at: now,
             updated_at: now,
@@ -734,6 +734,7 @@ mod tests {
             host_company_id: HostCompanyId(Uuid::new_v4()),
             kind: ContractKind::Professionalization,
             number: Some("  C-12 ".to_owned()),
+            comment: Some("  **Note**  ".to_owned()),
             start_date: start,
             end_date: end,
         }
@@ -824,6 +825,7 @@ mod tests {
             host_company_id: closed.host_company_id,
             kind: ContractKind::Apprenticeship,
             number: None,
+            comment: None,
             start_date: day(2026, 9, 1),
             end_date: day(2028, 8, 31),
         };
@@ -851,6 +853,7 @@ mod tests {
             host_company_id: HostCompanyId(Uuid::new_v4()),
             kind: ContractKind::Apprenticeship,
             number: None,
+            comment: None,
             start_date: day(2026, 9, 1),
             end_date: day(2028, 8, 31),
         };
@@ -866,7 +869,8 @@ mod tests {
                     contract_id,
                     company_tutor_id: CompanyTutorId(Uuid::new_v4()),
                     organization_id,
-                    rank: TutorRank::Main,
+                    is_main: true,
+                    position: 0,
                     archived_at: None,
                 }];
                 Box::pin(async move { Ok(linked) })
@@ -901,11 +905,11 @@ mod tests {
         });
         repo.expect_replace_contract_tutors()
             .times(1)
-            .withf(|_, _, tutors| tutors.len() == 1 && tutors[0].rank == TutorRank::Main)
+            .withf(|_, _, tutors| tutors.len() == 1 && tutors[0].is_main && tutors[0].position == 0)
             .returning(|_, _, _| Box::pin(async { Ok(()) }));
 
         let tutors = CursusTriadService::new(repo, RecordingEmitter::new())
-            .set_tutors(organization_id, id, Some(&main), None)
+            .set_tutors(organization_id, id, &[(main.clone(), true)])
             .await
             .unwrap();
 
@@ -960,7 +964,7 @@ mod tests {
         });
 
         let result = CursusTriadService::new(repo, RecordingEmitter::new())
-            .get_file_key(organization_id, id, ContractFileKind::Cerfa)
+            .get_file_key(organization_id, id, ContractFileKind::MissionSheet)
             .await;
 
         assert!(matches!(result, Err(CoreError::NotFound)));
@@ -979,7 +983,7 @@ mod tests {
         repo.expect_list_tutor_links().returning(move |_, _| {
             let links = vec![TutorTriadLink {
                 triad_id: tutored,
-                rank: TutorRank::Main,
+                is_main: true,
                 archived_at: Some(archived_at),
             }];
             Box::pin(async move { Ok(links) })
