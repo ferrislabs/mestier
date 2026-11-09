@@ -1,6 +1,7 @@
 export const ENTRY = {
 	projects: 'projects',
 	models: 'models',
+	photos: 'photos',
 	overview: 'overview',
 	missions: 'missions',
 	doe: 'doe',
@@ -9,7 +10,7 @@ export const ENTRY = {
 
 export type ProjectSection = 'overview' | 'missions' | 'doe' | 'settings'
 
-const NOT_A_PROJECT = new Set(['new', 'doe-models'])
+const NOT_A_PROJECT = new Set(['new', 'doe-models', 'photos'])
 
 const SECTION_SEGMENT: Record<ProjectSection, string> = {
 	overview: '',
@@ -42,6 +43,9 @@ export function projectSectionOf(modulePath: string): ProjectSection | null {
 export function activeSidebarEntries(modulePath: string): ReadonlySet<string> {
 	if (modulePath.startsWith('/projet/doe-models')) {
 		return new Set([ENTRY.models])
+	}
+	if (modulePath.startsWith('/projet/photos')) {
+		return new Set([ENTRY.photos])
 	}
 	const section = projectSectionOf(modulePath)
 	return new Set([section ? ENTRY[section] : ENTRY.projects])

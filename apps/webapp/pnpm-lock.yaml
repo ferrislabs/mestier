@@ -68,6 +68,9 @@ importers:
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
+      heic-to:
+        specifier: ^1.6.7
+        version: 1.6.7
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.5)
@@ -2442,6 +2445,9 @@ packages:
     peerDependenciesMeta:
       crossws:
         optional: true
+
+  heic-to@1.6.7:
+    resolution: {integrity: sha512-GCPYNl86u6eZ7mr2aa+uQB+PrQOVKSBYfH8esovr8kh2c6EYQSDYIJ6uhXSmM2hPC8PdBVJ/Trn0jnfM9H9gvg==}
 
   html-encoding-sniffer@6.0.0:
     resolution: {integrity: sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg==}
@@ -5504,6 +5510,8 @@ snapshots:
     dependencies:
       rou3: 0.8.1
       srvx: 0.11.15
+
+  heic-to@1.6.7: {}
 
   html-encoding-sniffer@6.0.0:
     dependencies:

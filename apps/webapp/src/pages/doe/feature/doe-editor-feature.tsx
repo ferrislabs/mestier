@@ -4,10 +4,16 @@ import { useUploadFile } from '#/hooks/use-customers'
 import { useDirtyBaseline } from '#/hooks/use-dirty'
 import { type Doe, downloadDoePdf, useUpdateDoe } from '#/hooks/use-doe'
 import { useFileUrls } from '#/hooks/use-file-url'
+import type { PlacementResponse } from '#/hooks/use-photo-library'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import { DeleteDoeFeature } from '#/pages/doe/feature/delete-doe-feature'
+import { DoePhotoLibraryPickerFeature } from '#/pages/doe/feature/doe-photo-library-picker-feature'
 import { DoeSupplyPickerFeature } from '#/pages/doe/feature/doe-supply-picker-feature'
+import {
+	type LibraryTarget,
+	mergePhotos,
+} from '#/pages/doe/lib/library-placement'
 import {
 	buildUpdatePayload,
 	canSave,
@@ -82,6 +88,7 @@ export function DoeEditorFeature({
 	const dirty = useDirtyBaseline(initial, form)
 	const [sheet, setSheet] = useState<SheetState | null>(null)
 	const [pickerSectionId, setPickerSectionId] = useState<string | null>(null)
+	const [libraryTarget, setLibraryTarget] = useState<LibraryTarget | null>(null)
 	const [notice, setNotice] = useState<string | null>(null)
 	const [pdfError, setPdfError] = useState<string | null>(null)
 	const [isDownloading, setIsDownloading] = useState(false)
@@ -178,8 +185,45 @@ export function DoeEditorFeature({
 		}
 	}
 
+	const libraryBlockedReason = dirty.isDirty
+		? 'Enregistre tes modifications avant de choisir dans la photothèque.'
+		: null
+	const sheetLibraryBlockedReason = sheet?.isNew
+		? 'Ajoute d’abord la fourniture au DOE et enregistre.'
+		: libraryBlockedReason
+
+	const applyPlacement = ({ doe: placed }: PlacementResponse) => {
+		const next = doeToForm(placed)
+		setForm(next)
+		dirty.commit(next)
+		const supplyId =
+			libraryTarget?.kind === 'supply' ? libraryTarget.supplyId : null
+		if (!supplyId) return
+		const saved = placed.sections
+			.flatMap((section) =>
+				section.content.kind === 'supplies' ? section.content.supplies : [],
+			)
+			.find((supply) => supply.id === supplyId)
+		if (!saved) return
+		const savedPhotos = supplyToForm(saved).photos
+		setSheet((current) =>
+			current
+				? {
+						...current,
+						values: {
+							...current.values,
+							photos: mergePhotos(current.values.photos, savedPhotos),
+						},
+					}
+				: current,
+		)
+	}
+
 	const sectionActions: SectionActions = {
 		uploadingSectionId,
+		libraryBlockedReason,
+		onPickPhotosFromLibrary: (sectionId) =>
+			setLibraryTarget({ kind: 'section', sectionId }),
 		onMakerLabelChange: (sectionId: string, label: MakerLabel) =>
 			setSections((sections) =>
 				updateContent(sections, sectionId, (content) =>
@@ -462,6 +506,11 @@ export function DoeEditorFeature({
 				isUploadingPhotos={sheetUploading === 'photos'}
 				isUploadingDatasheets={sheetUploading === 'datasheets'}
 				error={uploadError}
+				libraryBlockedReason={sheetLibraryBlockedReason}
+				onPickFromLibrary={() => {
+					if (sheet)
+						setLibraryTarget({ kind: 'supply', supplyId: sheet.supplyId })
+				}}
 				onOpenChange={(open) => {
 					if (!open) setSheet(null)
 				}}
@@ -527,6 +576,15 @@ export function DoeEditorFeature({
 						params: { projectId },
 					})
 				}}
+			/>
+
+			<DoePhotoLibraryPickerFeature
+				open={libraryTarget !== null}
+				organizationId={organizationId}
+				doeId={doe.id}
+				target={libraryTarget}
+				onPlaced={applyPlacement}
+				onClose={() => setLibraryTarget(null)}
 			/>
 
 			<DoeSupplyPickerFeature

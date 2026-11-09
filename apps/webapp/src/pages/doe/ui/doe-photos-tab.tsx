@@ -1,6 +1,7 @@
-import { ImageIcon, X } from 'lucide-react'
+import { ImageIcon, Images, X } from 'lucide-react'
 import { useId } from 'react'
 import { RequirePermission } from '#/components/require-permission'
+import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import {
@@ -23,6 +24,8 @@ interface DoePhotosTabProps {
 	photos: DoeFile[]
 	fileUrls: Record<string, string | undefined>
 	isUploading: boolean
+	libraryBlockedReason: string | null
+	onPickFromLibrary: () => void
 	onPerPageChange: (perPage: PhotosPerPage) => void
 	onUpload: (files: File[]) => void
 	onCaptionChange: (index: number, caption: string) => void
@@ -46,6 +49,8 @@ export function DoePhotosTab({
 	photos,
 	fileUrls,
 	isUploading,
+	libraryBlockedReason,
+	onPickFromLibrary,
 	onPerPageChange,
 	onUpload,
 	onCaptionChange,
@@ -90,6 +95,24 @@ export function DoePhotosTab({
 						isUploading={isUploading}
 						onFiles={onUpload}
 					/>
+				</RequirePermission>
+				<RequirePermission permission="MANAGE_PLANNING">
+					<div className="flex flex-wrap items-center gap-3">
+						<Button
+							type="button"
+							variant="outline"
+							disabled={libraryBlockedReason !== null}
+							onClick={onPickFromLibrary}
+						>
+							<Images aria-hidden />
+							Choisir dans la photothèque
+						</Button>
+						{libraryBlockedReason ? (
+							<span className="text-muted-foreground text-xs">
+								{libraryBlockedReason}
+							</span>
+						) : null}
+					</div>
 				</RequirePermission>
 				{photos.length === 0 ? (
 					<p className="py-4 text-center text-muted-foreground text-sm">

@@ -30,6 +30,7 @@ import { Route as AppOOrganizationSlugAutomatisationIndexRouteImport } from './r
 import { Route as AppOOrganizationSlugSupportTableRouteImport } from './routes/_app.o.$organizationSlug.support.table'
 import { Route as AppOOrganizationSlugSupportIntegrationRouteImport } from './routes/_app.o.$organizationSlug.support.integration'
 import { Route as AppOOrganizationSlugPurchaseSuppliersRouteImport } from './routes/_app.o.$organizationSlug.purchase.suppliers'
+import { Route as AppOOrganizationSlugProjetPhotosRouteImport } from './routes/_app.o.$organizationSlug.projet.photos'
 import { Route as AppOOrganizationSlugProjetNewRouteImport } from './routes/_app.o.$organizationSlug.projet.new'
 import { Route as AppOOrganizationSlugProjetDoeModelsRouteImport } from './routes/_app.o.$organizationSlug.projet.doe-models'
 import { Route as AppOOrganizationSlugProjetProjectIdRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId'
@@ -219,6 +220,12 @@ const AppOOrganizationSlugPurchaseSuppliersRoute =
   AppOOrganizationSlugPurchaseSuppliersRouteImport.update({
     id: '/purchase/suppliers',
     path: '/purchase/suppliers',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugProjetPhotosRoute =
+  AppOOrganizationSlugProjetPhotosRouteImport.update({
+    id: '/projet/photos',
+    path: '/projet/photos',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugProjetNewRoute =
@@ -675,6 +682,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/projet/$projectId': typeof AppOOrganizationSlugProjetProjectIdRoute
   '/o/$organizationSlug/projet/doe-models': typeof AppOOrganizationSlugProjetDoeModelsRoute
   '/o/$organizationSlug/projet/new': typeof AppOOrganizationSlugProjetNewRoute
+  '/o/$organizationSlug/projet/photos': typeof AppOOrganizationSlugProjetPhotosRoute
   '/o/$organizationSlug/purchase/suppliers': typeof AppOOrganizationSlugPurchaseSuppliersRoute
   '/o/$organizationSlug/support/integration': typeof AppOOrganizationSlugSupportIntegrationRoute
   '/o/$organizationSlug/support/table': typeof AppOOrganizationSlugSupportTableRoute
@@ -764,6 +772,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/projet/$projectId': typeof AppOOrganizationSlugProjetProjectIdRoute
   '/o/$organizationSlug/projet/doe-models': typeof AppOOrganizationSlugProjetDoeModelsRoute
   '/o/$organizationSlug/projet/new': typeof AppOOrganizationSlugProjetNewRoute
+  '/o/$organizationSlug/projet/photos': typeof AppOOrganizationSlugProjetPhotosRoute
   '/o/$organizationSlug/purchase/suppliers': typeof AppOOrganizationSlugPurchaseSuppliersRoute
   '/o/$organizationSlug/support/integration': typeof AppOOrganizationSlugSupportIntegrationRoute
   '/o/$organizationSlug/support/table': typeof AppOOrganizationSlugSupportTableRoute
@@ -857,6 +866,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/projet/$projectId': typeof AppOOrganizationSlugProjetProjectIdRoute
   '/_app/o/$organizationSlug/projet/doe-models': typeof AppOOrganizationSlugProjetDoeModelsRoute
   '/_app/o/$organizationSlug/projet/new': typeof AppOOrganizationSlugProjetNewRoute
+  '/_app/o/$organizationSlug/projet/photos': typeof AppOOrganizationSlugProjetPhotosRoute
   '/_app/o/$organizationSlug/purchase/suppliers': typeof AppOOrganizationSlugPurchaseSuppliersRoute
   '/_app/o/$organizationSlug/support/integration': typeof AppOOrganizationSlugSupportIntegrationRoute
   '/_app/o/$organizationSlug/support/table': typeof AppOOrganizationSlugSupportTableRoute
@@ -950,6 +960,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/projet/$projectId'
     | '/o/$organizationSlug/projet/doe-models'
     | '/o/$organizationSlug/projet/new'
+    | '/o/$organizationSlug/projet/photos'
     | '/o/$organizationSlug/purchase/suppliers'
     | '/o/$organizationSlug/support/integration'
     | '/o/$organizationSlug/support/table'
@@ -1039,6 +1050,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/projet/$projectId'
     | '/o/$organizationSlug/projet/doe-models'
     | '/o/$organizationSlug/projet/new'
+    | '/o/$organizationSlug/projet/photos'
     | '/o/$organizationSlug/purchase/suppliers'
     | '/o/$organizationSlug/support/integration'
     | '/o/$organizationSlug/support/table'
@@ -1131,6 +1143,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/projet/$projectId'
     | '/_app/o/$organizationSlug/projet/doe-models'
     | '/_app/o/$organizationSlug/projet/new'
+    | '/_app/o/$organizationSlug/projet/photos'
     | '/_app/o/$organizationSlug/purchase/suppliers'
     | '/_app/o/$organizationSlug/support/integration'
     | '/_app/o/$organizationSlug/support/table'
@@ -1342,6 +1355,13 @@ declare module '@tanstack/react-router' {
       path: '/purchase/suppliers'
       fullPath: '/o/$organizationSlug/purchase/suppliers'
       preLoaderRoute: typeof AppOOrganizationSlugPurchaseSuppliersRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/projet/photos': {
+      id: '/_app/o/$organizationSlug/projet/photos'
+      path: '/projet/photos'
+      fullPath: '/o/$organizationSlug/projet/photos'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetPhotosRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/projet/new': {
@@ -1890,6 +1910,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugProjetProjectIdRoute: typeof AppOOrganizationSlugProjetProjectIdRoute
   AppOOrganizationSlugProjetDoeModelsRoute: typeof AppOOrganizationSlugProjetDoeModelsRoute
   AppOOrganizationSlugProjetNewRoute: typeof AppOOrganizationSlugProjetNewRoute
+  AppOOrganizationSlugProjetPhotosRoute: typeof AppOOrganizationSlugProjetPhotosRoute
   AppOOrganizationSlugPurchaseSuppliersRoute: typeof AppOOrganizationSlugPurchaseSuppliersRoute
   AppOOrganizationSlugSupportIntegrationRoute: typeof AppOOrganizationSlugSupportIntegrationRoute
   AppOOrganizationSlugSupportTableRoute: typeof AppOOrganizationSlugSupportTableRoute
@@ -1987,6 +2008,7 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugProjetDoeModelsRoute:
     AppOOrganizationSlugProjetDoeModelsRoute,
   AppOOrganizationSlugProjetNewRoute: AppOOrganizationSlugProjetNewRoute,
+  AppOOrganizationSlugProjetPhotosRoute: AppOOrganizationSlugProjetPhotosRoute,
   AppOOrganizationSlugPurchaseSuppliersRoute:
     AppOOrganizationSlugPurchaseSuppliersRoute,
   AppOOrganizationSlugSupportIntegrationRoute:
