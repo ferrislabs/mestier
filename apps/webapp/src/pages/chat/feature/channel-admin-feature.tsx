@@ -49,7 +49,6 @@ export function ChannelAdminFeature({
 	const [nameDraft, setNameDraft] = useState('')
 	const [topicDraft, setTopicDraft] = useState('')
 	const [categoryIdDraft, setCategoryIdDraft] = useState<string | null>(null)
-	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [newWebhookName, setNewWebhookName] = useState('')
 	const [createdWebhookToken, setCreatedWebhookToken] = useState<string | null>(
 		null,
@@ -83,7 +82,6 @@ export function ChannelAdminFeature({
 	function handleConfirmDelete() {
 		deleteChannel.mutate({ path: { channel_id: channelId } } as never, {
 			onSuccess: () => {
-				setDeleteDialogOpen(false)
 				onOpenChange(false)
 			},
 		})
@@ -151,9 +149,6 @@ export function ChannelAdminFeature({
 			onChangeCategory={setCategoryIdDraft}
 			onSaveGeneral={handleSaveGeneral}
 			isSavingGeneral={updateChannel.isPending}
-			deleteDialogOpen={deleteDialogOpen}
-			onRequestDelete={() => setDeleteDialogOpen(true)}
-			onCancelDelete={() => setDeleteDialogOpen(false)}
 			onConfirmDelete={handleConfirmDelete}
 			isDeleting={deleteChannel.isPending}
 			isLoadingOverwrites={overwrites.isLoading}

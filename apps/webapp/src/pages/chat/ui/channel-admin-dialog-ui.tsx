@@ -1,15 +1,6 @@
 import { Globe, Loader2, Lock, Trash2, X } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from '#/components/ui/alert-dialog'
+import { DoubleClickConfirmButton } from '#/components/double-click-confirm-button'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -56,9 +47,6 @@ export interface ChannelAdminDialogUIProps {
 	onSaveGeneral: () => void
 	isSavingGeneral: boolean
 
-	deleteDialogOpen: boolean
-	onRequestDelete: () => void
-	onCancelDelete: () => void
 	onConfirmDelete: () => void
 	isDeleting: boolean
 
@@ -96,9 +84,6 @@ export function ChannelAdminDialogUI({
 	onChangeCategory,
 	onSaveGeneral,
 	isSavingGeneral,
-	deleteDialogOpen,
-	onRequestDelete,
-	onCancelDelete,
 	onConfirmDelete,
 	isDeleting,
 	isLoadingOverwrites,
@@ -170,14 +155,14 @@ export function ChannelAdminDialogUI({
 							</TabsList>
 							<RequirePermission permission="MANAGE_CHANNELS">
 								<div className="mt-1 border-nav-border border-t pt-3">
-									<button
-										type="button"
-										onClick={onRequestDelete}
-										className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left font-medium text-red-300 text-sm hover:bg-red-500/15"
-									>
-										Supprimer le canal
-										<Trash2 className="size-4" />
-									</button>
+									<DoubleClickConfirmButton
+										variant="ghost"
+										className="w-full justify-start px-2.5 text-red-300 hover:bg-red-500/15 hover:text-red-200"
+										label="Supprimer le canal"
+										disabled={isDeleting}
+										confirmLabel="Confirmer la suppression"
+										onConfirm={onConfirmDelete}
+									/>
 								</div>
 							</RequirePermission>
 						</div>
@@ -404,35 +389,6 @@ export function ChannelAdminDialogUI({
 						ESC
 					</button>
 				</DialogClose>
-
-				<AlertDialog
-					open={deleteDialogOpen}
-					onOpenChange={(next) => {
-						if (!next) onCancelDelete()
-					}}
-				>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>Supprimer le canal ?</AlertDialogTitle>
-							<AlertDialogDescription>
-								Cette action supprime définitivement le canal
-								{channel ? ` #${channel.name}` : ''}, tous ses messages,
-								réactions et pièces jointes. Elle est irréversible.
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel onClick={onCancelDelete}>
-								Annuler
-							</AlertDialogCancel>
-							<AlertDialogAction
-								onClick={onConfirmDelete}
-								disabled={isDeleting}
-							>
-								Supprimer
-							</AlertDialogAction>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
 			</DialogContent>
 		</Dialog>
 	)

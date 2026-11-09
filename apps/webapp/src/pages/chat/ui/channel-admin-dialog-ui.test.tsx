@@ -46,9 +46,6 @@ function baseProps(
 		onChangeCategory: vi.fn(),
 		onSaveGeneral: vi.fn(),
 		isSavingGeneral: false,
-		deleteDialogOpen: false,
-		onRequestDelete: vi.fn(),
-		onCancelDelete: vi.fn(),
 		onConfirmDelete: vi.fn(),
 		isDeleting: false,
 		isLoadingOverwrites: false,
@@ -86,43 +83,17 @@ describe('ChannelAdminDialogUI — general', () => {
 		expect(onSaveGeneral).toHaveBeenCalledTimes(1)
 	})
 
-	it('opens a confirmation naming the channel before deleting', async () => {
-		const user = userEvent.setup()
-		const onRequestDelete = vi.fn()
-		renderWithPermissions(
-			<ChannelAdminDialogUI {...baseProps({ onRequestDelete })} />,
-		)
-
-		await user.click(screen.getByText('Supprimer le canal'))
-
-		expect(onRequestDelete).toHaveBeenCalledTimes(1)
-	})
-
-	it('names what is lost in the delete confirmation', () => {
-		renderWithPermissions(
-			<ChannelAdminDialogUI
-				{...baseProps({
-					deleteDialogOpen: true,
-					channel: channel({ name: 'random' }),
-				})}
-			/>,
-		)
-
-		expect(screen.getAllByText(/#random/).length).toBeGreaterThan(0)
-		expect(screen.getByText(/tous ses messages/)).toBeDefined()
-	})
-
-	it('confirms deletion via the alert dialog action', async () => {
+	it('deletes the channel only on the second click', async () => {
 		const user = userEvent.setup()
 		const onConfirmDelete = vi.fn()
 		renderWithPermissions(
-			<ChannelAdminDialogUI
-				{...baseProps({ deleteDialogOpen: true, onConfirmDelete })}
-			/>,
+			<ChannelAdminDialogUI {...baseProps({ onConfirmDelete })} />,
 		)
 
-		await user.click(screen.getByText('Supprimer'))
+		await user.click(screen.getByText('Supprimer le canal'))
+		expect(onConfirmDelete).not.toHaveBeenCalled()
 
+		await user.click(screen.getByText('Confirmer la suppression'))
 		expect(onConfirmDelete).toHaveBeenCalledTimes(1)
 	})
 })
