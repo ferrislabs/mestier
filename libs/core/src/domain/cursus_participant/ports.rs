@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 
 use crate::{
-    Apprentice, CompanyTutor, CompanyTutorId, CompanyTutorRecord, OrganizationId, Participant,
-    ParticipantId, ParticipantKind, ParticipantStatus, UserId,
+    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, OrganizationId,
+    Participant, ParticipantId, ParticipantKind, ParticipantStatus, UserId,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -30,6 +30,11 @@ pub trait CursusParticipantRepository: Send {
         organization_id: OrganizationId,
         user_id: UserId,
     ) -> impl Future<Output = Result<Option<Participant>, CoreError>> + Send;
+
+    fn list_active_participants_by_user(
+        &mut self,
+        user_id: UserId,
+    ) -> impl Future<Output = Result<Vec<Participant>, CoreError>> + Send;
 
     fn find_participant_by_token_hash(
         &mut self,
@@ -85,6 +90,18 @@ pub trait CursusParticipantRepository: Send {
         organization_id: OrganizationId,
         participant_id: ParticipantId,
     ) -> impl Future<Output = Result<Option<Apprentice>, CoreError>> + Send;
+
+    fn find_apprentice_by_id(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ApprenticeId,
+    ) -> impl Future<Output = Result<Option<Apprentice>, CoreError>> + Send;
+
+    fn find_company_tutor(
+        &mut self,
+        organization_id: OrganizationId,
+        id: CompanyTutorId,
+    ) -> impl Future<Output = Result<Option<CompanyTutor>, CoreError>> + Send;
 
     fn insert_company_tutor(
         &mut self,

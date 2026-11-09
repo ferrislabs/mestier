@@ -149,6 +149,7 @@ pub struct CursusSpace {
     pub organization_id: OrganizationId,
     pub slug: String,
     pub name: String,
+    pub is_member: bool,
 }
 
 #[cfg(test)]

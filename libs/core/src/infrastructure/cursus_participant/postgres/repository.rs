@@ -3,8 +3,8 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    Apprentice, CompanyTutor, CompanyTutorId, CompanyTutorRecord, OrganizationId, Participant,
-    ParticipantId, ParticipantKind, ParticipantStatus, UserId,
+    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, OrganizationId,
+    Participant, ParticipantId, ParticipantKind, ParticipantStatus, UserId,
     domain::cursus_participant::ports::CursusParticipantRepository,
     infrastructure::{
         cursus_participant::postgres::model::{
@@ -147,6 +147,28 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         Ok(row.map(Into::into))
+    }
+
+    async fn list_active_participants_by_user(
+        &mut self,
+        user_id: UserId,
+    ) -> Result<Vec<Participant>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            ParticipantRow,
+            r#"
+            SELECT id, org_id, user_id, last_name, first_name, email, phone, invitation_token_hash, invitation_expires_at, deactivated_at, created_at, updated_at
+            FROM cursus.participant
+            WHERE user_id = $1 AND deactivated_at IS NULL
+            ORDER BY created_at ASC
+            "#,
+            user_id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 
     async fn list_participants(
@@ -381,6 +403,52 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
             "#,
             organization_id.0,
             participant_id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.map(Into::into))
+    }
+
+    async fn find_apprentice_by_id(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ApprenticeId,
+    ) -> Result<Option<Apprentice>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            ApprenticeRow,
+            r#"
+            SELECT id, org_id, participant_id, birth_date, ine_code, address, created_at, updated_at
+            FROM cursus.apprentice
+            WHERE org_id = $1 AND id = $2
+            "#,
+            organization_id.0,
+            id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.map(Into::into))
+    }
+
+    async fn find_company_tutor(
+        &mut self,
+        organization_id: OrganizationId,
+        id: CompanyTutorId,
+    ) -> Result<Option<CompanyTutor>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            CompanyTutorRow,
+            r#"
+            SELECT id, org_id, participant_id, host_company_id, job_title, created_at, updated_at
+            FROM cursus.company_tutor
+            WHERE org_id = $1 AND id = $2
+            "#,
+            organization_id.0,
+            id.0,
         )
         .fetch_optional(&mut ***tx)
         .await

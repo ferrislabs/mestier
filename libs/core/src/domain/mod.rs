@@ -6,6 +6,7 @@ pub(crate) mod chat;
 pub(crate) mod cursus_catalog;
 pub(crate) mod cursus_host_company;
 pub(crate) mod cursus_participant;
+pub(crate) mod cursus_triad;
 pub(crate) mod custom_unit;
 pub(crate) mod customer;
 pub(crate) mod customer_contact;
@@ -55,6 +56,11 @@ pub use assignment_report::*;
 pub use cursus_catalog::*;
 pub use cursus_host_company::*;
 pub use cursus_participant::*;
+pub use cursus_triad::{
+    Closure, Contract, ContractFileKind, ContractId, ContractTutor, ContractTutorView,
+    ContractView, MyTriad, MyTriadDetail, ParticipantScope, Triad, TriadAccess, TriadDetail,
+    TriadId, TriadLink, TriadRole, TriadSummary, TutorRank, TutorTriadLink, merge_links,
+};
 pub use custom_unit::*;
 pub use customer::*;
 pub use customer_contact::*;

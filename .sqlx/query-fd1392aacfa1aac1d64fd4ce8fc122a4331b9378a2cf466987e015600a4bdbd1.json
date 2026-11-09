@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id\n            FROM cursus.triad t\n            JOIN cursus.apprentice a ON a.org_id = t.org_id AND a.id = t.apprentice_id\n            WHERE t.org_id = $1 AND a.participant_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fd1392aacfa1aac1d64fd4ce8fc122a4331b9378a2cf466987e015600a4bdbd1"
+}

@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE cursus.contract\n            SET host_company_id = $3, kind = $4, number = $5, start_date = $6, end_date = $7,\n                closed_at = $8, closure_reason_id = $9, closure_note = $10,\n                cerfa_file_key = $11, mission_sheet_file_key = $12, updated_at = $13\n            WHERE org_id = $1 AND id = $2\n            RETURNING id, org_id, triad_id, host_company_id, kind, number, start_date, end_date, closed_at, closure_reason_id, closure_note, cerfa_file_key, mission_sheet_file_key, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "triad_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "host_company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "start_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 8,
+        "name": "closed_at",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "closure_reason_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "closure_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "cerfa_file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "mission_sheet_file_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "Date",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "25d58d43334437c600b72773c4eebc9ed30dfc8b57166f9059176000f71822e7"
+}

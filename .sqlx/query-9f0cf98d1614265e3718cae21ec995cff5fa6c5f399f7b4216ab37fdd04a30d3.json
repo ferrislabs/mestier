@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM cursus.contract_tutor\n            WHERE org_id = $1 AND contract_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9f0cf98d1614265e3718cae21ec995cff5fa6c5f399f7b4216ab37fdd04a30d3"
+}
