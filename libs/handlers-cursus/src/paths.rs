@@ -1,7 +1,7 @@
 use axum_extra::routing::TypedPath;
 use mestier_core::{
-    ClosureReasonId, CompanyTutorId, EstablishmentId, HostCompanyId, OrganizationId, ParticipantId,
-    PromotionId, TrainingId,
+    ClosureReasonId, CompanyTutorId, ContractFileKind, ContractId, EstablishmentId, HostCompanyId,
+    OrganizationId, ParticipantId, PromotionId, TrainingId, TriadId,
 };
 use serde::Deserialize;
 
@@ -180,4 +180,77 @@ pub struct CompanyTutorPath {
 #[typed_path("/api/v1/cursus/invitations/{token}/accept")]
 pub struct AcceptInvitationPath {
     pub token: String,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/triads")]
+pub struct TriadCollectionPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}")]
+pub struct TriadPath {
+    pub organization_id: OrganizationId,
+    pub triad_id: TriadId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}/close")]
+pub struct TriadClosePath {
+    pub organization_id: OrganizationId,
+    pub triad_id: TriadId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}/contracts")]
+pub struct TriadContractsPath {
+    pub organization_id: OrganizationId,
+    pub triad_id: TriadId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}")]
+pub struct ContractPath {
+    pub organization_id: OrganizationId,
+    pub contract_id: ContractId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/close")]
+pub struct ContractClosePath {
+    pub organization_id: OrganizationId,
+    pub contract_id: ContractId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/tutors")]
+pub struct ContractTutorsPath {
+    pub organization_id: OrganizationId,
+    pub contract_id: ContractId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/contracts/{contract_id}/files/{kind}")]
+pub struct ContractFilePath {
+    pub organization_id: OrganizationId,
+    pub contract_id: ContractId,
+    pub kind: ContractFileKind,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/cursus/me/spaces")]
+pub struct MySpacesPath;
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/me/triads")]
+pub struct MyTriadCollectionPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/me/triads/{triad_id}")]
+pub struct MyTriadPath {
+    pub organization_id: OrganizationId,
+    pub triad_id: TriadId,
 }
