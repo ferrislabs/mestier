@@ -107,7 +107,7 @@ function PromotionFormBody({
 							className="text-foreground underline underline-offset-2"
 							onClick={onManageTrainings}
 						>
-							Gérer les formations dans Paramètres › Cursus
+							Gérer les formations
 						</button>
 					</p>
 				) : null}

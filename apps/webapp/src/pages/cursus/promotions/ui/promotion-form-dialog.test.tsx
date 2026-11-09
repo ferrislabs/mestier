@@ -22,21 +22,21 @@ function renderDialog(onManageTrainings?: () => void) {
 }
 
 describe('PromotionFormDialog', () => {
-	it('points to the trainings settings when there is no training yet', async () => {
+	it('points to the trainings page when there is no training yet', async () => {
 		const onManageTrainings = vi.fn()
 		renderDialog(onManageTrainings)
 
 		expect(screen.getByText(/Aucune formation pour l’instant/)).toBeTruthy()
 		await userEvent.click(
 			screen.getByRole('button', {
-				name: 'Gérer les formations dans Paramètres › Cursus',
+				name: 'Gérer les formations',
 			}),
 		)
 
 		expect(onManageTrainings).toHaveBeenCalledOnce()
 	})
 
-	it('shows no settings link without a handler', () => {
+	it('shows no trainings link without a handler', () => {
 		renderDialog()
 
 		expect(

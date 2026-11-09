@@ -9,19 +9,21 @@ import {
 	type TrainingValues,
 	toEstablishmentValues,
 	toTrainingValues,
-} from '#/pages/cursus/settings/lib/catalog'
+} from '#/pages/cursus/catalog/lib/catalog'
 import {
 	CatalogBlock,
 	CatalogDialog,
+	type CatalogPageLayout,
 	CatalogRow,
-} from '#/pages/cursus/settings/ui/catalog-block'
+} from '#/pages/cursus/catalog/ui/catalog-block'
 import {
 	ClosureReasonForm,
 	EstablishmentForm,
 	TrainingForm,
-} from '#/pages/cursus/settings/ui/catalog-forms'
+} from '#/pages/cursus/catalog/ui/catalog-forms'
 
 interface BlockProps<Item, Values> {
+	page?: CatalogPageLayout
 	items: Item[]
 	isLoading: boolean
 	error: string | null
@@ -36,6 +38,7 @@ interface BlockProps<Item, Values> {
 }
 
 export function EstablishmentsBlock({
+	page,
 	items,
 	isLoading,
 	error,
@@ -52,6 +55,7 @@ export function EstablishmentsBlock({
 
 	return (
 		<CatalogBlock
+			page={page}
 			title="Établissements"
 			addLabel="Nouvel établissement"
 			canManage={canManage}
@@ -97,6 +101,7 @@ export function EstablishmentsBlock({
 }
 
 export function TrainingsBlock({
+	page,
 	items,
 	isLoading,
 	error,
@@ -113,6 +118,7 @@ export function TrainingsBlock({
 
 	return (
 		<CatalogBlock
+			page={page}
 			title="Formations"
 			addLabel="Nouvelle formation"
 			canManage={canManage}
@@ -157,6 +163,7 @@ export function TrainingsBlock({
 }
 
 export function ClosureReasonsBlock({
+	page,
 	items,
 	isLoading,
 	error,
@@ -173,6 +180,7 @@ export function ClosureReasonsBlock({
 
 	return (
 		<CatalogBlock
+			page={page}
 			title="Motifs de clôture"
 			addLabel="Nouveau motif"
 			canManage={canManage}

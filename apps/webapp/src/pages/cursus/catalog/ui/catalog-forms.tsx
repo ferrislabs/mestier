@@ -4,17 +4,17 @@ import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Label } from '#/components/ui/label'
 import {
-	FieldInput,
-	FormError,
-} from '#/pages/cursus/participants/ui/field-input'
-import {
 	type ClosureReasonValues,
 	type EstablishmentValues,
 	type TrainingValues,
 	validateClosureReason,
 	validateEstablishment,
 	validateTraining,
-} from '#/pages/cursus/settings/lib/catalog'
+} from '#/pages/cursus/catalog/lib/catalog'
+import {
+	FieldInput,
+	FormError,
+} from '#/pages/cursus/participants/ui/field-input'
 
 interface FormShellProps {
 	isPending: boolean

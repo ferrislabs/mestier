@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { EstablishmentsBlock } from '#/pages/cursus/settings/ui/catalog-blocks'
+import { EstablishmentsBlock } from '#/pages/cursus/catalog/ui/catalog-blocks'
 
 function renderBlock(canManage: boolean) {
 	render(

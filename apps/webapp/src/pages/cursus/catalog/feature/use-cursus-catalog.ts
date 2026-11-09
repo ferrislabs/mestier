@@ -17,20 +17,20 @@ export const CLOSURE_REASON_PATH =
 export const CLOSURE_REASON_ARCHIVE_PATH =
 	`${BASE}/closure-reasons/{closure_reason_id}/archive` as const
 
-export function useEstablishments(organizationId: string) {
+export function useEstablishments(organizationId: string, archived = false) {
 	return useQuery(
 		window.tanstackApi.get(ESTABLISHMENTS_PATH, {
 			path: { organization_id: organizationId },
-			query: {},
+			query: archived ? { archived: true } : {},
 		}).queryOptions,
 	)
 }
 
-export function useTrainings(organizationId: string) {
+export function useTrainings(organizationId: string, archived = false) {
 	return useQuery(
 		window.tanstackApi.get(TRAININGS_PATH, {
 			path: { organization_id: organizationId },
-			query: { per_page: 100 },
+			query: archived ? { archived: true, per_page: 100 } : { per_page: 100 },
 		}).queryOptions,
 	)
 }

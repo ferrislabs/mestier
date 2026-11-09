@@ -4,7 +4,7 @@ import {
 	toTrainingRequest,
 	toTrainingValues,
 	validateTraining,
-} from '#/pages/cursus/settings/lib/catalog'
+} from '#/pages/cursus/catalog/lib/catalog'
 
 const TRAINING = {
 	id: 'training-1',

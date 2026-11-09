@@ -15,24 +15,31 @@ import {
 	useUpdateClosureReason,
 	useUpdateEstablishment,
 	useUpdateTraining,
-} from '#/pages/cursus/settings/feature/use-cursus-catalog'
+} from '#/pages/cursus/catalog/feature/use-cursus-catalog'
 import {
 	type EditorState,
 	toClosureReasonRequest,
 	toEstablishmentRequest,
 	toTrainingRequest,
-} from '#/pages/cursus/settings/lib/catalog'
+} from '#/pages/cursus/catalog/lib/catalog'
 import {
 	ClosureReasonsBlock,
 	EstablishmentsBlock,
 	TrainingsBlock,
-} from '#/pages/cursus/settings/ui/catalog-blocks'
+} from '#/pages/cursus/catalog/ui/catalog-blocks'
 
-export function EstablishmentsFeature() {
+export interface CatalogFeatureProps {
+	pageDescription?: string
+}
+
+export function EstablishmentsFeature({
+	pageDescription,
+}: CatalogFeatureProps) {
+	const [archived, setArchived] = useState(false)
 	const { activeOrganizationId } = useActiveOrganization()
 	const canManage = useHasPermission('MANAGE_CURSUS_CATALOG')
 	const [editor, setEditor] = useState<EditorState>(null)
-	const list = useEstablishments(activeOrganizationId)
+	const list = useEstablishments(activeOrganizationId, archived)
 	const create = useCreateEstablishment()
 	const update = useUpdateEstablishment()
 	const archive = useArchiveEstablishment()
@@ -40,6 +47,15 @@ export function EstablishmentsFeature() {
 
 	return (
 		<EstablishmentsBlock
+			page={
+				pageDescription === undefined
+					? undefined
+					: {
+							description: pageDescription,
+							archived,
+							onArchivedChange: setArchived,
+						}
+			}
 			items={list.data?.data ?? []}
 			isLoading={list.isLoading}
 			error={mutationErrorMessage(list.error ?? archive.error)}
@@ -81,11 +97,12 @@ export function EstablishmentsFeature() {
 	)
 }
 
-export function TrainingsFeature() {
+export function TrainingsFeature({ pageDescription }: CatalogFeatureProps) {
+	const [archived, setArchived] = useState(false)
 	const { activeOrganizationId } = useActiveOrganization()
 	const canManage = useHasPermission('MANAGE_CURSUS_CATALOG')
 	const [editor, setEditor] = useState<EditorState>(null)
-	const list = useTrainings(activeOrganizationId)
+	const list = useTrainings(activeOrganizationId, archived)
 	const create = useCreateTraining()
 	const update = useUpdateTraining()
 	const archive = useArchiveTraining()
@@ -93,6 +110,15 @@ export function TrainingsFeature() {
 
 	return (
 		<TrainingsBlock
+			page={
+				pageDescription === undefined
+					? undefined
+					: {
+							description: pageDescription,
+							archived,
+							onArchivedChange: setArchived,
+						}
+			}
 			items={list.data?.data ?? []}
 			isLoading={list.isLoading}
 			error={mutationErrorMessage(list.error ?? archive.error)}

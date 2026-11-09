@@ -43,9 +43,8 @@ function PromotionsRoute() {
 			}
 			onManageTrainings={() =>
 				void navigate({
-					to: '/o/$organizationSlug/settings',
+					to: '/o/$organizationSlug/cursus/formations',
 					params: (previous) => previous,
-					hash: 'cursus',
 				})
 			}
 			onOpenPromotion={(promotionId) =>
