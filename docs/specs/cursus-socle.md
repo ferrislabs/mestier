@@ -133,7 +133,7 @@ Portail et « Mes trinômes », sans bit :
 
 - `GET /cursus/me/spaces` → organisations où l'utilisateur a un participant actif : `[{organization_id, slug, name, is_member}]`
 - `GET /organizations/{organization_id}/cursus/me/triads` → mes trinômes avec rôle et accès
-- `GET /organizations/{organization_id}/cursus/me/triads/{triad_id}` → trinôme, promotion, formation, apprenti, contrats et tuteurs ; 404 hors périmètre
+- `GET /organizations/{organization_id}/cursus/me/triads/{triad_id}` → trinôme, promotion, formation, apprenti, contrats et tuteurs ; un tuteur ne voit que les contrats où il est lié ; 404 hors périmètre
 - `POST /cursus/invitations/{token}/accept`
 
 `POST /participants` accepte un bloc facultatif `apprentice` ou `company_tutor` (`host_company_id`, `job_title`) créé dans la même transaction. Listes paginées avec le crate `pagination` (référentiels courts : liste simple). Clôture : `{closed_at: date, closure_reason_id, closure_note?}`.
@@ -224,3 +224,4 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 
 Amended: 2026-11-09 `POST /participants` crée la fiche apprenti ou tuteur dans la même transaction, pour ne jamais laisser un participant sans rôle.
 Amended: 2026-11-09 les fichiers de contrat suivent le motif de `member_document` (envoi par `POST /files`, puis rattachement par clé) au lieu d'un multipart.
+Amended: 2026-11-09 sur `/me`, un tuteur ne voit que ses propres contrats d'un trinôme, pour ne pas exposer ceux d'une autre entreprise.
