@@ -2,10 +2,12 @@ import {
 	Bug,
 	Building2,
 	FileText,
+	GraduationCap,
 	LifeBuoy,
 	ShieldCheck,
 	Workflow,
 } from 'lucide-react'
+import { CursusSettingsSection } from '#/pages/cursus/settings/cursus-settings-section'
 import { AutomationSection } from '#/pages/settings/sections/automation-section'
 import { DeveloperSection } from '#/pages/settings/sections/developer-section'
 import { ModelsSection } from '#/pages/settings/sections/models-section'
@@ -39,6 +41,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 		icon: LifeBuoy,
 		moduleId: 'support',
 		Component: SupportSection,
+	},
+	{
+		id: 'cursus',
+		label: 'Cursus',
+		icon: GraduationCap,
+		moduleId: 'cursus',
+		Component: CursusSettingsSection,
 	},
 	{
 		id: 'modeles',

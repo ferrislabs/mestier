@@ -11,6 +11,7 @@ export type PermissionArea =
 	| 'reference'
 	| 'chat'
 	| 'support'
+	| 'cursus'
 	| 'administration'
 
 export const PERMISSION_AREA_LABELS: Record<PermissionArea, string> = {
@@ -20,6 +21,7 @@ export const PERMISSION_AREA_LABELS: Record<PermissionArea, string> = {
 	reference: 'Référence',
 	chat: 'Discussion',
 	support: 'Support',
+	cursus: 'Cursus',
 	administration: 'Administration',
 }
 
@@ -42,7 +44,7 @@ export interface PermissionDescriptor {
 /**
  * Every named bit (`mestier_core::domain::role::Permissions::NAMED`), with
  * the French sentence #308 asks for. `permission-catalog.test.ts` locks
- * this list to exactly the 19 names `PermissionName` carries, so a bit
+ * this list to exactly the names `PermissionName` carries, so a bit
  * added on the backend fails loudly here instead of showing up unlabeled.
  *
  * `VIEW_COST` and `MANAGE_COST` are worded to read differently at a
@@ -176,6 +178,34 @@ export const PERMISSION_CATALOG: PermissionDescriptor[] = [
 		description:
 			'Répondre au client, écrire des notes et des brouillons, assigner un ticket et changer son statut.',
 		note: 'Sans « Voir les tickets de support », ce droit n’ouvre aucun écran.',
+	},
+
+	{
+		name: 'VIEW_CURSUS',
+		area: 'cursus',
+		label: 'Voir Cursus',
+		description:
+			'Lire les formations, promotions, trinômes, contrats, participants et entreprises.',
+	},
+	{
+		name: 'MANAGE_CURSUS_CATALOG',
+		area: 'cursus',
+		label: 'Gérer le catalogue Cursus',
+		description:
+			'Gérer les établissements, formations, promotions et motifs de clôture.',
+	},
+	{
+		name: 'MANAGE_CURSUS_TRIADS',
+		area: 'cursus',
+		label: 'Gérer les trinômes',
+		description:
+			"Gérer les trinômes, les contrats et les entreprises d'accueil.",
+	},
+	{
+		name: 'MANAGE_CURSUS_PARTICIPANTS',
+		area: 'cursus',
+		label: 'Gérer les participants',
+		description: 'Créer, inviter et désactiver les apprentis et les tuteurs.',
 	},
 
 	// Administration

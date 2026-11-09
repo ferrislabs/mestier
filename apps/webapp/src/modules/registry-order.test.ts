@@ -18,6 +18,7 @@ describe('MODULES order and labels', () => {
 			'planification',
 			'chat',
 			'support',
+			'cursus',
 			'hr',
 			'automatisation',
 			'purchase',
