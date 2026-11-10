@@ -82,7 +82,8 @@
   )
 ]
 
-#set page(paper: "a4", margin: (x: 2cm, y: 2.4cm))
+#let page_margin_y = 2.4cm
+#set page(paper: "a4", margin: (x: 2cm, y: page_margin_y))
 
 // Decorations are placed in millimeters from the page's top-left corner,
 // whatever the margins. `scope` is "cover" or "inner"; full-page attachments
@@ -235,11 +236,24 @@
         v(12pt)
         let count = (one: 1, two: 2, three: 3).at(supply.photo_columns, default: 3)
         let height = (one: 15cm, two: 9cm, three: 4.6cm).at(supply.photo_columns, default: 4.6cm)
-        grid(
-          columns: range(count).map(_ => 1fr),
-          gutter: 10pt,
-          ..supply.photos.map(photo => captioned(photo, height)),
-        )
+        for (at, row) in supply.photos.chunks(count).enumerate() {
+          // A row measures the room under an anchor placed before it. Measuring
+          // the row itself settles on the next page: once pushed there, the row
+          // reads a whole page of room and keeps its full height.
+          let anchor = "photo-row-" + entry.number + "-" + str(at)
+          [#metadata(none)#label(anchor)]
+          context {
+            let top = query(label(anchor)).first().location().position().y
+            let fitting = page.height - page_margin_y - top - 1.2cm
+            let shown = if fitting >= calc.min(5cm, height) { calc.min(height, fitting) } else { height }
+            grid(
+              columns: range(count).map(_ => 1fr),
+              gutter: 10pt,
+              ..row.map(photo => captioned(photo, shown)),
+            )
+          }
+          v(10pt)
+        }
       }
       for key in supply.datasheet_keys { full_pages(key) }
     }

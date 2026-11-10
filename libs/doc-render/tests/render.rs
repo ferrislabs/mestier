@@ -649,3 +649,34 @@ fn the_docx_refuses_a_picture_it_cannot_decode_instead_of_panicking() {
         Err(DoeRenderError::UnsupportedFile { key, .. }) if key == "p1"
     ));
 }
+
+fn pages_with_one_supply_photo(columns: Option<SupplyPhotoColumns>) -> usize {
+    let (mut document, bundle) = fixture();
+    if let NumberedContent::Supplies { supplies, .. } = &mut document.sections[0].content {
+        if let Some(columns) = columns {
+            supplies[0].supply.photos = vec![caption("ph0", "Sujet")];
+            supplies[0].supply.photo_columns = columns;
+        } else {
+            supplies[0].supply.photos = vec![];
+        }
+    }
+    let bytes = TypstDoeRenderer.render(&document, &bundle).unwrap();
+    text_of(&bytes).0
+}
+
+#[test]
+fn supply_photos_shrink_to_stay_on_the_page_of_their_table() {
+    let without = pages_with_one_supply_photo(None);
+    for columns in [
+        SupplyPhotoColumns::One,
+        SupplyPhotoColumns::Two,
+        SupplyPhotoColumns::Three,
+    ] {
+        let label = format!("{columns:?}");
+        assert_eq!(
+            pages_with_one_supply_photo(Some(columns)),
+            without,
+            "a photo in {label} columns started a new page"
+        );
+    }
+}
