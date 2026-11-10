@@ -12,12 +12,15 @@ const DOE_MODEL_FROM_STARTER_PATH =
 const DOE_STARTERS_PATH =
 	'/api/v1/organizations/{organization_id}/doe-model-starters'
 const DOE_SETTINGS_PATH = '/api/v1/organizations/{organization_id}/doe-settings'
+const PROJECT_DOE_STYLE_PATH =
+	'/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style'
 
 export type DoeModel = Schemas.DoeModelResponse
 export type DoeModelSection = Schemas.DoeModelSection
 export type DoeModelSectionKind = Schemas.DoeModelSectionKind
 export type DoeModelStarter = Schemas.DoeModelStarterResponse
 export type DoeSettings = Schemas.DoeSettingsResponse
+export type ProjectDoeStyle = Schemas.ProjectDoeStyleResponse
 export type StarterModel = Schemas.StarterModel
 
 function queryId(queryKey: readonly unknown[]) {
@@ -134,6 +137,43 @@ export function useUpdateDoeSettings() {
 				predicate: (query) => queryId(query.queryKey) === DOE_SETTINGS_PATH,
 			})
 		},
+	})
+}
+
+export function useProjectDoeStyle(organizationId: string, projectId: string) {
+	return useQuery({
+		...window.tanstackApi.get(PROJECT_DOE_STYLE_PATH, {
+			path: { organization_id: organizationId, project_id: projectId },
+		}).queryOptions,
+		enabled: Boolean(organizationId && projectId),
+	})
+}
+
+function useInvalidateProjectDoeStyle() {
+	const queryClient = useQueryClient()
+	return () =>
+		queryClient.invalidateQueries({
+			predicate: (query) => queryId(query.queryKey) === PROJECT_DOE_STYLE_PATH,
+		})
+}
+
+export function useSaveProjectDoeStyle() {
+	const invalidate = useInvalidateProjectDoeStyle()
+
+	return useMutation({
+		...window.tanstackApi.mutation('put', PROJECT_DOE_STYLE_PATH)
+			.mutationOptions,
+		onSuccess: invalidate,
+	})
+}
+
+export function useClearProjectDoeStyle() {
+	const invalidate = useInvalidateProjectDoeStyle()
+
+	return useMutation({
+		...window.tanstackApi.mutation('delete', PROJECT_DOE_STYLE_PATH)
+			.mutationOptions,
+		onSuccess: invalidate,
 	})
 }
 

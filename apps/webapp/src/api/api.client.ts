@@ -2092,6 +2092,7 @@ export namespace Schemas {
     topic?: (string | null) | undefined;
     updated_at: string;
   };
+  export type ProjectDoeStyleResponse = { inherited: DoeStyle; style?: (null | DoeStyle) | undefined };
   export type ProjectSupplierCostLineResponse = {
     allocation_id: SupplierInvoiceLineAllocationId;
     amount_cents: number;
@@ -2735,6 +2736,7 @@ export namespace Schemas {
     unit: string;
     unit_price_cents: number;
   };
+  export type UpdateProjectDoeStyleRequest = { style: DoeStyle };
   export type UpdateProjectRequest = {
     customer_context_id?: (null | CustomerContextId) | undefined;
     customer_id?: (null | CustomerId) | undefined;
@@ -10850,6 +10852,69 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_GetProjectDoeStyle = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+    };
+    responses: {
+      200: {
+        data: { inherited: Schemas.DoeStyle; style?: (null | Schemas.DoeStyle) | undefined };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_UpdateProjectDoeStyle = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+
+      body: Schemas.UpdateProjectDoeStyleRequest;
+    };
+    responses: {
+      200: {
+        data: Partial<{
+          body_font: Schemas.DoeFont;
+          contents_title: Schemas.DoeLabel;
+          cover_logo_position: Schemas.LogoPosition;
+          cover_logo_size: Schemas.LogoSize;
+          cover_photo: boolean;
+          cover_title: Schemas.DoeLabel;
+          decorations: Array<Schemas.DoeDecoration>;
+          footer_text: Schemas.DoeTemplate;
+          header_logo: boolean;
+          header_text: Schemas.DoeTemplate;
+          heading_font: Schemas.DoeFont;
+          logo_key: string | null;
+          on_primary: Schemas.HexColor;
+          parties_title: Schemas.DoeLabel;
+          primary: Schemas.HexColor;
+          secondary: Schemas.HexColor;
+          supply_table_title: Schemas.DoeLabel;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_ClearProjectDoeStyle = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type post_RestoreProject = {
     method: "POST";
     path: "/api/v1/organizations/{organization_id}/projects/{project_id}/restore";
@@ -13850,6 +13915,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}": Endpoints.delete_DeleteLibraryPhoto;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.delete_ClearProjectDoeStyle;
     "/api/v1/organizations/{organization_id}/support/api-keys/{key_id}": Endpoints.delete_RevokeSupportApiKey;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.delete_DeleteSupportDraft;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges/{label}": Endpoints.delete_RemoveSupportTicketBadge;
@@ -13972,6 +14038,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.get_GetProject;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/channel": Endpoints.get_GetProjectChannel;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/doe": Endpoints.get_GetProjectDoe;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.get_GetProjectDoeStyle;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/reporting/profitability": Endpoints.get_GetProfitability;
     "/api/v1/organizations/{organization_id}/reporting/worked-hours": Endpoints.get_GetWorkedHours;
@@ -14170,6 +14237,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.put_PutMemberProfile;
     "/api/v1/organizations/{organization_id}/numbering/{kind}": Endpoints.put_SetOrganizationNextNumber;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.put_UpdateProjectDoeStyle;
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.put_UpdateSupplier;
     "/api/v1/organizations/{organization_id}/support/settings": Endpoints.put_ReplaceSupportSettings;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/assignee": Endpoints.put_AssignSupportTicket;

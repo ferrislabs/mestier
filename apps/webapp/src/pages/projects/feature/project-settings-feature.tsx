@@ -1,22 +1,27 @@
 import { useCallback, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { useDoeSettings } from '#/hooks/use-doe-models'
+import {
+	useClearProjectDoeStyle,
+	useProjectDoeStyle,
+	useSaveProjectDoeStyle,
+} from '#/hooks/use-doe-models'
 import {
 	useArchiveProject,
 	usePatchProject,
 	useProject,
 	useRestoreProject,
 } from '#/hooks/use-projects'
+import { mutationErrorMessage } from '#/lib/api-error'
 import { DoeStyleEditorFeature } from '#/pages/doe-style/feature/doe-style-editor-feature'
-import { completeStyle, sameStyle } from '#/pages/doe-style/lib/style'
+import {
+	completeStyle,
+	normalizeStyle,
+	sameStyle,
+} from '#/pages/doe-style/lib/style'
 import {
 	saveProjectExtras,
 	useProjectExtras,
 } from '#/pages/projects/feature/mocks/project-extras'
-import {
-	saveProjectStyle,
-	useProjectStyleOverrides,
-} from '#/pages/projects/feature/mocks/project-styles'
 import { useProjectFormOptions } from '#/pages/projects/feature/use-project-form-options'
 import {
 	extrasOfForm,
@@ -71,10 +76,12 @@ function ProjectSettingsWorkspace({
 	const patchProject = usePatchProject()
 	const archiveProject = useArchiveProject()
 	const restoreProject = useRestoreProject()
-	const settings = useDoeSettings(organizationId)
-	const overrides = useProjectStyleOverrides()
-	const defaults = completeStyle(settings.data?.data.style)
-	const storedStyle = overrides[project.id] ?? defaults
+	const projectStyle = useProjectDoeStyle(organizationId, project.id)
+	const saveStyle = useSaveProjectDoeStyle()
+	const clearStyle = useClearProjectDoeStyle()
+	const styles = projectStyle.data?.data
+	const storedStyle = completeStyle(styles?.style ?? styles?.inherited)
+	const stylePath = { organization_id: organizationId, project_id: project.id }
 	const [style, setStyle] = useSyncedDraft(storedStyle, sameStyle)
 	const [projectDirty, setProjectDirty] = useState(false)
 	const [styleDirty, setStyleDirty] = useState(false)
@@ -135,7 +142,7 @@ function ProjectSettingsWorkspace({
 				<StyleCard
 					draft={style}
 					stored={storedStyle}
-					defaults={defaults}
+					hasOwnStyle={Boolean(styles?.style)}
 					editor={
 						<DoeStyleEditorFeature
 							organizationId={organizationId}
@@ -145,10 +152,22 @@ function ProjectSettingsWorkspace({
 							}
 						/>
 					}
-					isSaving={false}
-					error={null}
+					isSaving={saveStyle.isPending || clearStyle.isPending}
+					error={
+						mutationErrorMessage(saveStyle.error) ??
+						mutationErrorMessage(clearStyle.error) ??
+						null
+					}
 					onReplace={setStyle}
-					onSubmit={() => saveProjectStyle(project.id, style)}
+					onSubmit={async () => {
+						await saveStyle.mutateAsync({
+							path: stylePath,
+							body: { style: normalizeStyle(style) },
+						})
+					}}
+					onClear={async () => {
+						await clearStyle.mutateAsync({ path: stylePath })
+					}}
 					onDirtyChange={onStyleDirty}
 				/>
 			</div>

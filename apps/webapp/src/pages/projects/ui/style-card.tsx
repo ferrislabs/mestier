@@ -15,24 +15,26 @@ const SAVED_LABEL =
 export interface StyleCardProps {
 	draft: CompleteDoeStyle
 	stored: CompleteDoeStyle
-	defaults: CompleteDoeStyle
+	hasOwnStyle: boolean
 	editor: ReactNode
 	isSaving: boolean
 	error: string | null
 	onReplace: (style: CompleteDoeStyle) => void
 	onSubmit: () => Promise<void>
+	onClear: () => Promise<void>
 	onDirtyChange: (dirty: boolean) => void
 }
 
 export function StyleCard({
 	draft,
 	stored,
-	defaults,
+	hasOwnStyle,
 	editor,
 	isSaving,
 	error,
 	onReplace,
 	onSubmit,
+	onClear,
 	onDirtyChange,
 }: StyleCardProps) {
 	const baseId = useId()
@@ -44,14 +46,16 @@ export function StyleCard({
 	function submit(event: FormEvent) {
 		event.preventDefault()
 		if (!canSave) return
-		void onSubmit().then(() => setSaved(true))
+		void onSubmit()
+			.then(() => setSaved(true))
+			.catch(() => {})
 	}
 
 	return (
 		<SettingsSection
 			id={`${baseId}-style`}
 			title="Mise en page du DOE de ce projet"
-			description="Couleurs, polices, couverture, en-tête, pied de page et libellés du PDF. Le style est lu à l’export : le DOE du projet l’utilise à son prochain aperçu PDF."
+			description="Couleurs, polices, couverture, en-tête, pied de page, libellés et éléments du PDF, pour ce projet seulement. Sans style propre, le DOE suit son modèle, sinon l’organisation."
 		>
 			<form onSubmit={submit} noValidate>
 				<div className="px-5 py-5">{editor}</div>
@@ -73,13 +77,13 @@ export function StyleCard({
 							type="button"
 							variant="ghost"
 							size="sm"
-							disabled={sameStyle(draft, defaults)}
+							disabled={!hasOwnStyle || isSaving}
 							onClick={() => {
 								setSaved(false)
-								onReplace(defaults)
+								void onClear().catch(() => {})
 							}}
 						>
-							Rétablir le style par défaut
+							Revenir au style de l’organisation
 						</Button>
 						<Button
 							type="button"
