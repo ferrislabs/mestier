@@ -450,6 +450,52 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
             sent["id"] = json!(CONTRACT);
             (StatusCode::CREATED, Json(json!({"data": sent}))).into_response()
         }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/knowledge/articles") => Json(json!({
+            "data": [{
+                "id": ARTICLE, "kind": "file", "title": "Tarifs gazon", "body": null,
+                "file": {"mime_type": "application/pdf", "size_bytes": 1234},
+                "tags": ["tarif"], "updated_at": "2026-11-10T08:00:00Z"
+            }],
+            "pagination": {"per_page": 10, "current_page": 1, "total": 1}
+        }))
+        .into_response(),
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/knowledge/articles/{ARTICLE}") => {
+            Json(json!({"data": {
+                "id": ARTICLE, "kind": "file", "title": "Tarifs gazon", "body": null,
+                "file": {"mime_type": "application/pdf", "size_bytes": 1234},
+                "tags": ["tarif"], "updated_at": "2026-11-10T08:00:00Z",
+                "extracted_text": "abcdefghij",
+                "links": [{"resource_type": "project", "resource_id": PROJECT, "created_at": "2026-11-10T08:00:00Z"}]
+            }}))
+            .into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/knowledge/notes") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            (
+                StatusCode::CREATED,
+                Json(json!({"data": {
+                    "id": ARTICLE, "kind": "note", "title": sent["title"], "body": sent["body"],
+                    "file": null, "tags": sent["tags"], "updated_at": "2026-11-10T08:00:00Z"
+                }})),
+            )
+                .into_response()
+        }
+        (&Method::PATCH, p) if p == format!("organizations/{ORG_A}/knowledge/articles/{ARTICLE}") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": {
+                "id": ARTICLE, "kind": "note", "title": sent["title"], "body": null,
+                "file": null, "tags": sent["tags"], "updated_at": "2026-11-10T08:00:00Z"
+            }}))
+            .into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/knowledge/articles/{ARTICLE}/links") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": {
+                "resource_type": sent["resource_type"], "resource_id": sent["resource_id"],
+                "created_at": "2026-11-10T08:00:00Z"
+            }}))
+            .into_response()
+        }
         (&Method::POST, "files") => (
             StatusCode::CREATED,
             Json(json!({"data": {"key": "doe/uploaded.bin", "mime_type": "x", "size_bytes": bytes.len()}})),
@@ -582,6 +628,145 @@ fn text(result: &Value) -> String {
         .as_str()
         .unwrap_or_default()
         .to_owned()
+}
+
+const ARTICLE: &str = "e0000000-0000-4000-8000-000000000001";
+
+#[tokio::test]
+async fn the_knowledge_search_sends_every_filter_and_returns_slim_articles() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "search_knowledge",
+        json!({"query": " arrosage ", "tags": [" Tarif "], "resource_type": "project",
+               "resource_id": PROJECT, "limit": 500}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let found: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(found["articles"][0]["id"], ARTICLE);
+    assert!(found["articles"][0].get("extracted_text").is_none());
+    assert_eq!(found["total"], 1);
+
+    let request = fake
+        .seen()
+        .into_iter()
+        .find(|s| s.path.ends_with("/knowledge/articles"))
+        .unwrap();
+    for expected in [
+        "q=arrosage",
+        "tag=tarif",
+        "resource_type=project",
+        &format!("resource_id={PROJECT}"),
+        "per_page=50",
+    ] {
+        assert!(
+            request.query.contains(expected),
+            "{expected} in {}",
+            request.query
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_half_given_resource_filter_is_refused_before_any_call() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "search_knowledge",
+        json!({"resource_type": "quote"}),
+    )
+    .await;
+    assert_eq!(result["isError"], json!(true));
+    assert!(fake.seen().iter().all(|s| !s.path.contains("/knowledge/")));
+}
+
+#[tokio::test]
+async fn reading_an_article_windows_the_text_and_says_when_more_remains() {
+    let (mcp, _) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "get_knowledge_article",
+        json!({"article_id": ARTICLE, "offset": 2, "max_chars": 4}),
+    )
+    .await;
+    let article: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(article["text"], "cdef");
+    assert_eq!(article["text_length"], 10);
+    assert_eq!(article["text_truncated"], true);
+    assert_eq!(article["links"][0]["resource_id"], PROJECT);
+}
+
+#[tokio::test]
+async fn a_note_is_created_with_clean_tags_and_updated_without_resending_the_others() {
+    let (mcp, fake) = start().await;
+    let created = call(
+        &mcp,
+        "solo",
+        "create_knowledge_note",
+        json!({"title": "CGV", "body": "30 jours", "tags": [" CGV ", "cgv", "Devis"]}),
+    )
+    .await;
+    assert_ne!(created["isError"], json!(true), "{created}");
+    let created: Value = serde_json::from_str(&text(&created)).unwrap();
+    assert_eq!(created["tags"], json!(["cgv", "devis"]));
+
+    let updated = call(
+        &mcp,
+        "solo",
+        "update_knowledge_article",
+        json!({"article_id": ARTICLE, "add_tags": ["Neuf"], "remove_tags": ["tarif"]}),
+    )
+    .await;
+    assert_ne!(updated["isError"], json!(true), "{updated}");
+    let updated: Value = serde_json::from_str(&text(&updated)).unwrap();
+    assert_eq!(updated["tags"], json!(["neuf"]));
+
+    let nothing = call(
+        &mcp,
+        "solo",
+        "update_knowledge_article",
+        json!({"article_id": ARTICLE}),
+    )
+    .await;
+    assert_eq!(nothing["isError"], json!(true));
+    drop(fake);
+}
+
+#[tokio::test]
+async fn an_article_is_linked_and_the_assistant_never_deletes_uploads_or_unlinks() {
+    let (mcp, fake) = start().await;
+    let linked = call(
+        &mcp,
+        "solo",
+        "link_knowledge_article",
+        json!({"article_id": ARTICLE, "resource_type": "customer", "resource_id": CUSTOMER}),
+    )
+    .await;
+    assert_ne!(linked["isError"], json!(true), "{linked}");
+    let linked: Value = serde_json::from_str(&text(&linked)).unwrap();
+    assert_eq!(linked["resource_type"], "customer");
+
+    let bad = call(
+        &mcp,
+        "solo",
+        "link_knowledge_article",
+        json!({"article_id": ARTICLE, "resource_type": "customer", "resource_id": "nope"}),
+    )
+    .await;
+    assert_eq!(bad["isError"], json!(true));
+
+    for seen in fake.seen() {
+        assert_ne!(seen.method, "DELETE", "{}", seen.path);
+        assert!(
+            !(seen.method == "POST" && seen.path.ends_with("/knowledge/articles")),
+            "{}",
+            seen.path
+        );
+    }
 }
 
 #[tokio::test]

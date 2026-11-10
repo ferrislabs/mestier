@@ -36,6 +36,11 @@ principals:
     roles: ["user"]
     attr:
       scopes: ["mestier.read", "mestier.reference.write"]
+  knowledge_writer:
+    id: u9
+    roles: ["user"]
+    attr:
+      scopes: ["mestier.read", "mestier.knowledge.write"]
   no_scope:
     id: u3
     roles: ["user"]
@@ -46,6 +51,14 @@ resources:
     kind: mcp_tool
     id: list_projects
     attr: {access: read, domain: project, organization: acme}
+  write_knowledge:
+    kind: mcp_tool
+    id: create_knowledge_note
+    attr: {access: write, domain: knowledge, organization: acme}
+  read_knowledge:
+    kind: mcp_tool
+    id: search_knowledge
+    attr: {access: read, domain: knowledge, organization: acme}
   write_doe:
     kind: mcp_tool
     id: create_doe
@@ -397,3 +410,51 @@ tests:
         resource: write_planning
         actions:
           create_task: EFFECT_DENY
+  - name: write knowledge with mestier.knowledge.write is allowed
+    input:
+      principals: [knowledge_writer]
+      resources: [write_knowledge]
+      actions: [create_knowledge_note]
+    expected:
+      - principal: knowledge_writer
+        resource: write_knowledge
+        actions:
+          create_knowledge_note: EFFECT_ALLOW
+  - name: write knowledge with only mestier.read or another write scope is denied
+    input:
+      principals: [reader, crm_writer, doe_writer]
+      resources: [write_knowledge]
+      actions: [create_knowledge_note]
+    expected:
+      - principal: reader
+        resource: write_knowledge
+        actions:
+          create_knowledge_note: EFFECT_DENY
+      - principal: crm_writer
+        resource: write_knowledge
+        actions:
+          create_knowledge_note: EFFECT_DENY
+      - principal: doe_writer
+        resource: write_knowledge
+        actions:
+          create_knowledge_note: EFFECT_DENY
+  - name: mestier.knowledge.write alone does not open a DOE write
+    input:
+      principals: [knowledge_writer]
+      resources: [write_doe]
+      actions: [create_doe]
+    expected:
+      - principal: knowledge_writer
+        resource: write_doe
+        actions:
+          create_doe: EFFECT_DENY
+  - name: read knowledge with mestier.read is allowed
+    input:
+      principals: [reader]
+      resources: [read_knowledge]
+      actions: [search_knowledge]
+    expected:
+      - principal: reader
+        resource: read_knowledge
+        actions:
+          search_knowledge: EFFECT_ALLOW

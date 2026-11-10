@@ -3,6 +3,7 @@ pub mod app;
 pub mod crm;
 pub mod edit;
 pub mod files;
+pub mod knowledge;
 pub mod maintenance;
 pub mod photos;
 pub mod planning;

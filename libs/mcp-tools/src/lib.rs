@@ -22,9 +22,11 @@ pub const SCOPE_QUOTE_WRITE: &str = "mestier.quote.write";
 pub const SCOPE_PLANNING_WRITE: &str = "mestier.planning.write";
 /// OAuth scope granting the catalogue and supplier write tools.
 pub const SCOPE_REFERENCE_WRITE: &str = "mestier.reference.write";
+/// OAuth scope granting the knowledge base write tools (notes, tags, links).
+pub const SCOPE_KNOWLEDGE_WRITE: &str = "mestier.knowledge.write";
 
 /// Every scope the gateway advertises in its protected resource metadata.
-pub const SCOPES_SUPPORTED: [&str; 7] = [
+pub const SCOPES_SUPPORTED: [&str; 8] = [
     SCOPE_READ,
     SCOPE_DOE_WRITE,
     SCOPE_MAINTENANCE_WRITE,
@@ -32,6 +34,7 @@ pub const SCOPES_SUPPORTED: [&str; 7] = [
     SCOPE_QUOTE_WRITE,
     SCOPE_PLANNING_WRITE,
     SCOPE_REFERENCE_WRITE,
+    SCOPE_KNOWLEDGE_WRITE,
 ];
 
 /// Header the gateway sets on requests it forwards, naming the LLM client
@@ -122,10 +125,15 @@ pub enum Tool {
     SearchPhotoLibrary,
     TagLibraryPhotos,
     PlaceDoeFiles,
+    SearchKnowledge,
+    GetKnowledgeArticle,
+    CreateKnowledgeNote,
+    UpdateKnowledgeArticle,
+    LinkKnowledgeArticle,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 67] = [
+    pub const ALL: [Tool; 72] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -193,6 +201,11 @@ impl Tool {
         Tool::SearchPhotoLibrary,
         Tool::TagLibraryPhotos,
         Tool::PlaceDoeFiles,
+        Tool::SearchKnowledge,
+        Tool::GetKnowledgeArticle,
+        Tool::CreateKnowledgeNote,
+        Tool::UpdateKnowledgeArticle,
+        Tool::LinkKnowledgeArticle,
     ];
 
     /// The name MCP clients call the tool by.
@@ -265,6 +278,11 @@ impl Tool {
             Self::SearchPhotoLibrary => "search_photo_library",
             Self::TagLibraryPhotos => "tag_library_photos",
             Self::PlaceDoeFiles => "place_doe_files",
+            Self::SearchKnowledge => "search_knowledge",
+            Self::GetKnowledgeArticle => "get_knowledge_article",
+            Self::CreateKnowledgeNote => "create_knowledge_note",
+            Self::UpdateKnowledgeArticle => "update_knowledge_article",
+            Self::LinkKnowledgeArticle => "link_knowledge_article",
         }
     }
 
@@ -308,7 +326,10 @@ impl Tool {
             | Self::CreateSupplier
             | Self::UpdateSupplier
             | Self::TagLibraryPhotos
-            | Self::PlaceDoeFiles => Access::Write,
+            | Self::PlaceDoeFiles
+            | Self::CreateKnowledgeNote
+            | Self::UpdateKnowledgeArticle
+            | Self::LinkKnowledgeArticle => Access::Write,
             Self::ListOrganizations
             | Self::ListProjects
             | Self::GetProject
@@ -338,7 +359,9 @@ impl Tool {
             | Self::ListOutstandingInvoices
             | Self::GetProfitability
             | Self::GetWorkedHours
-            | Self::SearchPhotoLibrary => Access::Read,
+            | Self::SearchPhotoLibrary
+            | Self::SearchKnowledge
+            | Self::GetKnowledgeArticle => Access::Read,
         }
     }
 
@@ -384,6 +407,11 @@ impl Tool {
             | Self::SearchPhotoLibrary
             | Self::TagLibraryPhotos
             | Self::PlaceDoeFiles => "doe",
+            Self::SearchKnowledge
+            | Self::GetKnowledgeArticle
+            | Self::CreateKnowledgeNote
+            | Self::UpdateKnowledgeArticle
+            | Self::LinkKnowledgeArticle => "knowledge",
             Self::SearchProducts | Self::GetProduct => "catalog",
             Self::ListQuotes
             | Self::GetQuote
@@ -476,7 +504,8 @@ mod tests {
                         "quote",
                         "planning",
                         "reference",
-                        "purchase"
+                        "purchase",
+                        "knowledge"
                     ]
                     .contains(&tool.domain()),
                     "{tool}"
@@ -506,6 +535,7 @@ mod tests {
                 "create_customer_contact",
                 "create_deal",
                 "create_doe",
+                "create_knowledge_note",
                 "create_maintenance_contract_draft",
                 "create_product",
                 "create_project",
@@ -516,6 +546,7 @@ mod tests {
                 "delete_doe_file",
                 "delete_doe_section",
                 "delete_doe_supply",
+                "link_knowledge_article",
                 "move_deal_stage",
                 "place_doe_files",
                 "reorder_doe_sections",
@@ -529,6 +560,7 @@ mod tests {
                 "update_doe_party",
                 "update_doe_section",
                 "update_doe_supply",
+                "update_knowledge_article",
                 "update_product",
                 "update_project",
                 "update_quote",
@@ -576,7 +608,8 @@ mod tests {
                 "mestier.crm.write",
                 "mestier.quote.write",
                 "mestier.planning.write",
-                "mestier.reference.write"
+                "mestier.reference.write",
+                "mestier.knowledge.write"
             ]
         );
     }
@@ -640,7 +673,7 @@ mod tests {
     #[test]
     fn the_reference_write_scope_covers_the_catalogue_and_the_suppliers() {
         assert_eq!(SCOPE_REFERENCE_WRITE, "mestier.reference.write");
-        assert_eq!(SCOPES_SUPPORTED.len(), 7);
+        assert_eq!(SCOPES_SUPPORTED.len(), 8);
         for tool in [Tool::CreateProduct, Tool::CreateSupplier] {
             assert!(["reference", "purchase"].contains(&tool.domain()));
         }
@@ -671,5 +704,29 @@ mod tests {
                 assert!(!name.contains("delete"), "{name}");
             }
         }
+    }
+
+    #[test]
+    fn the_knowledge_tools_read_write_notes_and_links_but_never_delete() {
+        let expected = [
+            (Tool::SearchKnowledge, Access::Read),
+            (Tool::GetKnowledgeArticle, Access::Read),
+            (Tool::CreateKnowledgeNote, Access::Write),
+            (Tool::UpdateKnowledgeArticle, Access::Write),
+            (Tool::LinkKnowledgeArticle, Access::Write),
+        ];
+        for (tool, access) in expected {
+            assert_eq!(tool.access(), access, "{tool}");
+            assert_eq!(tool.domain(), "knowledge", "{tool}");
+            assert!(tool.is_organization_scoped(), "{tool}");
+        }
+        for tool in Tool::ALL {
+            if tool.domain() == "knowledge" {
+                for forbidden in ["delete", "unlink", "upload"] {
+                    assert!(!tool.name().contains(forbidden), "{tool}");
+                }
+            }
+        }
+        assert_eq!(SCOPE_KNOWLEDGE_WRITE, "mestier.knowledge.write");
     }
 }
