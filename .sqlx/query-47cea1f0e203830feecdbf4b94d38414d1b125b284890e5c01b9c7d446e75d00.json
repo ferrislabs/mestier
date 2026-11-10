@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE knowledge_articles\n            SET folder_id = $3, updated_at = now()\n            WHERE org_id = $1 AND id = ANY($2)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "47cea1f0e203830feecdbf4b94d38414d1b125b284890e5c01b9c7d446e75d00"
+}

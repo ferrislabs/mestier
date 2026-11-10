@@ -16,6 +16,9 @@ pub struct CreateKnowledgeNoteRequest {
     /// At most 20 tags of 1 to 40 characters, lowercased and deduplicated.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Absent or null puts the note at the root.
+    #[serde(default)]
+    pub folder_id: Option<mestier_core::KnowledgeFolderId>,
 }
 
 #[utoipa::path(
@@ -29,6 +32,7 @@ pub struct CreateKnowledgeNoteRequest {
         (status = 201, description = "The note", body = inline(DataEnvelope<KnowledgeArticleResponse>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
+        (status = 404, description = "Folder not found, or held by another organization"),
         (status = 422, description = "Empty or too long title, note or tag"),
     ),
     security(("bearer_auth" = []))
@@ -51,6 +55,7 @@ pub async fn handler(
             title: payload.title,
             body: payload.body,
             tags: payload.tags,
+            folder_id: payload.folder_id,
         })
         .await?
         .map_err(unprocessable)?;

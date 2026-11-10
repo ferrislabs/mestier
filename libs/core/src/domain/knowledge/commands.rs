@@ -1,4 +1,7 @@
-use crate::{KnowledgeArticleId, KnowledgeResource, OrganizationId};
+use crate::{
+    KnowledgeArticleId, KnowledgeFolder, KnowledgeFolderId, KnowledgeFolderScope,
+    KnowledgeResource, OrganizationId,
+};
 
 #[derive(Debug, Clone)]
 pub struct CreateKnowledgeNoteCommand {
@@ -7,6 +10,8 @@ pub struct CreateKnowledgeNoteCommand {
     pub title: String,
     pub body: String,
     pub tags: Vec<String>,
+    /// `None` puts the note at the root.
+    pub folder_id: Option<KnowledgeFolderId>,
 }
 
 #[derive(Debug, Clone)]
@@ -19,6 +24,8 @@ pub struct UploadKnowledgeFileCommand {
     /// Read from the file by the caller, off the async executor.
     pub extracted_text: Option<String>,
     pub tags: Vec<String>,
+    /// `None` puts the file at the root.
+    pub folder_id: Option<KnowledgeFolderId>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +35,7 @@ pub struct ListKnowledgeCommand {
     pub query: Option<String>,
     pub tags: Vec<String>,
     pub resource: Option<KnowledgeResource>,
+    pub folder: Option<KnowledgeFolderScope>,
     pub limit: u64,
     pub offset: u64,
 }
@@ -68,4 +76,59 @@ pub struct LinkKnowledgeCommand {
 pub struct KnowledgeArticleWithLinks {
     pub article: crate::KnowledgeArticle,
     pub links: Vec<crate::KnowledgeLink>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateKnowledgeFolderCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    /// `None` creates the folder at the root.
+    pub parent_id: Option<KnowledgeFolderId>,
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateKnowledgeFolderCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub id: KnowledgeFolderId,
+    /// Absent keeps the name.
+    pub name: Option<String>,
+    /// Absent keeps the parent; `Some(None)` moves the folder to the root.
+    pub parent_id: Option<Option<KnowledgeFolderId>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteKnowledgeFolderCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub id: KnowledgeFolderId,
+}
+
+#[derive(Debug, Clone)]
+pub struct BrowseKnowledgeFolderCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    /// `None` opens the root.
+    pub id: Option<KnowledgeFolderId>,
+}
+
+/// A folder opened in the drive: where it is and what folders it holds. Its
+/// articles come from the listing, filtered on the folder.
+#[derive(Debug, Clone)]
+pub struct KnowledgeFolderView {
+    /// `None` at the root.
+    pub folder: Option<KnowledgeFolder>,
+    /// From the root down to the folder, the folder included. Empty at the root.
+    pub path: Vec<KnowledgeFolder>,
+    pub children: Vec<KnowledgeFolder>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MoveKnowledgeArticlesCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub ids: Vec<KnowledgeArticleId>,
+    /// `None` moves the articles to the root.
+    pub folder_id: Option<KnowledgeFolderId>,
 }

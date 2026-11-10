@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM knowledge_articles a\n            WHERE a.org_id = $1\n              AND ($2::text IS NULL OR a.search @@ websearch_to_tsquery('french', $2))\n              AND a.tags @> $3::text[]\n              AND ($4::text IS NULL OR EXISTS (\n                    SELECT 1 FROM knowledge_links l\n                    WHERE l.article_id = a.id AND l.resource_type = $4 AND l.resource_id = $5))\n              AND CASE $6::text\n                    WHEN 'root' THEN a.folder_id IS NULL\n                    WHEN 'directly' THEN a.folder_id = $7\n                    WHEN 'within' THEN a.folder_id IN (\n                        WITH RECURSIVE tree AS (\n                            SELECT f.id FROM knowledge_folders f WHERE f.id = $7 AND f.org_id = $1\n                            UNION ALL\n                            SELECT f.id FROM knowledge_folders f JOIN tree t ON f.parent_id = t.id\n                        )\n                        SELECT id FROM tree)\n                    ELSE TRUE\n                  END\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e6df8a654e34ec699c22a6a42e78cc70e6bad783caa24c6a3d41acfbd0031a13"
+}

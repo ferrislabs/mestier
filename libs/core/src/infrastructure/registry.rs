@@ -30,6 +30,7 @@ pub mod domain {
     pub struct Invoice;
     pub struct Ledger;
     pub struct KnowledgeArticle;
+    pub struct KnowledgeFolder;
     pub struct LibraryPhoto;
     pub struct Receipt;
     pub struct MaintenanceContract;

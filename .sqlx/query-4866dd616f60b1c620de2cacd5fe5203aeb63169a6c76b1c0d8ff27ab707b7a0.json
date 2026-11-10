@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, parent_id, name, created_at, updated_at\n            FROM knowledge_folders\n            WHERE org_id = $1 AND parent_id IS NOT DISTINCT FROM $2\n            ORDER BY lower(name), id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4866dd616f60b1c620de2cacd5fe5203aeb63169a6c76b1c0d8ff27ab707b7a0"
+}

@@ -82,6 +82,19 @@ async fn cleanup(app: &harness::App) {
         .execute(&app.pool)
         .await
         .expect("knowledge cleanup");
+    // Children first: a folder that still has subfolders cannot go.
+    sqlx::query(
+        "WITH RECURSIVE tree AS (
+             SELECT id, 0 AS depth FROM knowledge_folders WHERE org_id = $1 AND parent_id IS NULL
+             UNION ALL
+             SELECT f.id, t.depth + 1 FROM knowledge_folders f JOIN tree t ON f.parent_id = t.id
+         )
+         DELETE FROM knowledge_folders WHERE id IN (SELECT id FROM tree)",
+    )
+    .bind(app.organization_id)
+    .execute(&app.pool)
+    .await
+    .expect("folder cleanup");
     app.cleanup().await;
 }
 
@@ -393,6 +406,198 @@ async fn another_organization_and_a_member_without_the_permission_are_refused() 
         403
     );
 
+    intruder.cleanup(&app.pool).await;
+    cleanup(&app).await;
+}
+
+async fn send(request: reqwest::RequestBuilder) -> (u16, Value) {
+    let response = request.send().await.expect("the api answers");
+    let status = response.status().as_u16();
+    let body = response.json().await.unwrap_or(Value::Null);
+    (status, body)
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres, redis and object storage"]
+async fn folders_nest_hold_articles_and_keep_their_rules() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+    let folders = articles_url(&app, app.organization_id, "/folders");
+    let create = |body: Value| client.post(&folders).bearer_auth(&app.token).json(&body);
+
+    let (status, top) = send(create(json!({"name": "Chantiers"}))).await;
+    assert_eq!(status, 201);
+    let top = top["data"]["id"].as_str().unwrap().to_owned();
+    let (_, sub) = send(create(json!({"name": "Parc", "parent_id": top}))).await;
+    let sub = sub["data"]["id"].as_str().unwrap().to_owned();
+
+    let (_, opened) = send(
+        client
+            .get(format!("{folders}/{sub}"))
+            .bearer_auth(&app.token),
+    )
+    .await;
+    let path: Vec<_> = opened["data"]["path"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|folder| folder["name"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(path, vec!["Chantiers", "Parc"]);
+    let (_, root) = send(client.get(&folders).bearer_auth(&app.token)).await;
+    assert_eq!(root["data"]["children"].as_array().unwrap().len(), 1);
+
+    let (status, _) = send(create(json!({"name": "chantiers"}))).await;
+    assert_eq!(status, 409, "a sibling name in another case");
+
+    let (status, _) = send(
+        client
+            .patch(format!("{folders}/{top}"))
+            .bearer_auth(&app.token)
+            .json(&json!({"parent_id": sub})),
+    )
+    .await;
+    assert_eq!(status, 422, "a folder under its own subfolder");
+
+    let mut parent = sub.clone();
+    for level in 3..=10 {
+        let (status, made) = send(create(
+            json!({"name": format!("n{level}"), "parent_id": parent}),
+        ))
+        .await;
+        assert_eq!(status, 201, "level {level}");
+        parent = made["data"]["id"].as_str().unwrap().to_owned();
+    }
+    let (status, _) = send(create(json!({"name": "n11", "parent_id": parent}))).await;
+    assert_eq!(status, 422, "an eleventh level");
+
+    let uploaded: Value = upload(
+        &app,
+        &app.token,
+        app.organization_id,
+        &format!("title=Plan&folder_id={sub}"),
+        "text/plain",
+        b"beton desactive".to_vec(),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
+    let file = uploaded["data"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(uploaded["data"]["folder_id"], sub.as_str());
+    assert_eq!(
+        search(&app, &format!("folder={sub}")).await,
+        vec![file.clone()]
+    );
+    assert!(search(&app, "folder=root").await.is_empty());
+
+    let mut notes = Vec::new();
+    for title in ["Un", "Deux", "Trois"] {
+        let made: Value = create_note(&app, &app.token, json!({"title": title, "body": "beton"}))
+            .await
+            .json()
+            .await
+            .unwrap();
+        notes.push(made["data"]["id"].as_str().unwrap().to_owned());
+    }
+    let (status, moved) = send(
+        client
+            .post(articles_url(&app, app.organization_id, "/articles/move"))
+            .bearer_auth(&app.token)
+            .json(&json!({"article_ids": notes, "folder_id": top})),
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(moved["data"]["moved"], 3);
+    assert_eq!(search(&app, &format!("folder={top}")).await.len(), 3);
+    assert_eq!(
+        search(&app, &format!("q=beton&folder={top}&recursive=true"))
+            .await
+            .len(),
+        4,
+        "the folder and the folders below it"
+    );
+
+    let (status, _) = send(
+        client
+            .delete(format!("{folders}/{sub}"))
+            .bearer_auth(&app.token),
+    )
+    .await;
+    assert_eq!(status, 409, "a folder that still holds something");
+    let (status, _) = send(
+        client
+            .delete(format!("{folders}/{parent}"))
+            .bearer_auth(&app.token),
+    )
+    .await;
+    assert_eq!(status, 204, "an empty folder");
+
+    cleanup(&app).await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres, redis and object storage"]
+async fn the_folders_of_another_organization_are_out_of_reach() {
+    let app = harness::start().await;
+    let client = reqwest::Client::new();
+    let intruder: Intruder = seed_intruder(&app.pool).await;
+
+    let (_, made) = send(
+        client
+            .post(articles_url(&app, app.organization_id, "/folders"))
+            .bearer_auth(&app.token)
+            .json(&json!({"name": "Compta"})),
+    )
+    .await;
+    let ours = made["data"]["id"].as_str().unwrap().to_owned();
+    let theirs = |suffix: &str| articles_url(&app, intruder.organization_id, suffix);
+
+    let (status, _) = send(
+        client
+            .get(theirs(&format!("/folders/{ours}")))
+            .bearer_auth(&intruder.token),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = send(
+        client
+            .post(theirs("/folders"))
+            .bearer_auth(&intruder.token)
+            .json(&json!({"name": "Intrus", "parent_id": ours})),
+    )
+    .await;
+    assert_eq!(status, 404);
+    let (status, _) = send(
+        client
+            .post(format!("{}?title=x&folder_id={ours}", theirs("/articles")))
+            .bearer_auth(&intruder.token)
+            .header("content-type", "text/plain")
+            .body("x"),
+    )
+    .await;
+    assert_eq!(status, 404);
+
+    let note: Value = create_note(&app, &app.token, json!({"title": "A nous", "body": "x"}))
+        .await
+        .json()
+        .await
+        .unwrap();
+    let note = note["data"]["id"].as_str().unwrap().to_owned();
+    let (status, _) = send(
+        client
+            .post(theirs("/articles/move"))
+            .bearer_auth(&intruder.token)
+            .json(&json!({"article_ids": [note], "folder_id": null})),
+    )
+    .await;
+    assert_eq!(status, 404);
+
+    sqlx::query("DELETE FROM knowledge_folders WHERE org_id = $1")
+        .bind(intruder.organization_id)
+        .execute(&app.pool)
+        .await
+        .unwrap();
     intruder.cleanup(&app.pool).await;
     cleanup(&app).await;
 }

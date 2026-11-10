@@ -22,6 +22,27 @@ pub enum KnowledgeError {
     FileTooLarge,
     #[error("file: this file type is not accepted")]
     UnsupportedFile,
+    #[error("name: a folder name cannot be empty")]
+    FolderNameEmpty,
+    #[error("name: a folder name holds at most 100 characters")]
+    FolderNameTooLong,
+    #[error("name: a folder with this name already exists here")]
+    FolderNameTaken,
+    #[error("parent: folders nest at most 10 levels deep")]
+    FolderTooDeep,
+    #[error("parent: a folder cannot move inside itself")]
+    FolderCycle,
+    #[error("folder: only an empty folder can be deleted")]
+    FolderNotEmpty,
+    #[error("articles: at most 100 articles move at once")]
+    TooManyArticles,
+}
+
+impl KnowledgeError {
+    /// The request is well formed but clashes with what is already stored.
+    pub fn is_conflict(self) -> bool {
+        matches!(self, Self::FolderNameTaken | Self::FolderNotEmpty)
+    }
 }
 
 pub type KnowledgeOutcome<T> = Result<T, KnowledgeError>;

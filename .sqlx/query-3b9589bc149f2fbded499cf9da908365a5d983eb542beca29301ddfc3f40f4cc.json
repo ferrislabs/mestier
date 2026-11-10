@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE knowledge_folders\n            SET name = $3, parent_id = $4, updated_at = $5\n            WHERE id = $1 AND org_id = $2\n            RETURNING id, org_id, parent_id, name, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3b9589bc149f2fbded499cf9da908365a5d983eb542beca29301ddfc3f40f4cc"
+}

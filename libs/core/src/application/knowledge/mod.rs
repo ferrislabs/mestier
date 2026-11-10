@@ -3,15 +3,21 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    CreateKnowledgeNoteCommand, CustomerId, DeleteKnowledgeCommand, GetKnowledgeCommand,
-    KnowledgeArticle, KnowledgeArticleWithLinks, KnowledgeLink, KnowledgeOutcome,
-    KnowledgeResource, KnowledgeResourceType, LinkKnowledgeCommand, ListKnowledgeCommand,
-    OrganizationId, ProjectId, QuoteId, UpdateKnowledgeCommand, UploadKnowledgeFileCommand,
+    BrowseKnowledgeFolderCommand, CreateKnowledgeFolderCommand, CreateKnowledgeNoteCommand,
+    CustomerId, DeleteKnowledgeCommand, DeleteKnowledgeFolderCommand, GetKnowledgeCommand,
+    KnowledgeArticle, KnowledgeArticleWithLinks, KnowledgeFilter, KnowledgeFolder,
+    KnowledgeFolderScope, KnowledgeFolderView, KnowledgeLink, KnowledgeOutcome, KnowledgeResource,
+    KnowledgeResourceType, LinkKnowledgeCommand, ListKnowledgeCommand,
+    MoveKnowledgeArticlesCommand, OrganizationId, ProjectId, QuoteId, UpdateKnowledgeCommand,
+    UpdateKnowledgeFolderCommand, UploadKnowledgeFileCommand,
     application::{MestierAuthorizer, MestierFileStorageService, MestierUseCase, policy},
     domain::{
-        customer::ports::CustomerRepository, knowledge::service::KnowledgeService,
-        member::ports::MemberRepository, project::ports::ProjectRepository,
-        quote::ports::QuoteRepository, role::ports::RoleRepository,
+        customer::ports::CustomerRepository,
+        knowledge::{folders::KnowledgeFolderService, service::KnowledgeService},
+        member::ports::MemberRepository,
+        project::ports::ProjectRepository,
+        quote::ports::QuoteRepository,
+        role::ports::RoleRepository,
     },
 };
 
@@ -73,7 +79,7 @@ where
 }
 
 impl MestierUseCase {
-    #[transactional(knowledge_article, member, role, authz)]
+    #[transactional(knowledge_article, knowledge_folder, member, role, authz)]
     pub async fn create_knowledge_note(
         &self,
         command: CreateKnowledgeNoteCommand,
@@ -90,12 +96,15 @@ impl MestierUseCase {
         )
         .await?;
 
+        KnowledgeFolderService::new(knowledge_folder_repository)
+            .require(command.organization_id, command.folder_id)
+            .await?;
         KnowledgeService::new(knowledge_article_repository)
             .create_note(command)
             .await
     }
 
-    #[transactional(knowledge_article, member, role, authz)]
+    #[transactional(knowledge_article, knowledge_folder, member, role, authz)]
     pub async fn upload_knowledge_file(
         &self,
         command: UploadKnowledgeFileCommand,
@@ -113,6 +122,9 @@ impl MestierUseCase {
         )
         .await?;
 
+        KnowledgeFolderService::new(knowledge_folder_repository)
+            .require(command.organization_id, command.folder_id)
+            .await?;
         KnowledgeService::new(knowledge_article_repository)
             .upload_file(command, storage)
             .await
@@ -141,7 +153,7 @@ impl MestierUseCase {
         Ok(KnowledgeArticleWithLinks { article, links })
     }
 
-    #[transactional(knowledge_article, member, role, authz)]
+    #[transactional(knowledge_article, knowledge_folder, member, role, authz)]
     pub async fn list_knowledge_articles(
         &self,
         command: ListKnowledgeCommand,
@@ -158,12 +170,22 @@ impl MestierUseCase {
         )
         .await?;
 
+        let folder_id = match command.folder {
+            Some(KnowledgeFolderScope::Directly(id) | KnowledgeFolderScope::Within(id)) => Some(id),
+            Some(KnowledgeFolderScope::Root) | None => None,
+        };
+        KnowledgeFolderService::new(knowledge_folder_repository)
+            .require(command.organization_id, folder_id)
+            .await?;
         KnowledgeService::new(knowledge_article_repository)
             .list(
                 command.organization_id,
-                command.query,
-                command.tags,
-                command.resource,
+                KnowledgeFilter {
+                    query: command.query,
+                    tags: command.tags,
+                    resource: command.resource,
+                    folder: command.folder,
+                },
                 command.limit,
                 command.offset,
             )
@@ -266,6 +288,121 @@ impl MestierUseCase {
 
         KnowledgeService::new(knowledge_article_repository)
             .unlink(command.organization_id, command.id, command.resource)
+            .await
+    }
+    #[transactional(knowledge_folder, member, role, authz)]
+    pub async fn browse_knowledge_folder(
+        &self,
+        command: BrowseKnowledgeFolderCommand,
+    ) -> Result<KnowledgeFolderView, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require(
+            authz,
+            command.actor.clone(),
+            command.organization_id,
+            "knowledge.view",
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        KnowledgeFolderService::new(knowledge_folder_repository)
+            .browse(command.organization_id, command.id)
+            .await
+    }
+
+    #[transactional(knowledge_folder, member, role, authz)]
+    pub async fn create_knowledge_folder(
+        &self,
+        command: CreateKnowledgeFolderCommand,
+    ) -> Result<KnowledgeOutcome<KnowledgeFolder>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require(
+            authz,
+            command.actor.clone(),
+            command.organization_id,
+            "knowledge.manage",
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        KnowledgeFolderService::new(knowledge_folder_repository)
+            .create(command)
+            .await
+    }
+
+    #[transactional(knowledge_folder, member, role, authz)]
+    pub async fn update_knowledge_folder(
+        &self,
+        command: UpdateKnowledgeFolderCommand,
+    ) -> Result<KnowledgeOutcome<KnowledgeFolder>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require(
+            authz,
+            command.actor.clone(),
+            command.organization_id,
+            "knowledge.manage",
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        KnowledgeFolderService::new(knowledge_folder_repository)
+            .update(command)
+            .await
+    }
+
+    #[transactional(knowledge_folder, member, role, authz)]
+    pub async fn delete_knowledge_folder(
+        &self,
+        command: DeleteKnowledgeFolderCommand,
+    ) -> Result<KnowledgeOutcome<()>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require(
+            authz,
+            command.actor.clone(),
+            command.organization_id,
+            "knowledge.manage",
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        KnowledgeFolderService::new(knowledge_folder_repository)
+            .delete(command.organization_id, command.id)
+            .await
+    }
+
+    #[transactional(knowledge_article, knowledge_folder, member, role, authz)]
+    pub async fn move_knowledge_articles(
+        &self,
+        command: MoveKnowledgeArticlesCommand,
+    ) -> Result<KnowledgeOutcome<u64>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        let mut knowledge_article_repository = knowledge_article_repository;
+        require(
+            authz,
+            command.actor.clone(),
+            command.organization_id,
+            "knowledge.manage",
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        KnowledgeFolderService::new(knowledge_folder_repository)
+            .move_articles(
+                &mut knowledge_article_repository,
+                command.organization_id,
+                &command.ids,
+                command.folder_id,
+            )
             .await
     }
 }

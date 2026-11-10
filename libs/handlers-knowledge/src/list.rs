@@ -7,7 +7,10 @@ use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
     require_org_membership, resolve_actor,
 };
-use mestier_core::{KnowledgeResource, KnowledgeResourceType, ListKnowledgeCommand};
+use mestier_core::{
+    KnowledgeFolderId, KnowledgeFolderScope, KnowledgeResource, KnowledgeResourceType,
+    ListKnowledgeCommand,
+};
 use url::form_urlencoded;
 use uuid::Uuid;
 
@@ -21,6 +24,14 @@ pub(crate) struct ListQuery {
     tags: Vec<String>,
     resource_type: Option<KnowledgeResourceType>,
     resource_id: Option<Uuid>,
+    folder: Option<FolderParam>,
+    recursive: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FolderParam {
+    Root,
+    Folder(KnowledgeFolderId),
 }
 
 impl ListQuery {
@@ -45,6 +56,20 @@ impl ListQuery {
                             ApiError::Validation("resource_id: not a uuid".to_owned())
                         })?);
                 }
+                "folder" => {
+                    parsed.folder = Some(if value == "root" {
+                        FolderParam::Root
+                    } else {
+                        FolderParam::Folder(value.parse().map_err(|_| {
+                            ApiError::Validation("folder: expected root or a uuid".to_owned())
+                        })?)
+                    });
+                }
+                "recursive" => {
+                    parsed.recursive = value.parse().map_err(|_| {
+                        ApiError::Validation("recursive: expected true or false".to_owned())
+                    })?;
+                }
                 _ => {}
             }
         }
@@ -61,6 +86,16 @@ impl ListQuery {
             resource_type: self.resource_type?,
             id: self.resource_id?,
         })
+    }
+
+    /// The root with its whole tree is the whole drive: no folder filter.
+    fn folder(&self) -> Option<KnowledgeFolderScope> {
+        match (self.folder?, self.recursive) {
+            (FolderParam::Root, true) => None,
+            (FolderParam::Root, false) => Some(KnowledgeFolderScope::Root),
+            (FolderParam::Folder(id), false) => Some(KnowledgeFolderScope::Directly(id)),
+            (FolderParam::Folder(id), true) => Some(KnowledgeFolderScope::Within(id)),
+        }
     }
 
     fn pagination(&self) -> PaginationParams {
@@ -90,12 +125,15 @@ fn number(name: &str, value: &str) -> Result<u64, ApiError> {
         ("tag" = Option<Vec<String>>, Query, description = "Tag filter, repeatable: an article must carry every tag given"),
         ("resource_type" = Option<String>, Query, description = "project, customer or quote. Goes with resource_id"),
         ("resource_id" = Option<uuid::Uuid>, Query, description = "Only the articles linked to this resource"),
+        ("folder" = Option<String>, Query, description = "root, or a folder id: only the articles placed there. Absent searches the whole drive"),
+        ("recursive" = Option<bool>, Query, description = "With folder, also the articles of every folder below it"),
     ),
     responses(
         (status = 200, description = "The articles, without the text read from files", body = inline(DataEnvelope<Vec<KnowledgeArticleResponse>>)),
         (status = 400, description = "A query parameter is malformed"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
+        (status = 404, description = "Folder not found, or held by another organization"),
         (status = 422, description = "An empty or too long tag filter"),
     ),
     security(("bearer_auth" = []))
@@ -114,6 +152,7 @@ pub async fn handler(
     let per_page = pagination.per_page();
     let page = pagination.page();
     let resource = query.resource();
+    let folder = query.folder();
     let (articles, total) = state
         .usecase
         .list_knowledge_articles(ListKnowledgeCommand {
@@ -122,6 +161,7 @@ pub async fn handler(
             query: query.query,
             tags: query.tags,
             resource,
+            folder,
             limit: per_page,
             offset: pagination.offset(),
         })
@@ -149,6 +189,34 @@ mod tests {
         assert_eq!(query.tags, vec!["devis", "2026"]);
         assert_eq!(query.resource().unwrap().id, id);
         assert_eq!(query.pagination().page(), 2);
+    }
+
+    #[test]
+    fn the_folder_filter_reads_root_a_folder_and_its_tree() {
+        let id = Uuid::nil();
+        assert_eq!(
+            ListQuery::parse(Some("folder=root")).unwrap().folder(),
+            Some(KnowledgeFolderScope::Root)
+        );
+        assert_eq!(
+            ListQuery::parse(Some("folder=root&recursive=true"))
+                .unwrap()
+                .folder(),
+            None
+        );
+        assert_eq!(
+            ListQuery::parse(Some(&format!("folder={id}")))
+                .unwrap()
+                .folder(),
+            Some(KnowledgeFolderScope::Directly(KnowledgeFolderId(id)))
+        );
+        assert_eq!(
+            ListQuery::parse(Some(&format!("folder={id}&recursive=true")))
+                .unwrap()
+                .folder(),
+            Some(KnowledgeFolderScope::Within(KnowledgeFolderId(id)))
+        );
+        assert!(ListQuery::parse(Some("folder=nowhere")).is_err());
     }
 
     #[test]
