@@ -13,6 +13,7 @@ use handlers_knowledge as knowledge;
 use handlers_member as member;
 use handlers_organization as organization;
 use handlers_planning as planning;
+use handlers_platform as platform;
 use handlers_purchase as purchase;
 use handlers_quote as quote;
 use handlers_reference as reference;
@@ -434,6 +435,14 @@ impl Modify for SecurityAddon {
         knowledge::folders::update,
         knowledge::folders::delete,
         knowledge::move_articles::handler,
+        platform::list::handler,
+        platform::unseen::handler,
+        platform::seen::handler,
+        platform::access::handler,
+        platform::admin_list::handler,
+        platform::admin_create::handler,
+        platform::admin_update::handler,
+        platform::admin_delete::handler,
         support::ticket::list::handler,
         support::ticket::get_one::handler,
         support::ticket::transition::handler,
@@ -472,6 +481,15 @@ impl Modify for SecurityAddon {
         knowledge::folders::UpdateKnowledgeFolderRequest,
         knowledge::move_articles::MoveKnowledgeArticlesRequest,
         knowledge::move_articles::MoveKnowledgeArticlesResponse,
+        platform::response::NewsResponse,
+        platform::response::NewsItemResponse,
+        platform::response::NewsCtaResponse,
+        platform::response::NewsAccessResponse,
+        platform::request::NewsRequest,
+        platform::request::NewsItemRequest,
+        platform::request::NewsCtaRequest,
+        platform::request::MarkSeenRequest,
+        mestier_core::NewsIcon,
         support::response::TicketResponse,
         support::response::BadgeResponse,
         support::ticket::transition::TransitionTicketRequest,
@@ -929,6 +947,7 @@ impl Modify for SecurityAddon {
         (name = "reference", description = "Reference cost catalog"),
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),
         (name = "knowledge", description = "Knowledge base: files and notes searched by text and tags, linked to projects, customers and quotes"),
+        (name = "news", description = "Product news: published to every user, written from a back-office reserved to platform administrators"),
         (name = "support", description = "Support tickets — kanban, thread, intake by organization API key"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
@@ -1826,6 +1845,39 @@ mod tests {
             assert!(
                 !required.iter().any(|name| name == field),
                 "{field} is nullable and must not be required"
+            );
+        }
+    }
+
+    #[test]
+    fn every_news_route_reaches_the_document() {
+        let document = ApiDoc::openapi();
+        let paths = &document.paths.paths;
+        for path in [
+            "/api/v1/news",
+            "/api/v1/news/unseen",
+            "/api/v1/news/seen",
+            "/api/v1/news/access",
+            "/api/v1/admin/news",
+            "/api/v1/admin/news/{news_id}",
+        ] {
+            assert!(paths.contains_key(path), "{path}");
+        }
+
+        let json = serde_json::to_string(&document).unwrap();
+        for operation_id in [
+            "listNews",
+            "listUnseenNews",
+            "markNewsSeen",
+            "getNewsAccess",
+            "listNewsForAdmin",
+            "createNews",
+            "updateNews",
+            "deleteNews",
+        ] {
+            assert!(
+                json.contains(&format!("\"operationId\":\"{operation_id}\"")),
+                "{operation_id}"
             );
         }
     }

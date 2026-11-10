@@ -129,6 +129,7 @@ dependencies = [
  "handlers-member",
  "handlers-organization",
  "handlers-planning",
+ "handlers-platform",
  "handlers-purchase",
  "handlers-quote",
  "handlers-reference",
@@ -3228,6 +3229,7 @@ dependencies = [
  "doc-render",
  "handlers",
  "handlers-knowledge",
+ "handlers-platform",
  "http 1.4.0",
  "image",
  "jsonwebtoken",
@@ -3241,6 +3243,21 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "handlers-platform"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "handlers",
+ "mestier-core",
+ "serde",
  "utoipa",
  "uuid",
 ]
@@ -4801,6 +4818,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "url",
  "utoipa",
  "uuid",
 ]

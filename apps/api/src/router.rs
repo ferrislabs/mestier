@@ -20,6 +20,7 @@ use handlers_knowledge as knowledge;
 use handlers_member as member;
 use handlers_organization as organization;
 use handlers_planning as planning;
+use handlers_platform as platform;
 use handlers_purchase as purchase;
 use handlers_quote as quote;
 use handlers_reference as reference;
@@ -83,6 +84,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(reporting::router(&state))
         .merge(planning::router(&state))
         .merge(knowledge::router(&state))
+        .merge(platform::router(&state))
         .merge(support::router(&state))
         .merge(reference::router(&state))
         .merge(Scalar::with_url("/scalar", openapi.clone()))

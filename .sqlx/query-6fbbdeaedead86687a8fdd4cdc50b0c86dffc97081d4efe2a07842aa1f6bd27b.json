@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO news (id, title, image_key, items, cta, published_at, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n            RETURNING id, title, image_key, items, cta, published_at, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "image_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "items",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "cta",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "published_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "6fbbdeaedead86687a8fdd4cdc50b0c86dffc97081d4efe2a07842aa1f6bd27b"
+}
