@@ -80,6 +80,28 @@ impl MestierUseCase {
     }
 
     #[transactional(library_photo, member, role, authz)]
+    pub async fn copy_library_photo(
+        &self,
+        command: GetLibraryPhotoCommand,
+        storage: &MestierFileStorageService,
+    ) -> Result<String, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require_planning(
+            authz,
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        PhotoLibraryService::new(library_photo_repository)
+            .copy_file(command.organization_id, command.id, storage)
+            .await
+    }
+
+    #[transactional(library_photo, member, role, authz)]
     pub async fn list_library_photos(
         &self,
         command: ListLibraryPhotosCommand,

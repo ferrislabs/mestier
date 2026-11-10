@@ -8,6 +8,7 @@ use handlers::{ApiError, AppState};
 use mestier_core::{DoeId, LibraryPhotoId, OrganizationId, PhotoLibraryError};
 use serde::Deserialize;
 
+pub mod copy;
 pub mod delete;
 pub mod get_one;
 pub mod list;
@@ -33,6 +34,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_patch(update::handler)
         .typed_delete(delete::handler)
         .typed_post(place::handler)
+        .typed_post(copy::handler)
 }
 
 #[derive(TypedPath, Deserialize)]
@@ -51,6 +53,13 @@ pub struct PhotoPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}/thumbnail")]
 pub struct ThumbnailPath {
+    pub organization_id: OrganizationId,
+    pub photo_id: LibraryPhotoId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}/copy")]
+pub struct CopyPhotoPath {
     pub organization_id: OrganizationId,
     pub photo_id: LibraryPhotoId,
 }

@@ -94,7 +94,7 @@
     if d.layer == layer and (d.pages == "all" or d.pages == scope) {
       let w = d.width * 1mm
       let h = d.height * 1mm
-      place(top + left, dx: d.x * 1mm, dy: d.y * 1mm, if d.kind == "image" {
+      let body = if d.kind == "image" {
         block(width: w, height: h, clip: true, {
           picture(d.key, width: w, height: h, fit: d.fit)
           if d.opacity < 1 and layer == "behind" {
@@ -103,7 +103,17 @@
         })
       } else {
         rect(width: w, height: h, fill: rgb(d.fill).transparentize((1 - d.opacity) * 100%), radius: d.radius * 1mm, stroke: none)
-      })
+      }
+      // Mirror first, then turn clockwise, both around the frame's center:
+      // the editor's CSS `rotate(θ) scale(sx, sy)`.
+      let flipped = scale(
+        x: if d.flip_x { -100% } else { 100% },
+        y: if d.flip_y { -100% } else { 100% },
+        origin: center + horizon,
+        body,
+      )
+      place(top + left, dx: d.x * 1mm, dy: d.y * 1mm,
+        rotate(d.rotation * 1deg, origin: center + horizon, flipped))
     }
   }
 }

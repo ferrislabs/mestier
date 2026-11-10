@@ -58,6 +58,7 @@ fn doe_photos(doe: &Doe) -> Vec<DoeFile> {
 }
 
 const DOE_FILE_FOLDER: &str = "doe";
+const STYLE_FILE_FOLDER: &str = "doe-style";
 
 fn library_folder(organization_id: OrganizationId) -> String {
     format!("library-{}", organization_id.0)
@@ -108,6 +109,26 @@ where
             .find_by_id(organization_id, id)
             .await?
             .ok_or(CoreError::NotFound)
+    }
+
+    /// Copies a library photo to a key of its own, so that deleting the photo
+    /// never takes the copy with it.
+    pub async fn copy_file<S: FileStorage>(
+        &mut self,
+        organization_id: OrganizationId,
+        id: LibraryPhotoId,
+        storage: &FileStorageService<S>,
+    ) -> Result<String, CoreError> {
+        let photo = self.get(organization_id, id).await?;
+        let object = storage.get(&photo.file_key).await?;
+        let stored = storage
+            .upload(UploadFileCommand {
+                mime_type: object.mime_type,
+                bytes: object.bytes,
+                folder: Some(STYLE_FILE_FOLDER.to_owned()),
+            })
+            .await?;
+        Ok(stored.key)
     }
 
     pub async fn list(
@@ -1437,5 +1458,54 @@ mod tests {
         assert_eq!(report.skipped, 1);
         assert_eq!(report.failed, 1);
         assert_eq!(report.imported, 0);
+    }
+
+    #[tokio::test]
+    async fn a_copied_photo_outlives_its_library_entry() {
+        let organization_id = organization();
+        let (photos, storage) = library_with(organization_id, 1);
+        let photo = photos[0].clone();
+
+        let key = PhotoLibraryService::new(repository_holding(photos))
+            .copy_file(organization_id, photo.id, &storage_service(storage.clone()))
+            .await
+            .unwrap();
+
+        assert_ne!(key, photo.file_key);
+        storage.objects.lock().unwrap().remove(&photo.file_key);
+        assert_eq!(
+            storage.objects.lock().unwrap().get(&key),
+            Some(&vec![9, 9, 9])
+        );
+    }
+
+    #[tokio::test]
+    async fn a_photo_of_another_organization_is_not_copied() {
+        let (photos, storage) = library_with(organization(), 1);
+        let id = photos[0].id;
+
+        let result = PhotoLibraryService::new(repository_holding(photos))
+            .copy_file(organization(), id, &storage_service(storage.clone()))
+            .await;
+
+        assert!(matches!(result, Err(CoreError::NotFound)));
+        assert_eq!(storage.keys().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_photo_missing_from_storage_is_not_found() {
+        let organization_id = organization();
+        let photo = photo(organization_id, "library-x/gone.jpg");
+        let id = photo.id;
+
+        let result = PhotoLibraryService::new(repository_holding(vec![photo]))
+            .copy_file(
+                organization_id,
+                id,
+                &storage_service(FakeStorage::default()),
+            )
+            .await;
+
+        assert!(matches!(result, Err(CoreError::NotFound)));
     }
 }

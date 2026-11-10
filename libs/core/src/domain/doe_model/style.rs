@@ -255,6 +255,36 @@ impl From<Opacity> for f32 {
     }
 }
 
+/// A clockwise turn around the element's center, in whole degrees from 0 to 359.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(try_from = "f32", into = "u16")]
+pub struct Rotation(u16);
+
+impl Rotation {
+    pub fn get(self) -> u16 {
+        self.0
+    }
+}
+
+impl TryFrom<f32> for Rotation {
+    type Error = CoreError;
+
+    fn try_from(value: f32) -> Result<Self, Self::Error> {
+        if !value.is_finite() {
+            return Err(CoreError::Conflict(
+                "a rotation must be a number of degrees".to_owned(),
+            ));
+        }
+        Ok(Self(value.round().rem_euclid(360.0) as u16 % 360))
+    }
+}
+
+impl From<Rotation> for u16 {
+    fn from(value: Rotation) -> Self {
+        value.0
+    }
+}
+
 /// Which pages an element is printed on. Full-page attachments (supplier
 /// datasheets, plans) never carry one.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -316,6 +346,14 @@ pub struct DoeDecoration {
     pub pages: DecorationPages,
     #[serde(default)]
     pub layer: DecorationLayer,
+    #[serde(default)]
+    pub rotation: Rotation,
+    /// Mirrors the element left to right, before the rotation.
+    #[serde(default)]
+    pub flip_x: bool,
+    /// Mirrors the element top to bottom, before the rotation.
+    #[serde(default)]
+    pub flip_y: bool,
 }
 
 #[derive(Deserialize)]
@@ -330,6 +368,12 @@ struct RawDecoration {
     pages: DecorationPages,
     #[serde(default)]
     layer: DecorationLayer,
+    #[serde(default)]
+    rotation: Rotation,
+    #[serde(default)]
+    flip_x: bool,
+    #[serde(default)]
+    flip_y: bool,
 }
 
 impl TryFrom<RawDecoration> for DoeDecoration {
@@ -356,6 +400,9 @@ impl TryFrom<RawDecoration> for DoeDecoration {
             height: raw.height,
             pages: raw.pages,
             layer: raw.layer,
+            rotation: raw.rotation,
+            flip_x: raw.flip_x,
+            flip_y: raw.flip_y,
         })
     }
 }
@@ -607,5 +654,45 @@ mod tests {
         let many = |n: usize| vec![one.as_str(); n].join(",");
         assert!(style_with(&many(20)).is_ok());
         assert!(style_with(&many(21)).is_err());
+    }
+
+    #[test]
+    fn a_decoration_without_transform_is_upright_and_unflipped() {
+        let style =
+            style_with(&format!(r#"{{{RECT},"x":0,"y":0,"width":10,"height":10}}"#)).unwrap();
+        let decoration = &style.decorations[0];
+        assert_eq!(decoration.rotation.get(), 0);
+        assert!(!decoration.flip_x);
+        assert!(!decoration.flip_y);
+    }
+
+    #[test]
+    fn rotation_is_kept_between_0_and_359_degrees() {
+        let turned = |rotation: &str| {
+            style_with(&format!(
+                r#"{{{RECT},"x":0,"y":0,"width":10,"height":10,"rotation":{rotation}}}"#
+            ))
+            .map(|style| style.decorations[0].rotation.get())
+        };
+        assert_eq!(turned("-90").unwrap(), 270);
+        assert_eq!(turned("360").unwrap(), 0);
+        assert_eq!(turned("12.4").unwrap(), 12);
+        assert_eq!(turned("359.6").unwrap(), 0);
+        assert_eq!(turned("725").unwrap(), 5);
+        assert!(turned(r#""90""#).is_err());
+        assert!(Rotation::try_from(f32::NAN).is_err());
+        assert!(Rotation::try_from(f32::INFINITY).is_err());
+    }
+
+    #[test]
+    fn a_rotated_element_may_overflow_the_page() {
+        let style = style_with(&format!(
+            r#"{{{RECT},"x":0,"y":0,"width":210,"height":20,"rotation":45,"flip_x":true}}"#
+        ))
+        .unwrap();
+        let json = serde_json::to_value(&style.decorations[0]).unwrap();
+        assert_eq!(json["rotation"], 45);
+        assert_eq!(json["flip_x"], true);
+        assert_eq!(json["flip_y"], false);
     }
 }

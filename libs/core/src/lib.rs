@@ -254,7 +254,7 @@ pub use domain::{
     DoeFont, DoeId, DoeLabel, DoeModel, DoeModelId, DoeModelSection, DoeModelSectionKind, DoeParty,
     DoeSection, DoeSectionContent, DoeSettings, DoeStyle, DoeSummary, DoeSupply, DoeTemplate,
     HexColor, ImageFit, LogoPosition, LogoSize, MakerLabel, Millimeters, Opacity, PartyRole,
-    PhotosPerPage, Revision, StarterModel, SupplierSnapshot, SupplyPhotoColumns,
+    PhotosPerPage, Revision, Rotation, StarterModel, SupplierSnapshot, SupplyPhotoColumns,
     doe::commands::{
         CreateDoeCommand, DeleteDoeCommand, DraftSupplyFromProductCommand, UpdateDoeCommand,
     },
