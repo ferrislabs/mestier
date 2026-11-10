@@ -1,6 +1,6 @@
 # DOE : éditeur de mise en page
 
-État : **spec, 2026-11-10** (branche `feat/doe-layout-editor`).
+État : **implémenté, 2026-11-10** (branche `feat/doe-layout-editor`). Non recetté dans un navigateur par l’agent.
 
 ## Goal
 
