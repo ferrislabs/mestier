@@ -752,3 +752,107 @@ async fn spec_photo_11_the_file_ceiling_reports_the_surplus_as_failed() {
 
     cleanup(&app).await;
 }
+
+async fn copy(app: &harness::App, token: &str, org: Uuid, id: &str) -> reqwest::Response {
+    reqwest::Client::new()
+        .post(photos_url(app, org, &format!("/{id}/copy")))
+        .bearer_auth(token)
+        .send()
+        .await
+        .expect("the api answers the copy call")
+}
+
+async fn images_in_preview(app: &harness::App, key: &str) -> usize {
+    let style = json!({ "decorations": [{
+        "kind": "image", "key": key, "x": 20, "y": 20, "width": 60, "height": 40,
+        "rotation": 30, "flip_x": true,
+    }] });
+    let pages: Value = reqwest::Client::new()
+        .post(format!(
+            "{}/api/v1/organizations/{}/doe-style/preview/pages",
+            app.base_url, app.organization_id
+        ))
+        .bearer_auth(&app.token)
+        .json(&json!({ "style": style }))
+        .send()
+        .await
+        .expect("preview pages")
+        .json()
+        .await
+        .expect("json");
+    pages["data"]["pages"]
+        .as_array()
+        .expect("pages")
+        .iter()
+        .map(|page| page.as_str().unwrap().matches("<image").count())
+        .sum()
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres, redis and object storage"]
+async fn spec_layout_editor_2_6_a_copied_photo_outlives_the_library() {
+    let app = harness::start().await;
+    let intruder = seed_intruder(&app.pool).await;
+    let client = reqwest::Client::new();
+    let photo = upload_new(&app, 40).await["data"].clone();
+    let id = photo["id"].as_str().unwrap();
+
+    let copied = copy(&app, &app.token, app.organization_id, id).await;
+    assert_eq!(copied.status(), 200);
+    let key = copied.json::<Value>().await.expect("json")["data"]["key"]
+        .as_str()
+        .expect("a key")
+        .to_owned();
+    assert_ne!(key, photo["file_key"].as_str().unwrap());
+
+    let forbidden = copy(&app, &app.no_permission_token, app.organization_id, id).await;
+    assert_eq!(forbidden.status(), 403);
+    let foreign = copy(&app, &intruder.token, intruder.organization_id, id).await;
+    assert_eq!(foreign.status(), 404);
+
+    let settings = format!(
+        "{}/api/v1/organizations/{}/doe-settings",
+        app.base_url, app.organization_id
+    );
+    let saved = client
+        .put(&settings)
+        .bearer_auth(&app.token)
+        .json(&json!({ "style": { "decorations": [{
+            "kind": "image", "key": key, "x": 0, "y": 0, "width": 210, "height": 30,
+            "rotation": -90, "flip_x": true,
+        }] } }))
+        .send()
+        .await
+        .expect("save the style");
+    assert_eq!(saved.status(), 200);
+    let saved: Value = saved.json().await.expect("json");
+    let decoration = &saved["data"]["style"]["decorations"][0];
+    assert_eq!(decoration["rotation"], 270);
+    assert_eq!(decoration["flip_x"], true);
+    assert_eq!(decoration["flip_y"], false);
+
+    let not_a_number = client
+        .put(&settings)
+        .bearer_auth(&app.token)
+        .json(&json!({ "style": { "decorations": [{
+            "kind": "rectangle", "fill": "#ff0000", "x": 0, "y": 0, "width": 10, "height": 10,
+            "rotation": "quart",
+        }] } }))
+        .send()
+        .await
+        .expect("refused style");
+    assert!(not_a_number.status().is_client_error());
+
+    let missing = images_in_preview(&app, "doe-style/missing").await;
+    let removed = client
+        .delete(photos_url(&app, app.organization_id, &format!("/{id}")))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("delete");
+    assert_eq!(removed.status(), 204);
+    assert!(images_in_preview(&app, &key).await > missing);
+
+    intruder.cleanup(&app.pool).await;
+    cleanup(&app).await;
+}

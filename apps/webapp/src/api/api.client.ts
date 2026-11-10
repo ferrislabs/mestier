@@ -416,6 +416,7 @@ export namespace Schemas {
     site_label: string;
   };
   export type ContractType = "CDI" | "CDD" | "APPRENTICESHIP" | "INTERIM" | "MANAGER";
+  export type CopiedPhotoResponse = { key: string };
   export type CorrectEmployeeCostBasisRequest = {
     effective_from: string;
     effective_to?: (string | null) | undefined;
@@ -513,7 +514,6 @@ export namespace Schemas {
   export type CreateDoeModelFromStarterRequest = { starter: StarterModel };
   export type MakerLabel = "manufacturer" | "nursery";
   export type PhotosPerPage = "one" | "two" | "four";
-  export type SupplyPhotoColumns = "one" | "two" | "three";
   export type DoeModelSectionKind =
     | { kind: "supplies"; maker_label: MakerLabel }
     | { kind: "photos"; per_page: PhotosPerPage }
@@ -533,10 +533,14 @@ export namespace Schemas {
     | { fill: HexColor; kind: "rectangle"; opacity?: Opacity | undefined; radius?: Millimeters | undefined };
   export type DecorationLayer = "behind" | "front";
   export type DecorationPages = "cover" | "inner" | "all";
+  export type Rotation = number;
   export type DoeDecoration = DecorationShape & {
+    flip_x?: boolean | undefined;
+    flip_y?: boolean | undefined;
     height: Millimeters;
     layer?: DecorationLayer | undefined;
     pages?: DecorationPages | undefined;
+    rotation?: Rotation | undefined;
     width: Millimeters;
     x: Millimeters;
     y: Millimeters;
@@ -641,6 +645,7 @@ export namespace Schemas {
     project_id?: (null | ProjectId) | undefined;
     title?: string | undefined;
   };
+  export type CreateKnowledgeNoteRequest = { body: string; tags?: Array<string> | undefined; title: string };
   export type LeaveAccountId = string;
   export type CreateLeaveAdjustmentRequest = {
     account_id: LeaveAccountId;
@@ -1077,6 +1082,7 @@ export namespace Schemas {
     role: PartyRole;
   };
   export type Revision = string;
+  export type SupplyPhotoColumns = "one" | "two" | "three";
   export type SupplierSnapshot = {
     address?: (string | null) | undefined;
     email?: (string | null) | undefined;
@@ -1662,6 +1668,23 @@ export namespace Schemas {
     vat_exemption_basis?: (string | null) | undefined;
     vat_number?: (string | null) | undefined;
   };
+  export type KnowledgeArticleId = string;
+  export type KnowledgeFileResponse = { mime_type: string; size_bytes: number };
+  export type KnowledgeKind = "file" | "note";
+  export type KnowledgeArticleResponse = {
+    body?: (string | null) | undefined;
+    created_at: string;
+    extracted_text?: (string | null) | undefined;
+    file?: (null | KnowledgeFileResponse) | undefined;
+    id: KnowledgeArticleId;
+    kind: KnowledgeKind;
+    links?: (Array<KnowledgeLinkResponse> | null) | undefined;
+    tags: Array<string>;
+    title: string;
+    updated_at: string;
+  };
+  export type KnowledgeResourceType = "project" | "customer" | "quote";
+  export type KnowledgeLinkResponse = { created_at: string; resource_id: string; resource_type: KnowledgeResourceType };
   export type LeaveAccountRequest = {
     acquisition: AcquisitionBody;
     carry_over_max: number;
@@ -1728,7 +1751,24 @@ export namespace Schemas {
     trend: Array<MonthTrendResponse>;
     vat: VatSummaryResponse;
   };
+  export type LibraryPhotoId = string;
+  export type LibraryPhotoResponse = {
+    caption?: (string | null) | undefined;
+    created_at: string;
+    file_key: string;
+    height: number;
+    id: LibraryPhotoId;
+    mime_type: string;
+    project_id?: (null | ProjectId) | undefined;
+    size_bytes: number;
+    tags: Array<string>;
+    taken_at?: (string | null) | undefined;
+    thumbnail_key: string;
+    updated_at: string;
+    width: number;
+  };
   export type LineAllocationShareRequest = { amount_cents: number; project_id: ProjectId };
+  export type LinkKnowledgeRequest = { resource_id: string; resource_type: KnowledgeResourceType };
   export type MaintenanceLine = {
     cadence: Cadence;
     id: MaintenanceLineId;
@@ -1887,6 +1927,24 @@ export namespace Schemas {
   };
   export type PatchTaskResponse = { detached: boolean; task: TaskResponse };
   export type PayExpenseRequest = { method: PaymentMethod; paid_on: string };
+  export type PlacementTarget = "section" | "supply" | "cover";
+  export type PlacementItem = {
+    caption?: (string | null) | undefined;
+    photo_id: LibraryPhotoId;
+    section_id?: (string | null) | undefined;
+    section_title?: (string | null) | undefined;
+    supply_id?: (string | null) | undefined;
+    target: PlacementTarget;
+  };
+  export type PlacePhotosRequest = { placements: Array<PlacementItem> };
+  export type PlacementStatusResponse = "placed" | "failed";
+  export type PlacementResultResponse = {
+    error?: (string | null) | undefined;
+    key?: (string | null) | undefined;
+    photo_id: LibraryPhotoId;
+    status: PlacementStatusResponse;
+  };
+  export type PlacementReportResponse = { doe: DoeResponse; results: Array<PlacementResultResponse> };
   export type PlanMaintenanceLinesRequest = { line_ids: Array<MaintenanceLineId>; week: string };
   export type PlannedProjectResponse = {
     created_at: string;
@@ -2034,6 +2092,7 @@ export namespace Schemas {
     topic?: (string | null) | undefined;
     updated_at: string;
   };
+  export type ProjectDoeStyleResponse = { inherited: DoeStyle; style?: (null | DoeStyle) | undefined };
   export type ProjectSupplierCostLineResponse = {
     allocation_id: SupplierInvoiceLineAllocationId;
     amount_cents: number;
@@ -2625,6 +2684,11 @@ export namespace Schemas {
     project_id?: (null | ProjectId) | undefined;
     title?: (string | null) | undefined;
   };
+  export type UpdateKnowledgeArticleRequest = Partial<{
+    body: string | null;
+    tags: Array<string> | null;
+    title: string | null;
+  }>;
   export type VatStatusRequest = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type UpdateLegalIdentityRequest = Partial<{
     address_city: string | null;
@@ -2641,6 +2705,11 @@ export namespace Schemas {
     share_capital_cents: number | null;
     vat_on_debits: boolean;
     vat_status: null | VatStatusRequest;
+  }>;
+  export type UpdateLibraryPhotoRequest = Partial<{
+    caption: string | null;
+    project_id: null | ProjectId;
+    tags: Array<string> | null;
   }>;
   export type UpdateMemberRequest = Partial<{ first_name: string | null; last_name: string | null }>;
   export type UpdateMessageRequest = { content: string };
@@ -2667,6 +2736,7 @@ export namespace Schemas {
     unit: string;
     unit_price_cents: number;
   };
+  export type UpdateProjectDoeStyleRequest = { style: DoeStyle };
   export type UpdateProjectRequest = {
     customer_context_id?: (null | CustomerContextId) | undefined;
     customer_id?: (null | CustomerId) | undefined;
@@ -7732,6 +7802,15 @@ export namespace Endpoints {
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
+  export type get_ExportDoeDocx = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/does/{doe_id}/docx";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_id: string };
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
   export type get_ExportDoePdf = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/does/{doe_id}/pdf";
@@ -7740,6 +7819,26 @@ export namespace Endpoints {
       path: { organization_id: string; doe_id: string };
     };
     responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type post_PlaceLibraryPhotosInDoe = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/does/{doe_id}/photos/place";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; doe_id: string };
+
+      body: Schemas.PlacePhotosRequest;
+    };
+    responses: {
+      200: {
+        data: { doe: Schemas.DoeResponse; results: Array<Schemas.PlacementResultResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
   };
   export type post_DraftDoeSupply = {
     method: "POST";
@@ -7759,6 +7858,7 @@ export namespace Endpoints {
           dpgf_ref?: (string | null) | undefined;
           id: string;
           maker?: (string | null) | undefined;
+          photo_columns?: Schemas.SupplyPhotoColumns | undefined;
           photos: Array<Schemas.DoeFile>;
           source_product_id?: (null | Schemas.ProductId) | undefined;
           specs?: (string | null) | undefined;
@@ -8582,6 +8682,214 @@ export namespace Endpoints {
       };
       401: unknown;
       403: unknown;
+    };
+  };
+  export type get_ListKnowledgeArticles = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{
+        page: number;
+        per_page: number;
+        q: string;
+        tag: Array<string>;
+        resource_type: string;
+        resource_id: string;
+      }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          body?: (string | null) | undefined;
+          created_at: string;
+          extracted_text?: (string | null) | undefined;
+          file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          id: Schemas.KnowledgeArticleId;
+          kind: Schemas.KnowledgeKind;
+          links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          tags: Array<string>;
+          title: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type post_UploadKnowledgeFile = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles";
+    requestFormat: "text";
+    parameters: {
+      query: { title: string; tag?: Array<string> | undefined };
+      path: { organization_id: string };
+    };
+    responses: {
+      201: {
+        data: {
+          body?: (string | null) | undefined;
+          created_at: string;
+          extracted_text?: (string | null) | undefined;
+          file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          id: Schemas.KnowledgeArticleId;
+          kind: Schemas.KnowledgeKind;
+          links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          tags: Array<string>;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      413: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetKnowledgeArticle = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; article_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          body?: (string | null) | undefined;
+          created_at: string;
+          extracted_text?: (string | null) | undefined;
+          file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          id: Schemas.KnowledgeArticleId;
+          kind: Schemas.KnowledgeKind;
+          links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          tags: Array<string>;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteKnowledgeArticle = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; article_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateKnowledgeArticle = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; article_id: string };
+
+      body: Schemas.UpdateKnowledgeArticleRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          body?: (string | null) | undefined;
+          created_at: string;
+          extracted_text?: (string | null) | undefined;
+          file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          id: Schemas.KnowledgeArticleId;
+          kind: Schemas.KnowledgeKind;
+          links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          tags: Array<string>;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type get_DownloadKnowledgeFile = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/download";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; article_id: string };
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type post_LinkKnowledgeArticle = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; article_id: string };
+
+      body: Schemas.LinkKnowledgeRequest;
+    };
+    responses: {
+      200: {
+        data: { created_at: string; resource_id: string; resource_type: Schemas.KnowledgeResourceType };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_UnlinkKnowledgeArticle = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links/{resource_type}/{resource_id}";
+    requestFormat: "json";
+    parameters: {
+      path: {
+        organization_id: string;
+        article_id: string;
+        resource_type: "project" | "customer" | "quote";
+        resource_id: string;
+      };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type post_CreateKnowledgeNote = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/notes";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateKnowledgeNoteRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          body?: (string | null) | undefined;
+          created_at: string;
+          extracted_text?: (string | null) | undefined;
+          file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          id: Schemas.KnowledgeArticleId;
+          kind: Schemas.KnowledgeKind;
+          links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          tags: Array<string>;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
     };
   };
   export type get_ListLeaveAccounts = {
@@ -9778,6 +10086,195 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type get_ListLibraryPhotos = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/photo-library/photos";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{
+        page: number;
+        per_page: number;
+        q: string;
+        tag: Array<string>;
+        project_id: string;
+        to_sort: boolean;
+      }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          caption?: (string | null) | undefined;
+          created_at: string;
+          file_key: string;
+          height: number;
+          id: Schemas.LibraryPhotoId;
+          mime_type: string;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          size_bytes: number;
+          tags: Array<string>;
+          taken_at?: (string | null) | undefined;
+          thumbnail_key: string;
+          updated_at: string;
+          width: number;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type post_UploadLibraryPhoto = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/photo-library/photos";
+    requestFormat: "text";
+    parameters: {
+      query: Partial<{ project_id: string }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          caption?: (string | null) | undefined;
+          created_at: string;
+          file_key: string;
+          height: number;
+          id: Schemas.LibraryPhotoId;
+          mime_type: string;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          size_bytes: number;
+          tags: Array<string>;
+          taken_at?: (string | null) | undefined;
+          thumbnail_key: string;
+          updated_at: string;
+          width: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      201: {
+        data: {
+          caption?: (string | null) | undefined;
+          created_at: string;
+          file_key: string;
+          height: number;
+          id: Schemas.LibraryPhotoId;
+          mime_type: string;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          size_bytes: number;
+          tags: Array<string>;
+          taken_at?: (string | null) | undefined;
+          thumbnail_key: string;
+          updated_at: string;
+          width: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      413: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetLibraryPhoto = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; photo_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          caption?: (string | null) | undefined;
+          created_at: string;
+          file_key: string;
+          height: number;
+          id: Schemas.LibraryPhotoId;
+          mime_type: string;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          size_bytes: number;
+          tags: Array<string>;
+          taken_at?: (string | null) | undefined;
+          thumbnail_key: string;
+          updated_at: string;
+          width: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteLibraryPhoto = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; photo_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateLibraryPhoto = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; photo_id: string };
+
+      body: Schemas.UpdateLibraryPhotoRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          caption?: (string | null) | undefined;
+          created_at: string;
+          file_key: string;
+          height: number;
+          id: Schemas.LibraryPhotoId;
+          mime_type: string;
+          project_id?: (null | Schemas.ProjectId) | undefined;
+          size_bytes: number;
+          tags: Array<string>;
+          taken_at?: (string | null) | undefined;
+          thumbnail_key: string;
+          updated_at: string;
+          width: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_CopyLibraryPhoto = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}/copy";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; photo_id: string };
+    };
+    responses: {
+      200: { data: { key: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type get_GetLibraryPhotoThumbnail = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}/thumbnail";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; photo_id: string };
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type get_GetPlanning = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/planning";
@@ -10354,6 +10851,69 @@ export namespace Endpoints {
       404: unknown;
       409: unknown;
     };
+  };
+  export type get_GetProjectDoeStyle = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+    };
+    responses: {
+      200: {
+        data: { inherited: Schemas.DoeStyle; style?: (null | Schemas.DoeStyle) | undefined };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_UpdateProjectDoeStyle = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+
+      body: Schemas.UpdateProjectDoeStyleRequest;
+    };
+    responses: {
+      200: {
+        data: Partial<{
+          body_font: Schemas.DoeFont;
+          contents_title: Schemas.DoeLabel;
+          cover_logo_position: Schemas.LogoPosition;
+          cover_logo_size: Schemas.LogoSize;
+          cover_photo: boolean;
+          cover_title: Schemas.DoeLabel;
+          decorations: Array<Schemas.DoeDecoration>;
+          footer_text: Schemas.DoeTemplate;
+          header_logo: boolean;
+          header_text: Schemas.DoeTemplate;
+          heading_font: Schemas.DoeFont;
+          logo_key: string | null;
+          on_primary: Schemas.HexColor;
+          parties_title: Schemas.DoeLabel;
+          primary: Schemas.HexColor;
+          secondary: Schemas.HexColor;
+          supply_table_title: Schemas.DoeLabel;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_ClearProjectDoeStyle = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
   export type post_RestoreProject = {
     method: "POST";
@@ -13297,7 +13857,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.patch_UpdateAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.patch_UpdateWorkflowFolder;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.patch_UpdateWorkflow;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.patch_UpdateKnowledgeArticle;
     "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
+    "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}": Endpoints.patch_UpdateLibraryPhoto;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.patch_PatchProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.patch_PatchProject;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.patch_EditSupportDraft;
@@ -13344,12 +13906,16 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.delete_DeleteKnowledgeArticle;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links/{resource_type}/{resource_id}": Endpoints.delete_UnlinkKnowledgeArticle;
     "/api/v1/organizations/{organization_id}/leave-adjustments/{adjustment_id}": Endpoints.delete_DeleteLeaveAdjustment;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.delete_DeleteMemberContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/day-overrides/{date}": Endpoints.delete_DeleteDayOverride;
     "/api/v1/organizations/{organization_id}/members/{member_id}/documents/{document_id}": Endpoints.delete_DeleteMemberDocument;
+    "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}": Endpoints.delete_DeleteLibraryPhoto;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.delete_ClearProjectDoeStyle;
     "/api/v1/organizations/{organization_id}/support/api-keys/{key_id}": Endpoints.delete_RevokeSupportApiKey;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.delete_DeleteSupportDraft;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges/{label}": Endpoints.delete_RemoveSupportTicketBadge;
@@ -13425,6 +13991,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.get_GetDoeSettings;
     "/api/v1/organizations/{organization_id}/does": Endpoints.get_ListDoes;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.get_GetDoe;
+    "/api/v1/organizations/{organization_id}/does/{doe_id}/docx": Endpoints.get_ExportDoeDocx;
     "/api/v1/organizations/{organization_id}/does/{doe_id}/pdf": Endpoints.get_ExportDoePdf;
     "/api/v1/organizations/{organization_id}/employee-profiles": Endpoints.get_ListEmployeeProfiles;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.get_ListEquipment;
@@ -13438,6 +14005,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.get_ListInvitations;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.get_ListInvoices;
     "/api/v1/organizations/{organization_id}/invoices/outstanding": Endpoints.get_ListOutstandingBalanceByCustomer;
+    "/api/v1/organizations/{organization_id}/knowledge/articles": Endpoints.get_ListKnowledgeArticles;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.get_GetKnowledgeArticle;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/download": Endpoints.get_DownloadKnowledgeFile;
     "/api/v1/organizations/{organization_id}/leave-accounts": Endpoints.get_ListLeaveAccounts;
     "/api/v1/organizations/{organization_id}/leave-adjustments": Endpoints.get_ListLeaveAdjustments;
     "/api/v1/organizations/{organization_id}/ledger": Endpoints.get_ReadLedger;
@@ -13456,6 +14026,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts": Endpoints.get_ListMemberContracts;
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.get_GetMemberProfile;
     "/api/v1/organizations/{organization_id}/numbering": Endpoints.get_GetOrganizationNumbering;
+    "/api/v1/organizations/{organization_id}/photo-library/photos": Endpoints.get_ListLibraryPhotos;
+    "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}": Endpoints.get_GetLibraryPhoto;
+    "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}/thumbnail": Endpoints.get_GetLibraryPhotoThumbnail;
     "/api/v1/organizations/{organization_id}/planning": Endpoints.get_GetPlanning;
     "/api/v1/organizations/{organization_id}/planning/availability": Endpoints.get_GetPlanningAvailability;
     "/api/v1/organizations/{organization_id}/products": Endpoints.get_ListProducts;
@@ -13465,6 +14038,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.get_GetProject;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/channel": Endpoints.get_GetProjectChannel;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/doe": Endpoints.get_GetProjectDoe;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.get_GetProjectDoeStyle;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
     "/api/v1/organizations/{organization_id}/reporting/profitability": Endpoints.get_GetProfitability;
     "/api/v1/organizations/{organization_id}/reporting/worked-hours": Endpoints.get_GetWorkedHours;
@@ -13556,6 +14130,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}/restore": Endpoints.post_RestoreDoeModel;
     "/api/v1/organizations/{organization_id}/doe-style/preview": Endpoints.post_PreviewDoeStyle;
     "/api/v1/organizations/{organization_id}/doe-style/preview/pages": Endpoints.post_PreviewDoeStylePages;
+    "/api/v1/organizations/{organization_id}/does/{doe_id}/photos/place": Endpoints.post_PlaceLibraryPhotosInDoe;
     "/api/v1/organizations/{organization_id}/does/{doe_id}/supplies/draft": Endpoints.post_DraftDoeSupply;
     "/api/v1/organizations/{organization_id}/equipment": Endpoints.post_CreateEquipment;
     "/api/v1/organizations/{organization_id}/expense-categories": Endpoints.post_CreateExpenseCategory;
@@ -13571,6 +14146,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/field/time-entries/declare": Endpoints.post_DeclareTimeEntry;
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.post_CreateInvoice;
+    "/api/v1/organizations/{organization_id}/knowledge/articles": Endpoints.post_UploadKnowledgeFile;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links": Endpoints.post_LinkKnowledgeArticle;
+    "/api/v1/organizations/{organization_id}/knowledge/notes": Endpoints.post_CreateKnowledgeNote;
     "/api/v1/organizations/{organization_id}/leave-accounts": Endpoints.post_CreateLeaveAccount;
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}/archive": Endpoints.post_ArchiveLeaveAccount;
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}/restore": Endpoints.post_RestoreLeaveAccount;
@@ -13587,6 +14165,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts": Endpoints.post_CreateMemberContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/documents": Endpoints.post_AddMemberDocument;
     "/api/v1/organizations/{organization_id}/members/{member_id}/restore": Endpoints.post_RestoreMember;
+    "/api/v1/organizations/{organization_id}/photo-library/photos": Endpoints.post_UploadLibraryPhoto;
+    "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}/copy": Endpoints.post_CopyLibraryPhoto;
     "/api/v1/organizations/{organization_id}/products": Endpoints.post_CreateProduct;
     "/api/v1/organizations/{organization_id}/project-templates": Endpoints.post_CreateProjectTemplate;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/instantiate": Endpoints.post_InstantiateProjectTemplate;
@@ -13657,6 +14237,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.put_PutMemberProfile;
     "/api/v1/organizations/{organization_id}/numbering/{kind}": Endpoints.put_SetOrganizationNextNumber;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.put_UpdateProjectDoeStyle;
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.put_UpdateSupplier;
     "/api/v1/organizations/{organization_id}/support/settings": Endpoints.put_ReplaceSupportSettings;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/assignee": Endpoints.put_AssignSupportTicket;

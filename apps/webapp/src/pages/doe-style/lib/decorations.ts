@@ -22,6 +22,8 @@ export const DUPLICATE_OFFSET_MM = 5
 export const KEY_STEP_MM = 1
 export const KEY_STEP_SHIFT_MM = 10
 export const LINE_THICKNESS_MM = 1
+export const IMAGE_DEFAULT_WIDTH_MM = 80
+const IMAGE_FALLBACK_HEIGHT_MM = 100
 
 const EPSILON = 1e-6
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i
@@ -124,6 +126,40 @@ export function createDecoration(
 		pages: 'all',
 		layer: 'behind',
 	}
+}
+
+export function createImageDecoration(
+	key: string,
+	aspectRatio: number,
+): Decoration {
+	const usable = Number.isFinite(aspectRatio) && aspectRatio > 0
+	let width = IMAGE_DEFAULT_WIDTH_MM
+	let height = usable ? width / aspectRatio : IMAGE_FALLBACK_HEIGHT_MM
+	if (height > PAGE_HEIGHT_MM) {
+		width = (width * PAGE_HEIGHT_MM) / height
+		height = PAGE_HEIGHT_MM
+	}
+	width = Math.max(roundMm(width), MIN_SIZE_MM)
+	height = Math.max(roundMm(height), MIN_SIZE_MM)
+	return {
+		kind: 'image',
+		key,
+		fit: 'contain',
+		x: roundMm((PAGE_WIDTH_MM - width) / 2),
+		y: roundMm((PAGE_HEIGHT_MM - height) / 2),
+		width,
+		height,
+		pages: 'all',
+		layer: 'behind',
+	}
+}
+
+export function appendDecoration(
+	list: Decoration[],
+	decoration: Decoration,
+): Decoration[] {
+	if (list.length >= MAX_DECORATIONS) return list
+	return [...list, decoration]
 }
 
 export function addDecoration(

@@ -28,7 +28,7 @@ pub mod style;
 
 pub use style::{
     DecorationLayer, DecorationPages, DecorationShape, DoeDecoration, DoeFont, DoeLabel, DoeStyle,
-    DoeTemplate, ImageFit, LogoPosition, LogoSize, Millimeters, Opacity, TemplateValues,
+    DoeTemplate, ImageFit, LogoPosition, LogoSize, Millimeters, Opacity, Rotation, TemplateValues,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
@@ -135,6 +135,13 @@ impl DoeModel {
 #[serde(rename_all = "snake_case")]
 pub enum StarterModel {
     Landscaping,
+}
+
+/// A project's own style, and the one its DOE gets without it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectDoeStyle {
+    pub style: Option<DoeStyle>,
+    pub inherited: DoeStyle,
 }
 
 /// How an organization's documents look. One row per organization; an

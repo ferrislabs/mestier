@@ -6,6 +6,7 @@ import {
 	FileText,
 	Images,
 	Info,
+	LayoutTemplate,
 	ListOrdered,
 	Loader2,
 	type LucideIcon,
@@ -52,6 +53,7 @@ export interface DoeSidebarProps {
 	onSave: () => void
 	onDownload: () => void
 	onDownloadWord: () => void
+	onOpenLayout: () => void
 	onDelete: () => void
 }
 
@@ -73,6 +75,7 @@ export function DoeSidebar({
 	onSave,
 	onDownload,
 	onDownloadWord,
+	onOpenLayout,
 	onDelete,
 }: DoeSidebarProps) {
 	return (
@@ -116,6 +119,17 @@ export function DoeSidebar({
 								<Save aria-hidden />
 							)}
 							Enregistrer
+						</Button>
+					</RequirePermission>
+					<RequirePermission permission="MANAGE_PLANNING">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={onOpenLayout}
+						>
+							<LayoutTemplate aria-hidden />
+							Mise en page
 						</Button>
 					</RequirePermission>
 					<div className="grid grid-cols-2 gap-2">

@@ -19,6 +19,7 @@ interface DoeStylePreviewProps {
 	selectedDecoration?: number | null
 	onSelectDecoration?: (index: number) => void
 	onCommitDecoration?: (index: number, rect: Rect) => void
+	onRotateDecoration?: (index: number, rotation: number) => void
 	onSelectPage: (index: number) => void
 }
 
@@ -36,6 +37,7 @@ export function DoeStylePreview({
 	selectedDecoration = null,
 	onSelectDecoration,
 	onCommitDecoration,
+	onRotateDecoration,
 	onSelectPage,
 }: DoeStylePreviewProps) {
 	const current = Math.min(activePage, Math.max(pages.length - 1, 0))
@@ -79,6 +81,8 @@ export function DoeStylePreview({
 						selectedIndex={selectedDecoration}
 						onSelect={onSelectDecoration}
 						onCommit={onCommitDecoration}
+						onRotate={onRotateDecoration}
+						snapping
 					/>
 				) : null}
 				{loading ? (

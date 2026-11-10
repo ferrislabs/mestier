@@ -680,3 +680,45 @@ fn supply_photos_shrink_to_stay_on_the_page_of_their_table() {
         );
     }
 }
+
+fn magenta_transform(transform: &str) -> String {
+    let (document, bundle) = decorated(&format!(
+        r##"[{{"kind":"rectangle","fill":"{MAGENTA}","x":50,"y":50,"width":40,"height":10{transform}}}]"##
+    ));
+    let svg = TypstDoeRenderer
+        .render_svg(&document, &bundle, &[0])
+        .unwrap()
+        .remove(0);
+    let at = svg.find(MAGENTA).expect("the element is drawn");
+    let rest = &svg[at..];
+    let start = rest.find("transform=\"").map_or(0, |i| i + 11);
+    rest[start..]
+        .split('"')
+        .next()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+// CSS `rotate(θ) scale(sx, sy)` around the center of the 40 × 10 mm frame at
+// (50, 50) mm: the center lands on (70, 55) mm, i.e. (198.4, 155.9) pt.
+#[test]
+fn layout_a_quarter_turn_is_clockwise_around_the_center() {
+    assert_eq!(
+        magenta_transform(r#","rotation":90"#),
+        "matrix(0 1 -1 0 212.598425197 99.212598425)"
+    );
+}
+
+#[test]
+fn layout_a_mirror_is_applied_before_the_rotation() {
+    assert_eq!(
+        magenta_transform(r#","rotation":90,"flip_x":true"#),
+        "matrix(0 -1 -1 0 212.598425197 212.598425197)"
+    );
+    assert!(magenta_transform(r#","flip_y":true"#).starts_with("matrix(1 0 0 -1 "));
+}
+
+#[test]
+fn layout_an_upright_element_is_only_moved() {
+    assert!(magenta_transform("").starts_with("translate("));
+}

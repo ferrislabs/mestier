@@ -3,16 +3,57 @@ use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    DoeDocument, DoeModel, DoeModelId, DoeSettings, OrganizationId,
-    application::{MestierUseCase, policy},
-    domain::doe_model::{
-        commands::{
-            CreateDoeModelCommand, CreateDoeModelFromStarterCommand, PreviewDoeStyleCommand,
-            UpdateDoeModelCommand, UpdateDoeSettingsCommand,
+    DoeDocument, DoeModel, DoeModelId, DoeSettings, DoeStyle, OrganizationId, ProjectDoeStyle,
+    ProjectId,
+    application::{MestierAuthorizer, MestierUseCase, policy},
+    domain::{
+        doe::ports::DoeRepository,
+        doe_model::{
+            commands::{
+                CreateDoeModelCommand, CreateDoeModelFromStarterCommand, PreviewDoeStyleCommand,
+                ProjectDoeStyleCommand, UpdateDoeModelCommand, UpdateDoeSettingsCommand,
+                UpdateProjectDoeStyleCommand,
+            },
+            ports::DoeSettingsRepository,
+            service::{DoeModelService, inherited_style},
         },
-        service::DoeModelService,
+        member::ports::MemberRepository,
+        project::ports::ProjectRepository,
+        role::ports::RoleRepository,
     },
 };
+
+/// A project's style is edited like its DOE: with `planning.manage`, on a
+/// project of the organization.
+async fn require_project_style<M, R, P>(
+    authz: &MestierAuthorizer,
+    actor: authz::Subject,
+    organization_id: OrganizationId,
+    project_id: ProjectId,
+    members: &mut M,
+    roles: &mut R,
+    projects: &mut P,
+) -> Result<(), CoreError>
+where
+    M: MemberRepository,
+    R: RoleRepository,
+    P: ProjectRepository,
+{
+    let actor = policy::enrich_for_organization(actor, organization_id, members, roles).await?;
+    policy::require(
+        authz,
+        &actor,
+        "planning.manage",
+        Resource::new("organization", organization_id.0.to_string()),
+    )
+    .await?;
+    projects
+        .find_by_id(project_id)
+        .await?
+        .filter(|project| project.organization_id == organization_id)
+        .map(|_| ())
+        .ok_or(CoreError::NotFound)
+}
 
 mod tests;
 
@@ -217,7 +258,8 @@ impl MestierUseCase {
     }
 
     /// A sample DOE laid out with a style that is not saved yet. Gated like
-    /// saving a style, since it exists to edit one.
+    /// saving a style, the organization's or a project's, since it exists to
+    /// edit one.
     #[transactional(role, member, authz)]
     pub async fn preview_doe_style(
         &self,
@@ -233,17 +275,108 @@ impl MestierUseCase {
             &mut role_repository,
         )
         .await?;
-        policy::require(
-            &authz,
-            &actor,
-            "reference.manage",
-            Resource::new("organization", command.organization_id.0.to_string()),
-        )
-        .await?;
+        let organization = Resource::new("organization", command.organization_id.0.to_string());
+        if !policy::holds(&authz, &actor, "reference.manage", organization.clone()).await? {
+            policy::require(&authz, &actor, "planning.manage", organization).await?;
+        }
 
         Ok(DoeDocument::sample(
             &command.style.cleaned(),
             chrono::Utc::now().date_naive(),
         ))
+    }
+
+    #[transactional(project, doe, doe_model, doe_settings, role, member, authz)]
+    pub async fn get_project_doe_style(
+        &self,
+        command: ProjectDoeStyleCommand,
+    ) -> Result<ProjectDoeStyle, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        let mut project_repository = project_repository;
+        let mut doe_repository = doe_repository;
+        let mut doe_model_repository = doe_model_repository;
+        let mut doe_settings_repository = doe_settings_repository;
+        require_project_style(
+            authz,
+            command.actor,
+            command.organization_id,
+            command.project_id,
+            &mut member_repository,
+            &mut role_repository,
+            &mut project_repository,
+        )
+        .await?;
+
+        let model_id = doe_repository
+            .find_by_project(command.project_id)
+            .await?
+            .filter(|doe| doe.organization_id == command.organization_id)
+            .and_then(|doe| doe.model_id);
+        let inherited = inherited_style(
+            &mut doe_model_repository,
+            &mut doe_settings_repository,
+            command.organization_id,
+            model_id,
+        )
+        .await?;
+        let style = doe_settings_repository
+            .find_project_style(command.organization_id, command.project_id)
+            .await?;
+        Ok(ProjectDoeStyle { style, inherited })
+    }
+
+    #[transactional(project, doe_settings, role, member, authz)]
+    pub async fn update_project_doe_style(
+        &self,
+        command: UpdateProjectDoeStyleCommand,
+    ) -> Result<DoeStyle, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        let mut project_repository = project_repository;
+        let mut doe_settings_repository = doe_settings_repository;
+        require_project_style(
+            authz,
+            command.actor,
+            command.organization_id,
+            command.project_id,
+            &mut member_repository,
+            &mut role_repository,
+            &mut project_repository,
+        )
+        .await?;
+
+        doe_settings_repository
+            .upsert_project_style(
+                command.organization_id,
+                command.project_id,
+                &command.style.cleaned(),
+            )
+            .await
+    }
+
+    #[transactional(project, doe_settings, role, member, authz)]
+    pub async fn clear_project_doe_style(
+        &self,
+        command: ProjectDoeStyleCommand,
+    ) -> Result<(), CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        let mut project_repository = project_repository;
+        let mut doe_settings_repository = doe_settings_repository;
+        require_project_style(
+            authz,
+            command.actor,
+            command.organization_id,
+            command.project_id,
+            &mut member_repository,
+            &mut role_repository,
+            &mut project_repository,
+        )
+        .await?;
+
+        doe_settings_repository
+            .delete_project_style(command.organization_id, command.project_id)
+            .await
     }
 }

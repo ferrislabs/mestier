@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
-use crate::{DoeModel, DoeModelId, DoeSettings, OrganizationId};
+use crate::{DoeModel, DoeModelId, DoeSettings, DoeStyle, OrganizationId, ProjectId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait DoeModelRepository: Send {
@@ -47,4 +47,23 @@ pub trait DoeSettingsRepository: Send {
         &mut self,
         settings: &DoeSettings,
     ) -> impl Future<Output = Result<DoeSettings, CoreError>> + Send;
+
+    fn find_project_style(
+        &mut self,
+        organization_id: OrganizationId,
+        project_id: ProjectId,
+    ) -> impl Future<Output = Result<Option<DoeStyle>, CoreError>> + Send;
+
+    fn upsert_project_style(
+        &mut self,
+        organization_id: OrganizationId,
+        project_id: ProjectId,
+        style: &DoeStyle,
+    ) -> impl Future<Output = Result<DoeStyle, CoreError>> + Send;
+
+    fn delete_project_style(
+        &mut self,
+        organization_id: OrganizationId,
+        project_id: ProjectId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }

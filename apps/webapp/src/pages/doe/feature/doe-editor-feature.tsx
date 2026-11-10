@@ -13,6 +13,7 @@ import type { PlacementResponse } from '#/hooks/use-photo-library'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import { DeleteDoeFeature } from '#/pages/doe/feature/delete-doe-feature'
+import { DoeLayoutFeature } from '#/pages/doe/feature/doe-layout-feature'
 import { DoePhotoLibraryPickerFeature } from '#/pages/doe/feature/doe-photo-library-picker-feature'
 import { DoeSupplyPickerFeature } from '#/pages/doe/feature/doe-supply-picker-feature'
 import {
@@ -95,6 +96,7 @@ export function DoeEditorFeature({
 	const [pickerSectionId, setPickerSectionId] = useState<string | null>(null)
 	const [libraryTarget, setLibraryTarget] = useState<LibraryTarget | null>(null)
 	const [notice, setNotice] = useState<string | null>(null)
+	const [layoutOpen, setLayoutOpen] = useState(false)
 	const [pdfError, setPdfError] = useState<string | null>(null)
 	const [isDownloading, setIsDownloading] = useState(false)
 	const [uploadError, setUploadError] = useState<string | null>(null)
@@ -437,6 +439,7 @@ export function DoeEditorFeature({
 						void runPdf(() =>
 							downloadDoeDocx(organizationId, doe.id, `DOE-${form.title}.docx`),
 						),
+					onOpenLayout: () => setLayoutOpen(true),
 					onDelete: () => setDeleteOpen(true),
 				}}
 				items={items}
@@ -572,6 +575,16 @@ export function DoeEditorFeature({
 			/>
 
 			<LeaveGuardDialog active={dirty.isDirty} />
+
+			{layoutOpen ? (
+				<DoeLayoutFeature
+					organizationId={organizationId}
+					projectId={projectId}
+					onSaved={() => setNotice('Mise en page enregistrée')}
+					onFailed={setNotice}
+					onClose={() => setLayoutOpen(false)}
+				/>
+			) : null}
 
 			<DeleteDoeFeature
 				open={deleteOpen}
