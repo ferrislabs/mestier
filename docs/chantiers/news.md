@@ -18,7 +18,7 @@ L'équipe Mestier publie des news (nouveautés, annonces) depuis un back-office 
 1. **Données de plateforme, pas d'organisation** : `news` et `news_views` n'ont pas d'`org_id`. Exception voulue à la règle « toute requête est bornée par `org_id` » : une news est la même pour tous. `news_views` est borné par `user_id`.
 2. **Contenu structuré** : `title` (1 à 120 caractères), `image_key` facultatif (stockage de fichiers, même envoi que les autres images), `items` (1 à 6 : `icon`, `title` 1 à 60, `text` 1 à 240), `cta` facultatif (`label` 1 à 40, `url` en `https://` ou `http://`). Icônes : une liste fermée (`NewsIcon`), traduite en icônes lucide côté webapp.
 3. **Publication portée par une date** : `published_at: Option<DateTime>`. Absente = brouillon ; passée = publiée ; future = programmée. Pas de champ d'état à part.
-4. **Back-office réservé à `mestier:admin`** via l'action `news.manage`, volontairement absente de `default_authorizer` : seuls le super-admin et le système passent. Remplacer par un rôle dédié plus tard = enregistrer l'action ou changer ce contrôle, rien d'autre.
+4. **Back-office réservé à `mestier:admin`, lu à part** (amendé le 2026-11-10, réponse a) : Mestier ne lisait aucun rôle du jeton. `Identity` porte désormais les rôles du royaume dans un champ à part (`realm_roles`), jamais donné au moteur de droits : le passe-droit `mestier:admin` de `LocalPolicyEngine` reste inactif. Le handler en tire un `NewsEditor` (preuve de type) que chaque use case du back-office exige. Un jeton délégué (assistant MCP) ou un client n'a aucun rôle du royaume. Remplacer par un rôle dédié plus tard = changer `NewsEditor::ROLE`.
 5. **Vue = affichée** : le webapp envoie `POST /news/seen` avec l'id d'une news dès qu'elle est à l'écran dans le carrousel. Idempotent. La vue est retenue côté serveur, par utilisateur, tous appareils confondus.
 6. **Ordre** : la plus récemment publiée d'abord.
 7. **Webapp** : la fenêtre s'ouvre après connexion s'il reste des news non vues ; « Nouveautés » dans le menu utilisateur la rouvre sur toutes les news publiées ; l'entrée « Back-office news » n'apparaît qu'à qui peut gérer.
@@ -28,7 +28,7 @@ L'équipe Mestier publie des news (nouveautés, annonces) depuis un back-office 
 1. Une news en brouillon ou programmée n'est jamais servie aux utilisateurs. [test]
 2. Une news vue n'est plus proposée à cet utilisateur, et reste proposée aux autres. [test]
 3. Un contenu invalide (titre vide, 0 ou 7 points, URL `javascript:`) est refusé à l'enregistrement. [type : constructeurs]
-4. Seul `mestier:admin` lit, crée, modifie, publie et supprime dans le back-office. [test]
+4. Seul `mestier:admin`, sur son propre jeton, lit, crée, modifie, publie et supprime dans le back-office ; ce rôle ne donne rien d'autre. [type : `NewsEditor` ; test : `Identity::roles` reste vide]
 5. Supprimer une news supprime ses vues. [migration : `ON DELETE CASCADE`]
 6. Migration réversible. [test : up, down, up]
 
@@ -43,7 +43,7 @@ L'équipe Mestier publie des news (nouveautés, annonces) depuis un back-office 
 ## Design
 
 - **Migration** `20261118000001_create_news` : `news (id, title, image_key, items JSONB, cta JSONB NULL, published_at NULL, created_at, updated_at)`, index sur `published_at` ; `news_views (news_id → news ON DELETE CASCADE, user_id → users ON DELETE CASCADE, seen_at, PRIMARY KEY (news_id, user_id))`.
-- **Core** `domain/news` : `News`, `NewsId`, `NewsTitle`, `NewsItem`, `NewsIcon`, `NewsCta` (URL validée), `NewsContent` (points bornés) ; port `NewsRepository` (`insert`, `update`, `delete`, `find_by_id`, `list_all`, `list_published(now)`, `list_unseen(user, now)`, `mark_seen(user, ids)`). `application/news` : use cases `list_news_for_admin`, `create_news`, `update_news`, `delete_news` (contrôle `news.manage`), `list_published_news`, `list_unseen_news`, `mark_news_seen`, `can_manage_news`.
+- **Core** `domain/news` : `News`, `NewsId`, `NewsTitle`, `NewsItem`, `NewsIcon`, `NewsCta` (URL validée), `NewsContent` (points bornés) ; port `NewsRepository` (`insert`, `update`, `delete`, `find_by_id`, `list_all`, `list_published(now)`, `list_unseen(user, now)`, `mark_seen(user, ids)`). `application/news` : use cases `list_news_for_admin`, `create_news`, `update_news`, `delete_news` (chacun exige un `NewsEditor`), `list_published_news`, `list_unseen_news`, `mark_news_seen`.
 - **Infrastructure** `infrastructure/news/postgres` + marqueur dans `registry.rs`.
 - **API** crate `handlers-platform` (zone : ce qui est au-dessus des organisations), tag `news` :
   - utilisateur : `GET /api/v1/news` (publiées), `GET /api/v1/news/unseen`, `POST /api/v1/news/seen` `{ ids }`, `GET /api/v1/news/access` → `{ can_manage }` ;
@@ -82,6 +82,18 @@ Une branche `feat/news`, une PR.
 | La fenêtre gêne à chaque connexion | Une news vue ne revient jamais ; aucune requête si rien de nouveau |
 | Une URL de bouton malveillante | Seuls `http(s)://` acceptés, lien ouvert avec `rel="noopener noreferrer"` |
 | `mestier:admin` donne bien plus que les news | Assumé pour l'instant (réponse du 2026-11-10), rôle dédié hors périmètre |
+
+## Écarts constatés à l'implémentation
+
+- **Les rôles du jeton n'étaient pas lus** (`Identity::from(Claims)` mettait `roles: Vec::new()`) : corrigé par la décision 4 amendée, sans réveiller le passe-droit global.
+- `GET /news/access` renvoie `{ "data": { "can_manage": bool } }` : enveloppé comme toute réponse JSON, pas `{ "can_manage": bool }` nu.
+- Le contrôle du rôle passe avant la validation du contenu : un non-admin qui envoie un contenu invalide reçoit 403, pas 422.
+- `NewsTitle` n'existe pas comme type à part : le titre est validé dans `NewsContent::try_from(NewsContentInput)`, avec `NewsItem::new` et `NewsCta::new` pour les points et le bouton.
+- La crate `url` est ajoutée aux dépendances de `mestier-core` pour valider le lien du bouton.
+- Webapp : l'éditeur du back-office utilise un état contrôlé et la validation pure de `lib/`, partagée avec l'aperçu, pas TanStack Form (même choix que l'éditeur de style DOE).
+- Webapp : sans bouton, le pied de la fenêtre affiche « Compris », qui la ferme.
+- Webapp : « Publier maintenant » sur une news déjà publiée garde sa date de publication ; une date programmée doit être dans le futur.
+- Webapp : un `seen` en échec n'est pas renvoyé pendant la session ; la news sera reproposée à la prochaine ouverture.
 
 ## Verify (exit)
 
