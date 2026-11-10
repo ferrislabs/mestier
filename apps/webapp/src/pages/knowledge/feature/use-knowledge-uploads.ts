@@ -16,7 +16,10 @@ import {
 	type UploadItem,
 } from '#/pages/photo-library/lib/uploads'
 
-export function useKnowledgeUploads(organizationId: string) {
+export function useKnowledgeUploads(
+	organizationId: string,
+	folderId: string | null,
+) {
 	const [items, setItems] = useState<UploadItem[]>([])
 	const { mutateAsync } = useUploadKnowledgeFile(organizationId)
 
@@ -43,6 +46,7 @@ export function useKnowledgeUploads(organizationId: string) {
 						file: file.slice(0, file.size, mimeType),
 						mimeType,
 						title: titleFromFileName(file.name),
+						folderId,
 					})
 					update(item.id, { status: 'done', message: null })
 				} catch (error) {
@@ -53,7 +57,7 @@ export function useKnowledgeUploads(organizationId: string) {
 				}
 			})
 		},
-		[mutateAsync],
+		[mutateAsync, folderId],
 	)
 
 	return {

@@ -1,6 +1,6 @@
 # Drive
 
-État : **spec à valider, 2026-11-10.** Premier chantier après la base de connaissances (#668), qui sert de socle.
+État : **spec validée le 2026-11-10. D1 (dossiers) implémenté sur `feat/drive`, pas encore recetté dans un navigateur. D2 et D3 à faire.** Premier chantier après la base de connaissances (#668), qui sert de socle.
 
 ## Goal
 
@@ -55,6 +55,7 @@ Briques réutilisées : le chiffrement des secrets de l'automatisation (`SecretC
 - La recherche texte reste globale, avec un filtre optionnel « dans ce dossier et ses sous-dossiers ».
 - Webapp : arbre des dossiers à gauche, contenu à droite, fil d'Ariane, dépôt par glisser-déposer dans le dossier ouvert, déplacement par glisser-déposer ou par menu « Déplacer vers ».
 - MCP : `list_knowledge_folder`, `create_knowledge_folder`, `move_knowledge_articles`. Pas de suppression (règle existante).
+- Tranché en route : la webapp lit tout l'arbre d'un coup (`GET /knowledge/folder-tree`, 5 000 dossiers au plus) pour l'arbre, le fil d'Ariane et le sélecteur de destination ; le dossier ouvert est dans l'adresse (`?dossier=`). Une recherche porte sur le dossier ouvert et ses sous-dossiers. Le MCP ne renomme ni ne déplace un dossier.
 
 ### D2 : aperçu et lecture du texte Word et Excel
 
@@ -118,3 +119,5 @@ Plus une recette navigateur par lot, et pour D3 une recette avec un vrai fournis
 - **Nom du module dans le menu.** Proposition : « Connaissances » devient une section avec l'entrée « Drive ». À confirmer par l'utilisateur à la recette.
 - **Coût de l'IA** : à la charge du client, sur sa clé. Aucune clé fournie par Mestier dans ce chantier.
 - **Données envoyées à un tiers** : seulement si le client active l'IA et choisit son fournisseur. À écrire dans l'écran de réglage.
+
+Amended: 2026-11-10 ajout de la route `folder-tree` pour l'arbre de la webapp.
