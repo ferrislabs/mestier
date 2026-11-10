@@ -1,0 +1,16 @@
+[package]
+name = "handlers-cursus"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+handlers = { workspace = true }
+mestier-core = { workspace = true }
+auth = { workspace = true }
+
+axum = { workspace = true }
+axum-extra = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+utoipa = { workspace = true }

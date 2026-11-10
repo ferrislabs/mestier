@@ -120,6 +120,7 @@ dependencies = [
  "dotenvy",
  "handlers",
  "handlers-automation",
+ "handlers-cursus",
  "handlers-customer",
  "handlers-discord",
  "handlers-field",
@@ -3026,6 +3027,20 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "handlers-cursus"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "handlers",
+ "mestier-core",
+ "serde",
+ "utoipa",
 ]
 
 [[package]]

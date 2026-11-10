@@ -73,6 +73,11 @@ impl Permissions {
     pub const VIEW_SUPPORT: Self = Permissions(1 << 21);
     pub const MANAGE_SUPPORT: Self = Permissions(1 << 22);
 
+    pub const VIEW_CURSUS: Self = Permissions(1 << 23);
+    pub const MANAGE_CURSUS_CATALOG: Self = Permissions(1 << 24);
+    pub const MANAGE_CURSUS_TRIADS: Self = Permissions(1 << 25);
+    pub const MANAGE_CURSUS_PARTICIPANTS: Self = Permissions(1 << 26);
+
     pub const ALL: Self = Permissions(i64::MAX);
 
     pub const fn contains(self, other: Permissions) -> bool {
@@ -115,6 +120,13 @@ impl Permissions {
         ("MANAGE_AUTOMATION", Permissions::MANAGE_AUTOMATION),
         ("VIEW_SUPPORT", Permissions::VIEW_SUPPORT),
         ("MANAGE_SUPPORT", Permissions::MANAGE_SUPPORT),
+        ("VIEW_CURSUS", Permissions::VIEW_CURSUS),
+        ("MANAGE_CURSUS_CATALOG", Permissions::MANAGE_CURSUS_CATALOG),
+        ("MANAGE_CURSUS_TRIADS", Permissions::MANAGE_CURSUS_TRIADS),
+        (
+            "MANAGE_CURSUS_PARTICIPANTS",
+            Permissions::MANAGE_CURSUS_PARTICIPANTS,
+        ),
     ];
 
     /// The names of every bit `self` carries — #307's "the caller's
@@ -226,6 +238,10 @@ pub fn default_admin_business_permissions() -> Permissions {
         | Permissions::MANAGE_AUTOMATION
         | Permissions::VIEW_SUPPORT
         | Permissions::MANAGE_SUPPORT
+        | Permissions::VIEW_CURSUS
+        | Permissions::MANAGE_CURSUS_CATALOG
+        | Permissions::MANAGE_CURSUS_TRIADS
+        | Permissions::MANAGE_CURSUS_PARTICIPANTS
 }
 
 /// #304: the business bits a fresh organization's default `member` role
@@ -543,5 +559,50 @@ mod tests {
 
         assert!(!member.contains(Permissions::VIEW_SUPPORT));
         assert!(!member.contains(Permissions::MANAGE_SUPPORT));
+    }
+
+    #[test]
+    fn cursus_permission_bits_have_stable_values() {
+        assert_eq!(Permissions::VIEW_CURSUS.bits(), 1 << 23);
+        assert_eq!(Permissions::MANAGE_CURSUS_CATALOG.bits(), 1 << 24);
+        assert_eq!(Permissions::MANAGE_CURSUS_TRIADS.bits(), 1 << 25);
+        assert_eq!(Permissions::MANAGE_CURSUS_PARTICIPANTS.bits(), 1 << 26);
+    }
+
+    #[test]
+    fn cursus_bits_round_trip_through_their_names() {
+        let original = Permissions::VIEW_CURSUS
+            | Permissions::MANAGE_CURSUS_CATALOG
+            | Permissions::MANAGE_CURSUS_TRIADS
+            | Permissions::MANAGE_CURSUS_PARTICIPANTS;
+
+        let roundtripped = Permissions::from_names(&original.granted_names()).unwrap();
+
+        assert_eq!(roundtripped, original);
+    }
+
+    #[test]
+    fn managing_cursus_does_not_imply_reading_it() {
+        assert!(!Permissions::MANAGE_CURSUS_CATALOG.contains(Permissions::VIEW_CURSUS));
+    }
+
+    #[test]
+    fn admin_gets_every_cursus_bit_by_default() {
+        let admin = default_admin_business_permissions();
+
+        assert!(admin.contains(Permissions::VIEW_CURSUS));
+        assert!(admin.contains(Permissions::MANAGE_CURSUS_CATALOG));
+        assert!(admin.contains(Permissions::MANAGE_CURSUS_TRIADS));
+        assert!(admin.contains(Permissions::MANAGE_CURSUS_PARTICIPANTS));
+    }
+
+    #[test]
+    fn member_gets_no_cursus_bit_by_default() {
+        let member = default_member_business_permissions();
+
+        assert!(!member.contains(Permissions::VIEW_CURSUS));
+        assert!(!member.contains(Permissions::MANAGE_CURSUS_CATALOG));
+        assert!(!member.contains(Permissions::MANAGE_CURSUS_TRIADS));
+        assert!(!member.contains(Permissions::MANAGE_CURSUS_PARTICIPANTS));
     }
 }

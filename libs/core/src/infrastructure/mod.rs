@@ -5,6 +5,7 @@ pub mod automation;
 pub mod category;
 pub mod category_access;
 pub mod channel;
+pub mod cursus_catalog;
 pub mod custom_unit;
 pub mod customer;
 pub mod customer_contact;

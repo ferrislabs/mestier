@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, name, uai, siret, address, is_main_site, archived_at, created_at, updated_at\n            FROM cursus.establishment\n            WHERE org_id = $1 AND ($2 OR archived_at IS NULL)\n            ORDER BY name ASC, created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "uai",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "siret",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_main_site",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "ad8ed2620d941bc5f6e94d2aeeddd17d01a583cb142e66f0b028543946d5ff5f"
+}

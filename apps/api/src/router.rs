@@ -11,6 +11,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use handlers::{ApiError, AppState};
 use handlers_automation as automation;
+use handlers_cursus as cursus;
 use handlers_customer as customer;
 use handlers_discord as discord;
 use handlers_field as field;
@@ -73,6 +74,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(field::router(&state))
         .merge(files::router(&state))
         .merge(customer::router(&state))
+        .merge(cursus::router(&state))
         .merge(discord::router(&state))
         .merge(invoice::router(&state))
         .merge(member::router(&state))

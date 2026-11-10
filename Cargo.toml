@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/api", "apps/mcp-gateway", "apps/mcp-server", "apps/seed-demo", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/discord", "libs/doc-render", "libs/events", "libs/handlers", "libs/handlers-automation", "libs/handlers-customer", "libs/handlers-discord", "libs/handlers-field", "libs/handlers-files", "libs/handlers-invoice", "libs/handlers-member", "libs/handlers-organization", "libs/handlers-planning", "libs/handlers-purchase", "libs/handlers-quote", "libs/handlers-reporting", "libs/handlers-reference", "libs/handlers-support", "libs/iam", "libs/macros", "libs/mcp-tools", "libs/pagination", "libs/rate-limit", "libs/server", "libs/telemetry"]
+members = ["apps/api", "apps/mcp-gateway", "apps/mcp-server", "apps/seed-demo", "libs/args", "libs/auth", "libs/authz", "libs/common", "libs/core", "libs/discord", "libs/doc-render", "libs/events", "libs/handlers", "libs/handlers-automation", "libs/handlers-cursus", "libs/handlers-customer", "libs/handlers-discord", "libs/handlers-field", "libs/handlers-files", "libs/handlers-invoice", "libs/handlers-member", "libs/handlers-organization", "libs/handlers-planning", "libs/handlers-purchase", "libs/handlers-quote", "libs/handlers-reporting", "libs/handlers-reference", "libs/handlers-support", "libs/iam", "libs/macros", "libs/mcp-tools", "libs/pagination", "libs/rate-limit", "libs/server", "libs/telemetry"]
 resolver = "3"
 
 [workspace.package]
@@ -78,6 +78,7 @@ handlers-purchase = { path = "libs/handlers-purchase" }
 handlers-quote = { path = "libs/handlers-quote" }
 handlers-reporting = { path = "libs/handlers-reporting" }
 handlers-planning = { path = "libs/handlers-planning" }
+handlers-cursus = { path = "libs/handlers-cursus" }
 handlers-support = { path = "libs/handlers-support" }
 handlers-reference = { path = "libs/handlers-reference" }
 iam = { path = "libs/iam" }
