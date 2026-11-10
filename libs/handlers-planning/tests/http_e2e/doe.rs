@@ -739,3 +739,154 @@ async fn a_doe_is_deleted_by_a_planner_only_and_inside_its_organization() {
     intruder.cleanup(&app.pool).await;
     cleanup(&app).await;
 }
+
+fn project_style_url(app: &harness::App, organization_id: Uuid, project_id: Uuid) -> String {
+    format!(
+        "{}/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style",
+        app.base_url
+    )
+}
+
+async fn project_style(app: &harness::App, project_id: Uuid) -> Value {
+    let response = reqwest::Client::new()
+        .get(project_style_url(app, app.organization_id, project_id))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("read the project style");
+    assert_eq!(response.status(), 200);
+    response.json::<Value>().await.expect("json")["data"].clone()
+}
+
+async fn pdf_of(app: &harness::App, doe_id: &str) -> Vec<u8> {
+    let response = reqwest::Client::new()
+        .get(doe_url(app, app.organization_id, doe_id, "/pdf"))
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("export the DOE");
+    assert_eq!(response.status(), 200);
+    response.bytes().await.expect("pdf").to_vec()
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn spec_layout_editor_10_to_13_a_project_style_replaces_the_model_and_the_organization() {
+    let app = harness::start().await;
+    let intruder = crate::photo_library::seed_intruder(&app.pool).await;
+    let client = reqwest::Client::new();
+    let seeded = seed_project_and_model(&app).await;
+    let doe = create_doe(&app, &seeded).await;
+    let doe_id = doe["data"]["id"].as_str().unwrap().to_owned();
+    let bare_project = Uuid::now_v7();
+    sqlx::query("INSERT INTO projects (id, org_id, name) VALUES ($1, $2, 'Sans DOE')")
+        .bind(bare_project)
+        .bind(app.organization_id)
+        .execute(&app.pool)
+        .await
+        .expect("seed a project without DOE");
+    sqlx::query(r##"UPDATE doe_models SET style = '{"primary":"#aa0000"}' WHERE id = $1"##)
+        .bind(seeded.model_id)
+        .execute(&app.pool)
+        .await
+        .expect("give the model a style");
+    let saved_org = client
+        .put(org_url(&app, "/doe-settings"))
+        .bearer_auth(&app.token)
+        .json(&json!({ "style": { "primary": "#00aa00" } }))
+        .send()
+        .await
+        .expect("save the organization style");
+    assert_eq!(saved_org.status(), 200);
+
+    let initial = project_style(&app, seeded.project_id).await;
+    assert_eq!(initial["style"], Value::Null);
+    assert_eq!(initial["inherited"]["primary"], "#aa0000");
+    let bare = project_style(&app, bare_project).await;
+    assert_eq!(bare["style"], Value::Null);
+    assert_eq!(bare["inherited"]["primary"], "#00aa00");
+
+    let from_model = pdf_of(&app, &doe_id).await;
+    let url = project_style_url(&app, app.organization_id, seeded.project_id);
+    let saved = client
+        .put(&url)
+        .bearer_auth(&app.token)
+        .json(&json!({ "style": { "primary": "#0000aa", "decorations": [{
+            "kind": "rectangle", "fill": "#ff00ff", "x": 0, "y": 0, "width": 210, "height": 10,
+            "rotation": 10,
+        }] } }))
+        .send()
+        .await
+        .expect("save the project style");
+    assert_eq!(saved.status(), 200);
+    let saved: Value = saved.json().await.expect("json");
+    assert_eq!(saved["data"]["primary"], "#0000aa");
+    assert_eq!(
+        project_style(&app, seeded.project_id).await["style"]["primary"],
+        "#0000aa"
+    );
+    assert_eq!(
+        project_style(&app, bare_project).await["style"],
+        Value::Null
+    );
+    assert_ne!(pdf_of(&app, &doe_id).await, from_model);
+
+    let forbidden = client
+        .put(&url)
+        .bearer_auth(&app.no_permission_token)
+        .json(&json!({ "style": {} }))
+        .send()
+        .await
+        .expect("write without permission");
+    assert_eq!(forbidden.status(), 403);
+    for response in [
+        client
+            .get(project_style_url(
+                &app,
+                intruder.organization_id,
+                seeded.project_id,
+            ))
+            .bearer_auth(&intruder.token)
+            .send()
+            .await
+            .expect("foreign read"),
+        client
+            .put(project_style_url(
+                &app,
+                intruder.organization_id,
+                seeded.project_id,
+            ))
+            .bearer_auth(&intruder.token)
+            .json(&json!({ "style": { "primary": "#123456" } }))
+            .send()
+            .await
+            .expect("foreign write"),
+    ] {
+        assert_eq!(response.status(), 404);
+    }
+    assert_eq!(
+        project_style(&app, seeded.project_id).await["style"]["primary"],
+        "#0000aa"
+    );
+
+    let cleared = client
+        .delete(&url)
+        .bearer_auth(&app.token)
+        .send()
+        .await
+        .expect("clear the project style");
+    assert_eq!(cleared.status(), 204);
+    assert_eq!(
+        project_style(&app, seeded.project_id).await["style"],
+        Value::Null
+    );
+    assert_eq!(pdf_of(&app, &doe_id).await, from_model);
+
+    sqlx::query("DELETE FROM doe_project_styles WHERE org_id = $1")
+        .bind(app.organization_id)
+        .execute(&app.pool)
+        .await
+        .expect("clear project styles");
+    intruder.cleanup(&app.pool).await;
+    cleanup(&app).await;
+}

@@ -181,6 +181,35 @@ where
     }
 }
 
+/// The style a DOE gets when its project has none: its model's if the model
+/// has one, else the organization's, else the default.
+pub async fn inherited_style<MR, SR>(
+    models: &mut MR,
+    settings: &mut SR,
+    organization_id: OrganizationId,
+    model_id: Option<DoeModelId>,
+) -> Result<DoeStyle, CoreError>
+where
+    MR: DoeModelRepository,
+    SR: DoeSettingsRepository,
+{
+    if let Some(model_id) = model_id {
+        let model_style = models
+            .find_by_id(model_id)
+            .await?
+            .filter(|model| model.organization_id == organization_id)
+            .and_then(|model| model.style);
+        if let Some(style) = model_style {
+            return Ok(style);
+        }
+    }
+    Ok(settings
+        .find(organization_id)
+        .await?
+        .map(|settings| settings.style)
+        .unwrap_or_default())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

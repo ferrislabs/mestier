@@ -13,6 +13,7 @@ pub mod from_starter;
 pub mod get_one;
 pub mod list;
 pub mod preview;
+pub mod project_style;
 pub mod response;
 pub mod restore;
 pub mod settings;
@@ -33,6 +34,9 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(preview::pages_handler)
         .typed_get(settings::get_handler)
         .typed_put(settings::put_handler)
+        .typed_get(project_style::get_handler)
+        .typed_put(project_style::put_handler)
+        .typed_delete(project_style::delete_handler)
 }
 
 #[derive(TypedPath, Deserialize)]
@@ -83,6 +87,13 @@ pub struct DoeStylePreviewPagesPath {
 #[typed_path("/api/v1/organizations/{organization_id}/doe-settings")]
 pub struct DoeSettingsPath {
     pub organization_id: mestier_core::OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style")]
+pub struct ProjectDoeStylePath {
+    pub organization_id: mestier_core::OrganizationId,
+    pub project_id: mestier_core::ProjectId,
 }
 
 pub(crate) async fn require_doe_model(

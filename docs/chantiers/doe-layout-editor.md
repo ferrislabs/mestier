@@ -94,6 +94,36 @@ Une branche `feat/doe-layout-editor`, une PR.
 - Les champs numériques du panneau de propriétés créent un pas d'historique par modification, un geste sur la page en crée un seul.
 - Ajout de `lib/shortcuts.ts` (table des raccourcis clavier, testée) et de `ui/decoration-properties.tsx` (panneau de propriétés partagé entre l'onglet « Éléments » et l'éditeur).
 
+## Ajout du 2026-11-10 : style du projet et accès depuis le DOE
+
+Constat en recette : le style réglé dans Réglages du projet est une maquette (`pages/projects/feature/mocks/project-styles.ts`, refonte du design), jamais envoyée au serveur ; l'aperçu PDF n'en tient pas compte.
+
+Réponses du 2026-11-10 : style par projet réel ; stocké à part, une ligne par projet ; bouton « Mise en page » dans l'en-tête du DOE ; l'éditeur reste dans Paramètres › Documents et dans les modèles.
+
+### Décisions
+
+9. **Table `doe_project_styles`** (`project_id` clé, `org_id`, `style JSONB`), au module DOE, portée par `DoeSettingsRepository`. Existe sans DOE ; supprimée avec le projet.
+10. **Ordre de résolution** : style du projet, sinon celui du modèle du DOE, sinon celui de l'organisation, sinon le défaut. Le style du projet remplace tout le style, comme celui d'un modèle.
+11. **Permission `planning.manage`** pour lire, écrire et retirer le style d'un projet (il ne touche qu'un projet, comme le DOE). L'aperçu du style accepte `reference.manage` ou `planning.manage`.
+12. **API** : `GET /organizations/{org}/projects/{project_id}/doe-style` → `{ style: DoeStyle | null, inherited: DoeStyle }` (`inherited` = ce qui s'applique sans style de projet) ; `PUT` même chemin, corps `{ style }` ; `DELETE` retire le style du projet.
+13. **Bouton « Mise en page »** dans l'en-tête du DOE : ouvre l'éditeur plein écran sur `style ?? inherited` ; « Valider » enregistre aussitôt le style du projet (`PUT`), sans formulaire derrière.
+14. **Réglages du projet** : la maquette est supprimée, la carte style lit et écrit l'API ; « Revenir au style de l'organisation » appelle `DELETE`.
+
+### Invariants
+
+7. Un projet sans style rend ses DOE comme avant ce chantier. [test : résolution]
+8. Le style d'un projet ne s'applique qu'aux DOE de ce projet. [test]
+9. Un projet d'une autre organisation : 404, rien écrit. [test]
+
+### Acceptance
+
+10. `PUT …/projects/{id}/doe-style` puis export du DOE du projet : le PDF prend ce style ; un DOE d'un autre projet garde celui de l'organisation.
+11. `DELETE` puis export : le DOE reprend le style du modèle, sinon celui de l'organisation.
+12. `GET` sans style de projet : `style = null`, `inherited` = style du modèle du DOE s'il en a un, sinon celui de l'organisation.
+13. 403 sans `planning.manage` ; 404 pour un projet d'une autre organisation.
+14. Migration : up puis down sur une base qui a des styles de projet.
+15. Webapp : régler le style dans Réglages du projet, recharger la page : il est toujours là, et l'aperçu PDF du DOE le montre. « Mise en page » depuis le DOE, « Valider » : l'export suit sans autre enregistrement.
+
 ## Verify (exit)
 
 ```bash

@@ -1,5 +1,5 @@
 use crate::{
-    DoeModelId, OrganizationId,
+    DoeModelId, OrganizationId, ProjectId,
     domain::doe_model::{DoeModelSection, DoeStyle, StarterModel},
 };
 
@@ -42,5 +42,20 @@ pub struct UpdateDoeSettingsCommand {
 pub struct PreviewDoeStyleCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,
+    pub style: DoeStyle,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectDoeStyleCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub project_id: ProjectId,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateProjectDoeStyleCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub project_id: ProjectId,
     pub style: DoeStyle,
 }

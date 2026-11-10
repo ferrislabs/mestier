@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM doe_project_styles WHERE org_id = $1 AND project_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ab63c574f1811737d1e9bc7aeb676cc7f67291a426b9640573f27b255b184e3"
+}

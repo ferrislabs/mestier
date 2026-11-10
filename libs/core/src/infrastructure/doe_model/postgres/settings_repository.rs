@@ -3,7 +3,7 @@ use mestier_macros::repository;
 use sqlx::types::Json;
 
 use crate::{
-    DoeSettings, DoeStyle, OrganizationId,
+    DoeSettings, DoeStyle, OrganizationId, ProjectId,
     domain::doe_model::ports::DoeSettingsRepository,
     infrastructure::{
         doe_model::postgres::model::DoeSettingsRow,
@@ -59,5 +59,69 @@ impl<'tx> DoeSettingsRepository for PgDoeSettingsRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         Ok(row.into())
+    }
+
+    async fn find_project_style(
+        &mut self,
+        organization_id: OrganizationId,
+        project_id: ProjectId,
+    ) -> Result<Option<DoeStyle>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let style = sqlx::query_scalar!(
+            r#"SELECT style AS "style: Json<DoeStyle>" FROM doe_project_styles WHERE org_id = $1 AND project_id = $2"#,
+            organization_id.0,
+            project_id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(style.map(|style| style.0))
+    }
+
+    async fn upsert_project_style(
+        &mut self,
+        organization_id: OrganizationId,
+        project_id: ProjectId,
+        style: &DoeStyle,
+    ) -> Result<DoeStyle, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let saved = sqlx::query_scalar!(
+            r#"
+            INSERT INTO doe_project_styles (project_id, org_id, style)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (project_id) DO UPDATE
+            SET style = EXCLUDED.style, updated_at = now()
+            WHERE doe_project_styles.org_id = EXCLUDED.org_id
+            RETURNING style AS "style: Json<DoeStyle>"
+            "#,
+            project_id.0,
+            organization_id.0,
+            Json(style) as Json<&DoeStyle>,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .ok_or(CoreError::NotFound)?;
+
+        Ok(saved.0)
+    }
+
+    async fn delete_project_style(
+        &mut self,
+        organization_id: OrganizationId,
+        project_id: ProjectId,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query!(
+            "DELETE FROM doe_project_styles WHERE org_id = $1 AND project_id = $2",
+            organization_id.0,
+            project_id.0,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
     }
 }

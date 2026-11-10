@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO doe_project_styles (project_id, org_id, style)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (project_id) DO UPDATE\n            SET style = EXCLUDED.style, updated_at = now()\n            WHERE doe_project_styles.org_id = EXCLUDED.org_id\n            RETURNING style AS \"style: Json<DoeStyle>\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "style: Json<DoeStyle>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2107a69cfe71d1a6afb9a1af61fe4c3bd56fb40526e35363a87385d1fc5556c2"
+}

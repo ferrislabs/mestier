@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT style AS \"style: Json<DoeStyle>\" FROM doe_project_styles WHERE org_id = $1 AND project_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "style: Json<DoeStyle>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0ee22f3cc1b7db0bfa7c3f4dd96070d4ac1049c49ae9a4f6d22eb941aa83e9d0"
+}

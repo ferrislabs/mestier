@@ -137,6 +137,13 @@ pub enum StarterModel {
     Landscaping,
 }
 
+/// A project's own style, and the one its DOE gets without it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectDoeStyle {
+    pub style: Option<DoeStyle>,
+    pub inherited: DoeStyle,
+}
+
 /// How an organization's documents look. One row per organization; an
 /// organization without one gets `DoeSettings::default_for`.
 #[derive(Debug, Clone, PartialEq, Eq)]

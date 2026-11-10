@@ -17,6 +17,7 @@ use crate::{
         doe_model::{
             DoeModel, DoeModelSection, DoeModelSectionKind,
             ports::{DoeModelRepository, DoeSettingsRepository},
+            service::inherited_style,
         },
         organization::ports::OrganizationRepository,
         product::ports::ProductRepository,
@@ -446,8 +447,8 @@ where
         })
     }
 
-    /// The DOE as it will be printed, in its model's style if the model has
-    /// one, else the organization's, else the default.
+    /// The DOE as it will be printed, in its project's style if it has one,
+    /// else its model's, else the organization's, else the default.
     pub async fn document<MR, SR>(
         &mut self,
         id: DoeId,
@@ -459,21 +460,12 @@ where
         SR: DoeSettingsRepository,
     {
         let doe = self.get_doe(id).await?;
-        let model_style = match doe.model_id {
-            Some(model_id) => models
-                .find_by_id(model_id)
-                .await?
-                .filter(|model| model.organization_id == doe.organization_id)
-                .and_then(|model| model.style),
-            None => None,
-        };
-        let style = match model_style {
+        let style = match settings
+            .find_project_style(doe.organization_id, doe.project_id)
+            .await?
+        {
             Some(style) => style,
-            None => settings
-                .find(doe.organization_id)
-                .await?
-                .map(|settings| settings.style)
-                .unwrap_or_default(),
+            None => inherited_style(models, settings, doe.organization_id, doe.model_id).await?,
         };
         Ok(DoeDocument::from_doe(&doe, &style))
     }
@@ -1057,7 +1049,23 @@ mod tests {
     }
 
     fn settings_with(style: Option<DoeStyle>) -> MockDoeSettingsRepository {
+        settings_with_project(style, None)
+    }
+
+    fn settings_with_project(
+        style: Option<DoeStyle>,
+        project: Option<(OrganizationId, ProjectId, DoeStyle)>,
+    ) -> MockDoeSettingsRepository {
         let mut settings = MockDoeSettingsRepository::new();
+        settings
+            .expect_find_project_style()
+            .returning(move |organization_id, project_id| {
+                let found = project
+                    .clone()
+                    .filter(|(org, project, _)| *org == organization_id && *project == project_id)
+                    .map(|(_, _, style)| style);
+                Box::pin(async move { Ok(found) })
+            });
         settings.expect_find().returning(move |organization_id| {
             let found = style.clone().map(|style| DoeSettings {
                 organization_id,
@@ -1142,6 +1150,50 @@ mod tests {
             document_style(doe, Some(fixture.model), Some(styled("#00aa00"))).await,
             "#00aa00"
         );
+    }
+
+    #[tokio::test]
+    async fn spec_layout_editor_10_the_project_style_replaces_the_model_and_the_organization() {
+        let mut fixture = fixture();
+        fixture.model.style = Some(styled("#aa0000"));
+        let mut doe = existing_doe(fixture.organization_id);
+        doe.model_id = Some(fixture.model.id);
+        let project = (doe.organization_id, doe.project_id, styled("#0000aa"));
+        let id = doe.id;
+
+        let document = DoeService::new(doe_repository_returning(doe))
+            .document(
+                id,
+                &mut models_with(Some(fixture.model)),
+                &mut settings_with_project(Some(styled("#00aa00")), Some(project)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(document.style.primary.as_str(), "#0000aa");
+    }
+
+    #[tokio::test]
+    async fn spec_layout_editor_10_another_project_style_is_not_applied() {
+        let fixture = fixture();
+        let doe = existing_doe(fixture.organization_id);
+        let other = (
+            doe.organization_id,
+            ProjectId(Uuid::new_v4()),
+            styled("#0000aa"),
+        );
+        let id = doe.id;
+
+        let document = DoeService::new(doe_repository_returning(doe))
+            .document(
+                id,
+                &mut models_with(None),
+                &mut settings_with_project(Some(styled("#00aa00")), Some(other)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(document.style.primary.as_str(), "#00aa00");
     }
 
     #[tokio::test]
