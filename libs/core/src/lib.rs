@@ -227,12 +227,15 @@ pub use domain::maintenance::overview::{
 };
 
 pub use domain::{
-    BackfillReport, InsertOutcome, KnowledgeArticle, KnowledgeArticleId, KnowledgeError,
+    BackfillReport, CreateKnowledgeNoteCommand, DeleteKnowledgeCommand, GetKnowledgeCommand,
+    InsertOutcome, KnowledgeArticle, KnowledgeArticleId, KnowledgeArticleWithLinks, KnowledgeError,
     KnowledgeFile, KnowledgeFilter, KnowledgeKind, KnowledgeLink, KnowledgeOutcome,
-    KnowledgeResource, KnowledgeResourceType, LibraryPhoto, LibraryPhotoId, PhotoFilter,
-    PhotoLibraryError, PhotoLibraryOutcome, PlacementReport, PlacementResult, PlacementStatus,
+    KnowledgeResource, KnowledgeResourceType, LibraryPhoto, LibraryPhotoId, LinkKnowledgeCommand,
+    ListKnowledgeCommand, PhotoFilter, PhotoLibraryError, PhotoLibraryOutcome, PlacementReport,
+    PlacementResult, PlacementStatus, UpdateKnowledgeCommand, UploadKnowledgeFileCommand,
     UploadedPhoto,
     doe::service::PHOTOS_SECTION_TITLE,
+    knowledge::service::MAX_PAGE_SIZE as KNOWLEDGE_MAX_PAGE_SIZE,
     knowledge::text::{
         MAX_EXTRACTED_CHARS, MAX_FILE_BYTES, check_file as check_knowledge_file,
         extract_text as extract_knowledge_text, normalize_note as normalize_knowledge_note,

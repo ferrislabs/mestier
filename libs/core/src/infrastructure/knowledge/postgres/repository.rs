@@ -12,10 +12,6 @@ use crate::{
 };
 
 #[repository(domain = KnowledgeArticle, backend = Postgres)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "used by the use cases of the next lot")
-)]
 pub struct PgKnowledgeArticleRepository<'tx> {
     tx: SharedTx<'tx>,
 }

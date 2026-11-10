@@ -30,6 +30,7 @@ uuid = { workspace = true }
 # the bootstrap crates the binary uses, not just this crate's own dependencies
 # — see `libs/handlers-field/Cargo.toml`'s own copy of this note.
 [dev-dependencies]
+handlers-knowledge = { workspace = true }
 args = { workspace = true }
 image = { workspace = true }
 clap = { workspace = true }

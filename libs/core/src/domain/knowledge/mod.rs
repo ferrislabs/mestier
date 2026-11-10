@@ -7,10 +7,13 @@ use uuid::Uuid;
 
 use crate::OrganizationId;
 
+pub mod commands;
 pub mod error;
 pub mod ports;
+pub mod service;
 pub mod text;
 
+pub use commands::*;
 pub use error::{KnowledgeError, KnowledgeOutcome};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
@@ -98,6 +101,12 @@ impl KnowledgeResourceType {
             KnowledgeResourceType::Customer => "customer",
             KnowledgeResourceType::Quote => "quote",
         }
+    }
+}
+
+impl Display for KnowledgeResourceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

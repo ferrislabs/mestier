@@ -7,14 +7,14 @@ use crate::{harness, issuer};
 
 const MAX_UPLOAD_BYTES: usize = 10 * 1024 * 1024;
 
-struct Intruder {
-    token: String,
-    organization_id: Uuid,
+pub(crate) struct Intruder {
+    pub(crate) token: String,
+    pub(crate) organization_id: Uuid,
     user_id: Uuid,
 }
 
 impl Intruder {
-    async fn cleanup(&self, pool: &PgPool) {
+    pub(crate) async fn cleanup(&self, pool: &PgPool) {
         for statement in [
             "DELETE FROM member_roles WHERE member_id IN (SELECT id FROM organization_members WHERE organization_id = $1)",
             "DELETE FROM roles WHERE organization_id = $1",
@@ -35,7 +35,7 @@ impl Intruder {
     }
 }
 
-async fn seed_intruder(pool: &PgPool) -> Intruder {
+pub(crate) async fn seed_intruder(pool: &PgPool) -> Intruder {
     let user_id = Uuid::now_v7();
     let sub = format!("sub-photo-intruder-{user_id}");
     sqlx::query(

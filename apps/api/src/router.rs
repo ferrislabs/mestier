@@ -16,6 +16,7 @@ use handlers_discord as discord;
 use handlers_field as field;
 use handlers_files as files;
 use handlers_invoice as invoice;
+use handlers_knowledge as knowledge;
 use handlers_member as member;
 use handlers_organization as organization;
 use handlers_planning as planning;
@@ -81,6 +82,7 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
         .merge(quote::router(&state))
         .merge(reporting::router(&state))
         .merge(planning::router(&state))
+        .merge(knowledge::router(&state))
         .merge(support::router(&state))
         .merge(reference::router(&state))
         .merge(Scalar::with_url("/scalar", openapi.clone()))

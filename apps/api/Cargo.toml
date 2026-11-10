@@ -18,6 +18,7 @@ handlers-purchase = { workspace = true }
 handlers-quote = { workspace = true }
 handlers-reporting = { workspace = true }
 handlers-planning = { workspace = true }
+handlers-knowledge = { workspace = true }
 handlers-support = { workspace = true }
 handlers-reference = { workspace = true }
 server = { workspace = true }

@@ -52,6 +52,7 @@ pub mod expense;
 pub mod extra_period;
 pub mod invitation;
 pub mod invoice;
+pub mod knowledge;
 pub mod leave_account;
 pub mod leave_adjustment;
 pub mod ledger;
@@ -117,6 +118,8 @@ pub fn default_authorizer() -> MestierAuthorizer {
         .action("webhook.manage", Permissions::MANAGE_WEBHOOKS.0)
         .action("planning.manage", Permissions::MANAGE_PLANNING.0)
         .action("support.manage", Permissions::MANAGE_SUPPORT.0)
+        .action("knowledge.view", Permissions::VIEW_KNOWLEDGE.0)
+        .action("knowledge.manage", Permissions::MANAGE_KNOWLEDGE.0)
         // #309: `planning.view`, `cost.view`, `cost.manage` and
         // `report.view` used to be registered here too, from #304, on the
         // assumption a handler would eventually call

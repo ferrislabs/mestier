@@ -6,10 +6,6 @@ use crate::{
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "used by the use cases of the next lot")
-)]
 pub trait KnowledgeArticleRepository: Send {
     fn insert(
         &mut self,

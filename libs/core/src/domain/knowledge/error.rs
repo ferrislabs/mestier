@@ -8,6 +8,8 @@ pub enum KnowledgeError {
     NoteEmpty,
     #[error("note: a note holds at most 100000 characters")]
     NoteTooLong,
+    #[error("note: only a note has a text of its own")]
+    NotANote,
     #[error("tags: a tag cannot be empty")]
     TagEmpty,
     #[error("tags: a tag holds at most 40 characters")]
