@@ -28,6 +28,7 @@ import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import { downloadAuthenticatedFile } from '#/lib/download-file'
 import { buildOrgPath } from '#/modules/org-path'
 import { invoiceKindLabel } from '#/pages/invoices/types'
+import { LinkedKnowledgeFeature } from '#/pages/knowledge/feature/linked-knowledge-feature'
 import { computeBillingPipelineSteps } from '#/pages/quotes/lib/billing-pipeline'
 import {
 	duplicateItem,
@@ -443,68 +444,76 @@ function QuoteEditWorkspace({ quote }: { quote: Quote }) {
 	}
 
 	return (
-		<QuoteEditUI
-			quote={quote}
-			info={info}
-			owners={owners}
-			defaultSigner=""
-			values={values}
-			customer={savedCustomer}
-			customers={customers.data?.data ?? []}
-			customerContexts={customerContexts.data?.data ?? []}
-			catalogItems={catalogItems}
-			photoUrls={photoUrls}
-			vatEnabled={vatEnabled}
-			customUnits={(catalog.customUnits.data?.data ?? []).map(
-				(customUnit) => customUnit.code,
-			)}
-			error={error}
-			isLoading={
-				customers.isLoading ||
-				customerContexts.isLoading ||
-				catalog.serviceRates.isLoading ||
-				catalog.products.isLoading
-			}
-			isSaving={updateQuote.isPending || updateStatus.isPending}
-			isDeleting={deleteQuote.isPending}
-			isDuplicating={createQuote.isPending}
-			isRevising={reviseQuote.isPending}
-			isUploading={uploadFile.isPending}
-			isDownloading={isDownloading}
-			billingSteps={visibleBillingSteps}
-			linkedInvoices={linkedInvoices}
-			paper={paper}
-			history={buildQuoteHistory(quote, terms)}
-			totals={savedQuoteTotals(quote)}
-			unsavedNotice={
-				isDirty ? `Aperçu non enregistré : ${formatCents(totalLines)} HT` : null
-			}
-			canSave={canSave}
-			canSend={canSend}
-			identityIncompleteForSending={identityIncompleteForSending}
-			onChange={(patch) => {
-				if (patch.customerId !== undefined) {
-					updateValues({ customerId: patch.customerId, customerContextId: '' })
-					return
+		<>
+			<QuoteEditUI
+				quote={quote}
+				info={info}
+				owners={owners}
+				defaultSigner=""
+				values={values}
+				customer={savedCustomer}
+				customers={customers.data?.data ?? []}
+				customerContexts={customerContexts.data?.data ?? []}
+				catalogItems={catalogItems}
+				photoUrls={photoUrls}
+				vatEnabled={vatEnabled}
+				customUnits={(catalog.customUnits.data?.data ?? []).map(
+					(customUnit) => customUnit.code,
+				)}
+				error={error}
+				isLoading={
+					customers.isLoading ||
+					customerContexts.isLoading ||
+					catalog.serviceRates.isLoading ||
+					catalog.products.isLoading
 				}
-				updateValues(patch)
-			}}
-			onLineChange={updateLine}
-			onAddLine={addLine}
-			onAddCatalogItem={addCatalogItem}
-			onMoveLine={moveLine}
-			onDuplicateLine={duplicateLine}
-			onRemoveLine={removeLine}
-			onUploadLinePhoto={uploadLinePhoto}
-			onSave={saveQuote}
-			onTransition={(target) => void transitionTo(target)}
-			onAccept={acceptQuote}
-			onDecline={declineQuote}
-			onRevise={reviseCurrentQuote}
-			onDelete={deleteCurrentQuote}
-			onDuplicate={duplicateCurrentQuote}
-			onDownloadPdf={downloadPdf}
-		/>
+				isSaving={updateQuote.isPending || updateStatus.isPending}
+				isDeleting={deleteQuote.isPending}
+				isDuplicating={createQuote.isPending}
+				isRevising={reviseQuote.isPending}
+				isUploading={uploadFile.isPending}
+				isDownloading={isDownloading}
+				billingSteps={visibleBillingSteps}
+				linkedInvoices={linkedInvoices}
+				paper={paper}
+				history={buildQuoteHistory(quote, terms)}
+				totals={savedQuoteTotals(quote)}
+				unsavedNotice={
+					isDirty
+						? `Aperçu non enregistré : ${formatCents(totalLines)} HT`
+						: null
+				}
+				canSave={canSave}
+				canSend={canSend}
+				identityIncompleteForSending={identityIncompleteForSending}
+				onChange={(patch) => {
+					if (patch.customerId !== undefined) {
+						updateValues({
+							customerId: patch.customerId,
+							customerContextId: '',
+						})
+						return
+					}
+					updateValues(patch)
+				}}
+				onLineChange={updateLine}
+				onAddLine={addLine}
+				onAddCatalogItem={addCatalogItem}
+				onMoveLine={moveLine}
+				onDuplicateLine={duplicateLine}
+				onRemoveLine={removeLine}
+				onUploadLinePhoto={uploadLinePhoto}
+				onSave={saveQuote}
+				onTransition={(target) => void transitionTo(target)}
+				onAccept={acceptQuote}
+				onDecline={declineQuote}
+				onRevise={reviseCurrentQuote}
+				onDelete={deleteCurrentQuote}
+				onDuplicate={duplicateCurrentQuote}
+				onDownloadPdf={downloadPdf}
+			/>
+			<LinkedKnowledgeFeature resourceType="quote" resourceId={quote.id} />
+		</>
 	)
 }
 

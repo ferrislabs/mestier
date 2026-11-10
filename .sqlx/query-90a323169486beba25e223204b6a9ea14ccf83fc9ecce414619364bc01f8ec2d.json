@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT article_id, resource_type, resource_id, created_at\n            FROM knowledge_links\n            WHERE article_id = $1 AND org_id = $2\n            ORDER BY created_at, resource_type, resource_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "article_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "resource_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "resource_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "90a323169486beba25e223204b6a9ea14ccf83fc9ecce414619364bc01f8ec2d"
+}

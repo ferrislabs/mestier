@@ -1,17 +1,18 @@
 import { useParams } from '@tanstack/react-router'
+import { Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	useCategories,
 	useChannels,
-	useDeleteChannel,
-	useNotificationLevels,
-	useReorderChannels,
-	useSetNotificationLevel,
 	useChatDirectory,
 	useChatListGatewaySync,
+	useDeleteChannel,
 	useDirectChannels,
+	useNotificationLevels,
 	useReadStateGatewaySync,
+	useReorderChannels,
+	useSetNotificationLevel,
 	useUnreadMentionCount,
 	useUnreadSummaries,
 } from '#/hooks/use-chat'
@@ -19,7 +20,6 @@ import { useHasPermission } from '#/hooks/use-permissions'
 import { usePresenceStatuses } from '#/hooks/use-presence'
 import { buildDirectMessageItems } from '#/pages/chat/lib/direct-messages'
 import { groupChannelsByCategory } from '#/pages/chat/lib/group-channels'
-import { Plus } from 'lucide-react'
 import { type DropHint, planMove } from '#/pages/chat/lib/reorder-channels'
 import {
 	addButtonClassName,

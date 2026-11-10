@@ -26,6 +26,7 @@ import { Route as AppOOrganizationSlugPlanningIndexRouteImport } from './routes/
 import { Route as AppOOrganizationSlugPlanificationIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.index'
 import { Route as AppOOrganizationSlugDiscussionsIndexRouteImport } from './routes/_app.o.$organizationSlug.discussions.index'
 import { Route as AppOOrganizationSlugCrmIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.index'
+import { Route as AppOOrganizationSlugConnaissancesIndexRouteImport } from './routes/_app.o.$organizationSlug.connaissances.index'
 import { Route as AppOOrganizationSlugAutomatisationIndexRouteImport } from './routes/_app.o.$organizationSlug.automatisation.index'
 import { Route as AppOOrganizationSlugSupportTableRouteImport } from './routes/_app.o.$organizationSlug.support.table'
 import { Route as AppOOrganizationSlugSupportIntegrationRouteImport } from './routes/_app.o.$organizationSlug.support.integration'
@@ -199,6 +200,12 @@ const AppOOrganizationSlugCrmIndexRoute =
   AppOOrganizationSlugCrmIndexRouteImport.update({
     id: '/crm/',
     path: '/crm/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugConnaissancesIndexRoute =
+  AppOOrganizationSlugConnaissancesIndexRouteImport.update({
+    id: '/connaissances/',
+    path: '/connaissances/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugAutomatisationIndexRoute =
@@ -711,6 +718,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/support/integration': typeof AppOOrganizationSlugSupportIntegrationRoute
   '/o/$organizationSlug/support/table': typeof AppOOrganizationSlugSupportTableRoute
   '/o/$organizationSlug/automatisation/': typeof AppOOrganizationSlugAutomatisationIndexRoute
+  '/o/$organizationSlug/connaissances/': typeof AppOOrganizationSlugConnaissancesIndexRoute
   '/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
   '/o/$organizationSlug/discussions/': typeof AppOOrganizationSlugDiscussionsIndexRoute
   '/o/$organizationSlug/planification/': typeof AppOOrganizationSlugPlanificationIndexRoute
@@ -804,6 +812,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/support/integration': typeof AppOOrganizationSlugSupportIntegrationRoute
   '/o/$organizationSlug/support/table': typeof AppOOrganizationSlugSupportTableRoute
   '/o/$organizationSlug/automatisation': typeof AppOOrganizationSlugAutomatisationIndexRoute
+  '/o/$organizationSlug/connaissances': typeof AppOOrganizationSlugConnaissancesIndexRoute
   '/o/$organizationSlug/crm': typeof AppOOrganizationSlugCrmIndexRoute
   '/o/$organizationSlug/discussions': typeof AppOOrganizationSlugDiscussionsIndexRoute
   '/o/$organizationSlug/planification': typeof AppOOrganizationSlugPlanificationIndexRoute
@@ -901,6 +910,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/support/integration': typeof AppOOrganizationSlugSupportIntegrationRoute
   '/_app/o/$organizationSlug/support/table': typeof AppOOrganizationSlugSupportTableRoute
   '/_app/o/$organizationSlug/automatisation/': typeof AppOOrganizationSlugAutomatisationIndexRoute
+  '/_app/o/$organizationSlug/connaissances/': typeof AppOOrganizationSlugConnaissancesIndexRoute
   '/_app/o/$organizationSlug/crm/': typeof AppOOrganizationSlugCrmIndexRoute
   '/_app/o/$organizationSlug/discussions/': typeof AppOOrganizationSlugDiscussionsIndexRoute
   '/_app/o/$organizationSlug/planification/': typeof AppOOrganizationSlugPlanificationIndexRoute
@@ -998,6 +1008,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/support/integration'
     | '/o/$organizationSlug/support/table'
     | '/o/$organizationSlug/automatisation/'
+    | '/o/$organizationSlug/connaissances/'
     | '/o/$organizationSlug/crm/'
     | '/o/$organizationSlug/discussions/'
     | '/o/$organizationSlug/planification/'
@@ -1091,6 +1102,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/support/integration'
     | '/o/$organizationSlug/support/table'
     | '/o/$organizationSlug/automatisation'
+    | '/o/$organizationSlug/connaissances'
     | '/o/$organizationSlug/crm'
     | '/o/$organizationSlug/discussions'
     | '/o/$organizationSlug/planification'
@@ -1187,6 +1199,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/support/integration'
     | '/_app/o/$organizationSlug/support/table'
     | '/_app/o/$organizationSlug/automatisation/'
+    | '/_app/o/$organizationSlug/connaissances/'
     | '/_app/o/$organizationSlug/crm/'
     | '/_app/o/$organizationSlug/discussions/'
     | '/_app/o/$organizationSlug/planification/'
@@ -1366,6 +1379,13 @@ declare module '@tanstack/react-router' {
       path: '/crm'
       fullPath: '/o/$organizationSlug/crm/'
       preLoaderRoute: typeof AppOOrganizationSlugCrmIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/connaissances/': {
+      id: '/_app/o/$organizationSlug/connaissances/'
+      path: '/connaissances'
+      fullPath: '/o/$organizationSlug/connaissances/'
+      preLoaderRoute: typeof AppOOrganizationSlugConnaissancesIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/automatisation/': {
@@ -1981,6 +2001,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugSupportIntegrationRoute: typeof AppOOrganizationSlugSupportIntegrationRoute
   AppOOrganizationSlugSupportTableRoute: typeof AppOOrganizationSlugSupportTableRoute
   AppOOrganizationSlugAutomatisationIndexRoute: typeof AppOOrganizationSlugAutomatisationIndexRoute
+  AppOOrganizationSlugConnaissancesIndexRoute: typeof AppOOrganizationSlugConnaissancesIndexRoute
   AppOOrganizationSlugCrmIndexRoute: typeof AppOOrganizationSlugCrmIndexRoute
   AppOOrganizationSlugPlanificationIndexRoute: typeof AppOOrganizationSlugPlanificationIndexRoute
   AppOOrganizationSlugPlanningIndexRoute: typeof AppOOrganizationSlugPlanningIndexRoute
@@ -2086,6 +2107,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugSupportTableRoute: AppOOrganizationSlugSupportTableRoute,
   AppOOrganizationSlugAutomatisationIndexRoute:
     AppOOrganizationSlugAutomatisationIndexRoute,
+  AppOOrganizationSlugConnaissancesIndexRoute:
+    AppOOrganizationSlugConnaissancesIndexRoute,
   AppOOrganizationSlugCrmIndexRoute: AppOOrganizationSlugCrmIndexRoute,
   AppOOrganizationSlugPlanificationIndexRoute:
     AppOOrganizationSlugPlanificationIndexRoute,

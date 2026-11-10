@@ -81,6 +81,26 @@ const DELEGATED_ROUTES: &[(Method, &str)] = &[
     ),
     (
         Method::GET,
+        "/api/v1/organizations/{organization_id}/knowledge/articles",
+    ),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}",
+    ),
+    (
+        Method::POST,
+        "/api/v1/organizations/{organization_id}/knowledge/notes",
+    ),
+    (
+        Method::PATCH,
+        "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}",
+    ),
+    (
+        Method::POST,
+        "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links",
+    ),
+    (
+        Method::GET,
         "/api/v1/organizations/{organization_id}/maintenance/recap",
     ),
     (
@@ -248,5 +268,31 @@ mod tests {
             &Method::PUT,
             &format!("{PHOTOS}/{{photo_id}}")
         ));
+    }
+
+    #[test]
+    fn the_assistant_reads_writes_notes_and_links_but_never_uploads_deletes_or_unlinks_knowledge() {
+        const KNOWLEDGE: &str = "/api/v1/organizations/{organization_id}/knowledge";
+        let article = format!("{KNOWLEDGE}/articles/{{article_id}}");
+        for (method, path) in [
+            (Method::GET, format!("{KNOWLEDGE}/articles")),
+            (Method::GET, article.clone()),
+            (Method::POST, format!("{KNOWLEDGE}/notes")),
+            (Method::PATCH, article.clone()),
+            (Method::POST, format!("{article}/links")),
+        ] {
+            assert!(delegated_route_allowed(&method, &path), "{method} {path}");
+        }
+        for (method, path) in [
+            (Method::POST, format!("{KNOWLEDGE}/articles")),
+            (Method::DELETE, article.clone()),
+            (
+                Method::DELETE,
+                format!("{article}/links/project/{{resource_id}}"),
+            ),
+            (Method::GET, format!("{article}/download")),
+        ] {
+            assert!(!delegated_route_allowed(&method, &path), "{method} {path}");
+        }
     }
 }

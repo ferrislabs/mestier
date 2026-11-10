@@ -11,6 +11,7 @@ export type PermissionArea =
 	| 'reference'
 	| 'chat'
 	| 'support'
+	| 'knowledge'
 	| 'administration'
 
 export const PERMISSION_AREA_LABELS: Record<PermissionArea, string> = {
@@ -20,6 +21,7 @@ export const PERMISSION_AREA_LABELS: Record<PermissionArea, string> = {
 	reference: 'Référence',
 	chat: 'Discussion',
 	support: 'Support',
+	knowledge: 'Connaissances',
 	administration: 'Administration',
 }
 
@@ -176,6 +178,22 @@ export const PERMISSION_CATALOG: PermissionDescriptor[] = [
 		description:
 			'Répondre au client, écrire des notes et des brouillons, assigner un ticket et changer son statut.',
 		note: 'Sans « Voir les tickets de support », ce droit n’ouvre aucun écran.',
+	},
+
+	{
+		name: 'VIEW_KNOWLEDGE',
+		area: 'knowledge',
+		label: 'Voir la base de connaissances',
+		description:
+			'Consulter les documents et les notes de l’entreprise, et les retrouver par l’assistant.',
+	},
+	{
+		name: 'MANAGE_KNOWLEDGE',
+		area: 'knowledge',
+		label: 'Gérer la base de connaissances',
+		description:
+			'Déposer des documents, écrire et modifier des notes, les étiqueter, les rattacher à un projet, un client ou un devis, ou les supprimer.',
+		note: 'Sans « Voir la base de connaissances », ce droit n’ouvre aucun écran.',
 	},
 
 	// Administration

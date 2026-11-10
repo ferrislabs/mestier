@@ -148,6 +148,7 @@ pub use domain::{
     extra_period::ports::MockExtraPeriodRepository,
     invitation::ports::MockInvitationRepository,
     invoice::ports::{MockDocumentFormat, MockInvoiceRepository},
+    knowledge::ports::MockKnowledgeArticleRepository,
     leave_account::ports::MockLeaveAccountRepository,
     leave_adjustment::ports::MockLeaveAdjustmentRepository,
     ledger::ports::{MockLedgerRepository, MockReceiptRepository},
@@ -226,9 +227,20 @@ pub use domain::maintenance::overview::{
 };
 
 pub use domain::{
-    BackfillReport, InsertOutcome, LibraryPhoto, LibraryPhotoId, PhotoFilter, PhotoLibraryError,
-    PhotoLibraryOutcome, PlacementReport, PlacementResult, PlacementStatus, UploadedPhoto,
+    BackfillReport, CreateKnowledgeNoteCommand, DeleteKnowledgeCommand, GetKnowledgeCommand,
+    InsertOutcome, KnowledgeArticle, KnowledgeArticleId, KnowledgeArticleWithLinks, KnowledgeError,
+    KnowledgeFile, KnowledgeFilter, KnowledgeKind, KnowledgeLink, KnowledgeOutcome,
+    KnowledgeResource, KnowledgeResourceType, LibraryPhoto, LibraryPhotoId, LinkKnowledgeCommand,
+    ListKnowledgeCommand, PhotoFilter, PhotoLibraryError, PhotoLibraryOutcome, PlacementReport,
+    PlacementResult, PlacementStatus, UpdateKnowledgeCommand, UploadKnowledgeFileCommand,
+    UploadedPhoto,
     doe::service::PHOTOS_SECTION_TITLE,
+    knowledge::service::MAX_PAGE_SIZE as KNOWLEDGE_MAX_PAGE_SIZE,
+    knowledge::text::{
+        MAX_EXTRACTED_CHARS, MAX_FILE_BYTES, check_file as check_knowledge_file,
+        extract_text as extract_knowledge_text, normalize_note as normalize_knowledge_note,
+        normalize_tags as normalize_knowledge_tags, normalize_title as normalize_knowledge_title,
+    },
     photo_library::commands::{
         DeleteLibraryPhotoCommand, GetLibraryPhotoCommand, ListLibraryPhotosCommand,
         MAX_PLACEMENTS, PlaceLibraryPhotosCommand, PlacementRequest, PlacementTargetKind,

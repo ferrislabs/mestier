@@ -17,6 +17,7 @@
 mod doe;
 mod harness;
 mod issuer;
+mod knowledge;
 mod maintenance_contract;
 mod maintenance_draft;
 mod maintenance_intervention;

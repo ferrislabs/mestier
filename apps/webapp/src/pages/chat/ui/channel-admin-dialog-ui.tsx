@@ -1,6 +1,6 @@
 import { Globe, Loader2, Lock, Trash2, X } from 'lucide-react'
-import { RequirePermission } from '#/components/require-permission'
 import { DoubleClickConfirmButton } from '#/components/double-click-confirm-button'
+import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import {
 	Dialog,
@@ -12,17 +12,17 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import { Textarea } from '#/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
+import { Textarea } from '#/components/ui/textarea'
 import type { Channel, Webhook } from '#/hooks/use-chat'
-import { ChannelPermissionsSectionUI } from '#/pages/chat/ui/channel-permissions-section-ui'
-import { ChannelWebhooksSectionUI } from '#/pages/chat/ui/channel-webhooks-section-ui'
 import { NEW_ITEM_KINDS } from '#/pages/chat/lib/channel-kinds'
 import type {
 	OverwriteBitName,
 	TriState,
 } from '#/pages/chat/lib/permission-bits'
 import type { PermissionTarget } from '#/pages/chat/lib/permission-targets'
+import { ChannelPermissionsSectionUI } from '#/pages/chat/ui/channel-permissions-section-ui'
+import { ChannelWebhooksSectionUI } from '#/pages/chat/ui/channel-webhooks-section-ui'
 
 export interface ChannelAdminDialogUIProps {
 	open: boolean

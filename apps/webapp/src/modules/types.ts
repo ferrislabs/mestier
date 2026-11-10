@@ -13,6 +13,7 @@ export type ModuleId =
 	| 'chat'
 	| 'automatisation'
 	| 'support'
+	| 'knowledge'
 	| 'settings'
 
 /**

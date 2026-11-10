@@ -63,7 +63,9 @@ pub async fn start() -> App {
         .await
         .expect("build AppState for the test");
 
-    let router = handlers_planning::router(&state).with_state(state);
+    let router = handlers_planning::router(&state)
+        .merge(handlers_knowledge::router(&state))
+        .with_state(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind the test api");

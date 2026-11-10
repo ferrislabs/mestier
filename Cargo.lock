@@ -125,6 +125,7 @@ dependencies = [
  "handlers-field",
  "handlers-files",
  "handlers-invoice",
+ "handlers-knowledge",
  "handlers-member",
  "handlers-organization",
  "handlers-planning",
@@ -3145,6 +3146,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "handlers-knowledge"
+version = "0.1.0"
+dependencies = [
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "common",
+ "handlers",
+ "http 1.4.0",
+ "mestier-core",
+ "pagination",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "handlers-member"
 version = "0.1.0"
 dependencies = [
@@ -3203,6 +3227,7 @@ dependencies = [
  "discord",
  "doc-render",
  "handlers",
+ "handlers-knowledge",
  "http 1.4.0",
  "image",
  "jsonwebtoken",

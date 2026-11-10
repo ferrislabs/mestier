@@ -9,6 +9,7 @@ use handlers_discord as discord;
 use handlers_field as field;
 use handlers_files as files;
 use handlers_invoice as invoice;
+use handlers_knowledge as knowledge;
 use handlers_member as member;
 use handlers_organization as organization;
 use handlers_planning as planning;
@@ -413,6 +414,15 @@ impl Modify for SecurityAddon {
         discord::notification::level::list_handler,
         discord::notification::mark_read::handler,
         discord::notification::mark_all_read::handler,
+        knowledge::upload::handler,
+        knowledge::create_note::handler,
+        knowledge::list::handler,
+        knowledge::get_one::handler,
+        knowledge::update::handler,
+        knowledge::delete::handler,
+        knowledge::download::handler,
+        knowledge::link::add,
+        knowledge::link::remove,
         support::ticket::list::handler,
         support::ticket::get_one::handler,
         support::ticket::transition::handler,
@@ -439,6 +449,12 @@ impl Modify for SecurityAddon {
         support::intake::attachment_url::handler,
     ),
     components(schemas(
+        knowledge::response::KnowledgeArticleResponse,
+        knowledge::response::KnowledgeFileResponse,
+        knowledge::response::KnowledgeLinkResponse,
+        knowledge::create_note::CreateKnowledgeNoteRequest,
+        knowledge::update::UpdateKnowledgeArticleRequest,
+        knowledge::link::LinkKnowledgeRequest,
         support::response::TicketResponse,
         support::response::BadgeResponse,
         support::ticket::transition::TransitionTicketRequest,
@@ -892,6 +908,7 @@ impl Modify for SecurityAddon {
         (name = "members", description = "Organization seats — free or occupied, no account required"),
         (name = "reference", description = "Reference cost catalog"),
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),
+        (name = "knowledge", description = "Knowledge base: files and notes searched by text and tags, linked to projects, customers and quotes"),
         (name = "support", description = "Support tickets — kanban, thread, intake by organization API key"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )

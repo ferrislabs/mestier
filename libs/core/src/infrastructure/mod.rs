@@ -21,6 +21,7 @@ pub mod extra_period;
 pub mod file_storage;
 pub mod invitation;
 pub mod invoice;
+pub mod knowledge;
 pub mod leave_account;
 pub mod leave_adjustment;
 pub mod ledger;

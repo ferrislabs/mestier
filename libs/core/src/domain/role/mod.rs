@@ -73,6 +73,9 @@ impl Permissions {
     pub const VIEW_SUPPORT: Self = Permissions(1 << 21);
     pub const MANAGE_SUPPORT: Self = Permissions(1 << 22);
 
+    pub const VIEW_KNOWLEDGE: Self = Permissions(1 << 23); // 8388608
+    pub const MANAGE_KNOWLEDGE: Self = Permissions(1 << 24); // 16777216
+
     pub const ALL: Self = Permissions(i64::MAX);
 
     pub const fn contains(self, other: Permissions) -> bool {
@@ -115,6 +118,8 @@ impl Permissions {
         ("MANAGE_AUTOMATION", Permissions::MANAGE_AUTOMATION),
         ("VIEW_SUPPORT", Permissions::VIEW_SUPPORT),
         ("MANAGE_SUPPORT", Permissions::MANAGE_SUPPORT),
+        ("VIEW_KNOWLEDGE", Permissions::VIEW_KNOWLEDGE),
+        ("MANAGE_KNOWLEDGE", Permissions::MANAGE_KNOWLEDGE),
     ];
 
     /// The names of every bit `self` carries — #307's "the caller's
@@ -226,6 +231,8 @@ pub fn default_admin_business_permissions() -> Permissions {
         | Permissions::MANAGE_AUTOMATION
         | Permissions::VIEW_SUPPORT
         | Permissions::MANAGE_SUPPORT
+        | Permissions::VIEW_KNOWLEDGE
+        | Permissions::MANAGE_KNOWLEDGE
 }
 
 /// #304: the business bits a fresh organization's default `member` role

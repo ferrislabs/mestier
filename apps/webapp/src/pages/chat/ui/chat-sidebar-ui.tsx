@@ -1,15 +1,15 @@
 import { Link } from '@tanstack/react-router'
-import type { DragEvent, ReactNode } from 'react'
 import {
 	AlertCircle,
+	Bell,
 	ChevronRight,
 	Copy,
-	Bell,
 	Fingerprint,
 	Plus,
 	Settings,
 	Trash2,
 } from 'lucide-react'
+import type { DragEvent, ReactNode } from 'react'
 import { DoubleClickConfirmButton } from '#/components/double-click-confirm-button'
 import { RequirePermission } from '#/components/require-permission'
 import {
@@ -34,12 +34,12 @@ import type { NotificationLevel } from '#/hooks/use-chat'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import { channelKindIcon } from '#/pages/chat/lib/channel-kinds'
+import type { DirectMessageItem } from '#/pages/chat/lib/direct-messages'
+import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
 import {
 	effectiveNotificationLevel,
 	NOTIFICATION_LEVELS,
 } from '#/pages/chat/lib/notification-levels'
-import type { DirectMessageItem } from '#/pages/chat/lib/direct-messages'
-import type { ChannelGroup } from '#/pages/chat/lib/group-channels'
 import type { DropHint } from '#/pages/chat/lib/reorder-channels'
 import { PersonAvatar } from '#/pages/chat/ui/person-avatar'
 

@@ -79,3 +79,14 @@ resourcePolicy:
               - expr: R.attr.access == "write"
               - expr: R.attr.domain in ["reference", "purchase"]
               - expr: '"mestier.reference.write" in P.attr.scopes'
+    - actions: ["*"]
+      effect: EFFECT_ALLOW
+      roles: ["user"]
+      name: knowledge_write_with_knowledge_write_scope
+      condition:
+        match:
+          all:
+            of:
+              - expr: R.attr.access == "write"
+              - expr: R.attr.domain == "knowledge"
+              - expr: '"mestier.knowledge.write" in P.attr.scopes'
