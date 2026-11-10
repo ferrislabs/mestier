@@ -1,6 +1,6 @@
 # Base de connaissances
 
-État : **brouillon du 2026-11-09, en attente de validation. Rien n'est implémenté.**
+État : **spec validée le 2026-11-09, K0 à K4 implémentés sur `feat/knowledge-base`. Pas encore recetté dans un navigateur ni avec un client MCP réel.**
 
 ## Goal
 
@@ -11,7 +11,7 @@ Une entreprise dépose dans la webapp ses documents (devis, tarifs fournisseurs,
 1. **Contenu : fichiers et notes texte.** Pas de fiches typées (fournisseur, produit, prix) dans ce chantier.
 2. **Recherche : plein texte Postgres et étiquettes.** Pas d'embeddings. Le texte des PDF est extrait au dépôt.
 3. **Rattachement : projets, clients, devis.** Un article peut être lié à plusieurs ressources, une ressource à plusieurs articles. Pas de DOE dans ce lot.
-4. **Droits : une permission dédiée `MANAGE_KNOWLEDGE`**, isolation par `org_id`.
+4. **Droits : deux permissions dédiées `VIEW_KNOWLEDGE` et `MANAGE_KNOWLEDGE`** (même découpage lecture et écriture que les autres domaines), accordées aux rôles admin par migration, pas au rôle member. Isolation par `org_id`.
 
 ## Hypothèses à confirmer
 
@@ -56,8 +56,19 @@ Nouvelle page « Base de connaissances » : liste, recherche, filtres par étiqu
 - **K3** : outils MCP et scopes.
 - **K4** : blocs « Documents liés » sur projet, client, devis.
 
-## Questions ouvertes
+## Ce qui a été tranché en route
 
-1. Les devis : le devis Mestier est-il déjà un objet en base (rattachement direct) ou faut-il aussi stocker les anciens devis PDF de l'entreprise comme fichiers libres ?
-2. Faut-il un partage entre organisations ou un article global (CGV Ferrislabs) ? Hypothèse : non.
-3. Un seul crate de handlers ou un module de `handlers-planning` ?
+- Un crate `handlers-knowledge` à part, et non un module de `handlers-planning`.
+- Le devis rattaché est un devis Mestier existant ; les anciens devis PDF sont des fichiers libres.
+- Pas de partage entre organisations.
+- Le dépôt d'un fichier est le corps brut de la requête, le titre et les étiquettes sont en paramètres. Le texte est lu hors de l'exécuteur async, avec un délai de 30 s. Un fichier dont le texte est illisible est gardé, pas refusé.
+- La clé de stockage ne sort jamais de l'API : on lit un fichier par la route `download`.
+- Les routes ouvertes au MCP : lister, lire, créer une note, modifier, rattacher. Pas de dépôt, de suppression ni de détachement (règle existante : aucune route déléguée ne supprime).
+- Scope FerrisKey `mestier.knowledge.write` (les lectures passent par `mestier.read`) et règle Cerbos associée dans `deploy/cerbos/policies/mcp_tool.yaml`.
+
+## Reste à faire
+
+- Déclarer le scope `mestier.knowledge.write` dans FerrisKey et déployer la politique Cerbos.
+- Recette dans un navigateur : dépôt par glisser-déposer, note, rattachement depuis la fiche projet, client et devis, droits en lecture seule.
+- Recette avec un client MCP réel.
+- Lire le texte des fichiers Word et Excel (acceptés au dépôt, pas lus), et l'OCR des PDF scannés.
