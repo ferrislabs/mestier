@@ -33,6 +33,7 @@ import { buildOrgPath } from '#/modules/org-path'
 import { daysBetweenIso } from '#/pages/invoices/lib/iso-date'
 import { todayDate } from '#/pages/invoices/lib/payment-form'
 import { eurosToCents } from '#/pages/invoices/types'
+import { LinkedKnowledgeFeature } from '#/pages/knowledge/feature/linked-knowledge-feature'
 import { computeWindow } from '#/pages/planning/lib/window'
 import { todayIsoDate } from '#/pages/planning/types'
 import { buildTemplateTaskShapeRequest } from '#/pages/project-templates/lib/template-task-form'
@@ -461,6 +462,8 @@ function ProjectDetailWorkspace({
 					void setMissionStatus(mission.id, next)
 				}}
 			/>
+
+			<LinkedKnowledgeFeature resourceType="project" resourceId={project.id} />
 
 			<ProjectEditDialog
 				open={editDraft !== null}

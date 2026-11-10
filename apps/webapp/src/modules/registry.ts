@@ -1,5 +1,6 @@
 import {
 	AlarmClockPlus,
+	Bell,
 	Boxes,
 	CalendarCheck,
 	CalendarDays,
@@ -23,7 +24,6 @@ import {
 	Library,
 	LibraryBig,
 	LifeBuoy,
-	Bell,
 	MessagesSquare,
 	Package,
 	PlugZap,

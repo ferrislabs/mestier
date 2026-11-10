@@ -11,14 +11,9 @@ import {
 	useDeleteWebhook,
 	useUpdateChannel,
 	useUpdateWebhook,
-	useUpsertTargetOverwrite,
 	useUpsertEveryoneOverwrite,
+	useUpsertTargetOverwrite,
 } from '#/hooks/use-chat'
-import {
-	buildPermissionTargets,
-	EVERYONE_KEY,
-	type PermissionTargetType,
-} from '#/pages/chat/lib/permission-targets'
 import {
 	OVERWRITE_BITS,
 	type OverwriteBitName,
@@ -26,6 +21,11 @@ import {
 	type TriState,
 	withBitState,
 } from '#/pages/chat/lib/permission-bits'
+import {
+	buildPermissionTargets,
+	EVERYONE_KEY,
+	type PermissionTargetType,
+} from '#/pages/chat/lib/permission-targets'
 import { ChannelAdminDialogUI } from '#/pages/chat/ui/channel-admin-dialog-ui'
 
 export interface ChannelAdminFeatureProps {

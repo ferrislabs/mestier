@@ -73,6 +73,7 @@ import { OpportunitiesCard } from '#/pages/customers/ui/opportunities-card'
 import { useDealsByCustomer } from '#/pages/deals/feature/use-deals'
 import { isOpenStage } from '#/pages/deals/lib/pipeline'
 import { DealCreateDialog } from '#/pages/deals/ui/deal-create-dialog'
+import { LinkedKnowledgeFeature } from '#/pages/knowledge/feature/linked-knowledge-feature'
 
 interface CustomerEditFeatureProps {
 	customerId: string
@@ -247,171 +248,179 @@ export function CustomerEditFeature({
 	}
 
 	return (
-		<CustomerEditUI
-			sidebar={
-				<CustomerSidebar
-					organizationSlug={organizationSlug}
-					customerId={customer.id}
-					name={customer.name}
-					hue={hueOf(customer.id)}
-					status={status}
-					kindLabel={ACCOUNT_KIND_LABELS[kind]}
-					tab={tab}
-					summaries={summaries}
-				/>
-			}
-		>
-			{tab === 'identite' && (
-				<IdentitySection
-					customer={customer}
-					details={details}
-					owner={findPerson(people, details.ownerId)}
-					people={people}
-					defaultTerms={defaultTerms}
-					initialForm={accountFormOf(customer, stripeCustomerId)}
-					isSaving={updateCustomer.isPending || saveStripeCustomerId.isPending}
-					saveError={mutationErrorMessage(updateCustomer.error)}
-					onSave={save}
-					onConvert={() => void convert().catch(ignore)}
-					onArchive={() => void archive().catch(ignore)}
-					onRestore={() => void restore().catch(ignore)}
-					openDeals={openDeals}
-				/>
-			)}
-			{tab === 'contacts' && (
-				<ContactsSection
-					contacts={contactList}
-					billingContactId={
-						billingContactOf(contactList, customer.billing_contact_id)?.id
-					}
-					isLoading={contacts.isLoading}
-					loadError={mutationErrorMessage(contacts.error)}
-					onRetry={() => void contacts.refetch()}
-					actions={{
-						isSaving: createContact.isPending || updateContact.isPending,
-						isDeleting: (contactId) =>
-							deleteContact.isPending &&
-							deleteContact.variables?.path.customer_contact_id === contactId,
-						error: contactError,
-						onSave: (contact, form) => saveContact(contact, form),
-						onMakePrimary: (contact) =>
-							updateContact.mutate({
-								path: { customer_contact_id: contact.id },
-								body: {
-									first_name: contact.first_name,
-									last_name: contact.last_name,
-									role: contact.role ?? null,
-									email: contact.email ?? null,
-									phone: contact.phone ?? null,
-									mobile: contact.mobile ?? null,
-									is_primary: true,
-								},
-							}),
-						onMakeBilling: (contact) =>
-							designateBilling({ billing_contact_id: contact.id }),
-						onDelete: (contact) =>
-							deleteContact.mutate({
-								path: { customer_contact_id: contact.id },
-							}),
-					}}
-				/>
-			)}
-			{tab === 'adresses' && (
-				<AddressesSection
-					contexts={contextList}
-					billingContextId={
-						billingContextOf(contextList, customer.billing_address_id)?.id
-					}
-					isLoading={contexts.isLoading}
-					loadError={mutationErrorMessage(contexts.error)}
-					onRetry={() => void contexts.refetch()}
-					actions={{
-						isSaving: createContext.isPending || updateContext.isPending,
-						isUploadingPhoto: uploadFile.isPending,
-						isDeleting: (contextId) =>
-							deleteContext.isPending &&
-							deleteContext.variables?.path.customer_context_id === contextId,
-						error: contextError,
-						onUploadPhoto: async (file) => {
-							const uploaded = await uploadFile.mutateAsync(file)
-							return uploaded.data.key
-						},
-						onSave: async (context, draft) => {
-							const body = {
-								label: draft.label.trim(),
-								kind: apiAddressKindOf(draft.kind),
-								address_line: draft.address.street.trim() || null,
-								address_line2: draft.address.complement.trim() || null,
-								postal_code: draft.address.postalCode.trim() || null,
-								city: draft.address.city.trim() || null,
-								country: countryCodeOf(draft.address.country),
-								photo_key: draft.photoKey.trim() || null,
-							}
-							if (context)
-								await updateContext.mutateAsync({
+		<>
+			<CustomerEditUI
+				sidebar={
+					<CustomerSidebar
+						organizationSlug={organizationSlug}
+						customerId={customer.id}
+						name={customer.name}
+						hue={hueOf(customer.id)}
+						status={status}
+						kindLabel={ACCOUNT_KIND_LABELS[kind]}
+						tab={tab}
+						summaries={summaries}
+					/>
+				}
+			>
+				{tab === 'identite' && (
+					<IdentitySection
+						customer={customer}
+						details={details}
+						owner={findPerson(people, details.ownerId)}
+						people={people}
+						defaultTerms={defaultTerms}
+						initialForm={accountFormOf(customer, stripeCustomerId)}
+						isSaving={
+							updateCustomer.isPending || saveStripeCustomerId.isPending
+						}
+						saveError={mutationErrorMessage(updateCustomer.error)}
+						onSave={save}
+						onConvert={() => void convert().catch(ignore)}
+						onArchive={() => void archive().catch(ignore)}
+						onRestore={() => void restore().catch(ignore)}
+						openDeals={openDeals}
+					/>
+				)}
+				{tab === 'contacts' && (
+					<ContactsSection
+						contacts={contactList}
+						billingContactId={
+							billingContactOf(contactList, customer.billing_contact_id)?.id
+						}
+						isLoading={contacts.isLoading}
+						loadError={mutationErrorMessage(contacts.error)}
+						onRetry={() => void contacts.refetch()}
+						actions={{
+							isSaving: createContact.isPending || updateContact.isPending,
+							isDeleting: (contactId) =>
+								deleteContact.isPending &&
+								deleteContact.variables?.path.customer_contact_id === contactId,
+							error: contactError,
+							onSave: (contact, form) => saveContact(contact, form),
+							onMakePrimary: (contact) =>
+								updateContact.mutate({
+									path: { customer_contact_id: contact.id },
+									body: {
+										first_name: contact.first_name,
+										last_name: contact.last_name,
+										role: contact.role ?? null,
+										email: contact.email ?? null,
+										phone: contact.phone ?? null,
+										mobile: contact.mobile ?? null,
+										is_primary: true,
+									},
+								}),
+							onMakeBilling: (contact) =>
+								designateBilling({ billing_contact_id: contact.id }),
+							onDelete: (contact) =>
+								deleteContact.mutate({
+									path: { customer_contact_id: contact.id },
+								}),
+						}}
+					/>
+				)}
+				{tab === 'adresses' && (
+					<AddressesSection
+						contexts={contextList}
+						billingContextId={
+							billingContextOf(contextList, customer.billing_address_id)?.id
+						}
+						isLoading={contexts.isLoading}
+						loadError={mutationErrorMessage(contexts.error)}
+						onRetry={() => void contexts.refetch()}
+						actions={{
+							isSaving: createContext.isPending || updateContext.isPending,
+							isUploadingPhoto: uploadFile.isPending,
+							isDeleting: (contextId) =>
+								deleteContext.isPending &&
+								deleteContext.variables?.path.customer_context_id === contextId,
+							error: contextError,
+							onUploadPhoto: async (file) => {
+								const uploaded = await uploadFile.mutateAsync(file)
+								return uploaded.data.key
+							},
+							onSave: async (context, draft) => {
+								const body = {
+									label: draft.label.trim(),
+									kind: apiAddressKindOf(draft.kind),
+									address_line: draft.address.street.trim() || null,
+									address_line2: draft.address.complement.trim() || null,
+									postal_code: draft.address.postalCode.trim() || null,
+									city: draft.address.city.trim() || null,
+									country: countryCodeOf(draft.address.country),
+									photo_key: draft.photoKey.trim() || null,
+								}
+								if (context)
+									await updateContext.mutateAsync({
+										path: { customer_context_id: context.id },
+										body,
+									})
+								else
+									await createContext.mutateAsync({
+										path: { customer_id: customer.id },
+										body,
+									})
+							},
+							onMakeBilling: (context) =>
+								designateBilling({ billing_address_id: context.id }),
+							onDelete: (context) =>
+								deleteContext.mutate({
 									path: { customer_context_id: context.id },
-									body,
-								})
-							else
-								await createContext.mutateAsync({
-									path: { customer_id: customer.id },
-									body,
-								})
-						},
-						onMakeBilling: (context) =>
-							designateBilling({ billing_address_id: context.id }),
-						onDelete: (context) =>
-							deleteContext.mutate({
-								path: { customer_context_id: context.id },
-							}),
-					}}
-				/>
-			)}
-			{tab === 'activite' && (
-				<ActivitySection
-					organizationSlug={organizationSlug}
-					revenue12m={stats.revenue12m}
-					outstanding={outstandingCents}
-					overdue={stats.overdue}
-					openDeals={openDeals}
-					opportunities={
-						<OpportunitiesCard
-							organizationSlug={organizationSlug}
-							rows={customerDeals.deals.map((deal) => ({
-								id: deal.id,
-								title: deal.title,
-								stage: deal.stage,
-								amount: deal.amount,
-								date: deal.createdAt,
-							}))}
-							action={
-								status === 'archived' ? undefined : (
-									<DealCreateDialog
-										open={creatingDeal}
-										onOpenChange={setCreatingDeal}
-										customers={[customer]}
-										people={people}
-										defaultOwnerId={currentPersonId ?? ''}
-										organizationSlug={organizationSlug}
-										onCreate={customerDeals.create}
-										trigger={
-											<Button variant="outline" size="sm">
-												<Plus aria-hidden /> Nouvelle opportunité
-											</Button>
-										}
-									/>
-								)
-							}
-						/>
-					}
-					quotes={quoteRows}
-					invoices={invoiceRows}
-					creditNotes={creditNoteRows}
-					payments={paymentRows}
-					isLoading={quotes.isLoading || invoices.isLoading}
-					isLoadingPayments={payments.isLoading}
-				/>
-			)}
-		</CustomerEditUI>
+								}),
+						}}
+					/>
+				)}
+				{tab === 'activite' && (
+					<ActivitySection
+						organizationSlug={organizationSlug}
+						revenue12m={stats.revenue12m}
+						outstanding={outstandingCents}
+						overdue={stats.overdue}
+						openDeals={openDeals}
+						opportunities={
+							<OpportunitiesCard
+								organizationSlug={organizationSlug}
+								rows={customerDeals.deals.map((deal) => ({
+									id: deal.id,
+									title: deal.title,
+									stage: deal.stage,
+									amount: deal.amount,
+									date: deal.createdAt,
+								}))}
+								action={
+									status === 'archived' ? undefined : (
+										<DealCreateDialog
+											open={creatingDeal}
+											onOpenChange={setCreatingDeal}
+											customers={[customer]}
+											people={people}
+											defaultOwnerId={currentPersonId ?? ''}
+											organizationSlug={organizationSlug}
+											onCreate={customerDeals.create}
+											trigger={
+												<Button variant="outline" size="sm">
+													<Plus aria-hidden /> Nouvelle opportunité
+												</Button>
+											}
+										/>
+									)
+								}
+							/>
+						}
+						quotes={quoteRows}
+						invoices={invoiceRows}
+						creditNotes={creditNoteRows}
+						payments={paymentRows}
+						isLoading={quotes.isLoading || invoices.isLoading}
+						isLoadingPayments={payments.isLoading}
+					/>
+				)}
+			</CustomerEditUI>
+			<LinkedKnowledgeFeature
+				resourceType="customer"
+				resourceId={customer.id}
+			/>
+		</>
 	)
 }

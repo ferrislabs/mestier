@@ -7,8 +7,8 @@ import {
 	useCreateChannel,
 } from '#/hooks/use-chat'
 import type { NewItemKind } from '#/pages/chat/lib/channel-kinds'
-import type { NewChannelPreset } from './chat-dialogs-store'
 import { NewChannelDialogUI } from '#/pages/chat/ui/new-channel-dialog-ui'
+import type { NewChannelPreset } from './chat-dialogs-store'
 
 export interface NewChannelFeatureProps {
 	organizationId: string
