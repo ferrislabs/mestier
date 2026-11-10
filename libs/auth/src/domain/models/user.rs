@@ -9,4 +9,9 @@ pub struct User {
     pub roles: Vec<String>,
     #[serde(default)]
     pub delegated: bool,
+    /// The FerrisKey realm roles of the token. Kept apart from `roles`, which
+    /// feeds the policy subject: there, `mestier:admin` would pass every check
+    /// of every organization. Read only by checks that name the role.
+    #[serde(default)]
+    pub realm_roles: Vec<String>,
 }

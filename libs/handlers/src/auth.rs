@@ -145,6 +145,7 @@ mod tests {
             name: name.map(str::to_string),
             roles: vec![],
             delegated: false,
+            realm_roles: vec![],
         }
     }
 

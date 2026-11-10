@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO news_views (news_id, user_id, seen_at)\n            SELECT id, $2, $3 FROM news\n            WHERE id = ANY($1) AND published_at IS NOT NULL AND published_at <= $3\n            ON CONFLICT (news_id, user_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c57798729b5609b7accb1d617d05332307338e3cb9593cbcd68f7cddd60160be"
+}

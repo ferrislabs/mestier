@@ -157,6 +157,7 @@ pub use domain::{
     member_contract::ports::MockMemberContractRepository,
     member_document::ports::MockMemberDocumentRepository,
     member_profile::ports::MockMemberProfileRepository,
+    news::ports::MockNewsRepository,
     organization::ports::MockOrganizationRepository,
     photo_library::ports::MockLibraryPhotoRepository,
     planning::ports::MockPlanningRepository,
@@ -224,6 +225,12 @@ pub use domain::{
 pub use domain::maintenance::overview::{
     ContractSite, Grid, GridContract, GridLine, GridVisit, Recap, RecapGroup, RecapLine,
     SiteContact,
+};
+
+pub use domain::{
+    CreateNewsCommand, MAX_NEWS_ITEMS, MAX_SEEN_IDS, News, NewsContent, NewsContentInput, NewsCta,
+    NewsCtaInput, NewsEditor, NewsError, NewsIcon, NewsId, NewsItem, NewsItemInput, NewsOutcome,
+    UpdateNewsCommand, check_seen_ids,
 };
 
 pub use domain::{

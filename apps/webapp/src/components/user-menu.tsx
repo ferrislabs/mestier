@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { LogOut, Settings } from 'lucide-react'
+import { LogOut, Megaphone, Settings, SquarePen } from 'lucide-react'
 import { useAuth } from 'react-oidc-context'
 
 import {
@@ -11,8 +11,10 @@ import {
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
+import { useNewsAccess } from '#/hooks/use-news'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
+import { openAllNews } from '#/store/news.store'
 
 interface UserMenuProps {
 	className?: string
@@ -28,6 +30,7 @@ export function UserMenu({
 	showIdentity = false,
 }: UserMenuProps) {
 	const auth = useAuth()
+	const canManageNews = useNewsAccess().data?.data.can_manage === true
 	const { activeOrganization } = useActiveOrganization()
 	const profile = auth.user?.profile
 	const displayName =
@@ -80,6 +83,18 @@ export function UserMenu({
 						Paramètres
 					</Link>
 				</DropdownMenuItem>
+				<DropdownMenuItem onClick={openAllNews}>
+					<Megaphone />
+					Nouveautés
+				</DropdownMenuItem>
+				{canManageNews ? (
+					<DropdownMenuItem asChild>
+						<Link to="/admin/news">
+							<SquarePen />
+							Back-office news
+						</Link>
+					</DropdownMenuItem>
+				) : null}
 				<DropdownMenuItem
 					onClick={() => {
 						void auth.signoutRedirect()

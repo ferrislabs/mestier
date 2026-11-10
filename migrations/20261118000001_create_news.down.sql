@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS news_views;
+DROP TABLE IF EXISTS news;

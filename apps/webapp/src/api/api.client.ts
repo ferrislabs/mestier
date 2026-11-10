@@ -645,7 +645,14 @@ export namespace Schemas {
     project_id?: (null | ProjectId) | undefined;
     title?: string | undefined;
   };
-  export type CreateKnowledgeNoteRequest = { body: string; tags?: Array<string> | undefined; title: string };
+  export type KnowledgeFolderId = string;
+  export type CreateKnowledgeFolderRequest = { name: string; parent_id?: (null | KnowledgeFolderId) | undefined };
+  export type CreateKnowledgeNoteRequest = {
+    body: string;
+    folder_id?: (null | KnowledgeFolderId) | undefined;
+    tags?: Array<string> | undefined;
+    title: string;
+  };
   export type LeaveAccountId = string;
   export type CreateLeaveAdjustmentRequest = {
     account_id: LeaveAccountId;
@@ -1676,12 +1683,25 @@ export namespace Schemas {
     created_at: string;
     extracted_text?: (string | null) | undefined;
     file?: (null | KnowledgeFileResponse) | undefined;
+    folder_id?: (null | KnowledgeFolderId) | undefined;
     id: KnowledgeArticleId;
     kind: KnowledgeKind;
     links?: (Array<KnowledgeLinkResponse> | null) | undefined;
     tags: Array<string>;
     title: string;
     updated_at: string;
+  };
+  export type KnowledgeFolderResponse = {
+    created_at: string;
+    id: KnowledgeFolderId;
+    name: string;
+    parent_id?: (null | KnowledgeFolderId) | undefined;
+    updated_at: string;
+  };
+  export type KnowledgeFolderViewResponse = {
+    children: Array<KnowledgeFolderResponse>;
+    folder?: (null | KnowledgeFolderResponse) | undefined;
+    path: Array<KnowledgeFolderResponse>;
   };
   export type KnowledgeResourceType = "project" | "customer" | "quote";
   export type KnowledgeLinkResponse = { created_at: string; resource_id: string; resource_type: KnowledgeResourceType };
@@ -1793,6 +1813,8 @@ export namespace Schemas {
     updated_at: string;
   };
   export type MarkChannelReadRequest = { message_id: MessageId };
+  export type NewsId = string;
+  export type MarkSeenRequest = { ids: Array<NewsId> };
   export type MemberAccountResponse = { email: string; name: string };
   export type MemberDocumentId = string;
   export type MemberDocumentResponse = {
@@ -1864,8 +1886,52 @@ export namespace Schemas {
   };
   export type MinuteIntervalResponse = { ends_minute: number; starts_minute: number };
   export type MoveDealRequest = { lost_reason?: (string | null) | undefined; stage: DealStageName };
+  export type MoveKnowledgeArticlesRequest = {
+    article_ids: Array<KnowledgeArticleId>;
+    folder_id?: (null | KnowledgeFolderId) | undefined;
+  };
+  export type MoveKnowledgeArticlesResponse = { moved: number };
   export type MyMemberResponse = { display_name: string; member_id: MemberId; organization_id: OrganizationId };
   export type MyPermissionsResponse = { permissions: Array<string> };
+  export type NewsAccessResponse = { can_manage: boolean };
+  export type NewsCtaRequest = { label: string; url: string };
+  export type NewsCtaResponse = { label: string; url: string };
+  export type NewsIcon =
+    | "plug"
+    | "sparkles"
+    | "rocket"
+    | "chart"
+    | "bell"
+    | "calendar"
+    | "file"
+    | "users"
+    | "shield"
+    | "zap"
+    | "image"
+    | "message"
+    | "settings"
+    | "map"
+    | "wrench"
+    | "star";
+  export type NewsItemRequest = { icon: NewsIcon; text: string; title: string };
+  export type NewsItemResponse = { icon: NewsIcon; text: string; title: string };
+  export type NewsRequest = {
+    cta?: (null | NewsCtaRequest) | undefined;
+    image_key?: (string | null) | undefined;
+    items: Array<NewsItemRequest>;
+    published_at?: (string | null) | undefined;
+    title: string;
+  };
+  export type NewsResponse = {
+    created_at: string;
+    cta?: (null | NewsCtaResponse) | undefined;
+    id: NewsId;
+    image_key?: (string | null) | undefined;
+    items: Array<NewsItemResponse>;
+    published_at?: (string | null) | undefined;
+    title: string;
+    updated_at: string;
+  };
   export type NodePositionDto = { x: number; y: number };
   export type NoteInvoiceRequest = { note: string };
   export type NotificationLevel = "ALL" | "MENTIONS" | "NOTHING";
@@ -2689,6 +2755,7 @@ export namespace Schemas {
     tags: Array<string> | null;
     title: string | null;
   }>;
+  export type UpdateKnowledgeFolderRequest = Partial<{ name: string | null; parent_id: null | KnowledgeFolderId }>;
   export type VatStatusRequest = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type UpdateLegalIdentityRequest = Partial<{
     address_city: string | null;
@@ -2924,6 +2991,93 @@ export namespace Schemas {
 export namespace Endpoints {
   // <Endpoints>
 
+  export type get_ListNewsForAdmin = {
+    method: "GET";
+    path: "/api/v1/admin/news";
+    requestFormat: "json";
+    parameters: never;
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          cta?: (null | Schemas.NewsCtaResponse) | undefined;
+          id: Schemas.NewsId;
+          image_key?: (string | null) | undefined;
+          items: Array<Schemas.NewsItemResponse>;
+          published_at?: (string | null) | undefined;
+          title: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateNews = {
+    method: "POST";
+    path: "/api/v1/admin/news";
+    requestFormat: "json";
+    parameters: {
+      body: Schemas.NewsRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          cta?: (null | Schemas.NewsCtaResponse) | undefined;
+          id: Schemas.NewsId;
+          image_key?: (string | null) | undefined;
+          items: Array<Schemas.NewsItemResponse>;
+          published_at?: (string | null) | undefined;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      422: unknown;
+    };
+  };
+  export type put_UpdateNews = {
+    method: "PUT";
+    path: "/api/v1/admin/news/{news_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { news_id: string };
+
+      body: Schemas.NewsRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          cta?: (null | Schemas.NewsCtaResponse) | undefined;
+          id: Schemas.NewsId;
+          image_key?: (string | null) | undefined;
+          items: Array<Schemas.NewsItemResponse>;
+          published_at?: (string | null) | undefined;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_DeleteNews = {
+    method: "DELETE";
+    path: "/api/v1/admin/news/{news_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { news_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type patch_ResolveAssignmentReport = {
     method: "PATCH";
     path: "/api/v1/assignment-reports/{assignment_report_id}/resolution";
@@ -5768,6 +5922,69 @@ export namespace Endpoints {
       400: unknown;
       401: unknown;
       403: unknown;
+    };
+  };
+  export type get_ListNews = {
+    method: "GET";
+    path: "/api/v1/news";
+    requestFormat: "json";
+    parameters: never;
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          cta?: (null | Schemas.NewsCtaResponse) | undefined;
+          id: Schemas.NewsId;
+          image_key?: (string | null) | undefined;
+          items: Array<Schemas.NewsItemResponse>;
+          published_at?: (string | null) | undefined;
+          title: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+    };
+  };
+  export type get_GetNewsAccess = {
+    method: "GET";
+    path: "/api/v1/news/access";
+    requestFormat: "json";
+    parameters: never;
+    responses: {
+      200: { data: { can_manage: boolean }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+    };
+  };
+  export type post_MarkNewsSeen = {
+    method: "POST";
+    path: "/api/v1/news/seen";
+    requestFormat: "json";
+    parameters: {
+      body: Schemas.MarkSeenRequest;
+    };
+    responses: { 204: unknown; 401: unknown; 422: unknown };
+  };
+  export type get_ListUnseenNews = {
+    method: "GET";
+    path: "/api/v1/news/unseen";
+    requestFormat: "json";
+    parameters: never;
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          cta?: (null | Schemas.NewsCtaResponse) | undefined;
+          id: Schemas.NewsId;
+          image_key?: (string | null) | undefined;
+          items: Array<Schemas.NewsItemResponse>;
+          published_at?: (string | null) | undefined;
+          title: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
     };
   };
   export type get_ListOrganizations = {
@@ -8696,6 +8913,8 @@ export namespace Endpoints {
         tag: Array<string>;
         resource_type: string;
         resource_id: string;
+        folder: string;
+        recursive: boolean;
       }>;
       path: { organization_id: string };
     };
@@ -8706,6 +8925,7 @@ export namespace Endpoints {
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          folder_id?: (null | Schemas.KnowledgeFolderId) | undefined;
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
@@ -8718,6 +8938,7 @@ export namespace Endpoints {
       400: unknown;
       401: unknown;
       403: unknown;
+      404: unknown;
       422: unknown;
     };
   };
@@ -8726,7 +8947,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/knowledge/articles";
     requestFormat: "text";
     parameters: {
-      query: { title: string; tag?: Array<string> | undefined };
+      query: { title: string; tag?: Array<string> | undefined; folder_id?: string | undefined };
       path: { organization_id: string };
     };
     responses: {
@@ -8736,6 +8957,7 @@ export namespace Endpoints {
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          folder_id?: (null | Schemas.KnowledgeFolderId) | undefined;
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
@@ -8748,7 +8970,25 @@ export namespace Endpoints {
       400: unknown;
       401: unknown;
       403: unknown;
+      404: unknown;
       413: unknown;
+      422: unknown;
+    };
+  };
+  export type post_MoveKnowledgeArticles = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/move";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.MoveKnowledgeArticlesRequest;
+    };
+    responses: {
+      200: { data: { moved: number }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      404: unknown;
       422: unknown;
     };
   };
@@ -8766,6 +9006,7 @@ export namespace Endpoints {
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          folder_id?: (null | Schemas.KnowledgeFolderId) | undefined;
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
@@ -8805,6 +9046,7 @@ export namespace Endpoints {
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          folder_id?: (null | Schemas.KnowledgeFolderId) | undefined;
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
@@ -8862,6 +9104,132 @@ export namespace Endpoints {
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
+  export type get_ListKnowledgeFolders = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/folder-tree";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          id: Schemas.KnowledgeFolderId;
+          name: string;
+          parent_id?: (null | Schemas.KnowledgeFolderId) | undefined;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_BrowseKnowledgeRoot = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/folders";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          children: Array<Schemas.KnowledgeFolderResponse>;
+          folder?: (null | Schemas.KnowledgeFolderResponse) | undefined;
+          path: Array<Schemas.KnowledgeFolderResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateKnowledgeFolder = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/folders";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateKnowledgeFolderRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          id: Schemas.KnowledgeFolderId;
+          name: string;
+          parent_id?: (null | Schemas.KnowledgeFolderId) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type get_BrowseKnowledgeFolder = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; folder_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          children: Array<Schemas.KnowledgeFolderResponse>;
+          folder?: (null | Schemas.KnowledgeFolderResponse) | undefined;
+          path: Array<Schemas.KnowledgeFolderResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteKnowledgeFolder = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; folder_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateKnowledgeFolder = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; folder_id: string };
+
+      body: Schemas.UpdateKnowledgeFolderRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          id: Schemas.KnowledgeFolderId;
+          name: string;
+          parent_id?: (null | Schemas.KnowledgeFolderId) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
   export type post_CreateKnowledgeNote = {
     method: "POST";
     path: "/api/v1/organizations/{organization_id}/knowledge/notes";
@@ -8878,6 +9246,7 @@ export namespace Endpoints {
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          folder_id?: (null | Schemas.KnowledgeFolderId) | undefined;
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
@@ -8889,6 +9258,7 @@ export namespace Endpoints {
       };
       401: unknown;
       403: unknown;
+      404: unknown;
       422: unknown;
     };
   };
@@ -13834,101 +14204,8 @@ export namespace Endpoints {
 
 // <EndpointByMethod>
 export type EndpointByMethod = {
-  patch: {
-    "/api/v1/assignment-reports/{assignment_report_id}/resolution": Endpoints.patch_ResolveAssignmentReport;
-    "/api/v1/chat/categories/{category_id}": Endpoints.patch_UpdateCategory;
-    "/api/v1/chat/channels/{channel_id}": Endpoints.patch_UpdateChannel;
-    "/api/v1/chat/messages/{message_id}": Endpoints.patch_UpdateMessage;
-    "/api/v1/chat/threads/{channel_id}": Endpoints.patch_UpdateThread;
-    "/api/v1/chat/webhooks/{webhook_id}": Endpoints.patch_UpdateWebhook;
-    "/api/v1/cost-bases/{cost_basis_id}": Endpoints.patch_CorrectEmployeeCostBasis;
-    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.patch_UpdateCustomerContact;
-    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.patch_UpdateCustomerContext;
-    "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
-    "/api/v1/deals/{deal_id}": Endpoints.patch_UpdateDeal;
-    "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
-    "/api/v1/expense-categories/{category_id}": Endpoints.patch_UpdateExpenseCategory;
-    "/api/v1/expenses/{expense_id}": Endpoints.patch_UpdateExpense;
-    "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.patch_AmendAssignmentReport;
-    "/api/v1/invoices/{invoice_id}": Endpoints.patch_UpdateInvoice;
-    "/api/v1/members/{member_id}": Endpoints.patch_UpdateMember;
-    "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
-    "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
-    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.patch_UpdateAutomationCredential;
-    "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.patch_UpdateWorkflowFolder;
-    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.patch_UpdateWorkflow;
-    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.patch_UpdateKnowledgeArticle;
-    "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
-    "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}": Endpoints.patch_UpdateLibraryPhoto;
-    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.patch_PatchProjectTemplate;
-    "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.patch_PatchProject;
-    "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.patch_EditSupportDraft;
-    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/status": Endpoints.patch_TransitionSupportTicket;
-    "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.patch_UpdateTaskLabel;
-    "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;
-    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.patch_UpdateTaskComment;
-    "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
-    "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
-    "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
-    "/api/v1/roles/{role_id}": Endpoints.patch_UpdateRole;
-    "/api/v1/service-rates/{service_rate_id}": Endpoints.patch_UpdateServiceRate;
-    "/api/v1/supplier-invoices/{supplier_invoice_id}": Endpoints.patch_UpdateSupplierInvoiceNotes;
-    "/api/v1/task-recurrences/{task_recurrence_id}": Endpoints.patch_PatchTaskRecurrence;
-  };
-  delete: {
-    "/api/v1/chat/categories/{category_id}": Endpoints.delete_DeleteCategory;
-    "/api/v1/chat/channels/{channel_id}": Endpoints.delete_DeleteChannel;
-    "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.delete_DeleteEveryoneOverwrite;
-    "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}": Endpoints.delete_DeleteTargetOverwrite;
-    "/api/v1/chat/messages/{message_id}": Endpoints.delete_DeleteMessage;
-    "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.delete_RemoveReaction;
-    "/api/v1/chat/threads/{channel_id}": Endpoints.delete_DeleteThread;
-    "/api/v1/chat/webhooks/{webhook_id}": Endpoints.delete_DeleteWebhook;
-    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.delete_DeleteCustomerContact;
-    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.delete_DeleteCustomerContext;
-    "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
-    "/api/v1/deals/{deal_id}": Endpoints.delete_DeleteDeal;
-    "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
-    "/api/v1/expense-categories/{category_id}": Endpoints.delete_DeleteExpenseCategory;
-    "/api/v1/expenses/{expense_id}": Endpoints.delete_DeleteExpense;
-    "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.delete_WithdrawAssignmentReport;
-    "/api/v1/invitations/{invitation_id}": Endpoints.delete_RevokeInvitation;
-    "/api/v1/invoice-payments/{invoice_payment_id}": Endpoints.delete_DeleteInvoicePayment;
-    "/api/v1/invoices/{invoice_id}": Endpoints.delete_DeleteInvoice;
-    "/api/v1/members/{member_id}": Endpoints.delete_DeleteMember;
-    "/api/v1/members/{member_id}/employee-profile": Endpoints.delete_RemoveEmployeeProfile;
-    "/api/v1/members/{member_id}/roles/{role_id}": Endpoints.delete_UnassignRole;
-    "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
-    "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
-    "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}": Endpoints.delete_DeleteCollection;
-    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
-    "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.delete_DeleteWorkflowFolder;
-    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
-    "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
-    "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
-    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.delete_DeleteKnowledgeArticle;
-    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links/{resource_type}/{resource_id}": Endpoints.delete_UnlinkKnowledgeArticle;
-    "/api/v1/organizations/{organization_id}/leave-adjustments/{adjustment_id}": Endpoints.delete_DeleteLeaveAdjustment;
-    "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.delete_DeleteMemberContract;
-    "/api/v1/organizations/{organization_id}/members/{member_id}/day-overrides/{date}": Endpoints.delete_DeleteDayOverride;
-    "/api/v1/organizations/{organization_id}/members/{member_id}/documents/{document_id}": Endpoints.delete_DeleteMemberDocument;
-    "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}": Endpoints.delete_DeleteLibraryPhoto;
-    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
-    "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
-    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.delete_ClearProjectDoeStyle;
-    "/api/v1/organizations/{organization_id}/support/api-keys/{key_id}": Endpoints.delete_RevokeSupportApiKey;
-    "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.delete_DeleteSupportDraft;
-    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges/{label}": Endpoints.delete_RemoveSupportTicketBadge;
-    "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
-    "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
-    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.delete_DeleteTaskComment;
-    "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
-    "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
-    "/api/v1/roles/{role_id}": Endpoints.delete_DeleteRole;
-    "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
-    "/api/v1/task-recurrences/{task_recurrence_id}": Endpoints.delete_DeleteTaskRecurrence;
-  };
   get: {
+    "/api/v1/admin/news": Endpoints.get_ListNewsForAdmin;
     "/api/v1/chat/channels/{channel_id}": Endpoints.get_GetChannel;
     "/api/v1/chat/channels/{channel_id}/messages": Endpoints.get_ListMessages;
     "/api/v1/chat/channels/{channel_id}/permissions": Endpoints.get_ListChannelPermissions;
@@ -13962,6 +14239,9 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}": Endpoints.get_GetMember;
     "/api/v1/members/{member_id}/roles": Endpoints.get_ListMemberRoles;
     "/api/v1/members/{member_id}/work-time": Endpoints.get_GetWorkTime;
+    "/api/v1/news": Endpoints.get_ListNews;
+    "/api/v1/news/access": Endpoints.get_GetNewsAccess;
+    "/api/v1/news/unseen": Endpoints.get_ListUnseenNews;
     "/api/v1/organizations": Endpoints.get_ListOrganizations;
     "/api/v1/organizations/{organization_id}": Endpoints.get_GetOrganization;
     "/api/v1/organizations/{organization_id}/absence-types": Endpoints.get_ListAbsenceTypes;
@@ -14008,6 +14288,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/knowledge/articles": Endpoints.get_ListKnowledgeArticles;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.get_GetKnowledgeArticle;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/download": Endpoints.get_DownloadKnowledgeFile;
+    "/api/v1/organizations/{organization_id}/knowledge/folder-tree": Endpoints.get_ListKnowledgeFolders;
+    "/api/v1/organizations/{organization_id}/knowledge/folders": Endpoints.get_BrowseKnowledgeRoot;
+    "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}": Endpoints.get_BrowseKnowledgeFolder;
     "/api/v1/organizations/{organization_id}/leave-accounts": Endpoints.get_ListLeaveAccounts;
     "/api/v1/organizations/{organization_id}/leave-adjustments": Endpoints.get_ListLeaveAdjustments;
     "/api/v1/organizations/{organization_id}/ledger": Endpoints.get_ReadLedger;
@@ -14076,6 +14359,7 @@ export type EndpointByMethod = {
     "/oauth/callback": Endpoints.get_CompleteAutomationCredentialOauth;
   };
   post: {
+    "/api/v1/admin/news": Endpoints.post_CreateNews;
     "/api/v1/chat/channels/{channel_id}/messages": Endpoints.post_CreateMessage;
     "/api/v1/chat/channels/{channel_id}/threads": Endpoints.post_CreateThread;
     "/api/v1/chat/channels/{channel_id}/typing": Endpoints.post_StartTyping;
@@ -14103,6 +14387,7 @@ export type EndpointByMethod = {
     "/api/v1/invoices/{invoice_id}/remind": Endpoints.post_RemindInvoice;
     "/api/v1/invoices/{invoice_id}/send": Endpoints.post_SendInvoice;
     "/api/v1/members/{member_id}/roles": Endpoints.post_AssignRole;
+    "/api/v1/news/seen": Endpoints.post_MarkNewsSeen;
     "/api/v1/organizations": Endpoints.post_CreateOrganization;
     "/api/v1/organizations/{organization_id}/absence-types": Endpoints.post_CreateAbsenceType;
     "/api/v1/organizations/{organization_id}/absence-types/{absence_type_id}/archive": Endpoints.post_ArchiveAbsenceType;
@@ -14147,7 +14432,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.post_CreateInvoice;
     "/api/v1/organizations/{organization_id}/knowledge/articles": Endpoints.post_UploadKnowledgeFile;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/move": Endpoints.post_MoveKnowledgeArticles;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links": Endpoints.post_LinkKnowledgeArticle;
+    "/api/v1/organizations/{organization_id}/knowledge/folders": Endpoints.post_CreateKnowledgeFolder;
     "/api/v1/organizations/{organization_id}/knowledge/notes": Endpoints.post_CreateKnowledgeNote;
     "/api/v1/organizations/{organization_id}/leave-accounts": Endpoints.post_CreateLeaveAccount;
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}/archive": Endpoints.post_ArchiveLeaveAccount;
@@ -14210,6 +14497,7 @@ export type EndpointByMethod = {
     "/webhooks/{path}": Endpoints.post_ReceiveWebhook;
   };
   put: {
+    "/api/v1/admin/news/{news_id}": Endpoints.put_UpdateNews;
     "/api/v1/chat/channels/{channel_id}/notification-level": Endpoints.put_SetNotificationLevel;
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;
     "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}": Endpoints.put_UpsertTargetOverwrite;
@@ -14244,16 +14532,113 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}": Endpoints.put_UpdateSurcharge;
     "/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations": Endpoints.put_ReplaceSupplierInvoiceLineAllocations;
   };
+  delete: {
+    "/api/v1/admin/news/{news_id}": Endpoints.delete_DeleteNews;
+    "/api/v1/chat/categories/{category_id}": Endpoints.delete_DeleteCategory;
+    "/api/v1/chat/channels/{channel_id}": Endpoints.delete_DeleteChannel;
+    "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.delete_DeleteEveryoneOverwrite;
+    "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}": Endpoints.delete_DeleteTargetOverwrite;
+    "/api/v1/chat/messages/{message_id}": Endpoints.delete_DeleteMessage;
+    "/api/v1/chat/messages/{message_id}/reactions/{emoji}": Endpoints.delete_RemoveReaction;
+    "/api/v1/chat/threads/{channel_id}": Endpoints.delete_DeleteThread;
+    "/api/v1/chat/webhooks/{webhook_id}": Endpoints.delete_DeleteWebhook;
+    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.delete_DeleteCustomerContact;
+    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.delete_DeleteCustomerContext;
+    "/api/v1/customers/{customer_id}": Endpoints.delete_DeleteCustomer;
+    "/api/v1/deals/{deal_id}": Endpoints.delete_DeleteDeal;
+    "/api/v1/equipment/{equipment_id}": Endpoints.delete_DeleteEquipment;
+    "/api/v1/expense-categories/{category_id}": Endpoints.delete_DeleteExpenseCategory;
+    "/api/v1/expenses/{expense_id}": Endpoints.delete_DeleteExpense;
+    "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.delete_WithdrawAssignmentReport;
+    "/api/v1/invitations/{invitation_id}": Endpoints.delete_RevokeInvitation;
+    "/api/v1/invoice-payments/{invoice_payment_id}": Endpoints.delete_DeleteInvoicePayment;
+    "/api/v1/invoices/{invoice_id}": Endpoints.delete_DeleteInvoice;
+    "/api/v1/members/{member_id}": Endpoints.delete_DeleteMember;
+    "/api/v1/members/{member_id}/employee-profile": Endpoints.delete_RemoveEmployeeProfile;
+    "/api/v1/members/{member_id}/roles/{role_id}": Endpoints.delete_UnassignRole;
+    "/api/v1/organizations/{organization_id}": Endpoints.delete_DeleteOrganization;
+    "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.delete_DeleteAbsence;
+    "/api/v1/organizations/{organization_id}/automation/collections/{collection_id}": Endpoints.delete_DeleteCollection;
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.delete_DeleteWorkflowFolder;
+    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
+    "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
+    "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.delete_DeleteKnowledgeArticle;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links/{resource_type}/{resource_id}": Endpoints.delete_UnlinkKnowledgeArticle;
+    "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}": Endpoints.delete_DeleteKnowledgeFolder;
+    "/api/v1/organizations/{organization_id}/leave-adjustments/{adjustment_id}": Endpoints.delete_DeleteLeaveAdjustment;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.delete_DeleteMemberContract;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/day-overrides/{date}": Endpoints.delete_DeleteDayOverride;
+    "/api/v1/organizations/{organization_id}/members/{member_id}/documents/{document_id}": Endpoints.delete_DeleteMemberDocument;
+    "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}": Endpoints.delete_DeleteLibraryPhoto;
+    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.delete_ArchiveProjectTemplate;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.delete_ArchiveProject;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.delete_ClearProjectDoeStyle;
+    "/api/v1/organizations/{organization_id}/support/api-keys/{key_id}": Endpoints.delete_RevokeSupportApiKey;
+    "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.delete_DeleteSupportDraft;
+    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges/{label}": Endpoints.delete_RemoveSupportTicketBadge;
+    "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.delete_DeleteTaskComment;
+    "/api/v1/products/{product_id}": Endpoints.delete_DeleteProduct;
+    "/api/v1/quotes/{quote_id}": Endpoints.delete_DeleteQuote;
+    "/api/v1/roles/{role_id}": Endpoints.delete_DeleteRole;
+    "/api/v1/service-rates/{service_rate_id}": Endpoints.delete_DeleteServiceRate;
+    "/api/v1/task-recurrences/{task_recurrence_id}": Endpoints.delete_DeleteTaskRecurrence;
+  };
+  patch: {
+    "/api/v1/assignment-reports/{assignment_report_id}/resolution": Endpoints.patch_ResolveAssignmentReport;
+    "/api/v1/chat/categories/{category_id}": Endpoints.patch_UpdateCategory;
+    "/api/v1/chat/channels/{channel_id}": Endpoints.patch_UpdateChannel;
+    "/api/v1/chat/messages/{message_id}": Endpoints.patch_UpdateMessage;
+    "/api/v1/chat/threads/{channel_id}": Endpoints.patch_UpdateThread;
+    "/api/v1/chat/webhooks/{webhook_id}": Endpoints.patch_UpdateWebhook;
+    "/api/v1/cost-bases/{cost_basis_id}": Endpoints.patch_CorrectEmployeeCostBasis;
+    "/api/v1/customer-contacts/{customer_contact_id}": Endpoints.patch_UpdateCustomerContact;
+    "/api/v1/customer-contexts/{customer_context_id}": Endpoints.patch_UpdateCustomerContext;
+    "/api/v1/customers/{customer_id}": Endpoints.patch_UpdateCustomer;
+    "/api/v1/deals/{deal_id}": Endpoints.patch_UpdateDeal;
+    "/api/v1/equipment/{equipment_id}": Endpoints.patch_UpdateEquipment;
+    "/api/v1/expense-categories/{category_id}": Endpoints.patch_UpdateExpenseCategory;
+    "/api/v1/expenses/{expense_id}": Endpoints.patch_UpdateExpense;
+    "/api/v1/field/assignment-reports/{assignment_report_id}": Endpoints.patch_AmendAssignmentReport;
+    "/api/v1/invoices/{invoice_id}": Endpoints.patch_UpdateInvoice;
+    "/api/v1/members/{member_id}": Endpoints.patch_UpdateMember;
+    "/api/v1/organizations/{organization_id}": Endpoints.patch_UpdateOrganization;
+    "/api/v1/organizations/{organization_id}/absences/{absence_id}": Endpoints.patch_PatchAbsence;
+    "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.patch_UpdateAutomationCredential;
+    "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.patch_UpdateWorkflowFolder;
+    "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.patch_UpdateWorkflow;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.patch_UpdateKnowledgeArticle;
+    "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}": Endpoints.patch_UpdateKnowledgeFolder;
+    "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
+    "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}": Endpoints.patch_UpdateLibraryPhoto;
+    "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.patch_PatchProjectTemplate;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.patch_PatchProject;
+    "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.patch_EditSupportDraft;
+    "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/status": Endpoints.patch_TransitionSupportTicket;
+    "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.patch_UpdateTaskLabel;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;
+    "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.patch_UpdateTaskComment;
+    "/api/v1/products/{product_id}": Endpoints.patch_UpdateProduct;
+    "/api/v1/quotes/{quote_id}": Endpoints.patch_UpdateQuote;
+    "/api/v1/quotes/{quote_id}/status": Endpoints.patch_UpdateQuoteStatus;
+    "/api/v1/roles/{role_id}": Endpoints.patch_UpdateRole;
+    "/api/v1/service-rates/{service_rate_id}": Endpoints.patch_UpdateServiceRate;
+    "/api/v1/supplier-invoices/{supplier_invoice_id}": Endpoints.patch_UpdateSupplierInvoiceNotes;
+    "/api/v1/task-recurrences/{task_recurrence_id}": Endpoints.patch_PatchTaskRecurrence;
+  };
 };
 
 // </EndpointByMethod>
 
 // <EndpointByMethod.Shorthands>
-export type PatchEndpoints = EndpointByMethod["patch"];
-export type DeleteEndpoints = EndpointByMethod["delete"];
 export type GetEndpoints = EndpointByMethod["get"];
 export type PostEndpoints = EndpointByMethod["post"];
 export type PutEndpoints = EndpointByMethod["put"];
+export type DeleteEndpoints = EndpointByMethod["delete"];
+export type PatchEndpoints = EndpointByMethod["patch"];
 // </EndpointByMethod.Shorthands>
 
 // <ApiClientTypes>
@@ -14486,68 +14871,6 @@ export class ApiClient {
     return;
   };
 
-  // <ApiClient.patch>
-  patch<Path extends keyof PatchEndpoints, TEndpoint extends PatchEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-    >
-  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
-
-  patch<Path extends keyof PatchEndpoints, TEndpoint extends PatchEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-    >
-  ): Promise<SafeApiResponse<TEndpoint>>;
-
-  patch<Path extends keyof PatchEndpoints, _TEndpoint extends PatchEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<any>
-  ): Promise<any> {
-    return this.request("patch", path, ...params);
-  }
-  // </ApiClient.patch>
-
-  // <ApiClient.delete>
-  delete<Path extends keyof DeleteEndpoints, TEndpoint extends DeleteEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
-    >
-  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
-
-  delete<Path extends keyof DeleteEndpoints, TEndpoint extends DeleteEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<
-      TEndpoint extends { parameters: infer UParams }
-        ? NotNever<UParams> extends true
-          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
-    >
-  ): Promise<SafeApiResponse<TEndpoint>>;
-
-  delete<Path extends keyof DeleteEndpoints, _TEndpoint extends DeleteEndpoints[Path]>(
-    path: Path,
-    ...params: MaybeOptionalArg<any>
-  ): Promise<any> {
-    return this.request("delete", path, ...params);
-  }
-  // </ApiClient.delete>
-
   // <ApiClient.get>
   get<Path extends keyof GetEndpoints, TEndpoint extends GetEndpoints[Path]>(
     path: Path,
@@ -14640,6 +14963,68 @@ export class ApiClient {
     return this.request("put", path, ...params);
   }
   // </ApiClient.put>
+
+  // <ApiClient.delete>
+  delete<Path extends keyof DeleteEndpoints, TEndpoint extends DeleteEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+    >
+  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
+
+  delete<Path extends keyof DeleteEndpoints, TEndpoint extends DeleteEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+    >
+  ): Promise<SafeApiResponse<TEndpoint>>;
+
+  delete<Path extends keyof DeleteEndpoints, _TEndpoint extends DeleteEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<any>
+  ): Promise<any> {
+    return this.request("delete", path, ...params);
+  }
+  // </ApiClient.delete>
+
+  // <ApiClient.patch>
+  patch<Path extends keyof PatchEndpoints, TEndpoint extends PatchEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: false; throwOnStatusError?: boolean }
+    >
+  ): Promise<Extract<InferResponseByStatus<TEndpoint, SuccessStatusCode>, { data: {} }>["data"]>;
+
+  patch<Path extends keyof PatchEndpoints, TEndpoint extends PatchEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<
+      TEndpoint extends { parameters: infer UParams }
+        ? NotNever<UParams> extends true
+          ? UParams & { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+          : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+        : { overrides?: RequestInit; withResponse?: true; throwOnStatusError?: boolean }
+    >
+  ): Promise<SafeApiResponse<TEndpoint>>;
+
+  patch<Path extends keyof PatchEndpoints, _TEndpoint extends PatchEndpoints[Path]>(
+    path: Path,
+    ...params: MaybeOptionalArg<any>
+  ): Promise<any> {
+    return this.request("patch", path, ...params);
+  }
+  // </ApiClient.patch>
 
   // <ApiClient.request>
   /**

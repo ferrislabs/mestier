@@ -45,9 +45,32 @@ impl Identity {
         }
     }
 
+    /// The realm roles of a user acting for themself. A client or a delegated
+    /// token (an assistant acting for the user) has none here.
+    pub fn realm_roles(&self) -> &[String] {
+        match self {
+            Identity::User(u) if !u.delegated => &u.realm_roles,
+            _ => &[],
+        }
+    }
+
     pub fn has_role(&self, role: &str) -> bool {
         self.roles().iter().any(|r| r == role)
     }
+}
+
+fn realm_roles(extra: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
+    extra
+        .get("realm_access")
+        .and_then(|access| access.get("roles"))
+        .and_then(|roles| roles.as_array())
+        .map(|roles| {
+            roles
+                .iter()
+                .filter_map(|role| role.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 impl From<Claims> for Identity {
@@ -68,6 +91,7 @@ impl From<Claims> for Identity {
                 name: claims.name,
                 roles: Vec::new(),
                 delegated,
+                realm_roles: realm_roles(&claims.extra),
                 username: claims.preferred_username.unwrap_or(claims.sub.0),
             })
         }
@@ -208,5 +232,25 @@ mod tests {
         assert_eq!(identity.username(), "ferriscord-bot");
         assert!(identity.roles().is_empty());
         assert!(!identity.has_role("service"));
+    }
+
+    #[test]
+    fn a_user_carries_the_realm_roles_of_the_token_but_no_policy_role() {
+        let identity: Identity = create_user_claims().into();
+
+        assert_eq!(identity.realm_roles(), ["user", "moderator"]);
+        assert!(identity.roles().is_empty());
+    }
+
+    #[test]
+    fn a_delegated_token_or_a_client_has_no_realm_role() {
+        let mut claims = create_user_claims();
+        claims
+            .extra
+            .insert("act".to_string(), json!({"sub": "mestier-mcp"}));
+        assert!(Identity::from(claims).realm_roles().is_empty());
+
+        let client: Identity = create_service_account_claims().into();
+        assert!(client.realm_roles().is_empty());
     }
 }

@@ -39,6 +39,7 @@ pub mod domain {
     pub struct SupportSettings;
     pub struct SupportTicket;
     pub struct SupportTicketEntry;
+    pub struct News;
     pub struct Organization;
     pub struct Planning;
     pub struct Product;
