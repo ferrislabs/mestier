@@ -14,6 +14,7 @@ import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AppOOrganizationSlugRouteImport } from './routes/_app.o.$organizationSlug'
 import { Route as AppFieldOrganizationSlugRouteImport } from './routes/_app.field.$organizationSlug'
+import { Route as AppAdminNewsRouteImport } from './routes/_app.admin.news'
 import { Route as AppOOrganizationSlugIndexRouteImport } from './routes/_app.o.$organizationSlug.index'
 import { Route as AppOOrganizationSlugSettingsRouteImport } from './routes/_app.o.$organizationSlug.settings'
 import { Route as AppOOrganizationSlugReportingRouteImport } from './routes/_app.o.$organizationSlug.reporting'
@@ -130,6 +131,11 @@ const AppFieldOrganizationSlugRoute =
     path: '/field/$organizationSlug',
     getParentRoute: () => AppRoute,
   } as any)
+const AppAdminNewsRoute = AppAdminNewsRouteImport.update({
+  id: '/admin/news',
+  path: '/admin/news',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOOrganizationSlugIndexRoute =
   AppOOrganizationSlugIndexRouteImport.update({
     id: '/',
@@ -680,6 +686,7 @@ const AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/admin/news': typeof AppAdminNewsRoute
   '/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
   '/o/$organizationSlug/discussions': typeof AppOOrganizationSlugDiscussionsRouteWithChildren
@@ -776,6 +783,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
   '/': typeof AppIndexRoute
+  '/admin/news': typeof AppAdminNewsRoute
   '/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
   '/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
@@ -872,6 +880,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/admin/news': typeof AppAdminNewsRoute
   '/_app/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
   '/_app/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
   '/_app/o/$organizationSlug/discussions': typeof AppOOrganizationSlugDiscussionsRouteWithChildren
@@ -970,6 +979,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/invite/$token'
+    | '/admin/news'
     | '/field/$organizationSlug'
     | '/o/$organizationSlug'
     | '/o/$organizationSlug/discussions'
@@ -1066,6 +1076,7 @@ export interface FileRouteTypes {
   to:
     | '/invite/$token'
     | '/'
+    | '/admin/news'
     | '/field/$organizationSlug'
     | '/o/$organizationSlug/reporting'
     | '/o/$organizationSlug/settings'
@@ -1161,6 +1172,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/invite/$token'
     | '/_app/'
+    | '/_app/admin/news'
     | '/_app/field/$organizationSlug'
     | '/_app/o/$organizationSlug'
     | '/_app/o/$organizationSlug/discussions'
@@ -1295,6 +1307,13 @@ declare module '@tanstack/react-router' {
       path: '/field/$organizationSlug'
       fullPath: '/field/$organizationSlug'
       preLoaderRoute: typeof AppFieldOrganizationSlugRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/news': {
+      id: '/_app/admin/news'
+      path: '/admin/news'
+      fullPath: '/admin/news'
+      preLoaderRoute: typeof AppAdminNewsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/o/$organizationSlug/': {
@@ -2213,12 +2232,14 @@ const AppOOrganizationSlugRouteWithChildren =
 
 interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
+  AppAdminNewsRoute: typeof AppAdminNewsRoute
   AppFieldOrganizationSlugRoute: typeof AppFieldOrganizationSlugRoute
   AppOOrganizationSlugRoute: typeof AppOOrganizationSlugRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
+  AppAdminNewsRoute: AppAdminNewsRoute,
   AppFieldOrganizationSlugRoute: AppFieldOrganizationSlugRoute,
   AppOOrganizationSlugRoute: AppOOrganizationSlugRouteWithChildren,
 }

@@ -4,6 +4,7 @@ import { AuthGate } from '#/components/auth-gate'
 import { GatewayStatusBanner } from '#/components/gateway-status-banner'
 import { OrgGate } from '#/components/org-gate'
 import { GatewayProvider } from '#/hooks/use-gateway'
+import { NewsGateFeature } from '#/pages/news/feature/news-gate-feature'
 
 export const Route = createFileRoute('/_app')({ component: AppLayout })
 
@@ -23,6 +24,7 @@ function AppLayout() {
 				<OrgGate>
 					<GatewayStatusBanner />
 					<Outlet />
+					<NewsGateFeature />
 				</OrgGate>
 			</GatewayProvider>
 		</AuthGate>
