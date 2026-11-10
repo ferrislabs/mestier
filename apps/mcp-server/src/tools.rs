@@ -16,8 +16,8 @@ use serde_json::{Value, json};
 use crate::{
     api::{ApiClient, Fault},
     edit::{
-        MakerLabel, NewSection, PerPage, PhotoColumns, SectionKind, SectionPatch, SectionRef,
-        SupplyPatch,
+        MakerLabel, NewSection, PartyPatch, PartyRole, PerPage, PhotoColumns, SectionKind,
+        SectionPatch, SectionRef, SupplyPatch,
     },
     files::{FileFetcher, FileParam, Source, Target},
     maintenance::ContractDraft,
@@ -217,6 +217,31 @@ pub struct UpdateHeaderArgs {
     pub author: Option<String>,
     #[schemars(description = "New revision label, 1 to 8 characters.")]
     pub revision: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct UpdatePartyArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the DOE.")]
+    pub doe_id: String,
+    #[schemars(
+        description = "Which party: project_owner (maîtrise d'ouvrage), project_manager (maîtrise d'œuvre) or contractor (entreprise)."
+    )]
+    pub role: PartyRole,
+    #[schemars(
+        description = "Name printed in the DOE. Cannot be blank. Required to add a party the DOE does not have yet."
+    )]
+    pub name: Option<String>,
+    #[schemars(description = "Postal address. An empty string clears it.")]
+    pub address: Option<String>,
+    #[schemars(description = "Phone number. An empty string clears it.")]
+    pub phone: Option<String>,
+    #[schemars(description = "E-mail address. An empty string clears it.")]
+    pub email: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -934,7 +959,7 @@ impl MestierTools {
     }
 
     #[tool(
-        description = "Update the header of a DOE (title, place, lot, issue date, author, revision). Only the given fields change; sections and parties are kept. Returns the updated DOE."
+        description = "Update the header of a DOE (title, place, lot, issue date, author, revision). Only the given fields change; sections and parties are kept (use update_doe_party for parties). Returns the updated DOE."
     )]
     #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "update_doe_header"))]
     async fn update_doe_header(
@@ -959,6 +984,40 @@ impl MestierTools {
                             issued_on: args.issued_on.as_deref(),
                             author: args.author.as_deref(),
                             revision: args.revision.as_deref(),
+                        },
+                    )
+                    .await?;
+                Ok(json_result(&data))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Update one party of a DOE (project_owner, project_manager or contractor): name, address, phone, e-mail. Only the given fields change; an empty string clears address, phone or e-mail. A party the DOE does not have yet is added when name is given. Logos are kept as they are. Returns the updated DOE."
+    )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "update_doe_party"))]
+    async fn update_doe_party(
+        &self,
+        Parameters(args): Parameters<UpdatePartyArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "update_doe_party") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(
+            async {
+                let data = s
+                    .update_party(
+                        args.organization.as_deref(),
+                        &args.doe_id,
+                        PartyPatch {
+                            role: args.role,
+                            name: args.name.as_deref(),
+                            address: args.address.as_deref(),
+                            phone: args.phone.as_deref(),
+                            email: args.email.as_deref(),
                         },
                     )
                     .await?;

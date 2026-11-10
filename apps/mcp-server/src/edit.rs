@@ -90,6 +90,34 @@ impl PhotoColumns {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+#[serde(rename_all = "snake_case")]
+pub enum PartyRole {
+    ProjectOwner,
+    ProjectManager,
+    Contractor,
+}
+
+impl PartyRole {
+    fn tag(self) -> &'static str {
+        match self {
+            Self::ProjectOwner => "project_owner",
+            Self::ProjectManager => "project_manager",
+            Self::Contractor => "contractor",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct PartyPatch<'a> {
+    pub role: PartyRole,
+    pub name: Option<&'a str>,
+    pub address: Option<&'a str>,
+    pub phone: Option<&'a str>,
+    pub email: Option<&'a str>,
+}
+
 #[derive(Debug, Default)]
 pub struct SupplyPatch<'a> {
     pub photo_columns: Option<PhotoColumns>,
@@ -273,6 +301,49 @@ fn find_supply(doe: &Value, supply_id: &str) -> Result<(usize, usize), Fault> {
     Err(Fault::new(format!(
         "fourniture introuvable : « {supply_id} ». Les ids des fournitures sont dans get_doe"
     )))
+}
+
+pub fn update_party(doe: &mut Value, patch: &PartyPatch<'_>) -> Result<(), Fault> {
+    if patch.name.is_some_and(|name| name.trim().is_empty()) {
+        return Err(Fault::new("le nom de l'intervenant ne peut pas être vide"));
+    }
+    let tag = patch.role.tag();
+    let parties = doe["parties"]
+        .as_array_mut()
+        .ok_or_else(|| Fault::new("ce DOE n'a pas de liste d'intervenants"))?;
+    let index = match parties.iter().position(|party| party["role"] == tag) {
+        Some(index) => index,
+        None => {
+            let Some(name) = patch.name else {
+                return Err(Fault::new(
+                    "cet intervenant n'existe pas encore dans le DOE : précisez `name`",
+                ));
+            };
+            parties.push(json!({
+                "role": tag,
+                "name": name,
+                "address": null,
+                "phone": null,
+                "email": null,
+                "logo_key": null,
+            }));
+            parties.len() - 1
+        }
+    };
+    let party = &mut parties[index];
+    if let Some(name) = patch.name {
+        party["name"] = json!(name);
+    }
+    for (field, value) in [
+        ("address", patch.address),
+        ("phone", patch.phone),
+        ("email", patch.email),
+    ] {
+        if let Some(value) = value {
+            party[field] = blank_to_null(value);
+        }
+    }
+    Ok(())
 }
 
 pub fn update_supply(

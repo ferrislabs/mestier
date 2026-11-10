@@ -80,6 +80,7 @@ pub enum Tool {
     UpdateDoeFile,
     DeleteDoeFile,
     UpdateDoeHeader,
+    UpdateDoeParty,
     ExportDoePdf,
     ListMaintenanceDue,
     GetMaintenanceContract,
@@ -124,7 +125,7 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Tool; 66] = [
+    pub const ALL: [Tool; 67] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -150,6 +151,7 @@ impl Tool {
         Tool::UpdateDoeFile,
         Tool::DeleteDoeFile,
         Tool::UpdateDoeHeader,
+        Tool::UpdateDoeParty,
         Tool::ExportDoePdf,
         Tool::ListMaintenanceDue,
         Tool::GetMaintenanceContract,
@@ -221,6 +223,7 @@ impl Tool {
             Self::UpdateDoeFile => "update_doe_file",
             Self::DeleteDoeFile => "delete_doe_file",
             Self::UpdateDoeHeader => "update_doe_header",
+            Self::UpdateDoeParty => "update_doe_party",
             Self::ExportDoePdf => "export_doe_pdf",
             Self::ListMaintenanceDue => "list_maintenance_due",
             Self::GetMaintenanceContract => "get_maintenance_contract",
@@ -282,6 +285,7 @@ impl Tool {
             | Self::UpdateDoeFile
             | Self::DeleteDoeFile
             | Self::UpdateDoeHeader
+            | Self::UpdateDoeParty
             | Self::CreateMaintenanceContractDraft
             | Self::CreateCustomer
             | Self::UpdateCustomer
@@ -375,6 +379,7 @@ impl Tool {
             | Self::UpdateDoeFile
             | Self::DeleteDoeFile
             | Self::UpdateDoeHeader
+            | Self::UpdateDoeParty
             | Self::ExportDoePdf
             | Self::SearchPhotoLibrary
             | Self::TagLibraryPhotos
@@ -521,6 +526,7 @@ mod tests {
                 "update_deal",
                 "update_doe_file",
                 "update_doe_header",
+                "update_doe_party",
                 "update_doe_section",
                 "update_doe_supply",
                 "update_product",

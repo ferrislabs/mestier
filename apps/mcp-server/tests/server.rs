@@ -791,6 +791,56 @@ async fn a_supply_without_designation_is_refused_before_any_write() {
 }
 
 #[tokio::test]
+async fn updating_a_party_adds_it_then_patches_it_and_keeps_the_rest() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "update_doe_party",
+        json!({"doe_id": DOE, "role": "project_manager", "name": "Atelier Vert", "phone": "0102030405"}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let put = fake.seen().into_iter().find(|s| s.method == "PUT").unwrap();
+    let parties = put.body["parties"].as_array().unwrap();
+    assert_eq!(parties.len(), 2);
+    assert_eq!(parties[0], doe()["parties"][0]);
+    assert_eq!(parties[1]["role"], "project_manager");
+    assert_eq!(parties[1]["name"], "Atelier Vert");
+    assert_eq!(parties[1]["phone"], "0102030405");
+    assert_eq!(parties[1]["address"], Value::Null);
+    assert_eq!(put.body["sections"], doe()["sections"]);
+}
+
+#[tokio::test]
+async fn updating_a_party_without_a_name_cannot_create_it() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "update_doe_party",
+        json!({"doe_id": DOE, "role": "contractor", "email": "a@b.fr"}),
+    )
+    .await;
+    assert_eq!(result["isError"], json!(true));
+    assert!(fake.seen().iter().all(|s| s.method != "PUT"));
+}
+
+#[tokio::test]
+async fn updating_a_party_refuses_a_blank_name() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "update_doe_party",
+        json!({"doe_id": DOE, "role": "contractor", "name": "  "}),
+    )
+    .await;
+    assert_eq!(result["isError"], json!(true));
+    assert!(fake.seen().iter().all(|s| s.method != "PUT"));
+}
+
+#[tokio::test]
 async fn updating_the_header_patches_only_the_given_fields() {
     let (mcp, fake) = start().await;
     let result = call(

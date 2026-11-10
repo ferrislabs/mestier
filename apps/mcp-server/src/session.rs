@@ -3,7 +3,10 @@ use uuid::Uuid;
 
 use crate::{
     api::{ApiClient, Fault, MAX_PDF_BYTES},
-    edit::{self, FilePlacement, NewSection, SectionKind, SectionPatch, SectionRef, SupplyPatch},
+    edit::{
+        self, FilePlacement, NewSection, PartyPatch, SectionKind, SectionPatch, SectionRef,
+        SupplyPatch,
+    },
     files::{FileFetcher, Source, Target},
     maintenance::ContractDraft,
 };
@@ -767,6 +770,16 @@ impl<'a> Session<'a> {
             Ok(())
         })
         .await
+    }
+
+    pub async fn update_party(
+        &self,
+        organization: Option<&str>,
+        doe_id: &str,
+        patch: PartyPatch<'_>,
+    ) -> Result<Value, Fault> {
+        self.edit_doe(organization, doe_id, |doe| edit::update_party(doe, &patch))
+            .await
     }
 
     pub async fn export_pdf(
