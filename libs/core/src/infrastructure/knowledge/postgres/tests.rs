@@ -3,12 +3,13 @@ use common::{CoreError, generate_uuid_v7};
 use sqlx::PgPool;
 
 use crate::{
-    KnowledgeArticle, KnowledgeArticleId, KnowledgeFile, KnowledgeFilter, KnowledgeKind,
-    KnowledgeResource, KnowledgeResourceType, OrganizationId,
+    KnowledgeArticle, KnowledgeArticleId, KnowledgeFile, KnowledgeFilter, KnowledgeFolder,
+    KnowledgeFolderId, KnowledgeFolderScope, KnowledgeKind, KnowledgeResource,
+    KnowledgeResourceType, OrganizationId,
     application::test_support::dev_pool,
-    domain::knowledge::ports::KnowledgeArticleRepository,
+    domain::knowledge::ports::{KnowledgeArticleRepository, KnowledgeFolderRepository},
     infrastructure::{
-        knowledge::postgres::PgKnowledgeArticleRepository,
+        knowledge::postgres::{PgKnowledgeArticleRepository, PgKnowledgeFolderRepository},
         postgres::{SharedTx, with_tx},
     },
 };
@@ -49,6 +50,7 @@ fn base(organization_id: OrganizationId, kind: KnowledgeKind, title: &str) -> Kn
     KnowledgeArticle {
         id: KnowledgeArticleId(generate_uuid_v7()),
         organization_id,
+        folder_id: None,
         kind,
         title: title.to_owned(),
         body: None,
@@ -390,6 +392,163 @@ async fn another_organization_sees_and_touches_nothing() {
                 .await
                 .is_err()
         );
+        Ok(())
+    })
+    .await;
+}
+
+fn folder(
+    organization_id: OrganizationId,
+    parent_id: Option<KnowledgeFolderId>,
+    name: &str,
+) -> KnowledgeFolder {
+    let now = Utc::now();
+    KnowledgeFolder {
+        id: KnowledgeFolderId(generate_uuid_v7()),
+        organization_id,
+        parent_id,
+        name: name.to_owned(),
+        created_at: now,
+        updated_at: now,
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_folder_knows_its_path_its_height_and_its_children() {
+    run(async |tx| {
+        let org = seed_organization(&tx).await;
+        let mut folders = PgKnowledgeFolderRepository::new(&tx);
+        let top = folders.insert(&folder(org, None, "Chantiers")).await?;
+        let middle = folders.insert(&folder(org, Some(top.id), "2026")).await?;
+        let bottom = folders
+            .insert(&folder(org, Some(middle.id), "Parc"))
+            .await?;
+        folders
+            .insert(&folder(org, Some(top.id), "archives"))
+            .await?;
+
+        let path: Vec<_> = folders
+            .path_to(org, bottom.id)
+            .await?
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert_eq!(path, vec!["Chantiers", "2026", "Parc"]);
+        assert_eq!(folders.height(org, top.id).await?, 2);
+        assert_eq!(folders.height(org, bottom.id).await?, 0);
+
+        let children: Vec<_> = folders
+            .children(org, Some(top.id))
+            .await?
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert_eq!(children, vec!["2026", "archives"]);
+        assert_eq!(folders.children(org, None).await?.len(), 1);
+        Ok(())
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn siblings_cannot_share_a_name_whatever_its_case() {
+    run(async |tx| {
+        let org = seed_organization(&tx).await;
+        let mut folders = PgKnowledgeFolderRepository::new(&tx);
+        folders.insert(&folder(org, None, "Devis")).await?;
+        let clash = folders.insert(&folder(org, None, "devis")).await;
+        assert!(matches!(clash, Err(CoreError::Conflict(_))));
+        Ok(())
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_parent_of_another_organization_is_refused() {
+    run(async |tx| {
+        let mine = seed_organization(&tx).await;
+        let theirs = seed_organization(&tx).await;
+        let mut folders = PgKnowledgeFolderRepository::new(&tx);
+        let foreign = folders
+            .insert(&folder(theirs, None, "Leur dossier"))
+            .await?;
+        assert!(folders.find_by_id(mine, foreign.id).await?.is_none());
+        let refused = folders
+            .insert(&folder(mine, Some(foreign.id), "Intrus"))
+            .await;
+        assert!(matches!(refused, Err(CoreError::Database(_))));
+        Ok(())
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn articles_move_between_folders_and_are_listed_by_scope() {
+    run(async |tx| {
+        let org = seed_organization(&tx).await;
+        let other = seed_organization(&tx).await;
+        let mut folders = PgKnowledgeFolderRepository::new(&tx);
+        let top = folders.insert(&folder(org, None, "Chantiers")).await?;
+        let sub = folders.insert(&folder(org, Some(top.id), "Parc")).await?;
+        let mut articles = PgKnowledgeArticleRepository::new(&tx);
+        let at_root = articles.insert(&note(org, "Racine", "béton")).await?;
+        let in_top = articles.insert(&note(org, "Haut", "béton")).await?;
+        let in_sub = articles.insert(&note(org, "Bas", "béton")).await?;
+        let foreign = articles.insert(&note(other, "Ailleurs", "béton")).await?;
+
+        assert_eq!(
+            articles
+                .move_to_folder(org, &[in_top.id], Some(top.id))
+                .await?,
+            1
+        );
+        articles
+            .move_to_folder(org, &[in_sub.id], Some(sub.id))
+            .await?;
+        assert_eq!(
+            articles
+                .move_to_folder(org, &[foreign.id], Some(top.id))
+                .await?,
+            0
+        );
+        assert!(!folders.is_empty(org, top.id).await?);
+
+        let scoped = |folder| KnowledgeFilter {
+            query: Some("béton".to_owned()),
+            folder: Some(folder),
+            ..KnowledgeFilter::default()
+        };
+        assert_eq!(
+            found(&mut articles, org, scoped(KnowledgeFolderScope::Root)).await,
+            vec![at_root.id]
+        );
+        assert_eq!(
+            found(
+                &mut articles,
+                org,
+                scoped(KnowledgeFolderScope::Directly(top.id))
+            )
+            .await,
+            vec![in_top.id]
+        );
+        let mut within = found(
+            &mut articles,
+            org,
+            scoped(KnowledgeFolderScope::Within(top.id)),
+        )
+        .await;
+        within.sort_by_key(|id| id.0);
+        let mut expected = vec![in_top.id, in_sub.id];
+        expected.sort_by_key(|id| id.0);
+        assert_eq!(within, expected);
+
+        articles.move_to_folder(org, &[in_sub.id], None).await?;
+        assert!(folders.is_empty(org, sub.id).await?);
+        folders.delete(org, sub.id).await?;
         Ok(())
     })
     .await;

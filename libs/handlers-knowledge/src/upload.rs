@@ -101,6 +101,7 @@ fn mime_type(headers: &HeaderMap) -> String {
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
         ("title" = String, Query, description = "Title of the article, usually the file name"),
         ("tag" = Option<Vec<String>>, Query, description = "Tag, repeatable"),
+        ("folder_id" = Option<mestier_core::KnowledgeFolderId>, Query, description = "Folder to put the file in; absent puts it at the root"),
     ),
     request_body(content = Vec<u8>, content_type = "application/pdf"),
     responses(
@@ -108,6 +109,7 @@ fn mime_type(headers: &HeaderMap) -> String {
         (status = 400, description = "The title is missing"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
+        (status = 404, description = "Folder not found, or held by another organization"),
         (status = 413, description = "The file exceeds 25 MB"),
         (status = 422, description = "Empty file, file type not accepted, or invalid title or tag"),
     ),
@@ -128,10 +130,18 @@ pub async fn handler(
     }
     let mut title = None;
     let mut tags = Vec::new();
+    let mut folder_id = None;
     for (key, value) in form_urlencoded::parse(raw.unwrap_or_default().as_bytes()) {
         match key.as_ref() {
             "title" => title = Some(value.into_owned()),
             "tag" => tags.push(value.into_owned()),
+            "folder_id" => {
+                folder_id = Some(
+                    value
+                        .parse()
+                        .map_err(|_| ApiError::Validation("folder_id: not a uuid".to_owned()))?,
+                );
+            }
             _ => {}
         }
     }
@@ -155,6 +165,7 @@ pub async fn handler(
                 bytes: body.to_vec(),
                 extracted_text,
                 tags,
+                folder_id,
             },
             &state.file_storage,
         )

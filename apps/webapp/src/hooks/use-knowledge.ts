@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 import {
+	type FolderScope,
 	type KnowledgeFilters,
 	listSearchParams,
 	PAGE_SIZE,
@@ -19,6 +20,8 @@ export interface KnowledgeLink {
 
 export interface KnowledgeArticle {
 	id: string
+	/** `null` at the root of the drive. */
+	folder_id?: string | null
 	kind: 'file' | 'note'
 	title: string
 	body: string | null
@@ -28,6 +31,15 @@ export interface KnowledgeArticle {
 	/** Only on a single article. */
 	links?: KnowledgeLink[]
 	tags: string[]
+	created_at: string
+	updated_at: string
+}
+
+export interface KnowledgeFolder {
+	id: string
+	/** `null` at the root. */
+	parent_id: string | null
+	name: string
 	created_at: string
 	updated_at: string
 }
@@ -56,6 +68,23 @@ function orgPath(organizationId: string): string {
 	return `/api/v1/organizations/${organizationId}/knowledge`
 }
 
+/** The folder rules the server enforces, said in French. */
+function folderRefusal(serverMessage: string): string | null {
+	if (serverMessage.includes('already exists here')) {
+		return 'Un dossier porte déjà ce nom ici.'
+	}
+	if (serverMessage.includes('only an empty folder')) {
+		return 'Ce dossier n’est pas vide : déplace ou supprime d’abord ce qu’il contient.'
+	}
+	if (serverMessage.includes('inside itself')) {
+		return 'Un dossier ne peut pas aller dans l’un de ses propres sous-dossiers.'
+	}
+	if (serverMessage.includes('10 levels')) {
+		return 'Les dossiers s’imbriquent sur 10 niveaux au plus.'
+	}
+	return null
+}
+
 export function knowledgeErrorMessage(
 	status: number,
 	serverMessage: string | null,
@@ -65,7 +94,8 @@ export function knowledgeErrorMessage(
 		return "Vous n'avez pas la permission de gérer la base de connaissances."
 	}
 	if (status === 404) return "Cet élément n'existe plus."
-	return serverMessage ?? `Échec de la requête (${status}).`
+	const known = serverMessage ? folderRefusal(serverMessage) : null
+	return known ?? serverMessage ?? `Échec de la requête (${status}).`
 }
 
 async function request(
@@ -122,11 +152,12 @@ export function useKnowledgeArticles(
 	organizationId: string,
 	filters: KnowledgeFilters,
 	page: number,
+	scope: FolderScope | null = null,
 ) {
 	return useQuery({
-		queryKey: [KNOWLEDGE_KEY, 'list', organizationId, filters, page],
+		queryKey: [KNOWLEDGE_KEY, 'list', organizationId, filters, page, scope],
 		queryFn: async (): Promise<KnowledgePage> => {
-			const query = listSearchParams(filters, page, PAGE_SIZE).toString()
+			const query = listSearchParams(filters, page, PAGE_SIZE, scope).toString()
 			const response = await request(
 				`${orgPath(organizationId)}/articles?${query}`,
 			)
@@ -134,6 +165,19 @@ export function useKnowledgeArticles(
 		},
 		enabled: Boolean(organizationId),
 		placeholderData: (previous) => previous,
+	})
+}
+
+/** Every folder of the drive, flat: each one names its parent. */
+export function useKnowledgeFolders(organizationId: string) {
+	return useQuery({
+		queryKey: [KNOWLEDGE_KEY, 'folders', organizationId],
+		queryFn: async (): Promise<KnowledgeFolder[]> => {
+			const response = await request(`${orgPath(organizationId)}/folder-tree`)
+			const folders = unwrap<unknown>(await response.json())
+			return Array.isArray(folders) ? (folders as KnowledgeFolder[]) : []
+		},
+		enabled: Boolean(organizationId),
 	})
 }
 
@@ -198,10 +242,12 @@ export function useCreateKnowledgeNote(organizationId: string) {
 			title: string
 			body: string
 			tags: string[]
+			folderId?: string | null
 		}): Promise<KnowledgeArticle> => {
+			const { folderId, ...note } = input
 			const response = await request(`${orgPath(organizationId)}/notes`, {
 				method: 'POST',
-				body: JSON.stringify(input),
+				body: JSON.stringify({ ...note, folder_id: folderId ?? null }),
 				contentType: 'application/json',
 			})
 			return unwrap<KnowledgeArticle>(await response.json())
@@ -219,8 +265,11 @@ export function useUploadKnowledgeFile(organizationId: string) {
 			file: Blob
 			mimeType: string
 			title: string
+			folderId?: string | null
 		}): Promise<KnowledgeArticle> => {
-			const query = new URLSearchParams({ title: input.title }).toString()
+			const params = new URLSearchParams({ title: input.title })
+			if (input.folderId) params.set('folder_id', input.folderId)
+			const query = params.toString()
 			const response = await request(
 				`${orgPath(organizationId)}/articles?${query}`,
 				{ method: 'POST', body: input.file, contentType: input.mimeType },
@@ -309,6 +358,96 @@ export function useUnlinkKnowledgeArticle(organizationId: string) {
 				`${orgPath(organizationId)}/articles/${input.articleId}/links/${input.resourceType}/${input.resourceId}`,
 				{ method: 'DELETE' },
 			)
+		},
+		onSuccess: () => {
+			void invalidate()
+		},
+	})
+}
+
+export function useCreateKnowledgeFolder(organizationId: string) {
+	const invalidate = useInvalidation()
+	return useMutation({
+		mutationFn: async (input: {
+			name: string
+			parentId: string | null
+		}): Promise<KnowledgeFolder> => {
+			const response = await request(`${orgPath(organizationId)}/folders`, {
+				method: 'POST',
+				body: JSON.stringify({ name: input.name, parent_id: input.parentId }),
+				contentType: 'application/json',
+			})
+			return unwrap<KnowledgeFolder>(await response.json())
+		},
+		onSuccess: () => {
+			void invalidate()
+		},
+	})
+}
+
+export function useUpdateKnowledgeFolder(organizationId: string) {
+	const invalidate = useInvalidation()
+	return useMutation({
+		mutationFn: async (input: {
+			id: string
+			/** Absent keeps the name. */
+			name?: string
+			/** Absent keeps the parent; `null` moves the folder to the root. */
+			parentId?: string | null
+		}): Promise<KnowledgeFolder> => {
+			const patch: Record<string, unknown> = {}
+			if (input.name !== undefined) patch.name = input.name
+			if (input.parentId !== undefined) patch.parent_id = input.parentId
+			const response = await request(
+				`${orgPath(organizationId)}/folders/${input.id}`,
+				{
+					method: 'PATCH',
+					body: JSON.stringify(patch),
+					contentType: 'application/json',
+				},
+			)
+			return unwrap<KnowledgeFolder>(await response.json())
+		},
+		onSuccess: () => {
+			void invalidate()
+		},
+	})
+}
+
+export function useDeleteKnowledgeFolder(organizationId: string) {
+	const invalidate = useInvalidation()
+	return useMutation({
+		mutationFn: async (id: string): Promise<void> => {
+			await request(`${orgPath(organizationId)}/folders/${id}`, {
+				method: 'DELETE',
+			})
+		},
+		onSuccess: () => {
+			void invalidate()
+		},
+	})
+}
+
+export function useMoveKnowledgeArticles(organizationId: string) {
+	const invalidate = useInvalidation()
+	return useMutation({
+		mutationFn: async (input: {
+			articleIds: string[]
+			/** `null` moves the articles to the root. */
+			folderId: string | null
+		}): Promise<number> => {
+			const response = await request(
+				`${orgPath(organizationId)}/articles/move`,
+				{
+					method: 'POST',
+					body: JSON.stringify({
+						article_ids: input.articleIds,
+						folder_id: input.folderId,
+					}),
+					contentType: 'application/json',
+				},
+			)
+			return unwrap<{ moved: number }>(await response.json()).moved
 		},
 		onSuccess: () => {
 			void invalidate()

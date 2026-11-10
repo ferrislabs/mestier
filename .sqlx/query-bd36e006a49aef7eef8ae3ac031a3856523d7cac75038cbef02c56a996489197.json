@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT NOT EXISTS (\n                SELECT 1 FROM knowledge_folders WHERE org_id = $1 AND parent_id = $2\n            ) AND NOT EXISTS (\n                SELECT 1 FROM knowledge_articles WHERE org_id = $1 AND folder_id = $2\n            ) AS \"empty!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "empty!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bd36e006a49aef7eef8ae3ac031a3856523d7cac75038cbef02c56a996489197"
+}

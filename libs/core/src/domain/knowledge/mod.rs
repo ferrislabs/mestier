@@ -9,6 +9,7 @@ use crate::OrganizationId;
 
 pub mod commands;
 pub mod error;
+pub mod folders;
 pub mod ports;
 pub mod service;
 pub mod text;
@@ -31,6 +32,45 @@ impl Display for KnowledgeArticleId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+pub struct KnowledgeFolderId(pub Uuid);
+
+impl FromStr for KnowledgeFolderId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::from_str(s).map(KnowledgeFolderId)
+    }
+}
+
+impl Display for KnowledgeFolderId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// A folder of the drive. `parent_id` is `None` at the root.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnowledgeFolder {
+    pub id: KnowledgeFolderId,
+    pub organization_id: OrganizationId,
+    pub parent_id: Option<KnowledgeFolderId>,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Where the articles of a listing are taken from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KnowledgeFolderScope {
+    /// Only the articles outside any folder.
+    Root,
+    /// Only the articles placed directly in this folder.
+    Directly(KnowledgeFolderId),
+    /// The articles of this folder and of every folder below it.
+    Within(KnowledgeFolderId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -73,6 +113,8 @@ pub struct KnowledgeFile {
 pub struct KnowledgeArticle {
     pub id: KnowledgeArticleId,
     pub organization_id: OrganizationId,
+    /// `None` when the article sits at the root of the drive.
+    pub folder_id: Option<KnowledgeFolderId>,
     pub kind: KnowledgeKind,
     pub title: String,
     /// The text of a note. `None` for a file.
@@ -144,4 +186,6 @@ pub struct KnowledgeFilter {
     pub tags: Vec<String>,
     /// Only the articles linked to this resource.
     pub resource: Option<KnowledgeResource>,
+    /// `None` searches the whole drive.
+    pub folder: Option<KnowledgeFolderScope>,
 }

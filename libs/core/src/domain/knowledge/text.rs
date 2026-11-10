@@ -7,6 +7,12 @@ pub const MAX_TITLE_CHARS: usize = 200;
 pub const MAX_NOTE_CHARS: usize = 100_000;
 pub const MAX_TAGS: usize = 20;
 pub const MAX_TAG_CHARS: usize = 40;
+pub const MAX_FOLDER_NAME_CHARS: usize = 100;
+/// A folder at the root is at depth 1.
+pub const MAX_FOLDER_DEPTH: usize = 10;
+pub const MAX_MOVED_ARTICLES: usize = 100;
+/// Bound on the folder tree sent in one answer.
+pub const MAX_LISTED_FOLDERS: u64 = 5_000;
 pub const MAX_FILE_BYTES: usize = 25 * 1024 * 1024;
 pub const MAX_EXTRACTED_CHARS: usize = 500_000;
 /// Bound on what a hostile PDF can inflate to while its text is read.
@@ -29,6 +35,15 @@ pub fn normalize_title(raw: &str) -> KnowledgeOutcome<String> {
         0 => Err(KnowledgeError::TitleEmpty),
         count if count > MAX_TITLE_CHARS => Err(KnowledgeError::TitleTooLong),
         _ => Ok(title.to_owned()),
+    }
+}
+
+pub fn normalize_folder_name(raw: &str) -> KnowledgeOutcome<String> {
+    let name = raw.trim();
+    match name.chars().count() {
+        0 => Err(KnowledgeError::FolderNameEmpty),
+        count if count > MAX_FOLDER_NAME_CHARS => Err(KnowledgeError::FolderNameTooLong),
+        _ => Ok(name.to_owned()),
     }
 }
 

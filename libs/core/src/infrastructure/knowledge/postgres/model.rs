@@ -3,14 +3,15 @@ use common::CoreError;
 use uuid::Uuid;
 
 use crate::{
-    KnowledgeArticle, KnowledgeArticleId, KnowledgeFile, KnowledgeKind, KnowledgeLink,
-    KnowledgeResource, KnowledgeResourceType, OrganizationId,
+    KnowledgeArticle, KnowledgeArticleId, KnowledgeFile, KnowledgeFolder, KnowledgeFolderId,
+    KnowledgeKind, KnowledgeLink, KnowledgeResource, KnowledgeResourceType, OrganizationId,
 };
 
 #[derive(Debug, Clone)]
 pub struct KnowledgeArticleRow {
     pub id: Uuid,
     pub org_id: Uuid,
+    pub folder_id: Option<Uuid>,
     pub kind: String,
     pub title: String,
     pub body: Option<String>,
@@ -44,6 +45,7 @@ impl TryFrom<KnowledgeArticleRow> for KnowledgeArticle {
         Ok(Self {
             id: KnowledgeArticleId(row.id),
             organization_id: OrganizationId(row.org_id),
+            folder_id: row.folder_id.map(KnowledgeFolderId),
             kind,
             title: row.title,
             body: row.body,
@@ -82,5 +84,28 @@ impl TryFrom<KnowledgeLinkRow> for KnowledgeLink {
             },
             created_at: row.created_at,
         })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct KnowledgeFolderRow {
+    pub id: Uuid,
+    pub org_id: Uuid,
+    pub parent_id: Option<Uuid>,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<KnowledgeFolderRow> for KnowledgeFolder {
+    fn from(row: KnowledgeFolderRow) -> Self {
+        Self {
+            id: KnowledgeFolderId(row.id),
+            organization_id: OrganizationId(row.org_id),
+            parent_id: row.parent_id.map(KnowledgeFolderId),
+            name: row.name,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
     }
 }

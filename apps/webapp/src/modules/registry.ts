@@ -317,7 +317,7 @@ export const MODULES: AppModule[] = [
 		label: 'Connaissances',
 		icon: LibraryBig,
 		hue: 45,
-		description: 'Devis, tarifs et notes de l’entreprise',
+		description: 'Documents, dossiers et notes de l’entreprise',
 		basePath: '/connaissances',
 		status: 'available',
 		hasOverview: true,
@@ -325,7 +325,7 @@ export const MODULES: AppModule[] = [
 		sections: [
 			{
 				id: 'articles',
-				label: 'Base de connaissances',
+				label: 'Drive',
 				to: '/connaissances',
 				icon: LibraryBig,
 				exact: true,

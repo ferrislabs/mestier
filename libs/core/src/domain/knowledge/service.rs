@@ -18,7 +18,7 @@ use crate::{
 
 pub const MAX_PAGE_SIZE: u64 = 100;
 
-fn knowledge_folder(organization_id: OrganizationId) -> String {
+fn storage_folder(organization_id: OrganizationId) -> String {
     format!("knowledge-{}", organization_id.0)
 }
 
@@ -56,6 +56,7 @@ where
         let article = KnowledgeArticle {
             id: KnowledgeArticleId(generate_uuid_v7()),
             organization_id: command.organization_id,
+            folder_id: command.folder_id,
             kind: KnowledgeKind::Note,
             title,
             body: Some(body),
@@ -92,13 +93,14 @@ where
             .upload(UploadFileCommand {
                 mime_type: command.mime_type.clone(),
                 bytes: command.bytes,
-                folder: Some(knowledge_folder(command.organization_id)),
+                folder: Some(storage_folder(command.organization_id)),
             })
             .await?;
         let now = Utc::now();
         let article = KnowledgeArticle {
             id: KnowledgeArticleId(generate_uuid_v7()),
             organization_id: command.organization_id,
+            folder_id: command.folder_id,
             kind: KnowledgeKind::File,
             title,
             body: None,
@@ -145,21 +147,15 @@ where
     pub async fn list(
         &mut self,
         organization_id: OrganizationId,
-        query: Option<String>,
-        tags: Vec<String>,
-        resource: Option<KnowledgeResource>,
+        filter: KnowledgeFilter,
         limit: u64,
         offset: u64,
     ) -> Result<KnowledgeOutcome<(Vec<KnowledgeArticle>, u64)>, CoreError> {
-        let tags = match normalize_tags(&tags) {
+        let tags = match normalize_tags(&filter.tags) {
             Ok(tags) => tags,
             Err(error) => return Ok(Err(error)),
         };
-        let filter = KnowledgeFilter {
-            query,
-            tags,
-            resource,
-        };
+        let filter = KnowledgeFilter { tags, ..filter };
         let limit = limit.clamp(1, MAX_PAGE_SIZE);
         self.articles
             .list(organization_id, &filter, limit, offset)
@@ -250,6 +246,7 @@ mod tests {
         KnowledgeArticle {
             id: KnowledgeArticleId(generate_uuid_v7()),
             organization_id,
+            folder_id: None,
             kind,
             title: "Titre".to_owned(),
             body: (kind == KnowledgeKind::Note).then(|| "texte".to_owned()),
@@ -287,6 +284,7 @@ mod tests {
                 title: "  Devis ".to_owned(),
                 body: " texte ".to_owned(),
                 tags: vec![" Devis".to_owned()],
+                folder_id: None,
             })
             .await
             .unwrap();
@@ -303,6 +301,7 @@ mod tests {
                 title: "Titre".to_owned(),
                 body: "   ".to_owned(),
                 tags: Vec::new(),
+                folder_id: None,
             })
             .await
             .unwrap();
@@ -363,7 +362,7 @@ mod tests {
             .returning(|_, _, _, _| Box::pin(async { Ok((Vec::new(), 0)) }));
 
         KnowledgeService::new(repository)
-            .list(org(), None, Vec::new(), None, 10_000, 0)
+            .list(org(), KnowledgeFilter::default(), 10_000, 0)
             .await
             .unwrap()
             .unwrap();

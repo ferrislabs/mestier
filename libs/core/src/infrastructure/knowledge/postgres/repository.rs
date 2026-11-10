@@ -2,8 +2,8 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    KnowledgeArticle, KnowledgeArticleId, KnowledgeFilter, KnowledgeLink, KnowledgeResource,
-    OrganizationId,
+    KnowledgeArticle, KnowledgeArticleId, KnowledgeFilter, KnowledgeFolderId, KnowledgeFolderScope,
+    KnowledgeLink, KnowledgeResource, OrganizationId,
     domain::knowledge::ports::KnowledgeArticleRepository,
     infrastructure::{
         knowledge::postgres::model::{KnowledgeArticleRow, KnowledgeLinkRow},
@@ -36,12 +36,13 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
         let row = sqlx::query_as!(
             KnowledgeArticleRow,
             r#"
-            INSERT INTO knowledge_articles (id, org_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            RETURNING id, org_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at
+            INSERT INTO knowledge_articles (id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            RETURNING id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at
             "#,
             article.id.0,
             article.organization_id.0,
+            article.folder_id.map(|id| id.0),
             article.kind.as_str(),
             article.title,
             article.body,
@@ -69,7 +70,7 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
         let row = sqlx::query_as!(
             KnowledgeArticleRow,
             r#"
-            SELECT id, org_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at
+            SELECT id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at
             FROM knowledge_articles
             WHERE id = $1 AND org_id = $2
             "#,
@@ -99,12 +100,18 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
             .filter(|q| !q.is_empty());
         let resource_type = filter.resource.map(|r| r.resource_type.as_str());
         let resource_id = filter.resource.map(|r| r.id);
+        let (folder_mode, folder_id) = match filter.folder {
+            None => (None, None),
+            Some(KnowledgeFolderScope::Root) => (Some("root"), None),
+            Some(KnowledgeFolderScope::Directly(id)) => (Some("directly"), Some(id.0)),
+            Some(KnowledgeFolderScope::Within(id)) => (Some("within"), Some(id.0)),
+        };
 
         let mut tx = self.tx.lock().await;
         let rows = sqlx::query_as!(
             KnowledgeArticleRow,
             r#"
-            SELECT a.id, a.org_id, a.kind, a.title, a.body, a.file_key, a.mime_type, a.size_bytes,
+            SELECT a.id, a.org_id, a.folder_id, a.kind, a.title, a.body, a.file_key, a.mime_type, a.size_bytes,
                    NULL::text AS extracted_text, a.tags, a.created_at, a.updated_at
             FROM knowledge_articles a
             WHERE a.org_id = $1
@@ -113,16 +120,30 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
               AND ($4::text IS NULL OR EXISTS (
                     SELECT 1 FROM knowledge_links l
                     WHERE l.article_id = a.id AND l.resource_type = $4 AND l.resource_id = $5))
+              AND CASE $6::text
+                    WHEN 'root' THEN a.folder_id IS NULL
+                    WHEN 'directly' THEN a.folder_id = $7
+                    WHEN 'within' THEN a.folder_id IN (
+                        WITH RECURSIVE tree AS (
+                            SELECT f.id FROM knowledge_folders f WHERE f.id = $7 AND f.org_id = $1
+                            UNION ALL
+                            SELECT f.id FROM knowledge_folders f JOIN tree t ON f.parent_id = t.id
+                        )
+                        SELECT id FROM tree)
+                    ELSE TRUE
+                  END
             ORDER BY
               CASE WHEN $2::text IS NULL THEN 0 ELSE ts_rank(a.search, websearch_to_tsquery('french', $2)) END DESC,
               a.created_at DESC, a.id
-            LIMIT $6 OFFSET $7
+            LIMIT $8 OFFSET $9
             "#,
             organization_id.0,
             query,
             &filter.tags,
             resource_type,
             resource_id,
+            folder_mode,
+            folder_id,
             limit,
             offset,
         )
@@ -140,12 +161,26 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
               AND ($4::text IS NULL OR EXISTS (
                     SELECT 1 FROM knowledge_links l
                     WHERE l.article_id = a.id AND l.resource_type = $4 AND l.resource_id = $5))
+              AND CASE $6::text
+                    WHEN 'root' THEN a.folder_id IS NULL
+                    WHEN 'directly' THEN a.folder_id = $7
+                    WHEN 'within' THEN a.folder_id IN (
+                        WITH RECURSIVE tree AS (
+                            SELECT f.id FROM knowledge_folders f WHERE f.id = $7 AND f.org_id = $1
+                            UNION ALL
+                            SELECT f.id FROM knowledge_folders f JOIN tree t ON f.parent_id = t.id
+                        )
+                        SELECT id FROM tree)
+                    ELSE TRUE
+                  END
             "#,
             organization_id.0,
             query,
             &filter.tags,
             resource_type,
             resource_id,
+            folder_mode,
+            folder_id,
         )
         .fetch_one(&mut ***tx)
         .await
@@ -166,7 +201,7 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
             UPDATE knowledge_articles
             SET title = $3, body = $4, tags = $5, updated_at = $6
             WHERE id = $1 AND org_id = $2
-            RETURNING id, org_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at
+            RETURNING id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at
             "#,
             article.id.0,
             article.organization_id.0,
@@ -280,5 +315,30 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         rows.into_iter().map(KnowledgeLink::try_from).collect()
+    }
+
+    async fn move_to_folder(
+        &mut self,
+        organization_id: OrganizationId,
+        ids: &[KnowledgeArticleId],
+        folder_id: Option<KnowledgeFolderId>,
+    ) -> Result<u64, CoreError> {
+        let ids: Vec<_> = ids.iter().map(|id| id.0).collect();
+        let mut tx = self.tx.lock().await;
+        let result = sqlx::query!(
+            r#"
+            UPDATE knowledge_articles
+            SET folder_id = $3, updated_at = now()
+            WHERE org_id = $1 AND id = ANY($2)
+            "#,
+            organization_id.0,
+            &ids,
+            folder_id.map(|id| id.0),
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(result.rows_affected())
     }
 }

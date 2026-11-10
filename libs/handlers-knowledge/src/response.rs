@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    KnowledgeArticle, KnowledgeArticleId, KnowledgeKind, KnowledgeLink, KnowledgeResourceType,
+    KnowledgeArticle, KnowledgeArticleId, KnowledgeFolder, KnowledgeFolderId, KnowledgeFolderView,
+    KnowledgeKind, KnowledgeLink, KnowledgeResourceType,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -35,6 +36,8 @@ impl From<KnowledgeLink> for KnowledgeLinkResponse {
 #[derive(Debug, Serialize, PartialEq, ToSchema)]
 pub struct KnowledgeArticleResponse {
     pub id: KnowledgeArticleId,
+    /// Absent when the article sits at the root of the drive.
+    pub folder_id: Option<KnowledgeFolderId>,
     pub kind: KnowledgeKind,
     pub title: String,
     /// The text of a note. Absent for a file.
@@ -57,6 +60,7 @@ impl From<KnowledgeArticle> for KnowledgeArticleResponse {
     fn from(article: KnowledgeArticle) -> Self {
         Self {
             id: article.id,
+            folder_id: article.folder_id,
             kind: article.kind,
             title: article.title,
             body: article.body,
@@ -69,6 +73,50 @@ impl From<KnowledgeArticle> for KnowledgeArticleResponse {
             tags: article.tags,
             created_at: article.created_at,
             updated_at: article.updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, PartialEq, ToSchema)]
+pub struct KnowledgeFolderResponse {
+    pub id: KnowledgeFolderId,
+    /// Absent at the root.
+    pub parent_id: Option<KnowledgeFolderId>,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<KnowledgeFolder> for KnowledgeFolderResponse {
+    fn from(folder: KnowledgeFolder) -> Self {
+        Self {
+            id: folder.id,
+            parent_id: folder.parent_id,
+            name: folder.name,
+            created_at: folder.created_at,
+            updated_at: folder.updated_at,
+        }
+    }
+}
+
+/// An opened folder. Its articles come from the article listing filtered on
+/// the folder.
+#[derive(Debug, Serialize, PartialEq, ToSchema)]
+pub struct KnowledgeFolderViewResponse {
+    /// Absent at the root.
+    pub folder: Option<KnowledgeFolderResponse>,
+    /// From the root down to the folder, the folder included. Empty at the root.
+    pub path: Vec<KnowledgeFolderResponse>,
+    /// The folders directly inside, by name.
+    pub children: Vec<KnowledgeFolderResponse>,
+}
+
+impl From<KnowledgeFolderView> for KnowledgeFolderViewResponse {
+    fn from(view: KnowledgeFolderView) -> Self {
+        Self {
+            folder: view.folder.map(Into::into),
+            path: view.path.into_iter().map(Into::into).collect(),
+            children: view.children.into_iter().map(Into::into).collect(),
         }
     }
 }

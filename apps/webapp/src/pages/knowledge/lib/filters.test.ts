@@ -29,4 +29,28 @@ describe('knowledge filters', () => {
 			'paiement',
 		)
 	})
+
+	it('reads the folder scope: root, a folder, its tree, the whole drive', () => {
+		const filters = { q: '', tags: [] }
+		const root = listSearchParams(filters, 1, 25, {
+			folderId: null,
+			recursive: false,
+		})
+		expect(root.get('folder')).toBe('root')
+		expect(root.has('recursive')).toBe(false)
+
+		const tree = listSearchParams(filters, 1, 25, {
+			folderId: 'f1',
+			recursive: true,
+		})
+		expect(tree.get('folder')).toBe('f1')
+		expect(tree.get('recursive')).toBe('true')
+
+		const drive = listSearchParams(filters, 1, 25, {
+			folderId: null,
+			recursive: true,
+		})
+		expect(drive.has('folder')).toBe(false)
+		expect(listSearchParams(filters, 1).has('folder')).toBe(false)
+	})
 })

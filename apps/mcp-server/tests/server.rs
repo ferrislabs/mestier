@@ -488,6 +488,32 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
             }}))
             .into_response()
         }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/knowledge/folders") => Json(json!({"data": {
+            "folder": null, "path": [],
+            "children": [{"id": FOLDER, "parent_id": null, "name": "Chantiers",
+                          "created_at": "2026-11-10T08:00:00Z", "updated_at": "2026-11-10T08:00:00Z"}]
+        }}))
+        .into_response(),
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/knowledge/folders/{FOLDER}") => {
+            let folder = json!({"id": FOLDER, "parent_id": null, "name": "Chantiers",
+                                "created_at": "2026-11-10T08:00:00Z", "updated_at": "2026-11-10T08:00:00Z"});
+            Json(json!({"data": {"folder": folder, "path": [folder], "children": []}})).into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/knowledge/folders") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            (
+                StatusCode::CREATED,
+                Json(json!({"data": {
+                    "id": FOLDER, "parent_id": sent["parent_id"], "name": sent["name"],
+                    "created_at": "2026-11-10T08:00:00Z", "updated_at": "2026-11-10T08:00:00Z"
+                }})),
+            )
+                .into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/knowledge/articles/move") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            Json(json!({"data": {"moved": sent["article_ids"].as_array().unwrap().len()}})).into_response()
+        }
         (&Method::POST, p) if p == format!("organizations/{ORG_A}/knowledge/articles/{ARTICLE}/links") => {
             let sent: Value = serde_json::from_slice(&bytes).unwrap();
             Json(json!({"data": {
@@ -631,6 +657,7 @@ fn text(result: &Value) -> String {
 }
 
 const ARTICLE: &str = "e0000000-0000-4000-8000-000000000001";
+const FOLDER: &str = "e0000000-0000-4000-8000-000000000002";
 
 #[tokio::test]
 async fn the_knowledge_search_sends_every_filter_and_returns_slim_articles() {
@@ -2861,5 +2888,94 @@ async fn no_photo_library_tool_uploads_or_deletes() {
         if tool.name().contains("photo") && tool.name().contains("library") {
             assert!(!tool.name().contains("delete"));
         }
+    }
+}
+
+#[tokio::test]
+async fn a_folder_is_opened_with_its_subfolders_and_the_articles_placed_in_it() {
+    let (mcp, fake) = start().await;
+    let root = call(&mcp, "solo", "list_knowledge_folder", json!({})).await;
+    assert_ne!(root["isError"], json!(true), "{root}");
+    let root: Value = serde_json::from_str(&text(&root)).unwrap();
+    assert_eq!(root["folder"], Value::Null);
+    assert_eq!(root["folders"][0]["name"], "Chantiers");
+    assert_eq!(root["articles"][0]["id"], ARTICLE);
+
+    let opened = call(
+        &mcp,
+        "solo",
+        "list_knowledge_folder",
+        json!({"folder_id": FOLDER}),
+    )
+    .await;
+    let opened: Value = serde_json::from_str(&text(&opened)).unwrap();
+    assert_eq!(opened["path"][0]["id"], FOLDER);
+
+    let listings: Vec<String> = fake
+        .seen()
+        .into_iter()
+        .filter(|s| s.path.ends_with("/knowledge/articles"))
+        .map(|s| s.query)
+        .collect();
+    assert!(listings[0].contains("folder=root"), "{}", listings[0]);
+    assert!(
+        listings[1].contains(&format!("folder={FOLDER}")),
+        "{}",
+        listings[1]
+    );
+}
+
+#[tokio::test]
+async fn a_folder_is_created_and_articles_are_moved_without_anything_deleted() {
+    let (mcp, fake) = start().await;
+    let created = call(
+        &mcp,
+        "solo",
+        "create_knowledge_folder",
+        json!({"name": "Devis 2026", "parent_id": FOLDER}),
+    )
+    .await;
+    assert_ne!(created["isError"], json!(true), "{created}");
+    let created: Value = serde_json::from_str(&text(&created)).unwrap();
+    assert_eq!(created["parent_id"], FOLDER);
+
+    let moved = call(
+        &mcp,
+        "solo",
+        "move_knowledge_articles",
+        json!({"article_ids": [ARTICLE], "folder_id": FOLDER}),
+    )
+    .await;
+    assert_ne!(moved["isError"], json!(true), "{moved}");
+    let moved: Value = serde_json::from_str(&text(&moved)).unwrap();
+    assert_eq!(moved["moved"], 1);
+
+    let empty = call(
+        &mcp,
+        "solo",
+        "move_knowledge_articles",
+        json!({"article_ids": []}),
+    )
+    .await;
+    assert_eq!(empty["isError"], json!(true));
+
+    let searched = call(
+        &mcp,
+        "solo",
+        "search_knowledge",
+        json!({"folder_id": FOLDER}),
+    )
+    .await;
+    assert_ne!(searched["isError"], json!(true), "{searched}");
+    let search = fake
+        .seen()
+        .into_iter()
+        .rfind(|s| s.path.ends_with("/knowledge/articles"))
+        .unwrap();
+    assert!(search.query.contains("recursive=true"), "{}", search.query);
+
+    for seen in fake.seen() {
+        assert_ne!(seen.method, "DELETE", "{}", seen.path);
+        assert_ne!(seen.method, "PATCH", "{}", seen.path);
     }
 }
