@@ -4,13 +4,13 @@ use handlers::{ApiError, AppState, DataEnvelope, Response, require_org_membershi
 use http::StatusCode;
 use mestier_core::{
     BrowseKnowledgeFolderCommand, CreateKnowledgeFolderCommand, DeleteKnowledgeFolderCommand,
-    KnowledgeFolderId, OrganizationId, UpdateKnowledgeFolderCommand,
+    KnowledgeFolderId, ListKnowledgeFoldersCommand, OrganizationId, UpdateKnowledgeFolderCommand,
 };
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
-    FolderPath, FoldersPath, deserialize_present,
+    FolderPath, FolderTreePath, FoldersPath, deserialize_present,
     response::{KnowledgeFolderResponse, KnowledgeFolderViewResponse},
     unprocessable,
 };
@@ -32,6 +32,36 @@ async fn open(
         })
         .await?;
     Ok(Response::OK(view.into()))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/organizations/{organization_id}/knowledge/folder-tree",
+    operation_id = "listKnowledgeFolders",
+    tag = crate::TAG,
+    params(("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier")),
+    responses(
+        (status = 200, description = "Every folder of the drive, flat and by name: each one names its parent", body = inline(DataEnvelope<Vec<KnowledgeFolderResponse>>)),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn tree(
+    FolderTreePath { organization_id }: FolderTreePath,
+    State(state): State<AppState>,
+    Extension(identity): Extension<Identity>,
+) -> Result<Response<Vec<KnowledgeFolderResponse>>, ApiError> {
+    require_org_membership(&state, &identity, organization_id).await?;
+    let (_, actor) = resolve_actor(&state, &identity).await?;
+    let folders = state
+        .usecase
+        .list_knowledge_folders(ListKnowledgeFoldersCommand {
+            actor,
+            organization_id,
+        })
+        .await?;
+    Ok(Response::OK(folders.into_iter().map(Into::into).collect()))
 }
 
 #[utoipa::path(

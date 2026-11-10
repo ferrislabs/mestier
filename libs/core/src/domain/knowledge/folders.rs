@@ -10,7 +10,7 @@ use crate::{
     UpdateKnowledgeFolderCommand,
     domain::knowledge::{
         ports::{KnowledgeArticleRepository, KnowledgeFolderRepository},
-        text::{MAX_FOLDER_DEPTH, MAX_MOVED_ARTICLES, normalize_folder_name},
+        text::{MAX_FOLDER_DEPTH, MAX_LISTED_FOLDERS, MAX_MOVED_ARTICLES, normalize_folder_name},
     },
 };
 
@@ -50,6 +50,14 @@ where
             Some(id) => self.get(organization_id, id).await.map(|_| ()),
             None => Ok(()),
         }
+    }
+
+    /// The whole tree, flat: each folder names its parent.
+    pub async fn tree(
+        &mut self,
+        organization_id: OrganizationId,
+    ) -> Result<Vec<KnowledgeFolder>, CoreError> {
+        self.folders.all(organization_id, MAX_LISTED_FOLDERS).await
     }
 
     pub async fn browse(

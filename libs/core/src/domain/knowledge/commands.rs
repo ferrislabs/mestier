@@ -106,6 +106,12 @@ pub struct DeleteKnowledgeFolderCommand {
 }
 
 #[derive(Debug, Clone)]
+pub struct ListKnowledgeFoldersCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+}
+
+#[derive(Debug, Clone)]
 pub struct BrowseKnowledgeFolderCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,

@@ -93,6 +93,13 @@ pub trait KnowledgeFolderRepository: Send {
         parent_id: Option<KnowledgeFolderId>,
     ) -> impl Future<Output = Result<Vec<KnowledgeFolder>, CoreError>> + Send;
 
+    /// Every folder of the organization, by name, at most `limit`.
+    fn all(
+        &mut self,
+        organization_id: OrganizationId,
+        limit: u64,
+    ) -> impl Future<Output = Result<Vec<KnowledgeFolder>, CoreError>> + Send;
+
     /// The path from the root down to the folder, the folder included. Its
     /// length is the depth of the folder.
     fn path_to(

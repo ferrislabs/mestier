@@ -11,6 +11,8 @@ pub const MAX_FOLDER_NAME_CHARS: usize = 100;
 /// A folder at the root is at depth 1.
 pub const MAX_FOLDER_DEPTH: usize = 10;
 pub const MAX_MOVED_ARTICLES: usize = 100;
+/// Bound on the folder tree sent in one answer.
+pub const MAX_LISTED_FOLDERS: u64 = 5_000;
 pub const MAX_FILE_BYTES: usize = 25 * 1024 * 1024;
 pub const MAX_EXTRACTED_CHARS: usize = 500_000;
 /// Bound on what a hostile PDF can inflate to while its text is read.

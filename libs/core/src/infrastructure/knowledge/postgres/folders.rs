@@ -92,6 +92,32 @@ impl<'tx> KnowledgeFolderRepository for PgKnowledgeFolderRepository<'tx> {
         Ok(rows.into_iter().map(KnowledgeFolder::from).collect())
     }
 
+    async fn all(
+        &mut self,
+        organization_id: OrganizationId,
+        limit: u64,
+    ) -> Result<Vec<KnowledgeFolder>, CoreError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            KnowledgeFolderRow,
+            r#"
+            SELECT id, org_id, parent_id, name, created_at, updated_at
+            FROM knowledge_folders
+            WHERE org_id = $1
+            ORDER BY lower(name), id
+            LIMIT $2
+            "#,
+            organization_id.0,
+            limit,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(KnowledgeFolder::from).collect())
+    }
+
     async fn path_to(
         &mut self,
         organization_id: OrganizationId,

@@ -46,6 +46,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_get(download::handler)
         .typed_post(link::add)
         .typed_delete(link::remove)
+        .typed_get(folders::tree)
         .typed_get(folders::browse_root)
         .typed_post(folders::create)
         .typed_get(folders::browse)
@@ -103,6 +104,12 @@ pub struct LinkPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/knowledge/articles/move")]
 pub struct MoveArticlesPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/knowledge/folder-tree")]
+pub struct FolderTreePath {
     pub organization_id: OrganizationId,
 }
 

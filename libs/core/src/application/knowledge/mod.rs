@@ -7,7 +7,7 @@ use crate::{
     CustomerId, DeleteKnowledgeCommand, DeleteKnowledgeFolderCommand, GetKnowledgeCommand,
     KnowledgeArticle, KnowledgeArticleWithLinks, KnowledgeFilter, KnowledgeFolder,
     KnowledgeFolderScope, KnowledgeFolderView, KnowledgeLink, KnowledgeOutcome, KnowledgeResource,
-    KnowledgeResourceType, LinkKnowledgeCommand, ListKnowledgeCommand,
+    KnowledgeResourceType, LinkKnowledgeCommand, ListKnowledgeCommand, ListKnowledgeFoldersCommand,
     MoveKnowledgeArticlesCommand, OrganizationId, ProjectId, QuoteId, UpdateKnowledgeCommand,
     UpdateKnowledgeFolderCommand, UploadKnowledgeFileCommand,
     application::{MestierAuthorizer, MestierFileStorageService, MestierUseCase, policy},
@@ -290,6 +290,28 @@ impl MestierUseCase {
             .unlink(command.organization_id, command.id, command.resource)
             .await
     }
+    #[transactional(knowledge_folder, member, role, authz)]
+    pub async fn list_knowledge_folders(
+        &self,
+        command: ListKnowledgeFoldersCommand,
+    ) -> Result<Vec<KnowledgeFolder>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require(
+            authz,
+            command.actor.clone(),
+            command.organization_id,
+            "knowledge.view",
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        KnowledgeFolderService::new(knowledge_folder_repository)
+            .tree(command.organization_id)
+            .await
+    }
+
     #[transactional(knowledge_folder, member, role, authz)]
     pub async fn browse_knowledge_folder(
         &self,

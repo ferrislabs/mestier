@@ -471,6 +471,14 @@ async fn folders_nest_hold_articles_and_keep_their_rules() {
     let (status, _) = send(create(json!({"name": "n11", "parent_id": parent}))).await;
     assert_eq!(status, 422, "an eleventh level");
 
+    let (_, tree) = send(
+        client
+            .get(articles_url(&app, app.organization_id, "/folder-tree"))
+            .bearer_auth(&app.token),
+    )
+    .await;
+    assert_eq!(tree["data"].as_array().unwrap().len(), 10);
+
     let uploaded: Value = upload(
         &app,
         &app.token,

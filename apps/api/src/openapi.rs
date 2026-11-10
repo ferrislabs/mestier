@@ -423,6 +423,7 @@ impl Modify for SecurityAddon {
         knowledge::download::handler,
         knowledge::link::add,
         knowledge::link::remove,
+        knowledge::folders::tree,
         knowledge::folders::browse_root,
         knowledge::folders::browse,
         knowledge::folders::create,
