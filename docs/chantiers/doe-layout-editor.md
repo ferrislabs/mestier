@@ -86,6 +86,14 @@ Une branche `feat/doe-layout-editor`, une PR.
 | L'aperçu SVG redessiné saute pendant un geste | Position locale pendant le geste, aperçu à la fin (comme aujourd'hui) |
 | Copies répétées de la même photo qui encombrent le stockage | Accepté en v1, comme les envois : les clés de style ne sont pas nettoyées aujourd'hui |
 
+## Écarts constatés à l'implémentation
+
+- Le redimensionnement d'un élément pivoté se fait dans les axes de l'élément (le déplacement du pointeur est projeté sur ces axes), sans recaler le coin opposé : le centre bouge un peu, l'élément ne « saute » pas.
+- Les repères sont calculés par `DecorationOverlay` (prop `snapping`) plutôt que passés en props, car ils dépendent de l'élément en cours de geste.
+- Les vignettes de pages de l'éditeur sont les trois pages de l'aperçu (couverture, intervenants, fiche de fourniture), pas deux entrées.
+- Les champs numériques du panneau de propriétés créent un pas d'historique par modification, un geste sur la page en crée un seul.
+- Ajout de `lib/shortcuts.ts` (table des raccourcis clavier, testée) et de `ui/decoration-properties.tsx` (panneau de propriétés partagé entre l'onglet « Éléments » et l'éditeur).
+
 ## Verify (exit)
 
 ```bash

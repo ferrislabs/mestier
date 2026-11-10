@@ -3,6 +3,7 @@ import { useUploadFile } from '#/hooks/use-customers'
 import { usePreviewDoeStyle } from '#/hooks/use-doe-models'
 import { useFileUrls } from '#/hooks/use-file-url'
 import { mutationErrorMessage } from '#/lib/api-error'
+import { LayoutEditorFeature } from '#/pages/doe-style/feature/layout-editor-feature'
 import { useStylePreviewPages } from '#/pages/doe-style/feature/use-style-preview-pages'
 import {
 	decorationErrors,
@@ -11,6 +12,7 @@ import {
 } from '#/pages/doe-style/lib/decorations'
 import {
 	type CompleteDoeStyle,
+	isValidHex,
 	normalizeStyle,
 	validateStyle,
 } from '#/pages/doe-style/lib/style'
@@ -34,6 +36,7 @@ export function DoeStyleEditorFeature({
 	const live = useStylePreviewPages(organizationId, value)
 	const [activePage, setActivePage] = useState(0)
 	const [selection, setSelection] = useState<number | null>(null)
+	const [layoutEditorOpen, setLayoutEditorOpen] = useState(false)
 	const latest = useRef(value)
 	latest.current = value
 	const selectedDecoration =
@@ -80,6 +83,17 @@ export function DoeStyleEditorFeature({
 						}),
 					})
 				}}
+				onRotateDecoration={(index, rotation) => {
+					const current = latest.current.decorations[index]
+					if (!current) return
+					onChange({
+						decorations: updateDecoration(latest.current.decorations, index, {
+							...current,
+							rotation,
+						}),
+					})
+				}}
+				onOpenLayoutEditor={() => setLayoutEditorOpen(true)}
 				onDecorationImageUpload={(index, file) => {
 					void upload
 						.mutateAsync(file)
@@ -114,6 +128,22 @@ export function DoeStyleEditorFeature({
 				}}
 				onLogoRemove={() => onChange({ logo_key: null })}
 			/>
+			{layoutEditorOpen ? (
+				<LayoutEditorFeature
+					organizationId={organizationId}
+					style={value}
+					accentColor={
+						isValidHex(value.primary)
+							? value.primary.trim().toLowerCase()
+							: '#0f3d36'
+					}
+					onApply={(decorations) => {
+						onChange({ decorations })
+						setLayoutEditorOpen(false)
+					}}
+					onCancel={() => setLayoutEditorOpen(false)}
+				/>
+			) : null}
 		</div>
 	)
 }

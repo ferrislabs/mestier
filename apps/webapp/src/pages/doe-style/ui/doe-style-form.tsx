@@ -53,7 +53,9 @@ interface DoeStyleFormProps {
 	isUploadingDecorationImage: boolean
 	onSelectDecoration: (index: number | null) => void
 	onCommitDecoration: (index: number, rect: Rect) => void
+	onRotateDecoration: (index: number, rotation: number) => void
 	onDecorationImageUpload: (index: number, file: File) => void
+	onOpenLayoutEditor: () => void
 	onSelectPage: (index: number) => void
 	onApplyTheme: (theme: DoeTheme) => void
 	onChange: (patch: Partial<CompleteDoeStyle>) => void
@@ -92,7 +94,9 @@ export function DoeStyleForm({
 	isUploadingDecorationImage,
 	onSelectDecoration,
 	onCommitDecoration,
+	onRotateDecoration,
 	onDecorationImageUpload,
+	onOpenLayoutEditor,
 	onSelectPage,
 	onApplyTheme,
 	onChange,
@@ -311,6 +315,7 @@ export function DoeStyleForm({
 						onChange={(decorations) => onChange({ decorations })}
 						onSelect={onSelectDecoration}
 						onImageUpload={onDecorationImageUpload}
+						onOpenEditor={onOpenLayoutEditor}
 					/>
 					{errors.decorations ? (
 						<p role="alert" className="text-[12px] text-state-alert">
@@ -334,6 +339,7 @@ export function DoeStyleForm({
 					selectedDecoration={selectedDecoration}
 					onSelectDecoration={onSelectDecoration}
 					onCommitDecoration={onCommitDecoration}
+					onRotateDecoration={onRotateDecoration}
 					onSelectPage={onSelectPage}
 				/>
 				<RequirePermission permission="MANAGE_REFERENCE">

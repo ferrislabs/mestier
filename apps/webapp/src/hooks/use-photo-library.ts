@@ -253,6 +253,25 @@ export function useDeleteLibraryPhoto(organizationId: string) {
 	})
 }
 
+export interface CopiedLibraryPhoto {
+	key: string
+}
+
+export function useCopyLibraryPhoto(organizationId: string) {
+	return useMutation({
+		mutationFn: async (photoId: string): Promise<CopiedLibraryPhoto> => {
+			const response = await request(
+				`${orgPath(organizationId)}/photo-library/photos/${photoId}/copy`,
+				{ method: 'POST' },
+			)
+			return unwrapBody<CopiedLibraryPhoto>(
+				await response.json(),
+				(value) => isRecord(value) && 'key' in value,
+			)
+		},
+	})
+}
+
 function queryId(queryKey: readonly unknown[]) {
 	const meta = queryKey[0]
 	return typeof meta === 'object' && meta !== null

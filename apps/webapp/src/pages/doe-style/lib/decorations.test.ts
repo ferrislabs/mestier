@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
 	addDecoration,
+	appendDecoration,
 	appliesToPage,
 	clampRect,
 	createDecoration,
+	createImageDecoration,
 	type Decoration,
 	decorationLabel,
 	duplicateDecoration,
@@ -23,7 +25,13 @@ import {
 
 const rect = (
 	over: Partial<
-		Rect & { opacity: number; pages: 'cover' | 'inner' | 'all' }
+		Rect & {
+			opacity: number
+			pages: 'cover' | 'inner' | 'all'
+			rotation: number
+			flip_x: boolean
+			flip_y: boolean
+		}
 	> = {},
 ): Decoration => ({
 	kind: 'rectangle',
@@ -248,5 +256,48 @@ describe('validation', () => {
 			/Élément 2/,
 		)
 		expect(validateDecorations([rect()])).toBeUndefined()
+	})
+})
+
+describe('createImageDecoration', () => {
+	it('is 80 mm wide, centered, with the photo aspect ratio', () => {
+		const image = createImageDecoration('k', 2)
+		expect(image).toMatchObject({
+			kind: 'image',
+			key: 'k',
+			width: 80,
+			height: 40,
+			x: 65,
+			y: 128.5,
+		})
+		expect(validateDecoration(image)).toBeUndefined()
+	})
+
+	it('shrinks a very tall photo to fit the page', () => {
+		const image = createImageDecoration('k', 0.1)
+		expect(image.height).toBeLessThanOrEqual(297)
+		expect(validateDecoration(image)).toBeUndefined()
+	})
+
+	it('falls back to a portrait frame without a usable ratio', () => {
+		expect(createImageDecoration('k', 0).width).toBe(80)
+		expect(createImageDecoration('k', Number.NaN).height).toBe(100)
+	})
+})
+
+describe('appendDecoration', () => {
+	it('adds at the top and respects the limit', () => {
+		const image = createImageDecoration('k', 1)
+		expect(appendDecoration([], image)).toEqual([image])
+		const full = Array.from({ length: MAX_DECORATIONS }, () => rect())
+		expect(appendDecoration(full, image)).toBe(full)
+	})
+})
+
+describe('duplicateDecoration keeps the transform', () => {
+	it('keeps rotation and flips on the copy', () => {
+		const list = [rect({ rotation: 30, flip_x: true, flip_y: true })]
+		const copy = duplicateDecoration(list, 0)[1]
+		expect(copy).toMatchObject({ rotation: 30, flip_x: true, flip_y: true })
 	})
 })
