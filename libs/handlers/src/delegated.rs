@@ -101,6 +101,22 @@ const DELEGATED_ROUTES: &[(Method, &str)] = &[
     ),
     (
         Method::GET,
+        "/api/v1/organizations/{organization_id}/knowledge/folders",
+    ),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}",
+    ),
+    (
+        Method::POST,
+        "/api/v1/organizations/{organization_id}/knowledge/folders",
+    ),
+    (
+        Method::POST,
+        "/api/v1/organizations/{organization_id}/knowledge/articles/move",
+    ),
+    (
+        Method::GET,
         "/api/v1/organizations/{organization_id}/maintenance/recap",
     ),
     (
@@ -280,6 +296,10 @@ mod tests {
             (Method::POST, format!("{KNOWLEDGE}/notes")),
             (Method::PATCH, article.clone()),
             (Method::POST, format!("{article}/links")),
+            (Method::GET, format!("{KNOWLEDGE}/folders")),
+            (Method::GET, format!("{KNOWLEDGE}/folders/{{folder_id}}")),
+            (Method::POST, format!("{KNOWLEDGE}/folders")),
+            (Method::POST, format!("{KNOWLEDGE}/articles/move")),
         ] {
             assert!(delegated_route_allowed(&method, &path), "{method} {path}");
         }
@@ -291,6 +311,8 @@ mod tests {
                 format!("{article}/links/project/{{resource_id}}"),
             ),
             (Method::GET, format!("{article}/download")),
+            (Method::DELETE, format!("{KNOWLEDGE}/folders/{{folder_id}}")),
+            (Method::PATCH, format!("{KNOWLEDGE}/folders/{{folder_id}}")),
         ] {
             assert!(!delegated_route_allowed(&method, &path), "{method} {path}");
         }

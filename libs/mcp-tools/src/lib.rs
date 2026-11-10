@@ -130,10 +130,13 @@ pub enum Tool {
     CreateKnowledgeNote,
     UpdateKnowledgeArticle,
     LinkKnowledgeArticle,
+    ListKnowledgeFolder,
+    CreateKnowledgeFolder,
+    MoveKnowledgeArticles,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 72] = [
+    pub const ALL: [Tool; 75] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -206,6 +209,9 @@ impl Tool {
         Tool::CreateKnowledgeNote,
         Tool::UpdateKnowledgeArticle,
         Tool::LinkKnowledgeArticle,
+        Tool::ListKnowledgeFolder,
+        Tool::CreateKnowledgeFolder,
+        Tool::MoveKnowledgeArticles,
     ];
 
     /// The name MCP clients call the tool by.
@@ -283,6 +289,9 @@ impl Tool {
             Self::CreateKnowledgeNote => "create_knowledge_note",
             Self::UpdateKnowledgeArticle => "update_knowledge_article",
             Self::LinkKnowledgeArticle => "link_knowledge_article",
+            Self::ListKnowledgeFolder => "list_knowledge_folder",
+            Self::CreateKnowledgeFolder => "create_knowledge_folder",
+            Self::MoveKnowledgeArticles => "move_knowledge_articles",
         }
     }
 
@@ -329,7 +338,9 @@ impl Tool {
             | Self::PlaceDoeFiles
             | Self::CreateKnowledgeNote
             | Self::UpdateKnowledgeArticle
-            | Self::LinkKnowledgeArticle => Access::Write,
+            | Self::LinkKnowledgeArticle
+            | Self::CreateKnowledgeFolder
+            | Self::MoveKnowledgeArticles => Access::Write,
             Self::ListOrganizations
             | Self::ListProjects
             | Self::GetProject
@@ -361,7 +372,8 @@ impl Tool {
             | Self::GetWorkedHours
             | Self::SearchPhotoLibrary
             | Self::SearchKnowledge
-            | Self::GetKnowledgeArticle => Access::Read,
+            | Self::GetKnowledgeArticle
+            | Self::ListKnowledgeFolder => Access::Read,
         }
     }
 
@@ -411,7 +423,10 @@ impl Tool {
             | Self::GetKnowledgeArticle
             | Self::CreateKnowledgeNote
             | Self::UpdateKnowledgeArticle
-            | Self::LinkKnowledgeArticle => "knowledge",
+            | Self::LinkKnowledgeArticle
+            | Self::ListKnowledgeFolder
+            | Self::CreateKnowledgeFolder
+            | Self::MoveKnowledgeArticles => "knowledge",
             Self::SearchProducts | Self::GetProduct => "catalog",
             Self::ListQuotes
             | Self::GetQuote
@@ -535,6 +550,7 @@ mod tests {
                 "create_customer_contact",
                 "create_deal",
                 "create_doe",
+                "create_knowledge_folder",
                 "create_knowledge_note",
                 "create_maintenance_contract_draft",
                 "create_product",
@@ -548,6 +564,7 @@ mod tests {
                 "delete_doe_supply",
                 "link_knowledge_article",
                 "move_deal_stage",
+                "move_knowledge_articles",
                 "place_doe_files",
                 "reorder_doe_sections",
                 "set_quote_status",
@@ -714,6 +731,9 @@ mod tests {
             (Tool::CreateKnowledgeNote, Access::Write),
             (Tool::UpdateKnowledgeArticle, Access::Write),
             (Tool::LinkKnowledgeArticle, Access::Write),
+            (Tool::ListKnowledgeFolder, Access::Read),
+            (Tool::CreateKnowledgeFolder, Access::Write),
+            (Tool::MoveKnowledgeArticles, Access::Write),
         ];
         for (tool, access) in expected {
             assert_eq!(tool.access(), access, "{tool}");

@@ -57,6 +57,10 @@ pub struct SearchKnowledgeArgs {
     pub resource_type: Option<ResourceKind>,
     #[schemars(description = "UUID of the project, customer or quote. Goes with resource_type.")]
     pub resource_id: Option<String>,
+    #[schemars(
+        description = "UUID of a folder (see list_knowledge_folder): only the articles of this folder and of the folders below it."
+    )]
+    pub folder_id: Option<String>,
     #[schemars(description = "Articles per page. Default 10, at most 50.")]
     pub limit: Option<u64>,
     #[schemars(description = "Page number, starting at 1.")]
@@ -93,6 +97,8 @@ pub struct CreateNoteArgs {
     pub body: String,
     #[schemars(description = "Tags, at most 20. Lowercased and trimmed.")]
     pub tags: Option<Vec<String>>,
+    #[schemars(description = "UUID of the folder to put the note in. Omit for the root.")]
+    pub folder_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -129,6 +135,50 @@ pub struct LinkKnowledgeArgs {
     pub resource_id: String,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct ListFolderArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUID of the folder to open. Omit to open the root of the drive.")]
+    pub folder_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct CreateFolderArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(
+        description = "Name, 1 to 100 characters, unique among the folders of the same parent whatever the case."
+    )]
+    pub name: String,
+    #[schemars(description = "UUID of the parent folder. Omit to create the folder at the root.")]
+    pub parent_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct MoveArticlesArgs {
+    #[schemars(
+        description = "Slug of the organization. Optional when the user belongs to exactly one organization; see list_organizations."
+    )]
+    pub organization: Option<String>,
+    #[schemars(description = "UUIDs of the articles to move, 1 to 100.")]
+    pub article_ids: Vec<String>,
+    #[schemars(
+        description = "UUID of the destination folder. Omit to move the articles to the root."
+    )]
+    pub folder_id: Option<String>,
+}
+
+/// Articles listed alongside the subfolders of an opened folder.
+pub const FOLDER_ARTICLES: u64 = 50;
+
 pub fn search_limit(requested: Option<u64>) -> u64 {
     requested.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT)
 }
@@ -158,6 +208,7 @@ fn strings(value: &Value) -> Vec<String> {
 fn slim(article: &Value) -> Value {
     json!({
         "id": article["id"],
+        "folder_id": article["folder_id"],
         "kind": article["kind"],
         "title": article["title"],
         "tags": article["tags"],
@@ -186,6 +237,10 @@ impl Session<'_> {
         if let (Some(kind), Some(id)) = (args.resource_type, resource_id) {
             query.push(("resource_type", kind.as_str().to_owned()));
             query.push(("resource_id", id));
+        }
+        if let Some(folder) = args.folder_id.as_deref().map(uuid).transpose()? {
+            query.push(("folder", folder));
+            query.push(("recursive", "true".to_owned()));
         }
         let body = self
             .api
@@ -229,6 +284,7 @@ impl Session<'_> {
     }
 
     pub async fn create_note(&self, args: &CreateNoteArgs) -> Result<Value, Fault> {
+        let folder_id = args.folder_id.as_deref().map(uuid).transpose()?;
         let org = self.organization_id(args.organization.as_deref()).await?;
         let tags =
             merge_tags(&[], args.tags.as_deref().unwrap_or_default(), &[]).map_err(Fault::new)?;
@@ -237,7 +293,7 @@ impl Session<'_> {
             .post(
                 self.token,
                 &format!("organizations/{org}/knowledge/notes"),
-                &json!({"title": args.title, "body": args.body, "tags": tags}),
+                &json!({"title": args.title, "body": args.body, "tags": tags, "folder_id": folder_id}),
             )
             .await?;
         Ok(slim(&body["data"]))
@@ -282,6 +338,84 @@ impl Session<'_> {
             )
             .await?;
         Ok(body["data"].clone())
+    }
+
+    pub async fn list_folder(&self, args: &ListFolderArgs) -> Result<Value, Fault> {
+        let folder_id = args.folder_id.as_deref().map(uuid).transpose()?;
+        let org = self.organization_id(args.organization.as_deref()).await?;
+        let (path, folder) = match &folder_id {
+            Some(id) => (
+                format!("organizations/{org}/knowledge/folders/{id}"),
+                id.clone(),
+            ),
+            None => (
+                format!("organizations/{org}/knowledge/folders"),
+                "root".to_owned(),
+            ),
+        };
+        let view = self.api.get(self.token, &path, &[]).await?;
+        let listed = self
+            .api
+            .get(
+                self.token,
+                &format!("organizations/{org}/knowledge/articles"),
+                &[
+                    ("folder", folder),
+                    ("per_page", FOLDER_ARTICLES.to_string()),
+                ],
+            )
+            .await?;
+        let named = |folder: &Value| json!({"id": folder["id"], "name": folder["name"]});
+        let list = |value: &Value| -> Vec<Value> {
+            value
+                .as_array()
+                .map(|items| items.iter().map(named).collect())
+                .unwrap_or_default()
+        };
+        let articles: Vec<Value> = listed["data"].as_array().cloned().unwrap_or_default();
+        Ok(json!({
+            "folder": view["data"]["folder"].as_object().map(|_| named(&view["data"]["folder"])),
+            "path": list(&view["data"]["path"]),
+            "folders": list(&view["data"]["children"]),
+            "articles": articles.iter().map(slim).collect::<Vec<_>>(),
+            "articles_total": listed["pagination"]["total"],
+        }))
+    }
+
+    pub async fn create_folder(&self, args: &CreateFolderArgs) -> Result<Value, Fault> {
+        let parent_id = args.parent_id.as_deref().map(uuid).transpose()?;
+        let org = self.organization_id(args.organization.as_deref()).await?;
+        let body = self
+            .api
+            .post(
+                self.token,
+                &format!("organizations/{org}/knowledge/folders"),
+                &json!({"name": args.name, "parent_id": parent_id}),
+            )
+            .await?;
+        Ok(body["data"].clone())
+    }
+
+    pub async fn move_articles(&self, args: &MoveArticlesArgs) -> Result<Value, Fault> {
+        if args.article_ids.is_empty() {
+            return Err(Fault::new("`article_ids` est vide"));
+        }
+        let ids = args
+            .article_ids
+            .iter()
+            .map(|id| uuid(id))
+            .collect::<Result<Vec<_>, _>>()?;
+        let folder_id = args.folder_id.as_deref().map(uuid).transpose()?;
+        let org = self.organization_id(args.organization.as_deref()).await?;
+        let body = self
+            .api
+            .post(
+                self.token,
+                &format!("organizations/{org}/knowledge/articles/move"),
+                &json!({"article_ids": ids, "folder_id": folder_id}),
+            )
+            .await?;
+        Ok(json!({"moved": body["data"]["moved"], "folder_id": folder_id}))
     }
 }
 
@@ -365,6 +499,54 @@ impl MestierTools {
             Err(refusal) => return refusal,
         };
         finish(async { Ok(json_result(&s.link_knowledge(&args).await?)) }.await)
+    }
+
+    #[tool(
+        description = "Open a folder of the knowledge base drive, or its root when folder_id is omitted. Returns {folder, path (from the root down to the folder), folders (the subfolders, by name), articles (the articles placed directly in it, at most 50), articles_total}. Search a whole folder tree with search_knowledge and folder_id."
+    )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "list_knowledge_folder"))]
+    async fn list_knowledge_folder(
+        &self,
+        Parameters(args): Parameters<ListFolderArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "list_knowledge_folder") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(async { Ok(json_result(&s.list_folder(&args).await?)) }.await)
+    }
+
+    #[tool(
+        description = "Create a folder in the knowledge base drive, at the root or inside parent_id. Folders nest at most 10 levels deep and siblings cannot share a name. Folders cannot be renamed or deleted through this tool. Returns the folder."
+    )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "create_knowledge_folder"))]
+    async fn create_knowledge_folder(
+        &self,
+        Parameters(args): Parameters<CreateFolderArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "create_knowledge_folder") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(async { Ok(json_result(&s.create_folder(&args).await?)) }.await)
+    }
+
+    #[tool(
+        description = "Move knowledge base articles (files or notes) into a folder, or to the root when folder_id is omitted. Up to 100 at once; if one article is not found, none moves. Returns {moved, folder_id}."
+    )]
+    #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "move_knowledge_articles"))]
+    async fn move_knowledge_articles(
+        &self,
+        Parameters(args): Parameters<MoveArticlesArgs>,
+        Extension(parts): Extension<Parts>,
+    ) -> CallToolResult {
+        let s = match self.session(&parts, "move_knowledge_articles") {
+            Ok(s) => s,
+            Err(refusal) => return refusal,
+        };
+        finish(async { Ok(json_result(&s.move_articles(&args).await?)) }.await)
     }
 }
 
