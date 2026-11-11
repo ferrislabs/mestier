@@ -36,9 +36,9 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
         let row = sqlx::query_as!(
             KnowledgeArticleRow,
             r#"
-            INSERT INTO knowledge_articles (id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            RETURNING id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at
+            INSERT INTO knowledge_articles (id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at, content, revision)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            RETURNING id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at, content, revision, lock_holder, lock_expires_at
             "#,
             article.id.0,
             article.organization_id.0,
@@ -53,6 +53,8 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
             &article.tags,
             article.created_at,
             article.updated_at,
+            article.content.as_ref(),
+            article.revision,
         )
         .fetch_one(&mut ***tx)
         .await
@@ -70,7 +72,7 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
         let row = sqlx::query_as!(
             KnowledgeArticleRow,
             r#"
-            SELECT id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at
+            SELECT id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at, content, revision, lock_holder, lock_expires_at
             FROM knowledge_articles
             WHERE id = $1 AND org_id = $2
             "#,
@@ -112,7 +114,8 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
             KnowledgeArticleRow,
             r#"
             SELECT a.id, a.org_id, a.folder_id, a.kind, a.title, a.body, a.file_key, a.mime_type, a.size_bytes,
-                   NULL::text AS extracted_text, a.tags, a.created_at, a.updated_at
+                   NULL::text AS extracted_text, a.tags, a.created_at, a.updated_at,
+                   NULL::jsonb AS content, a.revision, a.lock_holder, a.lock_expires_at
             FROM knowledge_articles a
             WHERE a.org_id = $1
               AND ($2::text IS NULL OR a.search @@ websearch_to_tsquery('french', $2))
@@ -199,14 +202,13 @@ impl<'tx> KnowledgeArticleRepository for PgKnowledgeArticleRepository<'tx> {
             KnowledgeArticleRow,
             r#"
             UPDATE knowledge_articles
-            SET title = $3, body = $4, tags = $5, updated_at = $6
+            SET title = $3, tags = $4, updated_at = $5
             WHERE id = $1 AND org_id = $2
-            RETURNING id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at
+            RETURNING id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at, content, revision, lock_holder, lock_expires_at
             "#,
             article.id.0,
             article.organization_id.0,
             article.title,
-            article.body,
             &article.tags,
             article.updated_at,
         )

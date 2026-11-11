@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
@@ -9,6 +10,7 @@ import {
 } from '#/hooks/use-knowledge'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { mutationErrorMessage } from '#/lib/api-error'
+import { buildOrgPath } from '#/modules/org-path'
 import { KnowledgeDetailFeature } from '#/pages/knowledge/feature/knowledge-detail-feature'
 import {
 	AttachKnowledgeDialog,
@@ -34,6 +36,7 @@ export function LinkedKnowledgeFeature(props: LinkedKnowledgeFeatureProps) {
 		<LinkedKnowledgeSection
 			key={activeOrganization.id}
 			organizationId={activeOrganization.id}
+			organizationSlug={activeOrganization.slug}
 			{...props}
 		/>
 	)
@@ -41,9 +44,14 @@ export function LinkedKnowledgeFeature(props: LinkedKnowledgeFeatureProps) {
 
 function LinkedKnowledgeSection({
 	organizationId,
+	organizationSlug,
 	resourceType,
 	resourceId,
-}: LinkedKnowledgeFeatureProps & { organizationId: string }) {
+}: LinkedKnowledgeFeatureProps & {
+	organizationId: string
+	organizationSlug: string
+}) {
+	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_KNOWLEDGE')
 	const [openId, setOpenId] = useState<string | null>(null)
 	const [attaching, setAttaching] = useState(false)
@@ -70,7 +78,18 @@ function LinkedKnowledgeSection({
 				isLoading={linked.isLoading}
 				error={mutationErrorMessage(linked.error ?? unlink.error ?? null)}
 				canManage={canManage}
-				onOpen={(article) => setOpenId(article.id)}
+				onOpen={(article) => {
+					if (article.kind === 'document') {
+						void navigate({
+							to: buildOrgPath(
+								organizationSlug,
+								`/connaissances/documents/${article.id}`,
+							),
+						})
+					} else {
+						setOpenId(article.id)
+					}
+				}}
 				onUnlink={(article) =>
 					unlink.mutate({
 						articleId: article.id,

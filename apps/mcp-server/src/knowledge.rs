@@ -46,7 +46,7 @@ pub struct SearchKnowledgeArgs {
     )]
     pub organization: Option<String>,
     #[schemars(
-        description = "Words to look for, in French, in titles, tags, notes and the text of files. Best matches first. Omit to list the newest articles."
+        description = "Words to look for, in French, in titles, tags, documents and the text of files. Best matches first. Omit to list the newest articles."
     )]
     pub query: Option<String>,
     #[schemars(description = "Only articles carrying all of these tags.")]
@@ -93,11 +93,13 @@ pub struct CreateNoteArgs {
     pub organization: Option<String>,
     #[schemars(description = "Title, 1 to 200 characters.")]
     pub title: String,
-    #[schemars(description = "Text of the note, up to 100000 characters.")]
+    #[schemars(
+        description = "Content of the document in Markdown, up to 100000 characters: headings (#), lists, checklists (- [ ]), quotes, code blocks and links are kept. Mestier links: [Name](mestier:customer/<uuid>), also project and quote, mention it; ![caption](mestier:drive/<uuid>) or mestier:photo/<uuid> alone in a paragraph inserts an image; [Title](mestier:file/<uuid>) alone in a paragraph inserts a drive file; [View](mestier:table/<table_uuid>?view=<view_uuid>) alone in a paragraph shows a table view."
+    )]
     pub body: String,
     #[schemars(description = "Tags, at most 20. Lowercased and trimmed.")]
     pub tags: Option<Vec<String>>,
-    #[schemars(description = "UUID of the folder to put the note in. Omit for the root.")]
+    #[schemars(description = "UUID of the folder to put the document in. Omit for the root.")]
     pub folder_id: Option<String>,
 }
 
@@ -112,7 +114,9 @@ pub struct UpdateKnowledgeArgs {
     pub article_id: String,
     #[schemars(description = "New title. Omit to keep it.")]
     pub title: Option<String>,
-    #[schemars(description = "New text. Notes only: the text of a file cannot be edited.")]
+    #[schemars(
+        description = "New content in Markdown, replacing the whole document (same mestier: link forms as create_knowledge_note). Documents only: the text of a file cannot be edited. Refused while someone is editing the document."
+    )]
     pub body: Option<String>,
     #[schemars(description = "Tags to add. At most 20 tags per article.")]
     pub add_tags: Option<Vec<String>>,
@@ -193,6 +197,16 @@ pub fn text_window(text: &str, offset: usize, max_chars: Option<usize>) -> (Stri
     (window, chars.next().is_some())
 }
 
+fn being_edited(fault: Fault) -> Fault {
+    if fault.message.contains("being edited") {
+        Fault::new(
+            "ce document est en cours de modification par quelqu'un d'autre : rien n'a été changé, réessayez plus tard",
+        )
+    } else {
+        fault
+    }
+}
+
 fn strings(value: &Value) -> Vec<String> {
     value
         .as_array()
@@ -213,6 +227,7 @@ fn slim(article: &Value) -> Value {
         "title": article["title"],
         "tags": article["tags"],
         "body": article["body"],
+        "revision": article["revision"],
         "file": article["file"],
         "updated_at": article["updated_at"],
     })
@@ -272,6 +287,7 @@ impl Session<'_> {
         let article = &body["data"];
         let mut out = slim(article);
         out["links"] = article["links"].clone();
+        out["lock"] = article["lock"].clone();
         if let Some(text) = article["extracted_text"].as_str() {
             let offset = args.offset.unwrap_or(0);
             let (window, truncated) = text_window(text, offset, args.max_chars);
@@ -321,7 +337,11 @@ impl Session<'_> {
                 merge_tags(&strings(&current["data"]["tags"]), add, remove).map_err(Fault::new)?;
             patch["tags"] = json!(tags);
         }
-        let body = self.api.patch(self.token, &path, &patch).await?;
+        let body = self
+            .api
+            .patch(self.token, &path, &patch)
+            .await
+            .map_err(being_edited)?;
         Ok(slim(&body["data"]))
     }
 
@@ -422,7 +442,7 @@ impl Session<'_> {
 #[tool_router(router = knowledge_router, vis = "pub(crate)")]
 impl MestierTools {
     #[tool(
-        description = "Search the organization's knowledge base: documents (quotes, price lists, terms, datasheets) and notes. query is searched in French in titles, tags, notes and the text read from files, best matches first; tags (all must match); resource_type + resource_id restrict to the articles linked to a project, customer or quote. Returns {articles:[{id, kind, title, tags, body, file, updated_at}], page, total}; a file's text is read with get_knowledge_article. limit defaults to 10, at most 50."
+        description = "Search the organization's knowledge base: documents written in Mestier and files (quotes, price lists, terms, datasheets). query is searched in French in titles, tags, the text of documents and the text read from files, best matches first; tags (all must match); resource_type + resource_id restrict to the articles linked to a project, customer or quote. Returns {articles:[{id, kind (file or document), title, tags, body, revision, file, updated_at}], page, total}; a file's text is read with get_knowledge_article. limit defaults to 10, at most 50."
     )]
     #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "search_knowledge"))]
     async fn search_knowledge(
@@ -438,7 +458,7 @@ impl MestierTools {
     }
 
     #[tool(
-        description = "Read one article of the knowledge base. For a file, text is the text read from it (absent for a scan or an image), returned in a window of max_chars characters from offset: when text_truncated is true, call again with a larger offset. Also returns links, the projects, customers and quotes the article is attached to."
+        description = "Read one article of the knowledge base. For a document, body is its content in Markdown, with Mestier elements as mestier: links (mentions, images, files, table views), and lock tells who is editing it right now, if anyone. For a file, text is the text read from it (absent for a scan or an image), returned in a window of max_chars characters from offset: when text_truncated is true, call again with a larger offset. Also returns links, the projects, customers and quotes the article is attached to."
     )]
     #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "get_knowledge_article"))]
     async fn get_knowledge_article(
@@ -454,7 +474,7 @@ impl MestierTools {
     }
 
     #[tool(
-        description = "Create a note in the knowledge base: a title, a text and tags. Files are added by the user in the web app, never through this tool. Returns the note. Attach it to a project, customer or quote with link_knowledge_article."
+        description = "Create a document in the knowledge base from Markdown: a title, a body and tags. The Markdown becomes blocks (headings, lists, checklists, quotes, code, links); mestier: links insert mentions of customers, projects and quotes, images, drive files and table views. Files are added by the user in the web app, never through this tool. Returns the document. Attach it to a project, customer or quote with link_knowledge_article."
     )]
     #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "create_knowledge_note"))]
     async fn create_knowledge_note(
@@ -470,7 +490,7 @@ impl MestierTools {
     }
 
     #[tool(
-        description = "Change the title, the text (notes only) or the tags of a knowledge base article: add_tags and remove_tags change the tags without resending the others. Articles cannot be deleted. Returns the article."
+        description = "Change the title, the content (documents only, from Markdown, replacing the whole document) or the tags of a knowledge base article: add_tags and remove_tags change the tags without resending the others. Replacing the content fails while someone is editing the document: read it with get_knowledge_article to see who, and try again later. Articles cannot be deleted. Returns the article."
     )]
     #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "update_knowledge_article"))]
     async fn update_knowledge_article(
@@ -534,7 +554,7 @@ impl MestierTools {
     }
 
     #[tool(
-        description = "Move knowledge base articles (files or notes) into a folder, or to the root when folder_id is omitted. Up to 100 at once; if one article is not found, none moves. Returns {moved, folder_id}."
+        description = "Move knowledge base articles (files or documents) into a folder, or to the root when folder_id is omitted. Up to 100 at once; if one article is not found, none moves. Returns {moved, folder_id}."
     )]
     #[tracing::instrument(name = "mcp.tool", skip_all, fields(tool = "move_knowledge_articles"))]
     async fn move_knowledge_articles(

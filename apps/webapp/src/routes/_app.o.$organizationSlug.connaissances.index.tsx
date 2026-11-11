@@ -18,10 +18,19 @@ function DrivePage() {
 			navigate({ search: folderId ? { dossier: folderId } : {} }),
 		[navigate],
 	)
+	const onOpenDocument = useCallback(
+		(articleId: string) =>
+			navigate({
+				to: '/o/$organizationSlug/connaissances/documents/$articleId',
+				params: (params) => ({ ...params, articleId }),
+			}),
+		[navigate],
+	)
 	return (
 		<KnowledgeFeature
 			folderId={dossier ?? null}
 			onFolderChange={onFolderChange}
+			onOpenDocument={onOpenDocument}
 		/>
 	)
 }

@@ -22,7 +22,7 @@ pub const SCOPE_QUOTE_WRITE: &str = "mestier.quote.write";
 pub const SCOPE_PLANNING_WRITE: &str = "mestier.planning.write";
 /// OAuth scope granting the catalogue and supplier write tools.
 pub const SCOPE_REFERENCE_WRITE: &str = "mestier.reference.write";
-/// OAuth scope granting the knowledge base write tools (notes, tags, links).
+/// OAuth scope granting the knowledge base write tools (documents, tags, links).
 pub const SCOPE_KNOWLEDGE_WRITE: &str = "mestier.knowledge.write";
 
 /// Every scope the gateway advertises in its protected resource metadata.
@@ -751,7 +751,7 @@ mod tests {
     }
 
     #[test]
-    fn the_knowledge_tools_read_write_notes_and_links_but_never_delete() {
+    fn the_knowledge_tools_read_write_documents_and_links_but_never_delete() {
         let expected = [
             (Tool::SearchKnowledge, Access::Read),
             (Tool::GetKnowledgeArticle, Access::Read),

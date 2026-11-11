@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @plugin '@tailwindcss/typography';
 @import "tw-animate-css";
+@source "../node_modules/@blocknote/shadcn/dist";
 @import "@fontsource-variable/figtree";
 @import "@fontsource-variable/geist";
 
@@ -296,4 +297,22 @@
 	.dark.module-glyph {
 		color: oklch(0.8 0.12 var(--hue));
 	}
+}
+
+/* BlockNote's editor surface follows the theme tokens, so the document reads
+   the same in both themes. */
+.bn-shadcn,
+.bn-container[data-color-scheme] {
+	--bn-colors-editor-text: var(--foreground);
+	--bn-colors-editor-background: transparent;
+	--bn-colors-menu-text: var(--popover-foreground);
+	--bn-colors-menu-background: var(--popover);
+	--bn-colors-tooltip-text: var(--popover-foreground);
+	--bn-colors-tooltip-background: var(--popover);
+	--bn-colors-hovered-text: var(--accent-foreground);
+	--bn-colors-hovered-background: var(--accent);
+	--bn-colors-selected-text: var(--primary-foreground);
+	--bn-colors-selected-background: var(--primary);
+	--bn-colors-border: var(--border);
+	--bn-font-family: inherit;
 }

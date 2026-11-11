@@ -4,13 +4,13 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import {
 	type KnowledgeFolder,
 	useCreateKnowledgeFolder,
-	useCreateKnowledgeNote,
 	useDeleteKnowledgeFolder,
 	useKnowledgeArticles,
 	useKnowledgeFolders,
 	useMoveKnowledgeArticles,
 	useUpdateKnowledgeFolder,
 } from '#/hooks/use-knowledge'
+import { useCreateKnowledgeDocument } from '#/hooks/use-knowledge-documents'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { KnowledgeDetailFeature } from '#/pages/knowledge/feature/knowledge-detail-feature'
@@ -26,14 +26,9 @@ import {
 import { FolderNameDialog } from '#/pages/knowledge/ui/folder-name-dialog'
 import { FolderPickerDialog } from '#/pages/knowledge/ui/folder-picker-dialog'
 import { KnowledgePage } from '#/pages/knowledge/ui/knowledge-page'
-import {
-	EMPTY_NOTE,
-	NoteDialog,
-	type NoteDraft,
-} from '#/pages/knowledge/ui/note-dialog'
-import { addTags, removeTag } from '#/pages/photo-library/lib/tags'
 
 const SEARCH_DELAY_MS = 300
+const NEW_DOCUMENT_TITLE = 'Document sans titre'
 
 function useDebounced<T>(value: T, delay: number): T {
 	const [debounced, setDebounced] = useState(value)
@@ -48,6 +43,7 @@ interface KnowledgeFeatureProps {
 	/** The open folder, from the address. `null` is the root. */
 	folderId: string | null
 	onFolderChange: (folderId: string | null) => void
+	onOpenDocument: (articleId: string) => void
 }
 
 export function KnowledgeFeature(props: KnowledgeFeatureProps) {
@@ -75,13 +71,13 @@ function KnowledgeWorkspace({
 	organizationId,
 	folderId,
 	onFolderChange,
+	onOpenDocument,
 }: KnowledgeFeatureProps & { organizationId: string }) {
 	const canManage = useHasPermission('MANAGE_KNOWLEDGE')
 	const [q, setQ] = useState('')
 	const [tagInput, setTagInput] = useState('')
 	const [page, setPage] = useState(1)
 	const [openId, setOpenId] = useState<string | null>(null)
-	const [note, setNote] = useState<NoteDraft | null>(null)
 	const [expanded, setExpanded] = useState<Set<string>>(new Set())
 	const [selected, setSelected] = useState<Set<string>>(new Set())
 	const [nameDraft, setNameDraft] = useState<NameDraft | null>(null)
@@ -116,7 +112,7 @@ function KnowledgeWorkspace({
 	)
 	const list = useKnowledgeArticles(organizationId, filters, page, scope)
 	const uploads = useKnowledgeUploads(organizationId, currentFolderId)
-	const createNote = useCreateKnowledgeNote(organizationId)
+	const createDocument = useCreateKnowledgeDocument(organizationId)
 	const createFolder = useCreateKnowledgeFolder(organizationId)
 	const updateFolder = useUpdateKnowledgeFolder(organizationId)
 	const deleteFolder = useDeleteKnowledgeFolder(organizationId)
@@ -146,18 +142,17 @@ function KnowledgeWorkspace({
 
 	const pagination = list.data?.pagination ?? null
 
-	const submitNote = async () => {
-		if (!note) return
+	const newDocument = async () => {
+		setDropError(null)
 		try {
-			const created = await createNote.mutateAsync({
-				title: note.title.trim(),
-				body: note.body.trim(),
-				tags: addTags(note.tags, note.tagInput),
-				folderId: currentFolderId,
+			const created = await createDocument.mutateAsync({
+				title: NEW_DOCUMENT_TITLE,
+				folder_id: currentFolderId,
 			})
-			setNote(null)
-			setOpenId(created.id)
-		} catch {}
+			onOpenDocument(created.id)
+		} catch (error) {
+			setDropError(mutationErrorMessage(error))
+		}
 	}
 
 	const nameParent =
@@ -320,7 +315,10 @@ function KnowledgeWorkspace({
 					void uploads.enqueue(files)
 				}}
 				onClearUploads={uploads.clear}
-				onNewNote={() => setNote(EMPTY_NOTE)}
+				isCreatingDocument={createDocument.isPending}
+				onNewDocument={() => {
+					void newDocument()
+				}}
 				onQChange={(value) => {
 					setQ(value)
 					setPage(1)
@@ -330,7 +328,10 @@ function KnowledgeWorkspace({
 					setPage(1)
 				}}
 				onPageChange={setPage}
-				onOpen={(article) => setOpenId(article.id)}
+				onOpen={(article) => {
+					if (article.kind === 'document') onOpenDocument(article.id)
+					else setOpenId(article.id)
+				}}
 			/>
 			{openId ? (
 				<KnowledgeDetailFeature
@@ -341,39 +342,6 @@ function KnowledgeWorkspace({
 					onClose={() => setOpenId(null)}
 				/>
 			) : null}
-			<NoteDialog
-				open={note !== null}
-				draft={note ?? EMPTY_NOTE}
-				isSaving={createNote.isPending}
-				error={mutationErrorMessage(createNote.error)}
-				onDraftChange={(change) =>
-					setNote((current) => (current ? { ...current, ...change } : current))
-				}
-				onAddTags={() =>
-					setNote((current) =>
-						current
-							? {
-									...current,
-									tags: addTags(current.tags, current.tagInput),
-									tagInput: '',
-								}
-							: current,
-					)
-				}
-				onRemoveTag={(tag) =>
-					setNote((current) =>
-						current
-							? { ...current, tags: removeTag(current.tags, tag) }
-							: current,
-					)
-				}
-				onSubmit={() => {
-					void submitNote()
-				}}
-				onOpenChange={(open) => {
-					if (!open) setNote(null)
-				}}
-			/>
 			<FolderNameDialog
 				open={nameDraft !== null}
 				title={

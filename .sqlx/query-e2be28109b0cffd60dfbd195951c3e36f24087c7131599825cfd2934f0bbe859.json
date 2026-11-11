@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE knowledge_articles\n            SET lock_holder = $3, lock_expires_at = now() + make_interval(secs => $4::float8)\n            WHERE id = $1 AND org_id = $2 AND kind = 'document'\n              AND (lock_holder IS NULL OR lock_expires_at IS NULL\n                   OR lock_expires_at < now() OR lock_holder = $3)\n            RETURNING revision, lock_expires_at AS \"lock_expires_at!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "revision",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "lock_expires_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "e2be28109b0cffd60dfbd195951c3e36f24087c7131599825cfd2934f0bbe859"
+}

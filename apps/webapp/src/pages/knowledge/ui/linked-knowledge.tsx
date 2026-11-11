@@ -1,4 +1,4 @@
-import { FileText, Link2, Loader2, Search, StickyNote, X } from 'lucide-react'
+import { FileText, Link2, Loader2, NotebookText, Search, X } from 'lucide-react'
 import { useId } from 'react'
 import { Button } from '#/components/ui/button'
 import {
@@ -14,14 +14,14 @@ import type { KnowledgeArticle } from '#/hooks/use-knowledge'
 import { fileTypeLabel, formatSize } from '#/pages/knowledge/lib/files'
 
 function ArticleIcon({ article }: { article: KnowledgeArticle }) {
-	const Icon = article.kind === 'note' ? StickyNote : FileText
+	const Icon = article.kind === 'document' ? NotebookText : FileText
 	return <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
 }
 
 function kindLabel(article: KnowledgeArticle): string {
 	return article.file
 		? `${fileTypeLabel(article.file.mime_type)} · ${formatSize(article.file.size_bytes)}`
-		: 'Note'
+		: 'Document'
 }
 
 interface LinkedKnowledgeProps {
@@ -71,7 +71,7 @@ export function LinkedKnowledge({
 				</div>
 			) : articles.length === 0 ? (
 				<p className="text-[13px] text-muted-foreground">
-					Aucun document ni note rattaché.
+					Aucun document ni fichier rattaché.
 				</p>
 			) : (
 				<ul className="divide-y rounded-lg border bg-card">
@@ -139,7 +139,7 @@ export function AttachKnowledgeDialog({
 				<DialogHeader>
 					<DialogTitle>Rattacher un document</DialogTitle>
 					<DialogDescription>
-						Choisis un document ou une note de la base de connaissances.
+						Choisissez un document ou un fichier de la base de connaissances.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="grid gap-1">
@@ -155,7 +155,7 @@ export function AttachKnowledgeDialog({
 							id={id}
 							type="search"
 							value={query}
-							placeholder="Titre, note, texte d’un document"
+							placeholder="Titre, texte d’un document"
 							autoComplete="off"
 							className="pl-8"
 							onChange={(event) => onQueryChange(event.target.value)}

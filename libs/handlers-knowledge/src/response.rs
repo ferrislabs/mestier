@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use mestier_core::{
-    KnowledgeArticle, KnowledgeArticleId, KnowledgeFolder, KnowledgeFolderId, KnowledgeFolderView,
-    KnowledgeKind, KnowledgeLink, KnowledgeResourceType,
+    EditLock, KnowledgeArticle, KnowledgeArticleId, KnowledgeFolder, KnowledgeFolderId,
+    KnowledgeFolderView, KnowledgeKind, KnowledgeLink, KnowledgeResourceType,
 };
 use serde::Serialize;
+use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -11,6 +12,21 @@ use uuid::Uuid;
 pub struct KnowledgeFileResponse {
     pub mime_type: String,
     pub size_bytes: u64,
+}
+
+#[derive(Debug, Serialize, PartialEq, ToSchema)]
+pub struct KnowledgeLockResponse {
+    pub holder_id: Uuid,
+    pub expires_at: DateTime<Utc>,
+}
+
+impl From<EditLock> for KnowledgeLockResponse {
+    fn from(lock: EditLock) -> Self {
+        Self {
+            holder_id: lock.holder.0,
+            expires_at: lock.expires_at,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, PartialEq, ToSchema)]
@@ -40,10 +56,22 @@ pub struct KnowledgeArticleResponse {
     pub folder_id: Option<KnowledgeFolderId>,
     pub kind: KnowledgeKind,
     pub title: String,
-    /// The text of a note. Absent for a file.
+    /// The Markdown of a document, written by the server on every save. Absent
+    /// for a file.
     pub body: Option<String>,
-    /// Absent for a note.
+    /// Absent for a document.
     pub file: Option<KnowledgeFileResponse>,
+    /// The blocks of a document, in the Mestier block format (version 1).
+    /// Only on the single-article response.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub content: Option<Value>,
+    /// Increases by one on every save of a document. Absent for a file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i32>,
+    /// Who holds the edit lock of a document and until when. Null when it is
+    /// free, expired, or for a file.
+    pub lock: Option<KnowledgeLockResponse>,
     /// Text read from the file, when it holds any. Only on the single-article
     /// response.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,6 +86,8 @@ pub struct KnowledgeArticleResponse {
 
 impl From<KnowledgeArticle> for KnowledgeArticleResponse {
     fn from(article: KnowledgeArticle) -> Self {
+        let is_document = article.kind == KnowledgeKind::Document;
+        let now = Utc::now();
         Self {
             id: article.id,
             folder_id: article.folder_id,
@@ -68,6 +98,12 @@ impl From<KnowledgeArticle> for KnowledgeArticleResponse {
                 mime_type: file.mime_type,
                 size_bytes: file.size_bytes,
             }),
+            content: article.content,
+            revision: is_document.then_some(article.revision),
+            lock: article
+                .lock
+                .filter(|lock| lock.is_active(now))
+                .map(Into::into),
             extracted_text: article.extracted_text,
             links: None,
             tags: article.tags,

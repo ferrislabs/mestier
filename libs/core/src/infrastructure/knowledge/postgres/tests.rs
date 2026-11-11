@@ -7,14 +7,17 @@ use crate::{
     KnowledgeFolderId, KnowledgeFolderScope, KnowledgeKind, KnowledgeResource,
     KnowledgeResourceType, OrganizationId,
     application::test_support::dev_pool,
-    domain::knowledge::ports::{KnowledgeArticleRepository, KnowledgeFolderRepository},
+    domain::knowledge::{
+        documents::DocumentContent,
+        ports::{KnowledgeArticleRepository, KnowledgeFolderRepository},
+    },
     infrastructure::{
         knowledge::postgres::{PgKnowledgeArticleRepository, PgKnowledgeFolderRepository},
         postgres::{SharedTx, with_tx},
     },
 };
 
-async fn seed_organization(tx: &SharedTx<'_>) -> OrganizationId {
+pub(super) async fn seed_organization(tx: &SharedTx<'_>) -> OrganizationId {
     let mut guard = tx.lock().await;
     let user_id = generate_uuid_v7();
     sqlx::query!(
@@ -55,6 +58,9 @@ fn base(organization_id: OrganizationId, kind: KnowledgeKind, title: &str) -> Kn
         title: title.to_owned(),
         body: None,
         file: None,
+        content: (kind == KnowledgeKind::Document).then(|| DocumentContent::empty().to_value()),
+        revision: 0,
+        lock: None,
         extracted_text: None,
         tags: Vec::new(),
         created_at: now,
@@ -65,7 +71,7 @@ fn base(organization_id: OrganizationId, kind: KnowledgeKind, title: &str) -> Kn
 fn note(organization_id: OrganizationId, title: &str, body: &str) -> KnowledgeArticle {
     KnowledgeArticle {
         body: Some(body.to_owned()),
-        ..base(organization_id, KnowledgeKind::Note, title)
+        ..base(organization_id, KnowledgeKind::Document, title)
     }
 }
 
@@ -96,7 +102,7 @@ async fn found(
         .collect()
 }
 
-async fn run<F>(work: F)
+pub(super) async fn run<F>(work: F)
 where
     F: AsyncFnOnce(SharedTx<'_>) -> Result<(), CoreError>,
 {
@@ -144,9 +150,10 @@ async fn the_database_refuses_an_article_of_the_wrong_shape() {
     run(async |tx| {
         let org = seed_organization(&tx).await;
         let mut repository = PgKnowledgeArticleRepository::new(&tx);
-        let mut empty_note = base(org, KnowledgeKind::Note, "Vide");
-        empty_note.body = Some("   ".to_owned());
-        assert!(repository.insert(&empty_note).await.is_err());
+        let mut without_content = base(org, KnowledgeKind::Document, "Vide");
+        without_content.body = Some(String::new());
+        without_content.content = None;
+        assert!(repository.insert(&without_content).await.is_err());
         Ok(())
     })
     .await;
@@ -278,17 +285,18 @@ async fn tags_filter_requires_every_tag() {
 
 #[tokio::test]
 #[ignore = "requires live postgres"]
-async fn update_changes_title_note_and_tags_and_the_search_follows() {
+async fn update_changes_title_and_tags_leaves_the_body_and_the_search_follows() {
     run(async |tx| {
         let org = seed_organization(&tx).await;
         let mut repository = PgKnowledgeArticleRepository::new(&tx);
-        let mut article = note(org, "Ancien titre", "ancien texte");
+        let mut article = note(org, "Ancien titre", "texte stable");
         repository.insert(&article).await?;
 
         article.title = "Nouveau titre".to_owned();
-        article.body = Some("texte neuf".to_owned());
+        article.body = Some("ignoré".to_owned());
         article.tags = vec!["revu".to_owned()];
-        repository.update(&article).await?;
+        let updated = repository.update(&article).await?;
+        assert_eq!(updated.body.as_deref(), Some("texte stable"));
 
         let query = |text: &str| KnowledgeFilter {
             query: Some(text.to_owned()),
@@ -298,8 +306,17 @@ async fn update_changes_title_note_and_tags_and_the_search_follows() {
             found(&mut repository, org, query("nouveau")).await,
             vec![article.id]
         );
+        assert_eq!(
+            found(&mut repository, org, query("stable")).await,
+            vec![article.id]
+        );
         assert!(
             found(&mut repository, org, query("ancien"))
+                .await
+                .is_empty()
+        );
+        assert!(
+            found(&mut repository, org, query("ignoré"))
                 .await
                 .is_empty()
         );

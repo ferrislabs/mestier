@@ -664,6 +664,11 @@ export namespace Schemas {
     title?: string | undefined;
   };
   export type KnowledgeFolderId = string;
+  export type CreateKnowledgeDocumentRequest = {
+    folder_id?: (null | KnowledgeFolderId) | undefined;
+    tags?: Array<string> | undefined;
+    title: string;
+  };
   export type CreateKnowledgeFolderRequest = { name: string; parent_id?: (null | KnowledgeFolderId) | undefined };
   export type CreateKnowledgeNoteRequest = {
     body: string;
@@ -1119,6 +1124,15 @@ export namespace Schemas {
   };
   export type PresenceStatus = "ONLINE" | "OFFLINE" | "DND";
   export type DirectoryEntryResponse = { display_name: string; presence: PresenceStatus; user_id: UserId };
+  export type DocumentConflictResponse = { code: string; message: string; reason: string; status: number };
+  export type DocumentLockResponse = { expires_at: string; holder_id: string; revision: number };
+  export type DocumentLockedResponse = {
+    code: string;
+    expires_at: string;
+    holder_id: string;
+    message: string;
+    status: number;
+  };
   export type DoeFile = { caption?: (string | null) | undefined; key: string };
   export type DoeId = string;
   export type DoeModelResponse = {
@@ -1777,9 +1791,11 @@ export namespace Schemas {
   };
   export type KnowledgeArticleId = string;
   export type KnowledgeFileResponse = { mime_type: string; size_bytes: number };
-  export type KnowledgeKind = "file" | "note";
+  export type KnowledgeKind = "file" | "document";
+  export type KnowledgeLockResponse = { expires_at: string; holder_id: string };
   export type KnowledgeArticleResponse = {
     body?: (string | null) | undefined;
+    content?: (Record<string, unknown> | null) | undefined;
     created_at: string;
     extracted_text?: (string | null) | undefined;
     file?: (null | KnowledgeFileResponse) | undefined;
@@ -1787,6 +1803,8 @@ export namespace Schemas {
     id: KnowledgeArticleId;
     kind: KnowledgeKind;
     links?: (Array<KnowledgeLinkResponse> | null) | undefined;
+    lock?: (null | KnowledgeLockResponse) | undefined;
+    revision?: (number | null) | undefined;
     tags: Array<string>;
     title: string;
     updated_at: string;
@@ -2559,8 +2577,10 @@ export namespace Schemas {
     graph?: (null | GraphDto) | undefined;
     steps: Array<RunStepResponse>;
   };
+  export type SaveDocumentContentRequest = { content: Record<string, unknown>; revision: number };
   export type WorkflowLayoutDto = Record<string, unknown>;
   export type SaveWorkflowVersionRequest = { graph: GraphDto; layout?: (null | WorkflowLayoutDto) | undefined };
+  export type SavedDocumentResponse = { revision: number; updated_at: string };
   export type SelectColor = "gray" | "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink";
   export type SelectOptionId = string;
   export type SelectOptionInput = {
@@ -9065,6 +9085,7 @@ export namespace Endpoints {
       200: {
         data: Array<{
           body?: (string | null) | undefined;
+          content?: (Record<string, unknown> | null) | undefined;
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
@@ -9072,6 +9093,8 @@ export namespace Endpoints {
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          lock?: (null | Schemas.KnowledgeLockResponse) | undefined;
+          revision?: (number | null) | undefined;
           tags: Array<string>;
           title: string;
           updated_at: string;
@@ -9097,6 +9120,7 @@ export namespace Endpoints {
       201: {
         data: {
           body?: (string | null) | undefined;
+          content?: (Record<string, unknown> | null) | undefined;
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
@@ -9104,6 +9128,8 @@ export namespace Endpoints {
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          lock?: (null | Schemas.KnowledgeLockResponse) | undefined;
+          revision?: (number | null) | undefined;
           tags: Array<string>;
           title: string;
           updated_at: string;
@@ -9115,6 +9141,41 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       413: unknown;
+      422: unknown;
+    };
+  };
+  export type post_CreateKnowledgeDocument = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/documents";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateKnowledgeDocumentRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          body?: (string | null) | undefined;
+          content?: (Record<string, unknown> | null) | undefined;
+          created_at: string;
+          extracted_text?: (string | null) | undefined;
+          file?: (null | Schemas.KnowledgeFileResponse) | undefined;
+          folder_id?: (null | Schemas.KnowledgeFolderId) | undefined;
+          id: Schemas.KnowledgeArticleId;
+          kind: Schemas.KnowledgeKind;
+          links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          lock?: (null | Schemas.KnowledgeLockResponse) | undefined;
+          revision?: (number | null) | undefined;
+          tags: Array<string>;
+          title: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
       422: unknown;
     };
   };
@@ -9146,6 +9207,7 @@ export namespace Endpoints {
       200: {
         data: {
           body?: (string | null) | undefined;
+          content?: (Record<string, unknown> | null) | undefined;
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
@@ -9153,6 +9215,8 @@ export namespace Endpoints {
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          lock?: (null | Schemas.KnowledgeLockResponse) | undefined;
+          revision?: (number | null) | undefined;
           tags: Array<string>;
           title: string;
           updated_at: string;
@@ -9186,6 +9250,7 @@ export namespace Endpoints {
       200: {
         data: {
           body?: (string | null) | undefined;
+          content?: (Record<string, unknown> | null) | undefined;
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
@@ -9193,6 +9258,8 @@ export namespace Endpoints {
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          lock?: (null | Schemas.KnowledgeLockResponse) | undefined;
+          revision?: (number | null) | undefined;
           tags: Array<string>;
           title: string;
           updated_at: string;
@@ -9202,6 +9269,28 @@ export namespace Endpoints {
       401: unknown;
       403: unknown;
       404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type put_SaveKnowledgeDocumentContent = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/content";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; article_id: string };
+
+      body: Schemas.SaveDocumentContentRequest;
+    };
+    responses: {
+      200: {
+        data: { revision: number; updated_at: string };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: Schemas.DocumentConflictResponse;
       422: unknown;
     };
   };
@@ -9246,6 +9335,33 @@ export namespace Endpoints {
       };
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type post_AcquireKnowledgeDocumentLock = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/lock";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; article_id: string };
+    };
+    responses: {
+      200: {
+        data: { expires_at: string; holder_id: string; revision: number };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: Schemas.DocumentLockedResponse;
+    };
+  };
+  export type delete_ReleaseKnowledgeDocumentLock = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/lock";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; article_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown };
   };
   export type get_ListKnowledgeFolders = {
     method: "GET";
@@ -9386,6 +9502,7 @@ export namespace Endpoints {
       201: {
         data: {
           body?: (string | null) | undefined;
+          content?: (Record<string, unknown> | null) | undefined;
           created_at: string;
           extracted_text?: (string | null) | undefined;
           file?: (null | Schemas.KnowledgeFileResponse) | undefined;
@@ -9393,6 +9510,8 @@ export namespace Endpoints {
           id: Schemas.KnowledgeArticleId;
           kind: Schemas.KnowledgeKind;
           links?: (Array<Schemas.KnowledgeLinkResponse> | null) | undefined;
+          lock?: (null | Schemas.KnowledgeLockResponse) | undefined;
+          revision?: (number | null) | undefined;
           tags: Array<string>;
           title: string;
           updated_at: string;
@@ -15054,8 +15173,10 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/invitations": Endpoints.post_CreateInvitation;
     "/api/v1/organizations/{organization_id}/invoices": Endpoints.post_CreateInvoice;
     "/api/v1/organizations/{organization_id}/knowledge/articles": Endpoints.post_UploadKnowledgeFile;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/documents": Endpoints.post_CreateKnowledgeDocument;
     "/api/v1/organizations/{organization_id}/knowledge/articles/move": Endpoints.post_MoveKnowledgeArticles;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links": Endpoints.post_LinkKnowledgeArticle;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/lock": Endpoints.post_AcquireKnowledgeDocumentLock;
     "/api/v1/organizations/{organization_id}/knowledge/folders": Endpoints.post_CreateKnowledgeFolder;
     "/api/v1/organizations/{organization_id}/knowledge/notes": Endpoints.post_CreateKnowledgeNote;
     "/api/v1/organizations/{organization_id}/knowledge/tables": Endpoints.post_CreateKnowledgeTable;
@@ -15148,6 +15269,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/content": Endpoints.put_SaveKnowledgeDocumentContent;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/order": Endpoints.put_ReorderTableColumns;
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}": Endpoints.put_UpdateLeaveAccount;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
@@ -15197,6 +15319,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.delete_DeleteKnowledgeArticle;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links/{resource_type}/{resource_id}": Endpoints.delete_UnlinkKnowledgeArticle;
+    "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/lock": Endpoints.delete_ReleaseKnowledgeDocumentLock;
     "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}": Endpoints.delete_DeleteKnowledgeFolder;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}": Endpoints.delete_DeleteKnowledgeTable;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/{column_id}": Endpoints.delete_DeleteTableColumn;

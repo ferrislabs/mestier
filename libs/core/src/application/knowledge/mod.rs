@@ -1,3 +1,4 @@
+mod documents;
 mod tables;
 
 use authz::{Resource, Subject};
@@ -15,7 +16,13 @@ use crate::{
     application::{MestierAuthorizer, MestierFileStorageService, MestierUseCase, policy},
     domain::{
         customer::ports::CustomerRepository,
-        knowledge::{folders::KnowledgeFolderService, service::KnowledgeService},
+        knowledge::{
+            documents::service::{
+                KnowledgeDocumentService, content_from_markdown, ensure_references_exist,
+            },
+            folders::KnowledgeFolderService,
+            service::{KnowledgeService, validate_update},
+        },
         member::ports::MemberRepository,
         project::ports::ProjectRepository,
         quote::ports::QuoteRepository,
@@ -81,13 +88,21 @@ where
 }
 
 impl MestierUseCase {
-    #[transactional(knowledge_article, knowledge_folder, member, role, authz)]
+    #[transactional(
+        knowledge_article,
+        knowledge_folder,
+        document_reference,
+        member,
+        role,
+        authz
+    )]
     pub async fn create_knowledge_note(
         &self,
         command: CreateKnowledgeNoteCommand,
     ) -> Result<KnowledgeOutcome<KnowledgeArticle>, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
+        let mut document_reference_repository = document_reference_repository;
         require(
             authz,
             command.actor.clone(),
@@ -98,11 +113,29 @@ impl MestierUseCase {
         )
         .await?;
 
+        let (content, body) = match content_from_markdown(&command.body) {
+            Ok(written) => written,
+            Err(error) => return Ok(Err(error)),
+        };
+        ensure_references_exist(
+            &mut document_reference_repository,
+            command.organization_id,
+            None,
+            &content,
+        )
+        .await?;
         KnowledgeFolderService::new(knowledge_folder_repository)
             .require(command.organization_id, command.folder_id)
             .await?;
         KnowledgeService::new(knowledge_article_repository)
-            .create_note(command)
+            .create_document(
+                command.organization_id,
+                command.folder_id,
+                &command.title,
+                &command.tags,
+                content,
+                body,
+            )
             .await
     }
 
@@ -194,13 +227,21 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(knowledge_article, member, role, authz)]
+    #[transactional(
+        knowledge_article,
+        knowledge_document,
+        document_reference,
+        member,
+        role,
+        authz
+    )]
     pub async fn update_knowledge_article(
         &self,
         command: UpdateKnowledgeCommand,
     ) -> Result<KnowledgeOutcome<KnowledgeArticle>, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
+        let mut document_reference_repository = document_reference_repository;
         require(
             authz,
             command.actor.clone(),
@@ -211,9 +252,31 @@ impl MestierUseCase {
         )
         .await?;
 
-        KnowledgeService::new(knowledge_article_repository)
-            .update(command)
-            .await
+        let mut articles = KnowledgeService::new(knowledge_article_repository);
+        if let Err(error) = validate_update(&command) {
+            return Ok(Err(error));
+        }
+        if let Some(markdown) = &command.body {
+            if let Err(error) = articles
+                .require_document(command.organization_id, command.id)
+                .await?
+            {
+                return Ok(Err(error));
+            }
+            if let Err(error) = KnowledgeDocumentService::new(knowledge_document_repository)
+                .replace_from_markdown(
+                    &mut document_reference_repository,
+                    command.organization_id,
+                    command.id,
+                    command.user_id,
+                    markdown,
+                )
+                .await?
+            {
+                return Ok(Err(error));
+            }
+        }
+        articles.update(command).await
     }
 
     #[transactional(knowledge_article, member, role, authz)]

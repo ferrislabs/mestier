@@ -44,6 +44,7 @@ const OWN_SUPPLIER: &str = "b1111111-1111-4111-8111-111111111111";
 const OWN_PRODUCT: &str = "b3333333-3333-4333-8333-333333333333";
 const LIBRARY_TOTAL: usize = 60;
 const FAILING_PHOTO: usize = 59;
+const DOCUMENT: &str = "a1111111-1111-4111-8111-111111111111";
 const UPDATED_AT: &str = "2026-10-10T08:00:00Z";
 const JPEG: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, b'J', b'F', b'I', b'F'];
 
@@ -469,12 +470,36 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
             }}))
             .into_response()
         }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/knowledge/articles/{DOCUMENT}") => {
+            Json(json!({"data": {
+                "id": DOCUMENT, "kind": "document", "title": "Compte rendu",
+                "body": "# Plan\n\n- [ ] commander", "file": null, "tags": [],
+                "revision": 3, "content": {"version": 1, "blocks": []},
+                "lock": {"holder_id": "e7777777-7777-4777-8777-777777777777", "expires_at": "2026-10-10T08:01:30Z"},
+                "updated_at": "2026-10-10T08:00:00Z", "links": []
+            }}))
+            .into_response()
+        }
+        (&Method::PATCH, p) if p == format!("organizations/{ORG_A}/knowledge/articles/{DOCUMENT}") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            if sent.get("body").is_some() {
+                return fail(
+                    StatusCode::CONFLICT,
+                    "Conflict: document: this document is being edited by someone else",
+                );
+            }
+            Json(json!({"data": {
+                "id": DOCUMENT, "kind": "document", "title": sent["title"], "body": "# Plan",
+                "file": null, "tags": [], "updated_at": "2026-10-10T08:00:00Z"
+            }}))
+            .into_response()
+        }
         (&Method::POST, p) if p == format!("organizations/{ORG_A}/knowledge/notes") => {
             let sent: Value = serde_json::from_slice(&bytes).unwrap();
             (
                 StatusCode::CREATED,
                 Json(json!({"data": {
-                    "id": ARTICLE, "kind": "note", "title": sent["title"], "body": sent["body"],
+                    "id": ARTICLE, "kind": "document", "title": sent["title"], "body": sent["body"],
                     "file": null, "tags": sent["tags"], "updated_at": "2026-11-10T08:00:00Z"
                 }})),
             )
@@ -483,7 +508,7 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
         (&Method::PATCH, p) if p == format!("organizations/{ORG_A}/knowledge/articles/{ARTICLE}") => {
             let sent: Value = serde_json::from_slice(&bytes).unwrap();
             Json(json!({"data": {
-                "id": ARTICLE, "kind": "note", "title": sent["title"], "body": null,
+                "id": ARTICLE, "kind": "document", "title": sent["title"], "body": null,
                 "file": null, "tags": sent["tags"], "updated_at": "2026-11-10T08:00:00Z"
             }}))
             .into_response()
@@ -786,6 +811,72 @@ async fn a_note_is_created_with_clean_tags_and_updated_without_resending_the_oth
     .await;
     assert_eq!(nothing["isError"], json!(true));
     drop(fake);
+}
+
+#[tokio::test]
+async fn a_document_is_created_and_read_in_markdown_and_refused_while_someone_edits_it() {
+    let (mcp, fake) = start().await;
+    let created = call(
+        &mcp,
+        "solo",
+        "create_knowledge_note",
+        json!({"title": "Plan", "body": "# Plan\n\n- [ ] commander\n\n[Dupont](mestier:customer/e1111111-1111-4111-8111-111111111111)"}),
+    )
+    .await;
+    assert_ne!(created["isError"], json!(true), "{created}");
+    let created: Value = serde_json::from_str(&text(&created)).unwrap();
+    assert_eq!(created["kind"], "document");
+    let sent = fake
+        .seen()
+        .into_iter()
+        .find(|s| s.method == "POST" && s.path.ends_with("/knowledge/notes"))
+        .unwrap();
+    assert!(
+        sent.body["body"]
+            .as_str()
+            .unwrap()
+            .contains("mestier:customer/")
+    );
+
+    let read = call(
+        &mcp,
+        "solo",
+        "get_knowledge_article",
+        json!({"article_id": DOCUMENT}),
+    )
+    .await;
+    assert_ne!(read["isError"], json!(true), "{read}");
+    let read: Value = serde_json::from_str(&text(&read)).unwrap();
+    assert_eq!(read["kind"], "document");
+    assert_eq!(read["body"], "# Plan\n\n- [ ] commander");
+    assert_eq!(read["revision"], 3);
+    assert_eq!(
+        read["lock"]["holder_id"],
+        "e7777777-7777-4777-8777-777777777777"
+    );
+    assert!(read.get("content").is_none());
+
+    let refused = call(
+        &mcp,
+        "solo",
+        "update_knowledge_article",
+        json!({"article_id": DOCUMENT, "body": "# Autre"}),
+    )
+    .await;
+    assert_eq!(refused["isError"], json!(true));
+    assert!(
+        text(&refused).contains("en cours de modification"),
+        "{refused}"
+    );
+
+    let title = call(
+        &mcp,
+        "solo",
+        "update_knowledge_article",
+        json!({"article_id": DOCUMENT, "title": "Nouveau"}),
+    )
+    .await;
+    assert_ne!(title["isError"], json!(true), "{title}");
 }
 
 #[tokio::test]

@@ -96,6 +96,7 @@ en16931 = { version = "0.6.0", features = ["chrono"] }
 en16931-formats = { version = "0.6.0", default-features = false, features = [
     "cii",
 ] }
+pulldown-cmark = { workspace = true }
 
 [features]
 # Exposes the `automock` doubles to downstream test targets, this crate's own

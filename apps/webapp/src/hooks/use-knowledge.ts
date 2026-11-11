@@ -6,9 +6,13 @@ import {
 	listSearchParams,
 	PAGE_SIZE,
 } from '#/pages/knowledge/lib/filters'
+import type {
+	DocumentContent,
+	DocumentLock,
+} from '#/pages/knowledge-documents/lib/document-api-types'
 import { authStore } from '#/store/auth.store'
 
-const KNOWLEDGE_KEY = 'knowledge'
+export const KNOWLEDGE_KEY = 'knowledge'
 
 export type KnowledgeResourceType = 'project' | 'customer' | 'quote'
 
@@ -22,14 +26,21 @@ export interface KnowledgeArticle {
 	id: string
 	/** `null` at the root of the drive. */
 	folder_id?: string | null
-	kind: 'file' | 'note'
+	kind: 'file' | 'document'
 	title: string
+	/** The Markdown of a document. */
 	body: string | null
 	file: { mime_type: string; size_bytes: number } | null
 	/** Only on a single article. */
 	extracted_text?: string | null
 	/** Only on a single article. */
 	links?: KnowledgeLink[]
+	/** Only on a single document. */
+	content?: DocumentContent | null
+	/** Only on a single document. */
+	revision?: number
+	/** Who is editing it: `null` when free, expired, or a file. */
+	lock?: DocumentLock | null
 	tags: string[]
 	created_at: string
 	updated_at: string
@@ -64,7 +75,7 @@ export class KnowledgeRequestError extends Error {
 	}
 }
 
-function orgPath(organizationId: string): string {
+export function orgPath(organizationId: string): string {
 	return `/api/v1/organizations/${organizationId}/knowledge`
 }
 
@@ -98,7 +109,7 @@ export function knowledgeErrorMessage(
 	return known ?? serverMessage ?? `Échec de la requête (${status}).`
 }
 
-async function request(
+export async function request(
 	path: string,
 	init: { method?: string; body?: BodyInit; contentType?: string } = {},
 ): Promise<Response> {
@@ -132,7 +143,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
 
-function unwrap<T>(body: unknown): T {
+export function unwrap<T>(body: unknown): T {
 	if (isRecord(body) && 'data' in body) return body.data as T
 	return body as T
 }
@@ -233,29 +244,6 @@ export function useResourceKnowledge(
 function useInvalidation() {
 	const queryClient = useQueryClient()
 	return () => queryClient.invalidateQueries({ queryKey: [KNOWLEDGE_KEY] })
-}
-
-export function useCreateKnowledgeNote(organizationId: string) {
-	const invalidate = useInvalidation()
-	return useMutation({
-		mutationFn: async (input: {
-			title: string
-			body: string
-			tags: string[]
-			folderId?: string | null
-		}): Promise<KnowledgeArticle> => {
-			const { folderId, ...note } = input
-			const response = await request(`${orgPath(organizationId)}/notes`, {
-				method: 'POST',
-				body: JSON.stringify({ ...note, folder_id: folderId ?? null }),
-				contentType: 'application/json',
-			})
-			return unwrap<KnowledgeArticle>(await response.json())
-		},
-		onSuccess: () => {
-			void invalidate()
-		},
-	})
 }
 
 export function useUploadKnowledgeFile(organizationId: string) {

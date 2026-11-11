@@ -252,8 +252,8 @@ pub use domain::{
     knowledge::text::{
         MAX_EXTRACTED_CHARS, MAX_FILE_BYTES, MAX_MOVED_ARTICLES,
         check_file as check_knowledge_file, extract_text as extract_knowledge_text,
-        normalize_note as normalize_knowledge_note, normalize_tags as normalize_knowledge_tags,
-        normalize_title as normalize_knowledge_title,
+        normalize_markdown as normalize_knowledge_markdown,
+        normalize_tags as normalize_knowledge_tags, normalize_title as normalize_knowledge_title,
     },
     photo_library::commands::{
         DeleteLibraryPhotoCommand, GetLibraryPhotoCommand, ListLibraryPhotosCommand,
@@ -261,6 +261,13 @@ pub use domain::{
         UpdateLibraryPhotoCommand, UploadLibraryPhotoCommand,
     },
     photo_library::normalize::{NormalizedImage, normalize_image},
+};
+
+pub use domain::knowledge::documents::{
+    ContentError as DocumentContentError, CreateKnowledgeDocumentCommand, DocumentContent,
+    DocumentLockCommand, DocumentLockGrant, DocumentOutcome, DocumentRefusal, EditLock,
+    SaveDocumentContentCommand, SavedDocument, content::MAX_JSON_BYTES as MAX_DOCUMENT_JSON_BYTES,
+    from_markdown as document_from_markdown, render as render_document,
 };
 
 pub use domain::knowledge::tables::csv::{

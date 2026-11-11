@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT coalesce(lock_holder = $3 AND lock_expires_at >= now(), false) AS \"holds!\"\n            FROM knowledge_articles\n            WHERE id = $1 AND org_id = $2 AND kind = 'document'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "holds!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2e3698dcbfd5d35fd8650a3013466a80d9f1e4ff6713a9a8a9efaf4e2a776c73"
+}

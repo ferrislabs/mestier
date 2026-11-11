@@ -1,10 +1,12 @@
 use chrono::{DateTime, Utc};
-use common::CoreError;
+use common::{CoreError, UserId};
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    KnowledgeArticle, KnowledgeArticleId, KnowledgeFile, KnowledgeFolder, KnowledgeFolderId,
-    KnowledgeKind, KnowledgeLink, KnowledgeResource, KnowledgeResourceType, OrganizationId,
+    EditLock, KnowledgeArticle, KnowledgeArticleId, KnowledgeFile, KnowledgeFolder,
+    KnowledgeFolderId, KnowledgeKind, KnowledgeLink, KnowledgeResource, KnowledgeResourceType,
+    OrganizationId,
 };
 
 #[derive(Debug, Clone)]
@@ -22,6 +24,10 @@ pub struct KnowledgeArticleRow {
     pub tags: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub content: Option<Value>,
+    pub revision: i32,
+    pub lock_holder: Option<Uuid>,
+    pub lock_expires_at: Option<DateTime<Utc>>,
 }
 
 impl TryFrom<KnowledgeArticleRow> for KnowledgeArticle {
@@ -50,6 +56,15 @@ impl TryFrom<KnowledgeArticleRow> for KnowledgeArticle {
             title: row.title,
             body: row.body,
             file,
+            content: row.content,
+            revision: row.revision,
+            lock: row
+                .lock_holder
+                .zip(row.lock_expires_at)
+                .map(|(holder, expires_at)| EditLock {
+                    holder: UserId(holder),
+                    expires_at,
+                }),
             extracted_text: row.extracted_text,
             tags: row.tags,
             created_at: row.created_at,

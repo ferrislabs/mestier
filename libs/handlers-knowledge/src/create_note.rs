@@ -11,12 +11,12 @@ use crate::{NotesPath, response::KnowledgeArticleResponse, unprocessable};
 pub struct CreateKnowledgeNoteRequest {
     /// 1 to 200 characters.
     pub title: String,
-    /// The text, up to 100 000 characters.
+    /// The document as Markdown, up to 100 000 characters, converted to blocks.
     pub body: String,
     /// At most 20 tags of 1 to 40 characters, lowercased and deduplicated.
     #[serde(default)]
     pub tags: Vec<String>,
-    /// Absent or null puts the note at the root.
+    /// Absent or null puts the document at the root.
     #[serde(default)]
     pub folder_id: Option<mestier_core::KnowledgeFolderId>,
 }
@@ -29,11 +29,11 @@ pub struct CreateKnowledgeNoteRequest {
     params(("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier")),
     request_body = CreateKnowledgeNoteRequest,
     responses(
-        (status = 201, description = "The note", body = inline(DataEnvelope<KnowledgeArticleResponse>)),
+        (status = 201, description = "The document", body = inline(DataEnvelope<KnowledgeArticleResponse>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
-        (status = 404, description = "Folder not found, or held by another organization"),
-        (status = 422, description = "Empty or too long title, note or tag"),
+        (status = 404, description = "Folder, or an element mentioned in the Markdown, not found or held by another organization"),
+        (status = 422, description = "Empty or too long title, text or tag, or blocks beyond the limits"),
     ),
     security(("bearer_auth" = []))
 )]
