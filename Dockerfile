@@ -9,6 +9,26 @@ FROM rust:1.95.0-bookworm AS sqlx-cli
 
 RUN cargo install sqlx-cli --version 0.8.6 --no-default-features --features postgres --locked
 
+# --- sccache: its own stage, same reason as sqlx-cli. Caches rustc output
+# across CI runs, so a commit only recompiles the crates it touched.
+FROM rust:1.95.0-bookworm AS sccache
+
+RUN cargo install sccache --version 0.10.0 --locked
+
+# --- Tooling shared by the dependency and workspace builds -------------
+# mold replaces the default linker: linking the big binaries is a visible
+# share of a release build. RUSTFLAGS must stay identical in `cook` and
+# `build`, or the cooked dependencies are rebuilt.
+FROM chef AS tooling
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends mold && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=sccache /usr/local/cargo/bin/sccache /usr/local/bin/sccache
+
+ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold"
+
 # --- Plan: extract a recipe of the workspace dependency graph ----------
 # Only the Rust inputs are copied: a change under apps/webapp, docs or deploy
 # must not invalidate anything below.
@@ -25,10 +45,21 @@ RUN cargo chef prepare --recipe-path recipe.json
 # --- Cook: build every dependency from the recipe ----------------------
 # This layer is cached as long as recipe.json (i.e. the dep graph) is
 # stable. Source changes do not invalidate it.
-FROM chef AS builder
+FROM tooling AS builder
 
+# CI passes its GitHub Actions cache credentials as build secrets. Without
+# them (local build) sccache stays off and cargo runs as usual.
 COPY --from=planner /usr/local/src/mestier/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN --mount=type=secret,id=ACTIONS_RESULTS_URL \
+    --mount=type=secret,id=ACTIONS_RUNTIME_TOKEN \
+    set -e; \
+    if [ -s /run/secrets/ACTIONS_RUNTIME_TOKEN ]; then \
+        export ACTIONS_RESULTS_URL="$(cat /run/secrets/ACTIONS_RESULTS_URL)" \
+               ACTIONS_RUNTIME_TOKEN="$(cat /run/secrets/ACTIONS_RUNTIME_TOKEN)" \
+               SCCACHE_GHA_ENABLED=true RUSTC_WRAPPER=sccache; \
+    fi; \
+    cargo chef cook --release --recipe-path recipe.json; \
+    sccache --show-stats || true
 
 # --- Build the actual workspace binaries -------------------------------
 # The CI builds this stage once per platform (`build-rust`) and every Rust
@@ -41,7 +72,16 @@ COPY apps/seed-demo apps/seed-demo
 COPY libs libs
 COPY migrations migrations
 COPY .sqlx .sqlx
-RUN cargo build --release
+RUN --mount=type=secret,id=ACTIONS_RESULTS_URL \
+    --mount=type=secret,id=ACTIONS_RUNTIME_TOKEN \
+    set -e; \
+    if [ -s /run/secrets/ACTIONS_RUNTIME_TOKEN ]; then \
+        export ACTIONS_RESULTS_URL="$(cat /run/secrets/ACTIONS_RESULTS_URL)" \
+               ACTIONS_RUNTIME_TOKEN="$(cat /run/secrets/ACTIONS_RUNTIME_TOKEN)" \
+               SCCACHE_GHA_ENABLED=true RUSTC_WRAPPER=sccache; \
+    fi; \
+    cargo build --release; \
+    sccache --show-stats || true
 
 # --- CI warm-up target -------------------------------------------------
 # Never shipped. It pulls in every expensive stage (workspace build and

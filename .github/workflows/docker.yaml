@@ -10,12 +10,13 @@ on:
   pull_request:
     branches:
       - main
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
       push:
         type: boolean
         default: false
-        description: "Whether to push the image"
+        description: "Whether to push the images (they are always built on dispatch)"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,6 +36,8 @@ env:
 jobs:
   rust-check:
     name: rust (${{ matrix.task }})
+    # Adding a label re-triggers the workflow: only the build-image label matters.
+    if: github.event.action != 'labeled' || github.event.label.name == 'build-image'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -79,6 +82,8 @@ jobs:
   # pushed before the checks pass, but nothing waits for them to compile.
   build-rust:
     name: build-rust (${{ matrix.runner.platform }})
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     runs-on: ${{ matrix.runner.name }}
     strategy:
       fail-fast: false
@@ -95,36 +100,76 @@ jobs:
       - name: set up buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: log-in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Exposes the Actions cache credentials to the Dockerfile as build
+      # secrets, so sccache can use the GitHub Actions cache from inside it.
+      - name: expose actions cache credentials
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable("ACTIONS_RESULTS_URL", process.env.ACTIONS_RESULTS_URL || "");
+            core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env.ACTIONS_RUNTIME_TOKEN || "");
+
       - name: build workspace
         uses: docker/build-push-action@v6
         with:
           context: .
           target: rust-prebuild
           platforms: ${{ matrix.runner.platform }}
-          cache-from: type=gha,scope=rust-${{ runner.arch }}
-          cache-to: type=gha,mode=max,scope=rust-${{ runner.arch }}
+          secrets: |
+            ACTIONS_RESULTS_URL=${{ env.ACTIONS_RESULTS_URL }}
+            ACTIONS_RUNTIME_TOKEN=${{ env.ACTIONS_RUNTIME_TOKEN }}
+          cache-from: type=registry,ref=ghcr.io/ferrislabs/mestier-buildcache:rust-${{ runner.arch }}
+          cache-to: type=registry,ref=ghcr.io/ferrislabs/mestier-buildcache:rust-${{ runner.arch }},mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd
           outputs: type=cacheonly
 
-  # Whether this run should push images at all. Centralised here rather than
-  # repeated in every job/step `if:` below — a job-level `if:` can't read the
-  # `env` context, only `needs`, so this has to be a job with an output.
-  # Pull-request builds only push for internal PRs (head repo == this repo):
-  # a fork PR must never be able to push with this workflow's registry creds.
-  should-push:
+  # Decides whether images are built and whether they are pushed. Images are
+  # rarely used from a pull request, so a PR builds them only when it carries
+  # the `build-image` label (internal PRs only: a fork PR must never push with
+  # this workflow's registry creds). `main`, tags and manual dispatch always
+  # build. A job-level `if:` can't read the `env` context, only `needs`, so this
+  # has to be a job with outputs.
+  plan:
     runs-on: ubuntu-24.04
     outputs:
+      build: ${{ steps.check.outputs.build || 'false' }}
       push: ${{ steps.check.outputs.push || 'false' }}
     steps:
       - id: check
-        if: >-
-          inputs.push || startsWith(github.ref, 'refs/tags/v') ||
-          github.ref_name == github.event.repository.default_branch ||
-          (github.event_name == 'pull_request' &&
-           github.event.pull_request.head.repo.full_name == github.repository)
-        run: echo "push=true" >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          IS_DEFAULT: ${{ github.ref_name == github.event.repository.default_branch }}
+          DISPATCH_PUSH: ${{ inputs.push }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'build-image') }}
+          INTERNAL: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          build=false
+          push=false
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            build=true
+            [ "$DISPATCH_PUSH" = "true" ] && push=true
+          elif [ "$EVENT" = "pull_request" ]; then
+            if [ "$HAS_LABEL" = "true" ] && [ "$INTERNAL" = "true" ]; then
+              build=true
+              push=true
+            fi
+          elif [ "$IS_DEFAULT" = "true" ] || [[ "$REF" == refs/tags/v* ]]; then
+            build=true
+            push=true
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "push=$push" >> "$GITHUB_OUTPUT"
 
   build:
-    needs: [rust-check, should-push, build-rust]
+    needs: [rust-check, plan, build-rust]
+    if: needs.plan.outputs.build == 'true'
     runs-on: ${{ matrix.runner.name }}
     strategy:
       matrix:
@@ -152,12 +197,18 @@ jobs:
           images: ghcr.io/ferrislabs/mestier-${{ matrix.target }}
 
       - name: log-in to ghcr
-        if: needs.should-push.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: expose actions cache credentials
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable("ACTIONS_RESULTS_URL", process.env.ACTIONS_RESULTS_URL || "");
+            core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env.ACTIONS_RUNTIME_TOKEN || "");
 
       - name: build and push
         uses: docker/build-push-action@v6
@@ -170,20 +221,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           # The Rust images read what `build-rust` cached and write nothing:
           # only the webapp image has layers of its own worth keeping.
-          cache-from: type=gha,scope=${{ matrix.target == 'webapp' && format('webapp-{0}', runner.arch) || format('rust-{0}', runner.arch) }}
-          cache-to: ${{ matrix.target == 'webapp' && format('type=gha,mode=max,scope=webapp-{0}', runner.arch) || '' }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=${{ needs.should-push.outputs.push }}
+          secrets: |
+            ACTIONS_RESULTS_URL=${{ env.ACTIONS_RESULTS_URL }}
+            ACTIONS_RUNTIME_TOKEN=${{ env.ACTIONS_RUNTIME_TOKEN }}
+          cache-from: type=registry,ref=ghcr.io/ferrislabs/mestier-buildcache:${{ matrix.target == 'webapp' && format('webapp-{0}', runner.arch) || format('rust-{0}', runner.arch) }}
+          cache-to: ${{ matrix.target == 'webapp' && format('type=registry,ref=ghcr.io/ferrislabs/mestier-buildcache:webapp-{0},mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd', runner.arch) || '' }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=${{ needs.plan.outputs.push }}
 
       - name: prepare digest
         id: digest
-        if: needs.should-push.outputs.push == 'true'
+        if: needs.plan.outputs.push == 'true'
         run: |
           mkdir -p ${{ runner.temp }}/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
       - name: upload digest
-        if: needs.should-push.outputs.push == 'true'
+        if: needs.plan.outputs.push == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ runner.arch }}-${{ matrix.target }}
@@ -192,9 +246,9 @@ jobs:
           retention-days: 1
 
   push-manifest:
-    if: needs.should-push.outputs.push == 'true'
+    if: needs.plan.outputs.push == 'true'
     needs:
-      - should-push
+      - plan
       - build
     runs-on: ubuntu-latest
     strategy:
