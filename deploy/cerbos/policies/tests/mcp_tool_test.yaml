@@ -59,6 +59,26 @@ resources:
     kind: mcp_tool
     id: search_knowledge
     attr: {access: read, domain: knowledge, organization: acme}
+  read_tables:
+    kind: mcp_tool
+    id: list_tables
+    attr: {access: read, domain: knowledge, organization: acme}
+  read_table:
+    kind: mcp_tool
+    id: get_table
+    attr: {access: read, domain: knowledge, organization: acme}
+  read_table_rows:
+    kind: mcp_tool
+    id: list_table_rows
+    attr: {access: read, domain: knowledge, organization: acme}
+  write_table_row_create:
+    kind: mcp_tool
+    id: create_table_row
+    attr: {access: write, domain: knowledge, organization: acme}
+  write_table_row_update:
+    kind: mcp_tool
+    id: update_table_row
+    attr: {access: write, domain: knowledge, organization: acme}
   write_doe:
     kind: mcp_tool
     id: create_doe
@@ -458,3 +478,127 @@ tests:
         resource: read_knowledge
         actions:
           search_knowledge: EFFECT_ALLOW
+  - name: list_tables with mestier.read is allowed
+    input:
+      principals: [reader]
+      resources: [read_tables]
+      actions: [list_tables]
+    expected:
+      - principal: reader
+        resource: read_tables
+        actions:
+          list_tables: EFFECT_ALLOW
+  - name: list_tables without any scope is denied
+    input:
+      principals: [no_scope]
+      resources: [read_tables]
+      actions: [list_tables]
+    expected:
+      - principal: no_scope
+        resource: read_tables
+        actions:
+          list_tables: EFFECT_DENY
+  - name: get_table with mestier.read is allowed
+    input:
+      principals: [reader]
+      resources: [read_table]
+      actions: [get_table]
+    expected:
+      - principal: reader
+        resource: read_table
+        actions:
+          get_table: EFFECT_ALLOW
+  - name: get_table without any scope is denied
+    input:
+      principals: [no_scope]
+      resources: [read_table]
+      actions: [get_table]
+    expected:
+      - principal: no_scope
+        resource: read_table
+        actions:
+          get_table: EFFECT_DENY
+  - name: list_table_rows with mestier.read is allowed
+    input:
+      principals: [reader]
+      resources: [read_table_rows]
+      actions: [list_table_rows]
+    expected:
+      - principal: reader
+        resource: read_table_rows
+        actions:
+          list_table_rows: EFFECT_ALLOW
+  - name: list_table_rows without any scope is denied
+    input:
+      principals: [no_scope]
+      resources: [read_table_rows]
+      actions: [list_table_rows]
+    expected:
+      - principal: no_scope
+        resource: read_table_rows
+        actions:
+          list_table_rows: EFFECT_DENY
+  - name: create_table_row with mestier.knowledge.write is allowed
+    input:
+      principals: [knowledge_writer]
+      resources: [write_table_row_create]
+      actions: [create_table_row]
+    expected:
+      - principal: knowledge_writer
+        resource: write_table_row_create
+        actions:
+          create_table_row: EFFECT_ALLOW
+  - name: create_table_row without mestier.knowledge.write is denied
+    input:
+      principals: [reader, crm_writer, doe_writer, no_scope]
+      resources: [write_table_row_create]
+      actions: [create_table_row]
+    expected:
+      - principal: reader
+        resource: write_table_row_create
+        actions:
+          create_table_row: EFFECT_DENY
+      - principal: crm_writer
+        resource: write_table_row_create
+        actions:
+          create_table_row: EFFECT_DENY
+      - principal: doe_writer
+        resource: write_table_row_create
+        actions:
+          create_table_row: EFFECT_DENY
+      - principal: no_scope
+        resource: write_table_row_create
+        actions:
+          create_table_row: EFFECT_DENY
+  - name: update_table_row with mestier.knowledge.write is allowed
+    input:
+      principals: [knowledge_writer]
+      resources: [write_table_row_update]
+      actions: [update_table_row]
+    expected:
+      - principal: knowledge_writer
+        resource: write_table_row_update
+        actions:
+          update_table_row: EFFECT_ALLOW
+  - name: update_table_row without mestier.knowledge.write is denied
+    input:
+      principals: [reader, crm_writer, doe_writer, no_scope]
+      resources: [write_table_row_update]
+      actions: [update_table_row]
+    expected:
+      - principal: reader
+        resource: write_table_row_update
+        actions:
+          update_table_row: EFFECT_DENY
+      - principal: crm_writer
+        resource: write_table_row_update
+        actions:
+          update_table_row: EFFECT_DENY
+      - principal: doe_writer
+        resource: write_table_row_update
+        actions:
+          update_table_row: EFFECT_DENY
+      - principal: no_scope
+        resource: write_table_row_update
+        actions:
+          update_table_row: EFFECT_DENY

@@ -522,6 +522,31 @@ async fn fake_api(State(fake): State<Fake>, request: Request) -> Response {
             }}))
             .into_response()
         }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/knowledge/tables") => Json(json!({"data": [{
+            "id": TABLE, "name": "Chantiers", "description": "Suivi",
+            "created_at": UPDATED_AT, "updated_at": UPDATED_AT
+        }]}))
+        .into_response(),
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/knowledge/tables/{TABLE}") => {
+            Json(json!({"data": table_detail()})).into_response()
+        }
+        (&Method::GET, p) if p == format!("organizations/{ORG_A}/knowledge/tables/{TABLE}/rows") => {
+            Json(json!({"data": {"rows": [table_row()], "total": 1, "limit": 100, "offset": 0}}))
+                .into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/knowledge/tables/{TABLE}/rows/query") => {
+            Json(json!({"data": {"rows": [table_row()], "total": 1, "limit": 20, "offset": 0}}))
+                .into_response()
+        }
+        (&Method::POST, p) if p == format!("organizations/{ORG_A}/knowledge/tables/{TABLE}/rows") => {
+            let sent: Value = serde_json::from_slice(&bytes).unwrap();
+            let mut row = table_row();
+            row["values"] = sent["values"].clone();
+            (StatusCode::CREATED, Json(json!({"data": row}))).into_response()
+        }
+        (&Method::PATCH, p) if p == format!("organizations/{ORG_A}/knowledge/tables/{TABLE}/rows/{TABLE_ROW}") => {
+            Json(json!({"data": table_row()})).into_response()
+        }
         (&Method::POST, "files") => (
             StatusCode::CREATED,
             Json(json!({"data": {"key": "doe/uploaded.bin", "mime_type": "x", "size_bytes": bytes.len()}})),
@@ -2977,5 +3002,264 @@ async fn a_folder_is_created_and_articles_are_moved_without_anything_deleted() {
     for seen in fake.seen() {
         assert_ne!(seen.method, "DELETE", "{}", seen.path);
         assert_ne!(seen.method, "PATCH", "{}", seen.path);
+    }
+}
+
+const TABLE: &str = "a1000000-0000-4000-8000-000000000001";
+const COL_NAME: &str = "a1000000-0000-4000-8000-000000000011";
+const COL_STATUS: &str = "a1000000-0000-4000-8000-000000000012";
+const COL_AMOUNT: &str = "a1000000-0000-4000-8000-000000000013";
+const COL_CUSTOMER: &str = "a1000000-0000-4000-8000-000000000014";
+const COL_DUE: &str = "a1000000-0000-4000-8000-000000000015";
+const COL_LOTS: &str = "a1000000-0000-4000-8000-000000000016";
+const OPT_ONGOING: &str = "a1000000-0000-4000-8000-000000000021";
+const OPT_DONE: &str = "a1000000-0000-4000-8000-000000000022";
+const OPT_LAWN: &str = "a1000000-0000-4000-8000-000000000023";
+const OPT_WATER: &str = "a1000000-0000-4000-8000-000000000024";
+const TABLE_VIEW: &str = "a1000000-0000-4000-8000-000000000031";
+const TABLE_ROW: &str = "a1000000-0000-4000-8000-000000000041";
+
+fn table_detail() -> Value {
+    json!({
+        "id": TABLE, "name": "Chantiers", "description": "Suivi",
+        "created_at": UPDATED_AT, "updated_at": UPDATED_AT,
+        "columns": [
+            {"id": COL_NAME, "name": "Nom", "kind": "text", "config": {}, "position": 0, "is_primary": true},
+            {"id": COL_STATUS, "name": "Statut", "kind": "single_select", "position": 1, "is_primary": false,
+             "config": {"options": [{"id": OPT_ONGOING, "label": "En cours", "color": "blue"},
+                                    {"id": OPT_DONE, "label": "Terminé", "color": "green"}]}},
+            {"id": COL_AMOUNT, "name": "Montant", "kind": "currency", "config": {}, "position": 2, "is_primary": false},
+            {"id": COL_CUSTOMER, "name": "Client", "kind": "link", "config": {"link_kind": "customer"}, "position": 3, "is_primary": false},
+            {"id": COL_DUE, "name": "Échéance", "kind": "date", "config": {}, "position": 4, "is_primary": false},
+            {"id": COL_LOTS, "name": "Lots", "kind": "multi_select", "position": 5, "is_primary": false,
+             "config": {"options": [{"id": OPT_LAWN, "label": "Gazon", "color": "green"},
+                                    {"id": OPT_WATER, "label": "Arrosage", "color": "blue"}]}}
+        ],
+        "views": [{
+            "id": TABLE_VIEW, "name": "En cours", "kind": "kanban", "position": 0,
+            "created_at": UPDATED_AT, "updated_at": UPDATED_AT,
+            "config": {
+                "filters": [{"column_id": COL_STATUS, "operator": "is", "value": OPT_ONGOING}],
+                "sorts": [{"column_id": COL_DUE, "direction": "desc"}],
+                "hidden": [], "widths": {}, "group_by": COL_STATUS
+            }
+        }]
+    })
+}
+
+fn table_row() -> Value {
+    json!({
+        "id": TABLE_ROW,
+        "values": {
+            COL_NAME: "Pelouse Dupont", COL_STATUS: OPT_ONGOING, COL_AMOUNT: 125_050,
+            COL_CUSTOMER: {"kind": "customer", "id": OWN_CUSTOMER}, COL_DUE: "2026-11-20",
+            COL_LOTS: [OPT_LAWN, OPT_WATER]
+        },
+        "labels": {COL_CUSTOMER: {"label": "Dupont", "missing": false}},
+        "created_by": null, "updated_by": null,
+        "created_at": UPDATED_AT, "updated_at": UPDATED_AT
+    })
+}
+
+fn table_calls(fake: &Fake) -> Vec<Seen> {
+    fake.seen()
+        .into_iter()
+        .filter(|s| s.path.contains("/knowledge/tables"))
+        .collect()
+}
+
+#[tokio::test]
+async fn the_tables_are_listed_and_one_is_read_with_its_columns_options_and_views() {
+    let (mcp, _) = start().await;
+    let listed = call(&mcp, "solo", "list_tables", json!({})).await;
+    assert_ne!(listed["isError"], json!(true), "{listed}");
+    let listed: Value = serde_json::from_str(&text(&listed)).unwrap();
+    assert_eq!(
+        listed,
+        json!([{"id": TABLE, "name": "Chantiers", "description": "Suivi"}])
+    );
+
+    let read = call(&mcp, "solo", "get_table", json!({"table_id": TABLE})).await;
+    assert_ne!(read["isError"], json!(true), "{read}");
+    let table: Value = serde_json::from_str(&text(&read)).unwrap();
+    assert_eq!(table["name"], "Chantiers");
+    assert_eq!(
+        table["columns"][0],
+        json!({"id": COL_NAME, "name": "Nom", "kind": "text", "primary": true})
+    );
+    assert_eq!(
+        table["columns"][1]["options"],
+        json!(["En cours", "Terminé"])
+    );
+    assert_eq!(table["columns"][3]["link_kind"], "customer");
+    assert_eq!(
+        table["views"],
+        json!([{"id": TABLE_VIEW, "name": "En cours", "kind": "kanban", "group_by": "Statut"}])
+    );
+}
+
+#[tokio::test]
+async fn the_rows_of_a_view_are_read_by_column_name_with_their_displayed_values() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "list_table_rows",
+        json!({"table_id": TABLE, "view_id": TABLE_VIEW, "limit": 500}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let page: Value = serde_json::from_str(&text(&result)).unwrap();
+    assert_eq!(page["total"], 1);
+    assert_eq!(page["table"], json!({"id": TABLE, "name": "Chantiers"}));
+    assert_eq!(
+        page["rows"][0],
+        json!({"id": TABLE_ROW, "fields": {
+            "Nom": "Pelouse Dupont", "Statut": "En cours", "Montant": "1250,50 €",
+            "Client": {"id": OWN_CUSTOMER, "label": "Dupont"}, "Échéance": "2026-11-20",
+            "Lots": ["Gazon", "Arrosage"]
+        }})
+    );
+    let rows = table_calls(&fake)
+        .into_iter()
+        .find(|s| s.path.ends_with("/rows"))
+        .unwrap();
+    assert_eq!(rows.method, "GET");
+    for expected in [&format!("view_id={TABLE_VIEW}"), "limit=100", "offset=0"] {
+        assert!(
+            rows.query.contains(expected),
+            "{expected} in {}",
+            rows.query
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_text_search_keeps_the_view_and_looks_in_the_primary_column() {
+    let (mcp, fake) = start().await;
+    let result = call(
+        &mcp,
+        "solo",
+        "list_table_rows",
+        json!({"table_id": TABLE, "view_id": TABLE_VIEW, "search": " pelouse ", "limit": 20}),
+    )
+    .await;
+    assert_ne!(result["isError"], json!(true), "{result}");
+    let query = table_calls(&fake)
+        .into_iter()
+        .find(|s| s.path.ends_with("/rows/query"))
+        .unwrap();
+    assert_eq!(
+        query.body,
+        json!({
+            "filters": [
+                {"column_id": COL_STATUS, "operator": "is", "value": OPT_ONGOING},
+                {"column_id": COL_NAME, "operator": "contains", "value": "pelouse"}
+            ],
+            "sorts": [{"column_id": COL_DUE, "direction": "desc"}],
+            "limit": 20,
+            "offset": 0
+        })
+    );
+
+    let unknown = call(
+        &mcp,
+        "solo",
+        "list_table_rows",
+        json!({"table_id": TABLE, "view_id": OWN_CUSTOMER}),
+    )
+    .await;
+    assert_eq!(unknown["isError"], json!(true));
+    assert!(text(&unknown).contains("En cours"), "{}", text(&unknown));
+}
+
+#[tokio::test]
+async fn a_row_is_created_with_values_by_column_name_and_options_by_label() {
+    let (mcp, fake) = start().await;
+    let created = call(
+        &mcp,
+        "solo",
+        "create_table_row",
+        json!({"table_id": TABLE, "values": {
+            "nom": "Haie Martin", "STATUT": " terminé ", "Montant": 5000,
+            "client": OWN_CUSTOMER, "Lots": ["gazon", "Arrosage"], "Échéance": null
+        }}),
+    )
+    .await;
+    assert_ne!(created["isError"], json!(true), "{created}");
+    let created: Value = serde_json::from_str(&text(&created)).unwrap();
+    assert_eq!(created["id"], TABLE_ROW);
+    assert_eq!(created["fields"]["Statut"], "Terminé");
+    let post = table_calls(&fake)
+        .into_iter()
+        .find(|s| s.method == "POST" && s.path.ends_with("/rows"))
+        .unwrap();
+    assert_eq!(
+        post.body,
+        json!({"values": {
+            COL_NAME: "Haie Martin", COL_STATUS: OPT_DONE, COL_AMOUNT: 5000,
+            COL_CUSTOMER: {"kind": "customer", "id": OWN_CUSTOMER},
+            COL_LOTS: [OPT_LAWN, OPT_WATER], COL_DUE: null
+        }})
+    );
+}
+
+#[tokio::test]
+async fn a_row_is_updated_with_only_the_given_cells_and_a_null_clears_one() {
+    let (mcp, fake) = start().await;
+    let updated = call(
+        &mcp,
+        "solo",
+        "update_table_row",
+        json!({"table_id": TABLE, "row_id": TABLE_ROW, "values": {"Statut": null, "Montant": 0}}),
+    )
+    .await;
+    assert_ne!(updated["isError"], json!(true), "{updated}");
+    let patch = table_calls(&fake)
+        .into_iter()
+        .find(|s| s.method == "PATCH")
+        .unwrap();
+    assert!(patch.path.ends_with(&format!("/rows/{TABLE_ROW}")));
+    assert_eq!(
+        patch.body,
+        json!({"values": {COL_STATUS: null, COL_AMOUNT: 0}})
+    );
+
+    let nothing = call(
+        &mcp,
+        "solo",
+        "update_table_row",
+        json!({"table_id": TABLE, "row_id": TABLE_ROW, "values": {}}),
+    )
+    .await;
+    assert_eq!(nothing["isError"], json!(true));
+}
+
+#[tokio::test]
+async fn an_unknown_column_or_option_is_refused_before_any_write() {
+    let (mcp, fake) = start().await;
+    let column = call(
+        &mcp,
+        "solo",
+        "create_table_row",
+        json!({"table_id": TABLE, "values": {"Couleur": "vert"}}),
+    )
+    .await;
+    assert_eq!(column["isError"], json!(true));
+    assert!(text(&column).contains("Couleur"), "{}", text(&column));
+    assert!(text(&column).contains("Statut"), "{}", text(&column));
+
+    let option = call(
+        &mcp,
+        "solo",
+        "update_table_row",
+        json!({"table_id": TABLE, "row_id": TABLE_ROW, "values": {"Statut": "Annulé"}}),
+    )
+    .await;
+    assert_eq!(option["isError"], json!(true));
+    assert!(text(&option).contains("Terminé"), "{}", text(&option));
+
+    for seen in table_calls(&fake) {
+        assert_eq!(seen.method, "GET", "{}", seen.path);
     }
 }
