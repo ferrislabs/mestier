@@ -427,3 +427,48 @@ describe('reading what the server stored', () => {
 		expect(toEditorBlocks(null)).toEqual([])
 	})
 })
+
+describe('ids that do not come from the app', () => {
+	it('keeps the label as text when a pasted mention has no valid id', () => {
+		const result = toDocumentContent([
+			{
+				id: '1',
+				type: 'paragraph',
+				props: {},
+				content: [
+					{
+						type: 'mention',
+						props: {
+							resourceType: 'customer',
+							resourceId: 'x',
+							label: 'Dupont',
+						},
+					},
+				],
+				children: [],
+			},
+		])
+		expect(result.blocks[0]?.content).toEqual([
+			{ type: 'text', text: 'Dupont', styles: {} },
+		])
+	})
+
+	it('drops image, file and table blocks whose id is not a uuid', () => {
+		const result = toDocumentContent([
+			{
+				id: '1',
+				type: 'image',
+				props: { source: 'drive', id: 'nope' },
+				children: [],
+			},
+			{ id: '2', type: 'file', props: { articleId: 'nope' }, children: [] },
+			{
+				id: '3',
+				type: 'tableView',
+				props: { tableId: 'nope', viewId: 'v1' },
+				children: [],
+			},
+		])
+		expect(result.blocks).toEqual([])
+	})
+})

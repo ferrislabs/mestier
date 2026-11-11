@@ -27,6 +27,7 @@ export const MAX_HEADING_LEVEL = 3
 const STYLE_NAMES = ['bold', 'italic', 'underline', 'strike', 'code'] as const
 const TONES: readonly CalloutTone[] = ['info', 'success', 'warning', 'danger']
 const MENTION_KINDS: readonly MentionKind[] = ['customer', 'project', 'quote']
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SAFE_LINK = /^(https?:|mailto:)/i
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i
 const LOOKS_LIKE_HOST = /^[^\s/:@]+\.[^\s/:@]+(\/\S*)?$/
@@ -158,7 +159,7 @@ function inlineFromEditor(raw: unknown): Inline[] {
 		} else if (entry.type === 'mention' && isRecord(entry.props)) {
 			const kind = entry.props.resourceType
 			const id = str(entry.props.resourceId)
-			if (MENTION_KINDS.includes(kind as MentionKind) && id !== '') {
+			if (MENTION_KINDS.includes(kind as MentionKind) && UUID.test(id)) {
 				flush()
 				const mention: MentionInline = {
 					type: 'mention',
@@ -167,6 +168,9 @@ function inlineFromEditor(raw: unknown): Inline[] {
 					label: str(entry.props.label),
 				}
 				result.push(mention)
+			} else {
+				const label = str(entry.props.label)
+				if (label !== '') run.push({ type: 'text', text: label, styles: {} })
 			}
 		}
 	}
@@ -292,7 +296,7 @@ function convertBlock(source: EditorBlock, ids: IdBook): DocumentBlock | null {
 		}
 		case 'image': {
 			const id = str(props.id)
-			if (id === '') return null
+			if (!UUID.test(id)) return null
 			const caption = str(props.caption)
 			const width = clamp(
 				Math.round(Number(props.width) || MAX_IMAGE_WIDTH),
@@ -314,7 +318,7 @@ function convertBlock(source: EditorBlock, ids: IdBook): DocumentBlock | null {
 		}
 		case 'file': {
 			const articleId = str(props.articleId)
-			if (articleId === '') return null
+			if (!UUID.test(articleId)) return null
 			return {
 				id: ids.take(source.id),
 				type,
@@ -326,7 +330,7 @@ function convertBlock(source: EditorBlock, ids: IdBook): DocumentBlock | null {
 		case 'table_view': {
 			const tableId = str(props.tableId)
 			const viewId = str(props.viewId)
-			if (tableId === '' || viewId === '') return null
+			if (!UUID.test(tableId) || viewId === '') return null
 			return {
 				id: ids.take(source.id),
 				type,

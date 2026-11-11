@@ -8,17 +8,33 @@ ALTER TABLE knowledge_articles DROP CONSTRAINT chk_knowledge_articles_kind;
 ALTER TABLE knowledge_articles DROP CONSTRAINT chk_knowledge_articles_shape;
 
 WITH lines AS (
-    SELECT a.id, l.line, l.n
+    SELECT a.id, l.line, l.n,
+           sum((char_length(l.line) - 1) / 20000 + 1) OVER (PARTITION BY a.id) > 5000 AS merged
     FROM knowledge_articles a
     CROSS JOIN LATERAL regexp_split_to_table(a.body, E'\r?\n') WITH ORDINALITY AS l(line, n)
     WHERE a.kind = 'note' AND btrim(l.line, E' \t\r') <> ''
 ), pieces AS (
-    SELECT lines.id, lines.n, g AS ord, substr(lines.line, g * 20000 + 1, 20000) AS text
+    SELECT lines.id, lines.n, lines.merged, g AS ord,
+           substr(lines.line, g * sz.size + 1, sz.size) AS text
     FROM lines
-    CROSS JOIN LATERAL generate_series(0, (char_length(lines.line) - 1) / 20000) AS g
-), numbered AS (
-    SELECT id, text, row_number() OVER (PARTITION BY id ORDER BY n, ord) AS k
+    CROSS JOIN LATERAL (SELECT CASE WHEN lines.merged THEN 10000 ELSE 20000 END AS size) sz
+    CROSS JOIN LATERAL generate_series(0, (char_length(lines.line) - 1) / sz.size) AS g
+), offsets AS (
+    SELECT id, n, ord, text,
+           CASE WHEN merged
+                THEN (sum(char_length(text) + 1) OVER (PARTITION BY id ORDER BY n, ord) - char_length(text) - 1) / 10000
+                ELSE n * 1000000 + ord
+           END AS bucket
     FROM pieces
+), grouped AS (
+    SELECT id,
+           min(n * 1000000 + ord) AS position,
+           string_agg(text, E'\n' ORDER BY n, ord) AS text
+    FROM offsets
+    GROUP BY id, bucket
+), numbered AS (
+    SELECT id, text, row_number() OVER (PARTITION BY id ORDER BY position) AS k
+    FROM grouped
 ), built AS (
     SELECT id,
            jsonb_agg(

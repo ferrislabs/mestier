@@ -9,6 +9,7 @@ import {
 } from '#/pages/knowledge-documents/lib/document-api-types'
 
 export const SAVE_RETRY_MS = 5_000
+export const KEEPALIVE_MAX_BYTES = 60_000
 
 export type AcquireOutcome =
 	| { kind: 'granted'; grant: LockGrant }
@@ -89,6 +90,7 @@ export function createDocumentSession({
 	let saveTimer: ReturnType<typeof setTimeout> | null = null
 	let renewTimer: ReturnType<typeof setInterval> | null = null
 	let holding = false
+	let saveSeq = 0
 	let left = false
 
 	const update = (change: Partial<SessionState>) => {
@@ -108,6 +110,7 @@ export function createDocumentSession({
 	}
 
 	const scheduleSave = (delay: number) => {
+		if (left) return
 		clearSaveTimer()
 		saveTimer = setTimeout(() => {
 			saveTimer = null
@@ -128,6 +131,7 @@ export function createDocumentSession({
 		const read = pending
 		pending = null
 		update({ saveState: 'saving', saveError: null })
+		saveSeq += 1
 		inflight = (async () => {
 			let outcome: SaveOutcome
 			try {
@@ -156,10 +160,12 @@ export function createDocumentSession({
 			await inflight
 		} finally {
 			inflight = null
+			saveSeq += 1
 		}
 	}
 
 	async function renew(): Promise<void> {
+		const startedAt = saveSeq
 		let outcome: AcquireOutcome
 		try {
 			outcome = await api.acquire()
@@ -169,7 +175,11 @@ export function createDocumentSession({
 		if (left || state.phase !== 'editing') return
 		if (outcome.kind === 'refused') {
 			loseEditing('lock_lost')
-		} else if (outcome.grant.revision !== revision) {
+		} else if (
+			outcome.grant.revision !== revision &&
+			inflight === null &&
+			saveSeq === startedAt
+		) {
 			loseEditing('revision_conflict')
 		}
 	}
@@ -238,6 +248,8 @@ export function createDocumentSession({
 				await runSave()
 			}
 			left = true
+			clearSaveTimer()
+			stopRenewing()
 			holding = false
 			if (wasHolding) await api.release().catch(() => {})
 		},
@@ -246,13 +258,16 @@ export function createDocumentSession({
 			if (state.phase !== 'editing') return
 			stopRenewing()
 			clearSaveTimer()
-			if (pending !== null) {
-				const read = pending
-				pending = null
-				void api
-					.save(read(), revision, { keepalive: true })
-					.catch(() => undefined)
-				return
+			if (pending !== null && inflight === null) {
+				const content = pending()
+				const size = new TextEncoder().encode(JSON.stringify(content)).length
+				if (size <= KEEPALIVE_MAX_BYTES) {
+					pending = null
+					void api
+						.save(content, revision, { keepalive: true })
+						.catch(() => undefined)
+					return
+				}
 			}
 			void api.release({ keepalive: true }).catch(() => {})
 		},

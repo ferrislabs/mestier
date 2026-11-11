@@ -422,3 +422,154 @@ describe('leaving', () => {
 		expect(api.save).toHaveBeenCalledWith(EMPTY, 3, { keepalive: true })
 	})
 })
+
+describe('renewing while saving', () => {
+	function deferred<T>() {
+		let resolve!: (value: T) => void
+		const promise = new Promise<T>((done) => {
+			resolve = done
+		})
+		return { promise, resolve }
+	}
+
+	it('keeps editing when a save lands between the server read and the comparison', async () => {
+		const renewal = deferred<AcquireOutcome>()
+		let acquires = 0
+		const api = fakeApi({
+			acquire: vi.fn(() => {
+				acquires += 1
+				if (acquires === 1) {
+					return Promise.resolve({ kind: 'granted' as const, grant: GRANT })
+				}
+				return renewal.promise
+			}),
+		})
+		const { session, last } = setup(api)
+		session.start()
+		await settle()
+		await vi.advanceTimersByTimeAsync(30_000)
+		expect(acquires).toBe(2)
+		session.change(() => EMPTY)
+		await vi.advanceTimersByTimeAsync(1000)
+		expect(api.save).toHaveBeenCalledTimes(1)
+		renewal.resolve({ kind: 'granted', grant: GRANT })
+		await settle()
+		expect(last().phase).toBe('editing')
+	})
+
+	it('keeps editing when the renewal answers while a save is in flight', async () => {
+		const saving = deferred<SaveOutcome>()
+		const renewal = deferred<AcquireOutcome>()
+		let acquires = 0
+		const api = fakeApi({
+			acquire: vi.fn(() => {
+				acquires += 1
+				if (acquires === 1) {
+					return Promise.resolve({ kind: 'granted' as const, grant: GRANT })
+				}
+				return renewal.promise
+			}),
+			save: vi.fn(() => saving.promise),
+		})
+		const { session, last } = setup(api)
+		session.start()
+		await settle()
+		session.change(() => EMPTY)
+		await vi.advanceTimersByTimeAsync(1000)
+		await vi.advanceTimersByTimeAsync(30_000)
+		expect(acquires).toBe(2)
+		renewal.resolve({ kind: 'granted', grant: { ...GRANT, revision: 4 } })
+		await settle()
+		expect(last().phase).toBe('editing')
+		saving.resolve({ kind: 'saved', saved: { revision: 4, updated_at: '' } })
+		await settle()
+		expect(last().phase).toBe('editing')
+		expect(last().saveState).toBe('saved')
+	})
+
+	it('still loses editing when the revision moved without any own save', async () => {
+		let acquires = 0
+		const api = fakeApi({
+			acquire: vi.fn(async () => {
+				acquires += 1
+				return {
+					kind: 'granted' as const,
+					grant: { ...GRANT, revision: acquires === 1 ? 3 : 9 },
+				}
+			}),
+		})
+		const { session, last } = setup(api)
+		session.start()
+		await settle()
+		await vi.advanceTimersByTimeAsync(30_000)
+		expect(last().phase).toBe('conflict')
+		expect(last().conflict).toBe('revision_conflict')
+	})
+})
+
+describe('leaving and hiding', () => {
+	it('does not save again after leaving when the final save failed', async () => {
+		const api = fakeApi({
+			save: vi.fn(async () => {
+				throw new Error('offline')
+			}),
+		})
+		const { session } = setup(api)
+		session.start()
+		await settle()
+		session.change(() => EMPTY)
+		await session.leave()
+		expect(api.save).toHaveBeenCalledTimes(1)
+		await vi.advanceTimersByTimeAsync(60_000)
+		expect(api.save).toHaveBeenCalledTimes(1)
+	})
+
+	it('only releases on page hide when a save is in flight', async () => {
+		const api = fakeApi({
+			save: vi.fn(() => new Promise<SaveOutcome>(() => {})),
+		})
+		const { session } = setup(api)
+		session.start()
+		await settle()
+		session.change(() => EMPTY)
+		await vi.advanceTimersByTimeAsync(1000)
+		session.change(() => EMPTY)
+		session.pageHide()
+		expect(api.save).toHaveBeenCalledTimes(1)
+		expect(api.release).toHaveBeenCalledWith({ keepalive: true })
+	})
+
+	it('saves with keepalive on page hide when nothing is in flight', async () => {
+		const api = fakeApi()
+		const { session } = setup(api)
+		session.start()
+		await settle()
+		session.change(() => EMPTY)
+		session.pageHide()
+		expect(api.save).toHaveBeenCalledWith(EMPTY, 3, { keepalive: true })
+		expect(api.release).not.toHaveBeenCalled()
+	})
+
+	it('releases instead of saving when the content is too big for keepalive', async () => {
+		const big: DocumentContent = {
+			version: 1,
+			blocks: [
+				{
+					id: 'a',
+					type: 'paragraph',
+					props: {},
+					content: [{ type: 'text', text: 'x'.repeat(70_000), styles: {} }],
+					children: [],
+				},
+			],
+		}
+		const api = fakeApi()
+		const { session } = setup(api)
+		session.start()
+		await settle()
+		session.change(() => big)
+		session.pageHide()
+		expect(api.save).not.toHaveBeenCalled()
+		expect(api.release).toHaveBeenCalledWith({ keepalive: true })
+	})
+})

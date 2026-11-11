@@ -508,6 +508,17 @@ async fn the_documents_migration_turns_notes_into_documents_and_back() {
     .execute(&pool)
     .await
     .unwrap();
+    let long_note = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO knowledge_articles (id, org_id, kind, title, body)
+         SELECT $1, $2, 'note', 'Six mille lignes', string_agg('ligne ' || g, E'\n' ORDER BY g)
+         FROM generate_series(1, 6000) AS g",
+    )
+    .bind(long_note)
+    .bind(org)
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query(
         "INSERT INTO knowledge_articles (id, org_id, kind, title, file_key, mime_type, size_bytes)
          VALUES ($1, $2, 'file', 'Tarifs', 'k', 'application/pdf', 10)",
@@ -552,6 +563,27 @@ async fn the_documents_migration_turns_notes_into_documents_and_back() {
         ]
     );
     assert!(row.3.contains("troisième"));
+    let long_content: serde_json::Value =
+        sqlx::query_scalar("SELECT content FROM knowledge_articles WHERE id = $1")
+            .bind(long_note)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let long_parsed =
+        DocumentContent::parse(&long_content).expect("a 6000 line note stays a valid document");
+    assert!(long_parsed.blocks().len() <= 5_000);
+    let long_text: String = sqlx::query_scalar(
+        "SELECT string_agg(b -> 'content' -> 0 ->> 'text', E'\n' ORDER BY n)
+         FROM knowledge_articles a, jsonb_array_elements(a.content -> 'blocks') WITH ORDINALITY AS t(b, n)
+         WHERE a.id = $1",
+    )
+    .bind(long_note)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let expected: Vec<String> = (1..=6000).map(|i| format!("ligne {i}")).collect();
+    assert_eq!(long_text, expected.join("\n"));
+
     let file_kind: String = sqlx::query_scalar("SELECT kind FROM knowledge_articles WHERE id = $1")
         .bind(file)
         .fetch_one(&pool)

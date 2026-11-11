@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import {
 	KNOWLEDGE_KEY,
 	type KnowledgeArticle,
@@ -262,17 +263,29 @@ export function useDriveFileInfo(organizationId: string, articleId: string) {
 }
 
 export function useDriveImageUrl(organizationId: string, articleId: string) {
-	return useQuery({
-		queryKey: [KNOWLEDGE_KEY, 'drive-image-url', organizationId, articleId],
-		queryFn: async (): Promise<string> => {
+	const query = useQuery({
+		queryKey: [KNOWLEDGE_KEY, 'drive-image', organizationId, articleId],
+		queryFn: async (): Promise<Blob> => {
 			const response = await request(
 				`${orgPath(organizationId)}/articles/${articleId}/download`,
 			)
-			return URL.createObjectURL(await response.blob())
+			return response.blob()
 		},
 		enabled: Boolean(organizationId) && articleId !== '',
 		retry: false,
 		staleTime: Number.POSITIVE_INFINITY,
 		gcTime: 5 * 60_000,
 	})
+	const blob = query.data
+	const [url, setUrl] = useState<string | undefined>(undefined)
+	useEffect(() => {
+		if (!blob) {
+			setUrl(undefined)
+			return
+		}
+		const objectUrl = URL.createObjectURL(blob)
+		setUrl(objectUrl)
+		return () => URL.revokeObjectURL(objectUrl)
+	}, [blob])
+	return { data: url, isError: query.isError }
 }
