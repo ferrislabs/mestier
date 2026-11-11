@@ -328,7 +328,11 @@ where
         let mut rewritten = Vec::new();
         if command.kind.is_some() || command.config.is_some() {
             let kind = command.kind.unwrap_or(before.kind());
-            let config = command.config.clone().unwrap_or_else(|| before.config());
+            let config = command
+                .config
+                .clone()
+                .unwrap_or_else(|| before.config())
+                .reusing_ids(before.options());
             let target = ColumnType::from_config(kind, &config)?;
             if column.is_primary && target.kind() != ColumnKind::Text {
                 return Err(TableError::PrimaryColumnLocked.into());
@@ -414,7 +418,9 @@ where
         if column.is_primary {
             return Err(TableError::PrimaryColumnLocked.into());
         }
-        self.tables.delete_column(organization_id, id).await?;
+        self.tables
+            .delete_column(organization_id, table_id, id)
+            .await?;
         self.rows
             .remove_column(organization_id, table_id, id)
             .await?;
@@ -517,7 +523,7 @@ where
         now: DateTime<Utc>,
     ) -> Result<TableView, Stop> {
         let organization_id = command.organization_id;
-        self.table(organization_id, command.table_id).await?;
+        self.lock(organization_id, command.table_id).await?;
         let views = self.tables.views(organization_id, command.table_id).await?;
         let mut view = views
             .iter()
@@ -563,7 +569,7 @@ where
         table_id: KnowledgeTableId,
         id: TableViewId,
     ) -> Result<(), Stop> {
-        self.table(organization_id, table_id).await?;
+        self.lock(organization_id, table_id).await?;
         let views = self.tables.views(organization_id, table_id).await?;
         if !views.iter().any(|view| view.id == id) {
             return Err(CoreError::NotFound.into());
@@ -571,7 +577,10 @@ where
         if views.len() <= 1 {
             return Err(TableError::LastView.into());
         }
-        Ok(self.tables.delete_view(organization_id, id).await?)
+        Ok(self
+            .tables
+            .delete_view(organization_id, table_id, id)
+            .await?)
     }
 
     async fn reconcile_views(
@@ -1107,6 +1116,84 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn deleting_or_updating_a_view_takes_the_table_lock_first() {
+        let organization_id = org();
+        let stored = table(organization_id);
+        let mut tables = MockKnowledgeTableRepository::new();
+        tables
+            .expect_lock_table()
+            .times(2)
+            .returning(|_, _| Box::pin(async { Ok(false) }));
+        tables.expect_delete_view().never();
+        tables.expect_update_view().never();
+        let mut service =
+            KnowledgeTableService::new(tables, MockKnowledgeTableRowRepository::new());
+
+        let deleted = service
+            .delete_view(organization_id, stored.id, TableViewId(generate_uuid_v7()))
+            .await;
+        let updated = service
+            .update_view(
+                UpdateTableViewCommand {
+                    actor: actor(),
+                    organization_id,
+                    table_id: stored.id,
+                    id: TableViewId(generate_uuid_v7()),
+                    name: Some("Autre".to_owned()),
+                    kind: None,
+                    config: None,
+                },
+                Utc::now(),
+            )
+            .await;
+
+        assert!(matches!(deleted, Err(CoreError::NotFound)));
+        assert!(matches!(updated, Err(CoreError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn an_option_sent_without_id_keeps_the_id_of_the_same_label() {
+        let organization_id = org();
+        let stored = table(organization_id);
+        let before = SelectOptions::parse(&options(&["En cours", "Terminé"])).unwrap();
+        let first = before.as_slice()[0].id;
+        let second = before.as_slice()[1].id;
+        let status = column(&stored, "Statut", ColumnType::SingleSelect(before));
+        let mut tables = MockKnowledgeTableRepository::new();
+        finding(&mut tables, &stored);
+        with_columns(&mut tables, vec![primary(&stored), status.clone()]);
+        with_views(&mut tables, vec![view(&stored)]);
+        tables.expect_update_column().returning(|column| {
+            let column = column.clone();
+            Box::pin(async move { Ok(column) })
+        });
+        let mut rows = MockKnowledgeTableRowRepository::new();
+        rows.expect_remove_option().never();
+
+        let updated = KnowledgeTableService::new(tables, rows)
+            .update_column(UpdateTableColumnCommand {
+                actor: actor(),
+                organization_id,
+                table_id: stored.id,
+                id: status.id,
+                name: None,
+                kind: None,
+                config: Some(ColumnConfig {
+                    options: Some(options(&[" terminé ", "EN COURS", "Nouveau"])),
+                    ..ColumnConfig::default()
+                }),
+            })
+            .await
+            .unwrap()
+            .unwrap();
+
+        let kept = updated.column_type.options().unwrap().as_slice();
+        assert_eq!(kept[0].id, second);
+        assert_eq!(kept[1].id, first);
+        assert!(kept[2].id != first && kept[2].id != second);
+    }
+
+    #[tokio::test]
     async fn a_removed_option_leaves_the_rows_and_a_removed_column_its_key() {
         let organization_id = org();
         let stored = table(organization_id);
@@ -1132,7 +1219,7 @@ mod tests {
         });
         tables
             .expect_delete_column()
-            .returning(|_, _| Box::pin(async { Ok(()) }));
+            .returning(|_, _, _| Box::pin(async { Ok(()) }));
         let mut rows = MockKnowledgeTableRowRepository::new();
         rows.expect_remove_option()
             .withf(move |_, _, _, kind, option| {

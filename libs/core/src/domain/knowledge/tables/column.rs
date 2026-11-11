@@ -233,6 +233,26 @@ pub struct ColumnConfig {
     pub link_kind: Option<KnowledgeResourceType>,
 }
 
+impl ColumnConfig {
+    pub fn reusing_ids(mut self, existing: Option<&SelectOptions>) -> Self {
+        let Some(existing) = existing else {
+            return self;
+        };
+        for input in self.options.iter_mut().flatten() {
+            if input.id.is_none() {
+                input.id = existing
+                    .as_slice()
+                    .iter()
+                    .find(|option| {
+                        option.label.trim().to_lowercase() == input.label.trim().to_lowercase()
+                    })
+                    .map(|option| option.id);
+            }
+        }
+        self
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ColumnType {
     Text,

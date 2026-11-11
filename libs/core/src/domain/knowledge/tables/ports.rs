@@ -76,6 +76,7 @@ pub trait KnowledgeTableRepository: Send {
     fn delete_column(
         &mut self,
         organization_id: OrganizationId,
+        table_id: KnowledgeTableId,
         id: TableColumnId,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
@@ -105,6 +106,7 @@ pub trait KnowledgeTableRepository: Send {
     fn delete_view(
         &mut self,
         organization_id: OrganizationId,
+        table_id: KnowledgeTableId,
         id: TableViewId,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }

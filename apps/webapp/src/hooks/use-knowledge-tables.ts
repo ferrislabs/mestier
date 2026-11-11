@@ -380,6 +380,22 @@ function mergeValues(values: RowValues, patch: RowValues): RowValues {
 	return merged
 }
 
+function cachedRow(
+	queryClient: QueryClient,
+	key: readonly unknown[],
+	rowId: string,
+): TableRow | undefined {
+	for (const [, pages] of queryClient.getQueriesData<RowPages>({
+		queryKey: key,
+	})) {
+		for (const page of pages?.pages ?? []) {
+			const found = page.rows.find((row) => row.id === rowId)
+			if (found) return found
+		}
+	}
+	return undefined
+}
+
 function patchCachedRows(
 	queryClient: QueryClient,
 	key: readonly unknown[],
@@ -411,19 +427,36 @@ export function useUpdateTableRow(organizationId: string, tableId: string) {
 		},
 		onMutate: async (input) => {
 			await queryClient.cancelQueries({ queryKey: rowsKey })
-			const snapshot = queryClient.getQueriesData<RowPages>({
-				queryKey: rowsKey,
-			})
+			const previous: RowValues = {}
+			const absent: string[] = []
+			const current = cachedRow(queryClient, rowsKey, input.rowId)
+			for (const key of Object.keys(input.values)) {
+				if (current && key in current.values)
+					previous[key] = current.values[key]
+				else absent.push(key)
+			}
 			patchCachedRows(queryClient, rowsKey, input.rowId, (row) => ({
 				...row,
 				values: mergeValues(row.values, input.values),
 			}))
-			return { snapshot }
+			return { previous, absent }
 		},
-		onError: (_error, _input, context) => {
-			for (const [key, data] of context?.snapshot ?? []) {
-				queryClient.setQueryData(key, data)
-			}
+		onError: (_error, input, context) => {
+			patchCachedRows(queryClient, rowsKey, input.rowId, (row) => {
+				const values = { ...row.values }
+				for (const [key, written] of Object.entries(input.values)) {
+					const untouched =
+						written === null
+							? !(key in values)
+							: JSON.stringify(values[key]) === JSON.stringify(written)
+					if (!untouched) continue
+					if (context && key in context.previous)
+						values[key] = context.previous[key]
+					else delete values[key]
+				}
+				return { ...row, values }
+			})
+			void queryClient.invalidateQueries({ queryKey: rowsKey })
 		},
 		onSuccess: (row) => {
 			patchCachedRows(queryClient, rowsKey, row.id, () => row)

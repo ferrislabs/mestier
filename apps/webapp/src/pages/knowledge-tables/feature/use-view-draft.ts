@@ -11,6 +11,7 @@ import type {
 import {
 	draftFromFilter,
 	normalizeConfig,
+	pruneViewState,
 	rowFilters,
 	sameQuery,
 } from '#/pages/knowledge-tables/lib/view-config'
@@ -94,8 +95,12 @@ export function useViewDraft({
 		() => (view ? savedState(view, columns) : null),
 		[view, columns],
 	)
-	const state: ViewState | null =
+	const current: ViewState | null =
 		view && local?.viewId === view.id ? local : saved
+	const state = useMemo(
+		() => (current ? pruneViewState(current, columns) : null),
+		[current, columns],
+	)
 
 	const update = useCallback(
 		(change: Partial<ViewState>) => {

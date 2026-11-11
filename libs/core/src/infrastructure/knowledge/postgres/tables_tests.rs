@@ -592,6 +592,56 @@ async fn rows_filter_sort_and_page_on_typed_values() {
 
 #[tokio::test]
 #[ignore = "requires live postgres"]
+async fn a_column_and_a_view_are_deleted_only_through_their_own_table() {
+    run(async |tx| {
+        let org = seed_organization(&tx).await;
+        let schema = create_table(&tx, org).await;
+        let elsewhere = KnowledgeTableService::new(
+            PgKnowledgeTableRepository::new(&tx),
+            PgKnowledgeTableRowRepository::new(&tx),
+        )
+        .create_table(
+            CreateKnowledgeTableCommand {
+                actor: actor(),
+                organization_id: org,
+                user_id: None,
+                name: "Autre".to_owned(),
+                description: None,
+            },
+            Utc::now(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let note = add_column(
+            &tx,
+            &schema,
+            "Note",
+            ColumnKind::Text,
+            ColumnConfig::default(),
+        )
+        .await;
+
+        let mut tables = PgKnowledgeTableRepository::new(&tx);
+        assert!(matches!(
+            tables.delete_column(org, elsewhere.table.id, note.id).await,
+            Err(CoreError::NotFound)
+        ));
+        assert_eq!(tables.columns(org, schema.table.id).await?.len(), 2);
+        assert!(matches!(
+            tables
+                .delete_view(org, elsewhere.table.id, schema.views[0].id)
+                .await,
+            Err(CoreError::NotFound)
+        ));
+        assert_eq!(tables.views(org, schema.table.id).await?.len(), 1);
+        Ok(())
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
 async fn another_organization_reaches_no_table_and_no_row() {
     run(async |tx| {
         let org = seed_organization(&tx).await;
@@ -611,11 +661,13 @@ async fn another_organization_reaches_no_table_and_no_row() {
         assert!(tables.columns(other, schema.table.id).await?.is_empty());
         assert!(tables.views(other, schema.table.id).await?.is_empty());
         assert!(matches!(
-            tables.delete_column(other, name.id).await,
+            tables.delete_column(other, schema.table.id, name.id).await,
             Err(CoreError::NotFound)
         ));
         assert!(matches!(
-            tables.delete_view(other, schema.views[0].id).await,
+            tables
+                .delete_view(other, schema.table.id, schema.views[0].id)
+                .await,
             Err(CoreError::NotFound)
         ));
 

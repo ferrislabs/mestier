@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::HashSet, ops::RangeInclusive};
 
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use encoding_rs::{Encoding, WINDOWS_1252};
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -90,7 +90,10 @@ impl CsvSheet {
             .next()
             .ok_or(TableError::CsvEmpty)?
             .map_err(|_| TableError::CsvUnreadable)?;
-        let headers: Vec<String> = header.iter().map(collapsed).collect();
+        let headers: Vec<String> = header
+            .iter()
+            .map(|cell| collapsed(undefused(cell)))
+            .collect();
         let width = headers.len();
         let mut rows = Vec::new();
         for (ordinal, record) in (2..).zip(records) {
@@ -396,6 +399,7 @@ fn date(written: &str) -> Option<NaiveDate> {
         )
     };
     NaiveDate::from_ymd_opt(i32::try_from(year).ok()?, month, day)
+        .filter(|date| (1..=9999).contains(&date.year()))
 }
 
 fn checkbox_word(written: &str) -> Option<bool> {
@@ -440,7 +444,7 @@ pub fn cell_from_text(
     column_type: &ColumnType,
     written: &str,
 ) -> Result<Option<CellValue>, CellError> {
-    let trimmed = written.trim();
+    let trimmed = undefused(written.trim());
     if trimmed.is_empty() {
         return Ok(None);
     }
@@ -610,11 +614,20 @@ fn sheet_amount(cents: i64) -> String {
     format!("{sign}{},{:02}", magnitude / 100, magnitude % 100)
 }
 
+const FORMULA_STARTS: [char; 6] = ['=', '+', '-', '@', '\t', '\r'];
+
 fn defused(text: String) -> String {
-    if text.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+    if text.starts_with(FORMULA_STARTS) {
         format!("'{text}")
     } else {
         text
+    }
+}
+
+fn undefused(text: &str) -> &str {
+    match text.strip_prefix('\'') {
+        Some(rest) if rest.starts_with(FORMULA_STARTS) => rest,
+        _ => text,
     }
 }
 
@@ -626,8 +639,8 @@ fn exported(column: &TableColumn, row: &ResolvedRow) -> String {
             .get(&column.key())
             .and_then(Value::as_i64)
             .map(sheet_amount),
-        ColumnType::Text | ColumnType::LongText => row.shown(column).map(defused),
-        _ => row.shown(column),
+        ColumnType::Number(_) | ColumnType::Date | ColumnType::Checkbox => row.shown(column),
+        _ => row.shown(column).map(defused),
     }
     .unwrap_or_default()
 }
@@ -637,7 +650,11 @@ pub fn write(columns: &[&TableColumn], rows: &[ResolvedRow]) -> Result<Vec<u8>, 
         .delimiter(b';')
         .terminator(::csv::Terminator::CRLF)
         .from_writer(UTF8_BOM.to_vec());
-    writer.write_record(columns.iter().map(|column| column.name.as_str()))?;
+    writer.write_record(
+        columns
+            .iter()
+            .map(|column| defused(column.name.as_str().to_owned())),
+    )?;
     for row in rows {
         writer.write_record(columns.iter().map(|column| exported(column, row)))?;
     }
@@ -961,7 +978,15 @@ mod tests {
                 "{written}"
             );
         }
-        for wrong in ["31/02/2026", "05/11/26", "2026-2-5", "11/2026", "demain"] {
+        for wrong in [
+            "31/02/2026",
+            "05/11/26",
+            "2026-2-5",
+            "11/2026",
+            "demain",
+            "0000-01-01",
+            "01/01/0000",
+        ] {
             assert_eq!(
                 json_of(&ColumnType::Date, wrong),
                 Err(CellError::NotDate),
@@ -1199,6 +1224,63 @@ mod tests {
             "Nom;Quantité;Montant;Début;Fait;Tags;Client\r\n\
              \"Villa; \"\"Dupont\"\"\";12,5;1250,50;05/11/2026;Oui;Urgent, Client;Élément supprimé\r\n\
              \"'=HYPERLINK(\"\"x\"\")\";;-0,05;;Non;;\r\n"
+        );
+    }
+
+    #[test]
+    fn an_export_defuses_every_string_cell_and_the_header() {
+        let options = select(&["=cmd", "+x"]);
+        let ids: Vec<String> = options
+            .as_slice()
+            .iter()
+            .map(|option| option.id.to_string())
+            .collect();
+        let status = column("@Statut", ColumnType::SingleSelect(options.clone()));
+        let tags = column("Tags", ColumnType::MultiSelect(options));
+        let customer = column("Client", ColumnType::Link(KnowledgeResourceType::Customer));
+        let amount = column("Montant", ColumnType::Currency);
+        let columns = [&status, &tags, &customer, &amount];
+        let row = resolved(
+            Map::from_iter([
+                (status.key(), json!(ids[0])),
+                (tags.key(), json!([ids[1]])),
+                (
+                    customer.key(),
+                    json!({"kind": "customer", "id": generate_uuid_v7()}),
+                ),
+                (amount.key(), json!(-5)),
+            ]),
+            BTreeMap::from([(customer.id, CellLabel::Found("-Dupont".to_owned()))]),
+        );
+
+        let written = write(&columns, std::slice::from_ref(&row)).unwrap();
+
+        let text = std::str::from_utf8(&written[UTF8_BOM.len()..]).unwrap();
+        assert_eq!(
+            text,
+            "'@Statut;Tags;Client;Montant\r\n'=cmd;'+x;'-Dupont;-0,05\r\n"
+        );
+    }
+
+    #[test]
+    fn an_export_with_formula_looking_text_reads_back_unchanged() {
+        let name = column("=Nom", ColumnType::Text);
+        let columns = [name.clone()];
+        let row = resolved(
+            Map::from_iter([(name.key(), json!("-5 chantiers"))]),
+            BTreeMap::new(),
+        );
+        let written = write(&[&name], std::slice::from_ref(&row)).unwrap();
+        let read = CsvSheet::read(&written).unwrap();
+        let plan = convert(
+            &read,
+            &columns,
+            &ColumnMapping::by_name(&read, &columns).unwrap(),
+        );
+        assert_eq!(plan.rows[0].values.to_json(), row.row.values);
+        assert_eq!(
+            json_of(&ColumnType::Text, "'rien"),
+            Ok(Some(json!("'rien")))
         );
     }
 

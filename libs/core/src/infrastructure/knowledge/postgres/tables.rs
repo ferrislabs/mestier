@@ -368,12 +368,14 @@ impl<'tx> KnowledgeTableRepository for PgKnowledgeTableRepository<'tx> {
     async fn delete_column(
         &mut self,
         organization_id: OrganizationId,
+        table_id: KnowledgeTableId,
         id: TableColumnId,
     ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
         let result = sqlx::query!(
-            "DELETE FROM knowledge_table_columns WHERE id = $1 AND org_id = $2 AND NOT is_primary",
+            "DELETE FROM knowledge_table_columns WHERE id = $1 AND table_id = $2 AND org_id = $3 AND NOT is_primary",
             id.0,
+            table_id.0,
             organization_id.0,
         )
         .execute(&mut ***tx)
@@ -490,12 +492,14 @@ impl<'tx> KnowledgeTableRepository for PgKnowledgeTableRepository<'tx> {
     async fn delete_view(
         &mut self,
         organization_id: OrganizationId,
+        table_id: KnowledgeTableId,
         id: TableViewId,
     ) -> Result<(), CoreError> {
         let mut tx = self.tx.lock().await;
         let result = sqlx::query!(
-            "DELETE FROM knowledge_table_views WHERE id = $1 AND org_id = $2",
+            "DELETE FROM knowledge_table_views WHERE id = $1 AND table_id = $2 AND org_id = $3",
             id.0,
+            table_id.0,
             organization_id.0,
         )
         .execute(&mut ***tx)

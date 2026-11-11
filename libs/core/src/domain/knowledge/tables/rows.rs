@@ -200,11 +200,8 @@ where
         C: CellReferenceCheck,
     {
         let organization_id = command.organization_id;
+        let columns = self.lock(organization_id, command.table_id).await?;
         let table = self.table(organization_id, command.table_id).await?;
-        let columns = self
-            .tables
-            .columns(organization_id, command.table_id)
-            .await?;
         let before = self
             .rows
             .find(organization_id, command.table_id, command.id)
@@ -853,6 +850,32 @@ mod tests {
             event.payload["row"]["fields"],
             json!({"Nom": "Villa", "Traité": "Oui", "Note": null})
         );
+    }
+
+    #[tokio::test]
+    async fn an_update_takes_the_table_lock_and_writes_nothing_without_it() {
+        let table_id = KnowledgeTableId(generate_uuid_v7());
+        let name = named(table_id, "Nom", ColumnType::Text);
+        let row = stored(table_id, serde_json::Map::new());
+        let mut tables = MockKnowledgeTableRepository::new();
+        tables
+            .expect_lock_table()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(false) }));
+        let mut rows = MockKnowledgeTableRowRepository::new();
+        rows.expect_patch().never();
+        let emitter = RecordingEmitter::default();
+        let mut service = KnowledgeTableRowService::new(tables, rows, &emitter);
+
+        let outcome = service
+            .update_row(
+                update(table_id, row.id, vec![(name.id, json!("Villa"))]),
+                &mut MockCellReferenceCheck::new(),
+                Utc::now(),
+            )
+            .await;
+
+        assert!(matches!(outcome, Err(CoreError::NotFound)));
     }
 
     #[tokio::test]

@@ -2,6 +2,7 @@ import { optionIds } from '#/pages/knowledge-tables/lib/cells'
 import {
 	columnOptions,
 	filterOperators,
+	isSortable,
 	operatorNeedsValue,
 	orderedColumns,
 } from '#/pages/knowledge-tables/lib/columns'
@@ -168,6 +169,45 @@ export function rowFilters(
 		const filter = column ? toRowFilter(draft, column) : null
 		return filter ? [filter] : []
 	})
+}
+
+function filterFits(draft: FilterCondition, column: TableColumn): boolean {
+	if (!filterOperators(column.kind).includes(draft.operator)) return false
+	if (
+		(column.kind === 'single_select' || column.kind === 'multi_select') &&
+		operatorNeedsValue(draft.operator)
+	) {
+		const known = columnOptions(column).map((option) => option.id)
+		return optionIds(draft.value).every((id) => known.includes(id))
+	}
+	return true
+}
+
+export function pruneViewState<
+	T extends {
+		filters: readonly FilterDraft[]
+		sorts: readonly RowSort[]
+		hidden: readonly string[]
+	},
+>(state: T, columns: readonly TableColumn[]): T {
+	const byId = new Map(columns.map((column) => [column.id, column]))
+	const filters = state.filters.filter((draft) => {
+		const column = byId.get(draft.column_id)
+		return column !== undefined && filterFits(draft, column)
+	})
+	const sorts = state.sorts.filter((sort) => {
+		const column = byId.get(sort.column_id)
+		return column !== undefined && isSortable(column.kind)
+	})
+	const hidden = state.hidden.filter((id) => byId.has(id))
+	if (
+		filters.length === state.filters.length &&
+		sorts.length === state.sorts.length &&
+		hidden.length === state.hidden.length
+	) {
+		return state
+	}
+	return { ...state, filters, sorts, hidden }
 }
 
 export interface RowQueryShape {

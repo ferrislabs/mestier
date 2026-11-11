@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use common::UserId;
 use serde_json::{Map, Value, json};
 use uuid::Uuid;
@@ -124,6 +124,7 @@ impl CellValue {
                 let written = raw.as_str().ok_or(CellError::NotDate)?;
                 let date = NaiveDate::parse_from_str(written, "%Y-%m-%d")
                     .ok()
+                    .filter(|date| (1..=9999).contains(&date.year()))
                     .filter(|date| date.format("%Y-%m-%d").to_string() == written)
                     .ok_or(CellError::NotDate)?;
                 Some(Value::String(date.format("%Y-%m-%d").to_string()))
@@ -448,6 +449,8 @@ mod tests {
             "31/02/2026",
             "2026-2-3",
             "2026-11-05T10:00:00",
+            "0000-01-01",
+            "+12345-01-01",
             "",
         ] {
             assert_eq!(

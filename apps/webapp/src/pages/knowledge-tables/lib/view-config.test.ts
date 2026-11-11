@@ -13,6 +13,7 @@ import {
 	MAX_SORTS,
 	NO_VALUE,
 	normalizeConfig,
+	pruneViewState,
 	rowFilters,
 	sameQuery,
 	toggleHidden,
@@ -298,5 +299,38 @@ describe('kanbanFields', () => {
 				(entry) => entry.id,
 			),
 		).toEqual(['amount'])
+	})
+})
+
+describe('pruneViewState', () => {
+	const status = column('status', 'single_select', {
+		config: { options: [{ id: 'o1', label: 'A' }] },
+	})
+	const state = {
+		filters: [
+			{ key: 'a', column_id: 'gone', operator: 'is' as const, value: 'x' },
+			{ key: 'b', column_id: 'status', operator: 'is' as const, value: 'o1' },
+			{ key: 'c', column_id: 'status', operator: 'is' as const, value: 'o9' },
+			{ key: 'd', column_id: 'qty', operator: 'contains' as const, value: '1' },
+		],
+		sorts: [
+			{ column_id: 'gone', direction: 'asc' as const },
+			{ column_id: 'qty', direction: 'asc' as const },
+			{ column_id: 'who', direction: 'asc' as const },
+		],
+		hidden: ['gone', 'qty'],
+	}
+	const columns = [status, column('qty', 'number'), column('who', 'member')]
+
+	it('drops what points at a deleted or retyped column', () => {
+		const pruned = pruneViewState(state, columns)
+		expect(pruned.filters.map((filter) => filter.key)).toEqual(['b'])
+		expect(pruned.sorts.map((sort) => sort.column_id)).toEqual(['qty'])
+		expect(pruned.hidden).toEqual(['qty'])
+	})
+
+	it('returns the same state when nothing is stale', () => {
+		const clean = { filters: [], sorts: [], hidden: [] }
+		expect(pruneViewState(clean, columns)).toBe(clean)
 	})
 })
