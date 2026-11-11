@@ -91,3 +91,10 @@ server = { path = "libs/server" }
 
 [profile.dev]
 debug = "line-tables-only"
+
+# Release images are built in CI: no debug info, symbols stripped, no
+# incremental state to write. Keeps link time and artefact size down.
+[profile.release]
+debug = false
+strip = "symbols"
+incremental = false
