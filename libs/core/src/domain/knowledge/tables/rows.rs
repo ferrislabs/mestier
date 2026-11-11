@@ -1,22 +1,47 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
-use common::{CoreError, generate_uuid_v7};
+use common::{CoreError, UserId, generate_uuid_v7};
 use events::EventEmitter;
 
 use crate::{
     OrganizationId,
     domain::knowledge::tables::{
         CellLabel, CreateTableRowCommand, KnowledgeTable, KnowledgeTableId, ListTableRowsCommand,
-        MAX_DELETED_ROWS, MAX_ROWS, ResolvedRow, RowBatch, RowPage, RowSelection, RowUpdate,
-        TableColumn, TableError, TableOutcome, TableRow, TableRowId, UpdateTableRowCommand,
+        MAX_DELETED_ROWS, MAX_ROW_PAGE, MAX_ROWS, ResolvedRow, RowBatch, RowPage, RowSelection,
+        RowUpdate, TableColumn, TableColumnId, TableError, TableOutcome, TableRow, TableRowId,
+        TableViewId, UpdateTableRowCommand,
+        csv::{self, ColumnMapping, CsvSheet, ImportReport, InvalidCsvCell},
         error::{Stop, settle},
         events::{TableRowCreated, TableRowUpdated, changed_columns},
         filter::RowQuery,
         ports::{CellReferenceCheck, KnowledgeTableRepository, KnowledgeTableRowRepository},
-        value::{CellError, CellValue, RowPatch, RowValues},
+        value::{CellError, CellReference, CellValue, RowPatch, RowValues},
     },
 };
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportTargets {
+    ByName,
+    Positional(Vec<TableColumnId>),
+}
+
+#[derive(Debug, Clone)]
+pub struct RowImport<'a> {
+    pub organization_id: OrganizationId,
+    pub table_id: KnowledgeTableId,
+    pub user_id: Option<UserId>,
+    pub sheet: &'a CsvSheet,
+    pub targets: ImportTargets,
+    pub now: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableExport {
+    pub table_name: String,
+    pub view_name: String,
+    pub bytes: Vec<u8>,
+}
 
 pub struct KnowledgeTableRowService<T, R, E>
 where
@@ -246,10 +271,150 @@ where
         if stored.saturating_add(added) > MAX_ROWS {
             return Err(TableError::TooManyRows.into());
         }
+        let mut checked = HashSet::new();
         for (_, values) in &batch.rows {
-            Self::check_references(organization_id, &columns, values, references).await?;
+            for (column, reference) in values.references(&columns) {
+                if checked.insert(reference)
+                    && !references.exists(organization_id, reference).await?
+                {
+                    return Err(TableError::InvalidCell {
+                        column,
+                        reason: CellError::UnknownTarget,
+                    }
+                    .into());
+                }
+            }
         }
         Ok(self.rows.insert_many(batch).await?)
+    }
+
+    pub async fn import_rows<C>(
+        &mut self,
+        import: RowImport<'_>,
+        references: &mut C,
+    ) -> Result<TableOutcome<ImportReport>, CoreError>
+    where
+        C: CellReferenceCheck,
+    {
+        settle(self.try_import_rows(import, references).await)
+    }
+
+    async fn try_import_rows<C>(
+        &mut self,
+        import: RowImport<'_>,
+        references: &mut C,
+    ) -> Result<ImportReport, Stop>
+    where
+        C: CellReferenceCheck,
+    {
+        let organization_id = import.organization_id;
+        let columns = self.lock(organization_id, import.table_id).await?;
+        let mapping = match &import.targets {
+            ImportTargets::ByName => ColumnMapping::by_name(import.sheet, &columns)?,
+            ImportTargets::Positional(ids) => ColumnMapping::by_position(ids),
+        };
+        let mut plan = csv::convert(import.sheet, &columns, &mapping);
+        let mut known: HashMap<CellReference, bool> = HashMap::new();
+        for row in &mut plan.rows {
+            for (column_id, reference) in row.values.references(&columns) {
+                let exists = match known.get(&reference) {
+                    Some(exists) => *exists,
+                    None => {
+                        let exists = references.exists(organization_id, reference).await?;
+                        known.insert(reference, exists);
+                        exists
+                    }
+                };
+                if !exists {
+                    row.values.remove(column_id);
+                    plan.invalid_cells.push(InvalidCsvCell {
+                        row: row.line,
+                        column: columns
+                            .iter()
+                            .find(|column| column.id == column_id)
+                            .map(|column| column.name.as_str().to_owned())
+                            .unwrap_or_default(),
+                        value: reference.id().to_string(),
+                        reason: CellError::UnknownTarget,
+                    });
+                }
+            }
+        }
+        let batch = RowBatch {
+            organization_id,
+            table_id: import.table_id,
+            created_by: import.user_id,
+            created_at: import.now,
+            rows: plan
+                .rows
+                .into_iter()
+                .map(|row| (TableRowId(generate_uuid_v7()), row.values))
+                .collect(),
+        };
+        let created = self.try_insert_rows(&batch, references).await?;
+        Ok(ImportReport::new(
+            created,
+            mapping.ignored().to_vec(),
+            plan.invalid_cells,
+        ))
+    }
+
+    pub async fn export_view(
+        &mut self,
+        organization_id: OrganizationId,
+        table_id: KnowledgeTableId,
+        view_id: TableViewId,
+    ) -> Result<TableOutcome<TableExport>, CoreError> {
+        settle(
+            self.try_export_view(organization_id, table_id, view_id)
+                .await,
+        )
+    }
+
+    async fn try_export_view(
+        &mut self,
+        organization_id: OrganizationId,
+        table_id: KnowledgeTableId,
+        view_id: TableViewId,
+    ) -> Result<TableExport, Stop> {
+        let table = self.table(organization_id, table_id).await?;
+        let columns = self.tables.columns(organization_id, table_id).await?;
+        let view = self
+            .tables
+            .views(organization_id, table_id)
+            .await?
+            .into_iter()
+            .find(|view| view.id == view_id)
+            .ok_or(CoreError::NotFound)?;
+        let mut rows = Vec::new();
+        let mut offset = 0;
+        loop {
+            let query = RowQuery::build(
+                &columns,
+                &view.config.filters,
+                &view.config.sorts,
+                MAX_ROW_PAGE,
+                offset,
+            )?;
+            let (page, total) = self.rows.list(organization_id, table_id, &query).await?;
+            let fetched = u64::try_from(page.len()).unwrap_or(u64::MAX);
+            rows.extend(self.resolve(organization_id, &columns, page).await?);
+            offset = offset.saturating_add(fetched);
+            if fetched == 0 || offset >= total || offset >= MAX_ROWS {
+                break;
+            }
+        }
+        let visible: Vec<&TableColumn> = columns
+            .iter()
+            .filter(|column| !view.config.hidden.contains(&column.id))
+            .collect();
+        let bytes =
+            csv::write(&visible, &rows).map_err(|error| CoreError::Internal(error.to_string()))?;
+        Ok(TableExport {
+            table_name: table.name.into_inner(),
+            view_name: view.name.into_inner(),
+            bytes,
+        })
     }
 
     pub async fn delete_rows(
@@ -394,7 +559,7 @@ mod tests {
     use crate::{
         KnowledgeResource, KnowledgeResourceType,
         domain::knowledge::tables::{
-            KnowledgeTable, TableColumnId, TableItemName,
+            KnowledgeTable, TableColumnId, TableItemName, TableView, ViewConfig, ViewKind,
             column::ColumnType,
             ports::{
                 MockCellReferenceCheck, MockKnowledgeTableRepository,
@@ -802,5 +967,160 @@ mod tests {
             CellLabel::Found("Dupont SARL".to_owned())
         );
         assert_eq!(resolved[1].labels[&client.id], CellLabel::Missing);
+    }
+
+    fn sheet(text: &str) -> CsvSheet {
+        CsvSheet::read(text.as_bytes()).unwrap()
+    }
+
+    fn import(table_id: KnowledgeTableId, sheet: &CsvSheet) -> RowImport<'_> {
+        RowImport {
+            organization_id: org(),
+            table_id,
+            user_id: None,
+            sheet,
+            targets: ImportTargets::ByName,
+            now: Utc::now(),
+        }
+    }
+
+    #[tokio::test]
+    async fn an_import_reports_dead_targets_and_unknown_columns_and_emits_nothing() {
+        let table_id = KnowledgeTableId(generate_uuid_v7());
+        let name = named(table_id, "Nom", ColumnType::Text);
+        let client = named(
+            table_id,
+            "Client",
+            ColumnType::Link(KnowledgeResourceType::Customer),
+        );
+        let known = generate_uuid_v7();
+        let gone = generate_uuid_v7();
+        let client_id = client.id;
+        let mut rows = MockKnowledgeTableRowRepository::new();
+        rows.expect_count()
+            .returning(|_, _| Box::pin(async { Ok(0) }));
+        rows.expect_insert_many()
+            .times(1)
+            .withf(move |batch| {
+                batch.rows.len() == 2
+                    && batch.rows[0].1.get(client_id).is_some()
+                    && batch.rows[1].1.get(client_id).is_none()
+            })
+            .returning(|batch| {
+                let added = batch.rows.len() as u64;
+                Box::pin(async move { Ok(added) })
+            });
+        let mut references = MockCellReferenceCheck::new();
+        references.expect_exists().returning(move |_, reference| {
+            let found = reference.id() == known;
+            Box::pin(async move { Ok(found) })
+        });
+        let emitter = RecordingEmitter::default();
+        let mut service =
+            KnowledgeTableRowService::new(tables_with(vec![name, client]), rows, &emitter);
+        let read = sheet(&format!(
+            "Nom;Client;Remarque\nVilla;{known};a\nGrange;{gone};b\n"
+        ));
+
+        let report = service
+            .import_rows(import(table_id, &read), &mut references)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(report.rows_created, 2);
+        assert_eq!(report.ignored_columns, ["Remarque"]);
+        assert_eq!(
+            report.invalid_cells,
+            vec![InvalidCsvCell {
+                row: 3,
+                column: "Client".to_owned(),
+                value: gone.to_string(),
+                reason: CellError::UnknownTarget,
+            }]
+        );
+        assert!(emitter.recorded().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_import_past_the_row_cap_writes_nothing() {
+        let table_id = KnowledgeTableId(generate_uuid_v7());
+        let mut rows = MockKnowledgeTableRowRepository::new();
+        rows.expect_count()
+            .returning(|_, _| Box::pin(async { Ok(MAX_ROWS - 1) }));
+        rows.expect_insert_many().never();
+        let emitter = RecordingEmitter::default();
+        let mut service = KnowledgeTableRowService::new(
+            tables_with(vec![named(table_id, "Nom", ColumnType::Text)]),
+            rows,
+            &emitter,
+        );
+        let read = sheet("Nom\nA\nB\n");
+
+        let outcome = service
+            .import_rows(import(table_id, &read), &mut MockCellReferenceCheck::new())
+            .await
+            .unwrap();
+
+        assert_eq!(outcome, Err(TableError::TooManyRows));
+    }
+
+    #[tokio::test]
+    async fn an_export_pages_through_its_view_and_keeps_its_visible_columns() {
+        let table_id = KnowledgeTableId(generate_uuid_v7());
+        let name = named(table_id, "Nom", ColumnType::Text);
+        let secret = named(table_id, "Secret", ColumnType::Text);
+        let view = TableView {
+            id: TableViewId(generate_uuid_v7()),
+            table_id,
+            organization_id: org(),
+            name: TableItemName::try_from("Grille").unwrap(),
+            kind: ViewKind::Grid,
+            config: ViewConfig {
+                hidden: vec![secret.id],
+                ..ViewConfig::default()
+            },
+            position: 0,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let view_id = view.id;
+        let mut tables = tables_with(vec![name.clone(), secret.clone()]);
+        tables.expect_views().returning(move |_, _| {
+            let views = vec![view.clone()];
+            Box::pin(async move { Ok(views) })
+        });
+        let mut rows = MockKnowledgeTableRowRepository::new();
+        let (name_key, secret_key) = (name.key(), secret.key());
+        rows.expect_list().times(2).returning(move |_, _, query| {
+            let page: Vec<TableRow> = (query.offset..(query.offset + query.limit).min(150))
+                .map(|n| {
+                    stored(
+                        table_id,
+                        serde_json::Map::from_iter([
+                            (name_key.clone(), json!(format!("Ligne {n}"))),
+                            (secret_key.clone(), json!("x")),
+                        ]),
+                    )
+                })
+                .collect();
+            Box::pin(async move { Ok((page, 150)) })
+        });
+        let emitter = RecordingEmitter::default();
+        let mut service = KnowledgeTableRowService::new(tables, rows, &emitter);
+
+        let export = service
+            .export_view(org(), table_id, view_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let text = std::str::from_utf8(&export.bytes[csv::UTF8_BOM.len()..]).unwrap();
+        let lines: Vec<&str> = text.split("\r\n").filter(|line| !line.is_empty()).collect();
+        assert_eq!(lines.len(), 151);
+        assert_eq!(lines[0], "Nom");
+        assert_eq!(lines[150], "Ligne 149");
+        assert_eq!(export.table_name, "Chantiers");
+        assert_eq!(export.view_name, "Grille");
     }
 }

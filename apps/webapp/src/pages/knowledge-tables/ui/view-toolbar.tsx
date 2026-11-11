@@ -29,7 +29,8 @@ import { FilterBuilder } from '#/pages/knowledge-tables/ui/filter-builder'
 import { NativeSelect } from '#/pages/knowledge-tables/ui/native-select'
 import { SortBuilder } from '#/pages/knowledge-tables/ui/sort-builder'
 
-const SOON = 'Bientôt disponible'
+const SAVED_VIEW_NOTICE =
+	'L’export suit la vue enregistrée, sans tes changements en cours.'
 
 interface ViewToolbarProps {
 	viewKind: ViewKind
@@ -42,6 +43,8 @@ interface ViewToolbarProps {
 	groupable: readonly TableColumn[]
 	canManage: boolean
 	selectedCount: number
+	isExporting: boolean
+	exportUsesSavedView: boolean
 	choicesFor: (column: TableColumn) => Choice[]
 	onFiltersChange: (filters: FilterDraft[]) => void
 	onSortsChange: (sorts: RowSort[]) => void
@@ -49,6 +52,8 @@ interface ViewToolbarProps {
 	onGroupByChange: (columnId: string) => void
 	onDeleteSelected: () => void
 	onClearSelection: () => void
+	onImport: () => void
+	onExport: () => void
 }
 
 function ToolbarPopover({
@@ -99,6 +104,8 @@ export function ViewToolbar({
 	groupable,
 	canManage,
 	selectedCount,
+	isExporting,
+	exportUsesSavedView,
 	choicesFor,
 	onFiltersChange,
 	onSortsChange,
@@ -106,6 +113,8 @@ export function ViewToolbar({
 	onGroupByChange,
 	onDeleteSelected,
 	onClearSelection,
+	onImport,
+	onExport,
 }: ViewToolbarProps) {
 	const hideable = orderedColumns(columns).filter(
 		(column) => !column.is_primary,
@@ -237,19 +246,27 @@ export function ViewToolbar({
 				</div>
 			) : null}
 			{canManage ? (
-				<span title={SOON}>
-					<Button type="button" variant="ghost" size="sm" disabled>
-						<Upload aria-hidden />
-						Importer
-					</Button>
+				<Button type="button" variant="ghost" size="sm" onClick={onImport}>
+					<Upload aria-hidden />
+					Importer
+				</Button>
+			) : null}
+			{exportUsesSavedView ? (
+				<span className="text-muted-foreground text-xs">
+					{SAVED_VIEW_NOTICE}
 				</span>
 			) : null}
-			<span title={SOON}>
-				<Button type="button" variant="ghost" size="sm" disabled>
-					<Download aria-hidden />
-					Exporter
-				</Button>
-			</span>
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				disabled={isExporting}
+				title={exportUsesSavedView ? SAVED_VIEW_NOTICE : undefined}
+				onClick={onExport}
+			>
+				<Download aria-hidden />
+				{isExporting ? 'Export…' : 'Exporter'}
+			</Button>
 		</div>
 	)
 }

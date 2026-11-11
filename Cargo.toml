@@ -53,6 +53,8 @@ cucumber = "0.23.0"
 proptest = "1.11"
 redis = { version = "1.2.0", default-features = false, features = ["tokio-comp", "connection-manager", "script"] }
 divan = { package = "codspeed-divan-compat", version = "3" }
+csv = "1.4.0"
+encoding_rs = "0.8.35"
 
 # Mestier Dependencies
 args = { path = "libs/args" }

@@ -182,6 +182,24 @@ impl SelectOptions {
             .map(|option| option.label.as_str())
     }
 
+    pub fn labelled(&self, label: &str) -> Option<&SelectOption> {
+        let wanted = label.trim().to_lowercase();
+        self.0
+            .iter()
+            .find(|option| option.label.to_lowercase() == wanted)
+    }
+
+    pub fn resolve(&self, written: &str) -> Option<SelectOptionId> {
+        self.labelled(written).map(|option| option.id).or_else(|| {
+            written
+                .trim()
+                .parse()
+                .ok()
+                .map(SelectOptionId)
+                .filter(|id| self.contains(*id))
+        })
+    }
+
     pub fn ids_in_order(&self) -> Vec<String> {
         self.0.iter().map(|option| option.id.to_string()).collect()
     }
@@ -472,6 +490,24 @@ mod tests {
             },
         ];
         assert_eq!(SelectOptions::parse(&twice), Err(TableError::OptionIdTaken));
+    }
+
+    #[test]
+    fn an_option_is_found_by_its_label_without_case_or_by_its_id() {
+        let options = select(&["En cours", "Terminé"]);
+        let ongoing = options.as_slice()[0].id;
+        let done = options.as_slice()[1].id;
+        assert_eq!(
+            options.labelled(" en COURS ").map(|option| option.id),
+            Some(ongoing)
+        );
+        assert_eq!(options.resolve("TERMINÉ"), Some(done));
+        assert_eq!(options.resolve(&done.to_string()), Some(done));
+        assert_eq!(options.resolve("Annulé"), None);
+        assert_eq!(
+            options.resolve(&SelectOptionId(generate_uuid_v7()).to_string()),
+            None
+        );
     }
 
     #[test]

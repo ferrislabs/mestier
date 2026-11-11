@@ -6,6 +6,30 @@ function failure(status: number, message: string) {
 }
 
 describe('tableErrorMessage', () => {
+	it('says the CSV refusals in French before the table bounds', () => {
+		expect(
+			tableErrorMessage(
+				failure(422, 'file: a CSV file holds at most 10000 rows'),
+			),
+		).toBe('Le fichier compte plus de 10 000 lignes : rien n’a été importé.')
+		expect(
+			tableErrorMessage(failure(413, 'file: a CSV file holds at most 5 MB')),
+		).toBe('Le fichier dépasse 5 Mo : rien n’a été importé.')
+		expect(
+			tableErrorMessage(
+				failure(
+					422,
+					'file: no column of the file matches a column of the table',
+				),
+			),
+		).toBe(
+			'Aucun en-tête du fichier ne porte le nom d’une colonne de la table.',
+		)
+		expect(
+			tableErrorMessage(failure(422, 'rows: a table holds at most 10000 rows')),
+		).toBe('Une table compte 10 000 lignes au plus.')
+	})
+
 	it('is null without error', () => {
 		expect(tableErrorMessage(null)).toBeNull()
 	})

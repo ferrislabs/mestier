@@ -29,6 +29,8 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 sqlx = { workspace = true }
 rust_decimal = { workspace = true }
+csv = { workspace = true }
+encoding_rs = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 aws-credential-types = { workspace = true }

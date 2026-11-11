@@ -73,6 +73,18 @@ pub enum TableError {
     KanbanNeedsSingleSelect,
     #[error("ids: at most 1000 rows are deleted at once")]
     TooManyRowsAtOnce,
+    #[error("file: a CSV file holds at most 5 MB")]
+    CsvTooLarge,
+    #[error("file: a CSV file holds at most 10000 rows")]
+    CsvTooManyRows,
+    #[error("file: a CSV file becomes a table of at most 50 columns")]
+    CsvTooManyColumns,
+    #[error("file: the CSV file has no header line")]
+    CsvEmpty,
+    #[error("file: the file cannot be read as CSV")]
+    CsvUnreadable,
+    #[error("file: no column of the file matches a column of the table")]
+    CsvNoKnownColumn,
 }
 
 impl TableError {

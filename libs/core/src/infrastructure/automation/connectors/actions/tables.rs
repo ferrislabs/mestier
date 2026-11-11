@@ -4,7 +4,7 @@ use serde_json::{Map, Value, json};
 
 use super::{ActionContext, failure};
 use crate::domain::knowledge::tables::{
-    CreateTableRowCommand, FilterOperator, GetKnowledgeTableCommand, KnowledgeTableId,
+    self, CreateTableRowCommand, FilterOperator, GetKnowledgeTableCommand, KnowledgeTableId,
     ListTableRowsCommand, ResolvedRow, RowFilter, RowSelection, SelectOptions, TableColumn,
     TableColumnId, TableError, TableRowId, UpdateTableRowCommand, column::ColumnType,
     events::row_payload, name::MAX_NAME_CHARS,
@@ -49,21 +49,13 @@ async fn columns(
 }
 
 fn column_named<'a>(columns: &'a [TableColumn], name: &str) -> Result<&'a TableColumn, String> {
-    columns
-        .iter()
-        .find(|column| column.name.same_as(name))
+    tables::column_named(columns, name)
         .ok_or_else(|| format!("`{}`: no such column in the table", name.trim()))
 }
 
 fn option_id(options: &SelectOptions, raw: &Value) -> Value {
     raw.as_str()
-        .map(|label| label.trim().to_lowercase())
-        .and_then(|label| {
-            options
-                .as_slice()
-                .iter()
-                .find(|option| option.label.to_lowercase() == label)
-        })
+        .and_then(|label| options.labelled(label))
         .map_or_else(
             || raw.clone(),
             |option| Value::String(option.id.to_string()),

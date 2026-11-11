@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use bytes::Bytes;
 use common::UserId;
 use serde_json::Value;
 
@@ -168,4 +169,30 @@ pub struct DeleteTableRowsCommand {
     pub organization_id: OrganizationId,
     pub table_id: KnowledgeTableId,
     pub ids: Vec<TableRowId>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportKnowledgeTableCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub user_id: Option<UserId>,
+    pub name: String,
+    pub file: Bytes,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportTableRowsCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub table_id: KnowledgeTableId,
+    pub user_id: Option<UserId>,
+    pub file: Bytes,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExportTableViewCommand {
+    pub actor: authz::Subject,
+    pub organization_id: OrganizationId,
+    pub table_id: KnowledgeTableId,
+    pub view_id: TableViewId,
 }

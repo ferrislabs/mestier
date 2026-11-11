@@ -1,12 +1,7 @@
-use std::collections::HashMap;
-
 use events::{DomainEvent, EventDescriptor, EventSubject};
 use serde_json::{Map, Value, json};
 
-use crate::domain::knowledge::tables::{
-    CellLabel, KnowledgeTable, ResolvedRow, TableColumn,
-    value::{CellValue, MISSING_LABEL},
-};
+use crate::domain::knowledge::tables::{KnowledgeTable, ResolvedRow, TableColumn};
 
 pub struct TableRowCreated<'a> {
     pub table: &'a KnowledgeTable,
@@ -78,23 +73,12 @@ pub fn row_payload(columns: &[TableColumn], row: &ResolvedRow) -> Value {
 }
 
 fn fields(columns: &[TableColumn], row: &ResolvedRow) -> Map<String, Value> {
-    let no_labels = HashMap::new();
     columns
         .iter()
         .map(|column| {
-            let shown = row.row.values.get(&column.key()).and_then(|raw| {
-                match row.labels.get(&column.id) {
-                    Some(CellLabel::Found(label)) => Some(label.clone()),
-                    Some(CellLabel::Missing) => Some(MISSING_LABEL.to_owned()),
-                    None => CellValue::parse(&column.column_type, raw)
-                        .ok()
-                        .flatten()
-                        .map(|cell| cell.display(&column.column_type, &no_labels)),
-                }
-            });
             (
                 column.name.as_str().to_owned(),
-                shown.map_or(Value::Null, Value::String),
+                row.shown(column).map_or(Value::Null, Value::String),
             )
         })
         .collect()

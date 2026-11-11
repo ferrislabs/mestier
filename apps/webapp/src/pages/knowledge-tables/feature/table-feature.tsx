@@ -17,6 +17,10 @@ import {
 } from '#/hooks/use-knowledge-tables'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { useTableChoices } from '#/pages/knowledge-tables/feature/use-table-choices'
+import {
+	useExportTableView,
+	useImportTableRows,
+} from '#/pages/knowledge-tables/feature/use-table-csv'
 import { useViewDraft } from '#/pages/knowledge-tables/feature/use-view-draft'
 import {
 	addOption,
@@ -33,10 +37,15 @@ import {
 	orderedColumns,
 	primaryColumn,
 } from '#/pages/knowledge-tables/lib/columns'
+import {
+	csvFileRefusal,
+	hiddenDiffers,
+} from '#/pages/knowledge-tables/lib/csv-transfer'
 import { tableErrorMessage } from '#/pages/knowledge-tables/lib/errors'
 import type {
 	RowValues,
 	TableColumn,
+	TableImportReport,
 	TableView,
 } from '#/pages/knowledge-tables/lib/types'
 import {
@@ -51,6 +60,7 @@ import {
 } from '#/pages/knowledge-tables/lib/view-config'
 import { ColumnDialog } from '#/pages/knowledge-tables/ui/column-dialog'
 import type { ColumnAction } from '#/pages/knowledge-tables/ui/column-header-menu'
+import { ImportDialog } from '#/pages/knowledge-tables/ui/import-dialog'
 import { KanbanBoard } from '#/pages/knowledge-tables/ui/kanban-board'
 import { RowSheet } from '#/pages/knowledge-tables/ui/row-sheet'
 import {
@@ -95,6 +105,18 @@ type ColumnEditor =
 type ViewEditor =
 	| { mode: 'create'; draft: ViewDraft }
 	| { mode: 'rename'; view: TableView; draft: ViewDraft }
+
+interface RowsImport {
+	file: File | null
+	refusal: string | null
+	report: TableImportReport | null
+}
+
+const EMPTY_ROWS_IMPORT: RowsImport = {
+	file: null,
+	refusal: null,
+	report: null,
+}
 
 type Confirmation =
 	| { kind: 'column'; column: TableColumn }
@@ -160,6 +182,7 @@ function TableWorkspace({
 	const [columnEditor, setColumnEditor] = useState<ColumnEditor | null>(null)
 	const [viewEditor, setViewEditor] = useState<ViewEditor | null>(null)
 	const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
+	const [rowsImport, setRowsImport] = useState<RowsImport | null>(null)
 
 	useEffect(() => {
 		if (!toast) return
@@ -182,6 +205,8 @@ function TableWorkspace({
 	const createRow = useCreateTableRow(organizationId, tableId)
 	const updateRow = useUpdateTableRow(organizationId, tableId)
 	const deleteRows = useDeleteTableRows(organizationId, tableId)
+	const importRows = useImportTableRows(organizationId, tableId)
+	const exportView = useExportTableView(organizationId, tableId)
 
 	const saveView = useCallback(
 		(id: string, next: TableView['config']) =>
@@ -231,6 +256,33 @@ function TableWorkspace({
 	}, [currentViewId])
 
 	const openRow = rows.find((row) => row.id === openRowId) ?? null
+
+	const exportUsesSavedView =
+		draft.source?.kind === 'query' ||
+		(config !== null && hiddenDiffers(hidden, config.hidden))
+
+	const exportCurrentView = () => {
+		if (!table || !view) return
+		exportView.mutate(
+			{ viewId: view.id, tableName: table.name, viewName: view.name },
+			{ onError: fail },
+		)
+	}
+
+	const closeImport = () => {
+		setRowsImport(null)
+		importRows.reset()
+	}
+
+	const submitImport = () => {
+		if (!rowsImport?.file || rowsImport.refusal) return
+		importRows.mutate(rowsImport.file, {
+			onSuccess: (report) =>
+				setRowsImport((current) =>
+					current ? { ...current, report } : current,
+				),
+		})
+	}
 
 	const changeCell = (rowId: string, columnId: string, value: unknown) => {
 		updateRow.mutate(
@@ -442,6 +494,8 @@ function TableWorkspace({
 							groupable={groupable}
 							canManage={canManage}
 							selectedCount={selected.size}
+							isExporting={exportView.isPending}
+							exportUsesSavedView={exportUsesSavedView}
 							choicesFor={choicesFor}
 							onFiltersChange={(filters) => draft.update({ filters })}
 							onSortsChange={(sorts) => draft.update({ sorts })}
@@ -451,6 +505,8 @@ function TableWorkspace({
 								setConfirmation({ kind: 'rows', rowIds: [...selected] })
 							}
 							onClearSelection={() => setSelected(new Set())}
+							onImport={() => setRowsImport(EMPTY_ROWS_IMPORT)}
+							onExport={exportCurrentView}
 						/>
 					) : null
 				}
@@ -638,6 +694,33 @@ function TableWorkspace({
 						createView.reset()
 						updateView.reset()
 					}
+				}}
+			/>
+			<ImportDialog
+				open={rowsImport !== null}
+				mode="rows"
+				fileName={rowsImport?.file?.name ?? null}
+				name=""
+				report={rowsImport?.report ?? null}
+				error={rowsImport?.refusal ?? tableErrorMessage(importRows.error)}
+				isImporting={importRows.isPending}
+				onFileChange={(file) => {
+					importRows.reset()
+					setRowsImport((current) =>
+						current
+							? {
+									...current,
+									file,
+									refusal: file ? csvFileRefusal(file) : null,
+								}
+							: current,
+					)
+				}}
+				onNameChange={() => {}}
+				onSubmit={submitImport}
+				onFinish={closeImport}
+				onOpenChange={(open) => {
+					if (!open) closeImport()
 				}}
 			/>
 			<ConfirmDialog

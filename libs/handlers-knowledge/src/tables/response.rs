@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use common::UserId;
 use mestier_core::{
-    CellLabel, ColumnConfig, ColumnKind, KnowledgeTable, KnowledgeTableId, ResolvedRow, RowPage,
-    TableColumn, TableColumnId, TableRowId, TableSchema, TableView, TableViewId, ViewConfig,
-    ViewKind,
+    CellLabel, ColumnConfig, ColumnKind, ImportedTable, InvalidCsvCell, KnowledgeTable,
+    KnowledgeTableId, ResolvedRow, RowPage, TableColumn, TableColumnId, TableImportReport,
+    TableRowId, TableSchema, TableView, TableViewId, ViewConfig, ViewKind,
 };
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -177,4 +177,59 @@ impl From<RowPage> for TableRowPageResponse {
 #[derive(Debug, Serialize, PartialEq, ToSchema)]
 pub struct DeletedTableRowsResponse {
     pub deleted: u64,
+}
+
+#[derive(Debug, Serialize, PartialEq, ToSchema)]
+pub struct InvalidCsvCellResponse {
+    pub row: u64,
+    pub column: String,
+    pub value: String,
+    pub reason: String,
+    pub message: String,
+}
+
+impl From<InvalidCsvCell> for InvalidCsvCellResponse {
+    fn from(cell: InvalidCsvCell) -> Self {
+        Self {
+            row: cell.row,
+            column: cell.column,
+            value: cell.value,
+            reason: cell.reason.code().to_owned(),
+            message: cell.reason.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, PartialEq, ToSchema)]
+pub struct TableImportReportResponse {
+    pub rows_created: u64,
+    pub ignored_columns: Vec<String>,
+    pub invalid_cells: Vec<InvalidCsvCellResponse>,
+    pub invalid_cell_count: u64,
+}
+
+impl From<TableImportReport> for TableImportReportResponse {
+    fn from(report: TableImportReport) -> Self {
+        Self {
+            rows_created: report.rows_created,
+            ignored_columns: report.ignored_columns,
+            invalid_cells: report.invalid_cells.into_iter().map(Into::into).collect(),
+            invalid_cell_count: report.invalid_cell_count,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, PartialEq, ToSchema)]
+pub struct ImportedKnowledgeTableResponse {
+    pub table: KnowledgeTableDetailResponse,
+    pub report: TableImportReportResponse,
+}
+
+impl From<ImportedTable> for ImportedKnowledgeTableResponse {
+    fn from(imported: ImportedTable) -> Self {
+        Self {
+            table: imported.schema.into(),
+            report: imported.report.into(),
+        }
+    }
 }

@@ -263,14 +263,19 @@ pub use domain::{
     photo_library::normalize::{NormalizedImage, normalize_image},
 };
 
-pub use domain::knowledge::tables::rows::KnowledgeTableRowService;
+pub use domain::knowledge::tables::csv::{
+    ImportReport as TableImportReport, InvalidCsvCell, MAX_CSV_BYTES, MAX_CSV_ROWS,
+};
+pub use domain::knowledge::tables::import::ImportedTable;
+pub use domain::knowledge::tables::rows::{KnowledgeTableRowService, TableExport};
 pub use domain::knowledge::tables::service::KnowledgeTableService;
 pub use domain::knowledge::tables::{
     CellError, CellLabel, CellReference, CellValue, ColumnConfig, ColumnKind, ColumnType,
     CreateKnowledgeTableCommand, CreateTableColumnCommand, CreateTableRowCommand,
     CreateTableViewCommand, Decimals, DeleteKnowledgeTableCommand, DeleteTableColumnCommand,
-    DeleteTableRowsCommand, DeleteTableViewCommand, FilterOperator, GetKnowledgeTableCommand,
-    GetTableRowCommand, KnowledgeTable, KnowledgeTableId, ListKnowledgeTablesCommand,
+    DeleteTableRowsCommand, DeleteTableViewCommand, ExportTableViewCommand, FilterOperator,
+    GetKnowledgeTableCommand, GetTableRowCommand, ImportKnowledgeTableCommand,
+    ImportTableRowsCommand, KnowledgeTable, KnowledgeTableId, ListKnowledgeTablesCommand,
     ListTableRowsCommand, MAX_COLUMNS as MAX_TABLE_COLUMNS,
     MAX_DELETED_ROWS as MAX_DELETED_TABLE_ROWS, MAX_ROW_PAGE as MAX_TABLE_ROW_PAGE,
     MAX_ROWS as MAX_TABLE_ROWS, ReorderTableColumnsCommand, ResolvedRow, RowBatch, RowFilter,

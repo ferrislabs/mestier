@@ -13,6 +13,7 @@ use crate::{
         TableViewId, UpdateKnowledgeTableCommand, UpdateTableColumnCommand, UpdateTableViewCommand,
         ViewConfig, ViewKind,
         column::{ColumnKind, ColumnType, Conversion},
+        csv::ColumnPlan,
         error::{Stop, settle},
         ports::{KnowledgeTableRepository, KnowledgeTableRowRepository},
         value::CellValue,
@@ -39,6 +40,10 @@ where
 {
     pub fn new(tables: T, rows: R) -> Self {
         Self { tables, rows }
+    }
+
+    pub fn into_parts(self) -> (T, R) {
+        (self.tables, self.rows)
     }
 
     pub async fn table(
@@ -91,17 +96,34 @@ where
         command: CreateKnowledgeTableCommand,
         now: DateTime<Utc>,
     ) -> Result<TableOutcome<TableSchema>, CoreError> {
-        settle(self.try_create_table(command, now).await)
+        settle(self.try_create_table(command, &[], now).await)
+    }
+
+    pub async fn create_table_with_columns(
+        &mut self,
+        command: CreateKnowledgeTableCommand,
+        columns: &[ColumnPlan],
+        now: DateTime<Utc>,
+    ) -> Result<TableOutcome<TableSchema>, CoreError> {
+        settle(self.try_create_table(command, columns, now).await)
     }
 
     async fn try_create_table(
         &mut self,
         command: CreateKnowledgeTableCommand,
+        columns: &[ColumnPlan],
         now: DateTime<Utc>,
     ) -> Result<TableSchema, Stop> {
         let organization_id = command.organization_id;
         let name = TableItemName::try_from(command.name.as_str())?;
         let description = TableDescription::parse(command.description.as_deref())?;
+        if columns.len() > MAX_COLUMNS {
+            return Err(TableError::TooManyColumns.into());
+        }
+        let (primary_name, others) = match columns.split_first() {
+            Some((first, others)) => (first.name.clone(), others),
+            None => (TableItemName::try_from(PRIMARY_COLUMN_NAME)?, &[][..]),
+        };
         self.tables.lock_organization(organization_id).await?;
         if self.tables.count_tables(organization_id).await? >= MAX_TABLES {
             return Err(TableError::TooManyTables.into());
@@ -126,13 +148,30 @@ where
                 id: TableColumnId(generate_uuid_v7()),
                 table_id: table.id,
                 organization_id,
-                name: TableItemName::try_from(PRIMARY_COLUMN_NAME)?,
+                name: primary_name,
                 column_type: ColumnType::Text,
                 position: 0,
                 is_primary: true,
                 created_at: now,
             })
             .await?;
+        let mut inserted = vec![primary];
+        for (position, plan) in (1..).zip(others) {
+            inserted.push(
+                self.tables
+                    .insert_column(&TableColumn {
+                        id: TableColumnId(generate_uuid_v7()),
+                        table_id: table.id,
+                        organization_id,
+                        name: plan.name.clone(),
+                        column_type: plan.column_type.clone(),
+                        position,
+                        is_primary: false,
+                        created_at: now,
+                    })
+                    .await?,
+            );
+        }
         let view = self
             .tables
             .insert_view(&TableView {
@@ -149,7 +188,7 @@ where
             .await?;
         Ok(TableSchema {
             table,
-            columns: vec![primary],
+            columns: inserted,
             views: vec![view],
         })
     }
@@ -701,6 +740,77 @@ mod tests {
         assert_eq!(schema.columns[0].name.as_str(), PRIMARY_COLUMN_NAME);
         assert_eq!(schema.columns[0].column_type, ColumnType::Text);
         assert_eq!(schema.views[0].kind, ViewKind::Grid);
+    }
+
+    #[tokio::test]
+    async fn an_imported_table_takes_its_primary_column_and_the_others_from_the_plan() {
+        let mut tables = MockKnowledgeTableRepository::new();
+        tables
+            .expect_lock_organization()
+            .returning(|_| Box::pin(async { Ok(()) }));
+        tables
+            .expect_count_tables()
+            .returning(|_| Box::pin(async { Ok(0) }));
+        tables
+            .expect_list_tables()
+            .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+        tables.expect_insert_table().returning(|table| {
+            let table = table.clone();
+            Box::pin(async move { Ok(table) })
+        });
+        tables.expect_insert_column().times(3).returning(|column| {
+            let column = column.clone();
+            Box::pin(async move { Ok(column) })
+        });
+        tables.expect_insert_view().returning(|view| {
+            let view = view.clone();
+            Box::pin(async move { Ok(view) })
+        });
+        let plan = |name: &str, column_type: ColumnType| ColumnPlan {
+            name: TableItemName::try_from(name).unwrap(),
+            column_type,
+        };
+
+        let schema = KnowledgeTableService::new(tables, MockKnowledgeTableRowRepository::new())
+            .create_table_with_columns(
+                CreateKnowledgeTableCommand {
+                    actor: actor(),
+                    organization_id: org(),
+                    user_id: None,
+                    name: "Articles".to_owned(),
+                    description: None,
+                },
+                &[
+                    plan("Désignation", ColumnType::Text),
+                    plan("Prix", ColumnType::Currency),
+                    plan("Livré", ColumnType::Checkbox),
+                ],
+                Utc::now(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+        let columns: Vec<_> = schema
+            .columns
+            .iter()
+            .map(|column| {
+                (
+                    column.name.as_str(),
+                    column.kind(),
+                    column.position,
+                    column.is_primary,
+                )
+            })
+            .collect();
+        assert_eq!(
+            columns,
+            vec![
+                ("Désignation", ColumnKind::Text, 0, true),
+                ("Prix", ColumnKind::Currency, 1, false),
+                ("Livré", ColumnKind::Checkbox, 2, false),
+            ]
+        );
     }
 
     #[tokio::test]

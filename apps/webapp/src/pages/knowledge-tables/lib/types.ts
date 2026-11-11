@@ -49,3 +49,6 @@ export interface Choice {
 	id: string
 	label: string
 }
+export type TableImportReport = Schemas.TableImportReportResponse
+export type InvalidCsvCell = Schemas.InvalidCsvCellResponse
+export type ImportedKnowledgeTable = Schemas.ImportedKnowledgeTableResponse

@@ -1474,6 +1474,7 @@ export namespace Schemas {
     members: Array<FeedMemberResponse>;
     overrides: Array<DayOverrideResponse>;
   };
+  export type ImportKnowledgeTableForm = { file: string; name?: (string | null) | undefined };
   export type SupplierInvoiceId = string;
   export type SupplierInvoiceLineAllocationId = string;
   export type SupplierInvoiceLineId = string;
@@ -1540,6 +1541,46 @@ export namespace Schemas {
         totals_mismatch?: (null | TotalsMismatchResponse) | undefined;
       }
     | { outcome: "parse_failed"; reason: string };
+  export type ImportTableRowsForm = { file: string };
+  export type InvalidCsvCellResponse = { column: string; message: string; reason: string; row: number; value: string };
+  export type TableImportReportResponse = {
+    ignored_columns: Array<string>;
+    invalid_cell_count: number;
+    invalid_cells: Array<InvalidCsvCellResponse>;
+    rows_created: number;
+  };
+  export type TableColumnResponse = {
+    config: ColumnConfig;
+    id: TableColumnId;
+    is_primary: boolean;
+    kind: ColumnKind;
+    name: string;
+    position: number;
+  };
+  export type KnowledgeTableId = string;
+  export type TableViewId = string;
+  export type TableViewResponse = {
+    config: ViewConfig;
+    created_at: string;
+    id: TableViewId;
+    kind: ViewKind;
+    name: string;
+    position: number;
+    updated_at: string;
+  };
+  export type KnowledgeTableDetailResponse = {
+    columns: Array<TableColumnResponse>;
+    created_at: string;
+    description?: (string | null) | undefined;
+    id: KnowledgeTableId;
+    name: string;
+    updated_at: string;
+    views: Array<TableViewResponse>;
+  };
+  export type ImportedKnowledgeTableResponse = {
+    report: TableImportReportResponse;
+    table: KnowledgeTableDetailResponse;
+  };
   export type InstantiateProjectTemplateRequest = {
     customer_context_id?: (null | CustomerContextId) | undefined;
     customer_id?: (null | CustomerId) | undefined;
@@ -1763,34 +1804,6 @@ export namespace Schemas {
     path: Array<KnowledgeFolderResponse>;
   };
   export type KnowledgeLinkResponse = { created_at: string; resource_id: string; resource_type: KnowledgeResourceType };
-  export type TableColumnResponse = {
-    config: ColumnConfig;
-    id: TableColumnId;
-    is_primary: boolean;
-    kind: ColumnKind;
-    name: string;
-    position: number;
-  };
-  export type KnowledgeTableId = string;
-  export type TableViewId = string;
-  export type TableViewResponse = {
-    config: ViewConfig;
-    created_at: string;
-    id: TableViewId;
-    kind: ViewKind;
-    name: string;
-    position: number;
-    updated_at: string;
-  };
-  export type KnowledgeTableDetailResponse = {
-    columns: Array<TableColumnResponse>;
-    created_at: string;
-    description?: (string | null) | undefined;
-    id: KnowledgeTableId;
-    name: string;
-    updated_at: string;
-    views: Array<TableViewResponse>;
-  };
   export type KnowledgeTableResponse = {
     created_at: string;
     description?: (string | null) | undefined;
@@ -9442,6 +9455,28 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type post_ImportKnowledgeTable = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/import";
+    requestFormat: "form-data";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.ImportKnowledgeTableForm;
+    };
+    responses: {
+      201: {
+        data: { report: Schemas.TableImportReportResponse; table: Schemas.KnowledgeTableDetailResponse };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+      413: unknown;
+      422: unknown;
+    };
+  };
   export type get_GetKnowledgeTable = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}";
@@ -9592,6 +9627,33 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+      422: unknown;
+    };
+  };
+  export type post_ImportTableRows = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/import";
+    requestFormat: "form-data";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+
+      body: Schemas.ImportTableRowsForm;
+    };
+    responses: {
+      200: {
+        data: {
+          ignored_columns: Array<string>;
+          invalid_cell_count: number;
+          invalid_cells: Array<Schemas.InvalidCsvCellResponse>;
+          rows_created: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      413: unknown;
       422: unknown;
     };
   };
@@ -9807,6 +9869,15 @@ export namespace Endpoints {
       409: unknown;
       422: unknown;
     };
+  };
+  export type get_ExportTableView = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views/{view_id}/export";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string; view_id: string };
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown };
   };
   export type get_ListLeaveAccounts = {
     method: "GET";
@@ -14841,6 +14912,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}": Endpoints.get_GetKnowledgeTable;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows": Endpoints.get_ListTableRows;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/{row_id}": Endpoints.get_GetTableRow;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views/{view_id}/export": Endpoints.get_ExportTableView;
     "/api/v1/organizations/{organization_id}/leave-accounts": Endpoints.get_ListLeaveAccounts;
     "/api/v1/organizations/{organization_id}/leave-adjustments": Endpoints.get_ListLeaveAdjustments;
     "/api/v1/organizations/{organization_id}/ledger": Endpoints.get_ReadLedger;
@@ -14987,7 +15059,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/knowledge/folders": Endpoints.post_CreateKnowledgeFolder;
     "/api/v1/organizations/{organization_id}/knowledge/notes": Endpoints.post_CreateKnowledgeNote;
     "/api/v1/organizations/{organization_id}/knowledge/tables": Endpoints.post_CreateKnowledgeTable;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/import": Endpoints.post_ImportKnowledgeTable;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns": Endpoints.post_CreateTableColumn;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/import": Endpoints.post_ImportTableRows;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows": Endpoints.post_CreateTableRow;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/delete": Endpoints.post_DeleteTableRows;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/query": Endpoints.post_QueryTableRows;

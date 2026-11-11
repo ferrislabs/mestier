@@ -11,9 +11,11 @@ use crate::OrganizationId;
 
 pub mod column;
 pub mod commands;
+pub mod csv;
 pub mod error;
 pub mod events;
 pub mod filter;
+pub mod import;
 pub mod name;
 pub mod ports;
 pub mod rows;
@@ -29,7 +31,7 @@ pub use commands::*;
 pub use error::{TableError, TableOutcome};
 pub use filter::{FilterOperator, RowCondition, RowFilter, RowQuery, RowSort, SortDirection};
 pub use name::{TableDescription, TableItemName};
-pub use value::{CellError, CellReference, CellValue, RowPatch, RowValues};
+pub use value::{CellError, CellReference, CellValue, MISSING_LABEL, RowPatch, RowValues};
 pub use view::{ViewConfig, ViewKind};
 
 macro_rules! table_id {
@@ -104,6 +106,10 @@ pub struct TableColumn {
     pub created_at: DateTime<Utc>,
 }
 
+pub fn column_named<'a>(columns: &'a [TableColumn], name: &str) -> Option<&'a TableColumn> {
+    columns.iter().find(|column| column.name.same_as(name))
+}
+
 impl TableColumn {
     pub fn kind(&self) -> ColumnKind {
         self.column_type.kind()
@@ -163,6 +169,20 @@ pub enum CellLabel {
 pub struct ResolvedRow {
     pub row: TableRow,
     pub labels: BTreeMap<TableColumnId, CellLabel>,
+}
+
+impl ResolvedRow {
+    pub fn shown(&self, column: &TableColumn) -> Option<String> {
+        let raw = self.row.values.get(&column.key())?;
+        match self.labels.get(&column.id) {
+            Some(CellLabel::Found(label)) => Some(label.clone()),
+            Some(CellLabel::Missing) => Some(MISSING_LABEL.to_owned()),
+            None => CellValue::parse(&column.column_type, raw)
+                .ok()
+                .flatten()
+                .map(|cell| cell.display(&column.column_type, &Default::default())),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -14,11 +14,16 @@ use crate::{
                 CellReference, CreateKnowledgeTableCommand, CreateTableColumnCommand,
                 CreateTableRowCommand, CreateTableViewCommand, DeleteKnowledgeTableCommand,
                 DeleteTableColumnCommand, DeleteTableRowsCommand, DeleteTableViewCommand,
-                GetKnowledgeTableCommand, GetTableRowCommand, KnowledgeTable,
+                ExportTableViewCommand, GetKnowledgeTableCommand, GetTableRowCommand,
+                ImportKnowledgeTableCommand, ImportTableRowsCommand, KnowledgeTable,
                 ListKnowledgeTablesCommand, ListTableRowsCommand, ReorderTableColumnsCommand,
                 ResolvedRow, RowPage, TableColumn, TableOutcome, TableSchema, TableView,
                 UpdateKnowledgeTableCommand, UpdateTableColumnCommand, UpdateTableRowCommand,
-                UpdateTableViewCommand, ports::CellReferenceCheck, rows::KnowledgeTableRowService,
+                UpdateTableViewCommand,
+                csv::ImportReport,
+                import::{ImportedTable, import_into_table, import_new_table},
+                ports::CellReferenceCheck,
+                rows::{KnowledgeTableRowService, TableExport},
                 service::KnowledgeTableService,
             },
         },
@@ -505,6 +510,124 @@ impl MestierUseCase {
             emitter,
         )
         .delete_rows(command.organization_id, command.table_id, &command.ids)
+        .await
+    }
+
+    #[transactional(
+        knowledge_table,
+        knowledge_table_row,
+        knowledge_article,
+        project,
+        customer,
+        quote,
+        member,
+        role,
+        authz,
+        emitter
+    )]
+    pub async fn import_knowledge_table(
+        &self,
+        command: ImportKnowledgeTableCommand,
+    ) -> Result<TableOutcome<ImportedTable>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require(
+            authz,
+            command.actor.clone(),
+            command.organization_id,
+            "knowledge.manage",
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        let mut references = References {
+            projects: project_repository,
+            customers: customer_repository,
+            quotes: quote_repository,
+            articles: knowledge_article_repository,
+            members: member_repository,
+        };
+        import_new_table(
+            knowledge_table_repository,
+            knowledge_table_row_repository,
+            emitter,
+            &mut references,
+            command,
+            Utc::now(),
+        )
+        .await
+    }
+
+    #[transactional(
+        knowledge_table,
+        knowledge_table_row,
+        knowledge_article,
+        project,
+        customer,
+        quote,
+        member,
+        role,
+        authz,
+        emitter
+    )]
+    pub async fn import_table_rows(
+        &self,
+        command: ImportTableRowsCommand,
+    ) -> Result<TableOutcome<ImportReport>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require(
+            authz,
+            command.actor.clone(),
+            command.organization_id,
+            "knowledge.manage",
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        let mut references = References {
+            projects: project_repository,
+            customers: customer_repository,
+            quotes: quote_repository,
+            articles: knowledge_article_repository,
+            members: member_repository,
+        };
+        import_into_table(
+            knowledge_table_repository,
+            knowledge_table_row_repository,
+            emitter,
+            &mut references,
+            command,
+            Utc::now(),
+        )
+        .await
+    }
+
+    #[transactional(knowledge_table, knowledge_table_row, member, role, authz, emitter)]
+    pub async fn export_table_view(
+        &self,
+        command: ExportTableViewCommand,
+    ) -> Result<TableOutcome<TableExport>, CoreError> {
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require(
+            authz,
+            command.actor.clone(),
+            command.organization_id,
+            "knowledge.view",
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+
+        KnowledgeTableRowService::new(
+            knowledge_table_repository,
+            knowledge_table_row_repository,
+            emitter,
+        )
+        .export_view(command.organization_id, command.table_id, command.view_id)
         .await
     }
 }

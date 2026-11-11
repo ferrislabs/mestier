@@ -1,6 +1,27 @@
 import { isForbiddenError, isNotFoundError } from '#/lib/api-error'
 
 const KNOWN_REFUSALS: readonly [string, string][] = [
+	[
+		'a CSV file holds at most 5 MB',
+		'Le fichier dépasse 5 Mo : rien n’a été importé.',
+	],
+	[
+		'a CSV file holds at most 10000 rows',
+		'Le fichier compte plus de 10 000 lignes : rien n’a été importé.',
+	],
+	[
+		'becomes a table of at most 50 columns',
+		'Le fichier compte plus de 50 colonnes : rien n’a été importé.',
+	],
+	[
+		'the CSV file has no header line',
+		'Le fichier est vide ou n’a pas de ligne d’en-tête.',
+	],
+	['cannot be read as CSV', 'Ce fichier ne se lit pas comme un CSV.'],
+	[
+		'no column of the file matches',
+		'Aucun en-tête du fichier ne porte le nom d’une colonne de la table.',
+	],
 	['a table with this name already exists', 'Une table porte déjà ce nom.'],
 	[
 		'a column with this name already exists',

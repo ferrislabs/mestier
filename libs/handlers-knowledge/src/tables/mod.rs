@@ -7,6 +7,7 @@ use mestier_core::{
 use serde::Deserialize;
 
 pub mod column;
+pub mod csv;
 pub mod response;
 pub mod row;
 pub mod table;
@@ -15,6 +16,10 @@ pub mod view;
 pub const MAX_BODY_BYTES: usize = 256 * 1024;
 
 pub fn routes() -> Router<AppState> {
+    let imports = Router::new()
+        .typed_post(csv::import_table)
+        .typed_post(csv::import_rows)
+        .layer(DefaultBodyLimit::max(csv::MAX_IMPORT_BODY_BYTES));
     Router::new()
         .typed_get(table::list)
         .typed_post(table::create)
@@ -35,13 +40,38 @@ pub fn routes() -> Router<AppState> {
         .typed_get(row::get)
         .typed_patch(row::update)
         .typed_delete(row::delete)
+        .typed_get(csv::export_view)
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
+        .merge(imports)
 }
 
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/knowledge/tables")]
 pub struct TablesPath {
     pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/knowledge/tables/import")]
+pub struct TableImportPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/import")]
+pub struct TableRowsImportPath {
+    pub organization_id: OrganizationId,
+    pub table_id: KnowledgeTableId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views/{view_id}/export"
+)]
+pub struct ViewExportPath {
+    pub organization_id: OrganizationId,
+    pub table_id: KnowledgeTableId,
+    pub view_id: TableViewId,
 }
 
 #[derive(TypedPath, Deserialize)]

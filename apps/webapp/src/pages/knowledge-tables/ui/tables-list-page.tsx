@@ -1,4 +1,12 @@
-import { Ellipsis, Loader2, Pencil, Plus, Table2, Trash2 } from 'lucide-react'
+import {
+	Ellipsis,
+	FileUp,
+	Loader2,
+	Pencil,
+	Plus,
+	Table2,
+	Trash2,
+} from 'lucide-react'
 import { EmptyState } from '#/components/empty-state'
 import { Button } from '#/components/ui/button'
 import {
@@ -17,6 +25,7 @@ interface TablesListPageProps {
 	isLoading: boolean
 	error: string | null
 	onCreate: () => void
+	onImport: () => void
 	onOpen: (table: KnowledgeTable) => void
 	onEdit: (table: KnowledgeTable) => void
 	onDelete: (table: KnowledgeTable) => void
@@ -32,6 +41,7 @@ export function TablesListPage({
 	isLoading,
 	error,
 	onCreate,
+	onImport,
 	onOpen,
 	onEdit,
 	onDelete,
@@ -43,10 +53,16 @@ export function TablesListPage({
 				description="Les tables de l’entreprise : suivi de chantiers, inventaire, contacts fournisseurs. Des colonnes typées, des vues Grille et Kanban."
 				actions={
 					canManage ? (
-						<Button type="button" onClick={onCreate}>
-							<Plus aria-hidden />
-							Nouvelle table
-						</Button>
+						<div className="flex flex-wrap gap-2">
+							<Button type="button" variant="outline" onClick={onImport}>
+								<FileUp aria-hidden />
+								Créer depuis un CSV
+							</Button>
+							<Button type="button" onClick={onCreate}>
+								<Plus aria-hidden />
+								Nouvelle table
+							</Button>
+						</div>
 					) : null
 				}
 			/>

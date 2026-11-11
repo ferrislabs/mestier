@@ -44,11 +44,41 @@ pub enum CellError {
     UnknownTarget,
 }
 
+impl CellError {
+    pub fn code(self) -> &'static str {
+        match self {
+            CellError::NotText => "not_text",
+            CellError::TextTooLong => "text_too_long",
+            CellError::NotNumber => "not_number",
+            CellError::NotCents => "not_amount",
+            CellError::NotDate => "not_date",
+            CellError::NotBoolean => "not_boolean",
+            CellError::UnknownOption => "unknown_option",
+            CellError::DuplicateOption => "duplicate_option",
+            CellError::NotOptionList => "not_option_list",
+            CellError::NotLink => "not_link",
+            CellError::WrongLinkKind => "wrong_link_kind",
+            CellError::NotId => "not_id",
+            CellError::UnknownTarget => "unknown_target",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CellReference {
     Resource(KnowledgeResource),
     File(KnowledgeArticleId),
     Member(UserId),
+}
+
+impl CellReference {
+    pub fn id(&self) -> Uuid {
+        match self {
+            CellReference::Resource(resource) => resource.id,
+            CellReference::File(id) => id.0,
+            CellReference::Member(id) => id.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,6 +267,14 @@ impl RowValues {
 
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    pub fn insert(&mut self, column: TableColumnId, cell: CellValue) {
+        self.0.insert(column, cell);
+    }
+
+    pub fn remove(&mut self, column: TableColumnId) -> Option<CellValue> {
+        self.0.remove(&column)
     }
 
     pub fn to_json(&self) -> Map<String, Value> {
