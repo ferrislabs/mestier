@@ -355,6 +355,24 @@ export namespace Schemas {
     title: string;
     version: string;
   };
+  export type KnowledgeResourceType = "project" | "customer" | "quote";
+  export type ColumnConfig = Partial<{
+    decimals: number | null;
+    link_kind: null | KnowledgeResourceType;
+    options: Array<SelectOptionInput> | null;
+  }>;
+  export type ColumnKind =
+    | "text"
+    | "long_text"
+    | "number"
+    | "currency"
+    | "date"
+    | "checkbox"
+    | "single_select"
+    | "multi_select"
+    | "link"
+    | "file"
+    | "member";
   export type MediaItem = { description?: (string | null) | undefined; url: string };
   export type SeparatorSpacing = "Small" | "Large";
   export type Component =
@@ -653,6 +671,7 @@ export namespace Schemas {
     tags?: Array<string> | undefined;
     title: string;
   };
+  export type CreateKnowledgeTableRequest = { description?: (string | null) | undefined; name: string };
   export type LeaveAccountId = string;
   export type CreateLeaveAdjustmentRequest = {
     account_id: LeaveAccountId;
@@ -805,6 +824,43 @@ export namespace Schemas {
     vat_number?: (string | null) | undefined;
   };
   export type CreateSupportApiKeyRequest = { name: string };
+  export type CreateTableColumnRequest = { config?: ColumnConfig | undefined; kind: ColumnKind; name: string };
+  export type TableColumnId = string;
+  export type FilterOperator =
+    | "contains"
+    | "is"
+    | "is_not"
+    | "any_of"
+    | "all_of"
+    | "is_empty"
+    | "is_not_empty"
+    | "eq"
+    | "ne"
+    | "lt"
+    | "le"
+    | "gt"
+    | "ge"
+    | "before"
+    | "after"
+    | "on"
+    | "checked"
+    | "unchecked";
+  export type RowFilter = {
+    column_id: TableColumnId;
+    operator: FilterOperator;
+    value?: (Record<string, unknown> | null) | undefined;
+  };
+  export type SortDirection = "asc" | "desc";
+  export type RowSort = { column_id: TableColumnId; direction?: SortDirection | undefined };
+  export type ViewConfig = Partial<{
+    filters: Array<RowFilter>;
+    group_by: null | TableColumnId;
+    hidden: Array<TableColumnId>;
+    sorts: Array<RowSort>;
+    widths: Record<string, number>;
+  }>;
+  export type ViewKind = "grid" | "kanban";
+  export type CreateTableViewRequest = { config?: ViewConfig | undefined; kind: ViewKind; name: string };
   export type CreateTaskCommentRequest = { body: string };
   export type CreateTaskLabelRequest = { color: string; name: string };
   export type RecurrenceRuleRequest =
@@ -1045,6 +1101,9 @@ export namespace Schemas {
   };
   export type DeclareTimeEntryRequest = { ended_at: string; started_at: string; task_id: TaskId };
   export type DeleteScopeRequest = "THIS_OCCURRENCE" | "THIS_AND_FOLLOWING";
+  export type TableRowId = string;
+  export type DeleteTableRowsRequest = { ids: Array<TableRowId> };
+  export type DeletedTableRowsResponse = { deleted: number };
   export type DeliveryAddressResponse = {
     city: string;
     country: string;
@@ -1415,6 +1474,7 @@ export namespace Schemas {
     members: Array<FeedMemberResponse>;
     overrides: Array<DayOverrideResponse>;
   };
+  export type ImportKnowledgeTableForm = { file: string; name?: (string | null) | undefined };
   export type SupplierInvoiceId = string;
   export type SupplierInvoiceLineAllocationId = string;
   export type SupplierInvoiceLineId = string;
@@ -1481,6 +1541,46 @@ export namespace Schemas {
         totals_mismatch?: (null | TotalsMismatchResponse) | undefined;
       }
     | { outcome: "parse_failed"; reason: string };
+  export type ImportTableRowsForm = { file: string };
+  export type InvalidCsvCellResponse = { column: string; message: string; reason: string; row: number; value: string };
+  export type TableImportReportResponse = {
+    ignored_columns: Array<string>;
+    invalid_cell_count: number;
+    invalid_cells: Array<InvalidCsvCellResponse>;
+    rows_created: number;
+  };
+  export type TableColumnResponse = {
+    config: ColumnConfig;
+    id: TableColumnId;
+    is_primary: boolean;
+    kind: ColumnKind;
+    name: string;
+    position: number;
+  };
+  export type KnowledgeTableId = string;
+  export type TableViewId = string;
+  export type TableViewResponse = {
+    config: ViewConfig;
+    created_at: string;
+    id: TableViewId;
+    kind: ViewKind;
+    name: string;
+    position: number;
+    updated_at: string;
+  };
+  export type KnowledgeTableDetailResponse = {
+    columns: Array<TableColumnResponse>;
+    created_at: string;
+    description?: (string | null) | undefined;
+    id: KnowledgeTableId;
+    name: string;
+    updated_at: string;
+    views: Array<TableViewResponse>;
+  };
+  export type ImportedKnowledgeTableResponse = {
+    report: TableImportReportResponse;
+    table: KnowledgeTableDetailResponse;
+  };
   export type InstantiateProjectTemplateRequest = {
     customer_context_id?: (null | CustomerContextId) | undefined;
     customer_id?: (null | CustomerId) | undefined;
@@ -1703,8 +1803,14 @@ export namespace Schemas {
     folder?: (null | KnowledgeFolderResponse) | undefined;
     path: Array<KnowledgeFolderResponse>;
   };
-  export type KnowledgeResourceType = "project" | "customer" | "quote";
   export type KnowledgeLinkResponse = { created_at: string; resource_id: string; resource_type: KnowledgeResourceType };
+  export type KnowledgeTableResponse = {
+    created_at: string;
+    description?: (string | null) | undefined;
+    id: KnowledgeTableId;
+    name: string;
+    updated_at: string;
+  };
   export type LeaveAccountRequest = {
     acquisition: AcquisitionBody;
     carry_over_max: number;
@@ -2235,6 +2341,12 @@ export namespace Schemas {
   };
   export type WorkSlotRequest = { ends_minute: number; starts_minute: number; work_date: string };
   export type PutWorkSlotsRequest = { slots: Array<WorkSlotRequest> };
+  export type QueryTableRowsRequest = Partial<{
+    filters: Array<RowFilter>;
+    limit: number | null;
+    offset: number | null;
+    sorts: Array<RowSort>;
+  }>;
   export type QuoteInvoicingBlockerResponse = "QUOTE_NOT_ACCEPTED" | "QUOTE_ALREADY_INVOICED" | "DEPOSITS_COVER_QUOTE";
   export type QuoteInvoicingResponse = {
     blocker?: (null | QuoteInvoicingBlockerResponse) | undefined;
@@ -2367,6 +2479,7 @@ export namespace Schemas {
   export type RejectInterventionRequest = Partial<{ note: string | null }>;
   export type RejectSupplierInvoiceRequest = Partial<{ notes: string | null }>;
   export type ReorderChannelsRequest = { placements: Array<ChannelPlacementRequest> };
+  export type ReorderTableColumnsRequest = { order: Array<TableColumnId> };
   export type ReplaceBillingSettingsRequest = {
     bic?: (string | null) | undefined;
     default_vat_rate_bp: number;
@@ -2448,6 +2561,13 @@ export namespace Schemas {
   };
   export type WorkflowLayoutDto = Record<string, unknown>;
   export type SaveWorkflowVersionRequest = { graph: GraphDto; layout?: (null | WorkflowLayoutDto) | undefined };
+  export type SelectColor = "gray" | "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink";
+  export type SelectOptionId = string;
+  export type SelectOptionInput = {
+    color?: (null | SelectColor) | undefined;
+    id?: (null | SelectOptionId) | undefined;
+    label: string;
+  };
   export type SeriesNumberingResponse = {
     kind: NumberSeriesKind;
     last_assigned_number: number;
@@ -2557,6 +2677,17 @@ export namespace Schemas {
     organization_id: OrganizationId;
     rate_bp: number;
   };
+  export type TableCellLabelResponse = { label?: (string | null) | undefined; missing: boolean };
+  export type TableRowResponse = {
+    created_at: string;
+    created_by?: (null | UserId) | undefined;
+    id: TableRowId;
+    labels: Record<string, unknown>;
+    updated_at: string;
+    updated_by?: (null | UserId) | undefined;
+    values: Record<string, unknown>;
+  };
+  export type TableRowPageResponse = { limit: number; offset: number; rows: Array<TableRowResponse>; total: number };
   export type TaskCommentAuthorResponse = { display_name: string; id: UserId };
   export type TaskCommentId = string;
   export type TaskCommentResponse = {
@@ -2756,6 +2887,7 @@ export namespace Schemas {
     title: string | null;
   }>;
   export type UpdateKnowledgeFolderRequest = Partial<{ name: string | null; parent_id: null | KnowledgeFolderId }>;
+  export type UpdateKnowledgeTableRequest = Partial<{ description: string | null; name: string | null }>;
   export type VatStatusRequest = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type UpdateLegalIdentityRequest = Partial<{
     address_city: string | null;
@@ -2857,6 +2989,16 @@ export namespace Schemas {
     registration_number?: (string | null) | undefined;
     vat_number?: (string | null) | undefined;
   };
+  export type UpdateTableColumnRequest = Partial<{
+    config: null | ColumnConfig;
+    kind: null | ColumnKind;
+    name: string | null;
+  }>;
+  export type UpdateTableViewRequest = Partial<{
+    config: null | ViewConfig;
+    kind: null | ViewKind;
+    name: string | null;
+  }>;
   export type UpdateTaskCommentRequest = { body: string };
   export type UpdateTaskLabelRequest = { color: string; name: string };
   export type UpdateTaskRecurrenceRequest = (null | RecurrenceRuleRequest) &
@@ -2984,6 +3126,7 @@ export namespace Schemas {
     tags: Array<string>;
     updated_at: string;
   };
+  export type WriteTableRowRequest = Partial<{ values: Record<string, unknown> }>;
 
   // </Schemas>
 }
@@ -9262,6 +9405,480 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type get_ListKnowledgeTables = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.KnowledgeTableId;
+          name: string;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateKnowledgeTable = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateKnowledgeTableRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          columns: Array<Schemas.TableColumnResponse>;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.KnowledgeTableId;
+          name: string;
+          updated_at: string;
+          views: Array<Schemas.TableViewResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type post_ImportKnowledgeTable = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/import";
+    requestFormat: "form-data";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.ImportKnowledgeTableForm;
+    };
+    responses: {
+      201: {
+        data: { report: Schemas.TableImportReportResponse; table: Schemas.KnowledgeTableDetailResponse };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      409: unknown;
+      413: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetKnowledgeTable = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          columns: Array<Schemas.TableColumnResponse>;
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.KnowledgeTableId;
+          name: string;
+          updated_at: string;
+          views: Array<Schemas.TableViewResponse>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteKnowledgeTable = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateKnowledgeTable = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+
+      body: Schemas.UpdateKnowledgeTableRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          description?: (string | null) | undefined;
+          id: Schemas.KnowledgeTableId;
+          name: string;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type post_CreateTableColumn = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+
+      body: Schemas.CreateTableColumnRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          config: Schemas.ColumnConfig;
+          id: Schemas.TableColumnId;
+          is_primary: boolean;
+          kind: Schemas.ColumnKind;
+          name: string;
+          position: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type put_ReorderTableColumns = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/order";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+
+      body: Schemas.ReorderTableColumnsRequest;
+    };
+    responses: {
+      200: {
+        data: Array<{
+          config: Schemas.ColumnConfig;
+          id: Schemas.TableColumnId;
+          is_primary: boolean;
+          kind: Schemas.ColumnKind;
+          name: string;
+          position: number;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_DeleteTableColumn = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/{column_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string; column_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateTableColumn = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/{column_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string; column_id: string };
+
+      body: Schemas.UpdateTableColumnRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          config: Schemas.ColumnConfig;
+          id: Schemas.TableColumnId;
+          is_primary: boolean;
+          kind: Schemas.ColumnKind;
+          name: string;
+          position: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type post_ImportTableRows = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/import";
+    requestFormat: "form-data";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+
+      body: Schemas.ImportTableRowsForm;
+    };
+    responses: {
+      200: {
+        data: {
+          ignored_columns: Array<string>;
+          invalid_cell_count: number;
+          invalid_cells: Array<Schemas.InvalidCsvCellResponse>;
+          rows_created: number;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      413: unknown;
+      422: unknown;
+    };
+  };
+  export type get_ListTableRows = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ view_id: string; limit: number; offset: number }>;
+      path: { organization_id: string; table_id: string };
+    };
+    responses: {
+      200: {
+        data: { limit: number; offset: number; rows: Array<Schemas.TableRowResponse>; total: number };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      400: unknown;
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateTableRow = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+
+      body: Schemas.WriteTableRowRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          created_at: string;
+          created_by?: (null | Schemas.UserId) | undefined;
+          id: Schemas.TableRowId;
+          labels: Record<string, unknown>;
+          updated_at: string;
+          updated_by?: (null | Schemas.UserId) | undefined;
+          values: Record<string, unknown>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_DeleteTableRows = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/delete";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+
+      body: Schemas.DeleteTableRowsRequest;
+    };
+    responses: {
+      200: { data: { deleted: number }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_QueryTableRows = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/query";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+
+      body: Schemas.QueryTableRowsRequest;
+    };
+    responses: {
+      200: {
+        data: { limit: number; offset: number; rows: Array<Schemas.TableRowResponse>; total: number };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetTableRow = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/{row_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string; row_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          created_by?: (null | Schemas.UserId) | undefined;
+          id: Schemas.TableRowId;
+          labels: Record<string, unknown>;
+          updated_at: string;
+          updated_by?: (null | Schemas.UserId) | undefined;
+          values: Record<string, unknown>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteTableRow = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/{row_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string; row_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type patch_UpdateTableRow = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/{row_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string; row_id: string };
+
+      body: Schemas.WriteTableRowRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          created_by?: (null | Schemas.UserId) | undefined;
+          id: Schemas.TableRowId;
+          labels: Record<string, unknown>;
+          updated_at: string;
+          updated_by?: (null | Schemas.UserId) | undefined;
+          values: Record<string, unknown>;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type post_CreateTableView = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string };
+
+      body: Schemas.CreateTableViewRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          config: Schemas.ViewConfig;
+          created_at: string;
+          id: Schemas.TableViewId;
+          kind: Schemas.ViewKind;
+          name: string;
+          position: number;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_DeleteTableView = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views/{view_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string; view_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateTableView = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views/{view_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string; view_id: string };
+
+      body: Schemas.UpdateTableViewRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          config: Schemas.ViewConfig;
+          created_at: string;
+          id: Schemas.TableViewId;
+          kind: Schemas.ViewKind;
+          name: string;
+          position: number;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type get_ExportTableView = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views/{view_id}/export";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; table_id: string; view_id: string };
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
   export type get_ListLeaveAccounts = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/leave-accounts";
@@ -14291,6 +14908,11 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/knowledge/folder-tree": Endpoints.get_ListKnowledgeFolders;
     "/api/v1/organizations/{organization_id}/knowledge/folders": Endpoints.get_BrowseKnowledgeRoot;
     "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}": Endpoints.get_BrowseKnowledgeFolder;
+    "/api/v1/organizations/{organization_id}/knowledge/tables": Endpoints.get_ListKnowledgeTables;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}": Endpoints.get_GetKnowledgeTable;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows": Endpoints.get_ListTableRows;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/{row_id}": Endpoints.get_GetTableRow;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views/{view_id}/export": Endpoints.get_ExportTableView;
     "/api/v1/organizations/{organization_id}/leave-accounts": Endpoints.get_ListLeaveAccounts;
     "/api/v1/organizations/{organization_id}/leave-adjustments": Endpoints.get_ListLeaveAdjustments;
     "/api/v1/organizations/{organization_id}/ledger": Endpoints.get_ReadLedger;
@@ -14436,6 +15058,14 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links": Endpoints.post_LinkKnowledgeArticle;
     "/api/v1/organizations/{organization_id}/knowledge/folders": Endpoints.post_CreateKnowledgeFolder;
     "/api/v1/organizations/{organization_id}/knowledge/notes": Endpoints.post_CreateKnowledgeNote;
+    "/api/v1/organizations/{organization_id}/knowledge/tables": Endpoints.post_CreateKnowledgeTable;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/import": Endpoints.post_ImportKnowledgeTable;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns": Endpoints.post_CreateTableColumn;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/import": Endpoints.post_ImportTableRows;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows": Endpoints.post_CreateTableRow;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/delete": Endpoints.post_DeleteTableRows;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/query": Endpoints.post_QueryTableRows;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views": Endpoints.post_CreateTableView;
     "/api/v1/organizations/{organization_id}/leave-accounts": Endpoints.post_CreateLeaveAccount;
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}/archive": Endpoints.post_ArchiveLeaveAccount;
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}/restore": Endpoints.post_RestoreLeaveAccount;
@@ -14518,6 +15148,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/order": Endpoints.put_ReorderTableColumns;
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}": Endpoints.put_UpdateLeaveAccount;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.put_UpdateMemberContract;
@@ -14567,6 +15198,10 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.delete_DeleteKnowledgeArticle;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/links/{resource_type}/{resource_id}": Endpoints.delete_UnlinkKnowledgeArticle;
     "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}": Endpoints.delete_DeleteKnowledgeFolder;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}": Endpoints.delete_DeleteKnowledgeTable;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/{column_id}": Endpoints.delete_DeleteTableColumn;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/{row_id}": Endpoints.delete_DeleteTableRow;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views/{view_id}": Endpoints.delete_DeleteTableView;
     "/api/v1/organizations/{organization_id}/leave-adjustments/{adjustment_id}": Endpoints.delete_DeleteLeaveAdjustment;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.delete_DeleteMemberContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/day-overrides/{date}": Endpoints.delete_DeleteDayOverride;
@@ -14612,6 +15247,10 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.patch_UpdateWorkflow;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.patch_UpdateKnowledgeArticle;
     "/api/v1/organizations/{organization_id}/knowledge/folders/{folder_id}": Endpoints.patch_UpdateKnowledgeFolder;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}": Endpoints.patch_UpdateKnowledgeTable;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/{column_id}": Endpoints.patch_UpdateTableColumn;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/rows/{row_id}": Endpoints.patch_UpdateTableRow;
+    "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/views/{view_id}": Endpoints.patch_UpdateTableView;
     "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
     "/api/v1/organizations/{organization_id}/photo-library/photos/{photo_id}": Endpoints.patch_UpdateLibraryPhoto;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}": Endpoints.patch_PatchProjectTemplate;

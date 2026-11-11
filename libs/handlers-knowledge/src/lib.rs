@@ -25,6 +25,7 @@ pub mod link;
 pub mod list;
 pub mod move_articles;
 pub mod response;
+pub mod tables;
 pub mod update;
 pub mod upload;
 
@@ -53,6 +54,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_patch(folders::update)
         .typed_delete(folders::delete)
         .typed_post(move_articles::handler)
+        .merge(tables::routes())
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
 }

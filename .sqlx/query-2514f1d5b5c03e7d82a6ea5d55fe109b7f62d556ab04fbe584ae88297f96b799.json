@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE knowledge_table_rows\n                SET \"values\" = CASE\n                    WHEN jsonb_array_length((\"values\" -> $3::text) - $4::text) = 0 THEN \"values\" - $3::text\n                    ELSE jsonb_set(\"values\", ARRAY[$3::text], (\"values\" -> $3::text) - $4::text)\n                END\n                WHERE table_id = $1 AND org_id = $2 AND (\"values\" -> $3::text) ? $4::text\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2514f1d5b5c03e7d82a6ea5d55fe109b7f62d556ab04fbe584ae88297f96b799"
+}

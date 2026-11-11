@@ -133,10 +133,15 @@ pub enum Tool {
     ListKnowledgeFolder,
     CreateKnowledgeFolder,
     MoveKnowledgeArticles,
+    ListTables,
+    GetTable,
+    ListTableRows,
+    CreateTableRow,
+    UpdateTableRow,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 75] = [
+    pub const ALL: [Tool; 80] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -212,6 +217,11 @@ impl Tool {
         Tool::ListKnowledgeFolder,
         Tool::CreateKnowledgeFolder,
         Tool::MoveKnowledgeArticles,
+        Tool::ListTables,
+        Tool::GetTable,
+        Tool::ListTableRows,
+        Tool::CreateTableRow,
+        Tool::UpdateTableRow,
     ];
 
     /// The name MCP clients call the tool by.
@@ -292,6 +302,11 @@ impl Tool {
             Self::ListKnowledgeFolder => "list_knowledge_folder",
             Self::CreateKnowledgeFolder => "create_knowledge_folder",
             Self::MoveKnowledgeArticles => "move_knowledge_articles",
+            Self::ListTables => "list_tables",
+            Self::GetTable => "get_table",
+            Self::ListTableRows => "list_table_rows",
+            Self::CreateTableRow => "create_table_row",
+            Self::UpdateTableRow => "update_table_row",
         }
     }
 
@@ -340,7 +355,9 @@ impl Tool {
             | Self::UpdateKnowledgeArticle
             | Self::LinkKnowledgeArticle
             | Self::CreateKnowledgeFolder
-            | Self::MoveKnowledgeArticles => Access::Write,
+            | Self::MoveKnowledgeArticles
+            | Self::CreateTableRow
+            | Self::UpdateTableRow => Access::Write,
             Self::ListOrganizations
             | Self::ListProjects
             | Self::GetProject
@@ -373,7 +390,10 @@ impl Tool {
             | Self::SearchPhotoLibrary
             | Self::SearchKnowledge
             | Self::GetKnowledgeArticle
-            | Self::ListKnowledgeFolder => Access::Read,
+            | Self::ListKnowledgeFolder
+            | Self::ListTables
+            | Self::GetTable
+            | Self::ListTableRows => Access::Read,
         }
     }
 
@@ -426,7 +446,12 @@ impl Tool {
             | Self::LinkKnowledgeArticle
             | Self::ListKnowledgeFolder
             | Self::CreateKnowledgeFolder
-            | Self::MoveKnowledgeArticles => "knowledge",
+            | Self::MoveKnowledgeArticles
+            | Self::ListTables
+            | Self::GetTable
+            | Self::ListTableRows
+            | Self::CreateTableRow
+            | Self::UpdateTableRow => "knowledge",
             Self::SearchProducts | Self::GetProduct => "catalog",
             Self::ListQuotes
             | Self::GetQuote
@@ -558,6 +583,7 @@ mod tests {
                 "create_quote",
                 "create_quote_revision",
                 "create_supplier",
+                "create_table_row",
                 "create_task",
                 "delete_doe_file",
                 "delete_doe_section",
@@ -582,6 +608,7 @@ mod tests {
                 "update_project",
                 "update_quote",
                 "update_supplier",
+                "update_table_row",
                 "update_task",
             ]
         );
@@ -748,5 +775,41 @@ mod tests {
             }
         }
         assert_eq!(SCOPE_KNOWLEDGE_WRITE, "mestier.knowledge.write");
+    }
+
+    #[test]
+    fn the_table_tools_read_and_write_rows_but_never_delete_or_change_the_structure() {
+        let expected = [
+            (Tool::ListTables, Access::Read),
+            (Tool::GetTable, Access::Read),
+            (Tool::ListTableRows, Access::Read),
+            (Tool::CreateTableRow, Access::Write),
+            (Tool::UpdateTableRow, Access::Write),
+        ];
+        for (tool, access) in expected {
+            assert_eq!(tool.access(), access, "{tool}");
+            assert_eq!(tool.domain(), "knowledge", "{tool}");
+            assert!(tool.is_organization_scoped(), "{tool}");
+        }
+        let names: Vec<&str> = Tool::ALL
+            .into_iter()
+            .map(Tool::name)
+            .filter(|name| name.contains("table"))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "list_tables",
+                "get_table",
+                "list_table_rows",
+                "create_table_row",
+                "update_table_row"
+            ]
+        );
+        for name in names {
+            for forbidden in ["delete", "remove", "column", "view", "import", "rename"] {
+                assert!(!name.contains(forbidden), "{name}");
+            }
+        }
     }
 }

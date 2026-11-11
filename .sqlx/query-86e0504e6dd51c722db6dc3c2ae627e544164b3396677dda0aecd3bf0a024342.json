@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE knowledge_table_rows\n            SET \"values\" = (\"values\" || $4::jsonb) - $5::text[], updated_by = $6, updated_at = $7\n            WHERE id = $1 AND table_id = $2 AND org_id = $3\n            RETURNING id, table_id, org_id, \"values\", created_by, updated_by, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "TextArray",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "86e0504e6dd51c722db6dc3c2ae627e544164b3396677dda0aecd3bf0a024342"
+}

@@ -11,7 +11,7 @@ auth = { workspace = true }
 common = { workspace = true }
 pagination = { workspace = true }
 
-axum = { workspace = true }
+axum = { workspace = true, features = ["multipart"] }
 axum-extra = { workspace = true }
 chrono = { workspace = true }
 http = { workspace = true }
@@ -23,3 +23,14 @@ tracing = { workspace = true }
 url = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
+
+[dev-dependencies]
+args = { workspace = true }
+clap = { workspace = true }
+jsonwebtoken = { workspace = true }
+reqwest = { workspace = true }
+sqlx = { workspace = true }
+
+[[test]]
+name = "http_e2e"
+path = "tests/http_e2e/main.rs"

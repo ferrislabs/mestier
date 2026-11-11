@@ -47,6 +47,9 @@ importers:
       '@tanstack/react-table':
         specifier: latest
         version: 8.21.3(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@tanstack/react-virtual':
+        specifier: 3.14.26
+        version: 3.14.26(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@tanstack/router-plugin':
         specifier: ^1.132.0
         version: 1.167.22(@tanstack/react-router@1.168.23(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(vite@8.0.9(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.9.1))
@@ -1853,6 +1856,12 @@ packages:
       react: '>=16.8'
       react-dom: '>=16.8'
 
+  '@tanstack/react-virtual@3.14.26':
+    resolution: {integrity: sha512-HUDlfsrYH6ko5xH56L62Mcl/uzT+AGVNMHFuDNqDJMdZWc1AQa2oeVKNUvZ/RWBZQ4TYtyQerFrNvLnp39h65A==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   '@tanstack/router-core@1.168.15':
     resolution: {integrity: sha512-Wr0424NDtD8fT/uALobMZ9DdcfsTyXtW5IPR++7zvW8/7RaIOeaqXpVDId8ywaGtqPWLWOfaUg2zUtYtukoXYA==}
     engines: {node: '>=20.19'}
@@ -1938,6 +1947,9 @@ packages:
   '@tanstack/table-core@8.21.3':
     resolution: {integrity: sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg==}
     engines: {node: '>=12'}
+
+  '@tanstack/virtual-core@3.19.11':
+    resolution: {integrity: sha512-/5iHb0RHBvj8Di59FDs4ESNm45jls33aZAi4zccVXZjc/6ZvwQP6nzEYeT6weXjTf9E6/vrp2JhYWRyO+ZP13A==}
 
   '@tanstack/virtual-file-routes@1.161.7':
     resolution: {integrity: sha512-olW33+Cn+bsCsZKPwEGhlkqS6w3M2slFv11JIobdnCFKMLG97oAI2kWKdx5/zsywTL8flpnoIgaZZPlQTFYhdQ==}
@@ -4862,6 +4874,12 @@ snapshots:
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
 
+  '@tanstack/react-virtual@3.14.26(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+    dependencies:
+      '@tanstack/virtual-core': 3.19.11
+      react: 19.2.5
+      react-dom: 19.2.5(react@19.2.5)
+
   '@tanstack/router-core@1.168.15':
     dependencies:
       '@tanstack/history': 1.161.6
@@ -4992,6 +5010,8 @@ snapshots:
   '@tanstack/store@0.9.3': {}
 
   '@tanstack/table-core@8.21.3': {}
+
+  '@tanstack/virtual-core@3.19.11': {}
 
   '@tanstack/virtual-file-routes@1.161.7': {}
 

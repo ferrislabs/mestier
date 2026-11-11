@@ -72,6 +72,7 @@ import { Route as AppOOrganizationSlugCrmFacturesIndexRouteImport } from './rout
 import { Route as AppOOrganizationSlugCrmDevisIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.devis.index'
 import { Route as AppOOrganizationSlugCrmClientsIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.clients.index'
 import { Route as AppOOrganizationSlugCrmAvoirsIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.avoirs.index'
+import { Route as AppOOrganizationSlugConnaissancesTablesIndexRouteImport } from './routes/_app.o.$organizationSlug.connaissances.tables.index'
 import { Route as AppOOrganizationSlugAutomatisationWorkflowsIndexRouteImport } from './routes/_app.o.$organizationSlug.automatisation.workflows.index'
 import { Route as AppOOrganizationSlugAutomatisationExecutionsIndexRouteImport } from './routes/_app.o.$organizationSlug.automatisation.executions.index'
 import { Route as AppOOrganizationSlugAutomatisationCollectionsIndexRouteImport } from './routes/_app.o.$organizationSlug.automatisation.collections.index'
@@ -96,6 +97,7 @@ import { Route as AppOOrganizationSlugCrmDevisNouveauRouteImport } from './route
 import { Route as AppOOrganizationSlugCrmDevisQuoteIdRouteImport } from './routes/_app.o.$organizationSlug.crm.devis.$quoteId'
 import { Route as AppOOrganizationSlugCrmClientsCustomerIdRouteImport } from './routes/_app.o.$organizationSlug.crm.clients.$customerId'
 import { Route as AppOOrganizationSlugCrmAvoirsCreditNoteIdRouteImport } from './routes/_app.o.$organizationSlug.crm.avoirs.$creditNoteId'
+import { Route as AppOOrganizationSlugConnaissancesTablesTableIdRouteImport } from './routes/_app.o.$organizationSlug.connaissances.tables.$tableId'
 import { Route as AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRouteImport } from './routes/_app.o.$organizationSlug.automatisation.workflows.$workflowId'
 import { Route as AppOOrganizationSlugAutomatisationProjetsProjectIdRouteImport } from './routes/_app.o.$organizationSlug.automatisation.projets.$projectId'
 import { Route as AppOOrganizationSlugAutomatisationCollectionsCollectionIdRouteImport } from './routes/_app.o.$organizationSlug.automatisation.collections.$collectionId'
@@ -478,6 +480,12 @@ const AppOOrganizationSlugCrmAvoirsIndexRoute =
     path: '/crm/avoirs/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugConnaissancesTablesIndexRoute =
+  AppOOrganizationSlugConnaissancesTablesIndexRouteImport.update({
+    id: '/connaissances/tables/',
+    path: '/connaissances/tables/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugAutomatisationWorkflowsIndexRoute =
   AppOOrganizationSlugAutomatisationWorkflowsIndexRouteImport.update({
     id: '/automatisation/workflows/',
@@ -624,6 +632,12 @@ const AppOOrganizationSlugCrmAvoirsCreditNoteIdRoute =
     path: '/crm/avoirs/$creditNoteId',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugConnaissancesTablesTableIdRoute =
+  AppOOrganizationSlugConnaissancesTablesTableIdRouteImport.update({
+    id: '/connaissances/tables/$tableId',
+    path: '/connaissances/tables/$tableId',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRoute =
   AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRouteImport.update({
     id: '/automatisation/workflows/$workflowId',
@@ -737,6 +751,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/automatisation/collections/$collectionId': typeof AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute
   '/o/$organizationSlug/automatisation/projets/$projectId': typeof AppOOrganizationSlugAutomatisationProjetsProjectIdRoute
   '/o/$organizationSlug/automatisation/workflows/$workflowId': typeof AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRoute
+  '/o/$organizationSlug/connaissances/tables/$tableId': typeof AppOOrganizationSlugConnaissancesTablesTableIdRoute
   '/o/$organizationSlug/crm/avoirs/$creditNoteId': typeof AppOOrganizationSlugCrmAvoirsCreditNoteIdRoute
   '/o/$organizationSlug/crm/clients/$customerId': typeof AppOOrganizationSlugCrmClientsCustomerIdRoute
   '/o/$organizationSlug/crm/devis/$quoteId': typeof AppOOrganizationSlugCrmDevisQuoteIdRouteWithChildren
@@ -761,6 +776,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/automatisation/collections/': typeof AppOOrganizationSlugAutomatisationCollectionsIndexRoute
   '/o/$organizationSlug/automatisation/executions/': typeof AppOOrganizationSlugAutomatisationExecutionsIndexRoute
   '/o/$organizationSlug/automatisation/workflows/': typeof AppOOrganizationSlugAutomatisationWorkflowsIndexRoute
+  '/o/$organizationSlug/connaissances/tables/': typeof AppOOrganizationSlugConnaissancesTablesIndexRoute
   '/o/$organizationSlug/crm/avoirs/': typeof AppOOrganizationSlugCrmAvoirsIndexRoute
   '/o/$organizationSlug/crm/clients/': typeof AppOOrganizationSlugCrmClientsIndexRoute
   '/o/$organizationSlug/crm/devis/': typeof AppOOrganizationSlugCrmDevisIndexRoute
@@ -832,6 +848,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/automatisation/collections/$collectionId': typeof AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute
   '/o/$organizationSlug/automatisation/projets/$projectId': typeof AppOOrganizationSlugAutomatisationProjetsProjectIdRoute
   '/o/$organizationSlug/automatisation/workflows/$workflowId': typeof AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRoute
+  '/o/$organizationSlug/connaissances/tables/$tableId': typeof AppOOrganizationSlugConnaissancesTablesTableIdRoute
   '/o/$organizationSlug/crm/avoirs/$creditNoteId': typeof AppOOrganizationSlugCrmAvoirsCreditNoteIdRoute
   '/o/$organizationSlug/crm/clients/$customerId': typeof AppOOrganizationSlugCrmClientsCustomerIdRoute
   '/o/$organizationSlug/crm/devis/$quoteId': typeof AppOOrganizationSlugCrmDevisQuoteIdRouteWithChildren
@@ -856,6 +873,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/automatisation/collections': typeof AppOOrganizationSlugAutomatisationCollectionsIndexRoute
   '/o/$organizationSlug/automatisation/executions': typeof AppOOrganizationSlugAutomatisationExecutionsIndexRoute
   '/o/$organizationSlug/automatisation/workflows': typeof AppOOrganizationSlugAutomatisationWorkflowsIndexRoute
+  '/o/$organizationSlug/connaissances/tables': typeof AppOOrganizationSlugConnaissancesTablesIndexRoute
   '/o/$organizationSlug/crm/avoirs': typeof AppOOrganizationSlugCrmAvoirsIndexRoute
   '/o/$organizationSlug/crm/clients': typeof AppOOrganizationSlugCrmClientsIndexRoute
   '/o/$organizationSlug/crm/devis': typeof AppOOrganizationSlugCrmDevisIndexRoute
@@ -931,6 +949,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/automatisation/collections/$collectionId': typeof AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute
   '/_app/o/$organizationSlug/automatisation/projets/$projectId': typeof AppOOrganizationSlugAutomatisationProjetsProjectIdRoute
   '/_app/o/$organizationSlug/automatisation/workflows/$workflowId': typeof AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRoute
+  '/_app/o/$organizationSlug/connaissances/tables/$tableId': typeof AppOOrganizationSlugConnaissancesTablesTableIdRoute
   '/_app/o/$organizationSlug/crm/avoirs/$creditNoteId': typeof AppOOrganizationSlugCrmAvoirsCreditNoteIdRoute
   '/_app/o/$organizationSlug/crm/clients/$customerId': typeof AppOOrganizationSlugCrmClientsCustomerIdRoute
   '/_app/o/$organizationSlug/crm/devis/$quoteId': typeof AppOOrganizationSlugCrmDevisQuoteIdRouteWithChildren
@@ -955,6 +974,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/automatisation/collections/': typeof AppOOrganizationSlugAutomatisationCollectionsIndexRoute
   '/_app/o/$organizationSlug/automatisation/executions/': typeof AppOOrganizationSlugAutomatisationExecutionsIndexRoute
   '/_app/o/$organizationSlug/automatisation/workflows/': typeof AppOOrganizationSlugAutomatisationWorkflowsIndexRoute
+  '/_app/o/$organizationSlug/connaissances/tables/': typeof AppOOrganizationSlugConnaissancesTablesIndexRoute
   '/_app/o/$organizationSlug/crm/avoirs/': typeof AppOOrganizationSlugCrmAvoirsIndexRoute
   '/_app/o/$organizationSlug/crm/clients/': typeof AppOOrganizationSlugCrmClientsIndexRoute
   '/_app/o/$organizationSlug/crm/devis/': typeof AppOOrganizationSlugCrmDevisIndexRoute
@@ -1030,6 +1050,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/automatisation/collections/$collectionId'
     | '/o/$organizationSlug/automatisation/projets/$projectId'
     | '/o/$organizationSlug/automatisation/workflows/$workflowId'
+    | '/o/$organizationSlug/connaissances/tables/$tableId'
     | '/o/$organizationSlug/crm/avoirs/$creditNoteId'
     | '/o/$organizationSlug/crm/clients/$customerId'
     | '/o/$organizationSlug/crm/devis/$quoteId'
@@ -1054,6 +1075,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/automatisation/collections/'
     | '/o/$organizationSlug/automatisation/executions/'
     | '/o/$organizationSlug/automatisation/workflows/'
+    | '/o/$organizationSlug/connaissances/tables/'
     | '/o/$organizationSlug/crm/avoirs/'
     | '/o/$organizationSlug/crm/clients/'
     | '/o/$organizationSlug/crm/devis/'
@@ -1125,6 +1147,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/automatisation/collections/$collectionId'
     | '/o/$organizationSlug/automatisation/projets/$projectId'
     | '/o/$organizationSlug/automatisation/workflows/$workflowId'
+    | '/o/$organizationSlug/connaissances/tables/$tableId'
     | '/o/$organizationSlug/crm/avoirs/$creditNoteId'
     | '/o/$organizationSlug/crm/clients/$customerId'
     | '/o/$organizationSlug/crm/devis/$quoteId'
@@ -1149,6 +1172,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/automatisation/collections'
     | '/o/$organizationSlug/automatisation/executions'
     | '/o/$organizationSlug/automatisation/workflows'
+    | '/o/$organizationSlug/connaissances/tables'
     | '/o/$organizationSlug/crm/avoirs'
     | '/o/$organizationSlug/crm/clients'
     | '/o/$organizationSlug/crm/devis'
@@ -1223,6 +1247,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/automatisation/collections/$collectionId'
     | '/_app/o/$organizationSlug/automatisation/projets/$projectId'
     | '/_app/o/$organizationSlug/automatisation/workflows/$workflowId'
+    | '/_app/o/$organizationSlug/connaissances/tables/$tableId'
     | '/_app/o/$organizationSlug/crm/avoirs/$creditNoteId'
     | '/_app/o/$organizationSlug/crm/clients/$customerId'
     | '/_app/o/$organizationSlug/crm/devis/$quoteId'
@@ -1247,6 +1272,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/automatisation/collections/'
     | '/_app/o/$organizationSlug/automatisation/executions/'
     | '/_app/o/$organizationSlug/automatisation/workflows/'
+    | '/_app/o/$organizationSlug/connaissances/tables/'
     | '/_app/o/$organizationSlug/crm/avoirs/'
     | '/_app/o/$organizationSlug/crm/clients/'
     | '/_app/o/$organizationSlug/crm/devis/'
@@ -1715,6 +1741,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugCrmAvoirsIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/connaissances/tables/': {
+      id: '/_app/o/$organizationSlug/connaissances/tables/'
+      path: '/connaissances/tables'
+      fullPath: '/o/$organizationSlug/connaissances/tables/'
+      preLoaderRoute: typeof AppOOrganizationSlugConnaissancesTablesIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/automatisation/workflows/': {
       id: '/_app/o/$organizationSlug/automatisation/workflows/'
       path: '/automatisation/workflows'
@@ -1883,6 +1916,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugCrmAvoirsCreditNoteIdRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/connaissances/tables/$tableId': {
+      id: '/_app/o/$organizationSlug/connaissances/tables/$tableId'
+      path: '/connaissances/tables/$tableId'
+      fullPath: '/o/$organizationSlug/connaissances/tables/$tableId'
+      preLoaderRoute: typeof AppOOrganizationSlugConnaissancesTablesTableIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/automatisation/workflows/$workflowId': {
       id: '/_app/o/$organizationSlug/automatisation/workflows/$workflowId'
       path: '/automatisation/workflows/$workflowId'
@@ -2031,6 +2071,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute: typeof AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute
   AppOOrganizationSlugAutomatisationProjetsProjectIdRoute: typeof AppOOrganizationSlugAutomatisationProjetsProjectIdRoute
   AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRoute: typeof AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRoute
+  AppOOrganizationSlugConnaissancesTablesTableIdRoute: typeof AppOOrganizationSlugConnaissancesTablesTableIdRoute
   AppOOrganizationSlugCrmAvoirsCreditNoteIdRoute: typeof AppOOrganizationSlugCrmAvoirsCreditNoteIdRoute
   AppOOrganizationSlugCrmClientsCustomerIdRoute: typeof AppOOrganizationSlugCrmClientsCustomerIdRoute
   AppOOrganizationSlugCrmDevisQuoteIdRoute: typeof AppOOrganizationSlugCrmDevisQuoteIdRouteWithChildren
@@ -2055,6 +2096,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugAutomatisationCollectionsIndexRoute: typeof AppOOrganizationSlugAutomatisationCollectionsIndexRoute
   AppOOrganizationSlugAutomatisationExecutionsIndexRoute: typeof AppOOrganizationSlugAutomatisationExecutionsIndexRoute
   AppOOrganizationSlugAutomatisationWorkflowsIndexRoute: typeof AppOOrganizationSlugAutomatisationWorkflowsIndexRoute
+  AppOOrganizationSlugConnaissancesTablesIndexRoute: typeof AppOOrganizationSlugConnaissancesTablesIndexRoute
   AppOOrganizationSlugCrmAvoirsIndexRoute: typeof AppOOrganizationSlugCrmAvoirsIndexRoute
   AppOOrganizationSlugCrmClientsIndexRoute: typeof AppOOrganizationSlugCrmClientsIndexRoute
   AppOOrganizationSlugCrmDevisIndexRoute: typeof AppOOrganizationSlugCrmDevisIndexRoute
@@ -2144,6 +2186,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugAutomatisationProjetsProjectIdRoute,
   AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRoute:
     AppOOrganizationSlugAutomatisationWorkflowsWorkflowIdRoute,
+  AppOOrganizationSlugConnaissancesTablesTableIdRoute:
+    AppOOrganizationSlugConnaissancesTablesTableIdRoute,
   AppOOrganizationSlugCrmAvoirsCreditNoteIdRoute:
     AppOOrganizationSlugCrmAvoirsCreditNoteIdRoute,
   AppOOrganizationSlugCrmClientsCustomerIdRoute:
@@ -2192,6 +2236,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugAutomatisationExecutionsIndexRoute,
   AppOOrganizationSlugAutomatisationWorkflowsIndexRoute:
     AppOOrganizationSlugAutomatisationWorkflowsIndexRoute,
+  AppOOrganizationSlugConnaissancesTablesIndexRoute:
+    AppOOrganizationSlugConnaissancesTablesIndexRoute,
   AppOOrganizationSlugCrmAvoirsIndexRoute:
     AppOOrganizationSlugCrmAvoirsIndexRoute,
   AppOOrganizationSlugCrmClientsIndexRoute:

@@ -18,6 +18,7 @@ mod planning_b;
 mod referentiel;
 mod reporting;
 mod support;
+mod tables;
 mod terrain;
 
 pub struct ActionContext<'a> {
@@ -164,6 +165,9 @@ async fn run(kind: &str, context: ActionContext<'_>) -> Option<Result<Value, Str
         return Some(result);
     }
     if let Some(result) = membres::run(kind, &context).await {
+        return Some(result);
+    }
+    if let Some(result) = tables::run(kind, &context).await {
         return Some(result);
     }
     None

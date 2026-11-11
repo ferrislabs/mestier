@@ -10,6 +10,7 @@ pub mod planning;
 pub mod quote;
 pub mod reference;
 pub mod session;
+pub mod tables;
 pub mod tools;
 
 pub use api::ApiClient;

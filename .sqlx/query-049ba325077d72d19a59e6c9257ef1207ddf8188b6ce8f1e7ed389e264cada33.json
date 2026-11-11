@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO knowledge_table_views (id, table_id, org_id, name, kind, config, position, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n            RETURNING id, table_id, org_id, name, kind, config, position, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "049ba325077d72d19a59e6c9257ef1207ddf8188b6ce8f1e7ed389e264cada33"
+}

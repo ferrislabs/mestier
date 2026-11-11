@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE knowledge_table_rows SET \"values\" = \"values\" - $3::text\n                WHERE table_id = $1 AND org_id = $2 AND \"values\" ->> $3::text = $4::text\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3db297f81beb35b9bf20a3a573866cfc381a306beed0296956da22657fa520db"
+}
