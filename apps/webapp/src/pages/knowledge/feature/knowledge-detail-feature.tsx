@@ -32,7 +32,6 @@ interface KnowledgeDetailFeatureProps {
 function draftOf(article: KnowledgeArticle): ArticleDraft {
 	return {
 		title: article.title,
-		body: article.body ?? '',
 		tags: article.tags,
 		tagInput: '',
 	}
@@ -91,9 +90,7 @@ function KnowledgeDetailLoaded({
 
 	const pendingTags = addTags(draft.tags, draft.tagInput)
 	const isDirty =
-		draft.title.trim() !== article.title ||
-		(article.kind === 'note' && draft.body.trim() !== (article.body ?? '')) ||
-		!sameTags(pendingTags, article.tags)
+		draft.title.trim() !== article.title || !sameTags(pendingTags, article.tags)
 
 	const save = async () => {
 		const problem = tagsProblem(pendingTags)
@@ -107,7 +104,6 @@ function KnowledgeDetailLoaded({
 				id: article.id,
 				patch: {
 					title: draft.title.trim(),
-					...(article.kind === 'note' ? { body: draft.body.trim() } : {}),
 					tags: pendingTags,
 				},
 			})

@@ -7,10 +7,10 @@ import {
 	FolderInput,
 	FolderPlus,
 	Loader2,
+	NotebookText,
 	Pencil,
 	Plus,
 	Search,
-	StickyNote,
 	Trash2,
 	X,
 } from 'lucide-react'
@@ -72,7 +72,8 @@ interface KnowledgePageProps {
 	onMoveSelected: () => void
 	onFiles: (files: File[]) => void
 	onClearUploads: () => void
-	onNewNote: () => void
+	onNewDocument: () => void
+	isCreatingDocument: boolean
 	onQChange: (q: string) => void
 	onTagInputChange: (tagInput: string) => void
 	onPageChange: (page: number) => void
@@ -164,7 +165,7 @@ function ArticleRow({
 	onToggle: () => void
 	onOpen: (article: KnowledgeArticle) => void
 }) {
-	const Icon = article.kind === 'note' ? StickyNote : FileText
+	const Icon = article.kind === 'document' ? NotebookText : FileText
 	return (
 		<li
 			draggable={canManage}
@@ -197,7 +198,7 @@ function ArticleRow({
 				/>
 				<span className="grid min-w-0 flex-1 gap-1">
 					<span className="truncate font-medium">{article.title}</span>
-					{article.kind === 'note' && article.body ? (
+					{article.kind === 'document' && article.body ? (
 						<span className="line-clamp-1 text-[13px] text-muted-foreground">
 							{article.body}
 						</span>
@@ -219,7 +220,7 @@ function ArticleRow({
 					<span className="block">
 						{article.file
 							? `${fileTypeLabel(article.file.mime_type)} · ${formatSize(article.file.size_bytes)}`
-							: 'Note'}
+							: 'Document'}
 					</span>
 					<span className="block">{formatDate(article.updated_at)}</span>
 				</span>
@@ -309,7 +310,8 @@ export function KnowledgePage({
 	onMoveSelected,
 	onFiles,
 	onClearUploads,
-	onNewNote,
+	onNewDocument,
+	isCreatingDocument,
 	onQChange,
 	onTagInputChange,
 	onPageChange,
@@ -325,7 +327,7 @@ export function KnowledgePage({
 		<Page>
 			<PageHeader
 				title="Drive"
-				description="Les devis, tarifs, conditions et notes de l’entreprise, rangés en dossiers. L’assistant les retrouve pour créer des devis ou des projets."
+				description="Les devis, tarifs, conditions et documents de l’entreprise, rangés en dossiers. L’assistant les retrouve pour créer des devis ou des projets."
 				actions={
 					canManage ? (
 						<div className="flex flex-wrap gap-2">
@@ -343,9 +345,17 @@ export function KnowledgePage({
 								<FolderPlus aria-hidden />
 								Nouveau dossier
 							</Button>
-							<Button type="button" onClick={onNewNote}>
-								<Plus aria-hidden />
-								Nouvelle note
+							<Button
+								type="button"
+								disabled={isCreatingDocument}
+								onClick={onNewDocument}
+							>
+								{isCreatingDocument ? (
+									<Loader2 aria-hidden className="animate-spin" />
+								) : (
+									<Plus aria-hidden />
+								)}
+								Nouveau document
 							</Button>
 						</div>
 					) : null
@@ -405,7 +415,7 @@ export function KnowledgePage({
 									id={`${baseId}-q`}
 									type="search"
 									value={q}
-									placeholder="Titre, note, texte d’un document"
+									placeholder="Titre, texte d’un document"
 									autoComplete="off"
 									className="pl-8"
 									onChange={(event) => onQChange(event.target.value)}
@@ -481,7 +491,7 @@ export function KnowledgePage({
 								hasFilters
 									? 'Modifie ou retire un filtre pour voir plus de documents.'
 									: canManage
-										? 'Dépose un document, écris une note ou crée un dossier.'
+										? 'Dépose un fichier, écris un document ou crée un dossier.'
 										: 'Personne n’a encore rien ajouté ici.'
 							}
 						/>

@@ -87,7 +87,7 @@ describe('LinkedKnowledge', () => {
 				onAttach={() => {}}
 			/>,
 		)
-		expect(screen.getByText('Aucun document ni note rattaché.')).toBeTruthy()
+		expect(screen.getByText('Aucun document ni fichier rattaché.')).toBeTruthy()
 	})
 })
 

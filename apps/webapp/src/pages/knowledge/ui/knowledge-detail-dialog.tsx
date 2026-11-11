@@ -18,7 +18,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { Textarea } from '#/components/ui/textarea'
 import type {
 	KnowledgeArticle,
 	KnowledgeLink,
@@ -34,7 +33,6 @@ import { TagsEditor } from '#/pages/knowledge/ui/tags-editor'
 
 export interface ArticleDraft {
 	title: string
-	body: string
 	tags: string[]
 	tagInput: string
 }
@@ -63,7 +61,7 @@ interface KnowledgeDetailDialogProps {
 
 const TEXT_PREVIEW_CHARS = 1200
 
-function ResourcePicker({
+export function ResourcePicker({
 	resources,
 	disabled,
 	onPick,
@@ -134,13 +132,11 @@ export function KnowledgeDetailDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
 				<DialogHeader>
-					<DialogTitle>
-						{article.kind === 'note' ? 'Note' : 'Document'}
-					</DialogTitle>
+					<DialogTitle>Fichier</DialogTitle>
 					<DialogDescription>
 						{article.file
 							? `${fileTypeLabel(article.file.mime_type)} · ${formatSize(article.file.size_bytes)}`
-							: 'Texte écrit dans l’application ou par l’assistant.'}
+							: ''}
 					</DialogDescription>
 				</DialogHeader>
 				<form
@@ -162,54 +158,39 @@ export function KnowledgeDetailDialog({
 							onChange={(event) => onDraftChange({ title: event.target.value })}
 						/>
 					</div>
-					{article.kind === 'note' ? (
-						<div className="grid gap-1">
-							<Label htmlFor={`${baseId}-body`}>Texte</Label>
-							<Textarea
-								id={`${baseId}-body`}
-								rows={8}
-								value={draft.body}
-								readOnly={!canManage}
-								onChange={(event) =>
-									onDraftChange({ body: event.target.value })
-								}
-							/>
-						</div>
-					) : (
-						<div className="grid gap-2">
-							<Button
-								type="button"
-								variant="outline"
-								className="justify-self-start"
-								disabled={isDownloading}
-								onClick={onDownload}
-							>
-								{isDownloading ? (
-									<Loader2 className="animate-spin" />
-								) : (
-									<Download aria-hidden />
-								)}
-								Télécharger le fichier
-							</Button>
-							{text !== '' ? (
-								<details className="rounded-md border px-3 py-2 text-sm">
-									<summary className="cursor-pointer text-muted-foreground">
-										Texte lu dans le document
-									</summary>
-									<p className="mt-2 whitespace-pre-wrap text-[13px]">
-										{text.length > TEXT_PREVIEW_CHARS
-											? `${text.slice(0, TEXT_PREVIEW_CHARS)}…`
-											: text}
-									</p>
-								</details>
+					<div className="grid gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							className="justify-self-start"
+							disabled={isDownloading}
+							onClick={onDownload}
+						>
+							{isDownloading ? (
+								<Loader2 className="animate-spin" />
 							) : (
-								<p className="text-[13px] text-muted-foreground">
-									Aucun texte lu dans ce fichier : il se retrouve par son titre
-									et ses étiquettes.
-								</p>
+								<Download aria-hidden />
 							)}
-						</div>
-					)}
+							Télécharger le fichier
+						</Button>
+						{text !== '' ? (
+							<details className="rounded-md border px-3 py-2 text-sm">
+								<summary className="cursor-pointer text-muted-foreground">
+									Texte lu dans le document
+								</summary>
+								<p className="mt-2 whitespace-pre-wrap text-[13px]">
+									{text.length > TEXT_PREVIEW_CHARS
+										? `${text.slice(0, TEXT_PREVIEW_CHARS)}…`
+										: text}
+								</p>
+							</details>
+						) : (
+							<p className="text-[13px] text-muted-foreground">
+								Aucun texte lu dans ce fichier : il se retrouve par son titre et
+								ses étiquettes.
+							</p>
+						)}
+					</div>
 					<TagsEditor
 						tags={draft.tags}
 						input={draft.tagInput}

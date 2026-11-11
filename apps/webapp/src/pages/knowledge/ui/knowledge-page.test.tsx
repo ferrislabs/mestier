@@ -7,7 +7,7 @@ import { KnowledgePage } from '#/pages/knowledge/ui/knowledge-page'
 
 const note: KnowledgeArticle = {
 	id: 'n1',
-	kind: 'note',
+	kind: 'document',
 	title: 'Conditions de paiement',
 	body: '30 jours fin de mois',
 	file: null,
@@ -74,7 +74,8 @@ function renderPage(
 		onMoveSelected: vi.fn(),
 		onFiles: vi.fn(),
 		onClearUploads: vi.fn(),
-		onNewNote: vi.fn(),
+		onNewDocument: vi.fn(),
+		isCreatingDocument: false,
 		onQChange: vi.fn(),
 		onTagInputChange: vi.fn(),
 		onPageChange: vi.fn(),
@@ -86,12 +87,12 @@ function renderPage(
 }
 
 describe('KnowledgePage', () => {
-	it('lists notes and files with their kind, size and tags', () => {
+	it('lists documents and files with their kind, size and tags', () => {
 		renderPage()
 		expect(screen.getByText('Conditions de paiement')).toBeTruthy()
 		expect(screen.getByText('cgv')).toBeTruthy()
 		expect(screen.getByText('PDF · 2 Ko')).toBeTruthy()
-		expect(screen.getByText('Note')).toBeTruthy()
+		expect(screen.getByText('Document')).toBeTruthy()
 	})
 
 	it('opens the article that is clicked', async () => {
@@ -100,17 +101,40 @@ describe('KnowledgePage', () => {
 		expect(props.onOpen).toHaveBeenCalledWith(file)
 	})
 
-	it('offers the drop zone and the new note button to someone who can manage', async () => {
+	it('offers the drop zone and the new document button to someone who can manage', async () => {
 		const props = renderPage()
 		expect(screen.getByText('Dépose des documents dans « Drive »')).toBeTruthy()
-		await userEvent.click(screen.getByRole('button', { name: /Nouvelle note/ }))
-		expect(props.onNewNote).toHaveBeenCalled()
+		await userEvent.click(
+			screen.getByRole('button', { name: /Nouveau document/ }),
+		)
+		expect(props.onNewDocument).toHaveBeenCalled()
+	})
+
+	it('has no new note button any more', () => {
+		renderPage()
+		expect(screen.queryByRole('button', { name: /Nouvelle note/ })).toBeNull()
+	})
+
+	it('disables the new document button while one is being created', () => {
+		renderPage({ isCreatingDocument: true })
+		const button = screen.getByRole('button', {
+			name: /Nouveau document/,
+		}) as HTMLButtonElement
+		expect(button.disabled).toBe(true)
+	})
+
+	it('opens a document that is clicked', async () => {
+		const props = renderPage()
+		await userEvent.click(screen.getByText('Conditions de paiement'))
+		expect(props.onOpen).toHaveBeenCalledWith(note)
 	})
 
 	it('is read-only without the permission to manage', () => {
 		renderPage({ canManage: false })
 		expect(screen.queryByText('Dépose des documents dans « Drive »')).toBeNull()
-		expect(screen.queryByRole('button', { name: /Nouvelle note/ })).toBeNull()
+		expect(
+			screen.queryByRole('button', { name: /Nouveau document/ }),
+		).toBeNull()
 		expect(screen.getByText('Conditions de paiement')).toBeTruthy()
 	})
 
