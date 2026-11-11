@@ -29,7 +29,8 @@ pub trait KnowledgeArticleRepository: Send {
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<KnowledgeArticle>, u64), CoreError>> + Send;
 
-    /// Replaces title, note and tags. The file and its text never change.
+    /// Replaces title and tags. The content of a document only changes through
+    /// `KnowledgeDocumentRepository`, which keeps the revision in step.
     fn update(
         &mut self,
         article: &KnowledgeArticle,

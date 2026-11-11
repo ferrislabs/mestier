@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT lock_holder, lock_expires_at\n            FROM knowledge_articles\n            WHERE id = $1 AND org_id = $2 AND kind = 'document'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lock_holder",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "lock_expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "1497a9d9930366fe99ea7336c044fc625fa5820c630bce564b506fd4979a9944"
+}

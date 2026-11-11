@@ -4,7 +4,7 @@
 use super::error::{KnowledgeError, KnowledgeOutcome};
 
 pub const MAX_TITLE_CHARS: usize = 200;
-pub const MAX_NOTE_CHARS: usize = 100_000;
+pub const MAX_MARKDOWN_CHARS: usize = 100_000;
 pub const MAX_TAGS: usize = 20;
 pub const MAX_TAG_CHARS: usize = 40;
 pub const MAX_FOLDER_NAME_CHARS: usize = 100;
@@ -47,12 +47,12 @@ pub fn normalize_folder_name(raw: &str) -> KnowledgeOutcome<String> {
     }
 }
 
-pub fn normalize_note(raw: &str) -> KnowledgeOutcome<String> {
-    let note = raw.trim();
-    match note.chars().count() {
-        0 => Err(KnowledgeError::NoteEmpty),
-        count if count > MAX_NOTE_CHARS => Err(KnowledgeError::NoteTooLong),
-        _ => Ok(note.to_owned()),
+pub fn normalize_markdown(raw: &str) -> KnowledgeOutcome<String> {
+    let markdown = raw.trim();
+    match markdown.chars().count() {
+        0 => Err(KnowledgeError::DocumentEmpty),
+        count if count > MAX_MARKDOWN_CHARS => Err(KnowledgeError::DocumentTooLong),
+        _ => Ok(markdown.to_owned()),
     }
 }
 
@@ -215,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn title_note_and_tags_are_trimmed_and_bounded() {
+    fn title_markdown_and_tags_are_trimmed_and_bounded() {
         assert_eq!(
             normalize_title("  Devis Dupont "),
             Ok("Devis Dupont".to_owned())
@@ -225,7 +225,10 @@ mod tests {
             normalize_title(&"a".repeat(MAX_TITLE_CHARS + 1)),
             Err(KnowledgeError::TitleTooLong)
         );
-        assert_eq!(normalize_note(" \n "), Err(KnowledgeError::NoteEmpty));
+        assert_eq!(
+            normalize_markdown(" \n "),
+            Err(KnowledgeError::DocumentEmpty)
+        );
         assert_eq!(
             normalize_tags(&[" Devis ", "devis", "TARIF"]),
             Ok(vec!["devis".to_owned(), "tarif".to_owned()])

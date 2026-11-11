@@ -12,7 +12,8 @@ pub struct UpdateKnowledgeArticleRequest {
     /// Absent leaves it unchanged.
     #[serde(default)]
     pub title: Option<String>,
-    /// The text of a note. Refused on a file. Absent leaves it unchanged.
+    /// The document as Markdown, converted to blocks. Refused on a file, and
+    /// with 409 while someone else holds the edit lock. Absent leaves it unchanged.
     #[serde(default)]
     pub body: Option<String>,
     /// Replaces the whole list. Absent leaves it unchanged.
@@ -34,8 +35,9 @@ pub struct UpdateKnowledgeArticleRequest {
         (status = 200, description = "The article, updated", body = inline(DataEnvelope<KnowledgeArticleResponse>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
-        (status = 404, description = "Article not found, or held by another organization"),
-        (status = 422, description = "Empty or too long title, note or tag, or a text sent for a file"),
+        (status = 404, description = "Article, or an element mentioned in the Markdown, not found or held by another organization"),
+        (status = 409, description = "Someone else is editing the document"),
+        (status = 422, description = "Empty or too long title, text or tag, invalid blocks, or a text sent for a file"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -57,6 +59,7 @@ pub async fn handler(
         .update_knowledge_article(UpdateKnowledgeCommand {
             actor,
             organization_id,
+            user_id,
             id: article_id,
             title: payload.title,
             body: payload.body,

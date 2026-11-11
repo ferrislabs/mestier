@@ -5,9 +5,13 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use serde_json::Value;
+
 use crate::OrganizationId;
+use documents::EditLock;
 
 pub mod commands;
+pub mod documents;
 pub mod error;
 pub mod folders;
 pub mod ports;
@@ -78,14 +82,14 @@ pub enum KnowledgeFolderScope {
 #[serde(rename_all = "snake_case")]
 pub enum KnowledgeKind {
     File,
-    Note,
+    Document,
 }
 
 impl KnowledgeKind {
     pub fn as_str(self) -> &'static str {
         match self {
             KnowledgeKind::File => "file",
-            KnowledgeKind::Note => "note",
+            KnowledgeKind::Document => "document",
         }
     }
 }
@@ -96,7 +100,7 @@ impl FromStr for KnowledgeKind {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "file" => Ok(KnowledgeKind::File),
-            "note" => Ok(KnowledgeKind::Note),
+            "document" => Ok(KnowledgeKind::Document),
             _ => Err(()),
         }
     }
@@ -118,10 +122,15 @@ pub struct KnowledgeArticle {
     pub folder_id: Option<KnowledgeFolderId>,
     pub kind: KnowledgeKind,
     pub title: String,
-    /// The text of a note. `None` for a file.
+    /// The Markdown of a document. `None` for a file.
     pub body: Option<String>,
-    /// `None` for a note.
+    /// `None` for a document.
     pub file: Option<KnowledgeFile>,
+    /// The blocks of a document. `None` for a file, and left out of list results.
+    pub content: Option<Value>,
+    pub revision: i32,
+    /// The live lock of a document, when somebody holds it.
+    pub lock: Option<EditLock>,
     /// Searchable text read from the file. Left out of list results.
     pub extracted_text: Option<String>,
     pub tags: Vec<String>,
@@ -181,7 +190,7 @@ pub struct KnowledgeLink {
 
 #[derive(Debug, Clone, Default)]
 pub struct KnowledgeFilter {
-    /// Full-text query over title, tags, note and extracted text.
+    /// Full-text query over title, tags, document and extracted text.
     pub query: Option<String>,
     /// Every tag listed must be on the article.
     pub tags: Vec<String>,

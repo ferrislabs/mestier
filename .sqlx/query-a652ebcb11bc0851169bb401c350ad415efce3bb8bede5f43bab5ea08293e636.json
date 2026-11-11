@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at\n            FROM knowledge_articles\n            WHERE id = $1 AND org_id = $2\n            ",
+  "query": "\n            SELECT id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at, content, revision, lock_holder, lock_expires_at\n            FROM knowledge_articles\n            WHERE id = $1 AND org_id = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -67,6 +67,26 @@
         "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "revision",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "lock_holder",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "lock_expires_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -88,8 +108,12 @@
       true,
       false,
       false,
-      false
+      false,
+      true,
+      false,
+      true,
+      true
     ]
   },
-  "hash": "d1997fc3d07ffb5bce2300036a3f5e4ce873aa53e9c5a6a7622ad4e11b9e73f4"
+  "hash": "a652ebcb11bc0851169bb401c350ad415efce3bb8bede5f43bab5ea08293e636"
 }

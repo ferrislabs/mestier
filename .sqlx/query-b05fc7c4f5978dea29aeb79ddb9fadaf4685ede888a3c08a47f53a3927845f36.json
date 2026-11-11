@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE knowledge_articles\n            SET lock_holder = NULL, lock_expires_at = NULL\n            WHERE id = $1 AND org_id = $2 AND kind = 'document' AND lock_holder = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b05fc7c4f5978dea29aeb79ddb9fadaf4685ede888a3c08a47f53a3927845f36"
+}

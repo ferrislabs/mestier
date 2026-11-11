@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT EXISTS(\n                        SELECT 1 FROM knowledge_table_views\n                        WHERE id = $1 AND table_id = $2 AND org_id = $3\n                    ) AS \"found!\"\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "found!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1eadf868b4b2c486cd90052d6d395f3e849af612564574506a10937511eb71de"
+}

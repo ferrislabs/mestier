@@ -19,6 +19,7 @@ pub struct App {
     pub pool: PgPool,
     pub organization_id: Uuid,
     pub manager: Caller,
+    pub colleague: Caller,
     pub viewer: Caller,
     pub stranger: Caller,
     pub intruder: Caller,
@@ -39,6 +40,7 @@ pub async fn start() -> App {
 
     let (organization_id, owner_id) = seed_organization(&pool, "Tables Org").await;
     let manager = seed_member(&pool, organization_id, Some(Permissions::ALL.0), true).await;
+    let colleague = seed_member(&pool, organization_id, Some(Permissions::ALL.0), true).await;
     let viewer = seed_member(
         &pool,
         organization_id,
@@ -82,6 +84,7 @@ pub async fn start() -> App {
         owner_id,
         intruder_owner_id,
         manager.user_id,
+        colleague.user_id,
         viewer.user_id,
         stranger.user_id,
         intruder.user_id,
@@ -91,6 +94,7 @@ pub async fn start() -> App {
         pool,
         organization_id,
         manager,
+        colleague,
         viewer,
         stranger,
         intruder,
@@ -227,8 +231,33 @@ impl App {
         suffix: &str,
         payload: Option<Value>,
     ) -> Reply {
+        let url = self.url(organization_id, suffix);
+        Self::send(method, token, url, payload).await
+    }
+
+    pub async fn knowledge(
+        &self,
+        method: reqwest::Method,
+        token: &str,
+        organization_id: Uuid,
+        suffix: &str,
+        payload: Option<Value>,
+    ) -> Reply {
+        let url = format!(
+            "{}/api/v1/organizations/{organization_id}/knowledge{suffix}",
+            self.base_url
+        );
+        Self::send(method, token, url, payload).await
+    }
+
+    async fn send(
+        method: reqwest::Method,
+        token: &str,
+        url: String,
+        payload: Option<Value>,
+    ) -> Reply {
         let request = reqwest::Client::new()
-            .request(method, self.url(organization_id, suffix))
+            .request(method, url)
             .bearer_auth(token);
         let request = match payload {
             Some(payload) => request.json(&payload),
@@ -295,6 +324,7 @@ impl App {
                 "DELETE FROM automation.event WHERE org_id = $1",
                 "DELETE FROM knowledge_tables WHERE org_id = $1",
                 "DELETE FROM knowledge_articles WHERE org_id = $1",
+                "DELETE FROM knowledge_folders WHERE org_id = $1",
                 "DELETE FROM customers WHERE org_id = $1",
                 "DELETE FROM member_roles WHERE member_id IN (SELECT id FROM organization_members WHERE organization_id = $1)",
                 "DELETE FROM roles WHERE organization_id = $1",

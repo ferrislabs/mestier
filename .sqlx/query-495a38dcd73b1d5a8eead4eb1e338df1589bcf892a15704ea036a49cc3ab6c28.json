@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT content AS \"content!\", revision, lock_holder, lock_expires_at\n            FROM knowledge_articles\n            WHERE id = $1 AND org_id = $2 AND kind = 'document'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "revision",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "lock_holder",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "lock_expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "495a38dcd73b1d5a8eead4eb1e338df1589bcf892a15704ea036a49cc3ab6c28"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE knowledge_articles\n            SET title = $3, body = $4, tags = $5, updated_at = $6\n            WHERE id = $1 AND org_id = $2\n            RETURNING id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at\n            ",
+  "query": "\n            UPDATE knowledge_articles\n            SET title = $3, tags = $4, updated_at = $5\n            WHERE id = $1 AND org_id = $2\n            RETURNING id, org_id, folder_id, kind, title, body, file_key, mime_type, size_bytes, extracted_text, tags, created_at, updated_at, content, revision, lock_holder, lock_expires_at\n            ",
   "describe": {
     "columns": [
       {
@@ -67,13 +67,32 @@
         "ordinal": 12,
         "name": "updated_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "revision",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "lock_holder",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "lock_expires_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
         "Uuid",
-        "Text",
         "Text",
         "TextArray",
         "Timestamptz"
@@ -92,8 +111,12 @@
       true,
       false,
       false,
-      false
+      false,
+      true,
+      false,
+      true,
+      true
     ]
   },
-  "hash": "5b12a2ed06eec7da6eea4b6602ac66f5e6116db8d26eb01126b604e319df8be6"
+  "hash": "39cec567fa6d6535d888892de32f2bb348203edb89f8044f3037c790babfd270"
 }

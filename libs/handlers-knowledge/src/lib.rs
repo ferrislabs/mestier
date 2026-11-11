@@ -1,4 +1,4 @@
-//! HTTP adapters for the knowledge base: files and notes an organization
+//! HTTP adapters for the knowledge base: files and documents an organization
 //! keeps, searched by text and tags, and linked to projects, customers and
 //! quotes.
 
@@ -18,6 +18,7 @@ use uuid::Uuid;
 
 pub mod create_note;
 pub mod delete;
+pub mod documents;
 pub mod download;
 pub mod folders;
 pub mod get_one;
@@ -33,6 +34,10 @@ pub const TAG: &str = "knowledge";
 
 pub fn router(state: &AppState) -> Router<AppState> {
     let upload_limit = mestier_core::MAX_FILE_BYTES.saturating_add(1);
+    let content_limit = mestier_core::MAX_DOCUMENT_JSON_BYTES + 64 * 1024;
+    let content = Router::new()
+        .typed_put(documents::save_content)
+        .layer(DefaultBodyLimit::max(content_limit));
 
     Router::new()
         .route(
@@ -54,6 +59,10 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .typed_patch(folders::update)
         .typed_delete(folders::delete)
         .typed_post(move_articles::handler)
+        .typed_post(documents::create)
+        .typed_post(documents::acquire_lock)
+        .typed_delete(documents::release_lock)
+        .merge(content)
         .merge(tables::routes())
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
@@ -74,6 +83,26 @@ pub struct NotesPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}")]
 pub struct ArticlePath {
+    pub organization_id: OrganizationId,
+    pub article_id: KnowledgeArticleId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/knowledge/articles/documents")]
+pub struct DocumentsPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/lock")]
+pub struct ArticleLockPath {
+    pub organization_id: OrganizationId,
+    pub article_id: KnowledgeArticleId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/content")]
+pub struct ArticleContentPath {
     pub organization_id: OrganizationId,
     pub article_id: KnowledgeArticleId,
 }

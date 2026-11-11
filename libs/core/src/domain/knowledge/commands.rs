@@ -1,3 +1,5 @@
+use common::UserId;
+
 use crate::{
     KnowledgeArticleId, KnowledgeFolder, KnowledgeFolderId, KnowledgeFolderScope,
     KnowledgeResource, OrganizationId,
@@ -8,9 +10,10 @@ pub struct CreateKnowledgeNoteCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,
     pub title: String,
+    /// Markdown, converted to blocks.
     pub body: String,
     pub tags: Vec<String>,
-    /// `None` puts the note at the root.
+    /// `None` puts the document at the root.
     pub folder_id: Option<KnowledgeFolderId>,
 }
 
@@ -51,6 +54,7 @@ pub struct GetKnowledgeCommand {
 pub struct UpdateKnowledgeCommand {
     pub actor: authz::Subject,
     pub organization_id: OrganizationId,
+    pub user_id: UserId,
     pub id: KnowledgeArticleId,
     pub title: Option<String>,
     pub body: Option<String>,
