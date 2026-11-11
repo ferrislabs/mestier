@@ -13,3 +13,6 @@ Column: typed field of a table, shown as "colonne". Rejected: "field", kept for 
 Primary column: first column of a table, always text, used as the title of a row.
 Row: one record of a table, shown as "ligne". Rejected: "record", "enregistrement".
 View: saved way to show a table (grid or kanban) with its filters, sorts and hidden columns, shown as "vue".
+Document: knowledge article written block by block in the webapp, shown as "document". Replaces the plain-text note. Rejected: "page", Notion's word, confused with a page of the app.
+Block: one unit of a document's content (paragraph, heading, list item, callout, image, table view…), shown as "bloc".
+Edit lock: 90-second lease that lets one person at a time change a document's content, shown as "en cours de modification par…". Rejected: "checkout".
