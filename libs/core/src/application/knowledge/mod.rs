@@ -1,3 +1,5 @@
+mod tables;
+
 use authz::{Resource, Subject};
 use common::CoreError;
 use mestier_macros::transactional;

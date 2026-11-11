@@ -31,6 +31,8 @@ pub mod domain {
     pub struct Ledger;
     pub struct KnowledgeArticle;
     pub struct KnowledgeFolder;
+    pub struct KnowledgeTable;
+    pub struct KnowledgeTableRow;
     pub struct LibraryPhoto;
     pub struct Receipt;
     pub struct MaintenanceContract;

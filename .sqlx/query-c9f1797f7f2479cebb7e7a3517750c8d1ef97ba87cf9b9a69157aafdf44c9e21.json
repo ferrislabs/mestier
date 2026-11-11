@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE knowledge_table_columns c\n            SET position = (o.rank - 1)::int\n            FROM UNNEST($3::uuid[]) WITH ORDINALITY AS o(id, rank)\n            WHERE c.id = o.id AND c.table_id = $1 AND c.org_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c9f1797f7f2479cebb7e7a3517750c8d1ef97ba87cf9b9a69157aafdf44c9e21"
+}

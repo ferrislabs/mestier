@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE knowledge_table_rows r\n            SET \"values\" = jsonb_set(r.\"values\", ARRAY[$3::text], u.value)\n            FROM jsonb_each($4::jsonb) AS u(id, value)\n            WHERE r.id = u.id::uuid AND r.table_id = $1 AND r.org_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ce33d9b0185258408b48b6d7f4b423188ac7054082f1e2184f9f1adea8f318a"
+}

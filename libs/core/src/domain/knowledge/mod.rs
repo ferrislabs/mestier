@@ -12,6 +12,7 @@ pub mod error;
 pub mod folders;
 pub mod ports;
 pub mod service;
+pub mod tables;
 pub mod text;
 
 pub use commands::*;

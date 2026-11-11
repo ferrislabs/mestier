@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM knowledge_table_rows WHERE table_id = $1 AND org_id = $2 AND id = ANY($3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6479b30444cd5c2c337d2129b2c73c0b312741365bba6771315a9e55fa960180"
+}

@@ -149,6 +149,9 @@ pub use domain::{
     invitation::ports::MockInvitationRepository,
     invoice::ports::{MockDocumentFormat, MockInvoiceRepository},
     knowledge::ports::{MockKnowledgeArticleRepository, MockKnowledgeFolderRepository},
+    knowledge::tables::ports::{
+        MockCellReferenceCheck, MockKnowledgeTableRepository, MockKnowledgeTableRowRepository,
+    },
     leave_account::ports::MockLeaveAccountRepository,
     leave_adjustment::ports::MockLeaveAdjustmentRepository,
     ledger::ports::{MockLedgerRepository, MockReceiptRepository},
@@ -258,6 +261,25 @@ pub use domain::{
         UpdateLibraryPhotoCommand, UploadLibraryPhotoCommand,
     },
     photo_library::normalize::{NormalizedImage, normalize_image},
+};
+
+pub use domain::knowledge::tables::rows::KnowledgeTableRowService;
+pub use domain::knowledge::tables::service::KnowledgeTableService;
+pub use domain::knowledge::tables::{
+    CellError, CellLabel, CellReference, CellValue, ColumnConfig, ColumnKind, ColumnType,
+    CreateKnowledgeTableCommand, CreateTableColumnCommand, CreateTableRowCommand,
+    CreateTableViewCommand, Decimals, DeleteKnowledgeTableCommand, DeleteTableColumnCommand,
+    DeleteTableRowsCommand, DeleteTableViewCommand, FilterOperator, GetKnowledgeTableCommand,
+    GetTableRowCommand, KnowledgeTable, KnowledgeTableId, ListKnowledgeTablesCommand,
+    ListTableRowsCommand, MAX_COLUMNS as MAX_TABLE_COLUMNS,
+    MAX_DELETED_ROWS as MAX_DELETED_TABLE_ROWS, MAX_ROW_PAGE as MAX_TABLE_ROW_PAGE,
+    MAX_ROWS as MAX_TABLE_ROWS, ReorderTableColumnsCommand, ResolvedRow, RowBatch, RowFilter,
+    RowPage, RowPatch, RowSelection, RowSort, RowValues, SelectColor,
+    SelectOption as TableSelectOption, SelectOptionId, SelectOptionInput, SelectOptions,
+    SortDirection, TableColumn, TableColumnId, TableDescription, TableError, TableItemName,
+    TableOutcome, TableRow, TableRowId, TableSchema, TableView, TableViewId,
+    UpdateKnowledgeTableCommand, UpdateTableColumnCommand, UpdateTableRowCommand,
+    UpdateTableViewCommand, ViewConfig, ViewKind,
 };
 
 pub use domain::{

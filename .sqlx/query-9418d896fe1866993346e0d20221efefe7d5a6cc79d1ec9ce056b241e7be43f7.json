@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO knowledge_table_rows (id, table_id, org_id, \"values\", created_by, updated_by, created_at, updated_at)\n            SELECT u.id, $1, $2, u.values, $3, $3, $4, $4\n            FROM UNNEST($5::uuid[], $6::jsonb[]) AS u(id, values)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "UuidArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9418d896fe1866993346e0d20221efefe7d5a6cc79d1ec9ce056b241e7be43f7"
+}
