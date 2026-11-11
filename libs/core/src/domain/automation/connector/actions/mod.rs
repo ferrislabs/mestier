@@ -11,6 +11,7 @@ mod planning_b;
 mod referentiel;
 mod reporting;
 mod support;
+mod tables;
 mod terrain;
 
 pub(super) const TABLES: &[&[ActionSpec]] = &[
@@ -26,4 +27,5 @@ pub(super) const TABLES: &[&[ActionSpec]] = &[
     planning_b::SPECS,
     referentiel::SPECS,
     membres::SPECS,
+    tables::SPECS,
 ];

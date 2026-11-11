@@ -7,10 +7,11 @@ use events::EventEmitter;
 use crate::{
     OrganizationId,
     domain::knowledge::tables::{
-        CellLabel, CreateTableRowCommand, KnowledgeTableId, ListTableRowsCommand, MAX_DELETED_ROWS,
-        MAX_ROWS, ResolvedRow, RowBatch, RowPage, RowSelection, RowUpdate, TableColumn, TableError,
-        TableOutcome, TableRow, TableRowId, UpdateTableRowCommand,
+        CellLabel, CreateTableRowCommand, KnowledgeTable, KnowledgeTableId, ListTableRowsCommand,
+        MAX_DELETED_ROWS, MAX_ROWS, ResolvedRow, RowBatch, RowPage, RowSelection, RowUpdate,
+        TableColumn, TableError, TableOutcome, TableRow, TableRowId, UpdateTableRowCommand,
         error::{Stop, settle},
+        events::{TableRowCreated, TableRowUpdated, changed_columns},
         filter::RowQuery,
         ports::{CellReferenceCheck, KnowledgeTableRepository, KnowledgeTableRowRepository},
         value::{CellError, CellValue, RowPatch, RowValues},
@@ -25,7 +26,6 @@ where
 {
     tables: T,
     rows: R,
-    #[expect(dead_code)]
     emitter: E,
 }
 
@@ -48,11 +48,19 @@ where
         organization_id: OrganizationId,
         table_id: KnowledgeTableId,
     ) -> Result<Vec<TableColumn>, CoreError> {
+        self.table(organization_id, table_id).await?;
+        self.tables.columns(organization_id, table_id).await
+    }
+
+    async fn table(
+        &mut self,
+        organization_id: OrganizationId,
+        table_id: KnowledgeTableId,
+    ) -> Result<KnowledgeTable, CoreError> {
         self.tables
             .find_table(organization_id, table_id)
             .await?
-            .ok_or(CoreError::NotFound)?;
-        self.tables.columns(organization_id, table_id).await
+            .ok_or(CoreError::NotFound)
     }
 
     async fn lock(
@@ -128,8 +136,21 @@ where
                 updated_at: now,
             })
             .await?;
-        let mut resolved = self.resolve(organization_id, &columns, vec![row]).await?;
-        resolved.pop().ok_or(Stop::Failed(CoreError::NotFound))
+        let table = self.table(organization_id, command.table_id).await?;
+        let resolved = self
+            .resolve(organization_id, &columns, vec![row])
+            .await?
+            .pop()
+            .ok_or(Stop::Failed(CoreError::NotFound))?;
+        self.emitter.emit(
+            organization_id,
+            &TableRowCreated {
+                table: &table,
+                columns: &columns,
+                row: &resolved,
+            },
+        )?;
+        Ok(resolved)
     }
 
     pub async fn update_row<C>(
@@ -154,8 +175,13 @@ where
         C: CellReferenceCheck,
     {
         let organization_id = command.organization_id;
-        let columns = self.columns(organization_id, command.table_id).await?;
-        self.rows
+        let table = self.table(organization_id, command.table_id).await?;
+        let columns = self
+            .tables
+            .columns(organization_id, command.table_id)
+            .await?;
+        let before = self
+            .rows
             .find(organization_id, command.table_id, command.id)
             .await?
             .ok_or(CoreError::NotFound)?;
@@ -174,8 +200,24 @@ where
             })
             .await?
             .ok_or(CoreError::NotFound)?;
-        let mut resolved = self.resolve(organization_id, &columns, vec![row]).await?;
-        resolved.pop().ok_or(Stop::Failed(CoreError::NotFound))
+        let resolved = self
+            .resolve(organization_id, &columns, vec![row])
+            .await?
+            .pop()
+            .ok_or(Stop::Failed(CoreError::NotFound))?;
+        let changed = changed_columns(&columns, &before.values, &resolved.row.values);
+        if !changed.is_empty() {
+            self.emitter.emit(
+                organization_id,
+                &TableRowUpdated {
+                    table: &table,
+                    columns: &columns,
+                    row: &resolved,
+                    changed,
+                },
+            )?;
+        }
+        Ok(resolved)
     }
 
     pub async fn insert_rows<C>(
@@ -346,7 +388,7 @@ where
 #[cfg(test)]
 mod tests {
     use events::testing::RecordingEmitter;
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::*;
     use crate::{
@@ -497,6 +539,219 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(outcome, Err(TableError::TooManyRows));
+        assert!(emitter.recorded().is_empty());
+    }
+
+    fn named(table_id: KnowledgeTableId, name: &str, column_type: ColumnType) -> TableColumn {
+        TableColumn {
+            name: TableItemName::try_from(name).unwrap(),
+            is_primary: name == "Nom",
+            ..column(table_id, column_type)
+        }
+    }
+
+    fn stored(table_id: KnowledgeTableId, values: serde_json::Map<String, Value>) -> TableRow {
+        TableRow {
+            id: TableRowId(generate_uuid_v7()),
+            table_id,
+            organization_id: org(),
+            values,
+            created_by: None,
+            updated_by: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    fn rows_holding(row: TableRow) -> MockKnowledgeTableRowRepository {
+        let mut rows = MockKnowledgeTableRowRepository::new();
+        let found = row.clone();
+        rows.expect_find().returning(move |_, _, _| {
+            let found = found.clone();
+            Box::pin(async move { Ok(Some(found)) })
+        });
+        rows.expect_patch().returning(move |update| {
+            let mut patched = row.clone();
+            patched.values.extend(update.set.clone());
+            for key in &update.cleared {
+                patched.values.remove(key);
+            }
+            Box::pin(async move { Ok(Some(patched)) })
+        });
+        rows
+    }
+
+    fn update(
+        table_id: KnowledgeTableId,
+        id: TableRowId,
+        values: Vec<(TableColumnId, Value)>,
+    ) -> UpdateTableRowCommand {
+        UpdateTableRowCommand {
+            actor: actor(),
+            organization_id: org(),
+            table_id,
+            id,
+            user_id: None,
+            values: values.into_iter().collect(),
+        }
+    }
+
+    #[tokio::test]
+    async fn creating_a_row_emits_one_created_event_naming_its_fields() {
+        let table_id = KnowledgeTableId(generate_uuid_v7());
+        let name = named(table_id, "Nom", ColumnType::Text);
+        let done = named(table_id, "Traité", ColumnType::Checkbox);
+        let mut rows = MockKnowledgeTableRowRepository::new();
+        rows.expect_count()
+            .returning(|_, _| Box::pin(async { Ok(0) }));
+        rows.expect_insert().times(1).returning(|row| {
+            let row = row.clone();
+            Box::pin(async move { Ok(row) })
+        });
+        let emitter = RecordingEmitter::default();
+        let mut service = KnowledgeTableRowService::new(
+            tables_with(vec![name.clone(), done.clone()]),
+            rows,
+            &emitter,
+        );
+
+        let created = service
+            .create_row(
+                CreateTableRowCommand {
+                    actor: actor(),
+                    organization_id: org(),
+                    table_id,
+                    user_id: None,
+                    values: BTreeMap::from([(name.id, json!("Villa")), (done.id, json!(true))]),
+                },
+                &mut MockCellReferenceCheck::new(),
+                Utc::now(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+        let event = emitter.only("table_row.created");
+        assert_eq!(emitter.recorded().len(), 1);
+        assert_eq!(event.version, 1);
+        assert_eq!(event.payload["table"]["name"], json!("Chantiers"));
+        assert_eq!(event.payload["row"]["id"], json!(created.row.id.0));
+        assert_eq!(event.payload["row"]["title"], json!("Villa"));
+        assert_eq!(
+            event.payload["row"]["fields"],
+            json!({"Nom": "Villa", "Traité": "Oui"})
+        );
+    }
+
+    #[tokio::test]
+    async fn updating_two_cells_emits_one_updated_event_naming_both() {
+        let table_id = KnowledgeTableId(generate_uuid_v7());
+        let name = named(table_id, "Nom", ColumnType::Text);
+        let done = named(table_id, "Traité", ColumnType::Checkbox);
+        let note = named(table_id, "Note", ColumnType::LongText);
+        let row = stored(
+            table_id,
+            serde_json::Map::from_iter([
+                (name.key(), json!("Villa")),
+                (note.key(), json!("à revoir")),
+            ]),
+        );
+        let emitter = RecordingEmitter::default();
+        let mut service = KnowledgeTableRowService::new(
+            tables_with(vec![name.clone(), done.clone(), note.clone()]),
+            rows_holding(row.clone()),
+            &emitter,
+        );
+
+        service
+            .update_row(
+                update(
+                    table_id,
+                    row.id,
+                    vec![
+                        (name.id, json!("Villa")),
+                        (done.id, json!(true)),
+                        (note.id, Value::Null),
+                    ],
+                ),
+                &mut MockCellReferenceCheck::new(),
+                Utc::now(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+        let event = emitter.only("table_row.updated");
+        assert_eq!(emitter.recorded().len(), 1);
+        assert_eq!(event.payload["changed"], json!(["Traité", "Note"]));
+        assert_eq!(
+            event.payload["row"]["fields"],
+            json!({"Nom": "Villa", "Traité": "Oui", "Note": null})
+        );
+    }
+
+    #[tokio::test]
+    async fn an_update_that_changes_nothing_emits_nothing() {
+        let table_id = KnowledgeTableId(generate_uuid_v7());
+        let name = named(table_id, "Nom", ColumnType::Text);
+        let done = named(table_id, "Traité", ColumnType::Checkbox);
+        let row = stored(
+            table_id,
+            serde_json::Map::from_iter([(name.key(), json!("Villa"))]),
+        );
+        let emitter = RecordingEmitter::default();
+        let mut service = KnowledgeTableRowService::new(
+            tables_with(vec![name.clone(), done.clone()]),
+            rows_holding(row.clone()),
+            &emitter,
+        );
+
+        let outcome = service
+            .update_row(
+                update(
+                    table_id,
+                    row.id,
+                    vec![(name.id, json!(" Villa ")), (done.id, Value::Null)],
+                ),
+                &mut MockCellReferenceCheck::new(),
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+
+        assert!(outcome.is_ok());
+        assert!(emitter.recorded().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_bulk_insert_emits_nothing() {
+        let table_id = KnowledgeTableId(generate_uuid_v7());
+        let mut rows = MockKnowledgeTableRowRepository::new();
+        rows.expect_count()
+            .returning(|_, _| Box::pin(async { Ok(0) }));
+        rows.expect_insert_many().times(1).returning(|batch| {
+            let added = batch.rows.len() as u64;
+            Box::pin(async move { Ok(added) })
+        });
+        let emitter = RecordingEmitter::default();
+        let mut service = KnowledgeTableRowService::new(tables_with(Vec::new()), rows, &emitter);
+        let batch = RowBatch {
+            organization_id: org(),
+            table_id,
+            created_by: None,
+            created_at: Utc::now(),
+            rows: vec![
+                (TableRowId(generate_uuid_v7()), RowValues::default()),
+                (TableRowId(generate_uuid_v7()), RowValues::default()),
+            ],
+        };
+
+        let outcome = service
+            .insert_rows(&batch, &mut MockCellReferenceCheck::new())
+            .await
+            .unwrap();
+
+        assert_eq!(outcome, Ok(2));
         assert!(emitter.recorded().is_empty());
     }
 

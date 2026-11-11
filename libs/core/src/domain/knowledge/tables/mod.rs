@@ -12,6 +12,7 @@ use crate::OrganizationId;
 pub mod column;
 pub mod commands;
 pub mod error;
+pub mod events;
 pub mod filter;
 pub mod name;
 pub mod ports;
