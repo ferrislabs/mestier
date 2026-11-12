@@ -43,12 +43,14 @@ export function DoeLayoutFeature({
 					? style.primary.trim().toLowerCase()
 					: '#0f3d36'
 			}
-			onApply={(decorations) => {
+			onApply={(decorations, cover_layout) => {
 				onClose()
 				save
 					.mutateAsync({
 						path: { organization_id: organizationId, project_id: projectId },
-						body: { style: normalizeStyle({ ...style, decorations }) },
+						body: {
+							style: normalizeStyle({ ...style, decorations, cover_layout }),
+						},
 					})
 					.then(onSaved)
 					.catch(() => onFailed('La mise en page n’a pas pu être enregistrée.'))
