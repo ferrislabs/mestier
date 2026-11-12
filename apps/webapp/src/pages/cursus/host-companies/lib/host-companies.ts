@@ -3,7 +3,8 @@ import type { Schemas } from '#/api/api.client'
 import { emptyToNull } from '#/pages/cursus/participants/lib/forms'
 
 export const hostCompaniesSearchSchema = z.object({
-	archived: z.literal(true).optional().catch(undefined),
+	archived: z.enum(['archived', 'all']).optional().catch(undefined),
+	q: z.string().optional().catch(undefined),
 })
 
 export type HostCompaniesSearch = z.infer<typeof hostCompaniesSearchSchema>

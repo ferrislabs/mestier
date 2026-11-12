@@ -10,16 +10,22 @@ export const Route = createFileRoute(
 })
 
 function HostCompaniesPage() {
-	const { archived } = Route.useSearch()
+	const { archived, q } = Route.useSearch()
 	const navigate = Route.useNavigate()
 
 	return (
 		<HostCompaniesListFeature
-			includeArchived={archived === true}
-			onIncludeArchivedChange={(includeArchived) =>
+			archived={archived ?? 'active'}
+			q={q}
+			onFiltersChange={(filters) =>
 				void navigate({
 					replace: true,
-					search: () => (includeArchived ? { archived: true } : {}),
+					search: () => ({
+						...(filters.archived === 'active'
+							? {}
+							: { archived: filters.archived }),
+						...(filters.q ? { q: filters.q } : {}),
+					}),
 				})
 			}
 			onOpenHostCompany={(hostCompanyId) =>

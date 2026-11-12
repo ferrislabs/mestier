@@ -28,14 +28,18 @@ function renderList(overrides: Partial<HostCompaniesListUIProps> = {}) {
 					archived: true,
 				},
 			]}
+			total={2}
+			search=""
 			isLoading={false}
 			error={null}
-			includeArchived
+			archived="all"
 			canManage
 			createOpen={false}
 			isCreating={false}
 			createError={null}
-			onIncludeArchivedChange={vi.fn()}
+			onSearchChange={vi.fn()}
+			onArchivedChange={vi.fn()}
+			onResetFilters={vi.fn()}
 			onCreateOpenChange={vi.fn()}
 			onCreate={vi.fn()}
 			onOpen={vi.fn()}
@@ -69,6 +73,21 @@ describe('HostCompaniesListUI', () => {
 
 		expect(
 			screen.getByRole('button', { name: 'Nouvelle entreprise' }),
+		).toBeTruthy()
+	})
+
+	it('counts every company when archived ones are included', () => {
+		renderList()
+
+		expect(screen.getByText('2 entreprises')).toBeTruthy()
+	})
+
+	it('offers to reset the filters when nothing matches', () => {
+		renderList({ rows: [], total: 0, search: 'zzz' })
+
+		expect(screen.getByText('Aucune entreprise ne correspond.')).toBeTruthy()
+		expect(
+			screen.getByRole('button', { name: 'Réinitialiser les filtres' }),
 		).toBeTruthy()
 	})
 })
