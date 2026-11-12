@@ -66,6 +66,7 @@ pub async fn start() -> App {
     let router = handlers_planning::router(&state)
         .merge(handlers_knowledge::router(&state))
         .merge(handlers_platform::router(&state))
+        .merge(handlers_organization::router(&state))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await

@@ -226,10 +226,10 @@ async fn only_a_platform_admin_reaches_the_back_office() {
     let access = |token: String| {
         let app = &app;
         async move {
-            let response = call(reqwest::Method::GET, app, &token, "/news/access", None).await;
+            let response = call(reqwest::Method::GET, app, &token, "/admin/access", None).await;
             assert_eq!(response.status(), 200);
             let json: Value = response.json().await.unwrap();
-            json["data"]["can_manage"].as_bool().unwrap()
+            json["data"]["can_access"].as_bool().unwrap()
         }
     };
     assert!(!access(reader.token.clone()).await);

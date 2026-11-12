@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT u.id, u.display_name, u.email, u.username, u.created_at,\n                   COALESCE((\n                       SELECT jsonb_agg(jsonb_build_object('name', o.name, 'slug', o.slug)\n                                        ORDER BY o.name, o.id)\n                         FROM organization_members m\n                         JOIN organizations o ON o.id = m.organization_id\n                        WHERE m.user_id = u.id\n                          AND m.deleted_at IS NULL\n                          AND o.deleted_at IS NULL\n                   ), '[]'::jsonb) AS \"organizations!\"\n            FROM users u\n            WHERE u.deleted_at IS NULL\n              AND ($1::text IS NULL\n                   OR u.display_name ILIKE $1 OR u.email ILIKE $1 OR u.username ILIKE $1)\n            ORDER BY u.created_at DESC, u.id\n            LIMIT $2 OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "organizations!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "b297306d8dcda61911ea69d1b8680b8280fb6b2ed276650613d5116b49ed8f5b"
+}

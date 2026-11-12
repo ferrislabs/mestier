@@ -2,15 +2,15 @@ use auth::Identity;
 use axum::Extension;
 use handlers::{ApiError, DataEnvelope, Response};
 
-use crate::{AccessPath, news_editor, response::NewsAccessResponse};
+use crate::{AccessPath, platform_admin, response::AdminAccessResponse};
 
 #[utoipa::path(
     get,
-    path = "/api/v1/news/access",
-    operation_id = "getNewsAccess",
-    tag = crate::TAG,
+    path = "/api/v1/admin/access",
+    operation_id = "getAdminAccess",
+    tag = crate::ADMIN_TAG,
     responses(
-        (status = 200, description = "Whether the caller may use the news back-office", body = inline(DataEnvelope<NewsAccessResponse>)),
+        (status = 200, description = "Whether the caller may use the platform back-office", body = inline(DataEnvelope<AdminAccessResponse>)),
         (status = 401, description = "Unauthorized"),
     ),
     security(("bearer_auth" = []))
@@ -18,8 +18,8 @@ use crate::{AccessPath, news_editor, response::NewsAccessResponse};
 pub async fn handler(
     _: AccessPath,
     Extension(identity): Extension<Identity>,
-) -> Result<Response<NewsAccessResponse>, ApiError> {
-    let can_manage = news_editor(&identity).is_ok();
+) -> Result<Response<AdminAccessResponse>, ApiError> {
+    let can_access = platform_admin(&identity).is_ok();
 
-    Ok(Response::OK(NewsAccessResponse { can_manage }))
+    Ok(Response::OK(AdminAccessResponse { can_access }))
 }

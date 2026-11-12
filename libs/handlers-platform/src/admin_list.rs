@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Extension, extract::State};
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 
-use crate::{AdminNewsPath, news_editor, response::NewsResponse};
+use crate::{AdminNewsPath, platform_admin, response::NewsResponse};
 
 #[utoipa::path(
     get,
@@ -21,13 +21,13 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<Response<Vec<NewsResponse>>, ApiError> {
-    let editor = news_editor(&identity)?;
+    let admin = platform_admin(&identity)?;
     let (user_id, _) = resolve_actor(&state, &identity).await?;
 
     let news = state
         .usecase
         .acting_as(user_id)
-        .list_news_for_admin(editor)
+        .list_news_for_admin(admin)
         .await?;
 
     Ok(Response::OK(news.into_iter().map(Into::into).collect()))

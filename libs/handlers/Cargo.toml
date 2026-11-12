@@ -20,10 +20,14 @@ itoa = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tower = { version = "0.5", default-features = false }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 
 [dev-dependencies]
+sqlx = { workspace = true }
+tower = { version = "0.5", features = ["util"] }
+uuid = { workspace = true }
 divan = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM organization_feature_flags\n            WHERE org_id = $1 AND flag = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3af6385e3adbbc9ce4f5a4104da46504c90eb09d4a3f80ce64d93d42fa973e4d"
+}

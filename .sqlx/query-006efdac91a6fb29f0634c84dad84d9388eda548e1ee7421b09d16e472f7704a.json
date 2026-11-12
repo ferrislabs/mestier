@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT w::date AS \"week_start!\", COUNT(u.id) AS \"total!\"\n                FROM generate_series(\n                         date_trunc('week', $1::timestamptz AT TIME ZONE 'UTC')\n                             - make_interval(weeks => $2 - 1),\n                         date_trunc('week', $1::timestamptz AT TIME ZONE 'UTC'),\n                         interval '1 week') AS w\n                LEFT JOIN users u ON date_trunc('week', u.created_at AT TIME ZONE 'UTC') = w\n                GROUP BY w\n                ORDER BY w\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "week_start!",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "total!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "006efdac91a6fb29f0634c84dad84d9388eda548e1ee7421b09d16e472f7704a"
+}
