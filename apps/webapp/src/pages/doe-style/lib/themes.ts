@@ -5,6 +5,7 @@ export type ThemeLook = Pick<
 	| 'primary'
 	| 'secondary'
 	| 'on_primary'
+	| 'party_color'
 	| 'heading_font'
 	| 'body_font'
 	| 'cover_logo_position'
@@ -34,6 +35,7 @@ export const DOE_THEMES: DoeTheme[] = [
 		look: {
 			...BASE,
 			primary: '#0f3d36',
+			party_color: '#0f3d36',
 			secondary: '#0f3d36',
 			heading_font: 'inter',
 			body_font: 'inter',
@@ -46,6 +48,7 @@ export const DOE_THEMES: DoeTheme[] = [
 		look: {
 			...BASE,
 			primary: '#2f5d3a',
+			party_color: '#2f5d3a',
 			secondary: '#6b8e23',
 			heading_font: 'montserrat',
 			body_font: 'source_serif',
@@ -58,6 +61,7 @@ export const DOE_THEMES: DoeTheme[] = [
 		look: {
 			...BASE,
 			primary: '#8b4a2b',
+			party_color: '#8b4a2b',
 			secondary: '#c47a3a',
 			heading_font: 'barlow',
 			body_font: 'barlow',
@@ -70,6 +74,7 @@ export const DOE_THEMES: DoeTheme[] = [
 		look: {
 			...BASE,
 			primary: '#1f3a5f',
+			party_color: '#1f3a5f',
 			secondary: '#3b6ea5',
 			heading_font: 'inter',
 			body_font: 'inter',
@@ -83,6 +88,7 @@ export const DOE_THEMES: DoeTheme[] = [
 		look: {
 			...BASE,
 			primary: '#2b2b2b',
+			party_color: '#2b2b2b',
 			secondary: '#8a6d3b',
 			on_primary: '#f5efe1',
 			heading_font: 'source_serif',

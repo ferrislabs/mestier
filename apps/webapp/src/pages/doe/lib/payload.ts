@@ -8,7 +8,17 @@ import type {
 import { PARTY_ROLES } from '#/pages/doe/types'
 
 function emptyParty(role: PartyForm['role']): PartyForm {
-	return { role, name: '', address: '', phone: '', email: '', logoKey: null }
+	return {
+		role,
+		name: '',
+		address: '',
+		phone: '',
+		email: '',
+		logoKey: null,
+		contactName: '',
+		contactRole: '',
+		contactEmail: '',
+	}
 }
 
 function partyToForm(party: DoeParty): PartyForm {
@@ -19,6 +29,9 @@ function partyToForm(party: DoeParty): PartyForm {
 		phone: party.phone ?? '',
 		email: party.email ?? '',
 		logoKey: party.logo_key ?? null,
+		contactName: party.contact_name ?? '',
+		contactRole: party.contact_role ?? '',
+		contactEmail: party.contact_email ?? '',
 	}
 }
 
@@ -62,6 +75,9 @@ export function buildUpdatePayload(
 			phone: orNull(party.phone),
 			email: orNull(party.email),
 			logo_key: party.logoKey,
+			contact_name: orNull(party.contactName),
+			contact_role: orNull(party.contactRole),
+			contact_email: orNull(party.contactEmail),
 		}))
 
 	return {

@@ -172,7 +172,7 @@ impl PartyRole {
         match self {
             Self::ProjectOwner => "Maîtrise d’ouvrage",
             Self::ProjectManager => "Maîtrise d’œuvre",
-            Self::Contractor => "Entreprise",
+            Self::Contractor => "Entreprise adjudicatrice",
         }
     }
 }
@@ -187,6 +187,14 @@ pub struct DoeParty {
     pub phone: Option<String>,
     pub email: Option<String>,
     pub logo_key: Option<String>,
+    /// The person to reach, printed by the maîtrise d'œuvre only.
+    #[serde(default)]
+    pub contact_name: Option<String>,
+    /// The contact's job title, printed in italics.
+    #[serde(default)]
+    pub contact_role: Option<String>,
+    #[serde(default)]
+    pub contact_email: Option<String>,
 }
 
 /// A stored file placed in the DOE: a photo, a plan. `caption` is the photo

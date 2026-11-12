@@ -22,6 +22,9 @@ export interface PartyForm {
 	phone: string
 	email: string
 	logoKey: string | null
+	contactName: string
+	contactRole: string
+	contactEmail: string
 }
 
 export interface DoeForm {
@@ -50,7 +53,7 @@ export const PARTY_ROLES: PartyRole[] = [
 export const PARTY_LABELS: Record<PartyRole, string> = {
 	project_owner: 'Maîtrise d’ouvrage',
 	project_manager: 'Maîtrise d’œuvre',
-	contractor: 'Entreprise',
+	contractor: 'Entreprise adjudicatrice',
 }
 
 export const KIND_LABELS: Record<SectionKind, string> = {

@@ -6,6 +6,7 @@ import {
 	FlipHorizontal2,
 	FlipVertical2,
 	Image as ImageIcon,
+	LayoutTemplate,
 	Library,
 	Loader2,
 	Minus,
@@ -30,6 +31,13 @@ import {
 import { Separator } from '#/components/ui/separator'
 import { cn } from '#/lib/utils'
 import {
+	COVER_BLOCK_KEYS,
+	COVER_BLOCK_LABELS,
+	type CoverBlock,
+	type CoverBlockKey,
+	type CoverLayout,
+} from '#/pages/doe-style/lib/cover-layout'
+import {
 	type Decoration,
 	type DecorationLayer,
 	decorationLabel,
@@ -40,6 +48,7 @@ import {
 	type Rect,
 } from '#/pages/doe-style/lib/decorations'
 import { rotationOf } from '#/pages/doe-style/lib/transform'
+import { CoverBlockProperties } from '#/pages/doe-style/ui/cover-block-properties'
 import { DecorationOverlay } from '#/pages/doe-style/ui/decoration-overlay'
 import { DecorationProperties } from '#/pages/doe-style/ui/decoration-properties'
 import {
@@ -51,6 +60,9 @@ interface LayoutEditorProps {
 	decorations: Decoration[]
 	errors: Array<string | undefined>
 	selectedIndex: number | null
+	coverLayout: CoverLayout | null
+	selectedBlock: CoverBlockKey | null
+	blockErrors: Partial<Record<CoverBlockKey, string>>
 	pages: string[]
 	activePage: number
 	previewLoading: boolean
@@ -61,6 +73,11 @@ interface LayoutEditorProps {
 	isUploading: boolean
 	invalid: boolean
 	onSelect: (index: number | null) => void
+	onSelectBlock: (key: CoverBlockKey) => void
+	onCommitBlock: (key: CoverBlockKey, rect: Rect) => void
+	onUpdateBlock: (key: CoverBlockKey, next: CoverBlock) => void
+	onCustomizeCover: () => void
+	onResetCover: () => void
 	onSelectPage: (index: number) => void
 	onAddShape: (kind: 'rectangle' | 'line') => void
 	onAddImageFile: (file: File) => void
@@ -115,6 +132,9 @@ export function LayoutEditor({
 	decorations,
 	errors,
 	selectedIndex,
+	coverLayout,
+	selectedBlock,
+	blockErrors,
 	pages,
 	activePage,
 	previewLoading,
@@ -125,6 +145,11 @@ export function LayoutEditor({
 	isUploading,
 	invalid,
 	onSelect,
+	onSelectBlock,
+	onCommitBlock,
+	onUpdateBlock,
+	onCustomizeCover,
+	onResetCover,
 	onSelectPage,
 	onAddShape,
 	onAddImageFile,
@@ -152,6 +177,9 @@ export function LayoutEditor({
 	const page = pages[current]
 	const order = decorations.map((_, index) => index).reverse()
 	const none = selected === undefined
+	const blocksVisible = coverLayout !== null && current === 0
+	const block =
+		coverLayout && selectedBlock ? coverLayout[selectedBlock] : undefined
 
 	return (
 		<Dialog open onOpenChange={(next) => (next ? undefined : onCancel())}>
@@ -159,7 +187,7 @@ export function LayoutEditor({
 				showCloseButton={false}
 				onKeyDown={onKeyDown}
 				onEscapeKeyDown={(event) => {
-					if (selectedIndex !== null) {
+					if (selectedIndex !== null || selectedBlock !== null) {
 						event.preventDefault()
 						onSelect(null)
 					}
@@ -273,6 +301,28 @@ export function LayoutEditor({
 						Ligne
 					</Button>
 					<Separator orientation="vertical" className="mx-2 h-6" />
+					{coverLayout === null ? (
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={onCustomizeCover}
+						>
+							<LayoutTemplate aria-hidden />
+							Personnaliser la couverture
+						</Button>
+					) : (
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={onResetCover}
+						>
+							<RotateCcw aria-hidden />
+							Rétablir la couverture par défaut
+						</Button>
+					)}
+					<Separator orientation="vertical" className="mx-2 h-6" />
 					<ToolButton
 						label="Pivoter de -15°"
 						icon={<RotateCcw aria-hidden />}
@@ -368,6 +418,41 @@ export function LayoutEditor({
 								))}
 							</div>
 						</section>
+						{blocksVisible && coverLayout ? (
+							<section className="grid gap-2">
+								<h3 className="font-medium text-sm">Blocs de la couverture</h3>
+								<ul aria-label="Blocs de la couverture" className="grid gap-1">
+									{COVER_BLOCK_KEYS.map((key) => {
+										const isSelected = key === selectedBlock
+										return (
+											<li key={key}>
+												<button
+													type="button"
+													aria-pressed={isSelected}
+													onClick={() => onSelectBlock(key)}
+													className={cn(
+														'flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-left text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+														isSelected
+															? 'border-primary bg-primary/5'
+															: 'hover:bg-muted',
+														blockErrors[key] ? 'border-destructive' : null,
+													)}
+												>
+													<span className="truncate">
+														{COVER_BLOCK_LABELS[key]}
+													</span>
+													{coverLayout[key].visible ? null : (
+														<span className="shrink-0 text-muted-foreground text-xs">
+															Masqué
+														</span>
+													)}
+												</button>
+											</li>
+										)
+									})}
+								</ul>
+							</section>
+						) : null}
 						<section className="grid gap-2">
 							<h3 className="font-medium text-sm">
 								Calques ({decorations.length} sur {MAX_DECORATIONS})
@@ -495,6 +580,10 @@ export function LayoutEditor({
 								<DecorationOverlay
 									decorations={decorations}
 									pageIndex={current}
+									blocks={coverLayout}
+									selectedBlock={selectedBlock}
+									onSelectBlock={onSelectBlock}
+									onCommitBlock={onCommitBlock}
 									selectedIndex={selectedIndex}
 									onSelect={onSelect}
 									onCommit={onCommitRect}
@@ -510,7 +599,22 @@ export function LayoutEditor({
 						className="min-h-0 overflow-y-auto border-l p-3"
 					>
 						<h3 className="mb-3 font-medium text-sm">Propriétés</h3>
-						{selected && selectedIndex !== null ? (
+						{block && selectedBlock ? (
+							<div className="grid gap-3">
+								<p className="text-muted-foreground text-xs">
+									Bloc de couverture : {COVER_BLOCK_LABELS[selectedBlock]}
+								</p>
+								{blockErrors[selectedBlock] ? (
+									<p role="alert" className="text-destructive text-xs">
+										{blockErrors[selectedBlock]}
+									</p>
+								) : null}
+								<CoverBlockProperties
+									block={block}
+									onChange={(next) => onUpdateBlock(selectedBlock, next)}
+								/>
+							</div>
+						) : selected && selectedIndex !== null ? (
 							<div className="grid gap-3">
 								<p className="text-muted-foreground text-xs">
 									Élément {selectedIndex + 1} : {decorationLabel(selected)}

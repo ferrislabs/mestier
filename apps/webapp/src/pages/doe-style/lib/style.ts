@@ -1,4 +1,5 @@
 import type { Schemas } from '#/api/api.client'
+import { validateCoverLayout } from '#/pages/doe-style/lib/cover-layout'
 import { validateDecorations } from '#/pages/doe-style/lib/decorations'
 
 export type DoeStyle = Schemas.DoeStyle
@@ -16,6 +17,7 @@ export const DEFAULT_DOE_STYLE: CompleteDoeStyle = {
 	primary: '#0f3d36',
 	secondary: '#0f3d36',
 	on_primary: '#ffffff',
+	party_color: '#0f3d36',
 	heading_font: 'inter',
 	body_font: 'inter',
 	logo_key: null,
@@ -30,6 +32,7 @@ export const DEFAULT_DOE_STYLE: CompleteDoeStyle = {
 	contents_title: 'SOMMAIRE',
 	supply_table_title: 'Identification de la fourniture',
 	decorations: [],
+	cover_layout: null,
 }
 
 export const FONT_LABELS: Record<DoeFont, string> = {
@@ -107,6 +110,7 @@ export function validateStyle(style: CompleteDoeStyle): StyleErrors {
 		primary: colorError(style.primary),
 		secondary: colorError(style.secondary),
 		on_primary: colorError(style.on_primary),
+		party_color: colorError(style.party_color),
 		header_text: templateError(style.header_text),
 		footer_text: templateError(style.footer_text),
 		cover_title: labelError(style.cover_title),
@@ -114,6 +118,7 @@ export function validateStyle(style: CompleteDoeStyle): StyleErrors {
 		contents_title: labelError(style.contents_title),
 		supply_table_title: labelError(style.supply_table_title),
 		decorations: validateDecorations(style.decorations),
+		cover_layout: validateCoverLayout(style.cover_layout),
 	}
 	const errors: StyleErrors = {}
 	for (const [key, message] of Object.entries(candidates)) {
@@ -132,6 +137,7 @@ export function normalizeStyle(style: CompleteDoeStyle): CompleteDoeStyle {
 		primary: style.primary.trim().toLowerCase(),
 		secondary: style.secondary.trim().toLowerCase(),
 		on_primary: style.on_primary.trim().toLowerCase(),
+		party_color: style.party_color.trim().toLowerCase(),
 		cover_title: style.cover_title.trim(),
 		parties_title: style.parties_title.trim(),
 		contents_title: style.contents_title.trim(),

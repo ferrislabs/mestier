@@ -66,6 +66,28 @@ describe('buildUpdatePayload', () => {
 	})
 })
 
+describe('party contact', () => {
+	it('round-trips the contact of a party and sends blanks as null', () => {
+		const form = doeToForm({
+			...DOE,
+			parties: [
+				{
+					role: 'project_manager',
+					name: 'Atelier',
+					contact_name: 'Claire Dupont',
+					contact_role: 'Paysagiste',
+				},
+			],
+		})
+		const manager = form.parties.find((p) => p.role === 'project_manager')
+		expect(manager?.contactName).toBe('Claire Dupont')
+		const sent = buildUpdatePayload(form, 'x').parties[0]
+		expect(sent?.contact_name).toBe('Claire Dupont')
+		expect(sent?.contact_role).toBe('Paysagiste')
+		expect(sent?.contact_email).toBeNull()
+	})
+})
+
 describe('cover photo', () => {
 	it('is read from the DOE and sent back on save', () => {
 		const form = doeToForm({ ...DOE, cover_photo_key: 'cover-1' })

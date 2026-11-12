@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { defaultCoverLayout } from '#/pages/doe-style/lib/cover-layout'
 import {
 	completeStyle,
 	DEFAULT_DOE_STYLE,
@@ -135,5 +136,29 @@ describe('decorations in the style', () => {
 			],
 		})
 		expect(errors.decorations).toMatch(/Élément 1/)
+	})
+})
+
+describe('cover_layout', () => {
+	it('defaults to null and is valid', () => {
+		expect(DEFAULT_DOE_STYLE.cover_layout).toBeNull()
+		expect(completeStyle({}).cover_layout).toBeNull()
+	})
+
+	it('keeps a layout from the server', () => {
+		const layout = defaultCoverLayout()
+		expect(completeStyle({ cover_layout: layout }).cover_layout).toEqual(layout)
+	})
+
+	it('reports an invalid block under the cover_layout key', () => {
+		const layout = defaultCoverLayout()
+		const errors = validateStyle({
+			...DEFAULT_DOE_STYLE,
+			cover_layout: { ...layout, title: { ...layout.title, width: 0 } },
+		})
+		expect(errors.cover_layout).toMatch(/Bandeau titre/)
+		expect(isStyleValid({ ...DEFAULT_DOE_STYLE, cover_layout: layout })).toBe(
+			true,
+		)
 	})
 })

@@ -295,12 +295,12 @@ pub use domain::knowledge::tables::{
 };
 
 pub use domain::{
-    BlankPageCount, DecorationLayer, DecorationPages, DecorationShape, Doe, DoeDecoration, DoeFile,
-    DoeFont, DoeId, DoeLabel, DoeModel, DoeModelId, DoeModelSection, DoeModelSectionKind, DoeParty,
-    DoeSection, DoeSectionContent, DoeSettings, DoeStyle, DoeSummary, DoeSupply, DoeTemplate,
-    HexColor, ImageFit, LogoPosition, LogoSize, MakerLabel, Millimeters, Opacity, PartyRole,
-    PhotosPerPage, ProjectDoeStyle, Revision, Rotation, StarterModel, SupplierSnapshot,
-    SupplyPhotoColumns,
+    BlankPageCount, CoverBlock, CoverLayout, DecorationLayer, DecorationPages, DecorationShape,
+    Doe, DoeDecoration, DoeFile, DoeFont, DoeId, DoeLabel, DoeModel, DoeModelId, DoeModelSection,
+    DoeModelSectionKind, DoeParty, DoeSection, DoeSectionContent, DoeSettings, DoeStyle,
+    DoeSummary, DoeSupply, DoeTemplate, HexColor, ImageFit, LogoPosition, LogoSize, MakerLabel,
+    Millimeters, Opacity, PartyRole, PhotosPerPage, ProjectDoeStyle, Revision, Rotation,
+    StarterModel, SupplierSnapshot, SupplyPhotoColumns,
     doe::commands::{
         CreateDoeCommand, DeleteDoeCommand, DraftSupplyFromProductCommand, UpdateDoeCommand,
     },

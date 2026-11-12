@@ -101,6 +101,9 @@ impl DoeDocument {
             phone: Some("01 23 45 67 89".to_owned()),
             email: None,
             logo_key: None,
+            contact_name: None,
+            contact_role: None,
+            contact_email: None,
         };
         let supply = |title: &str, designation: &str, specs: &str| DoeSupply {
             id: Uuid::nil(),
@@ -478,6 +481,9 @@ mod tests {
             phone: None,
             email: None,
             logo_key: Some("party-logo".to_owned()),
+            contact_name: None,
+            contact_role: None,
+            contact_email: None,
         };
         let doe = doe(
             vec![

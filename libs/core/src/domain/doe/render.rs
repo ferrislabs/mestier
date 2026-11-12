@@ -12,7 +12,9 @@ use serde::Serialize;
 
 use crate::domain::{
     doe::{DoeFile, DoeParty, DoeSupply, PhotosPerPage},
-    doe_model::{DecorationShape, DoeDecoration, DoeStyle, HexColor, LogoPosition, LogoSize},
+    doe_model::{
+        CoverLayout, DecorationShape, DoeDecoration, DoeStyle, HexColor, LogoPosition, LogoSize,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -40,11 +42,13 @@ pub struct DocumentStyle {
     pub primary: HexColor,
     pub secondary: HexColor,
     pub on_primary: HexColor,
+    pub party_color: HexColor,
     pub heading_font: String,
     pub body_font: String,
     pub logo_key: Option<String>,
     pub cover_logo_position: LogoPosition,
     pub cover_logo_size: LogoSize,
+    pub cover_layout: Option<CoverLayout>,
     pub header_logo: bool,
     pub cover_title: String,
     pub parties_title: String,
@@ -71,11 +75,13 @@ impl From<&DoeStyle> for DocumentStyle {
             primary: style.primary.clone(),
             secondary: style.secondary.clone(),
             on_primary: style.on_primary.clone(),
+            party_color: style.party_color.clone(),
             heading_font: style.heading_font.family().to_owned(),
             body_font: style.body_font.family().to_owned(),
             logo_key: style.logo_key.clone(),
             cover_logo_position: style.cover_logo_position,
             cover_logo_size: style.cover_logo_size,
+            cover_layout: style.cover_layout.clone(),
             header_logo: style.header_logo,
             cover_title: style.cover_title.as_str().to_owned(),
             parties_title: style.parties_title.as_str().to_owned(),

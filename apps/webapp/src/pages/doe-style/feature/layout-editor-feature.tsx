@@ -9,6 +9,16 @@ import {
 import { mutationErrorMessage } from '#/lib/api-error'
 import { useStylePreviewPages } from '#/pages/doe-style/feature/use-style-preview-pages'
 import {
+	blockRect,
+	type CoverBlock,
+	type CoverBlockKey,
+	type CoverLayout,
+	coverBlockErrors,
+	defaultCoverLayout,
+	setBlockRect,
+	validateCoverLayout,
+} from '#/pages/doe-style/lib/cover-layout'
+import {
 	addDecoration,
 	appendDecoration,
 	appliesToPage,
@@ -50,8 +60,13 @@ interface LayoutEditorFeatureProps {
 	organizationId: string
 	style: CompleteDoeStyle
 	accentColor: string
-	onApply: (decorations: Decoration[]) => void
+	onApply: (decorations: Decoration[], coverLayout: CoverLayout | null) => void
 	onCancel: () => void
+}
+
+interface EditorState {
+	decorations: Decoration[]
+	coverLayout: CoverLayout | null
 }
 
 function useDebounced<T>(value: T, delay: number): T {
@@ -81,14 +96,26 @@ export function LayoutEditorFeature({
 	onApply,
 	onCancel,
 }: LayoutEditorFeatureProps) {
-	const [history, setHistory] = useState(() => createHistory(style.decorations))
+	const [history, setHistory] = useState(() =>
+		createHistory<EditorState>({
+			decorations: style.decorations,
+			coverLayout: style.cover_layout,
+		}),
+	)
 	const [selection, setSelection] = useState<number | null>(null)
+	const [blockSelection, setBlockSelection] = useState<CoverBlockKey | null>(
+		null,
+	)
 	const [activePage, setActivePage] = useState(0)
 	const [picker, setPicker] = useState<'add' | 'replace' | null>(null)
 	const [search, setSearch] = useState('')
-	const decorations = history.present
+	const decorations = history.present.decorations
+	const coverLayout = history.present.coverLayout
 	const latest = useRef(decorations)
 	latest.current = decorations
+	const latestLayout = useRef(coverLayout)
+	latestLayout.current = coverLayout
+	const latestBlock = useRef<CoverBlockKey | null>(null)
 	const latestSelection = useRef<number | null>(null)
 
 	const upload = useUploadFile()
@@ -109,7 +136,11 @@ export function LayoutEditorFeature({
 		return urls
 	}, [thumbnails])
 
-	const live = useStylePreviewPages(organizationId, { ...style, decorations })
+	const live = useStylePreviewPages(organizationId, {
+		...style,
+		decorations,
+		cover_layout: coverLayout,
+	})
 
 	const selectedIndex =
 		selection !== null && selection < decorations.length ? selection : null
@@ -119,14 +150,61 @@ export function LayoutEditorFeature({
 	const [selectedImage] = useFileUrls(
 		selected?.kind === 'image' && selected.key ? [selected.key] : [],
 	)
-	const validation = validateDecorations(decorations)
+	const selectedBlock =
+		activePage === 0 && coverLayout !== null ? blockSelection : null
+	latestBlock.current = selectedBlock
+	const validation =
+		validateDecorations(decorations) ?? validateCoverLayout(coverLayout)
 
 	function commit(next: Decoration[]) {
-		setHistory((current) => push(current, next))
+		setHistory((current) =>
+			next === current.present.decorations
+				? current
+				: push(current, { ...current.present, decorations: next }),
+		)
+	}
+
+	function commitLayout(next: CoverLayout | null) {
+		setHistory((current) =>
+			next === current.present.coverLayout
+				? current
+				: push(current, { ...current.present, coverLayout: next }),
+		)
+	}
+
+	function selectBlock(key: CoverBlockKey) {
+		setBlockSelection(key)
+		setSelection(null)
+		setActivePage(0)
+	}
+
+	function selectPage(index: number) {
+		setActivePage(index)
+		if (index !== 0) setBlockSelection(null)
+	}
+
+	function customizeCover() {
+		if (latestLayout.current === null) commitLayout(defaultCoverLayout())
+	}
+
+	function resetCover() {
+		setBlockSelection(null)
+		commitLayout(null)
+	}
+
+	function updateBlock(key: CoverBlockKey, next: CoverBlock) {
+		const layout = latestLayout.current
+		if (layout) commitLayout({ ...layout, [key]: next })
+	}
+
+	function commitBlockRect(key: CoverBlockKey, rect: Rect) {
+		const layout = latestLayout.current
+		if (layout) commitLayout(setBlockRect(layout, key, rect))
 	}
 
 	function select(index: number | null) {
 		setSelection(index)
+		if (index !== null) setBlockSelection(null)
 		const target = index === null ? undefined : latest.current[index]
 		if (target && !appliesToPage(target, activePage)) {
 			setActivePage(pagesOf(target) === 'inner' ? 1 : 0)
@@ -138,6 +216,7 @@ export function LayoutEditorFeature({
 		const next = appendDecoration(base, decoration)
 		if (next === base) return
 		commit(next)
+		setBlockSelection(null)
 		setSelection(base.length)
 	}
 
@@ -249,6 +328,16 @@ export function LayoutEditorFeature({
 				remove()
 				return
 			case 'nudge': {
+				const layout = latestLayout.current
+				const key = latestBlock.current
+				if (key && layout) {
+					const frame = blockRect(layout[key])
+					const moved = nudgeRect(frame, action.key, action.shift)
+					if (moved.x !== frame.x || moved.y !== frame.y) {
+						commitLayout(setBlockRect(layout, key, moved))
+					}
+					return
+				}
 				const current = index === null ? undefined : latest.current[index]
 				if (index === null || !current) return
 				const rect = rectOf(current)
@@ -271,6 +360,9 @@ export function LayoutEditorFeature({
 				decorations={decorations}
 				errors={decorationErrors(decorations)}
 				selectedIndex={selectedIndex}
+				coverLayout={coverLayout}
+				selectedBlock={selectedBlock}
+				blockErrors={coverLayout ? coverBlockErrors(coverLayout) : {}}
 				pages={live.pages}
 				activePage={activePage}
 				previewLoading={live.loading}
@@ -281,7 +373,12 @@ export function LayoutEditorFeature({
 				isUploading={upload.isPending}
 				invalid={validation !== undefined}
 				onSelect={select}
-				onSelectPage={setActivePage}
+				onSelectBlock={selectBlock}
+				onCommitBlock={commitBlockRect}
+				onUpdateBlock={updateBlock}
+				onCustomizeCover={customizeCover}
+				onResetCover={resetCover}
+				onSelectPage={selectPage}
 				onAddShape={(kind) => {
 					const base = latest.current
 					const next = addDecoration(base, kind, accentColor)
@@ -314,7 +411,7 @@ export function LayoutEditorFeature({
 				onRemove={remove}
 				onUndo={() => setHistory(undo)}
 				onRedo={() => setHistory(redo)}
-				onApply={() => onApply(decorations)}
+				onApply={() => onApply(decorations, coverLayout)}
 				onCancel={onCancel}
 				onKeyDown={handleKeyDown}
 			/>

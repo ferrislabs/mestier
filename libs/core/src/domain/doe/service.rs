@@ -147,6 +147,9 @@ fn clean_party(party: DoeParty) -> Result<DoeParty, CoreError> {
         phone: blank_to_none(party.phone),
         email: blank_to_none(party.email),
         logo_key: blank_to_none(party.logo_key),
+        contact_name: blank_to_none(party.contact_name),
+        contact_role: blank_to_none(party.contact_role),
+        contact_email: blank_to_none(party.contact_email),
     })
 }
 
@@ -199,6 +202,9 @@ fn contractor_party(organization: &Organization) -> DoeParty {
         phone: blank_to_none(organization.contact_phone.clone()),
         email: blank_to_none(organization.contact_email.clone()),
         logo_key: None,
+        contact_name: None,
+        contact_role: None,
+        contact_email: None,
     }
 }
 
@@ -210,6 +216,9 @@ fn owner_party(customer: &Customer, address: Option<String>) -> DoeParty {
         phone: blank_to_none(customer.phone.clone()),
         email: blank_to_none(customer.email.clone()),
         logo_key: None,
+        contact_name: None,
+        contact_role: None,
+        contact_email: None,
     }
 }
 
@@ -812,6 +821,9 @@ mod tests {
             phone: None,
             email: None,
             logo_key: None,
+            contact_name: None,
+            contact_role: None,
+            contact_email: None,
         }];
 
         let err = replace_with(command, doe).await.unwrap_err();
@@ -1582,6 +1594,9 @@ mod tests {
             phone: None,
             email: None,
             logo_key: Some("logos/treyve".to_owned()),
+            contact_name: None,
+            contact_role: None,
+            contact_email: None,
         }];
         doe.sections = vec![
             DoeSection {
