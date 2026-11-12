@@ -7856,7 +7856,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/cursus/establishments";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ archived: boolean }>;
+      query: Partial<{ archived: "active" | "archived" | "all"; q: string }>;
       path: { organization_id: string };
     };
     responses: {
@@ -8002,7 +8002,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/cursus/host-companies";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ archived: boolean; page: number; per_page: number }>;
+      query: Partial<{ archived: "active" | "archived" | "all"; q: string; page: number; per_page: number }>;
       path: { organization_id: string };
     };
     responses: {
@@ -8258,6 +8258,7 @@ export namespace Endpoints {
         kind: "apprentice" | "company_tutor";
         status: "pending" | "active" | "inactive";
         host_company_id: string;
+        q: string;
         page: number;
         per_page: number;
       }>;
@@ -8471,7 +8472,13 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/cursus/promotions";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ training_id: string; archived: boolean; page: number; per_page: number }>;
+      query: Partial<{
+        training_id: string;
+        archived: "active" | "archived" | "all";
+        q: string;
+        page: number;
+        per_page: number;
+      }>;
       path: { organization_id: string };
     };
     responses: {
@@ -8612,7 +8619,13 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/cursus/trainings";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ establishment_id: string; archived: boolean; page: number; per_page: number }>;
+      query: Partial<{
+        establishment_id: string;
+        archived: "active" | "archived" | "all";
+        q: string;
+        page: number;
+        per_page: number;
+      }>;
       path: { organization_id: string };
     };
     responses: {
@@ -8763,7 +8776,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/cursus/triads";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ promotion_id: string; closed: boolean; page: number; per_page: number }>;
+      query: Partial<{ promotion_id: string; closed: boolean; q: string; page: number; per_page: number }>;
       path: { organization_id: string };
     };
     responses: {

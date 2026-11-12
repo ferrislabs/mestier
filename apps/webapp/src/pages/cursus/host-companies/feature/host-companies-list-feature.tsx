@@ -30,7 +30,7 @@ export function HostCompaniesListFeature({
 	const canManage = useHasPermission('MANAGE_CURSUS_TRIADS')
 	const [createOpen, setCreateOpen] = useState(false)
 	const list = useHostCompanies(activeOrganizationId, {
-		archived: includeArchived,
+		...(includeArchived ? { archived: 'all' as const } : {}),
 		per_page: 100,
 	})
 	const createCompany = useCreateHostCompany()

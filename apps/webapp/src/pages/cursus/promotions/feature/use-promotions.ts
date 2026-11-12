@@ -25,7 +25,7 @@ export function usePromotions(
 			query: {
 				page: 1,
 				per_page: 100,
-				...(filters.archived ? { archived: true } : {}),
+				...(filters.archived ? { archived: 'all' as const } : {}),
 				...(filters.trainingId ? { training_id: filters.trainingId } : {}),
 			},
 		}).queryOptions,

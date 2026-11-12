@@ -25,7 +25,7 @@ export function useEstablishments(
 	return useQuery({
 		...window.tanstackApi.get(ESTABLISHMENTS_PATH, {
 			path: { organization_id: organizationId },
-			query: archived ? { archived: true } : {},
+			query: archived ? { archived: 'all' } : {},
 		}).queryOptions,
 		enabled,
 	})
@@ -39,7 +39,7 @@ export function useTrainings(
 	return useQuery({
 		...window.tanstackApi.get(TRAININGS_PATH, {
 			path: { organization_id: organizationId },
-			query: archived ? { archived: true, per_page: 100 } : { per_page: 100 },
+			query: archived ? { archived: 'all', per_page: 100 } : { per_page: 100 },
 		}).queryOptions,
 		enabled,
 	})

@@ -10,7 +10,12 @@ export const HOST_COMPANY_ARCHIVE_PATH =
 
 export function useHostCompanies(
 	organizationId: string,
-	query: { archived?: boolean; page?: number; per_page?: number } = {},
+	query: {
+		archived?: 'active' | 'archived' | 'all'
+		q?: string
+		page?: number
+		per_page?: number
+	} = {},
 	enabled = true,
 ) {
 	return useQuery({
