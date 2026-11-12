@@ -5,6 +5,7 @@
 #let primary = rgb(style.primary)
 #let secondary = rgb(style.secondary)
 #let on_primary = rgb(style.on_primary)
+#let party_color = rgb(style.party_color)
 #let muted = luma(90)
 
 #set text(lang: "fr", font: style.body_font, size: 10.5pt)
@@ -67,20 +68,46 @@
 
 #let contractor = doc.parties.find(p => p.role == "contractor")
 
-#let party_block(party) = block(breakable: false, width: 100%)[
-  #grid(
-    columns: (auto, 1fr),
-    column-gutter: 14pt,
-    if party.logo_key != none {
-      picture(party.logo_key, height: 2cm, width: 4cm, fit: "contain")
-    },
-    [
-      #text(secondary, weight: "bold", size: 11pt, party.role_label) \
-      #text(weight: "bold", size: 13pt, party.name) \
-      #stacked(party.address, party.phone, party.email)
+// A value that may hold several lines ("1 rue X\n49000 Angers").
+#let lines_of(..items) = {
+  let kept = items.pos().filter(item => item != none and item != "")
+  kept.map(item => item.replace("\r", "").split("\n")).flatten().join(linebreak())
+}
+
+// One table per party, so a party never splits across two pages: a coloured
+// row with the role, then logo | details | contact. The owner has no contact
+// column, its details take the room; the contractor leaves a blank area for
+// the site contact, filled by hand.
+#let party_table(party) = {
+  let logo = if party.logo_key != none {
+    picture(party.logo_key, height: 1.8cm, width: 3cm, fit: "contain")
+  }
+  let details = [
+    #text(weight: "bold", size: 11pt, party.name) \
+    #lines_of(party.address, party.phone, party.email)
+  ]
+  let contact = if party.role == "contractor" {
+    block(height: 1.8cm, text(size: 9pt, fill: muted, [Contact chantier]))
+  } else if party.role == "project_manager" {
+    let named = (
+      if party.contact_name != none { text(weight: "bold", party.contact_name) },
+      if party.contact_role != none { text(style: "italic", party.contact_role) },
+      party.contact_email,
+    ).filter(item => item != none)
+    if named.len() == 0 { [—] } else { named.join(linebreak()) }
+  }
+  block(breakable: false, width: 100%, below: 14pt, table(
+    columns: (3.4cm, 1fr, 1fr),
+    stroke: 0.5pt + luma(180),
+    inset: 7pt,
+    align: horizon,
+    table.cell(colspan: 3, fill: party_color)[
+      #titled(on_primary, weight: "bold", size: 11pt, party.role_label)
     ],
-  )
-]
+    logo,
+    ..if contact == none { (table.cell(colspan: 2, details),) } else { (details, contact) },
+  ))
+}
 
 #let page_margin_y = 2.4cm
 #set page(paper: "a4", margin: (x: 2cm, y: page_margin_y))
@@ -125,47 +152,94 @@
 ).at(style.cover_logo_size)
 #let logo_align = (left: left, center: center, right: right).at(style.cover_logo_position)
 
-#page(header: none, footer: none, background: decor("cover", "behind"), foreground: decor("cover", "front"))[
-  #if style.logo_key != none {
-    align(logo_align, picture(style.logo_key, ..logo_box, fit: "contain"))
-  }
-  #v(1cm)
-  #if doc.place != none {
-    text(14pt, fill: muted, doc.place)
-    v(0.4cm)
-  }
-  // The frame carries the document's name, then the DOE title.
-  #block(width: 100%, fill: primary, inset: (x: 14pt, y: 18pt))[
-    #align(center)[
-      #titled(on_primary, weight: "bold", size: 15pt, style.cover_title)
-      #v(8pt)
-      #titled(on_primary, weight: "bold", size: 26pt, doc.title)
-      #if doc.lot != none {
-        v(6pt)
-        text(on_primary, size: 15pt, doc.lot)
-      }
-    ]
+#let company_text(contractor) = align(right, text(size: 9.5pt)[
+  #text(weight: "bold", size: 11pt, contractor.name) \
+  #lines_of(contractor.address, contractor.phone, contractor.email)
+])
+
+#let cover_banner(fill_height: false) = block(
+  width: 100%,
+  height: if fill_height { 100% } else { auto },
+  fill: primary,
+  inset: (x: 14pt, y: 18pt),
+  clip: true,
+)[
+  #align(center + if fill_height { horizon } else { top })[
+    #titled(on_primary, weight: "bold", size: 15pt, style.cover_title)
+    #v(8pt)
+    #titled(on_primary, weight: "bold", size: 26pt, doc.title)
+    #if doc.lot != none {
+      v(6pt)
+      text(on_primary, size: 15pt, doc.lot)
+    }
   ]
-  #v(0.8cm)
-  #grid(
-    columns: (auto, 1fr),
-    row-gutter: 8pt,
-    column-gutter: 18pt,
-    text(weight: "bold")[Date], data.issued_fr,
-    text(weight: "bold")[Rédacteur], dash(doc.author),
-    text(weight: "bold")[Indice], doc.revision,
-  )
-  // The photo takes whatever height the cover has left, so the cover stays
-  // one page whatever the logo size and title length.
-  #if doc.cover_photo_key != none {
-    v(0.8cm)
-    block(width: 100%, height: 1fr, clip: true, radius: 2pt,
-      picture(doc.cover_photo_key, width: 100%, height: 100%, fit: "cover"))
-    v(0.8cm)
+]
+
+#let cover_meta = grid(
+  columns: (auto, 1fr),
+  row-gutter: 8pt,
+  column-gutter: 18pt,
+  text(weight: "bold")[Date], data.issued_fr,
+  text(weight: "bold")[Rédacteur], dash(doc.author),
+  text(weight: "bold")[Indice], doc.revision,
+)
+
+// A block of a freely laid-out cover: millimeters from the page's corner.
+#let placed(frame, body) = if frame.visible {
+  place(top + left, dx: frame.x * 1mm, dy: frame.y * 1mm,
+    block(width: frame.width * 1mm, height: frame.height * 1mm, clip: true, body))
+}
+
+#let cover_layout = style.cover_layout
+
+#page(
+  ..if cover_layout != none { (margin: 0pt) } else { (:) },
+  header: none,
+  footer: none,
+  background: decor("cover", "behind"),
+  foreground: decor("cover", "front"),
+)[
+  #if cover_layout != none {
+    placed(cover_layout.logo, if style.logo_key != none {
+      picture(style.logo_key, width: 100%, height: 100%, fit: "contain")
+    })
+    placed(cover_layout.company, if contractor != none { company_text(contractor) })
+    placed(cover_layout.place, if doc.place != none { text(14pt, fill: muted, doc.place) })
+    placed(cover_layout.title, cover_banner(fill_height: true))
+    placed(cover_layout.meta, cover_meta)
+    placed(cover_layout.photo, if doc.cover_photo_key != none {
+      picture(doc.cover_photo_key, width: 100%, height: 100%, fit: "cover")
+    })
   } else {
-    v(1fr)
+    // The logo on the left, the contractor's details on the right.
+    grid(
+      columns: (1fr, 6cm),
+      column-gutter: 12pt,
+      if style.logo_key != none {
+        align(logo_align, picture(style.logo_key, ..logo_box, fit: "contain"))
+      },
+      if contractor != none { company_text(contractor) },
+    )
+    v(1cm)
+    if doc.place != none {
+      text(14pt, fill: muted, doc.place)
+      v(0.4cm)
+    }
+    // The frame carries the document's name, then the DOE title.
+    cover_banner()
+    v(0.8cm)
+    cover_meta
+    // The photo takes whatever height the cover has left, so the cover stays
+    // one page whatever the logo size and title length.
+    if doc.cover_photo_key != none {
+      v(0.8cm)
+      block(width: 100%, height: 1fr, clip: true, radius: 2pt,
+        picture(doc.cover_photo_key, width: 100%, height: 100%, fit: "cover"))
+      v(0.8cm)
+    } else {
+      v(1fr)
+    }
   }
-  #if contractor != none { party_block(contractor) }
 ]
 
 #set page(
@@ -196,10 +270,7 @@
 
 #titled(primary, weight: "bold", size: 20pt, style.parties_title)
 #v(10pt)
-#for party in doc.parties {
-  party_block(party)
-  v(16pt)
-}
+#for party in doc.parties { party_table(party) }
 
 #pagebreak(weak: true)
 #titled(primary, weight: "bold", size: 20pt, style.contents_title)

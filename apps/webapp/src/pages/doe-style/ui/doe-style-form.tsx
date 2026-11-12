@@ -56,6 +56,8 @@ interface DoeStyleFormProps {
 	onRotateDecoration: (index: number, rotation: number) => void
 	onDecorationImageUpload: (index: number, file: File) => void
 	onOpenLayoutEditor: () => void
+	onCustomizeCover: () => void
+	onResetCover: () => void
 	onSelectPage: (index: number) => void
 	onApplyTheme: (theme: DoeTheme) => void
 	onChange: (patch: Partial<CompleteDoeStyle>) => void
@@ -97,6 +99,8 @@ export function DoeStyleForm({
 	onRotateDecoration,
 	onDecorationImageUpload,
 	onOpenLayoutEditor,
+	onCustomizeCover,
+	onResetCover,
 	onSelectPage,
 	onApplyTheme,
 	onChange,
@@ -109,7 +113,7 @@ export function DoeStyleForm({
 			<div className="grid min-w-0 grid-cols-1 content-start gap-5">
 				<DoeThemePicker activeId={activeThemeId} onApply={onApplyTheme} />
 				<Group title="Couleurs" defaultOpen>
-					<div className="grid gap-4 md:grid-cols-3">
+					<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 						<ColorField
 							label="Couleur principale"
 							value={value.primary}
@@ -121,6 +125,12 @@ export function DoeStyleForm({
 							value={value.secondary}
 							error={errors.secondary}
 							onChange={(secondary) => onChange({ secondary })}
+						/>
+						<ColorField
+							label="Lignes des intervenants"
+							value={value.party_color}
+							error={errors.party_color}
+							onChange={(party_color) => onChange({ party_color })}
 						/>
 						<ColorField
 							label="Texte sur les bandeaux"
@@ -192,11 +202,44 @@ export function DoeStyleForm({
 							</RequirePermission>
 						</div>
 					</div>
+					<div className="flex flex-wrap items-center gap-3">
+						{value.cover_layout === null ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={onCustomizeCover}
+							>
+								Personnaliser la couverture
+							</Button>
+						) : (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={onResetCover}
+							>
+								Rétablir la couverture par défaut
+							</Button>
+						)}
+						{value.cover_layout === null ? null : (
+							<p className="text-xs text-muted-foreground">
+								La mise en page personnalisée remplace la position et la taille
+								du logo. Ajustez les blocs dans l'éditeur de mise en page.
+							</p>
+						)}
+					</div>
+					{errors.cover_layout ? (
+						<p role="alert" className="text-[12px] text-state-alert">
+							{errors.cover_layout}
+						</p>
+					) : null}
 					<div className="grid gap-4 md:grid-cols-2">
 						<div className="flex flex-col gap-2">
 							<Label>Position du logo</Label>
 							<Select
 								value={value.cover_logo_position}
+								disabled={value.cover_layout !== null}
 								onValueChange={(next) =>
 									onChange({ cover_logo_position: next as LogoPosition })
 								}
@@ -219,6 +262,7 @@ export function DoeStyleForm({
 							<Label>Taille du logo</Label>
 							<Select
 								value={value.cover_logo_size}
+								disabled={value.cover_layout !== null}
 								onValueChange={(next) =>
 									onChange({ cover_logo_size: next as LogoSize })
 								}

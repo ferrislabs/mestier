@@ -131,6 +131,10 @@ fn party(role: PartyRole, name: &str, logo: Option<&str>) -> DoeParty {
         phone: Some("01 02 03 04 05".to_owned()),
         email: Some("contact@example.fr".to_owned()),
         logo_key: logo.map(str::to_owned),
+        contact_name: (role == PartyRole::ProjectManager).then(|| "Claire Dupont".to_owned()),
+        contact_role: (role == PartyRole::ProjectManager).then(|| "Paysagiste".to_owned()),
+        contact_email: (role == PartyRole::ProjectManager)
+            .then(|| "claire@atelier-paysage.fr".to_owned()),
     }
 }
 
@@ -281,6 +285,35 @@ fn spec_style_1_default_style_prints_the_titles_of_before_in_inter() {
 }
 
 #[test]
+fn parties_are_tables_with_a_role_row_and_the_contractor_moves_to_the_cover() {
+    let (document, bundle) = fixture();
+    let bytes = TypstDoeRenderer.render(&document, &bundle).unwrap();
+    if let Ok(path) = std::env::var("DOE_PARTIES_OUT") {
+        std::fs::write(path, &bytes).unwrap();
+    }
+    let doc = Document::load_mem(&bytes).unwrap();
+    let text_on = |page: u32| doc.extract_text(&[page]).unwrap_or_default();
+    let cover = text_on(1);
+    assert!(cover.contains("Verts Travaux"), "{cover}");
+    assert!(cover.contains("contact@example.fr"), "{cover}");
+    let parties = text_on(2);
+    for expected in [
+        "Maîtrise d’ouvrage",
+        "Maîtrise d’œuvre",
+        "Entreprise adjudicatrice",
+        "Contact chantier",
+        "Claire Dupont",
+        "Paysagiste",
+        "claire@atelier-paysage.fr",
+    ] {
+        assert!(
+            parties.contains(expected),
+            "{expected} missing from {parties}"
+        );
+    }
+}
+
+#[test]
 fn spec_style_2_a_custom_style_reaches_the_pdf() {
     let (mut document, mut bundle) = fixture();
     bundle.insert("cover".into(), file("image/jpeg", jpeg(800, 500, 99)));
@@ -289,11 +322,13 @@ fn spec_style_2_a_custom_style_reaches_the_pdf() {
         primary: HexColor::try_from("#7a1f2b".to_owned()).unwrap(),
         secondary: HexColor::try_from("#335533".to_owned()).unwrap(),
         on_primary: HexColor::try_from("#ffe9a8".to_owned()).unwrap(),
+        party_color: HexColor::try_from("#224488".to_owned()).unwrap(),
         heading_font: DoeFont::Montserrat,
         body_font: DoeFont::SourceSerif,
         logo_key: Some("logo".to_owned()),
         cover_logo_position: LogoPosition::Right,
         cover_logo_size: LogoSize::Large,
+        cover_layout: None,
         cover_photo: true,
         header_logo: true,
         header_text: DoeTemplate::try_from("{titre}".to_owned()).unwrap(),
@@ -721,4 +756,82 @@ fn layout_a_mirror_is_applied_before_the_rotation() {
 #[test]
 fn layout_an_upright_element_is_only_moved() {
     assert!(magenta_transform("").starts_with("translate("));
+}
+
+fn block(x: f32, y: f32, width: f32, height: f32, visible: bool) -> String {
+    format!(r#"{{"x":{x},"y":{y},"width":{width},"height":{height},"visible":{visible}}}"#)
+}
+
+fn laid_out_cover(place_visible: bool, title: &str) -> (DoeDocument, FileBundle) {
+    let (mut document, mut bundle) = fixture();
+    bundle.insert("cover".into(), file("image/jpeg", jpeg(800, 500, 99)));
+    let layout = format!(
+        r#"{{"cover_layout":{{"logo":{},"company":{},"place":{},"title":{title},"meta":{},"photo":{}}}}}"#,
+        block(10.0, 10.0, 50.0, 25.0, true),
+        block(120.0, 10.0, 80.0, 25.0, true),
+        block(10.0, 40.0, 60.0, 10.0, place_visible),
+        block(10.0, 250.0, 90.0, 25.0, true),
+        block(10.0, 60.0, 190.0, 120.0, true),
+    );
+    let style: DoeStyle = serde_json::from_str(&layout).unwrap();
+    document.style = DocumentStyle::from(&DoeStyle {
+        logo_key: Some("logo".to_owned()),
+        primary: HexColor::try_from(MAGENTA.to_owned()).unwrap(),
+        ..style
+    });
+    document.cover_photo_key = Some("cover".to_owned());
+    (document, bundle)
+}
+
+fn cover_text(document: &DoeDocument, bundle: &FileBundle) -> (usize, String) {
+    let bytes = TypstDoeRenderer.render(document, bundle).unwrap();
+    let doc = Document::load_mem(&bytes).unwrap();
+    let pages = doc.get_pages().len();
+    (pages, doc.extract_text(&[1]).unwrap_or_default())
+}
+
+#[test]
+fn cover_layout_places_every_block_on_one_cover_page() {
+    let (document, bundle) = laid_out_cover(true, &block(10.0, 200.0, 190.0, 40.0, true));
+    if let Ok(path) = std::env::var("DOE_COVER_OUT") {
+        std::fs::write(path, TypstDoeRenderer.render(&document, &bundle).unwrap()).unwrap();
+    }
+    let (pages, text) = cover_text(&document, &bundle);
+    assert_eq!(pages, 14);
+    for expected in [
+        "Aménagement du parvis",
+        "Verts Travaux",
+        "Angers",
+        "Élodie Martin",
+    ] {
+        assert!(text.contains(expected), "{expected} missing from {text}");
+    }
+    assert!(pages_painted(&document, &bundle, MAGENTA).contains(&0));
+}
+
+#[test]
+fn cover_layout_a_hidden_block_is_not_printed() {
+    let (document, bundle) = laid_out_cover(false, &block(10.0, 200.0, 190.0, 40.0, true));
+    let (_, text) = cover_text(&document, &bundle);
+    assert!(!text.contains("Angers"), "{text}");
+    assert!(text.contains("Aménagement du parvis"), "{text}");
+}
+
+#[test]
+fn cover_layout_a_frame_too_small_for_the_title_still_gives_one_cover_page() {
+    let (document, bundle) = laid_out_cover(true, &block(10.0, 200.0, 20.0, 5.0, true));
+    let (pages, _) = cover_text(&document, &bundle);
+    assert_eq!(pages, 14);
+}
+
+#[test]
+fn cover_layout_rejects_a_frame_outside_the_page() {
+    let json = format!(
+        r#"{{"cover_layout":{{"logo":{0},"company":{0},"place":{0},"title":{1},"meta":{0},"photo":{0}}}}}"#,
+        block(0.0, 0.0, 10.0, 10.0, true),
+        block(100.0, 0.0, 120.0, 10.0, true),
+    );
+    assert!(serde_json::from_str::<DoeStyle>(&json).is_err());
+    let json = json.replace("120.0", "0");
+    assert!(serde_json::from_str::<DoeStyle>(&json).is_err());
 }

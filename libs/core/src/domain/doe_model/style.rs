@@ -407,6 +407,74 @@ impl TryFrom<RawDecoration> for DoeDecoration {
     }
 }
 
+/// One block of the cover, placed in millimeters from the page's top-left
+/// corner, whatever the margins. What it prints stays the same; a text that
+/// overflows its frame is cut.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(try_from = "RawCoverBlock")]
+pub struct CoverBlock {
+    pub x: Millimeters,
+    pub y: Millimeters,
+    pub width: Millimeters,
+    pub height: Millimeters,
+    pub visible: bool,
+}
+
+#[derive(Deserialize)]
+struct RawCoverBlock {
+    x: Millimeters,
+    y: Millimeters,
+    width: Millimeters,
+    height: Millimeters,
+    #[serde(default = "visible_by_default")]
+    visible: bool,
+}
+
+fn visible_by_default() -> bool {
+    true
+}
+
+impl TryFrom<RawCoverBlock> for CoverBlock {
+    type Error = CoreError;
+
+    fn try_from(raw: RawCoverBlock) -> Result<Self, Self::Error> {
+        let fits = raw.x.get() + raw.width.get() <= Millimeters::PAGE_WIDTH
+            && raw.y.get() + raw.height.get() <= Millimeters::PAGE_HEIGHT;
+        if !fits {
+            return Err(CoreError::Conflict(
+                "a cover block must stay inside the A4 page".to_owned(),
+            ));
+        }
+        if raw.width.get() <= 0.0 || raw.height.get() <= 0.0 {
+            return Err(CoreError::Conflict(
+                "a cover block needs a width and a height above 0".to_owned(),
+            ));
+        }
+        Ok(Self {
+            x: raw.x,
+            y: raw.y,
+            width: raw.width,
+            height: raw.height,
+            visible: raw.visible,
+        })
+    }
+}
+
+/// Where each block of the cover goes. All six are always present: a block
+/// is hidden, never missing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct CoverLayout {
+    pub logo: CoverBlock,
+    /// The contractor's name and details.
+    pub company: CoverBlock,
+    pub place: CoverBlock,
+    /// The band: document name, DOE title, lot.
+    pub title: CoverBlock,
+    /// Date, author, revision.
+    pub meta: CoverBlock,
+    pub photo: CoverBlock,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(default)]
 pub struct DoeStyle {
@@ -416,11 +484,16 @@ pub struct DoeStyle {
     pub secondary: HexColor,
     /// Text written on `primary`.
     pub on_primary: HexColor,
+    /// The role rows of the parties table: "Maîtrise d'ouvrage" and the like.
+    pub party_color: HexColor,
     pub heading_font: DoeFont,
     pub body_font: DoeFont,
     pub logo_key: Option<String>,
     pub cover_logo_position: LogoPosition,
     pub cover_logo_size: LogoSize,
+    /// Free placement of the cover's blocks; none keeps the cover flowing
+    /// top to bottom.
+    pub cover_layout: Option<CoverLayout>,
     /// Prints the DOE's cover photo, when it has one.
     pub cover_photo: bool,
     /// Repeats the logo in the running header.
@@ -460,11 +533,13 @@ impl Default for DoeStyle {
             primary: HexColor::mestier_default(),
             secondary: HexColor::mestier_default(),
             on_primary: HexColor::white(),
+            party_color: HexColor::mestier_default(),
             heading_font: DoeFont::Inter,
             body_font: DoeFont::Inter,
             logo_key: None,
             cover_logo_position: LogoPosition::Left,
             cover_logo_size: LogoSize::Medium,
+            cover_layout: None,
             cover_photo: true,
             header_logo: false,
             header_text: DoeTemplate::fixed("DOE – {titre}"),
@@ -513,6 +588,8 @@ mod tests {
         assert_eq!(style.primary.as_str(), "#0f3d36");
         assert_eq!(style.secondary.as_str(), "#0f3d36");
         assert_eq!(style.on_primary.as_str(), "#ffffff");
+        assert_eq!(style.party_color.as_str(), "#0f3d36");
+        assert!(style.cover_layout.is_none());
         assert_eq!(style.heading_font.family(), "Inter");
         assert_eq!(style.body_font.family(), "Inter");
         assert_eq!(style.header_text.fill(&values()), "DOE – Avenue du 8 mai");

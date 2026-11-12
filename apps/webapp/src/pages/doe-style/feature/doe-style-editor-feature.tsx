@@ -5,6 +5,7 @@ import { useFileUrls } from '#/hooks/use-file-url'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { LayoutEditorFeature } from '#/pages/doe-style/feature/layout-editor-feature'
 import { useStylePreviewPages } from '#/pages/doe-style/feature/use-style-preview-pages'
+import { defaultCoverLayout } from '#/pages/doe-style/lib/cover-layout'
 import {
 	decorationErrors,
 	type Rect,
@@ -112,6 +113,10 @@ export function DoeStyleEditorFeature({
 				}}
 				onSelectPage={setActivePage}
 				onApplyTheme={(theme) => onChange(applyTheme(value, theme))}
+				onCustomizeCover={() =>
+					onChange({ cover_layout: defaultCoverLayout() })
+				}
+				onResetCover={() => onChange({ cover_layout: null })}
 				logoUrl={logoPreview?.url}
 				isUploadingLogo={upload.isPending}
 				previewing={preview.isPending}
@@ -137,8 +142,8 @@ export function DoeStyleEditorFeature({
 							? value.primary.trim().toLowerCase()
 							: '#0f3d36'
 					}
-					onApply={(decorations) => {
-						onChange({ decorations })
+					onApply={(decorations, cover_layout) => {
+						onChange({ decorations, cover_layout })
 						setLayoutEditorOpen(false)
 					}}
 					onCancel={() => setLayoutEditorOpen(false)}

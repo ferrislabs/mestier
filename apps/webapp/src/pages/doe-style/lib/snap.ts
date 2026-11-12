@@ -35,6 +35,7 @@ export function collectGuides(
 	decorations: Decoration[],
 	pageIndex: number,
 	movingIndex: number | null,
+	extras: Rect[] = [],
 ): GuideSet {
 	const guides: GuideSet = { x: [...PAGE_GUIDES.x], y: [...PAGE_GUIDES.y] }
 	decorations.forEach((decoration, index) => {
@@ -43,6 +44,10 @@ export function collectGuides(
 		guides.x.push(box.x, box.x + box.width / 2, box.x + box.width)
 		guides.y.push(box.y, box.y + box.height / 2, box.y + box.height)
 	})
+	for (const box of extras) {
+		guides.x.push(box.x, box.x + box.width / 2, box.x + box.width)
+		guides.y.push(box.y, box.y + box.height / 2, box.y + box.height)
+	}
 	return guides
 }
 

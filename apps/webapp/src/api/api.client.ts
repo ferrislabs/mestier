@@ -443,6 +443,22 @@ export namespace Schemas {
     monthly_cost_cents?: (number | null) | undefined;
     weekly_contract_minutes: number;
   };
+  export type Millimeters = number;
+  export type CoverBlock = {
+    height: Millimeters;
+    visible: boolean;
+    width: Millimeters;
+    x: Millimeters;
+    y: Millimeters;
+  };
+  export type CoverLayout = {
+    company: CoverBlock;
+    logo: CoverBlock;
+    meta: CoverBlock;
+    photo: CoverBlock;
+    place: CoverBlock;
+    title: CoverBlock;
+  };
   export type CreateAbsenceRequest = {
     all_day?: boolean | undefined;
     end_date?: (string | null) | undefined;
@@ -545,7 +561,6 @@ export namespace Schemas {
   export type ImageFit = "contain" | "cover";
   export type Opacity = number;
   export type HexColor = string;
-  export type Millimeters = number;
   export type DecorationShape =
     | { fit?: ImageFit | undefined; key: string; kind: "image"; opacity?: Opacity | undefined }
     | { fill: HexColor; kind: "rectangle"; opacity?: Opacity | undefined; radius?: Millimeters | undefined };
@@ -567,6 +582,7 @@ export namespace Schemas {
   export type DoeStyle = Partial<{
     body_font: DoeFont;
     contents_title: DoeLabel;
+    cover_layout: null | CoverLayout;
     cover_logo_position: LogoPosition;
     cover_logo_size: LogoSize;
     cover_photo: boolean;
@@ -579,6 +595,7 @@ export namespace Schemas {
     logo_key: string | null;
     on_primary: HexColor;
     parties_title: DoeLabel;
+    party_color: HexColor;
     primary: HexColor;
     secondary: HexColor;
     supply_table_title: DoeLabel;
@@ -1155,6 +1172,9 @@ export namespace Schemas {
   export type PartyRole = "project_owner" | "project_manager" | "contractor";
   export type DoeParty = {
     address?: (string | null) | undefined;
+    contact_email?: (string | null) | undefined;
+    contact_name?: (string | null) | undefined;
+    contact_role?: (string | null) | undefined;
     email?: (string | null) | undefined;
     logo_key?: (string | null) | undefined;
     name: string;
@@ -11989,6 +12009,7 @@ export namespace Endpoints {
         data: Partial<{
           body_font: Schemas.DoeFont;
           contents_title: Schemas.DoeLabel;
+          cover_layout: null | Schemas.CoverLayout;
           cover_logo_position: Schemas.LogoPosition;
           cover_logo_size: Schemas.LogoSize;
           cover_photo: boolean;
@@ -12001,6 +12022,7 @@ export namespace Endpoints {
           logo_key: string | null;
           on_primary: Schemas.HexColor;
           parties_title: Schemas.DoeLabel;
+          party_color: Schemas.HexColor;
           primary: Schemas.HexColor;
           secondary: Schemas.HexColor;
           supply_table_title: Schemas.DoeLabel;

@@ -80,3 +80,13 @@ describe('snapRect', () => {
 		expect(snapped.lines).toEqual([{ axis: 'x', position: 210 }])
 	})
 })
+
+describe('collectGuides extras', () => {
+	it('adds the edges and centers of extra rectangles', () => {
+		const guides = collectGuides([], 0, null, [
+			{ x: 10, y: 20, width: 30, height: 40 },
+		])
+		expect(guides.x).toEqual(expect.arrayContaining([10, 25, 40]))
+		expect(guides.y).toEqual(expect.arrayContaining([20, 40, 60]))
+	})
+})

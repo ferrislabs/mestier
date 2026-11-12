@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { defaultCoverLayout } from '#/pages/doe-style/lib/cover-layout'
 import { DEFAULT_DOE_STYLE } from '#/pages/doe-style/lib/style'
 import {
 	activeThemeId,
@@ -41,6 +42,13 @@ describe('themes', () => {
 		expect(next.header_text).toBe('{titre} – {lot}')
 		expect(next.footer_text).toBe('')
 		expect(next.cover_title).toBe('MON DOE')
+	})
+
+	it('keeps the cover layout of the user', () => {
+		const layout = defaultCoverLayout()
+		const current = { ...DEFAULT_DOE_STYLE, cover_layout: layout }
+		expect(applyTheme(current, theme('corporate')).cover_layout).toBe(layout)
+		expect(activeThemeId(current)).toBe('sobre')
 	})
 
 	it('detects the active theme, and none once a value is tweaked', () => {

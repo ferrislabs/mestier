@@ -27,8 +27,9 @@ pub mod starter;
 pub mod style;
 
 pub use style::{
-    DecorationLayer, DecorationPages, DecorationShape, DoeDecoration, DoeFont, DoeLabel, DoeStyle,
-    DoeTemplate, ImageFit, LogoPosition, LogoSize, Millimeters, Opacity, Rotation, TemplateValues,
+    CoverBlock, CoverLayout, DecorationLayer, DecorationPages, DecorationShape, DoeDecoration,
+    DoeFont, DoeLabel, DoeStyle, DoeTemplate, ImageFit, LogoPosition, LogoSize, Millimeters,
+    Opacity, Rotation, TemplateValues,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
