@@ -79,7 +79,7 @@ describe('TrainingsPageFeature', () => {
 			screen.queryByRole('button', { name: 'Nouvelle formation' }),
 		).toBeNull()
 		expect(
-			screen.queryByRole('button', { name: 'Archiver CAP Menuiserie' }),
+			screen.queryByRole('button', { name: 'Actions CAP Menuiserie' }),
 		).toBeNull()
 	})
 
@@ -90,7 +90,49 @@ describe('TrainingsPageFeature', () => {
 			await screen.findByRole('button', { name: 'Nouvelle formation' }),
 		).toBeTruthy()
 		expect(
-			await screen.findByRole('button', { name: 'Archiver CAP Menuiserie' }),
+			await screen.findByRole('button', { name: 'Actions CAP Menuiserie' }),
 		).toBeTruthy()
+	})
+
+	it('counts the active entries in the header', async () => {
+		renderPage(['VIEW_CURSUS'])
+
+		expect(await screen.findByText('1 formation active')).toBeTruthy()
+	})
+
+	it('sends the typed search as q', { timeout: 15_000 }, async () => {
+		const user = userEvent.setup()
+		renderPage(['VIEW_CURSUS'])
+		await screen.findByText('CAP Menuiserie')
+
+		await user.click(
+			screen.getByPlaceholderText('Rechercher une formation, un code RNCP'),
+		)
+		await user.paste('CAP')
+
+		await waitFor(() =>
+			expect(
+				(callsTo(api, 'get', PATH).at(-1)?.params as { query: object }).query,
+			).toMatchObject({ q: 'CAP' }),
+		)
+	})
+
+	it('archives an entry from its row menu', { timeout: 15_000 }, async () => {
+		const user = userEvent.setup()
+		api.mockMutation('post', `${PATH}/{training_id}/archive`, () => ({
+			data: {},
+		}))
+		renderPage(['VIEW_CURSUS', 'MANAGE_CURSUS_CATALOG'])
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Actions CAP Menuiserie' }),
+		)
+		await user.click(await screen.findByRole('menuitem', { name: 'Archiver' }))
+
+		await waitFor(() =>
+			expect(
+				callsTo(api, 'post', `${PATH}/{training_id}/archive`),
+			).toHaveLength(1),
+		)
 	})
 })

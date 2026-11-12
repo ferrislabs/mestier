@@ -41,8 +41,8 @@ export function CursusSidebarFeature() {
 	)
 	const participants = useParticipants(organizationId, { per_page: 1 }, canView)
 	const companies = useHostCompanies(organizationId, { per_page: 1 }, canView)
-	const trainings = useTrainings(organizationId, false, canView)
-	const establishments = useEstablishments(organizationId, false, canView)
+	const trainings = useTrainings(organizationId, {}, canView)
+	const establishments = useEstablishments(organizationId, {}, canView)
 
 	return (
 		<CursusSidebar

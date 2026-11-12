@@ -1,19 +1,16 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { EstablishmentsBlock } from '#/pages/cursus/catalog/ui/catalog-blocks'
+import { ClosureReasonsBlock } from '#/pages/cursus/catalog/ui/catalog-blocks'
 
 function renderBlock(canManage: boolean) {
 	render(
-		<EstablishmentsBlock
+		<ClosureReasonsBlock
 			items={[
 				{
-					id: 'e-1',
+					id: 'r-1',
 					organization_id: 'org-1',
-					name: 'CFA du Bâtiment',
-					uai: '0690001A',
-					is_main_site: true,
+					label: 'Rupture',
 					created_at: '2026-01-01T00:00:00Z',
-					updated_at: '2026-01-01T00:00:00Z',
 				},
 			]}
 			isLoading={false}
@@ -30,32 +27,27 @@ function renderBlock(canManage: boolean) {
 	)
 }
 
-describe('EstablishmentsBlock', () => {
-	it('lists establishments with the write controls for a manager', () => {
+describe('ClosureReasonsBlock', () => {
+	it('lists closure reasons with the write controls for a manager', () => {
 		renderBlock(true)
 
-		expect(screen.getByText('CFA du Bâtiment')).toBeTruthy()
-		expect(screen.getByText('Site principal')).toBeTruthy()
+		expect(screen.getByText('Rupture')).toBeTruthy()
+		expect(screen.getByRole('button', { name: 'Nouveau motif' })).toBeTruthy()
 		expect(
-			screen.getByRole('button', { name: 'Nouvel établissement' }),
-		).toBeTruthy()
-		expect(
-			screen.getByRole('button', { name: 'Archiver CFA du Bâtiment' }),
+			screen.getByRole('button', { name: 'Archiver Rupture' }),
 		).toBeTruthy()
 	})
 
 	it('hides every write control for a reader', () => {
 		renderBlock(false)
 
-		expect(screen.getByText('CFA du Bâtiment')).toBeTruthy()
+		expect(screen.getByText('Rupture')).toBeTruthy()
+		expect(screen.queryByRole('button', { name: 'Nouveau motif' })).toBeNull()
 		expect(
-			screen.queryByRole('button', { name: 'Nouvel établissement' }),
+			screen.queryByRole('button', { name: 'Archiver Rupture' }),
 		).toBeNull()
 		expect(
-			screen.queryByRole('button', { name: 'Archiver CFA du Bâtiment' }),
-		).toBeNull()
-		expect(
-			screen.queryByRole('button', { name: 'Modifier CFA du Bâtiment' }),
+			screen.queryByRole('button', { name: 'Modifier Rupture' }),
 		).toBeNull()
 	})
 })

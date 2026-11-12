@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { invalidateCursus } from '#/pages/cursus/participants/lib/forms'
+import {
+	type ArchiveFilter,
+	archiveQuery,
+	searchQuery,
+} from '#/pages/cursus/shared/lib/list-filters'
 
 const BASE = '/api/v1/organizations/{organization_id}/cursus'
 export const ESTABLISHMENTS_PATH = `${BASE}/establishments` as const
@@ -17,15 +22,23 @@ export const CLOSURE_REASON_PATH =
 export const CLOSURE_REASON_ARCHIVE_PATH =
 	`${BASE}/closure-reasons/{closure_reason_id}/archive` as const
 
+export interface CatalogFilters {
+	archived?: ArchiveFilter
+	q?: string
+}
+
 export function useEstablishments(
 	organizationId: string,
-	archived = false,
+	filters: CatalogFilters = {},
 	enabled = true,
 ) {
 	return useQuery({
 		...window.tanstackApi.get(ESTABLISHMENTS_PATH, {
 			path: { organization_id: organizationId },
-			query: archived ? { archived: 'all' } : {},
+			query: {
+				...archiveQuery(filters.archived ?? 'active'),
+				...searchQuery(filters.q),
+			},
 		}).queryOptions,
 		enabled,
 	})
@@ -33,13 +46,17 @@ export function useEstablishments(
 
 export function useTrainings(
 	organizationId: string,
-	archived = false,
+	filters: CatalogFilters = {},
 	enabled = true,
 ) {
 	return useQuery({
 		...window.tanstackApi.get(TRAININGS_PATH, {
 			path: { organization_id: organizationId },
-			query: archived ? { archived: 'all', per_page: 100 } : { per_page: 100 },
+			query: {
+				...archiveQuery(filters.archived ?? 'active'),
+				...searchQuery(filters.q),
+				per_page: 100,
+			},
 		}).queryOptions,
 		enabled,
 	})

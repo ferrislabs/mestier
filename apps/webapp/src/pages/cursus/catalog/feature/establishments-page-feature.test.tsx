@@ -82,7 +82,7 @@ describe('EstablishmentsPageFeature', () => {
 			screen.queryByRole('button', { name: 'Nouvel établissement' }),
 		).toBeNull()
 		expect(
-			screen.queryByRole('button', { name: 'Archiver CFA du Bâtiment' }),
+			screen.queryByRole('button', { name: 'Actions CFA du Bâtiment' }),
 		).toBeNull()
 	})
 
@@ -93,7 +93,49 @@ describe('EstablishmentsPageFeature', () => {
 			await screen.findByRole('button', { name: 'Nouvel établissement' }),
 		).toBeTruthy()
 		expect(
-			await screen.findByRole('button', { name: 'Archiver CFA du Bâtiment' }),
+			await screen.findByRole('button', { name: 'Actions CFA du Bâtiment' }),
 		).toBeTruthy()
+	})
+
+	it('counts the active entries in the header', async () => {
+		renderPage(['VIEW_CURSUS'])
+
+		expect(await screen.findByText('1 établissement actif')).toBeTruthy()
+	})
+
+	it('sends the typed search as q', { timeout: 15_000 }, async () => {
+		const user = userEvent.setup()
+		renderPage(['VIEW_CURSUS'])
+		await screen.findByText('CFA du Bâtiment')
+
+		await user.click(
+			screen.getByPlaceholderText('Rechercher un établissement, un UAI'),
+		)
+		await user.paste('CFA')
+
+		await waitFor(() =>
+			expect(
+				(callsTo(api, 'get', PATH).at(-1)?.params as { query: object }).query,
+			).toMatchObject({ q: 'CFA' }),
+		)
+	})
+
+	it('archives an entry from its row menu', { timeout: 15_000 }, async () => {
+		const user = userEvent.setup()
+		api.mockMutation('post', `${PATH}/{establishment_id}/archive`, () => ({
+			data: {},
+		}))
+		renderPage(['VIEW_CURSUS', 'MANAGE_CURSUS_CATALOG'])
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Actions CFA du Bâtiment' }),
+		)
+		await user.click(await screen.findByRole('menuitem', { name: 'Archiver' }))
+
+		await waitFor(() =>
+			expect(
+				callsTo(api, 'post', `${PATH}/{establishment_id}/archive`),
+			).toHaveLength(1),
+		)
 	})
 })
