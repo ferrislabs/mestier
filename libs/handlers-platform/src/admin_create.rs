@@ -4,7 +4,7 @@ use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
 use mestier_core::CreateNewsCommand;
 
 use crate::{
-    AdminNewsPath, news_editor, request::NewsRequest, response::NewsResponse, unprocessable,
+    AdminNewsPath, platform_admin, request::NewsRequest, response::NewsResponse, unprocessable,
 };
 
 #[utoipa::path(
@@ -27,7 +27,7 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
     Json(payload): Json<NewsRequest>,
 ) -> Result<Response<NewsResponse>, ApiError> {
-    let editor = news_editor(&identity)?;
+    let admin = platform_admin(&identity)?;
     let (user_id, _) = resolve_actor(&state, &identity).await?;
     let (content, published_at) = payload.into_parts();
 
@@ -35,7 +35,7 @@ pub async fn handler(
         .usecase
         .acting_as(user_id)
         .create_news(CreateNewsCommand {
-            editor,
+            admin,
             content,
             published_at,
         })

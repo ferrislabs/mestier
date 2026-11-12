@@ -2996,10 +2996,13 @@ dependencies = [
  "serde",
  "serde_json",
  "server",
+ "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower",
  "tracing",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -3235,6 +3238,7 @@ dependencies = [
  "doc-render",
  "handlers",
  "handlers-knowledge",
+ "handlers-organization",
  "handlers-platform",
  "http 1.4.0",
  "image",

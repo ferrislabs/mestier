@@ -40,3 +40,9 @@ pub struct OrganizationNumberingSeriesPath {
     pub organization_id: OrganizationId,
     pub kind: crate::numbering::NumberSeriesKind,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/features")]
+pub struct OrganizationFeaturesPath {
+    pub organization_id: OrganizationId,
+}

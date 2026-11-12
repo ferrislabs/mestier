@@ -12,13 +12,18 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as AppAdminRouteImport } from './routes/_app.admin'
+import { Route as AppAdminIndexRouteImport } from './routes/_app.admin.index'
 import { Route as AppOOrganizationSlugRouteImport } from './routes/_app.o.$organizationSlug'
 import { Route as AppFieldOrganizationSlugRouteImport } from './routes/_app.field.$organizationSlug'
+import { Route as AppAdminUtilisateursRouteImport } from './routes/_app.admin.utilisateurs'
 import { Route as AppAdminNewsRouteImport } from './routes/_app.admin.news'
 import { Route as AppOOrganizationSlugIndexRouteImport } from './routes/_app.o.$organizationSlug.index'
+import { Route as AppAdminOrganisationsIndexRouteImport } from './routes/_app.admin.organisations.index'
 import { Route as AppOOrganizationSlugSettingsRouteImport } from './routes/_app.o.$organizationSlug.settings'
 import { Route as AppOOrganizationSlugReportingRouteImport } from './routes/_app.o.$organizationSlug.reporting'
 import { Route as AppOOrganizationSlugDiscussionsRouteImport } from './routes/_app.o.$organizationSlug.discussions'
+import { Route as AppAdminOrganisationsOrganizationIdRouteImport } from './routes/_app.admin.organisations.$organizationId'
 import { Route as AppOOrganizationSlugSupportIndexRouteImport } from './routes/_app.o.$organizationSlug.support.index'
 import { Route as AppOOrganizationSlugRhIndexRouteImport } from './routes/_app.o.$organizationSlug.rh.index'
 import { Route as AppOOrganizationSlugPurchaseIndexRouteImport } from './routes/_app.o.$organizationSlug.purchase.index'
@@ -123,6 +128,16 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAdminRoute,
+} as any)
 const AppOOrganizationSlugRoute = AppOOrganizationSlugRouteImport.update({
   id: '/o/$organizationSlug',
   path: '/o/$organizationSlug',
@@ -134,16 +149,27 @@ const AppFieldOrganizationSlugRoute =
     path: '/field/$organizationSlug',
     getParentRoute: () => AppRoute,
   } as any)
+const AppAdminUtilisateursRoute = AppAdminUtilisateursRouteImport.update({
+  id: '/utilisateurs',
+  path: '/utilisateurs',
+  getParentRoute: () => AppAdminRoute,
+} as any)
 const AppAdminNewsRoute = AppAdminNewsRouteImport.update({
-  id: '/admin/news',
-  path: '/admin/news',
-  getParentRoute: () => AppRoute,
+  id: '/news',
+  path: '/news',
+  getParentRoute: () => AppAdminRoute,
 } as any)
 const AppOOrganizationSlugIndexRoute =
   AppOOrganizationSlugIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppAdminOrganisationsIndexRoute =
+  AppAdminOrganisationsIndexRouteImport.update({
+    id: '/organisations/',
+    path: '/organisations/',
+    getParentRoute: () => AppAdminRoute,
   } as any)
 const AppOOrganizationSlugSettingsRoute =
   AppOOrganizationSlugSettingsRouteImport.update({
@@ -162,6 +188,12 @@ const AppOOrganizationSlugDiscussionsRoute =
     id: '/discussions',
     path: '/discussions',
     getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppAdminOrganisationsOrganizationIdRoute =
+  AppAdminOrganisationsOrganizationIdRouteImport.update({
+    id: '/organisations/$organizationId',
+    path: '/organisations/$organizationId',
+    getParentRoute: () => AppAdminRoute,
   } as any)
 const AppOOrganizationSlugSupportIndexRoute =
   AppOOrganizationSlugSupportIndexRouteImport.update({
@@ -706,13 +738,18 @@ const AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/admin': typeof AppAdminRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
   '/admin/news': typeof AppAdminNewsRoute
+  '/admin/utilisateurs': typeof AppAdminUtilisateursRoute
   '/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
+  '/admin/': typeof AppAdminIndexRoute
+  '/admin/organisations/$organizationId': typeof AppAdminOrganisationsOrganizationIdRoute
   '/o/$organizationSlug/discussions': typeof AppOOrganizationSlugDiscussionsRouteWithChildren
   '/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
+  '/admin/organisations/': typeof AppAdminOrganisationsIndexRoute
   '/o/$organizationSlug/': typeof AppOOrganizationSlugIndexRoute
   '/o/$organizationSlug/automatisation/credentials': typeof AppOOrganizationSlugAutomatisationCredentialsRoute
   '/o/$organizationSlug/automatisation/identifications': typeof AppOOrganizationSlugAutomatisationIdentificationsRoute
@@ -808,9 +845,13 @@ export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
   '/': typeof AppIndexRoute
   '/admin/news': typeof AppAdminNewsRoute
+  '/admin/utilisateurs': typeof AppAdminUtilisateursRoute
   '/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
+  '/admin': typeof AppAdminIndexRoute
+  '/admin/organisations/$organizationId': typeof AppAdminOrganisationsOrganizationIdRoute
   '/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
+  '/admin/organisations': typeof AppAdminOrganisationsIndexRoute
   '/o/$organizationSlug': typeof AppOOrganizationSlugIndexRoute
   '/o/$organizationSlug/automatisation/credentials': typeof AppOOrganizationSlugAutomatisationCredentialsRoute
   '/o/$organizationSlug/automatisation/identifications': typeof AppOOrganizationSlugAutomatisationIdentificationsRoute
@@ -905,14 +946,19 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/_app/admin': typeof AppAdminRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
   '/_app/': typeof AppIndexRoute
   '/_app/admin/news': typeof AppAdminNewsRoute
+  '/_app/admin/utilisateurs': typeof AppAdminUtilisateursRoute
   '/_app/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
   '/_app/o/$organizationSlug': typeof AppOOrganizationSlugRouteWithChildren
+  '/_app/admin/': typeof AppAdminIndexRoute
+  '/_app/admin/organisations/$organizationId': typeof AppAdminOrganisationsOrganizationIdRoute
   '/_app/o/$organizationSlug/discussions': typeof AppOOrganizationSlugDiscussionsRouteWithChildren
   '/_app/o/$organizationSlug/reporting': typeof AppOOrganizationSlugReportingRoute
   '/_app/o/$organizationSlug/settings': typeof AppOOrganizationSlugSettingsRoute
+  '/_app/admin/organisations/': typeof AppAdminOrganisationsIndexRoute
   '/_app/o/$organizationSlug/': typeof AppOOrganizationSlugIndexRoute
   '/_app/o/$organizationSlug/automatisation/credentials': typeof AppOOrganizationSlugAutomatisationCredentialsRoute
   '/_app/o/$organizationSlug/automatisation/identifications': typeof AppOOrganizationSlugAutomatisationIdentificationsRoute
@@ -1008,13 +1054,18 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/invite/$token'
     | '/admin/news'
+    | '/admin/utilisateurs'
     | '/field/$organizationSlug'
     | '/o/$organizationSlug'
+    | '/admin/'
+    | '/admin/organisations/$organizationId'
     | '/o/$organizationSlug/discussions'
     | '/o/$organizationSlug/reporting'
     | '/o/$organizationSlug/settings'
+    | '/admin/organisations/'
     | '/o/$organizationSlug/'
     | '/o/$organizationSlug/automatisation/credentials'
     | '/o/$organizationSlug/automatisation/identifications'
@@ -1110,9 +1161,13 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/'
     | '/admin/news'
+    | '/admin/utilisateurs'
     | '/field/$organizationSlug'
+    | '/admin'
+    | '/admin/organisations/$organizationId'
     | '/o/$organizationSlug/reporting'
     | '/o/$organizationSlug/settings'
+    | '/admin/organisations'
     | '/o/$organizationSlug'
     | '/o/$organizationSlug/automatisation/credentials'
     | '/o/$organizationSlug/automatisation/identifications'
@@ -1206,14 +1261,19 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/_app/admin'
     | '/invite/$token'
     | '/_app/'
     | '/_app/admin/news'
+    | '/_app/admin/utilisateurs'
     | '/_app/field/$organizationSlug'
     | '/_app/o/$organizationSlug'
+    | '/_app/admin/'
+    | '/_app/admin/organisations/$organizationId'
     | '/_app/o/$organizationSlug/discussions'
     | '/_app/o/$organizationSlug/reporting'
     | '/_app/o/$organizationSlug/settings'
+    | '/_app/admin/organisations/'
     | '/_app/o/$organizationSlug/'
     | '/_app/o/$organizationSlug/automatisation/credentials'
     | '/_app/o/$organizationSlug/automatisation/identifications'
@@ -1334,6 +1394,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/admin': {
+      id: '/_app/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/': {
+      id: '/_app/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AppAdminIndexRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
     '/_app/o/$organizationSlug': {
       id: '/_app/o/$organizationSlug'
       path: '/o/$organizationSlug'
@@ -1348,12 +1422,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFieldOrganizationSlugRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/utilisateurs': {
+      id: '/_app/admin/utilisateurs'
+      path: '/utilisateurs'
+      fullPath: '/admin/utilisateurs'
+      preLoaderRoute: typeof AppAdminUtilisateursRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
     '/_app/admin/news': {
       id: '/_app/admin/news'
-      path: '/admin/news'
+      path: '/news'
       fullPath: '/admin/news'
       preLoaderRoute: typeof AppAdminNewsRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppAdminRoute
     }
     '/_app/o/$organizationSlug/': {
       id: '/_app/o/$organizationSlug/'
@@ -1361,6 +1442,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/o/$organizationSlug/'
       preLoaderRoute: typeof AppOOrganizationSlugIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/admin/organisations/': {
+      id: '/_app/admin/organisations/'
+      path: '/organisations'
+      fullPath: '/admin/organisations/'
+      preLoaderRoute: typeof AppAdminOrganisationsIndexRouteImport
+      parentRoute: typeof AppAdminRoute
     }
     '/_app/o/$organizationSlug/settings': {
       id: '/_app/o/$organizationSlug/settings'
@@ -1382,6 +1470,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/o/$organizationSlug/discussions'
       preLoaderRoute: typeof AppOOrganizationSlugDiscussionsRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/admin/organisations/$organizationId': {
+      id: '/_app/admin/organisations/$organizationId'
+      path: '/organisations/$organizationId'
+      fullPath: '/admin/organisations/$organizationId'
+      preLoaderRoute: typeof AppAdminOrganisationsOrganizationIdRouteImport
+      parentRoute: typeof AppAdminRoute
     }
     '/_app/o/$organizationSlug/support/': {
       id: '/_app/o/$organizationSlug/support/'
@@ -2009,6 +2104,27 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppAdminRouteChildren {
+  AppAdminNewsRoute: typeof AppAdminNewsRoute
+  AppAdminUtilisateursRoute: typeof AppAdminUtilisateursRoute
+  AppAdminIndexRoute: typeof AppAdminIndexRoute
+  AppAdminOrganisationsOrganizationIdRoute: typeof AppAdminOrganisationsOrganizationIdRoute
+  AppAdminOrganisationsIndexRoute: typeof AppAdminOrganisationsIndexRoute
+}
+
+const AppAdminRouteChildren: AppAdminRouteChildren = {
+  AppAdminNewsRoute: AppAdminNewsRoute,
+  AppAdminUtilisateursRoute: AppAdminUtilisateursRoute,
+  AppAdminIndexRoute: AppAdminIndexRoute,
+  AppAdminOrganisationsOrganizationIdRoute:
+    AppAdminOrganisationsOrganizationIdRoute,
+  AppAdminOrganisationsIndexRoute: AppAdminOrganisationsIndexRoute,
+}
+
+const AppAdminRouteWithChildren = AppAdminRoute._addFileChildren(
+  AppAdminRouteChildren,
+)
+
 interface AppOOrganizationSlugDiscussionsRouteChildren {
   AppOOrganizationSlugDiscussionsChannelIdRoute: typeof AppOOrganizationSlugDiscussionsChannelIdRoute
   AppOOrganizationSlugDiscussionsActiviteRoute: typeof AppOOrganizationSlugDiscussionsActiviteRoute
@@ -2300,15 +2416,15 @@ const AppOOrganizationSlugRouteWithChildren =
   AppOOrganizationSlugRoute._addFileChildren(AppOOrganizationSlugRouteChildren)
 
 interface AppRouteChildren {
+  AppAdminRoute: typeof AppAdminRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
-  AppAdminNewsRoute: typeof AppAdminNewsRoute
   AppFieldOrganizationSlugRoute: typeof AppFieldOrganizationSlugRoute
   AppOOrganizationSlugRoute: typeof AppOOrganizationSlugRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAdminRoute: AppAdminRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
-  AppAdminNewsRoute: AppAdminNewsRoute,
   AppFieldOrganizationSlugRoute: AppFieldOrganizationSlugRoute,
   AppOOrganizationSlugRoute: AppOOrganizationSlugRouteWithChildren,
 }

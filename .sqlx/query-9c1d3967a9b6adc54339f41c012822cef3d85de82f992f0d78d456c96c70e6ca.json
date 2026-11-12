@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT o.id, o.name, o.slug, o.created_at,\n                   (SELECT COUNT(*) FROM organization_members m\n                     WHERE m.organization_id = o.id\n                       AND m.deleted_at IS NULL\n                       AND m.user_id IS NOT NULL) AS \"member_count!\",\n                   ARRAY(SELECT f.flag FROM organization_feature_flags f\n                          WHERE f.org_id = o.id ORDER BY f.flag) AS \"features!\"\n            FROM organizations o\n            WHERE o.deleted_at IS NULL\n              AND ($1::text IS NULL OR o.name ILIKE $1 OR o.slug ILIKE $1)\n            ORDER BY o.created_at DESC, o.id\n            LIMIT $2 OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "member_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "features!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "9c1d3967a9b6adc54339f41c012822cef3d85de82f992f0d78d456c96c70e6ca"
+}

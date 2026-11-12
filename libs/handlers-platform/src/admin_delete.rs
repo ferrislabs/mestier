@@ -2,7 +2,7 @@ use auth::Identity;
 use axum::{Extension, extract::State, http::StatusCode};
 use handlers::{ApiError, AppState, resolve_actor};
 
-use crate::{AdminNewsItemPath, news_editor};
+use crate::{AdminNewsItemPath, platform_admin};
 
 #[utoipa::path(
     delete,
@@ -23,13 +23,13 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
 ) -> Result<StatusCode, ApiError> {
-    let editor = news_editor(&identity)?;
+    let admin = platform_admin(&identity)?;
     let (user_id, _) = resolve_actor(&state, &identity).await?;
 
     state
         .usecase
         .acting_as(user_id)
-        .delete_news(editor, news_id)
+        .delete_news(admin, news_id)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)

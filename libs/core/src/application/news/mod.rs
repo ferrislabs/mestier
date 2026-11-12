@@ -3,15 +3,13 @@ use common::{CoreError, generate_uuid_v7};
 use mestier_macros::transactional;
 
 use crate::{
-    CreateNewsCommand, News, NewsContent, NewsEditor, NewsId, NewsOutcome, UpdateNewsCommand,
+    CreateNewsCommand, News, NewsContent, NewsId, NewsOutcome, PlatformAdmin, UpdateNewsCommand,
     UserId, application::MestierUseCase, domain::news::ports::NewsRepository,
 };
 
 impl MestierUseCase {
-    /// The back-office use cases take a [`NewsEditor`], the proof that the
-    /// caller holds the role, instead of asking the policy engine.
     #[transactional(news)]
-    pub async fn list_news_for_admin(&self, _: NewsEditor) -> Result<Vec<News>, CoreError> {
+    pub async fn list_news_for_admin(&self, _: PlatformAdmin) -> Result<Vec<News>, CoreError> {
         let mut news_repository = news_repository;
 
         news_repository.list_all().await
@@ -66,7 +64,7 @@ impl MestierUseCase {
     }
 
     #[transactional(news)]
-    pub async fn delete_news(&self, _: NewsEditor, id: NewsId) -> Result<(), CoreError> {
+    pub async fn delete_news(&self, _: PlatformAdmin, id: NewsId) -> Result<(), CoreError> {
         let mut news_repository = news_repository;
 
         if news_repository.delete(id).await? {

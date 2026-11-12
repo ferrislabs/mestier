@@ -6,12 +6,10 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub mod commands;
-pub mod editor;
 pub mod error;
 pub mod ports;
 
 pub use commands::*;
-pub use editor::NewsEditor;
 pub use error::{NewsError, NewsOutcome};
 
 pub const MAX_NEWS_ITEMS: usize = 6;

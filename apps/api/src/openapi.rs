@@ -148,6 +148,7 @@ impl Modify for SecurityAddon {
         organization::list::handler,
         organization::list_mine::handler,
         organization::get_one::handler,
+        organization::features::handler,
         organization::update::handler,
         organization::update_legal_identity::handler,
         organization::soft_delete::handler,
@@ -465,6 +466,12 @@ impl Modify for SecurityAddon {
         platform::unseen::handler,
         platform::seen::handler,
         platform::access::handler,
+        platform::admin_stats::handler,
+        platform::admin_feature_catalogue::handler,
+        platform::admin_organizations::handler,
+        platform::admin_organization::handler,
+        platform::admin_set_feature::handler,
+        platform::admin_users::handler,
         platform::admin_list::handler,
         platform::admin_create::handler,
         platform::admin_update::handler,
@@ -540,7 +547,22 @@ impl Modify for SecurityAddon {
         platform::response::NewsResponse,
         platform::response::NewsItemResponse,
         platform::response::NewsCtaResponse,
-        platform::response::NewsAccessResponse,
+        platform::response::AdminAccessResponse,
+        platform::response::FeatureFlagResponse,
+        platform::response::WeeklyCountResponse,
+        platform::response::CreationCountsResponse,
+        platform::response::FlagAdoptionResponse,
+        platform::response::PlatformStatsResponse,
+        platform::response::AdminOrganizationSummaryResponse,
+        platform::response::AdminMemberResponse,
+        platform::response::AdminOrganizationFeatureResponse,
+        platform::response::AdminFeatureChangeResponse,
+        platform::response::AdminOrganizationResponse,
+        platform::response::AdminFeatureToggleResponse,
+        platform::response::AdminUserOrganizationResponse,
+        platform::response::AdminUserResponse,
+        platform::admin_set_feature::SetFeatureRequest,
+        organization::features::OrganizationFeaturesResponse,
         platform::request::NewsRequest,
         platform::request::NewsItemRequest,
         platform::request::NewsCtaRequest,
@@ -1004,6 +1026,7 @@ impl Modify for SecurityAddon {
         (name = "planning", description = "Team planning — tasks, assignments, working time and availability"),
         (name = "knowledge", description = "Knowledge base: files and documents searched by text and tags, linked to projects, customers and quotes"),
         (name = "news", description = "Product news: published to every user, written from a back-office reserved to platform administrators"),
+        (name = "admin", description = "Platform back-office, reserved to platform administrators: organizations, users, feature flags and global counts"),
         (name = "support", description = "Support tickets — kanban, thread, intake by organization API key"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
@@ -1913,7 +1936,6 @@ mod tests {
             "/api/v1/news",
             "/api/v1/news/unseen",
             "/api/v1/news/seen",
-            "/api/v1/news/access",
             "/api/v1/admin/news",
             "/api/v1/admin/news/{news_id}",
         ] {
@@ -1925,11 +1947,46 @@ mod tests {
             "listNews",
             "listUnseenNews",
             "markNewsSeen",
-            "getNewsAccess",
             "listNewsForAdmin",
             "createNews",
             "updateNews",
             "deleteNews",
+        ] {
+            assert!(
+                json.contains(&format!("\"operationId\":\"{operation_id}\"")),
+                "{operation_id}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_back_office_route_reaches_the_document() {
+        let document = ApiDoc::openapi();
+        let paths = &document.paths.paths;
+        for path in [
+            "/api/v1/admin/access",
+            "/api/v1/admin/stats",
+            "/api/v1/admin/features",
+            "/api/v1/admin/organizations",
+            "/api/v1/admin/organizations/{organization_id}",
+            "/api/v1/admin/organizations/{organization_id}/features/{flag}",
+            "/api/v1/admin/users",
+            "/api/v1/organizations/{organization_id}/features",
+        ] {
+            assert!(paths.contains_key(path), "{path}");
+        }
+        assert!(!paths.contains_key("/api/v1/news/access"));
+
+        let json = serde_json::to_string(&document).unwrap();
+        for operation_id in [
+            "getAdminAccess",
+            "getPlatformStats",
+            "listFeatureCatalogue",
+            "listOrganizationsForAdmin",
+            "getOrganizationForAdmin",
+            "setOrganizationFeature",
+            "listUsersForAdmin",
+            "getOrganizationFeatures",
         ] {
             assert!(
                 json.contains(&format!("\"operationId\":\"{operation_id}\"")),

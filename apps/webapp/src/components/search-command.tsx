@@ -12,8 +12,10 @@ import {
 	CommandList,
 } from '#/components/ui/command'
 import { Kbd } from '#/components/ui/kbd'
+import { useFeatures } from '#/hooks/use-features'
 import { usePermissions } from '#/hooks/use-permissions'
 import { cn } from '#/lib/utils'
+import { isFeatureVisible } from '#/modules/feature-gate'
 import { buildOrgPath } from '#/modules/org-path'
 import { useVisibleModules } from '#/modules/use-visible-modules'
 
@@ -33,6 +35,7 @@ export function SearchCommand({
 	const { data: permissionsData, isSuccess: permissionsLoaded } =
 		usePermissions()
 	const granted = permissionsData?.data.permissions ?? []
+	const { features, loaded: featuresLoaded } = useFeatures()
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
@@ -103,7 +106,8 @@ export function SearchCommand({
 											section.status !== 'coming-soon' &&
 											(!section.requiredPermission ||
 												(permissionsLoaded &&
-													granted.includes(section.requiredPermission))),
+													granted.includes(section.requiredPermission))) &&
+											isFeatureVisible(section, features, featuresLoaded),
 									)
 									.map((section) => {
 										const Icon = section.icon ?? module.icon

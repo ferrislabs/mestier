@@ -232,8 +232,18 @@ pub use domain::maintenance::overview::{
 
 pub use domain::{
     CreateNewsCommand, MAX_NEWS_ITEMS, MAX_SEEN_IDS, News, NewsContent, NewsContentInput, NewsCta,
-    NewsCtaInput, NewsEditor, NewsError, NewsIcon, NewsId, NewsItem, NewsItemInput, NewsOutcome,
+    NewsCtaInput, NewsError, NewsIcon, NewsId, NewsItem, NewsItemInput, NewsOutcome,
     UpdateNewsCommand, check_seen_ids,
+};
+
+pub use domain::{
+    CreationCounts, FeatureActivation, FeatureChange, FeatureFlag, FlagAdoption, HISTORY_LIMIT,
+    OrganizationDetail, OrganizationFeature, OrganizationMemberSummary, OrganizationOverview,
+    OrganizationSummary, PlatformAdmin, PlatformStats, RECENT_DAYS, STATS_WEEKS,
+    UnknownFeatureFlag, UserOrganization, UserSummary, WeeklyCount,
+    feature_flag::events::{FEATURE_DISABLED, FEATURE_ENABLED, FeatureDisabled, FeatureEnabled},
+    feature_flag::ports::FeatureFlagRepository,
+    platform::ports::PlatformAdminRepository,
 };
 
 pub use domain::{

@@ -11,7 +11,7 @@ import {
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { useNewsAccess } from '#/hooks/use-news'
+import { useAdminAccess } from '#/hooks/use-admin'
 import { cn } from '#/lib/utils'
 import { buildOrgPath } from '#/modules/org-path'
 import { openAllNews } from '#/store/news.store'
@@ -30,7 +30,7 @@ export function UserMenu({
 	showIdentity = false,
 }: UserMenuProps) {
 	const auth = useAuth()
-	const canManageNews = useNewsAccess().data?.data.can_manage === true
+	const canAccessAdmin = useAdminAccess().data?.data.can_access === true
 	const { activeOrganization } = useActiveOrganization()
 	const profile = auth.user?.profile
 	const displayName =
@@ -87,11 +87,11 @@ export function UserMenu({
 					<Megaphone />
 					Nouveautés
 				</DropdownMenuItem>
-				{canManageNews ? (
+				{canAccessAdmin ? (
 					<DropdownMenuItem asChild>
-						<Link to="/admin/news">
+						<Link to="/admin">
 							<SquarePen />
-							Back-office news
+							Back-office
 						</Link>
 					</DropdownMenuItem>
 				) : null}

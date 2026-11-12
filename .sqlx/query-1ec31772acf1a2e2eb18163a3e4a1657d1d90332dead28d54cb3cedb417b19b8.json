@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT flag, enabled_at, enabled_by\n            FROM organization_feature_flags\n            WHERE org_id = $1\n            ORDER BY enabled_at, flag\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "flag",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "enabled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "enabled_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "1ec31772acf1a2e2eb18163a3e4a1657d1d90332dead28d54cb3cedb417b19b8"
+}

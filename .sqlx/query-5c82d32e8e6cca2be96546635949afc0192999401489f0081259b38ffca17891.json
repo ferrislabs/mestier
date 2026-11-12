@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO organization_feature_flags (org_id, flag, enabled_by)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (org_id, flag) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c82d32e8e6cca2be96546635949afc0192999401489f0081259b38ffca17891"
+}

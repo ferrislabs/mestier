@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType } from 'react'
+import type { FeatureKey } from '#/hooks/use-features'
 import type { PermissionName } from '#/hooks/use-permissions'
 
 export type ModuleId =
@@ -43,6 +44,12 @@ export interface NavTarget {
 	 * doc comment.
 	 */
 	requiredPermission?: PermissionName
+	/**
+	 * Hidden entirely while the active organization has not been granted this
+	 * feature flag, loading included. Presentation only: the API gates on the
+	 * flag by itself.
+	 */
+	requiredFeature?: FeatureKey
 }
 
 /** Second level: horizontal tabs, under the breadcrumb. */
@@ -102,4 +109,5 @@ export interface AppModule {
 		badge?: ComponentType
 	}
 	requiredPermission?: PermissionName
+	requiredFeature?: FeatureKey
 }

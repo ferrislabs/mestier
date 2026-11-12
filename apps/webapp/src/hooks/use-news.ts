@@ -4,7 +4,6 @@ import type { Schemas } from '#/api/api.client'
 const NEWS_PATH = '/api/v1/news'
 const NEWS_UNSEEN_PATH = '/api/v1/news/unseen'
 const NEWS_SEEN_PATH = '/api/v1/news/seen'
-const NEWS_ACCESS_PATH = '/api/v1/news/access'
 const ADMIN_NEWS_PATH = '/api/v1/admin/news'
 const ADMIN_NEWS_ITEM_PATH = '/api/v1/admin/news/{news_id}'
 
@@ -22,14 +21,6 @@ function queryId(queryKey: readonly unknown[]) {
 	return typeof meta === 'object' && meta !== null
 		? (meta as { _id?: unknown })._id
 		: null
-}
-
-export function useNewsAccess() {
-	return useQuery({
-		...window.tanstackApi.get(NEWS_ACCESS_PATH).queryOptions,
-		staleTime: 5 * 60 * 1000,
-		retry: false,
-	})
 }
 
 export function useUnseenNews() {

@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT e.name, e.payload->>'flag' AS \"flag?\", e.actor_kind, e.actor_id,\n                   u.display_name AS \"actor_name?\", e.occurred_at\n            FROM automation.event e\n            LEFT JOIN users u ON e.actor_kind = 'user' AND u.id = e.actor_id\n            WHERE e.org_id = $1 AND e.name IN ($2, $3)\n            ORDER BY e.occurred_at DESC, e.id DESC\n            LIMIT $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "flag?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "actor_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "actor_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "actor_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "1cc99367439b97f5090d5b9f85a17f2a136ead4d3fa5ae8bb8871aff263bb9db"
+}

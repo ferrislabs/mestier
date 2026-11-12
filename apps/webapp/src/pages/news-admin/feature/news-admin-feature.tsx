@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import type { Schemas } from '#/api/api.client'
-import { useAdminNews, useNewsAccess } from '#/hooks/use-news'
+import { useAdminNews } from '#/hooks/use-news'
 import { mutationErrorMessage } from '#/lib/api-error'
-import { NewsAccessDenied } from '#/pages/news-admin/ui/news-access-denied'
 import { NewsAdminList } from '#/pages/news-admin/ui/news-admin-list'
 import { NewsEditorFeature } from './news-editor-feature'
 
@@ -12,13 +11,8 @@ type Selection =
 	| { kind: 'edit'; news: Schemas.NewsResponse }
 
 export function NewsAdminFeature() {
-	const access = useNewsAccess()
-	const canManage = access.data?.data.can_manage === true
-	const list = useAdminNews(canManage)
+	const list = useAdminNews(true)
 	const [selection, setSelection] = useState<Selection>({ kind: 'list' })
-
-	if (access.isPending) return null
-	if (!canManage) return <NewsAccessDenied />
 
 	if (selection.kind !== 'list') {
 		return (

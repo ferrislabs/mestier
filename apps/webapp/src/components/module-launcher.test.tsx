@@ -20,6 +20,8 @@ const ORGANIZATION = { id: 'org-1', name: 'Dupont', slug: 'dupont' }
 const MY_PERMISSIONS_PATH =
 	'/api/v1/organizations/{organization_id}/members/me/permissions'
 
+const FEATURES_PATH = '/api/v1/organizations/{organization_id}/features'
+
 const EVERY_PERMISSION: PermissionName[] = [
 	'MANAGE_ORG',
 	'MANAGE_MEMBERS',
@@ -45,7 +47,7 @@ const EVERY_PERMISSION: PermissionName[] = [
 	'VIEW_SUPPORT',
 ]
 
-function installFakePermissionsApi(permissions: string[]) {
+function installFakePermissionsApi(permissions: string[], features: string[]) {
 	const fakeApi = {
 		get(path: string, params: unknown) {
 			const queryKey = [
@@ -58,6 +60,9 @@ function installFakePermissionsApi(permissions: string[]) {
 					queryFn: async () => {
 						if (path === MY_PERMISSIONS_PATH) {
 							return { data: { permissions }, pagination: null }
+						}
+						if (path === FEATURES_PATH) {
+							return { data: { features }, pagination: null }
 						}
 						throw new Error(`unmocked GET ${path}`)
 					},
@@ -121,8 +126,9 @@ function renderLauncher(
 	children: ReactNode,
 	initialPath = '/',
 	permissions: string[] = EVERY_PERMISSION,
+	features: string[] = [],
 ) {
-	installFakePermissionsApi(permissions)
+	installFakePermissionsApi(permissions, features)
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	})
@@ -326,5 +332,53 @@ describe('ModuleLauncher', () => {
 
 		expect(screen.queryByText('Module réservé')).toBeNull()
 		expect(screen.getByText('CRM')).toBeDefined()
+	})
+
+	describe('feature-gated module', () => {
+		const featureFixture: AppModule = {
+			id: 'test-feature-fixture' as ModuleId,
+			label: 'Module en option',
+			icon: LayoutDashboard,
+			basePath: '/test-feature-fixture',
+			status: 'available',
+			hasOverview: false,
+			sections: [],
+			requiredFeature: 'drive_ai',
+		}
+
+		beforeEach(() => {
+			MODULES.push(featureFixture)
+		})
+
+		afterEach(() => {
+			const index = MODULES.indexOf(featureFixture)
+			if (index !== -1) MODULES.splice(index, 1)
+		})
+
+		it('hides a module whose feature is not enabled for the organization', async () => {
+			await renderLauncher(
+				<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />,
+			)
+			await openLauncher()
+
+			expect(screen.queryByText('Module en option')).toBeNull()
+			expect(screen.getByText('CRM')).toBeDefined()
+		})
+
+		it('shows it once the feature is enabled', async () => {
+			await renderLauncher(
+				<ModuleLauncher activeModuleId="home" organizationSlug="dupont" />,
+				'/',
+				EVERY_PERMISSION,
+				['drive_ai'],
+			)
+			await userEvent.click(
+				screen.getByRole('button', { name: 'Changer de module' }),
+			)
+
+			await waitFor(() => {
+				expect(screen.getByText('Module en option')).toBeDefined()
+			})
+		})
 	})
 })
