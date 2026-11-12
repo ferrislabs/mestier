@@ -55,6 +55,7 @@ import {
 import { ActivityBadgeFeature } from '#/pages/chat/feature/activity-badge-feature'
 import { ChatSidebarFeature } from '#/pages/chat/feature/chat-sidebar-feature'
 import { CrmSidebarFeature } from '#/pages/crm-nav/feature/crm-sidebar-feature'
+import { CursusSidebarFeature } from '#/pages/cursus/nav/feature/cursus-sidebar-feature'
 import { ProjetSidebarFeature } from '#/pages/projet/feature/projet-sidebar-feature'
 import { RhSidebarFeature } from '#/pages/rh-nav/feature/rh-sidebar-feature'
 
@@ -357,6 +358,7 @@ export const MODULES: AppModule[] = [
 		basePath: '/cursus',
 		status: 'available',
 		hasOverview: false,
+		sidebar: CursusSidebarFeature,
 		sections: [
 			{
 				id: 'promotions',

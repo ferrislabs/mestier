@@ -11,7 +11,10 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { buildOrgPath } from '#/modules/org-path'
-import { CURSUS_ENTRY, type CursusEntry } from '#/pages/cursus/nav/lib/cursus-path'
+import {
+	CURSUS_ENTRY,
+	type CursusEntry,
+} from '#/pages/cursus/nav/lib/cursus-path'
 import {
 	SidebarEntryContent,
 	SidebarSection,
@@ -173,9 +176,7 @@ export function CursusSidebar({
 	return (
 		<nav aria-label="Navigation Cursus" className="flex flex-col gap-4">
 			{GROUPS.map((group) => {
-				const entries = group.entries.filter((entry) =>
-					visible(entry.audience),
-				)
+				const entries = group.entries.filter((entry) => visible(entry.audience))
 				if (entries.length === 0) return null
 				const items: ReactNode = entries.map((entry) => (
 					<Entry

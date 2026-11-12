@@ -11,13 +11,15 @@ export const HOST_COMPANY_ARCHIVE_PATH =
 export function useHostCompanies(
 	organizationId: string,
 	query: { archived?: boolean; page?: number; per_page?: number } = {},
+	enabled = true,
 ) {
-	return useQuery(
-		window.tanstackApi.get(HOST_COMPANIES_PATH, {
+	return useQuery({
+		...window.tanstackApi.get(HOST_COMPANIES_PATH, {
 			path: { organization_id: organizationId },
 			query,
 		}).queryOptions,
-	)
+		enabled,
+	})
 }
 
 export function useHostCompany(organizationId: string, hostCompanyId: string) {

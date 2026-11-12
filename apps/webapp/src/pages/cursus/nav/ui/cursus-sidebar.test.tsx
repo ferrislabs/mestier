@@ -35,9 +35,9 @@ describe('CursusSidebar', () => {
 		expect(companies.getAttribute('aria-current')).toBe('page')
 		expect(companies.textContent).toContain('21')
 		expect(
-			screen.getByRole('link', { name: /Promotions/ }).getAttribute(
-				'aria-current',
-			),
+			screen
+				.getByRole('link', { name: /Promotions/ })
+				.getAttribute('aria-current'),
 		).toBeNull()
 	})
 

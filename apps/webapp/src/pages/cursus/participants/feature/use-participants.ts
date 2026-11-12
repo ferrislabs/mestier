@@ -31,13 +31,15 @@ export interface ParticipantsQuery {
 export function useParticipants(
 	organizationId: string,
 	query: ParticipantsQuery,
+	enabled = true,
 ) {
-	return useQuery(
-		window.tanstackApi.get(PARTICIPANTS_PATH, {
+	return useQuery({
+		...window.tanstackApi.get(PARTICIPANTS_PATH, {
 			path: { organization_id: organizationId },
 			query,
 		}).queryOptions,
-	)
+		enabled,
+	})
 }
 
 export function useParticipant(organizationId: string, participantId: string) {
