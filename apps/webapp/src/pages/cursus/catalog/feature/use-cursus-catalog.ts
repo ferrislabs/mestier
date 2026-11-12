@@ -17,22 +17,32 @@ export const CLOSURE_REASON_PATH =
 export const CLOSURE_REASON_ARCHIVE_PATH =
 	`${BASE}/closure-reasons/{closure_reason_id}/archive` as const
 
-export function useEstablishments(organizationId: string, archived = false) {
-	return useQuery(
-		window.tanstackApi.get(ESTABLISHMENTS_PATH, {
+export function useEstablishments(
+	organizationId: string,
+	archived = false,
+	enabled = true,
+) {
+	return useQuery({
+		...window.tanstackApi.get(ESTABLISHMENTS_PATH, {
 			path: { organization_id: organizationId },
 			query: archived ? { archived: true } : {},
 		}).queryOptions,
-	)
+		enabled,
+	})
 }
 
-export function useTrainings(organizationId: string, archived = false) {
-	return useQuery(
-		window.tanstackApi.get(TRAININGS_PATH, {
+export function useTrainings(
+	organizationId: string,
+	archived = false,
+	enabled = true,
+) {
+	return useQuery({
+		...window.tanstackApi.get(TRAININGS_PATH, {
 			path: { organization_id: organizationId },
 			query: archived ? { archived: true, per_page: 100 } : { per_page: 100 },
 		}).queryOptions,
-	)
+		enabled,
+	})
 }
 
 export function useClosureReasons(organizationId: string) {

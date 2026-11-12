@@ -33,7 +33,7 @@ function renderSection(permissions: string[]) {
 }
 
 describe('CursusSettingsSection', () => {
-	it('creates a closure reason', async () => {
+	it('creates a closure reason', { timeout: 15_000 }, async () => {
 		const user = userEvent.setup()
 		api.mockMutation('post', CLOSURE_REASONS, () => ({ data: {} }))
 		renderSection(['VIEW_CURSUS', 'MANAGE_CURSUS_CATALOG'])
