@@ -1,86 +1,118 @@
 import { Plus } from 'lucide-react'
-import { EmptyState } from '#/components/empty-state'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
+import {
+	type CountQualifier,
+	countSummary,
+	TRIAD_NOUN,
+} from '#/pages/cursus/shared/lib/count-summary'
+import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
 import type { SelectOption } from '#/pages/cursus/shared/lib/options'
-import { OptionSelect } from '#/pages/cursus/shared/ui/option-select'
+import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 import type { TriadSummary } from '#/pages/cursus/triads/feature/use-triads'
 import { TriadsTable } from '#/pages/cursus/triads/ui/triads-table'
 
-export type ClosedFilter = 'all' | 'open' | 'closed'
+export type TriadStatusFilter = 'open' | 'closed' | 'all'
 
-const STATUS_OPTIONS: SelectOption[] = [
-	{ value: 'open', label: 'En cours' },
-	{ value: 'closed', label: 'Clôturés' },
+const STATUS_OPTIONS: FilterOption<TriadStatusFilter>[] = [
+	{ value: 'open', label: 'Ouverts' },
+	{ value: 'closed', label: 'Clos' },
+	{ value: 'all', label: 'Tous' },
 ]
+
+const STATUS_QUALIFIER: Record<TriadStatusFilter, CountQualifier | undefined> =
+	{
+		open: 'open',
+		closed: 'closed',
+		all: undefined,
+	}
+
+const ALL_PROMOTIONS = 'all'
 
 interface TriadsListProps {
 	triads: TriadSummary[]
+	total: number | undefined
 	promotions: SelectOption[]
 	promotionId: string | undefined
-	status: ClosedFilter
+	status: TriadStatusFilter
+	search: string
 	isLoading: boolean
 	canManage: boolean
+	onSearchChange: (search: string) => void
 	onPromotionChange: (promotionId: string | undefined) => void
-	onStatusChange: (status: ClosedFilter) => void
+	onStatusChange: (status: TriadStatusFilter) => void
+	onResetFilters: () => void
 	onOpen: (triadId: string) => void
 	onCreate: () => void
 }
 
 export function TriadsList({
 	triads,
+	total,
 	promotions,
 	promotionId,
 	status,
+	search,
 	isLoading,
 	canManage,
+	onSearchChange,
 	onPromotionChange,
 	onStatusChange,
+	onResetFilters,
 	onOpen,
 	onCreate,
 }: TriadsListProps) {
+	const filtered =
+		search.trim() !== '' || status !== 'open' || promotionId !== undefined
+
 	return (
-		<PageShell>
+		<PageShell className="block">
 			<PageHeader
+				className="mb-6"
 				title="Trinômes"
-				description="Apprenti, tuteur pédagogique et entreprise d’accueil."
+				description={
+					total === undefined
+						? undefined
+						: countSummary(total, TRIAD_NOUN, STATUS_QUALIFIER[status])
+				}
 				actions={
 					canManage ? (
-						<Button type="button" onClick={onCreate}>
-							<Plus />
-							Nouveau trinôme
+						<Button type="button" size="sm" onClick={onCreate}>
+							<Plus aria-hidden /> Nouveau trinôme
 						</Button>
 					) : null
 				}
 			/>
-			<div className="flex flex-wrap items-center gap-4">
-				<div className="w-64">
-					<OptionSelect
-						id="triads-promotion-filter"
-						value={promotionId ?? null}
-						options={promotions}
-						placeholder="Toutes les promotions"
-						noneLabel="Toutes les promotions"
-						onChange={(next) => onPromotionChange(next ?? undefined)}
-					/>
-				</div>
-				<div className="w-48">
-					<OptionSelect
-						id="triads-status-filter"
-						value={status === 'all' ? null : status}
-						options={STATUS_OPTIONS}
-						placeholder="Tous les statuts"
-						noneLabel="Tous les statuts"
-						onChange={(next) =>
-							onStatusChange(
-								next === 'open' || next === 'closed' ? next : 'all',
-							)
-						}
-					/>
-				</div>
-			</div>
-			{!isLoading && triads.length === 0 ? (
-				<EmptyState title="Aucun trinôme" />
+			<ListToolbar
+				search={search}
+				searchPlaceholder="Rechercher un apprenti, une entreprise, une promotion"
+				onSearch={onSearchChange}
+				status={status}
+				statusOptions={STATUS_OPTIONS}
+				statusLabel="Filtrer par statut"
+				onStatus={onStatusChange}
+				select={{
+					value: promotionId ?? ALL_PROMOTIONS,
+					label: 'Filtrer par promotion',
+					options: [
+						{ value: ALL_PROMOTIONS, label: 'Toutes les promotions' },
+						...promotions,
+					],
+					onChange: (next) =>
+						onPromotionChange(next === ALL_PROMOTIONS ? undefined : next),
+				}}
+			/>
+			{isLoading ? null : triads.length === 0 ? (
+				<ListEmpty
+					title="Aucun trinôme ne correspond."
+					hint={
+						filtered
+							? 'Vérifie l’orthographe, le statut ou la promotion sélectionnée.'
+							: undefined
+					}
+					onReset={filtered ? onResetFilters : undefined}
+				/>
 			) : (
 				<TriadsTable triads={triads} showPromotion onOpen={onOpen} />
 			)}

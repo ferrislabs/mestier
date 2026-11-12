@@ -8,8 +8,8 @@ use uuid::Uuid;
 use crate::{
     AcceptParticipantInvitationCommand, AddCompanyTutorCommand, ApprenticeInput, CompanyTutorInput,
     CreateHostCompanyCommand, CreateParticipantCommand, HostCompany, ParticipantDetail,
-    ParticipantKind, ParticipantStatus, Permissions, RemoveCompanyTutorCommand,
-    UpdateParticipantCommand, UpsertApprenticeCommand,
+    ParticipantFilter, ParticipantKind, ParticipantStatus, Permissions, RemoveCompanyTutorCommand,
+    SearchPattern, UpdateParticipantCommand, UpsertApprenticeCommand,
     application::{
         MestierUseCase, default_authorizer, policy,
         test_support::{purge, scratch_pool},
@@ -496,7 +496,7 @@ async fn without_the_participants_bit_every_participant_write_is_forbidden() {
 
     let (listed, total) = world
         .usecase
-        .list_participants(tenant.organization_id, None, None, None, 10, 0)
+        .list_participants(tenant.organization_id, ParticipantFilter::default(), 10, 0)
         .await
         .unwrap();
     assert_eq!((listed.len(), total), (1, 1));
@@ -636,9 +636,15 @@ async fn records_are_upserted_added_once_per_company_and_removed() {
     assert!(matches!(twice, Err(CoreError::Conflict(_))));
 
     let by_kind = |kind| {
-        world
-            .usecase
-            .list_participants(tenant.organization_id, Some(kind), None, None, 10, 0)
+        world.usecase.list_participants(
+            tenant.organization_id,
+            ParticipantFilter {
+                kind: Some(kind),
+                ..ParticipantFilter::default()
+            },
+            10,
+            0,
+        )
     };
     assert_eq!(by_kind(ParticipantKind::Apprentice).await.unwrap().1, 1);
     assert_eq!(by_kind(ParticipantKind::CompanyTutor).await.unwrap().1, 1);
@@ -664,9 +670,15 @@ async fn records_are_upserted_added_once_per_company_and_removed() {
     assert!(matches!(missing, Err(CoreError::NotFound)));
 
     let by_status = |status| {
-        world
-            .usecase
-            .list_participants(tenant.organization_id, None, Some(status), None, 10, 0)
+        world.usecase.list_participants(
+            tenant.organization_id,
+            ParticipantFilter {
+                status: Some(status),
+                ..ParticipantFilter::default()
+            },
+            10,
+            0,
+        )
     };
     assert_eq!(by_status(ParticipantStatus::Pending).await.unwrap().1, 1);
     assert_eq!(by_status(ParticipantStatus::Active).await.unwrap().1, 0);
@@ -733,7 +745,7 @@ async fn the_list_embeds_the_records_and_filters_by_host_company_within_the_orga
 
     let (listed, total) = world
         .usecase
-        .list_participants(tenant.organization_id, None, None, None, 10, 0)
+        .list_participants(tenant.organization_id, ParticipantFilter::default(), 10, 0)
         .await
         .unwrap();
     assert_eq!((listed.len(), total), (2, 2));
@@ -761,9 +773,10 @@ async fn the_list_embeds_the_records_and_filters_by_host_company_within_the_orga
     let at = |host_company_id| {
         world.usecase.list_participants(
             tenant.organization_id,
-            None,
-            None,
-            Some(host_company_id),
+            ParticipantFilter {
+                host_company_id: Some(host_company_id),
+                ..ParticipantFilter::default()
+            },
             10,
             0,
         )
@@ -793,7 +806,7 @@ async fn spec_cur_12_one_organization_never_sees_or_touches_another_ones_partici
 
     let (listed, total) = world
         .usecase
-        .list_participants(second.organization_id, None, None, None, 10, 0)
+        .list_participants(second.organization_id, ParticipantFilter::default(), 10, 0)
         .await
         .unwrap();
     assert_eq!((listed, total), (vec![], 0));
@@ -880,6 +893,74 @@ async fn the_database_refuses_records_that_cross_organizations() {
     .execute(&world.pool)
     .await;
     assert!(cross_participant.is_err());
+
+    world.cleanup(&[]).await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn participants_search_matches_names_and_email_and_counts_the_filtered_rows() {
+    let world = World::new().await;
+    let tenant = &world.first;
+    let named = |first: &str, last: &str, email: &str| CreateParticipantCommand {
+        first_name: Some(first.to_owned()),
+        last_name: last.to_owned(),
+        ..world.new_participant(tenant, email, None, None)
+    };
+    let jean = world
+        .usecase
+        .create_participant(named("Jean", "Dupont", "jean.dupont@example.com"))
+        .await
+        .unwrap();
+    let marc = world
+        .usecase
+        .create_participant(named("Marc", "Durand", "contact_42@example.com"))
+        .await
+        .unwrap();
+    world
+        .usecase
+        .create_participant(named("Léa", "Martin", "lea@example.com"))
+        .await
+        .unwrap();
+    world
+        .usecase
+        .create_participant(CreateParticipantCommand {
+            last_name: "Dupont".to_owned(),
+            ..world.new_participant(&world.second, "dupont@example.com", None, None)
+        })
+        .await
+        .unwrap();
+
+    let search = |q: &'static str, limit: u64| {
+        world.usecase.list_participants(
+            tenant.organization_id,
+            ParticipantFilter {
+                search: SearchPattern::parse(Some(q)),
+                ..ParticipantFilter::default()
+            },
+            limit,
+            0,
+        )
+    };
+    let ids = |items: Vec<crate::ParticipantListItem>| {
+        items
+            .into_iter()
+            .map(|item| item.participant.id)
+            .collect::<Vec<_>>()
+    };
+
+    let (by_last_name, total) = search("DUPONT", 10).await.unwrap();
+    assert_eq!((ids(by_last_name), total), (vec![jean.participant.id], 1));
+    let (by_full_name, total) = search(" jean dup ", 10).await.unwrap();
+    assert_eq!((ids(by_full_name), total), (vec![jean.participant.id], 1));
+    let (by_email, total) = search("contact_42@", 10).await.unwrap();
+    assert_eq!((ids(by_email), total), (vec![marc.participant.id], 1));
+    let (wildcard, total) = search("contact%42", 10).await.unwrap();
+    assert_eq!((wildcard.len(), total), (0, 0));
+    let (paged, total) = search("ma", 1).await.unwrap();
+    assert_eq!((paged.len(), total), (1, 2));
+    let (blank, total) = search("   ", 10).await.unwrap();
+    assert_eq!((blank.len(), total), (3, 3));
 
     world.cleanup(&[]).await;
 }

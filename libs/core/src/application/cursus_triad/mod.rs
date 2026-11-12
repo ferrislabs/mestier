@@ -4,8 +4,8 @@ use mestier_macros::transactional;
 
 use crate::{
     Closure, ContractFileKind, ContractId, ContractView, CursusSpace, FileKey, MemberId, MyTriad,
-    MyTriadDetail, OrganizationId, ParticipantScope, PromotionId, Triad, TriadDetail, TriadId,
-    TriadSummary, UserId,
+    MyTriadDetail, OrganizationId, ParticipantScope, Triad, TriadDetail, TriadId, TriadSummary,
+    UserId,
     application::{MestierUseCase, policy},
     domain::{
         cursus_catalog::service::CursusCatalogService,
@@ -14,8 +14,8 @@ use crate::{
         cursus_triad::{
             commands::{
                 CloseContractCommand, CloseTriadCommand, CreateContractCommand, CreateTriadCommand,
-                SetContractFileCommand, SetContractTutorsCommand, UpdateContractCommand,
-                UpdateTriadCommand,
+                SetContractFileCommand, SetContractTutorsCommand, TriadFilter,
+                UpdateContractCommand, UpdateTriadCommand,
             },
             service::CursusTriadService,
         },
@@ -159,13 +159,12 @@ impl MestierUseCase {
     pub async fn list_triads(
         &self,
         organization_id: OrganizationId,
-        promotion_id: Option<PromotionId>,
-        closed: Option<bool>,
+        filter: TriadFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<TriadSummary>, u64), CoreError> {
         CursusTriadService::new(cursus_triad_repository, emitter)
-            .list_triads(organization_id, promotion_id, closed, limit, offset)
+            .list_triads(organization_id, &filter, limit, offset)
             .await
     }
 

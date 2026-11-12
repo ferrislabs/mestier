@@ -6,6 +6,7 @@ use axum::{
 use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
 };
+use mestier_core::{HostCompanyFilter, SearchPattern};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -14,8 +15,16 @@ use crate::{paths::HostCompanyCollectionPath, require_view_cursus, response::Hos
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct ListHostCompaniesQuery {
-    #[param(example = false)]
-    pub archived: Option<bool>,
+    /// Which rows to return by archive state: `active` (the default) keeps
+    /// rows with no `archived_at`, `archived` keeps only archived rows, `all`
+    /// keeps both.
+    #[param(inline, example = "active")]
+    pub archived: Option<mestier_core::ArchivedFilter>,
+    /// A case-insensitive **substring** of the name or the SIRET. Not full-text
+    /// search: no stemming, no ranking, no word boundaries. The value is
+    /// trimmed, and `%`, `_` and `\` match themselves. Empty after trimming
+    /// means no filter, which is what a cleared search box means.
+    pub q: Option<String>,
 }
 
 #[utoipa::path(
@@ -29,7 +38,7 @@ pub struct ListHostCompaniesQuery {
         PaginationParams,
     ),
     responses(
-        (status = 200, description = "A page of host companies; archived rows only with `archived=true`", body = inline(DataEnvelope<Vec<HostCompanyResponse>>)),
+        (status = 200, description = "A page of host companies narrowed by archive state and `q`; `total` counts the filtered rows", body = inline(DataEnvelope<Vec<HostCompanyResponse>>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -50,7 +59,10 @@ pub async fn handler(
         .usecase
         .list_host_companies(
             path.organization_id,
-            query.archived.unwrap_or(false),
+            HostCompanyFilter {
+                archived: query.archived.unwrap_or_default(),
+                search: SearchPattern::parse(query.q.as_deref()),
+            },
             per_page,
             pagination.offset(),
         )

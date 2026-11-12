@@ -5,8 +5,9 @@ use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use crate::{
-    CreateClosureReasonCommand, CreateEstablishmentCommand, CreatePromotionCommand,
-    CreateTrainingCommand, Establishment, Permissions, UpdateEstablishmentCommand,
+    ArchivedFilter, CreateClosureReasonCommand, CreateEstablishmentCommand, CreatePromotionCommand,
+    CreateTrainingCommand, Establishment, EstablishmentFilter, Permissions, PromotionFilter,
+    SearchPattern, TrainingFilter, UpdateEstablishmentCommand,
     application::{
         MestierUseCase, default_authorizer, policy,
         test_support::{purge, scratch_pool},
@@ -222,17 +223,33 @@ async fn spec_cur_1_a_manager_builds_the_catalog_chain_and_lists_it() {
 
     let establishments = world
         .usecase
-        .list_establishments(tenant.organization_id, false)
+        .list_establishments(tenant.organization_id, EstablishmentFilter::default())
         .await
         .unwrap();
     let (trainings, training_total) = world
         .usecase
-        .list_trainings(tenant.organization_id, Some(establishment.id), false, 10, 0)
+        .list_trainings(
+            tenant.organization_id,
+            TrainingFilter {
+                establishment_id: Some(establishment.id),
+                ..TrainingFilter::default()
+            },
+            10,
+            0,
+        )
         .await
         .unwrap();
     let (promotions, promotion_total) = world
         .usecase
-        .list_promotions(tenant.organization_id, Some(training.id), false, 10, 0)
+        .list_promotions(
+            tenant.organization_id,
+            PromotionFilter {
+                training_id: Some(training.id),
+                ..PromotionFilter::default()
+            },
+            10,
+            0,
+        )
         .await
         .unwrap();
 
@@ -306,7 +323,13 @@ async fn spec_cur_12_one_organization_never_sees_or_touches_another_ones_catalog
 
     let listed = world
         .usecase
-        .list_establishments(world.second.organization_id, true)
+        .list_establishments(
+            world.second.organization_id,
+            EstablishmentFilter {
+                archived: ArchivedFilter::All,
+                search: None,
+            },
+        )
         .await
         .unwrap();
     assert!(listed.is_empty());
@@ -500,4 +523,122 @@ async fn a_training_is_created_without_an_establishment() {
         .await
         .unwrap();
     assert_eq!(found, training);
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn catalog_lists_search_and_filter_by_archive_state() {
+    let world = World::new().await;
+    let tenant = &world.first;
+    let training = |name: &str, rncp_code: &str| CreateTrainingCommand {
+        actor: tenant.manager.subject(),
+        organization_id: tenant.organization_id,
+        establishment_id: None,
+        name: name.to_owned(),
+        rncp_code: Some(rncp_code.to_owned()),
+        rncp_label: None,
+        level: None,
+        degree_type: None,
+    };
+    let bts = world
+        .usecase
+        .create_training(training("BTS Aménagements paysagers", "RNCP35214"))
+        .await
+        .unwrap();
+    let cap = world
+        .usecase
+        .create_training(training("CAP Jardinier", "RNCP_99"))
+        .await
+        .unwrap();
+    world
+        .usecase
+        .archive_training(tenant.manager.subject(), tenant.organization_id, cap.id)
+        .await
+        .unwrap();
+    let promotion = world
+        .usecase
+        .create_promotion(CreatePromotionCommand {
+            actor: tenant.manager.subject(),
+            organization_id: tenant.organization_id,
+            training_id: bts.id,
+            label: "Promo 2026-2028".to_owned(),
+            start_year: 2026,
+            end_year: 2028,
+        })
+        .await
+        .unwrap();
+    let campus = world.establishment(tenant, "Campus Nord").await;
+    let annex = world.establishment(tenant, "Annexe Sud").await;
+    world
+        .usecase
+        .archive_establishment(tenant.manager.subject(), tenant.organization_id, annex.id)
+        .await
+        .unwrap();
+
+    let trainings = |archived: ArchivedFilter, q: &'static str| {
+        world.usecase.list_trainings(
+            tenant.organization_id,
+            TrainingFilter {
+                establishment_id: None,
+                archived,
+                search: SearchPattern::parse(Some(q)),
+            },
+            10,
+            0,
+        )
+    };
+    let (by_code, by_code_total) = trainings(ArchivedFilter::Active, "rncp352").await.unwrap();
+    assert_eq!((by_code, by_code_total), (vec![bts.clone()], 1));
+    assert_eq!(
+        trainings(ArchivedFilter::Active, "rncp").await.unwrap().1,
+        1
+    );
+    assert_eq!(trainings(ArchivedFilter::All, "rncp").await.unwrap().1, 2);
+    let (archived, archived_total) = trainings(ArchivedFilter::Archived, "").await.unwrap();
+    assert_eq!(archived_total, 1);
+    assert_eq!(archived[0].id, cap.id);
+    assert_eq!(trainings(ArchivedFilter::All, "p_9").await.unwrap().1, 1);
+    assert_eq!(trainings(ArchivedFilter::All, "_").await.unwrap().1, 1);
+
+    let (promotions, promotion_total) = world
+        .usecase
+        .list_promotions(
+            tenant.organization_id,
+            PromotionFilter {
+                search: SearchPattern::parse(Some("PROMO 2026")),
+                ..PromotionFilter::default()
+            },
+            10,
+            0,
+        )
+        .await
+        .unwrap();
+    assert_eq!((promotions, promotion_total), (vec![promotion], 1));
+
+    let establishments = |archived: ArchivedFilter, q: &'static str| {
+        world.usecase.list_establishments(
+            tenant.organization_id,
+            EstablishmentFilter {
+                archived,
+                search: SearchPattern::parse(Some(q)),
+            },
+        )
+    };
+    assert_eq!(
+        establishments(ArchivedFilter::Active, "").await.unwrap(),
+        vec![campus.clone()]
+    );
+    assert_eq!(
+        establishments(ArchivedFilter::Archived, "")
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        establishments(ArchivedFilter::All, "nord").await.unwrap(),
+        vec![campus]
+    );
+
+    world.cleanup().await;
 }

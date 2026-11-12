@@ -77,7 +77,7 @@ describe('TriadsListFeature', () => {
 			>
 				<TriadsListFeature
 					promotionId={undefined}
-					closed={undefined}
+					status="open"
 					onFiltersChange={vi.fn()}
 					onOpenTriad={onOpenTriad}
 				/>
@@ -125,15 +125,73 @@ describe('TriadsListFeature', () => {
 			<Providers queryClient={createQueryClient(['VIEW_CURSUS'])}>
 				<TriadsListFeature
 					promotionId={undefined}
-					closed={undefined}
+					status="open"
 					onFiltersChange={vi.fn()}
 					onOpenTriad={vi.fn()}
 				/>
 			</Providers>,
 		)
 
-		await screen.findByText('Aucun trinôme')
+		await screen.findByText('Aucun trinôme ne correspond.')
 		expect(screen.queryByRole('button', { name: /Nouveau trinôme/ })).toBeNull()
+	})
+})
+
+function triadQueries(api: ReturnType<typeof installFakeTanstackApi>) {
+	return callsTo(api, 'get', TRIADS_PATH).map(
+		(call) => (call.params as { query: Record<string, unknown> }).query,
+	)
+}
+
+describe('TriadsListFeature filters', () => {
+	function renderList(status: 'open' | 'closed' | 'all') {
+		const api = installFakeTanstackApi()
+		installListReads(api)
+		render(
+			<Providers queryClient={createQueryClient(['VIEW_CURSUS'])}>
+				<TriadsListFeature
+					promotionId={undefined}
+					status={status}
+					onFiltersChange={vi.fn()}
+					onOpenTriad={vi.fn()}
+				/>
+			</Providers>,
+		)
+		return api
+	}
+
+	it('lists the open triads by default and counts them', async () => {
+		const api = renderList('open')
+
+		expect(await screen.findByText('Aucun trinôme ouvert')).toBeTruthy()
+		expect(triadQueries(api)[0]).toMatchObject({ closed: false })
+	})
+
+	it('drops the closed filter for every triad', async () => {
+		const api = renderList('all')
+
+		await screen.findByText('Aucun trinôme')
+		expect(triadQueries(api)[0]).not.toHaveProperty('closed')
+	})
+
+	it('sends the typed search as q', { timeout: 15_000 }, async () => {
+		const user = userEvent.setup()
+		const api = renderList('open')
+		await screen.findByText('Aucun trinôme ouvert')
+
+		await user.click(
+			screen.getByPlaceholderText(
+				'Rechercher un apprenti, une entreprise, une promotion',
+			),
+		)
+		await user.paste('Lea')
+
+		await waitFor(() =>
+			expect(triadQueries(api).at(-1)).toMatchObject({
+				q: 'Lea',
+				closed: false,
+			}),
+		)
 	})
 })
 

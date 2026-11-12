@@ -15,17 +15,21 @@ const PROMOTION: Promotion = {
 	updated_at: '2026-01-01T00:00:00Z',
 }
 
-function props(canManage: boolean) {
+function props(canManage: boolean, promotions: Promotion[] = [PROMOTION]) {
 	return {
-		promotions: [PROMOTION],
+		promotions,
+		total: promotions.length,
 		trainingNames: { 'training-1': 'CAP Menuisier' },
 		trainings: [{ value: 'training-1', label: 'CAP Menuisier' }],
 		trainingId: undefined,
-		archived: false,
+		archived: 'active' as const,
+		search: '',
 		archiveError: null,
 		isLoading: false,
 		canManage,
+		onSearchChange: vi.fn(),
 		onTrainingChange: vi.fn(),
+		onResetFilters: vi.fn(),
 		onArchivedChange: vi.fn(),
 		onOpen: vi.fn(),
 		onCreate: vi.fn(),
@@ -71,5 +75,26 @@ describe('PromotionsList', () => {
 		await user.click(screen.getByRole('button', { name: /Nouvelle promotion/ }))
 
 		expect(p.onCreate).toHaveBeenCalledOnce()
+	})
+
+	it('offers to reset the filters when nothing matches', async () => {
+		const user = userEvent.setup()
+		const p = { ...props(true, []), search: 'zzz' }
+		render(<PromotionsList {...p} />)
+
+		expect(screen.getByText('Aucune promotion ne correspond.')).toBeTruthy()
+		await user.click(
+			screen.getByRole('button', { name: 'Réinitialiser les filtres' }),
+		)
+
+		expect(p.onResetFilters).toHaveBeenCalledOnce()
+	})
+
+	it('has no reset button without filters', () => {
+		render(<PromotionsList {...props(true, [])} />)
+
+		expect(
+			screen.queryByRole('button', { name: 'Réinitialiser les filtres' }),
+		).toBeNull()
 	})
 })

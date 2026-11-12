@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM cursus.promotion\n            WHERE org_id = $1\n              AND ($2::uuid IS NULL OR training_id = $2)\n              AND ($3::bool IS NULL OR (archived_at IS NOT NULL) = $3)\n              AND ($4::text IS NULL OR label ILIKE $4)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "044942e5014e88e045ee3c4458ca30bf1c7ed7e0e5d84d86a8a38942d731eb32"
+}

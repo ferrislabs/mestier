@@ -8,20 +8,10 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '#/components/ui/dialog'
-import { Label } from '#/components/ui/label'
-import { PageHeader, PageShell } from '#/components/ui/surface'
-import { Switch } from '#/components/ui/switch'
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
-
-export interface CatalogPageLayout {
-	description: string
-	archived: boolean
-	onArchivedChange: (archived: boolean) => void
-}
 
 export interface CatalogBlockProps {
 	title: string
-	page?: CatalogPageLayout
 	addLabel: string
 	canManage: boolean
 	isLoading: boolean
@@ -34,7 +24,6 @@ export interface CatalogBlockProps {
 
 export function CatalogBlock({
 	title,
-	page,
 	addLabel,
 	canManage,
 	isLoading,
@@ -56,36 +45,6 @@ export function CatalogBlock({
 			<ul className="flex flex-col divide-y">{children}</ul>
 		</>
 	)
-
-	if (page) {
-		const switchId = `${title}-archived`
-		return (
-			<PageShell>
-				<PageHeader
-					title={title}
-					description={page.description}
-					actions={
-						canManage ? (
-							<Button type="button" onClick={onAdd}>
-								{addLabel}
-							</Button>
-						) : null
-					}
-				/>
-				<div className="flex items-center gap-2">
-					<Switch
-						id={switchId}
-						checked={page.archived}
-						onCheckedChange={page.onArchivedChange}
-					/>
-					<Label htmlFor={switchId}>Archivées</Label>
-				</div>
-				<section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-					{list}
-				</section>
-			</PageShell>
-		)
-	}
 
 	return (
 		<section className="flex flex-col gap-3 rounded-lg border p-4">

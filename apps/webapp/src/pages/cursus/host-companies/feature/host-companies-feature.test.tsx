@@ -34,12 +34,17 @@ beforeEach(() => {
 	api.mockGet(HOST_COMPANIES, () => page([COMPANY] as never))
 })
 
-function renderFeature(permissions: string[], onOpen = vi.fn()) {
+function renderFeature(
+	permissions: string[],
+	onOpen = vi.fn(),
+	onFiltersChange = vi.fn(),
+) {
 	render(
 		<Providers queryClient={createQueryClient(permissions)}>
 			<HostCompaniesListFeature
-				includeArchived={false}
-				onIncludeArchivedChange={vi.fn()}
+				archived="active"
+				q={undefined}
+				onFiltersChange={onFiltersChange}
 				onOpenHostCompany={onOpen}
 			/>
 		</Providers>,
@@ -126,5 +131,37 @@ describe('HostCompaniesListFeature', () => {
 		expect(
 			screen.queryByRole('button', { name: 'Nouvelle entreprise' }),
 		).toBeNull()
+	})
+
+	it('counts the active companies in the header', async () => {
+		renderFeature(['VIEW_CURSUS'])
+
+		expect(await screen.findByText('1 entreprise active')).toBeTruthy()
+	})
+
+	it('sends the typed search as q and reports it', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		const onFiltersChange = vi.fn()
+		renderFeature(['VIEW_CURSUS'], vi.fn(), onFiltersChange)
+		await screen.findByText('Menuiserie Roux')
+
+		await user.click(screen.getByPlaceholderText('Rechercher un nom, un SIRET'))
+		await user.paste('Roux')
+
+		await waitFor(() =>
+			expect(
+				(
+					callsTo(api, 'get', HOST_COMPANIES).at(-1)?.params as {
+						query: object
+					}
+				).query,
+			).toMatchObject({ q: 'Roux' }),
+		)
+		expect(onFiltersChange).toHaveBeenCalledWith({
+			archived: 'active',
+			q: 'Roux',
+		})
 	})
 })

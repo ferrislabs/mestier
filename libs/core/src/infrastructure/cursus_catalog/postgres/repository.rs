@@ -3,8 +3,9 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    ClosureReason, ClosureReasonId, Establishment, EstablishmentId, OrganizationId, Promotion,
-    PromotionId, Training, TrainingId,
+    ClosureReason, ClosureReasonId, Establishment, EstablishmentFilter, EstablishmentId,
+    OrganizationId, Promotion, PromotionFilter, PromotionId, SearchPattern, Training,
+    TrainingFilter, TrainingId,
     domain::cursus_catalog::ports::CursusCatalogRepository,
     infrastructure::{
         cursus_catalog::postgres::model::{
@@ -83,19 +84,23 @@ impl<'tx> CursusCatalogRepository for PgCursusCatalogRepository<'tx> {
     async fn list_establishments(
         &mut self,
         organization_id: OrganizationId,
-        include_archived: bool,
+        filter: &EstablishmentFilter,
     ) -> Result<Vec<Establishment>, CoreError> {
         let mut tx = self.tx.lock().await;
+        let pattern = filter.search.as_ref().map(SearchPattern::as_str);
         let rows = sqlx::query_as!(
             EstablishmentRow,
             r#"
             SELECT id, org_id, name, uai, siret, address, is_main_site, archived_at, created_at, updated_at
             FROM cursus.establishment
-            WHERE org_id = $1 AND ($2 OR archived_at IS NULL)
+            WHERE org_id = $1
+              AND ($2::bool IS NULL OR (archived_at IS NOT NULL) = $2)
+              AND ($3::text IS NULL OR name ILIKE $3 OR uai ILIKE $3)
             ORDER BY name ASC, created_at ASC
             "#,
             organization_id.0,
-            include_archived,
+            filter.archived.archived(),
+            pattern,
         )
         .fetch_all(&mut ***tx)
         .await
@@ -214,13 +219,14 @@ impl<'tx> CursusCatalogRepository for PgCursusCatalogRepository<'tx> {
     async fn list_trainings(
         &mut self,
         organization_id: OrganizationId,
-        establishment_id: Option<EstablishmentId>,
-        include_archived: bool,
+        filter: &TrainingFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Training>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
-        let establishment_id = establishment_id.map(|id| id.0);
+        let establishment_id = filter.establishment_id.map(|id| id.0);
+        let archived = filter.archived.archived();
+        let pattern = filter.search.as_ref().map(SearchPattern::as_str);
         let rows = sqlx::query_as!(
             TrainingRow,
             r#"
@@ -228,13 +234,15 @@ impl<'tx> CursusCatalogRepository for PgCursusCatalogRepository<'tx> {
             FROM cursus.training
             WHERE org_id = $1
               AND ($2::uuid IS NULL OR establishment_id = $2)
-              AND ($3 OR archived_at IS NULL)
+              AND ($3::bool IS NULL OR (archived_at IS NOT NULL) = $3)
+              AND ($4::text IS NULL OR name ILIKE $4 OR rncp_code ILIKE $4)
             ORDER BY name ASC, created_at ASC
-            LIMIT $4 OFFSET $5
+            LIMIT $5 OFFSET $6
             "#,
             organization_id.0,
             establishment_id,
-            include_archived,
+            archived,
+            pattern,
             limit as i64,
             offset as i64,
         )
@@ -248,11 +256,13 @@ impl<'tx> CursusCatalogRepository for PgCursusCatalogRepository<'tx> {
             FROM cursus.training
             WHERE org_id = $1
               AND ($2::uuid IS NULL OR establishment_id = $2)
-              AND ($3 OR archived_at IS NULL)
+              AND ($3::bool IS NULL OR (archived_at IS NOT NULL) = $3)
+              AND ($4::text IS NULL OR name ILIKE $4 OR rncp_code ILIKE $4)
             "#,
             organization_id.0,
             establishment_id,
-            include_archived,
+            archived,
+            pattern,
         )
         .fetch_one(&mut ***tx)
         .await
@@ -368,13 +378,14 @@ impl<'tx> CursusCatalogRepository for PgCursusCatalogRepository<'tx> {
     async fn list_promotions(
         &mut self,
         organization_id: OrganizationId,
-        training_id: Option<TrainingId>,
-        include_archived: bool,
+        filter: &PromotionFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Promotion>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
-        let training_id = training_id.map(|id| id.0);
+        let training_id = filter.training_id.map(|id| id.0);
+        let archived = filter.archived.archived();
+        let pattern = filter.search.as_ref().map(SearchPattern::as_str);
         let rows = sqlx::query_as!(
             PromotionRow,
             r#"
@@ -382,13 +393,15 @@ impl<'tx> CursusCatalogRepository for PgCursusCatalogRepository<'tx> {
             FROM cursus.promotion
             WHERE org_id = $1
               AND ($2::uuid IS NULL OR training_id = $2)
-              AND ($3 OR archived_at IS NULL)
+              AND ($3::bool IS NULL OR (archived_at IS NOT NULL) = $3)
+              AND ($4::text IS NULL OR label ILIKE $4)
             ORDER BY start_year DESC, label ASC, created_at ASC
-            LIMIT $4 OFFSET $5
+            LIMIT $5 OFFSET $6
             "#,
             organization_id.0,
             training_id,
-            include_archived,
+            archived,
+            pattern,
             limit as i64,
             offset as i64,
         )
@@ -402,11 +415,13 @@ impl<'tx> CursusCatalogRepository for PgCursusCatalogRepository<'tx> {
             FROM cursus.promotion
             WHERE org_id = $1
               AND ($2::uuid IS NULL OR training_id = $2)
-              AND ($3 OR archived_at IS NULL)
+              AND ($3::bool IS NULL OR (archived_at IS NOT NULL) = $3)
+              AND ($4::text IS NULL OR label ILIKE $4)
             "#,
             organization_id.0,
             training_id,
-            include_archived,
+            archived,
+            pattern,
         )
         .fetch_one(&mut ***tx)
         .await

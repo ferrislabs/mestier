@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 
 use crate::{
-    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, HostCompanyId,
-    OrganizationId, Participant, ParticipantId, ParticipantKind, ParticipantStatus, UserId,
+    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, OrganizationId,
+    Participant, ParticipantFilter, ParticipantId, UserId,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -44,9 +44,7 @@ pub trait CursusParticipantRepository: Send {
     fn list_participants(
         &mut self,
         organization_id: OrganizationId,
-        kind: Option<ParticipantKind>,
-        status: Option<ParticipantStatus>,
-        host_company_id: Option<HostCompanyId>,
+        filter: &ParticipantFilter,
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Participant>, u64), CoreError>> + Send;

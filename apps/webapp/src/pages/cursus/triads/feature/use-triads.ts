@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 import { useUploadFile } from '#/hooks/use-customers'
 import { invalidateCursus } from '#/pages/cursus/shared/feature/cursus-queries'
+import { searchQuery } from '#/pages/cursus/shared/lib/list-filters'
 
 const TRIADS_PATH = '/api/v1/organizations/{organization_id}/cursus/triads'
 const TRIAD_PATH =
@@ -24,6 +25,7 @@ export type ContractFileKind = 'mission_sheet'
 export interface TriadFilters {
 	promotionId: string | undefined
 	closed: boolean | undefined
+	q?: string
 }
 
 export function useTriads(
@@ -39,6 +41,7 @@ export function useTriads(
 				per_page: 100,
 				...(filters.promotionId ? { promotion_id: filters.promotionId } : {}),
 				...(filters.closed === undefined ? {} : { closed: filters.closed }),
+				...searchQuery(filters.q),
 			},
 		}).queryOptions,
 		enabled,

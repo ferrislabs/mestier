@@ -5,7 +5,8 @@ use uuid::Uuid;
 
 use crate::{
     CompanyTutorId, Contract, ContractId, ContractTutor, ContractView, OrganizationId,
-    ParticipantId, PromotionId, Triad, TriadDetail, TriadId, TriadSummary, TutorTriadLink,
+    ParticipantId, SearchPattern, Triad, TriadDetail, TriadFilter, TriadId, TriadSummary,
+    TutorTriadLink,
     domain::cursus_triad::ports::CursusTriadRepository,
     infrastructure::{
         cursus_triad::postgres::model::{
@@ -181,13 +182,13 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
     async fn list_triads(
         &mut self,
         organization_id: OrganizationId,
-        promotion_id: Option<PromotionId>,
-        closed: Option<bool>,
+        filter: &TriadFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<TriadSummary>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
-        let promotion_id = promotion_id.map(|id| id.0);
+        let promotion_id = filter.promotion_id.map(|id| id.0);
+        let pattern = filter.search.as_ref().map(SearchPattern::as_str);
         let rows = sqlx::query_as!(
             TriadSummaryRow,
             r#"
@@ -196,12 +197,7 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
                    p.label AS promotion_label, tr.name AS training_name,
                    ap.last_name AS apprentice_last_name, ap.first_name AS apprentice_first_name,
                    m.last_name AS "tutor_last_name?", m.first_name AS "tutor_first_name?",
-                   (SELECT h.name
-                      FROM cursus.contract c
-                      JOIN cursus.host_company h ON h.org_id = c.org_id AND h.id = c.host_company_id
-                     WHERE c.org_id = t.org_id AND c.triad_id = t.id AND c.closed_at IS NULL
-                     ORDER BY c.start_date DESC
-                     LIMIT 1) AS "current_host_company_name?"
+                   cur.name AS "current_host_company_name?"
             FROM cursus.triad t
             JOIN cursus.promotion p ON p.org_id = t.org_id AND p.id = t.promotion_id
             JOIN cursus.training tr ON tr.org_id = p.org_id AND tr.id = p.training_id
@@ -209,15 +205,29 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
             JOIN cursus.participant ap ON ap.org_id = a.org_id AND ap.id = a.participant_id
             LEFT JOIN organization_members m
                    ON m.id = t.pedagogic_tutor_member_id AND m.organization_id = t.org_id
+            LEFT JOIN LATERAL (
+                SELECT h.name
+                  FROM cursus.contract c
+                  JOIN cursus.host_company h ON h.org_id = c.org_id AND h.id = c.host_company_id
+                 WHERE c.org_id = t.org_id AND c.triad_id = t.id AND c.closed_at IS NULL
+                 ORDER BY c.start_date DESC
+                 LIMIT 1
+            ) cur ON TRUE
             WHERE t.org_id = $1
               AND ($2::uuid IS NULL OR t.promotion_id = $2)
               AND ($3::bool IS NULL OR (t.closed_at IS NOT NULL) = $3)
+              AND ($4::text IS NULL
+                   OR concat_ws(' ', ap.first_name, ap.last_name) ILIKE $4
+                   OR concat_ws(' ', ap.last_name, ap.first_name) ILIKE $4
+                   OR cur.name ILIKE $4
+                   OR p.label ILIKE $4)
             ORDER BY lower(ap.last_name) ASC, lower(coalesce(ap.first_name, '')) ASC, t.created_at ASC
-            LIMIT $4 OFFSET $5
+            LIMIT $5 OFFSET $6
             "#,
             organization_id.0,
             promotion_id,
-            closed,
+            filter.closed,
+            pattern,
             limit as i64,
             offset as i64,
         )
@@ -229,13 +239,30 @@ impl<'tx> CursusTriadRepository for PgCursusTriadRepository<'tx> {
             r#"
             SELECT COUNT(*) AS "count!"
             FROM cursus.triad t
+            JOIN cursus.promotion p ON p.org_id = t.org_id AND p.id = t.promotion_id
+            JOIN cursus.apprentice a ON a.org_id = t.org_id AND a.id = t.apprentice_id
+            JOIN cursus.participant ap ON ap.org_id = a.org_id AND ap.id = a.participant_id
+            LEFT JOIN LATERAL (
+                SELECT h.name
+                  FROM cursus.contract c
+                  JOIN cursus.host_company h ON h.org_id = c.org_id AND h.id = c.host_company_id
+                 WHERE c.org_id = t.org_id AND c.triad_id = t.id AND c.closed_at IS NULL
+                 ORDER BY c.start_date DESC
+                 LIMIT 1
+            ) cur ON TRUE
             WHERE t.org_id = $1
               AND ($2::uuid IS NULL OR t.promotion_id = $2)
               AND ($3::bool IS NULL OR (t.closed_at IS NOT NULL) = $3)
+              AND ($4::text IS NULL
+                   OR concat_ws(' ', ap.first_name, ap.last_name) ILIKE $4
+                   OR concat_ws(' ', ap.last_name, ap.first_name) ILIKE $4
+                   OR cur.name ILIKE $4
+                   OR p.label ILIKE $4)
             "#,
             organization_id.0,
             promotion_id,
-            closed,
+            filter.closed,
+            pattern,
         )
         .fetch_one(&mut ***tx)
         .await

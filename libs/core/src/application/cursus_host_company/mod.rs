@@ -6,7 +6,7 @@ use crate::{
     HostCompany, HostCompanyId, OrganizationId,
     application::{MestierUseCase, policy},
     domain::cursus_host_company::{
-        commands::{CreateHostCompanyCommand, UpdateHostCompanyCommand},
+        commands::{CreateHostCompanyCommand, HostCompanyFilter, UpdateHostCompanyCommand},
         service::CursusHostCompanyService,
     },
 };
@@ -73,12 +73,12 @@ impl MestierUseCase {
     pub async fn list_host_companies(
         &self,
         organization_id: OrganizationId,
-        include_archived: bool,
+        filter: HostCompanyFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<HostCompany>, u64), CoreError> {
         CursusHostCompanyService::new(cursus_host_company_repository)
-            .list(organization_id, include_archived, limit, offset)
+            .list(organization_id, &filter, limit, offset)
             .await
     }
 

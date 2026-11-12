@@ -118,6 +118,8 @@ pub use domain::{
 /// The profitability calculation, and the port it reads through. Exposed so the
 /// use case in `application` can drive it, and so the report types are usable
 /// from the handler crates.
+pub use domain::{ArchivedFilter, SearchPattern};
+
 pub use domain::profitability::{
     ports::ProfitabilityRepository, service::ProfitabilityService, service::build_report,
 };
@@ -345,18 +347,21 @@ pub use domain::{
     },
     cursus_catalog::commands::{
         CreateClosureReasonCommand, CreateEstablishmentCommand, CreatePromotionCommand,
-        CreateTrainingCommand, UpdateClosureReasonCommand, UpdateEstablishmentCommand,
-        UpdatePromotionCommand, UpdateTrainingCommand,
+        CreateTrainingCommand, EstablishmentFilter, PromotionFilter, TrainingFilter,
+        UpdateClosureReasonCommand, UpdateEstablishmentCommand, UpdatePromotionCommand,
+        UpdateTrainingCommand,
     },
-    cursus_host_company::commands::{CreateHostCompanyCommand, UpdateHostCompanyCommand},
+    cursus_host_company::commands::{
+        CreateHostCompanyCommand, HostCompanyFilter, UpdateHostCompanyCommand,
+    },
     cursus_participant::commands::{
         AcceptParticipantInvitationCommand, AddCompanyTutorCommand, ApprenticeInput,
-        CompanyTutorInput, CreateParticipantCommand, RemoveCompanyTutorCommand,
+        CompanyTutorInput, CreateParticipantCommand, ParticipantFilter, RemoveCompanyTutorCommand,
         UpdateParticipantCommand, UpsertApprenticeCommand,
     },
     cursus_triad::commands::{
         CloseContractCommand, CloseTriadCommand, ContractTutorInput, CreateContractCommand,
-        CreateTriadCommand, SetContractFileCommand, SetContractTutorsCommand,
+        CreateTriadCommand, SetContractFileCommand, SetContractTutorsCommand, TriadFilter,
         UpdateContractCommand, UpdateTriadCommand,
     },
     custom_unit::commands::CreateCustomUnitCommand,

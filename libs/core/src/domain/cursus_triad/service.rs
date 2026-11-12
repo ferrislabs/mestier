@@ -4,12 +4,12 @@ use events::EventEmitter;
 
 use crate::{
     Closure, CompanyTutor, Contract, ContractFileKind, ContractId, ContractTutor, ContractView,
-    FileKey, MyTriad, MyTriadDetail, OrganizationId, ParticipantScope, PromotionId, Triad,
-    TriadDetail, TriadId, TriadRole, TriadSummary,
+    FileKey, MyTriad, MyTriadDetail, OrganizationId, ParticipantScope, Triad, TriadDetail, TriadId,
+    TriadRole, TriadSummary,
     domain::cursus_triad::{
         ContractPeriod,
         commands::{
-            CreateContractCommand, CreateTriadCommand, SetContractFileCommand,
+            CreateContractCommand, CreateTriadCommand, SetContractFileCommand, TriadFilter,
             UpdateContractCommand, UpdateTriadCommand,
         },
         events::{ContractClosed, ContractCreated, TriadClosed, TriadCreated},
@@ -94,13 +94,12 @@ where
     pub async fn list_triads(
         &mut self,
         organization_id: OrganizationId,
-        promotion_id: Option<PromotionId>,
-        closed: Option<bool>,
+        filter: &TriadFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<TriadSummary>, u64), CoreError> {
         self.repo
-            .list_triads(organization_id, promotion_id, closed, limit, offset)
+            .list_triads(organization_id, filter, limit, offset)
             .await
     }
 
@@ -421,8 +420,8 @@ fn optional(value: Option<String>) -> Option<String> {
 mod tests {
     use super::*;
     use crate::{
-        ApprenticeId, ClosureReasonId, CompanyTutorId, HostCompanyId, ParticipantId, TriadLink,
-        TutorTriadLink,
+        ApprenticeId, ClosureReasonId, CompanyTutorId, HostCompanyId, ParticipantId, PromotionId,
+        TriadLink, TutorTriadLink,
         domain::cursus_triad::{ContractKind, ports::MockCursusTriadRepository},
     };
     use chrono::NaiveDate;

@@ -4,7 +4,7 @@ use common::{CoreError, generate_uuid_v7};
 use crate::{
     HostCompany, HostCompanyAddress, HostCompanyId, OrganizationId,
     domain::cursus_host_company::{
-        commands::{CreateHostCompanyCommand, UpdateHostCompanyCommand},
+        commands::{CreateHostCompanyCommand, HostCompanyFilter, UpdateHostCompanyCommand},
         ports::CursusHostCompanyRepository,
     },
 };
@@ -76,13 +76,11 @@ where
     pub async fn list(
         &mut self,
         organization_id: OrganizationId,
-        include_archived: bool,
+        filter: &HostCompanyFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<HostCompany>, u64), CoreError> {
-        self.repo
-            .list(organization_id, include_archived, limit, offset)
-            .await
+        self.repo.list(organization_id, filter, limit, offset).await
     }
 
     pub async fn update(

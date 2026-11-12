@@ -21,13 +21,17 @@ const TRIAD: TriadSummary = {
 function props(canManage: boolean, triads: TriadSummary[] = [TRIAD]) {
 	return {
 		triads,
+		total: triads.length,
 		promotions: [],
 		promotionId: undefined,
 		status: 'all' as const,
+		search: '',
 		isLoading: false,
 		canManage,
 		onPromotionChange: vi.fn(),
 		onStatusChange: vi.fn(),
+		onSearchChange: vi.fn(),
+		onResetFilters: vi.fn(),
 		onOpen: vi.fn(),
 		onCreate: vi.fn(),
 	}
@@ -66,5 +70,20 @@ describe('TriadsList', () => {
 		render(<TriadsList {...props(false)} />)
 
 		expect(screen.queryByRole('button', { name: /Nouveau trinôme/ })).toBeNull()
+	})
+
+	it('counts the listed triads in the header', () => {
+		render(<TriadsList {...props(true)} status="open" />)
+
+		expect(screen.getByText('1 trinôme ouvert')).toBeTruthy()
+	})
+
+	it('offers to reset a non-default filter when nothing matches', () => {
+		render(<TriadsList {...props(true, [])} status="closed" />)
+
+		expect(screen.getByText('Aucun trinôme ne correspond.')).toBeTruthy()
+		expect(
+			screen.getByRole('button', { name: 'Réinitialiser les filtres' }),
+		).toBeTruthy()
 	})
 })

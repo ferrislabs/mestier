@@ -4,6 +4,7 @@ pub(crate) mod assignment_report;
 pub(crate) mod automation;
 pub(crate) mod chat;
 pub(crate) mod cursus_catalog;
+pub(crate) mod cursus_common;
 pub(crate) mod cursus_host_company;
 pub(crate) mod cursus_participant;
 pub(crate) mod cursus_triad;
@@ -54,6 +55,7 @@ pub use absence::*;
 pub use absence_type::*;
 pub use assignment_report::*;
 pub use cursus_catalog::*;
+pub use cursus_common::*;
 pub use cursus_host_company::*;
 pub use cursus_participant::*;
 pub use cursus_triad::{

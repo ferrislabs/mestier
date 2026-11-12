@@ -60,13 +60,16 @@ export function TriadsTable({
 	})
 
 	return (
-		<div className="rounded-lg border bg-card">
+		<div className="overflow-hidden rounded-lg border bg-card">
 			<Table>
 				<TableHeader>
 					{table.getHeaderGroups().map((group) => (
-						<TableRow key={group.id}>
+						<TableRow key={group.id} className="hover:bg-transparent">
 							{group.headers.map((header) => (
-								<TableHead key={header.id}>
+								<TableHead
+									key={header.id}
+									className={header.index === 0 ? 'pl-4' : undefined}
+								>
 									{header.isPlaceholder
 										? null
 										: flexRender(
@@ -85,8 +88,13 @@ export function TriadsTable({
 							className="cursor-pointer"
 							onClick={() => onOpen(row.original.id)}
 						>
-							{row.getVisibleCells().map((cell) => (
-								<TableCell key={cell.id}>
+							{row.getVisibleCells().map((cell, index) => (
+								<TableCell
+									key={cell.id}
+									className={
+										index === 0 ? 'py-2.5 pl-4 font-medium' : undefined
+									}
+								>
 									{flexRender(cell.column.columnDef.cell, cell.getContext())}
 								</TableCell>
 							))}

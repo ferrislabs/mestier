@@ -13,8 +13,8 @@ use crate::{
     ContractTutorInput, ContractView, CreateClosureReasonCommand, CreateContractCommand,
     CreateEstablishmentCommand, CreateHostCompanyCommand, CreateParticipantCommand,
     CreatePromotionCommand, CreateTrainingCommand, CreateTriadCommand, CursusContractKind,
-    HostCompany, MemberId, Permissions, Promotion, RemoveCompanyTutorCommand,
-    SetContractFileCommand, SetContractTutorsCommand, Triad, TriadAccess, TriadRole,
+    HostCompany, MemberId, Permissions, Promotion, RemoveCompanyTutorCommand, SearchPattern,
+    SetContractFileCommand, SetContractTutorsCommand, Triad, TriadAccess, TriadFilter, TriadRole,
     UpdateContractCommand, UpdateTriadCommand,
     application::{
         MestierUseCase, default_authorizer, policy,
@@ -486,7 +486,7 @@ async fn spec_cur_5_a_second_triad_for_the_same_apprentice_and_promotion_is_a_co
     assert!(matches!(second, Err(CoreError::Conflict(_))));
     let (listed, total) = world
         .usecase
-        .list_triads(tenant.organization_id, None, None, 10, 0)
+        .list_triads(tenant.organization_id, TriadFilter::default(), 10, 0)
         .await
         .unwrap();
     assert_eq!(total, 1);
@@ -1186,6 +1186,13 @@ async fn contract_rules_period_host_company_tutors_and_files_hold_in_the_databas
     world.cleanup().await;
 }
 
+fn by_closure(closed: Option<bool>) -> TriadFilter {
+    TriadFilter {
+        closed,
+        ..TriadFilter::default()
+    }
+}
+
 #[tokio::test]
 #[ignore = "requires live postgres"]
 async fn the_operator_list_carries_names_and_the_current_host_company_and_filters_by_promotion_and_closure()
@@ -1209,8 +1216,10 @@ async fn the_operator_list_carries_names_and_the_current_host_company_and_filter
         .usecase
         .list_triads(
             tenant.organization_id,
-            Some(catalog.promotion.id),
-            None,
+            TriadFilter {
+                promotion_id: Some(catalog.promotion.id),
+                ..TriadFilter::default()
+            },
             10,
             0,
         )
@@ -1218,20 +1227,22 @@ async fn the_operator_list_carries_names_and_the_current_host_company_and_filter
         .unwrap();
     let (only_open, open_total) = world
         .usecase
-        .list_triads(tenant.organization_id, None, Some(false), 10, 0)
+        .list_triads(tenant.organization_id, by_closure(Some(false)), 10, 0)
         .await
         .unwrap();
     let (only_closed, closed_total) = world
         .usecase
-        .list_triads(tenant.organization_id, None, Some(true), 10, 0)
+        .list_triads(tenant.organization_id, by_closure(Some(true)), 10, 0)
         .await
         .unwrap();
     let (elsewhere, elsewhere_total) = world
         .usecase
         .list_triads(
             tenant.organization_id,
-            Some(crate::PromotionId(Uuid::new_v4())),
-            None,
+            TriadFilter {
+                promotion_id: Some(crate::PromotionId(Uuid::new_v4())),
+                ..TriadFilter::default()
+            },
             10,
             0,
         )
@@ -1239,7 +1250,7 @@ async fn the_operator_list_carries_names_and_the_current_host_company_and_filter
         .unwrap();
     let (paged, paged_total) = world
         .usecase
-        .list_triads(tenant.organization_id, None, None, 1, 1)
+        .list_triads(tenant.organization_id, TriadFilter::default(), 1, 1)
         .await
         .unwrap();
 
@@ -1259,6 +1270,24 @@ async fn the_operator_list_carries_names_and_the_current_host_company_and_filter
     );
     let finished = all.iter().find(|row| row.triad.id == closed.id).unwrap();
     assert_eq!(finished.current_host_company_name, None);
+
+    let search = |q: &'static str| {
+        world.usecase.list_triads(
+            tenant.organization_id,
+            TriadFilter {
+                search: SearchPattern::parse(Some(q)),
+                ..TriadFilter::default()
+            },
+            10,
+            0,
+        )
+    };
+    let (by_company, by_company_total) = search("paysages dur").await.unwrap();
+    assert_eq!(by_company_total, 1);
+    assert_eq!(by_company[0].triad.id, open.id);
+    assert_eq!(search("bts 20").await.unwrap().1, 2);
+    assert_eq!(search("léa mart").await.unwrap().1, 2);
+    assert_eq!(search("nobody").await.unwrap().1, 0);
 
     world.cleanup().await;
 }
@@ -1338,7 +1367,7 @@ async fn spec_cur_12_organizations_never_see_each_others_triads_and_me_routes_ar
         .await;
     let (listed, total) = world
         .usecase
-        .list_triads(world.second.organization_id, None, None, 10, 0)
+        .list_triads(world.second.organization_id, TriadFilter::default(), 10, 0)
         .await
         .unwrap();
     let foreign_write = world

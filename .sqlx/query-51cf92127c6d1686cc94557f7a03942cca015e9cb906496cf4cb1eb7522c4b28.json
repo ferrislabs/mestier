@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, name, uai, siret, address, is_main_site, archived_at, created_at, updated_at\n            FROM cursus.establishment\n            WHERE org_id = $1 AND ($2 OR archived_at IS NULL)\n            ORDER BY name ASC, created_at ASC\n            ",
+  "query": "\n            SELECT id, org_id, name, uai, siret, address, is_main_site, archived_at, created_at, updated_at\n            FROM cursus.establishment\n            WHERE org_id = $1\n              AND ($2::bool IS NULL OR (archived_at IS NOT NULL) = $2)\n              AND ($3::text IS NULL OR name ILIKE $3 OR uai ILIKE $3)\n            ORDER BY name ASC, created_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -57,7 +57,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Bool"
+        "Bool",
+        "Text"
       ]
     },
     "nullable": [
@@ -73,5 +74,5 @@
       false
     ]
   },
-  "hash": "ad8ed2620d941bc5f6e94d2aeeddd17d01a583cb142e66f0b028543946d5ff5f"
+  "hash": "51cf92127c6d1686cc94557f7a03942cca015e9cb906496cf4cb1eb7522c4b28"
 }

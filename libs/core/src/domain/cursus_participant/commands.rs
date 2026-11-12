@@ -1,6 +1,17 @@
 use chrono::NaiveDate;
 
-use crate::{CompanyTutorId, HostCompanyId, OrganizationId, ParticipantId};
+use crate::{
+    CompanyTutorId, HostCompanyId, OrganizationId, ParticipantId, ParticipantKind,
+    ParticipantStatus, SearchPattern,
+};
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ParticipantFilter {
+    pub kind: Option<ParticipantKind>,
+    pub status: Option<ParticipantStatus>,
+    pub host_company_id: Option<HostCompanyId>,
+    pub search: Option<SearchPattern>,
+}
 
 #[derive(Debug, Clone)]
 pub struct ApprenticeInput {

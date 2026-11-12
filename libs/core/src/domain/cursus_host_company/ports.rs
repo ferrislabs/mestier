@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
-use crate::{HostCompany, HostCompanyId, OrganizationId};
+use crate::{HostCompany, HostCompanyFilter, HostCompanyId, OrganizationId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait CursusHostCompanyRepository: Send {
@@ -19,7 +19,7 @@ pub trait CursusHostCompanyRepository: Send {
     fn list(
         &mut self,
         organization_id: OrganizationId,
-        include_archived: bool,
+        filter: &HostCompanyFilter,
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<HostCompany>, u64), CoreError>> + Send;

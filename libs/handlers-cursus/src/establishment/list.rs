@@ -4,6 +4,7 @@ use axum::{
     extract::{Query, State},
 };
 use handlers::{ApiError, AppState, DataEnvelope, Response};
+use mestier_core::{EstablishmentFilter, SearchPattern};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -14,8 +15,16 @@ use crate::{
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct ListEstablishmentsQuery {
-    #[param(example = false)]
-    pub archived: Option<bool>,
+    /// Which rows to return by archive state: `active` (the default) keeps
+    /// rows with no `archived_at`, `archived` keeps only archived rows, `all`
+    /// keeps both.
+    #[param(inline, example = "active")]
+    pub archived: Option<mestier_core::ArchivedFilter>,
+    /// A case-insensitive **substring** of the name or the UAI. Not full-text
+    /// search: no stemming, no ranking, no word boundaries. The value is
+    /// trimmed, and `%`, `_` and `\` match themselves. Empty after trimming
+    /// means no filter, which is what a cleared search box means.
+    pub q: Option<String>,
 }
 
 #[utoipa::path(
@@ -28,7 +37,7 @@ pub struct ListEstablishmentsQuery {
         ListEstablishmentsQuery,
     ),
     responses(
-        (status = 200, description = "The establishments; archived rows only with `archived=true`", body = inline(DataEnvelope<Vec<EstablishmentResponse>>)),
+        (status = 200, description = "The establishments narrowed by archive state and `q`", body = inline(DataEnvelope<Vec<EstablishmentResponse>>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -44,7 +53,13 @@ pub async fn handler(
 
     let items = state
         .usecase
-        .list_establishments(path.organization_id, query.archived.unwrap_or(false))
+        .list_establishments(
+            path.organization_id,
+            EstablishmentFilter {
+                archived: query.archived.unwrap_or_default(),
+                search: SearchPattern::parse(query.q.as_deref()),
+            },
+        )
         .await?;
 
     Ok(Response::OK(

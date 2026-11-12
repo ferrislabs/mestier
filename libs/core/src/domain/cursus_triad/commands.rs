@@ -2,8 +2,16 @@ use chrono::NaiveDate;
 
 use crate::{
     ApprenticeId, ClosureReasonId, CompanyTutorId, ContractFileKind, ContractId, HostCompanyId,
-    MemberId, OrganizationId, PromotionId, TriadId, domain::cursus_triad::ContractKind,
+    MemberId, OrganizationId, PromotionId, SearchPattern, TriadId,
+    domain::cursus_triad::ContractKind,
 };
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TriadFilter {
+    pub promotion_id: Option<PromotionId>,
+    pub closed: Option<bool>,
+    pub search: Option<SearchPattern>,
+}
 
 #[derive(Debug, Clone)]
 pub struct CreateTriadCommand {

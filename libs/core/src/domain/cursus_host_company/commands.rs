@@ -1,4 +1,10 @@
-use crate::{HostCompanyAddress, HostCompanyId, OrganizationId};
+use crate::{ArchivedFilter, HostCompanyAddress, HostCompanyId, OrganizationId, SearchPattern};
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HostCompanyFilter {
+    pub archived: ArchivedFilter,
+    pub search: Option<SearchPattern>,
+}
 
 #[derive(Debug, Clone)]
 pub struct CreateHostCompanyCommand {

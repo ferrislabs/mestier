@@ -1,19 +1,6 @@
-import {
-	createColumnHelper,
-	flexRender,
-	getCoreRowModel,
-	useReactTable,
-} from '@tanstack/react-table'
-import { Badge } from '#/components/ui/badge'
+import { Plus } from 'lucide-react'
 import { Button } from '#/components/ui/button'
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
-import { PageHeader, PageShell } from '#/components/ui/surface'
+import { PageHeader, PageShell, StatusBadge } from '#/components/ui/surface'
 import {
 	Table,
 	TableBody,
@@ -29,6 +16,16 @@ import {
 	STATUS_LABELS,
 } from '#/pages/cursus/participants/lib/participants'
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
+import {
+	APPRENTICE_NOUN,
+	COMPANY_TUTOR_NOUN,
+	type CountNoun,
+	countSummary,
+	PARTICIPANT_NOUN,
+} from '#/pages/cursus/shared/lib/count-summary'
+import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
+import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 
 export interface ParticipantRowVM {
 	id: string
@@ -41,6 +38,8 @@ export interface ParticipantRowVM {
 
 export interface ParticipantsListUIProps {
 	rows: ParticipantRowVM[]
+	total: number | undefined
+	search: string
 	isLoading: boolean
 	error: string | null
 	kind: ParticipantKind | undefined
@@ -48,6 +47,8 @@ export interface ParticipantsListUIProps {
 	canManage: boolean
 	page: number
 	pageCount: number
+	onSearchChange: (search: string) => void
+	onResetFilters: () => void
 	onKindChange: (kind: ParticipantKind | undefined) => void
 	onStatusChange: (status: ParticipantStatus | undefined) => void
 	onPageChange: (page: number) => void
@@ -55,11 +56,41 @@ export interface ParticipantsListUIProps {
 	onOpen: (participantId: string) => void
 }
 
-const ALL = 'all'
-const columnHelper = createColumnHelper<ParticipantRowVM>()
+type StatusFilter = ParticipantStatus | 'all'
+type KindFilter = ParticipantKind | 'all'
+
+const STATUS_OPTIONS: FilterOption<StatusFilter>[] = [
+	{ value: 'all', label: 'Tous' },
+	{ value: 'pending', label: 'En attente' },
+	{ value: 'active', label: 'Actifs' },
+	{ value: 'inactive', label: 'Inactifs' },
+]
+
+const KIND_OPTIONS: FilterOption<KindFilter>[] = [
+	{ value: 'all', label: 'Tous les types' },
+	{ value: 'apprentice', label: 'Apprentis' },
+	{ value: 'company_tutor', label: 'Tuteurs entreprise' },
+]
+
+const KIND_NOUN: Record<KindFilter, CountNoun> = {
+	all: PARTICIPANT_NOUN,
+	apprentice: APPRENTICE_NOUN,
+	company_tutor: COMPANY_TUTOR_NOUN,
+}
+
+const STATUS_TONE: Record<
+	ParticipantStatus,
+	'success' | 'warning' | 'neutral'
+> = {
+	active: 'success',
+	pending: 'warning',
+	inactive: 'neutral',
+}
 
 export function ParticipantsListUI({
 	rows,
+	total,
+	search,
 	isLoading,
 	error,
 	kind,
@@ -67,153 +98,115 @@ export function ParticipantsListUI({
 	canManage,
 	page,
 	pageCount,
+	onSearchChange,
+	onResetFilters,
 	onKindChange,
 	onStatusChange,
 	onPageChange,
 	onCreate,
 	onOpen,
 }: ParticipantsListUIProps) {
-	const columns = [
-		columnHelper.accessor('name', {
-			header: 'Nom',
-			cell: (info) => (
-				<button
-					type="button"
-					className="font-medium underline-offset-4 hover:underline"
-					onClick={() => onOpen(info.row.original.id)}
-				>
-					{info.getValue()}
-				</button>
-			),
-		}),
-		columnHelper.accessor('email', { header: 'E-mail' }),
-		columnHelper.accessor('kinds', {
-			header: 'Type',
-			cell: (info) => {
-				const kinds = info.getValue()
-				if (kinds.length === 0) return '—'
-				return kinds.map((value) => KIND_LABELS[value]).join(', ')
-			},
-		}),
-		columnHelper.accessor('hostCompanyNames', {
-			header: 'Entreprise',
-			cell: (info) => {
-				const names = info.getValue()
-				return names.length === 0 ? '—' : names.join(', ')
-			},
-		}),
-		columnHelper.accessor('status', {
-			header: 'Statut',
-			cell: (info) => (
-				<Badge variant={info.getValue() === 'active' ? 'default' : 'secondary'}>
-					{STATUS_LABELS[info.getValue()]}
-				</Badge>
-			),
-		}),
-	]
-
-	const table = useReactTable({
-		data: rows,
-		columns,
-		getCoreRowModel: getCoreRowModel(),
-	})
+	const filtered =
+		search.trim() !== '' || kind !== undefined || status !== undefined
 
 	return (
-		<PageShell>
+		<PageShell className="block">
 			<PageHeader
+				className="mb-6"
 				title="Participants"
-				description="Les apprentis et tuteurs d’entreprise suivis par l’organisation."
+				description={
+					total === undefined
+						? undefined
+						: countSummary(total, KIND_NOUN[kind ?? 'all'], status)
+				}
 				actions={
 					canManage ? (
-						<Button type="button" onClick={onCreate}>
-							Nouveau participant
+						<Button type="button" size="sm" onClick={onCreate}>
+							<Plus aria-hidden /> Nouveau participant
 						</Button>
 					) : null
 				}
 			/>
-
-			<div className="flex flex-wrap gap-3">
-				<Select
-					value={kind ?? ALL}
-					onValueChange={(value) =>
-						onKindChange(value === ALL ? undefined : (value as ParticipantKind))
-					}
-				>
-					<SelectTrigger aria-label="Type" className="w-52">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value={ALL}>Tous les types</SelectItem>
-						{(Object.keys(KIND_LABELS) as ParticipantKind[]).map((value) => (
-							<SelectItem key={value} value={value}>
-								{KIND_LABELS[value]}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-				<Select
-					value={status ?? ALL}
-					onValueChange={(value) =>
-						onStatusChange(
-							value === ALL ? undefined : (value as ParticipantStatus),
-						)
-					}
-				>
-					<SelectTrigger aria-label="Statut" className="w-48">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value={ALL}>Tous les statuts</SelectItem>
-						{(Object.keys(STATUS_LABELS) as ParticipantStatus[]).map(
-							(value) => (
-								<SelectItem key={value} value={value}>
-									{STATUS_LABELS[value]}
-								</SelectItem>
-							),
-						)}
-					</SelectContent>
-				</Select>
-			</div>
-
+			<ListToolbar
+				search={search}
+				searchPlaceholder="Rechercher un nom, un e-mail"
+				onSearch={onSearchChange}
+				status={status ?? 'all'}
+				statusOptions={STATUS_OPTIONS}
+				statusLabel="Filtrer par statut"
+				onStatus={(next) => onStatusChange(next === 'all' ? undefined : next)}
+				select={{
+					value: kind ?? 'all',
+					label: 'Filtrer par type',
+					options: KIND_OPTIONS,
+					onChange: (next) => onKindChange(next === 'all' ? undefined : next),
+				}}
+			/>
 			<FormError message={error} />
-
-			<Table>
-				<TableHeader>
-					{table.getHeaderGroups().map((group) => (
-						<TableRow key={group.id}>
-							{group.headers.map((header) => (
-								<TableHead key={header.id}>
-									{flexRender(
-										header.column.columnDef.header,
-										header.getContext(),
-									)}
-								</TableHead>
+			{isLoading || error ? null : rows.length === 0 ? (
+				<ListEmpty
+					title="Aucun participant ne correspond."
+					hint={
+						filtered
+							? 'Vérifie l’orthographe, le statut ou le type sélectionné.'
+							: undefined
+					}
+					onReset={filtered ? onResetFilters : undefined}
+				/>
+			) : (
+				<div className="overflow-hidden rounded-lg border bg-card">
+					<Table>
+						<TableHeader>
+							<TableRow className="hover:bg-transparent">
+								<TableHead className="pl-4">Nom</TableHead>
+								<TableHead>E-mail</TableHead>
+								<TableHead>Type</TableHead>
+								<TableHead>Entreprise</TableHead>
+								<TableHead className="pr-4">Statut</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{rows.map((row) => (
+								<TableRow
+									key={row.id}
+									className="relative cursor-pointer focus-within:bg-muted/50"
+								>
+									<TableCell className="py-2.5 pl-4">
+										<button
+											type="button"
+											className="font-medium outline-none before:absolute before:inset-0 focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset"
+											onClick={() => onOpen(row.id)}
+										>
+											{row.name}
+										</button>
+									</TableCell>
+									<TableCell className="text-muted-foreground">
+										{row.email}
+									</TableCell>
+									<TableCell>
+										{row.kinds.length === 0
+											? '—'
+											: row.kinds.map((value) => KIND_LABELS[value]).join(', ')}
+									</TableCell>
+									<TableCell>
+										{row.hostCompanyNames.length === 0
+											? '—'
+											: row.hostCompanyNames.join(', ')}
+									</TableCell>
+									<TableCell className="pr-4">
+										<StatusBadge tone={STATUS_TONE[row.status]}>
+											{STATUS_LABELS[row.status]}
+										</StatusBadge>
+									</TableCell>
+								</TableRow>
 							))}
-						</TableRow>
-					))}
-				</TableHeader>
-				<TableBody>
-					{table.getRowModel().rows.map((row) => (
-						<TableRow key={row.id}>
-							{row.getVisibleCells().map((cell) => (
-								<TableCell key={cell.id}>
-									{flexRender(cell.column.columnDef.cell, cell.getContext())}
-								</TableCell>
-							))}
-						</TableRow>
-					))}
-				</TableBody>
-			</Table>
-
-			{isLoading ? (
-				<p className="text-sm text-muted-foreground">Chargement…</p>
-			) : null}
-			{!isLoading && rows.length === 0 && !error ? (
-				<p className="text-sm text-muted-foreground">Aucun participant.</p>
-			) : null}
+						</TableBody>
+					</Table>
+				</div>
+			)}
 
 			{pageCount > 1 ? (
-				<div className="flex items-center justify-end gap-3 text-sm">
+				<div className="mt-3 flex items-center justify-end gap-3 text-sm">
 					<Button
 						type="button"
 						variant="outline"

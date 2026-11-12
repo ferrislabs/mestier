@@ -6,6 +6,7 @@ use axum::{
 use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
 };
+use mestier_core::{PromotionFilter, SearchPattern};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -15,8 +16,16 @@ use crate::{paths::PromotionCollectionPath, require_view_cursus, response::Promo
 #[into_params(parameter_in = Query)]
 pub struct ListPromotionsQuery {
     pub training_id: Option<mestier_core::TrainingId>,
-    #[param(example = false)]
-    pub archived: Option<bool>,
+    /// Which rows to return by archive state: `active` (the default) keeps
+    /// rows with no `archived_at`, `archived` keeps only archived rows, `all`
+    /// keeps both.
+    #[param(inline, example = "active")]
+    pub archived: Option<mestier_core::ArchivedFilter>,
+    /// A case-insensitive **substring** of the label. Not full-text
+    /// search: no stemming, no ranking, no word boundaries. The value is
+    /// trimmed, and `%`, `_` and `\` match themselves. Empty after trimming
+    /// means no filter, which is what a cleared search box means.
+    pub q: Option<String>,
 }
 
 #[utoipa::path(
@@ -30,7 +39,7 @@ pub struct ListPromotionsQuery {
         PaginationParams,
     ),
     responses(
-        (status = 200, description = "A page of promotions; archived rows only with `archived=true`", body = inline(DataEnvelope<Vec<PromotionResponse>>)),
+        (status = 200, description = "A page of promotions narrowed by training, archive state and `q`; `total` counts the filtered rows", body = inline(DataEnvelope<Vec<PromotionResponse>>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -51,8 +60,11 @@ pub async fn handler(
         .usecase
         .list_promotions(
             path.organization_id,
-            query.training_id,
-            query.archived.unwrap_or(false),
+            PromotionFilter {
+                training_id: query.training_id,
+                archived: query.archived.unwrap_or_default(),
+                search: SearchPattern::parse(query.q.as_deref()),
+            },
             per_page,
             pagination.offset(),
         )

@@ -14,23 +14,39 @@ import {
 	HostCompaniesListUI,
 	type HostCompanyRowVM,
 } from '#/pages/cursus/host-companies/ui/host-companies-list-ui'
+import { countOf } from '#/pages/cursus/nav/lib/count-of'
+import { useDebouncedSearch } from '#/pages/cursus/shared/feature/use-debounced-search'
+import {
+	type ArchiveFilter,
+	archiveQuery,
+	searchQuery,
+} from '#/pages/cursus/shared/lib/list-filters'
 
-export interface HostCompaniesListFeatureProps {
-	includeArchived: boolean
-	onIncludeArchivedChange: (includeArchived: boolean) => void
+export interface HostCompanyFiltersState {
+	archived: ArchiveFilter
+	q: string | undefined
+}
+
+export interface HostCompaniesListFeatureProps extends HostCompanyFiltersState {
+	onFiltersChange: (filters: HostCompanyFiltersState) => void
 	onOpenHostCompany: (hostCompanyId: string) => void
 }
 
 export function HostCompaniesListFeature({
-	includeArchived,
-	onIncludeArchivedChange,
+	archived,
+	q,
+	onFiltersChange,
 	onOpenHostCompany,
 }: HostCompaniesListFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const canManage = useHasPermission('MANAGE_CURSUS_TRIADS')
 	const [createOpen, setCreateOpen] = useState(false)
+	const search = useDebouncedSearch(q ?? '', (next) =>
+		onFiltersChange({ archived, q: next || undefined }),
+	)
 	const list = useHostCompanies(activeOrganizationId, {
-		archived: includeArchived,
+		...archiveQuery(archived),
+		...searchQuery(search.query),
 		per_page: 100,
 	})
 	const createCompany = useCreateHostCompany()
@@ -49,14 +65,21 @@ export function HostCompaniesListFeature({
 	return (
 		<HostCompaniesListUI
 			rows={rows}
+			total={countOf(list.data)}
+			search={search.text}
 			isLoading={list.isLoading}
 			error={mutationErrorMessage(list.error)}
-			includeArchived={includeArchived}
+			archived={archived}
 			canManage={canManage}
 			createOpen={createOpen}
 			isCreating={createCompany.isPending}
 			createError={mutationErrorMessage(createCompany.error)}
-			onIncludeArchivedChange={onIncludeArchivedChange}
+			onSearchChange={search.setText}
+			onArchivedChange={(next) => onFiltersChange({ archived: next, q })}
+			onResetFilters={() => {
+				search.reset()
+				onFiltersChange({ archived: 'active', q: undefined })
+			}}
 			onCreateOpenChange={setCreateOpen}
 			onCreate={(values) =>
 				createCompany.mutate(
