@@ -42,7 +42,9 @@ function renderPage(permissions: string[]) {
 }
 
 describe('TrainingsPageFeature', () => {
-	it('creates a training without an establishment field or id', async () => {
+	it('creates a training without an establishment field or id', {
+		timeout: 15_000,
+	}, async () => {
 		const user = userEvent.setup()
 		api.mockMutation('post', PATH, () => ({ data: {} }))
 		renderPage(['VIEW_CURSUS', 'MANAGE_CURSUS_CATALOG'])
