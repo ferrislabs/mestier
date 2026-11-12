@@ -1,16 +1,6 @@
-import {
-	type ColumnDef,
-	flexRender,
-	getCoreRowModel,
-	useReactTable,
-} from '@tanstack/react-table'
 import { Archive, Pencil, Plus } from 'lucide-react'
-import { EmptyState } from '#/components/empty-state'
-import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
-import { Label } from '#/components/ui/label'
-import { PageHeader, PageShell } from '#/components/ui/surface'
-import { Switch } from '#/components/ui/switch'
+import { PageHeader, PageShell, StatusBadge } from '#/components/ui/surface'
 import {
 	Table,
 	TableBody,
@@ -19,21 +9,39 @@ import {
 	TableHeader,
 	TableRow,
 } from '#/components/ui/table'
+import { cn } from '#/lib/utils'
 import type { Promotion } from '#/pages/cursus/promotions/feature/use-promotions'
+import {
+	archiveQualifier,
+	countSummary,
+	PROMOTION_NOUN,
+} from '#/pages/cursus/shared/lib/count-summary'
+import {
+	type ArchiveFilter,
+	FEMININE_ARCHIVE_OPTIONS,
+} from '#/pages/cursus/shared/lib/list-filters'
 import type { SelectOption } from '#/pages/cursus/shared/lib/options'
-import { OptionSelect } from '#/pages/cursus/shared/ui/option-select'
+import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
+import { RowActions } from '#/pages/cursus/shared/ui/row-actions'
+
+const ALL_TRAININGS = 'all'
 
 interface PromotionsListProps {
 	promotions: Promotion[]
+	total: number | undefined
 	trainingNames: Record<string, string>
 	trainings: SelectOption[]
 	trainingId: string | undefined
-	archived: boolean
+	archived: ArchiveFilter
+	search: string
 	archiveError: string | null
 	isLoading: boolean
 	canManage: boolean
+	onSearchChange: (search: string) => void
 	onTrainingChange: (trainingId: string | undefined) => void
-	onArchivedChange: (archived: boolean) => void
+	onArchivedChange: (archived: ArchiveFilter) => void
+	onResetFilters: () => void
 	onOpen: (promotionId: string) => void
 	onCreate: () => void
 	onEdit: (promotion: Promotion) => void
@@ -42,167 +50,149 @@ interface PromotionsListProps {
 
 export function PromotionsList({
 	promotions,
+	total,
 	trainingNames,
 	trainings,
 	trainingId,
 	archived,
+	search,
 	archiveError,
 	isLoading,
 	canManage,
+	onSearchChange,
 	onTrainingChange,
 	onArchivedChange,
+	onResetFilters,
 	onOpen,
 	onCreate,
 	onEdit,
 	onArchive,
 }: PromotionsListProps) {
-	const columns: ColumnDef<Promotion>[] = [
-		{ header: 'Libellé', accessorKey: 'label' },
-		{
-			header: 'Formation',
-			cell: ({ row }) => trainingNames[row.original.training_id] ?? '—',
-		},
-		{
-			header: 'Années',
-			cell: ({ row }) => `${row.original.start_year}–${row.original.end_year}`,
-		},
-		{
-			header: 'Statut',
-			cell: ({ row }) =>
-				row.original.archived_at ? (
-					<Badge variant="secondary">Archivée</Badge>
-				) : (
-					<Badge variant="outline">Active</Badge>
-				),
-		},
-	]
-	if (canManage) {
-		columns.push({
-			id: 'actions',
-			header: '',
-			cell: ({ row }) => (
-				<div className="flex justify-end gap-1">
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onClick={(event) => {
-							event.stopPropagation()
-							onEdit(row.original)
-						}}
-					>
-						<Pencil />
-						Modifier
-					</Button>
-					{row.original.archived_at ? null : (
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							onClick={(event) => {
-								event.stopPropagation()
-								onArchive(row.original)
-							}}
-						>
-							<Archive />
-							Archiver
-						</Button>
-					)}
-				</div>
-			),
-		})
-	}
-
-	const table = useReactTable({
-		data: promotions,
-		columns,
-		getCoreRowModel: getCoreRowModel(),
-	})
+	const filtered =
+		search.trim() !== '' || archived !== 'active' || trainingId !== undefined
 
 	return (
-		<PageShell>
+		<PageShell className="block">
 			<PageHeader
+				className="mb-6"
 				title="Promotions"
-				description="Les promotions de chaque formation et leurs trinômes."
+				description={
+					total === undefined
+						? undefined
+						: countSummary(total, PROMOTION_NOUN, archiveQualifier(archived))
+				}
 				actions={
 					canManage ? (
-						<Button type="button" onClick={onCreate}>
-							<Plus />
-							Nouvelle promotion
+						<Button type="button" size="sm" onClick={onCreate}>
+							<Plus aria-hidden /> Nouvelle promotion
 						</Button>
 					) : null
 				}
 			/>
-			<div className="flex flex-wrap items-center gap-4">
-				<div className="w-64">
-					<OptionSelect
-						id="promotions-training-filter"
-						value={trainingId ?? null}
-						options={trainings}
-						placeholder="Toutes les formations"
-						noneLabel="Toutes les formations"
-						onChange={(next) => onTrainingChange(next ?? undefined)}
-					/>
-				</div>
-				<div className="flex items-center gap-2">
-					<Switch
-						id="promotions-archived"
-						checked={archived}
-						onCheckedChange={onArchivedChange}
-					/>
-					<Label htmlFor="promotions-archived">Archivées</Label>
-				</div>
-			</div>
+			<ListToolbar
+				search={search}
+				searchPlaceholder="Rechercher une promotion"
+				onSearch={onSearchChange}
+				status={archived}
+				statusOptions={FEMININE_ARCHIVE_OPTIONS}
+				statusLabel="Filtrer par statut"
+				onStatus={onArchivedChange}
+				select={{
+					value: trainingId ?? ALL_TRAININGS,
+					label: 'Filtrer par formation',
+					options: [
+						{ value: ALL_TRAININGS, label: 'Toutes les formations' },
+						...trainings,
+					],
+					onChange: (next) =>
+						onTrainingChange(next === ALL_TRAININGS ? undefined : next),
+				}}
+			/>
 			{archiveError ? (
-				<p role="alert" className="text-[13px] text-state-alert">
+				<p role="alert" className="mb-3 text-[13px] text-state-alert">
 					{archiveError}
 				</p>
 			) : null}
-			{!isLoading && promotions.length === 0 ? (
-				<EmptyState
-					title={archived ? 'Aucune promotion archivée' : 'Aucune promotion'}
+			{isLoading ? null : promotions.length === 0 ? (
+				<ListEmpty
+					title="Aucune promotion ne correspond."
 					hint={
-						canManage && !archived
-							? 'Créez une première promotion pour y rattacher des trinômes.'
-							: undefined
+						filtered
+							? 'Vérifie l’orthographe, le statut ou la formation sélectionnée.'
+							: canManage
+								? 'Créez une première promotion pour y rattacher des trinômes.'
+								: undefined
 					}
+					onReset={filtered ? onResetFilters : undefined}
 				/>
 			) : (
-				<div className="rounded-lg border bg-card">
+				<div className="overflow-hidden rounded-lg border bg-card">
 					<Table>
 						<TableHeader>
-							{table.getHeaderGroups().map((group) => (
-								<TableRow key={group.id}>
-									{group.headers.map((header) => (
-										<TableHead key={header.id}>
-											{header.isPlaceholder
-												? null
-												: flexRender(
-														header.column.columnDef.header,
-														header.getContext(),
-													)}
-										</TableHead>
-									))}
-								</TableRow>
-							))}
+							<TableRow className="hover:bg-transparent">
+								<TableHead className="pl-4">Libellé</TableHead>
+								<TableHead>Formation</TableHead>
+								<TableHead>Années</TableHead>
+								<TableHead>Statut</TableHead>
+								<TableHead className="w-12 pr-4">
+									<span className="sr-only">Actions</span>
+								</TableHead>
+							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{table.getRowModel().rows.map((row) => (
-								<TableRow
-									key={row.id}
-									className="cursor-pointer"
-									onClick={() => onOpen(row.original.id)}
-								>
-									{row.getVisibleCells().map((cell) => (
-										<TableCell key={cell.id}>
-											{flexRender(
-												cell.column.columnDef.cell,
-												cell.getContext(),
-											)}
+							{promotions.map((promotion) => {
+								const isArchived = Boolean(promotion.archived_at)
+								return (
+									<TableRow
+										key={promotion.id}
+										className={cn(
+											'group cursor-pointer',
+											isArchived && 'opacity-60',
+										)}
+										onClick={() => onOpen(promotion.id)}
+									>
+										<TableCell className="py-2.5 pl-4 font-medium">
+											{promotion.label}
 										</TableCell>
-									))}
-								</TableRow>
-							))}
+										<TableCell>
+											{trainingNames[promotion.training_id] ?? '—'}
+										</TableCell>
+										<TableCell className="tabular">
+											{`${promotion.start_year}–${promotion.end_year}`}
+										</TableCell>
+										<TableCell>
+											<StatusBadge tone={isArchived ? 'neutral' : 'success'}>
+												{isArchived ? 'Archivée' : 'Active'}
+											</StatusBadge>
+										</TableCell>
+										<TableCell className="pr-4">
+											<RowActions
+												label={promotion.label}
+												actions={
+													canManage
+														? [
+																{
+																	label: 'Modifier',
+																	icon: <Pencil />,
+																	onSelect: () => onEdit(promotion),
+																},
+																...(isArchived
+																	? []
+																	: [
+																			{
+																				label: 'Archiver',
+																				icon: <Archive />,
+																				onSelect: () => onArchive(promotion),
+																			},
+																		]),
+															]
+														: []
+												}
+											/>
+										</TableCell>
+									</TableRow>
+								)
+							})}
 						</TableBody>
 					</Table>
 				</div>

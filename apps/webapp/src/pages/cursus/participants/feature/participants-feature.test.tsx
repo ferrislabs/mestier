@@ -149,6 +149,58 @@ describe('ParticipantsListFeature', () => {
 	})
 })
 
+describe('ParticipantsListFeature search', () => {
+	it('counts the participants from the pagination total', async () => {
+		api.mockGet(PARTICIPANTS, () =>
+			page(
+				[
+					{ ...PARTICIPANT_ROW, apprentice_id: 'a-1', company_tutors: [] },
+				] as never,
+				58,
+			),
+		)
+		renderWith(
+			['VIEW_CURSUS'],
+			<ParticipantsListFeature
+				kind={undefined}
+				status={undefined}
+				onFiltersChange={vi.fn()}
+				onOpenParticipant={vi.fn()}
+			/>,
+		)
+
+		expect(await screen.findByText('58 participants')).toBeTruthy()
+	})
+
+	it('sends the typed search as q from the first page', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		renderWith(
+			['VIEW_CURSUS'],
+			<ParticipantsListFeature
+				kind="apprentice"
+				status={undefined}
+				onFiltersChange={vi.fn()}
+				onOpenParticipant={vi.fn()}
+			/>,
+		)
+		await screen.findByText('Léa Martin')
+
+		await user.click(
+			screen.getByPlaceholderText('Rechercher un nom, un e-mail'),
+		)
+		await user.paste('lea')
+
+		await waitFor(() =>
+			expect(
+				(callsTo(api, 'get', PARTICIPANTS).at(-1)?.params as { query: object })
+					.query,
+			).toMatchObject({ q: 'lea', kind: 'apprentice', page: 1 }),
+		)
+	})
+})
+
 describe('ParticipantsListFeature records', () => {
 	it('shows the kind and host company from the list without detail calls', async () => {
 		api.mockGet(PARTICIPANTS, () =>

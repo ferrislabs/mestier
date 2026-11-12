@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Schemas } from '#/api/api.client'
 import { invalidateCursus } from '#/pages/cursus/shared/feature/cursus-queries'
+import {
+	type ArchiveFilter,
+	archiveQuery,
+	searchQuery,
+} from '#/pages/cursus/shared/lib/list-filters'
 
 const PROMOTIONS_PATH =
 	'/api/v1/organizations/{organization_id}/cursus/promotions'
@@ -10,8 +15,9 @@ const PROMOTION_ARCHIVE_PATH =
 	'/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}/archive'
 
 export interface PromotionFilters {
-	archived: boolean
+	archived: ArchiveFilter
 	trainingId: string | undefined
+	q?: string
 }
 
 export function usePromotions(
@@ -25,8 +31,9 @@ export function usePromotions(
 			query: {
 				page: 1,
 				per_page: 100,
-				...(filters.archived ? { archived: 'all' as const } : {}),
+				...archiveQuery(filters.archived),
 				...(filters.trainingId ? { training_id: filters.trainingId } : {}),
+				...searchQuery(filters.q),
 			},
 		}).queryOptions,
 		enabled,

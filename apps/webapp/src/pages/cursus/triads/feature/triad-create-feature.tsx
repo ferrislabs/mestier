@@ -35,7 +35,7 @@ export function TriadCreateFeature({
 	const members = useOrganizationMembers(activeOrganizationId, open)
 	const promotions = usePromotions(
 		activeOrganizationId,
-		{ archived: false, trainingId: undefined },
+		{ archived: 'active', trainingId: undefined },
 		open && !fixedPromotionId,
 	)
 	const createTriad = useCreateTriad()

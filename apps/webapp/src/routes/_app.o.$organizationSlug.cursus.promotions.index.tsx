@@ -1,19 +1,21 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { PromotionsListFeature } from '#/pages/cursus/promotions/feature/promotions-list-feature'
+import { parseArchiveSearch } from '#/pages/cursus/shared/lib/list-filters'
 
 interface PromotionsSearch {
-	archived?: true
+	archived?: 'archived' | 'all'
 	training?: string
+	q?: string
 }
 
 function validateSearch(raw: Record<string, unknown>): PromotionsSearch {
+	const archived = parseArchiveSearch(raw.archived)
 	return {
-		...(raw.archived === true || raw.archived === 'true'
-			? { archived: true as const }
-			: {}),
+		...(archived ? { archived } : {}),
 		...(typeof raw.training === 'string' && raw.training !== ''
 			? { training: raw.training }
 			: {}),
+		...(typeof raw.q === 'string' && raw.q !== '' ? { q: raw.q } : {}),
 	}
 }
 
@@ -30,14 +32,18 @@ function PromotionsRoute() {
 
 	return (
 		<PromotionsListFeature
-			archived={search.archived === true}
+			archived={search.archived ?? 'active'}
 			trainingId={search.training}
+			q={search.q}
 			onFiltersChange={(filters) =>
 				void navigate({
 					replace: true,
 					search: {
-						...(filters.archived ? { archived: true as const } : {}),
+						...(filters.archived === 'active'
+							? {}
+							: { archived: filters.archived }),
 						...(filters.trainingId ? { training: filters.trainingId } : {}),
+						...(filters.q ? { q: filters.q } : {}),
 					},
 				})
 			}

@@ -24,6 +24,7 @@ export interface ParticipantsQuery {
 	kind?: 'apprentice' | 'company_tutor'
 	status?: 'pending' | 'active' | 'inactive'
 	host_company_id?: string
+	q?: string
 	page?: number
 	per_page?: number
 }

@@ -3,6 +3,7 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { useHostCompanies } from '#/pages/cursus/host-companies/feature/use-host-companies'
+import { countOf } from '#/pages/cursus/nav/lib/count-of'
 import {
 	PARTICIPANTS_PER_PAGE,
 	useCreateParticipant,
@@ -20,6 +21,8 @@ import {
 	type ParticipantRowVM,
 	ParticipantsListUI,
 } from '#/pages/cursus/participants/ui/participants-list-ui'
+import { useDebouncedSearch } from '#/pages/cursus/shared/feature/use-debounced-search'
+import { searchQuery } from '#/pages/cursus/shared/lib/list-filters'
 
 export interface ParticipantsListFeatureProps {
 	kind: ParticipantKind | undefined
@@ -41,10 +44,12 @@ export function ParticipantsListFeature({
 	const canManage = useHasPermission('MANAGE_CURSUS_PARTICIPANTS')
 	const [page, setPage] = useState(1)
 	const [createOpen, setCreateOpen] = useState(false)
+	const search = useDebouncedSearch('', () => setPage(1))
 
 	const list = useParticipants(activeOrganizationId, {
 		kind,
 		status,
+		...searchQuery(search.query),
 		page,
 		per_page: PARTICIPANTS_PER_PAGE,
 	})
@@ -66,13 +71,15 @@ export function ParticipantsListFeature({
 		}
 	})
 
-	const total = list.data?.pagination?.total ?? participants.length
-	const pageCount = Math.max(1, Math.ceil(total / PARTICIPANTS_PER_PAGE))
+	const total = countOf(list.data)
+	const pageCount = Math.max(1, Math.ceil((total ?? 0) / PARTICIPANTS_PER_PAGE))
 
 	return (
 		<>
 			<ParticipantsListUI
 				rows={rows}
+				total={total}
+				search={search.text}
 				isLoading={list.isLoading}
 				error={mutationErrorMessage(list.error)}
 				kind={kind}
@@ -80,6 +87,12 @@ export function ParticipantsListFeature({
 				canManage={canManage}
 				page={page}
 				pageCount={pageCount}
+				onSearchChange={search.setText}
+				onResetFilters={() => {
+					search.reset()
+					setPage(1)
+					onFiltersChange({ kind: undefined, status: undefined })
+				}}
 				onKindChange={(next) => {
 					setPage(1)
 					onFiltersChange({ kind: next, status })

@@ -31,7 +31,7 @@ export function CursusSidebarFeature() {
 
 	const promotions = usePromotions(
 		organizationId,
-		{ archived: false, trainingId: undefined },
+		{ archived: 'active', trainingId: undefined },
 		canView,
 	)
 	const triads = useTriads(

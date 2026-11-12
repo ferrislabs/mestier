@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { PromotionsListFeature } from '#/pages/cursus/promotions/feature/promotions-list-feature'
+import type { ArchiveFilter } from '#/pages/cursus/shared/lib/list-filters'
 import {
 	callsTo,
 	chooseOption,
@@ -18,7 +19,11 @@ const TRAININGS_PATH =
 
 beforeAll(installRadixPolyfills)
 
-function setup(permissions: string[]) {
+function setup(
+	permissions: string[],
+	archived: ArchiveFilter = 'active',
+	onFiltersChange = vi.fn(),
+) {
 	const api = installFakeTanstackApi()
 	api.mockGet(PROMOTIONS_PATH, () => ({
 		data: [
@@ -53,9 +58,10 @@ function setup(permissions: string[]) {
 	render(
 		<Providers queryClient={createQueryClient(permissions)}>
 			<PromotionsListFeature
-				archived={false}
+				archived={archived}
 				trainingId={undefined}
-				onFiltersChange={vi.fn()}
+				q={undefined}
+				onFiltersChange={onFiltersChange}
 				onOpenPromotion={onOpenPromotion}
 			/>
 		</Providers>,
@@ -63,7 +69,47 @@ function setup(permissions: string[]) {
 	return { api, onOpenPromotion }
 }
 
+function promotionQueries(api: ReturnType<typeof installFakeTanstackApi>) {
+	return callsTo(api, 'get', PROMOTIONS_PATH).map(
+		(call) => (call.params as { query: Record<string, unknown> }).query,
+	)
+}
+
 describe('PromotionsListFeature', () => {
+	it('counts the active promotions in the header', async () => {
+		setup(['VIEW_CURSUS'])
+
+		expect(await screen.findByText('1 promotion active')).toBeTruthy()
+	})
+
+	it('sends the archive filter to the list query', async () => {
+		const { api } = setup(['VIEW_CURSUS'], 'archived')
+
+		await screen.findByText('CAP 2026')
+		expect(promotionQueries(api)[0]).toMatchObject({ archived: 'archived' })
+	})
+
+	it('sends the typed search as q and reports it', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		const onFiltersChange = vi.fn()
+		const { api } = setup(['VIEW_CURSUS'], 'active', onFiltersChange)
+		await screen.findByText('CAP 2026')
+
+		await user.click(screen.getByPlaceholderText('Rechercher une promotion'))
+		await user.paste('CAP')
+
+		await waitFor(() =>
+			expect(promotionQueries(api).at(-1)).toMatchObject({ q: 'CAP' }),
+		)
+		expect(onFiltersChange).toHaveBeenCalledWith({
+			archived: 'active',
+			trainingId: undefined,
+			q: 'CAP',
+		})
+	})
+
 	it('lists promotions with their training name', async () => {
 		setup(['VIEW_CURSUS'])
 

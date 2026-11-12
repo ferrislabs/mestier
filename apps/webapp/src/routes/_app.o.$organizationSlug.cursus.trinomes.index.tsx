@@ -2,19 +2,15 @@ import { createFileRoute } from '@tanstack/react-router'
 import { TriadsListFeature } from '#/pages/cursus/triads/feature/triads-list-feature'
 
 interface TriadsSearch {
-	closed?: boolean
+	status?: 'closed' | 'all'
 	promotion?: string
 }
 
 function validateSearch(raw: Record<string, unknown>): TriadsSearch {
-	const closed =
-		raw.closed === true || raw.closed === 'true'
-			? true
-			: raw.closed === false || raw.closed === 'false'
-				? false
-				: undefined
 	return {
-		...(closed === undefined ? {} : { closed }),
+		...(raw.status === 'closed' || raw.status === 'all'
+			? { status: raw.status }
+			: {}),
 		...(typeof raw.promotion === 'string' && raw.promotion !== ''
 			? { promotion: raw.promotion }
 			: {}),
@@ -35,12 +31,12 @@ function TriadsRoute() {
 	return (
 		<TriadsListFeature
 			promotionId={search.promotion}
-			closed={search.closed}
+			status={search.status ?? 'open'}
 			onFiltersChange={(filters) =>
 				void navigate({
 					replace: true,
 					search: {
-						...(filters.closed === undefined ? {} : { closed: filters.closed }),
+						...(filters.status === 'open' ? {} : { status: filters.status }),
 						...(filters.promotionId ? { promotion: filters.promotionId } : {}),
 					},
 				})
