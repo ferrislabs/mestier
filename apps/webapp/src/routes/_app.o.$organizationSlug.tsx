@@ -18,7 +18,9 @@ import {
 	useActiveOrganization,
 	useOrganizationList,
 } from '#/hooks/use-active-organization'
+import { useFeatures } from '#/hooks/use-features'
 import { PresenceProvider } from '#/hooks/use-presence'
+import { isFeatureVisible } from '#/modules/feature-gate'
 import { splitOrgPath } from '#/modules/org-path'
 import { hasSideNav, resolveModule } from '#/modules/resolve-module'
 import { resolveScope } from '#/modules/scope'
@@ -65,6 +67,10 @@ function AppShell() {
 	const location = useLocation()
 	const { activeOrganization } = useActiveOrganization()
 	const scope = resolveScope(location.pathname)
+	const { features, loaded: featuresLoaded } = useFeatures()
+	const tabs = scope.tabs.filter((tab) =>
+		isFeatureVisible(tab, features, featuresLoaded),
+	)
 	const path = splitOrgPath(location.pathname).path
 	const withSideNav = hasSideNav(resolveModule(path), path)
 
@@ -82,7 +88,7 @@ function AppShell() {
 				<AppHeader />
 				<ScopeBar
 					label={scope.label}
-					tabs={scope.tabs}
+					tabs={tabs}
 					organizationSlug={activeOrganization.slug}
 				/>
 				<div className="app-canvas flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">

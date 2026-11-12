@@ -79,6 +79,54 @@ export namespace Schemas {
   export type AddTicketEntryRequest = { body: string; kind: string };
   export type AddressKind = "BILLING" | "SITE" | "OTHER";
   export type AdjustmentKind = "ADJUSTMENT" | "CARRY_OVER";
+  export type AdminAccessResponse = { can_access: boolean };
+  export type AdminFeatureChangeResponse = {
+    actor_name?: (string | null) | undefined;
+    enabled: boolean;
+    flag: string;
+    occurred_at: string;
+  };
+  export type AdminFeatureToggleResponse = { changed: boolean; enabled: boolean; key: string };
+  export type AdminMemberResponse = {
+    created_at: string;
+    email?: (string | null) | undefined;
+    name: string;
+    roles: Array<string>;
+  };
+  export type AdminOrganizationFeatureResponse = {
+    description: string;
+    enabled: boolean;
+    enabled_at?: (string | null) | undefined;
+    enabled_by_name?: (string | null) | undefined;
+    key: string;
+    label: string;
+  };
+  export type AdminOrganizationResponse = {
+    created_at: string;
+    features: Array<AdminOrganizationFeatureResponse>;
+    history: Array<AdminFeatureChangeResponse>;
+    id: OrganizationId;
+    members: Array<AdminMemberResponse>;
+    name: string;
+    slug: string;
+  };
+  export type AdminOrganizationSummaryResponse = {
+    created_at: string;
+    features: Array<string>;
+    id: OrganizationId;
+    member_count: number;
+    name: string;
+    slug: string;
+  };
+  export type AdminUserOrganizationResponse = { name: string; slug: string };
+  export type AdminUserResponse = {
+    created_at: string;
+    display_name: string;
+    email: string;
+    id: UserId;
+    organizations: Array<AdminUserOrganizationResponse>;
+    username: string;
+  };
   export type InvoiceId = string;
   export type AllocateReceiptRequest = { invoice_id: InvoiceId };
   export type AmendAssignmentReportRequest = { comment?: (string | null) | undefined; reported_minutes: number };
@@ -946,6 +994,7 @@ export namespace Schemas {
     name: string;
     prefix: string;
   };
+  export type CreationCountsResponse = { last_30_days: number; total: number };
   export type CredentialOptionResponse = { label: string; value: string };
   export type CredentialShowWhenResponse = { field: string; one_of: Array<string> };
   export type CredentialFieldResponse = {
@@ -1418,6 +1467,7 @@ export namespace Schemas {
     status: ExtraStatus;
     surcharge_id?: (null | SurchargeId) | undefined;
   };
+  export type FeatureFlagResponse = { description: string; key: string; label: string };
   export type FeedMemberResponse = {
     archived: boolean;
     display_name: string;
@@ -1449,6 +1499,7 @@ export namespace Schemas {
   };
   export type FileUploadResponse = { key: string; mime_type: string; size_bytes: number };
   export type FileUrlResponse = { expires_at: string; url: string };
+  export type FlagAdoptionResponse = { key: string; label: string; organizations: number };
   export type FolderResponse = {
     created_at: string;
     id: string;
@@ -2037,7 +2088,6 @@ export namespace Schemas {
   export type MoveKnowledgeArticlesResponse = { moved: number };
   export type MyMemberResponse = { display_name: string; member_id: MemberId; organization_id: OrganizationId };
   export type MyPermissionsResponse = { permissions: Array<string> };
-  export type NewsAccessResponse = { can_manage: boolean };
   export type NewsCtaRequest = { label: string; url: string };
   export type NewsCtaResponse = { label: string; url: string };
   export type NewsIcon =
@@ -2090,6 +2140,7 @@ export namespace Schemas {
   };
   export type NumberSeriesKind = "QUOTE" | "INVOICE" | "CREDIT_NOTE";
   export type OpenDirectChannelRequest = { user_id: UserId };
+  export type OrganizationFeaturesResponse = { features: Array<string> };
   export type str = string;
   export type VatStatusResponse = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type OrganizationResponse = {
@@ -2222,6 +2273,18 @@ export namespace Schemas {
     resources: Array<PlanningResourceResponse>;
     timezone: string;
     work_time: Array<PlanningWorkTimeResponse>;
+  };
+  export type WeeklyCountResponse = { count: number; week_start: string };
+  export type PlatformStatsResponse = {
+    active_organizations: number;
+    active_users: number;
+    features: Array<FlagAdoptionResponse>;
+    invoices: CreationCountsResponse;
+    organizations_per_week: Array<WeeklyCountResponse>;
+    projects: CreationCountsResponse;
+    quotes: CreationCountsResponse;
+    signups_per_week: Array<WeeklyCountResponse>;
+    tasks: CreationCountsResponse;
   };
   export type PostIntakeMessageRequest = { body: string };
   export type PostalAddressBody = Partial<{
@@ -2643,6 +2706,7 @@ export namespace Schemas {
     monthly_cost_cents?: (number | null) | undefined;
     weekly_contract_minutes: number;
   };
+  export type SetFeatureRequest = { enabled: boolean };
   export type SetNextNumberRequest = { next_number: number };
   export type SetNotificationLevelRequest = { level: NotificationLevel };
   export type SetPresenceRequest = { status: PresenceStatus };
@@ -3174,6 +3238,30 @@ export namespace Schemas {
 export namespace Endpoints {
   // <Endpoints>
 
+  export type get_GetAdminAccess = {
+    method: "GET";
+    path: "/api/v1/admin/access";
+    requestFormat: "json";
+    parameters: never;
+    responses: {
+      200: { data: { can_access: boolean }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+    };
+  };
+  export type get_ListFeatureCatalogue = {
+    method: "GET";
+    path: "/api/v1/admin/features";
+    requestFormat: "json";
+    parameters: never;
+    responses: {
+      200: {
+        data: Array<{ description: string; key: string; label: string }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
   export type get_ListNewsForAdmin = {
     method: "GET";
     path: "/api/v1/admin/news";
@@ -3260,6 +3348,121 @@ export namespace Endpoints {
       path: { news_id: string };
     };
     responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type get_ListOrganizationsForAdmin = {
+    method: "GET";
+    path: "/api/v1/admin/organizations";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ search: string; page: number; per_page: number }>;
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          features: Array<string>;
+          id: Schemas.OrganizationId;
+          member_count: number;
+          name: string;
+          slug: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_GetOrganizationForAdmin = {
+    method: "GET";
+    path: "/api/v1/admin/organizations/{organization_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          created_at: string;
+          features: Array<Schemas.AdminOrganizationFeatureResponse>;
+          history: Array<Schemas.AdminFeatureChangeResponse>;
+          id: Schemas.OrganizationId;
+          members: Array<Schemas.AdminMemberResponse>;
+          name: string;
+          slug: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_SetOrganizationFeature = {
+    method: "PUT";
+    path: "/api/v1/admin/organizations/{organization_id}/features/{flag}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; flag: string };
+
+      body: Schemas.SetFeatureRequest;
+    };
+    responses: {
+      200: {
+        data: { changed: boolean; enabled: boolean; key: string };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetPlatformStats = {
+    method: "GET";
+    path: "/api/v1/admin/stats";
+    requestFormat: "json";
+    parameters: never;
+    responses: {
+      200: {
+        data: {
+          active_organizations: number;
+          active_users: number;
+          features: Array<Schemas.FlagAdoptionResponse>;
+          invoices: Schemas.CreationCountsResponse;
+          organizations_per_week: Array<Schemas.WeeklyCountResponse>;
+          projects: Schemas.CreationCountsResponse;
+          quotes: Schemas.CreationCountsResponse;
+          signups_per_week: Array<Schemas.WeeklyCountResponse>;
+          tasks: Schemas.CreationCountsResponse;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type get_ListUsersForAdmin = {
+    method: "GET";
+    path: "/api/v1/admin/users";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ search: string; page: number; per_page: number }>;
+    };
+    responses: {
+      200: {
+        data: Array<{
+          created_at: string;
+          display_name: string;
+          email: string;
+          id: Schemas.UserId;
+          organizations: Array<Schemas.AdminUserOrganizationResponse>;
+          username: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
   };
   export type patch_ResolveAssignmentReport = {
     method: "PATCH";
@@ -6129,16 +6332,6 @@ export namespace Endpoints {
       401: unknown;
     };
   };
-  export type get_GetNewsAccess = {
-    method: "GET";
-    path: "/api/v1/news/access";
-    requestFormat: "json";
-    parameters: never;
-    responses: {
-      200: { data: { can_manage: boolean }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
-      401: unknown;
-    };
-  };
   export type post_MarkNewsSeen = {
     method: "POST";
     path: "/api/v1/news/seen";
@@ -8671,6 +8864,19 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       422: unknown;
+    };
+  };
+  export type get_GetOrganizationFeatures = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/features";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+    };
+    responses: {
+      200: { data: { features: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
     };
   };
   export type get_ListMyAssignmentReports = {
@@ -14963,7 +15169,13 @@ export namespace Endpoints {
 // <EndpointByMethod>
 export type EndpointByMethod = {
   get: {
+    "/api/v1/admin/access": Endpoints.get_GetAdminAccess;
+    "/api/v1/admin/features": Endpoints.get_ListFeatureCatalogue;
     "/api/v1/admin/news": Endpoints.get_ListNewsForAdmin;
+    "/api/v1/admin/organizations": Endpoints.get_ListOrganizationsForAdmin;
+    "/api/v1/admin/organizations/{organization_id}": Endpoints.get_GetOrganizationForAdmin;
+    "/api/v1/admin/stats": Endpoints.get_GetPlatformStats;
+    "/api/v1/admin/users": Endpoints.get_ListUsersForAdmin;
     "/api/v1/chat/channels/{channel_id}": Endpoints.get_GetChannel;
     "/api/v1/chat/channels/{channel_id}/messages": Endpoints.get_ListMessages;
     "/api/v1/chat/channels/{channel_id}/permissions": Endpoints.get_ListChannelPermissions;
@@ -14998,7 +15210,6 @@ export type EndpointByMethod = {
     "/api/v1/members/{member_id}/roles": Endpoints.get_ListMemberRoles;
     "/api/v1/members/{member_id}/work-time": Endpoints.get_GetWorkTime;
     "/api/v1/news": Endpoints.get_ListNews;
-    "/api/v1/news/access": Endpoints.get_GetNewsAccess;
     "/api/v1/news/unseen": Endpoints.get_ListUnseenNews;
     "/api/v1/organizations": Endpoints.get_ListOrganizations;
     "/api/v1/organizations/{organization_id}": Endpoints.get_GetOrganization;
@@ -15036,6 +15247,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/expense-categories": Endpoints.get_ListExpenseCategories;
     "/api/v1/organizations/{organization_id}/expenses": Endpoints.get_ListExpenses;
     "/api/v1/organizations/{organization_id}/extra-periods": Endpoints.get_ListExtraPeriods;
+    "/api/v1/organizations/{organization_id}/features": Endpoints.get_GetOrganizationFeatures;
     "/api/v1/organizations/{organization_id}/field/assignment-reports": Endpoints.get_ListMyAssignmentReports;
     "/api/v1/organizations/{organization_id}/field/current": Endpoints.get_GetCurrentTimeEntry;
     "/api/v1/organizations/{organization_id}/field/tasks": Endpoints.get_ListMyFieldTasks;
@@ -15271,6 +15483,7 @@ export type EndpointByMethod = {
   };
   put: {
     "/api/v1/admin/news/{news_id}": Endpoints.put_UpdateNews;
+    "/api/v1/admin/organizations/{organization_id}/features/{flag}": Endpoints.put_SetOrganizationFeature;
     "/api/v1/chat/channels/{channel_id}/notification-level": Endpoints.put_SetNotificationLevel;
     "/api/v1/chat/channels/{channel_id}/permissions/everyone": Endpoints.put_UpsertEveryoneOverwrite;
     "/api/v1/chat/channels/{channel_id}/permissions/{target_type}/{target_id}": Endpoints.put_UpsertTargetOverwrite;

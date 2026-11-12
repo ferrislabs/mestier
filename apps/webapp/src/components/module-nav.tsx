@@ -14,8 +14,10 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from '#/components/ui/sidebar'
+import { useFeatures } from '#/hooks/use-features'
 import { usePermissions } from '#/hooks/use-permissions'
 import { cn } from '#/lib/utils'
+import { isFeatureVisible } from '#/modules/feature-gate'
 import { buildOrgPath, splitOrgPath } from '#/modules/org-path'
 import { resolveModule } from '#/modules/resolve-module'
 import type { AppModule, NavTarget } from '#/modules/types'
@@ -56,11 +58,13 @@ export function ModuleNav({
 	const { data: permissionsData, isSuccess: permissionsLoaded } =
 		usePermissions()
 	const grantedPermissions = permissionsData?.data.permissions ?? []
+	const { features, loaded: featuresLoaded } = useFeatures()
 	const visibleSections = activeModule.sections.filter(
 		(section) =>
-			!section.requiredPermission ||
-			(permissionsLoaded &&
-				grantedPermissions.includes(section.requiredPermission)),
+			(!section.requiredPermission ||
+				(permissionsLoaded &&
+					grantedPermissions.includes(section.requiredPermission))) &&
+			isFeatureVisible(section, features, featuresLoaded),
 	)
 
 	const sections = (
