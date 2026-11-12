@@ -4,15 +4,15 @@ use mestier_macros::transactional;
 
 use crate::{
     CursusSpace, HostCompanyId, OrganizationId, Participant, ParticipantDetail, ParticipantId,
-    ParticipantInvite, ParticipantKind, ParticipantListItem, ParticipantStatus,
+    ParticipantInvite, ParticipantListItem,
     application::{MestierUseCase, policy},
     domain::{
         cursus_host_company::service::CursusHostCompanyService,
         cursus_participant::{
             commands::{
                 AcceptParticipantInvitationCommand, AddCompanyTutorCommand,
-                CreateParticipantCommand, RemoveCompanyTutorCommand, UpdateParticipantCommand,
-                UpsertApprenticeCommand,
+                CreateParticipantCommand, ParticipantFilter, RemoveCompanyTutorCommand,
+                UpdateParticipantCommand, UpsertApprenticeCommand,
             },
             service::CursusParticipantService,
         },
@@ -93,21 +93,12 @@ impl MestierUseCase {
     pub async fn list_participants(
         &self,
         organization_id: OrganizationId,
-        kind: Option<ParticipantKind>,
-        status: Option<ParticipantStatus>,
-        host_company_id: Option<HostCompanyId>,
+        filter: ParticipantFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<ParticipantListItem>, u64), CoreError> {
         CursusParticipantService::new(cursus_participant_repository, emitter)
-            .list(
-                organization_id,
-                kind,
-                status,
-                host_company_id,
-                limit,
-                offset,
-            )
+            .list(organization_id, &filter, limit, offset)
             .await
     }
 

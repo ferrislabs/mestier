@@ -6,7 +6,9 @@ use axum::{
 use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
 };
-use mestier_core::{HostCompanyId, ParticipantKind, ParticipantStatus};
+use mestier_core::{
+    HostCompanyId, ParticipantFilter, ParticipantKind, ParticipantStatus, SearchPattern,
+};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -22,6 +24,11 @@ pub struct ListParticipantsQuery {
     #[param(inline)]
     pub status: Option<ParticipantStatus>,
     pub host_company_id: Option<HostCompanyId>,
+    /// A case-insensitive **substring** of the first name, the last name, `first last`, `last first` or the email. Not full-text
+    /// search: no stemming, no ranking, no word boundaries. The value is
+    /// trimmed, and `%`, `_` and `\` match themselves. Empty after trimming
+    /// means no filter, which is what a cleared search box means.
+    pub q: Option<String>,
 }
 
 #[utoipa::path(
@@ -35,7 +42,7 @@ pub struct ListParticipantsQuery {
         PaginationParams,
     ),
     responses(
-        (status = 200, description = "A page of participants, filtered by kind, status and host company, with their apprentice and company tutor records", body = inline(DataEnvelope<Vec<ParticipantListItemResponse>>)),
+        (status = 200, description = "A page of participants, filtered by kind, status, host company and `q` (`total` counts the filtered rows), with their apprentice and company tutor records", body = inline(DataEnvelope<Vec<ParticipantListItemResponse>>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -56,9 +63,12 @@ pub async fn handler(
         .usecase
         .list_participants(
             path.organization_id,
-            query.kind,
-            query.status,
-            query.host_company_id,
+            ParticipantFilter {
+                kind: query.kind,
+                status: query.status,
+                host_company_id: query.host_company_id,
+                search: SearchPattern::parse(query.q.as_deref()),
+            },
             per_page,
             pagination.offset(),
         )

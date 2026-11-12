@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, establishment_id, name, rncp_code, rncp_label, level, degree_type, archived_at, created_at, updated_at\n            FROM cursus.training\n            WHERE org_id = $1\n              AND ($2::uuid IS NULL OR establishment_id = $2)\n              AND ($3 OR archived_at IS NULL)\n            ORDER BY name ASC, created_at ASC\n            LIMIT $4 OFFSET $5\n            ",
+  "query": "\n            SELECT id, org_id, training_id, label, start_year, end_year, archived_at, created_at, updated_at\n            FROM cursus.promotion\n            WHERE org_id = $1\n              AND ($2::uuid IS NULL OR training_id = $2)\n              AND ($3::bool IS NULL OR (archived_at IS NOT NULL) = $3)\n              AND ($4::text IS NULL OR label ILIKE $4)\n            ORDER BY start_year DESC, label ASC, created_at ASC\n            LIMIT $5 OFFSET $6\n            ",
   "describe": {
     "columns": [
       {
@@ -15,46 +15,36 @@
       },
       {
         "ordinal": 2,
-        "name": "establishment_id",
+        "name": "training_id",
         "type_info": "Uuid"
       },
       {
         "ordinal": 3,
-        "name": "name",
+        "name": "label",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "rncp_code",
-        "type_info": "Text"
+        "name": "start_year",
+        "type_info": "Int4"
       },
       {
         "ordinal": 5,
-        "name": "rncp_label",
-        "type_info": "Text"
+        "name": "end_year",
+        "type_info": "Int4"
       },
       {
         "ordinal": 6,
-        "name": "level",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 7,
-        "name": "degree_type",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 8,
         "name": "archived_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -64,6 +54,7 @@
         "Uuid",
         "Uuid",
         "Bool",
+        "Text",
         "Int8",
         "Int8"
       ]
@@ -71,16 +62,14 @@
     "nullable": [
       false,
       false,
-      true,
       false,
-      true,
-      true,
-      true,
-      true,
+      false,
+      false,
+      false,
       true,
       false,
       false
     ]
   },
-  "hash": "94a4f34d28abeb22105b57d8f6eec05898cd28033acd3a918ef0b0c509093ad7"
+  "hash": "38b4792ff7e6410c031cd9670b83640dd3bfee5e4f69ebec09693b3ef8ea9643"
 }

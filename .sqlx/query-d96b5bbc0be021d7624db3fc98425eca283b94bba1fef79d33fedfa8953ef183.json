@@ -1,0 +1,87 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, establishment_id, name, rncp_code, rncp_label, level, degree_type, archived_at, created_at, updated_at\n            FROM cursus.training\n            WHERE org_id = $1\n              AND ($2::uuid IS NULL OR establishment_id = $2)\n              AND ($3::bool IS NULL OR (archived_at IS NOT NULL) = $3)\n              AND ($4::text IS NULL OR name ILIKE $4 OR rncp_code ILIKE $4)\n            ORDER BY name ASC, created_at ASC\n            LIMIT $5 OFFSET $6\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "establishment_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "rncp_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "rncp_label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "level",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "degree_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d96b5bbc0be021d7624db3fc98425eca283b94bba1fef79d33fedfa8953ef183"
+}

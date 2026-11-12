@@ -6,6 +6,7 @@ use axum::{
 use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
 };
+use mestier_core::{SearchPattern, TriadFilter};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -15,8 +16,15 @@ use crate::{paths::TriadCollectionPath, require_view_cursus, response::TriadSumm
 #[into_params(parameter_in = Query)]
 pub struct ListTriadsQuery {
     pub promotion_id: Option<mestier_core::PromotionId>,
+    /// Absent keeps every triad, `true` only closed ones, `false` only open
+    /// ones.
     #[param(example = false)]
     pub closed: Option<bool>,
+    /// A case-insensitive **substring** of the apprentice name (`first last` or `last first`), the current host company name or the promotion label. Not full-text
+    /// search: no stemming, no ranking, no word boundaries. The value is
+    /// trimmed, and `%`, `_` and `\` match themselves. Empty after trimming
+    /// means no filter, which is what a cleared search box means.
+    pub q: Option<String>,
 }
 
 #[utoipa::path(
@@ -30,7 +38,7 @@ pub struct ListTriadsQuery {
         PaginationParams,
     ),
     responses(
-        (status = 200, description = "A page of triads with apprentice, promotion, pedagogic tutor and current host company names", body = inline(DataEnvelope<Vec<TriadSummaryResponse>>)),
+        (status = 200, description = "A page of triads narrowed by promotion, `closed` and `q` (`total` counts the filtered rows), with apprentice, promotion, pedagogic tutor and current host company names", body = inline(DataEnvelope<Vec<TriadSummaryResponse>>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -51,8 +59,11 @@ pub async fn handler(
         .usecase
         .list_triads(
             path.organization_id,
-            query.promotion_id,
-            query.closed,
+            TriadFilter {
+                promotion_id: query.promotion_id,
+                closed: query.closed,
+                search: SearchPattern::parse(query.q.as_deref()),
+            },
             per_page,
             pagination.offset(),
         )

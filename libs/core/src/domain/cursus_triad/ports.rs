@@ -3,7 +3,7 @@ use common::CoreError;
 
 use crate::{
     CompanyTutorId, Contract, ContractId, ContractTutor, ContractView, OrganizationId,
-    ParticipantId, PromotionId, Triad, TriadDetail, TriadId, TriadSummary, TutorTriadLink,
+    ParticipantId, Triad, TriadDetail, TriadFilter, TriadId, TriadSummary, TutorTriadLink,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -33,8 +33,7 @@ pub trait CursusTriadRepository: Send {
     fn list_triads(
         &mut self,
         organization_id: OrganizationId,
-        promotion_id: Option<PromotionId>,
-        closed: Option<bool>,
+        filter: &TriadFilter,
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<TriadSummary>, u64), CoreError>> + Send;

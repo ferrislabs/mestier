@@ -4,8 +4,9 @@ use mestier_macros::repository;
 use uuid::Uuid;
 
 use crate::{
-    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, HostCompanyId,
-    OrganizationId, Participant, ParticipantId, ParticipantKind, ParticipantStatus, UserId,
+    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, OrganizationId,
+    Participant, ParticipantFilter, ParticipantId, ParticipantKind, ParticipantStatus,
+    SearchPattern, UserId,
     domain::cursus_participant::ports::CursusParticipantRepository,
     infrastructure::{
         cursus_participant::postgres::model::{
@@ -175,16 +176,15 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
     async fn list_participants(
         &mut self,
         organization_id: OrganizationId,
-        kind: Option<ParticipantKind>,
-        status: Option<ParticipantStatus>,
-        host_company_id: Option<HostCompanyId>,
+        filter: &ParticipantFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Participant>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
-        let kind = kind.map(ParticipantKind::as_str);
-        let status = status.map(ParticipantStatus::as_str);
-        let host_company_id = host_company_id.map(|id| id.0);
+        let kind = filter.kind.map(ParticipantKind::as_str);
+        let status = filter.status.map(ParticipantStatus::as_str);
+        let host_company_id = filter.host_company_id.map(|id| id.0);
+        let pattern = filter.search.as_ref().map(SearchPattern::as_str);
         let rows = sqlx::query_as!(
             ParticipantRow,
             r#"
@@ -206,13 +206,18 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
                    OR EXISTS (
                        SELECT 1 FROM cursus.company_tutor h
                        WHERE h.org_id = p.org_id AND h.participant_id = p.id AND h.host_company_id = $4))
+              AND ($5::text IS NULL
+                   OR concat_ws(' ', p.first_name, p.last_name) ILIKE $5
+                   OR concat_ws(' ', p.last_name, p.first_name) ILIKE $5
+                   OR p.email ILIKE $5)
             ORDER BY lower(p.last_name) ASC, lower(coalesce(p.first_name, '')) ASC, p.created_at ASC
-            LIMIT $5 OFFSET $6
+            LIMIT $6 OFFSET $7
             "#,
             organization_id.0,
             kind,
             status,
             host_company_id,
+            pattern,
             limit as i64,
             offset as i64,
         )
@@ -240,11 +245,16 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
                    OR EXISTS (
                        SELECT 1 FROM cursus.company_tutor h
                        WHERE h.org_id = p.org_id AND h.participant_id = p.id AND h.host_company_id = $4))
+              AND ($5::text IS NULL
+                   OR concat_ws(' ', p.first_name, p.last_name) ILIKE $5
+                   OR concat_ws(' ', p.last_name, p.first_name) ILIKE $5
+                   OR p.email ILIKE $5)
             "#,
             organization_id.0,
             kind,
             status,
             host_company_id,
+            pattern,
         )
         .fetch_one(&mut ***tx)
         .await

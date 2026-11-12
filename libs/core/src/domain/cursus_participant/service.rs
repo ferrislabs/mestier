@@ -5,16 +5,15 @@ use common::{CoreError, generate_uuid_v7};
 use events::EventEmitter;
 
 use crate::{
-    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, HostCompanyId,
-    OrganizationId, Participant, ParticipantDetail, ParticipantId, ParticipantInvite,
-    ParticipantKind, ParticipantListItem, ParticipantStatus,
+    Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, OrganizationId,
+    Participant, ParticipantDetail, ParticipantId, ParticipantInvite, ParticipantListItem,
     domain::{
         cursus_participant::{
             INVITATION_VALIDITY_DAYS,
             commands::{
                 AcceptParticipantInvitationCommand, AddCompanyTutorCommand, ApprenticeInput,
-                CompanyTutorInput, CreateParticipantCommand, RemoveCompanyTutorCommand,
-                UpdateParticipantCommand, UpsertApprenticeCommand,
+                CompanyTutorInput, CreateParticipantCommand, ParticipantFilter,
+                RemoveCompanyTutorCommand, UpdateParticipantCommand, UpsertApprenticeCommand,
             },
             events::{ParticipantActivated, ParticipantInvited},
             ports::CursusParticipantRepository,
@@ -157,22 +156,13 @@ where
     pub async fn list(
         &mut self,
         organization_id: OrganizationId,
-        kind: Option<ParticipantKind>,
-        status: Option<ParticipantStatus>,
-        host_company_id: Option<HostCompanyId>,
+        filter: &ParticipantFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<ParticipantListItem>, u64), CoreError> {
         let (participants, total) = self
             .repo
-            .list_participants(
-                organization_id,
-                kind,
-                status,
-                host_company_id,
-                limit,
-                offset,
-            )
+            .list_participants(organization_id, filter, limit, offset)
             .await?;
         let ids: Vec<ParticipantId> = participants.iter().map(|p| p.id).collect();
         let mut apprentice_ids: HashMap<ParticipantId, ApprenticeId> = self
@@ -493,7 +483,8 @@ fn valid_email(value: &str) -> Result<String, CoreError> {
 mod tests {
     use super::*;
     use crate::{
-        HostCompanyId, UserId, domain::cursus_participant::ports::MockCursusParticipantRepository,
+        HostCompanyId, ParticipantStatus, UserId,
+        domain::cursus_participant::ports::MockCursusParticipantRepository,
     };
     use events::testing::RecordingEmitter;
     use uuid::Uuid;
@@ -767,7 +758,7 @@ mod tests {
         let mut repo = MockCursusParticipantRepository::new();
         repo.expect_list_participants()
             .times(1)
-            .returning(move |_, _, _, _, _, _| {
+            .returning(move |_, _, _, _| {
                 let page = page.clone();
                 Box::pin(async move { Ok((page, 3)) })
             });
@@ -785,7 +776,7 @@ mod tests {
             });
 
         let (items, total) = service(repo)
-            .list(organization_id, None, None, None, 10, 0)
+            .list(organization_id, &ParticipantFilter::default(), 10, 0)
             .await
             .unwrap();
 

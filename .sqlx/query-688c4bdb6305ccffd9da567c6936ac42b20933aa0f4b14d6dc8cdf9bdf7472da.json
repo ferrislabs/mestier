@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, name, group_name, siret, legal_form, naf_code, capital, employee_count, group_employee_count, director_name, phone, email, website, activity_domains, missions, archived_at, created_at, updated_at\n            FROM cursus.host_company\n            WHERE org_id = $1 AND ($2 OR archived_at IS NULL)\n            ORDER BY name ASC, created_at ASC\n            LIMIT $3 OFFSET $4\n            ",
+  "query": "\n            SELECT id, org_id, name, group_name, siret, legal_form, naf_code, capital, employee_count, group_employee_count, director_name, phone, email, website, activity_domains, missions, archived_at, created_at, updated_at\n            FROM cursus.host_company\n            WHERE org_id = $1\n              AND ($2::bool IS NULL OR (archived_at IS NOT NULL) = $2)\n              AND ($3::text IS NULL OR name ILIKE $3 OR siret ILIKE $3)\n            ORDER BY name ASC, created_at ASC\n            LIMIT $4 OFFSET $5\n            ",
   "describe": {
     "columns": [
       {
@@ -103,6 +103,7 @@
       "Left": [
         "Uuid",
         "Bool",
+        "Text",
         "Int8",
         "Int8"
       ]
@@ -129,5 +130,5 @@
       false
     ]
   },
-  "hash": "5f10f1d1e6d2a63d950630467dd433f5a2da1b245905080b2fbdd9067aecfea5"
+  "hash": "688c4bdb6305ccffd9da567c6936ac42b20933aa0f4b14d6dc8cdf9bdf7472da"
 }

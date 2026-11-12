@@ -1,4 +1,27 @@
-use crate::{ClosureReasonId, EstablishmentId, OrganizationId, PromotionId, TrainingId};
+use crate::{
+    ArchivedFilter, ClosureReasonId, EstablishmentId, OrganizationId, PromotionId, SearchPattern,
+    TrainingId,
+};
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EstablishmentFilter {
+    pub archived: ArchivedFilter,
+    pub search: Option<SearchPattern>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TrainingFilter {
+    pub establishment_id: Option<EstablishmentId>,
+    pub archived: ArchivedFilter,
+    pub search: Option<SearchPattern>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PromotionFilter {
+    pub training_id: Option<TrainingId>,
+    pub archived: ArchivedFilter,
+    pub search: Option<SearchPattern>,
+}
 
 #[derive(Debug, Clone)]
 pub struct CreateEstablishmentCommand {

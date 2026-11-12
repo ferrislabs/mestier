@@ -5,7 +5,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use crate::{
-    HostCompany, HostCompanyId, OrganizationId,
+    HostCompany, HostCompanyFilter, HostCompanyId, OrganizationId, SearchPattern,
     domain::cursus_host_company::ports::CursusHostCompanyRepository,
     infrastructure::{
         cursus_host_company::postgres::model::{HostCompanyAddressRow, HostCompanyRow, assemble},
@@ -158,22 +158,27 @@ impl<'tx> CursusHostCompanyRepository for PgCursusHostCompanyRepository<'tx> {
     async fn list(
         &mut self,
         organization_id: OrganizationId,
-        include_archived: bool,
+        filter: &HostCompanyFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<HostCompany>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
+        let archived = filter.archived.archived();
+        let pattern = filter.search.as_ref().map(SearchPattern::as_str);
         let rows = sqlx::query_as!(
             HostCompanyRow,
             r#"
             SELECT id, org_id, name, group_name, siret, legal_form, naf_code, capital, employee_count, group_employee_count, director_name, phone, email, website, activity_domains, missions, archived_at, created_at, updated_at
             FROM cursus.host_company
-            WHERE org_id = $1 AND ($2 OR archived_at IS NULL)
+            WHERE org_id = $1
+              AND ($2::bool IS NULL OR (archived_at IS NOT NULL) = $2)
+              AND ($3::text IS NULL OR name ILIKE $3 OR siret ILIKE $3)
             ORDER BY name ASC, created_at ASC
-            LIMIT $3 OFFSET $4
+            LIMIT $4 OFFSET $5
             "#,
             organization_id.0,
-            include_archived,
+            archived,
+            pattern,
             limit as i64,
             offset as i64,
         )
@@ -185,10 +190,13 @@ impl<'tx> CursusHostCompanyRepository for PgCursusHostCompanyRepository<'tx> {
             r#"
             SELECT COUNT(*) AS "count!"
             FROM cursus.host_company
-            WHERE org_id = $1 AND ($2 OR archived_at IS NULL)
+            WHERE org_id = $1
+              AND ($2::bool IS NULL OR (archived_at IS NOT NULL) = $2)
+              AND ($3::text IS NULL OR name ILIKE $3 OR siret ILIKE $3)
             "#,
             organization_id.0,
-            include_archived,
+            archived,
+            pattern,
         )
         .fetch_one(&mut ***tx)
         .await

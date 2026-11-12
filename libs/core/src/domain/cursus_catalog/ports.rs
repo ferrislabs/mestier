@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 
 use crate::{
-    ClosureReason, ClosureReasonId, Establishment, EstablishmentId, OrganizationId, Promotion,
-    PromotionId, Training, TrainingId,
+    ClosureReason, ClosureReasonId, Establishment, EstablishmentFilter, EstablishmentId,
+    OrganizationId, Promotion, PromotionFilter, PromotionId, Training, TrainingFilter, TrainingId,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -22,7 +22,7 @@ pub trait CursusCatalogRepository: Send {
     fn list_establishments(
         &mut self,
         organization_id: OrganizationId,
-        include_archived: bool,
+        filter: &EstablishmentFilter,
     ) -> impl Future<Output = Result<Vec<Establishment>, CoreError>> + Send;
 
     fn update_establishment(
@@ -51,8 +51,7 @@ pub trait CursusCatalogRepository: Send {
     fn list_trainings(
         &mut self,
         organization_id: OrganizationId,
-        establishment_id: Option<EstablishmentId>,
-        include_archived: bool,
+        filter: &TrainingFilter,
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Training>, u64), CoreError>> + Send;
@@ -83,8 +82,7 @@ pub trait CursusCatalogRepository: Send {
     fn list_promotions(
         &mut self,
         organization_id: OrganizationId,
-        training_id: Option<TrainingId>,
-        include_archived: bool,
+        filter: &PromotionFilter,
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Promotion>, u64), CoreError>> + Send;

@@ -7,8 +7,9 @@ use crate::{
     domain::cursus_catalog::{
         commands::{
             CreateClosureReasonCommand, CreateEstablishmentCommand, CreatePromotionCommand,
-            CreateTrainingCommand, UpdateClosureReasonCommand, UpdateEstablishmentCommand,
-            UpdatePromotionCommand, UpdateTrainingCommand,
+            CreateTrainingCommand, EstablishmentFilter, PromotionFilter, TrainingFilter,
+            UpdateClosureReasonCommand, UpdateEstablishmentCommand, UpdatePromotionCommand,
+            UpdateTrainingCommand,
         },
         ports::CursusCatalogRepository,
     },
@@ -67,11 +68,9 @@ where
     pub async fn list_establishments(
         &mut self,
         organization_id: OrganizationId,
-        include_archived: bool,
+        filter: &EstablishmentFilter,
     ) -> Result<Vec<Establishment>, CoreError> {
-        self.repo
-            .list_establishments(organization_id, include_archived)
-            .await
+        self.repo.list_establishments(organization_id, filter).await
     }
 
     pub async fn update_establishment(
@@ -147,19 +146,12 @@ where
     pub async fn list_trainings(
         &mut self,
         organization_id: OrganizationId,
-        establishment_id: Option<EstablishmentId>,
-        include_archived: bool,
+        filter: &TrainingFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Training>, u64), CoreError> {
         self.repo
-            .list_trainings(
-                organization_id,
-                establishment_id,
-                include_archived,
-                limit,
-                offset,
-            )
+            .list_trainings(organization_id, filter, limit, offset)
             .await
     }
 
@@ -240,19 +232,12 @@ where
     pub async fn list_promotions(
         &mut self,
         organization_id: OrganizationId,
-        training_id: Option<TrainingId>,
-        include_archived: bool,
+        filter: &PromotionFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Promotion>, u64), CoreError> {
         self.repo
-            .list_promotions(
-                organization_id,
-                training_id,
-                include_archived,
-                limit,
-                offset,
-            )
+            .list_promotions(organization_id, filter, limit, offset)
             .await
     }
 
@@ -384,6 +369,7 @@ fn validate_years(start_year: i32, end_year: i32) -> Result<(), CoreError> {
 mod tests {
     use super::*;
     use crate::domain::cursus_catalog::ports::MockCursusCatalogRepository;
+    use crate::{ArchivedFilter, SearchPattern};
     use mockall::predicate::eq;
     use uuid::Uuid;
 
@@ -624,9 +610,13 @@ mod tests {
     #[tokio::test]
     async fn list_establishments_delegates_the_archived_flag() {
         let organization_id = org();
+        let filter = EstablishmentFilter {
+            archived: ArchivedFilter::All,
+            search: None,
+        };
         let mut repo = MockCursusCatalogRepository::new();
         repo.expect_list_establishments()
-            .with(eq(organization_id), eq(true))
+            .with(eq(organization_id), eq(filter.clone()))
             .returning(move |o, _| {
                 Box::pin(
                     async move { Ok(vec![establishment_in(o, EstablishmentId(Uuid::new_v4()))]) },
@@ -634,7 +624,7 @@ mod tests {
             });
 
         let items = CursusCatalogService::new(repo)
-            .list_establishments(organization_id, true)
+            .list_establishments(organization_id, &filter)
             .await
             .unwrap();
 
@@ -814,19 +804,18 @@ mod tests {
     async fn list_trainings_delegates_filter_and_paging() {
         let organization_id = org();
         let establishment_id = EstablishmentId(Uuid::new_v4());
+        let filter = TrainingFilter {
+            establishment_id: Some(establishment_id),
+            archived: ArchivedFilter::Active,
+            search: SearchPattern::parse(Some("rncp")),
+        };
         let mut repo = MockCursusCatalogRepository::new();
         repo.expect_list_trainings()
-            .with(
-                eq(organization_id),
-                eq(Some(establishment_id)),
-                eq(false),
-                eq(10),
-                eq(20),
-            )
-            .returning(|_, _, _, _, _| Box::pin(async { Ok((Vec::new(), 0)) }));
+            .with(eq(organization_id), eq(filter.clone()), eq(10), eq(20))
+            .returning(|_, _, _, _| Box::pin(async { Ok((Vec::new(), 0)) }));
 
         let (items, total) = CursusCatalogService::new(repo)
-            .list_trainings(organization_id, Some(establishment_id), false, 10, 20)
+            .list_trainings(organization_id, &filter, 10, 20)
             .await
             .unwrap();
 

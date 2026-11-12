@@ -5,8 +5,8 @@ use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use crate::{
-    CreateHostCompanyCommand, HostCompany, HostCompanyAddress, Permissions,
-    UpdateHostCompanyCommand,
+    ArchivedFilter, CreateHostCompanyCommand, HostCompany, HostCompanyAddress, HostCompanyFilter,
+    Permissions, SearchPattern, UpdateHostCompanyCommand,
     application::{
         MestierUseCase, default_authorizer, policy,
         test_support::{purge, scratch_pool},
@@ -183,6 +183,112 @@ impl World {
     }
 }
 
+fn all() -> HostCompanyFilter {
+    HostCompanyFilter {
+        archived: ArchivedFilter::All,
+        search: None,
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn host_companies_filter_by_archive_state_and_search_name_or_siret() {
+    let world = World::new().await;
+    let tenant = &world.first;
+    let kept = world.company(tenant, "Paysages Durand").await;
+    let gone = world.company(tenant, "Jardins Martin").await;
+    let sited = world
+        .usecase
+        .update_host_company(UpdateHostCompanyCommand {
+            actor: tenant.manager.subject(),
+            organization_id: tenant.organization_id,
+            id: kept.id,
+            name: kept.name.clone(),
+            group_name: None,
+            siret: Some("55210055400013".to_owned()),
+            legal_form: None,
+            naf_code: None,
+            capital: None,
+            employee_count: None,
+            group_employee_count: None,
+            director_name: None,
+            phone: None,
+            email: None,
+            website: None,
+            activity_domains: None,
+            missions: None,
+            addresses: Vec::new(),
+        })
+        .await
+        .unwrap();
+    world
+        .usecase
+        .archive_host_company(tenant.manager.subject(), tenant.organization_id, gone.id)
+        .await
+        .unwrap();
+
+    let (archived, archived_total) = world
+        .usecase
+        .list_host_companies(
+            tenant.organization_id,
+            HostCompanyFilter {
+                archived: ArchivedFilter::Archived,
+                search: None,
+            },
+            10,
+            0,
+        )
+        .await
+        .unwrap();
+    let (active, active_total) = world
+        .usecase
+        .list_host_companies(tenant.organization_id, HostCompanyFilter::default(), 10, 0)
+        .await
+        .unwrap();
+    let (_, all_total) = world
+        .usecase
+        .list_host_companies(tenant.organization_id, all(), 10, 0)
+        .await
+        .unwrap();
+    let (by_siret, by_siret_total) = world
+        .usecase
+        .list_host_companies(
+            tenant.organization_id,
+            HostCompanyFilter {
+                archived: ArchivedFilter::All,
+                search: SearchPattern::parse(Some(" 552100 ")),
+            },
+            10,
+            0,
+        )
+        .await
+        .unwrap();
+    let (by_name, by_name_total) = world
+        .usecase
+        .list_host_companies(
+            tenant.organization_id,
+            HostCompanyFilter {
+                archived: ArchivedFilter::Archived,
+                search: SearchPattern::parse(Some("MARTIN")),
+            },
+            10,
+            0,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(archived_total, 1);
+    assert_eq!(archived[0].id, gone.id);
+    assert!(archived[0].archived_at.is_some());
+    assert_eq!((active, active_total), (vec![sited.clone()], 1));
+    assert_eq!(all_total, 2);
+    assert_eq!((by_siret, by_siret_total), (vec![sited], 1));
+    assert_eq!(by_name_total, 1);
+    assert_eq!(by_name[0].id, gone.id);
+
+    world.cleanup().await;
+}
+
 #[tokio::test]
 #[ignore = "requires live postgres"]
 async fn a_triads_manager_manages_host_companies_and_archived_ones_are_hidden_by_default() {
@@ -225,12 +331,12 @@ async fn a_triads_manager_manages_host_companies_and_archived_ones_are_hidden_by
 
     let (visible, visible_total) = world
         .usecase
-        .list_host_companies(tenant.organization_id, false, 10, 0)
+        .list_host_companies(tenant.organization_id, HostCompanyFilter::default(), 10, 0)
         .await
         .unwrap();
     let (all, all_total) = world
         .usecase
-        .list_host_companies(tenant.organization_id, true, 10, 0)
+        .list_host_companies(tenant.organization_id, all(), 10, 0)
         .await
         .unwrap();
     assert_eq!((visible, visible_total), (vec![], 0));
@@ -294,7 +400,7 @@ async fn spec_cur_12_one_organization_never_sees_or_touches_another_ones_host_co
 
     let (listed, total) = world
         .usecase
-        .list_host_companies(world.second.organization_id, true, 10, 0)
+        .list_host_companies(world.second.organization_id, all(), 10, 0)
         .await
         .unwrap();
     assert_eq!((listed, total), (vec![], 0));
@@ -398,7 +504,7 @@ async fn addresses_are_replaced_as_a_whole_ordered_and_returned_by_every_read() 
 
     let (listed, _) = world
         .usecase
-        .list_host_companies(tenant.organization_id, false, 10, 0)
+        .list_host_companies(tenant.organization_id, HostCompanyFilter::default(), 10, 0)
         .await
         .unwrap();
     assert_eq!(listed[0].addresses, two.addresses);

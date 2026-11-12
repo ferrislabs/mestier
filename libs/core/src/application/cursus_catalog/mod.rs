@@ -9,8 +9,9 @@ use crate::{
     domain::cursus_catalog::{
         commands::{
             CreateClosureReasonCommand, CreateEstablishmentCommand, CreatePromotionCommand,
-            CreateTrainingCommand, UpdateClosureReasonCommand, UpdateEstablishmentCommand,
-            UpdatePromotionCommand, UpdateTrainingCommand,
+            CreateTrainingCommand, EstablishmentFilter, PromotionFilter, TrainingFilter,
+            UpdateClosureReasonCommand, UpdateEstablishmentCommand, UpdatePromotionCommand,
+            UpdateTrainingCommand,
         },
         service::CursusCatalogService,
     },
@@ -78,10 +79,10 @@ impl MestierUseCase {
     pub async fn list_establishments(
         &self,
         organization_id: OrganizationId,
-        include_archived: bool,
+        filter: EstablishmentFilter,
     ) -> Result<Vec<Establishment>, CoreError> {
         CursusCatalogService::new(cursus_catalog_repository)
-            .list_establishments(organization_id, include_archived)
+            .list_establishments(organization_id, &filter)
             .await
     }
 
@@ -165,19 +166,12 @@ impl MestierUseCase {
     pub async fn list_trainings(
         &self,
         organization_id: OrganizationId,
-        establishment_id: Option<EstablishmentId>,
-        include_archived: bool,
+        filter: TrainingFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Training>, u64), CoreError> {
         CursusCatalogService::new(cursus_catalog_repository)
-            .list_trainings(
-                organization_id,
-                establishment_id,
-                include_archived,
-                limit,
-                offset,
-            )
+            .list_trainings(organization_id, &filter, limit, offset)
             .await
     }
 
@@ -261,19 +255,12 @@ impl MestierUseCase {
     pub async fn list_promotions(
         &self,
         organization_id: OrganizationId,
-        training_id: Option<TrainingId>,
-        include_archived: bool,
+        filter: PromotionFilter,
         limit: u64,
         offset: u64,
     ) -> Result<(Vec<Promotion>, u64), CoreError> {
         CursusCatalogService::new(cursus_catalog_repository)
-            .list_promotions(
-                organization_id,
-                training_id,
-                include_archived,
-                limit,
-                offset,
-            )
+            .list_promotions(organization_id, &filter, limit, offset)
             .await
     }
 
