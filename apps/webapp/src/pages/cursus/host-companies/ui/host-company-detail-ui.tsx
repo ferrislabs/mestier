@@ -2,6 +2,7 @@ import type { Schemas } from '#/api/api.client'
 import { RichTextView } from '#/components/rich-text'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
+import { PageHeader, PageShell } from '#/components/ui/surface'
 import {
 	type HostCompanyValues,
 	toHostCompanyValues,
@@ -115,39 +116,40 @@ export function HostCompanyDetailUI({
 }: HostCompanyDetailUIProps) {
 	if (!company) {
 		return (
-			<div className="flex flex-col gap-4 p-6">
+			<PageShell>
 				{isLoading ? (
 					<p className="text-sm text-muted-foreground">Chargement…</p>
 				) : null}
 				<FormError message={loadError} />
-			</div>
+			</PageShell>
 		)
 	}
 
 	const archived = Boolean(company.archived_at)
 
 	return (
-		<div className="flex max-w-3xl flex-col gap-6 p-6">
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<div className="flex items-center gap-3">
-					<h1 className="text-xl font-semibold">{company.name}</h1>
-					{archived ? (
-						<Badge variant="secondary">
-							Archivée le {formatDate(company.archived_at)}
-						</Badge>
-					) : null}
-				</div>
-				{canManage && !archived ? (
-					<Button
-						type="button"
-						variant="outline"
-						disabled={isArchiving}
-						onClick={onArchive}
-					>
-						Archiver
-					</Button>
+		<PageShell>
+			<PageHeader
+				title={company.name}
+				actions={
+					canManage && !archived ? (
+						<Button
+							type="button"
+							variant="outline"
+							disabled={isArchiving}
+							onClick={onArchive}
+						>
+							Archiver
+						</Button>
+					) : null
+				}
+			>
+				{archived ? (
+					<Badge variant="secondary" className="mt-2">
+						Archivée le {formatDate(company.archived_at)}
+					</Badge>
 				) : null}
-			</div>
+			</PageHeader>
 			<FormError message={archiveError} />
 
 			<section className="rounded-lg border p-4">
@@ -188,6 +190,6 @@ export function HostCompanyDetailUI({
 					</ul>
 				)}
 			</section>
-		</div>
+		</PageShell>
 	)
 }

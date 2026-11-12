@@ -20,6 +20,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
+import { PageHeader, PageShell } from '#/components/ui/surface'
 import {
 	Table,
 	TableBody,
@@ -108,15 +109,18 @@ export function HostCompaniesListUI({
 	})
 
 	return (
-		<div className="flex flex-col gap-4 p-6">
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<h1 className="text-xl font-semibold">Entreprises d'accueil</h1>
-				{canManage ? (
-					<Button type="button" onClick={() => onCreateOpenChange(true)}>
-						Nouvelle entreprise
-					</Button>
-				) : null}
-			</div>
+		<PageShell>
+			<PageHeader
+				title="Entreprises d'accueil"
+				description="Les entreprises qui accueillent vos apprentis."
+				actions={
+					canManage ? (
+						<Button type="button" onClick={() => onCreateOpenChange(true)}>
+							Nouvelle entreprise
+						</Button>
+					) : null
+				}
+			/>
 
 			<Select
 				value={includeArchived ? 'all' : 'active'}
@@ -186,6 +190,6 @@ export function HostCompaniesListUI({
 					</DialogContent>
 				</Dialog>
 			) : null}
-		</div>
+		</PageShell>
 	)
 }

@@ -11,6 +11,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
+import { PageHeader, PageShell } from '#/components/ui/surface'
 import {
 	type ApprenticeValues,
 	type IdentityValues,
@@ -67,12 +68,12 @@ export function ParticipantDetailUI({
 }: ParticipantDetailUIProps) {
 	if (!participant) {
 		return (
-			<div className="flex flex-col gap-4 p-6">
+			<PageShell>
 				{isLoading ? (
 					<p className="text-sm text-muted-foreground">Chargement…</p>
 				) : null}
 				<FormError message={loadError} />
-			</div>
+			</PageShell>
 		)
 	}
 
@@ -81,47 +82,47 @@ export function ParticipantDetailUI({
 		: 'Inviter'
 
 	return (
-		<div className="flex max-w-3xl flex-col gap-6 p-6">
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<div className="flex items-center gap-3">
-					<h1 className="text-xl font-semibold">
-						{participantName(participant)}
-					</h1>
-					<Badge
-						variant={participant.status === 'active' ? 'default' : 'secondary'}
-					>
-						{STATUS_LABELS[participant.status]}
-					</Badge>
-				</div>
-				{canManage ? (
-					<div className="flex gap-2">
-						{participant.status === 'pending' ? (
-							<Button type="button" disabled={isBusy} onClick={onInvite}>
-								{inviteLabel}
-							</Button>
-						) : null}
-						{participant.status === 'inactive' ? (
-							<Button
-								type="button"
-								variant="outline"
-								disabled={isBusy}
-								onClick={onReactivate}
-							>
-								Réactiver
-							</Button>
-						) : (
-							<Button
-								type="button"
-								variant="outline"
-								disabled={isBusy}
-								onClick={onDeactivate}
-							>
-								Désactiver
-							</Button>
-						)}
-					</div>
-				) : null}
-			</div>
+		<PageShell>
+			<PageHeader
+				title={participantName(participant)}
+				actions={
+					canManage ? (
+						<>
+							{participant.status === 'pending' ? (
+								<Button type="button" disabled={isBusy} onClick={onInvite}>
+									{inviteLabel}
+								</Button>
+							) : null}
+							{participant.status === 'inactive' ? (
+								<Button
+									type="button"
+									variant="outline"
+									disabled={isBusy}
+									onClick={onReactivate}
+								>
+									Réactiver
+								</Button>
+							) : (
+								<Button
+									type="button"
+									variant="outline"
+									disabled={isBusy}
+									onClick={onDeactivate}
+								>
+									Désactiver
+								</Button>
+							)}
+						</>
+					) : null
+				}
+			>
+				<Badge
+					variant={participant.status === 'active' ? 'default' : 'secondary'}
+					className="mt-2"
+				>
+					{STATUS_LABELS[participant.status]}
+				</Badge>
+			</PageHeader>
 			<FormError message={errors.status} />
 
 			<IdentityForm
@@ -153,7 +154,7 @@ export function ParticipantDetailUI({
 				onAdd={onAddTutor}
 				onRemove={onRemoveTutor}
 			/>
-		</div>
+		</PageShell>
 	)
 }
 

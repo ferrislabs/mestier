@@ -13,6 +13,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
+import { PageHeader, PageShell } from '#/components/ui/surface'
 import {
 	Table,
 	TableBody,
@@ -118,15 +119,18 @@ export function ParticipantsListUI({
 	})
 
 	return (
-		<div className="flex flex-col gap-4 p-6">
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<h1 className="text-xl font-semibold">Participants</h1>
-				{canManage ? (
-					<Button type="button" onClick={onCreate}>
-						Nouveau participant
-					</Button>
-				) : null}
-			</div>
+		<PageShell>
+			<PageHeader
+				title="Participants"
+				description="Les apprentis et tuteurs d’entreprise suivis par l’organisation."
+				actions={
+					canManage ? (
+						<Button type="button" onClick={onCreate}>
+							Nouveau participant
+						</Button>
+					) : null
+				}
+			/>
 
 			<div className="flex flex-wrap gap-3">
 				<Select
@@ -233,6 +237,6 @@ export function ParticipantsListUI({
 					</Button>
 				</div>
 			) : null}
-		</div>
+		</PageShell>
 	)
 }
