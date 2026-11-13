@@ -84,13 +84,34 @@ export const EMPTY_CREATE_PARTICIPANT: CreateParticipantValues = {
 	jobTitle: '',
 }
 
+export const CREATE_PARTICIPANT_STEP_COUNT = 3
+
+export function validateCreateParticipantStep(
+	values: CreateParticipantValues,
+	step: number,
+): string | null {
+	if (step === 0 && values.lastName.trim() === '') {
+		return 'Le nom est obligatoire.'
+	}
+	if (step === 1 && values.email.trim() === '') {
+		return "L'e-mail est obligatoire."
+	}
+	if (
+		step === 2 &&
+		values.kind === 'company_tutor' &&
+		values.hostCompanyId === ''
+	) {
+		return "Choisissez l'entreprise d'accueil du tuteur."
+	}
+	return null
+}
+
 export function validateCreateParticipant(
 	values: CreateParticipantValues,
 ): string | null {
-	if (values.lastName.trim() === '') return 'Le nom est obligatoire.'
-	if (values.email.trim() === '') return "L'e-mail est obligatoire."
-	if (values.kind === 'company_tutor' && values.hostCompanyId === '') {
-		return "Choisissez l'entreprise d'accueil du tuteur."
+	for (let step = 0; step < CREATE_PARTICIPANT_STEP_COUNT; step += 1) {
+		const problem = validateCreateParticipantStep(values, step)
+		if (problem !== null) return problem
 	}
 	return null
 }

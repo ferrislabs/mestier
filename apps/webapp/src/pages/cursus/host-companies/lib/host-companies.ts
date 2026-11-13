@@ -169,6 +169,30 @@ export function validateHostCompany(values: HostCompanyValues): string | null {
 	return null
 }
 
+export const HOST_COMPANY_STEP_COUNT = 3
+
+export function validateHostCompanyStep(
+	values: HostCompanyValues,
+	step: number,
+): string | null {
+	if (step === 0 && values.name.trim() === '') {
+		return "Le nom de l'entreprise est obligatoire."
+	}
+	if (
+		step === 1 &&
+		values.addresses.some((address) => address.line1.trim() === '')
+	) {
+		return "Chaque adresse doit avoir une ligne d'adresse."
+	}
+	if (step === 2 && !isWholeNumber(values.employeeCount)) {
+		return "Le nombre d'employés doit être un nombre entier."
+	}
+	if (step === 2 && !isWholeNumber(values.groupEmployeeCount)) {
+		return "Le nombre d'employés du groupe doit être un nombre entier."
+	}
+	return null
+}
+
 function toCount(value: string): number | null {
 	const trimmed = value.trim()
 	return trimmed === '' ? null : Number(trimmed)
