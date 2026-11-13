@@ -136,6 +136,20 @@ fn party(role: PartyRole, name: &str, logo: Option<&str>) -> DoeParty {
         contact_email: (role == PartyRole::ProjectManager)
             .then(|| "claire@atelier-paysage.fr".to_owned()),
     }
+    .with_owner_contact()
+}
+
+trait OwnerContact {
+    fn with_owner_contact(self) -> Self;
+}
+
+impl OwnerContact for DoeParty {
+    fn with_owner_contact(mut self) -> Self {
+        if self.role == PartyRole::ProjectOwner {
+            self.contact_name = Some("Marc Leroy".to_owned());
+        }
+        self
+    }
 }
 
 fn fixture() -> (DoeDocument, FileBundle) {
@@ -305,6 +319,7 @@ fn parties_are_tables_with_a_role_row_and_the_contractor_moves_to_the_cover() {
         "Claire Dupont",
         "Paysagiste",
         "claire@atelier-paysage.fr",
+        "Marc Leroy",
     ] {
         assert!(
             parties.contains(expected),
