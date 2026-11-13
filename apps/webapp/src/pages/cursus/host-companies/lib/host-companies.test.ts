@@ -7,6 +7,7 @@ import {
 	setMainAddress,
 	toHostCompanyRequest,
 	validateHostCompany,
+	validateHostCompanyStep,
 } from '#/pages/cursus/host-companies/lib/host-companies'
 
 const withLine = (line1: string, isMain = false) => ({
@@ -95,5 +96,25 @@ describe('host company form', () => {
 				is_main: false,
 			},
 		])
+	})
+})
+
+describe('validateHostCompanyStep', () => {
+	it('checks only the fields of the given step', () => {
+		const values = {
+			...EMPTY_HOST_COMPANY,
+			employeeCount: 'douze',
+			addresses: [withLine('')],
+		}
+		expect(validateHostCompanyStep(values, 0)).toBe(
+			"Le nom de l'entreprise est obligatoire.",
+		)
+		const named = { ...values, name: 'Roux' }
+		expect(validateHostCompanyStep(named, 1)).toBe(
+			"Chaque adresse doit avoir une ligne d'adresse.",
+		)
+		expect(validateHostCompanyStep(named, 2)).toBe(
+			"Le nombre d'employés doit être un nombre entier.",
+		)
 	})
 })

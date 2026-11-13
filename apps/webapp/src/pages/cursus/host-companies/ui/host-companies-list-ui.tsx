@@ -1,12 +1,5 @@
 import { Plus } from 'lucide-react'
 import { Button } from '#/components/ui/button'
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from '#/components/ui/dialog'
 import { PageHeader, PageShell, StatusBadge } from '#/components/ui/surface'
 import {
 	Table,
@@ -18,7 +11,7 @@ import {
 } from '#/components/ui/table'
 import { cn } from '#/lib/utils'
 import type { HostCompanyValues } from '#/pages/cursus/host-companies/lib/host-companies'
-import { HostCompanyForm } from '#/pages/cursus/host-companies/ui/host-company-form'
+import { CreateHostCompanyDialog } from '#/pages/cursus/host-companies/ui/create-host-company-dialog'
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
 import {
 	archiveQualifier,
@@ -171,22 +164,13 @@ export function HostCompaniesListUI({
 			)}
 
 			{canManage ? (
-				<Dialog open={createOpen} onOpenChange={onCreateOpenChange}>
-					<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-						<DialogHeader>
-							<DialogTitle>Nouvelle entreprise d'accueil</DialogTitle>
-							<DialogDescription>
-								Renseignez l'entreprise qui accueille des apprentis.
-							</DialogDescription>
-						</DialogHeader>
-						<HostCompanyForm
-							submitLabel="Créer l'entreprise"
-							isPending={isCreating}
-							error={createError}
-							onSubmit={onCreate}
-						/>
-					</DialogContent>
-				</Dialog>
+				<CreateHostCompanyDialog
+					open={createOpen}
+					isPending={isCreating}
+					error={createError}
+					onOpenChange={onCreateOpenChange}
+					onSubmit={onCreate}
+				/>
 			) : null}
 		</PageShell>
 	)

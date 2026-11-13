@@ -67,10 +67,7 @@ describe('HostCompaniesListFeature', () => {
 		await user.paste('Charpente Blanc')
 		await user.click(screen.getByLabelText('Numéro de SIRET'))
 		await user.paste('98765432100022')
-		await user.click(
-			screen.getByLabelText("Nombre d'employés dans l'entreprise"),
-		)
-		await user.paste('8')
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
 		await user.click(
 			screen.getByRole('button', { name: 'Ajouter une adresse' }),
 		)
@@ -78,6 +75,12 @@ describe('HostCompaniesListFeature', () => {
 		await user.paste('1 rue des Lilas')
 		await user.click(screen.getByLabelText('Ville'))
 		await user.paste('Lyon')
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
+		expect(callsTo(api, 'post', HOST_COMPANIES)).toHaveLength(0)
+		await user.click(
+			screen.getByLabelText("Nombre d'employés dans l'entreprise"),
+		)
+		await user.paste('8')
 		await user.click(screen.getByRole('button', { name: "Créer l'entreprise" }))
 
 		await waitFor(() =>
@@ -113,6 +116,23 @@ describe('HostCompaniesListFeature', () => {
 			},
 		})
 		await waitFor(() => expect(onOpen).toHaveBeenCalledWith('hc-1'))
+	})
+
+	it('stays on the legal identity step while the name is empty', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		renderFeature(['VIEW_CURSUS', 'MANAGE_CURSUS_TRIADS'])
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouvelle entreprise' }),
+		)
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
+
+		expect(screen.getByRole('alert').textContent).toBe(
+			"Le nom de l'entreprise est obligatoire.",
+		)
+		expect(screen.queryByLabelText('Téléphone')).toBeNull()
 	})
 
 	it('has no creation button with only the read bit', async () => {
