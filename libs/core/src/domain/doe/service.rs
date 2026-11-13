@@ -52,7 +52,7 @@ fn distinct_file_keys(doe: &Doe) -> usize {
             DoeSectionContent::Photos { photos, .. } => {
                 keys.extend(photos.iter().map(|photo| photo.key.as_str()));
             }
-            DoeSectionContent::Plans { plans } => {
+            DoeSectionContent::Plans { plans, .. } => {
                 keys.extend(plans.iter().map(|plan| plan.key.as_str()));
             }
             DoeSectionContent::BlankPages { .. } => {}
@@ -123,8 +123,12 @@ fn clean_content(content: DoeSectionContent) -> Result<DoeSectionContent, CoreEr
             per_page,
             photos: photos.into_iter().map(clean_file).collect(),
         },
-        DoeSectionContent::Plans { plans } => DoeSectionContent::Plans {
+        DoeSectionContent::Plans { plans, listed } => DoeSectionContent::Plans {
             plans: plans.into_iter().map(clean_file).collect(),
+            listed: listed
+                .into_iter()
+                .filter_map(|name| blank_to_none(Some(name)))
+                .collect(),
         },
         blank @ DoeSectionContent::BlankPages { .. } => blank,
     })
@@ -164,7 +168,10 @@ fn section_from_model(section: &DoeModelSection) -> DoeSection {
             per_page: *per_page,
             photos: Vec::new(),
         },
-        DoeModelSectionKind::Plans => DoeSectionContent::Plans { plans: Vec::new() },
+        DoeModelSectionKind::Plans => DoeSectionContent::Plans {
+            plans: Vec::new(),
+            listed: Vec::new(),
+        },
         DoeModelSectionKind::BlankPages { count } => {
             DoeSectionContent::BlankPages { count: *count }
         }
@@ -780,7 +787,10 @@ mod tests {
             .map(|index| {
                 section(
                     &format!("Thème {index}"),
-                    DoeSectionContent::Plans { plans: Vec::new() },
+                    DoeSectionContent::Plans {
+                        plans: Vec::new(),
+                        listed: Vec::new(),
+                    },
                 )
             })
             .collect();
@@ -1624,6 +1634,7 @@ mod tests {
                             caption: None,
                         },
                     ],
+                    listed: Vec::new(),
                 },
             },
         ];

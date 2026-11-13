@@ -104,7 +104,7 @@ impl Layout<'_> {
                     let columns = if per_page.get() == 1 { 1 } else { 2 };
                     self.picture_grid(docx, photos, columns)?
                 }
-                NumberedContent::Plans { plans } => self.plans(docx, plans)?,
+                NumberedContent::Plans { plans, listed } => self.plans(docx, plans, listed)?,
                 NumberedContent::BlankPages { count } => (0..*count).fold(docx, |docx, _| {
                     docx.add_paragraph(
                         Paragraph::new().add_run(Run::new().add_break(BreakType::Page)),
@@ -242,7 +242,15 @@ impl Layout<'_> {
         Ok(docx)
     }
 
-    fn plans(&mut self, mut docx: Docx, plans: &[DoeFile]) -> Result<Docx, DoeRenderError> {
+    fn plans(
+        &mut self,
+        mut docx: Docx,
+        plans: &[DoeFile],
+        listed: &[String],
+    ) -> Result<Docx, DoeRenderError> {
+        for name in listed {
+            docx = docx.add_paragraph(Paragraph::new().add_run(Run::new().add_text(name)));
+        }
         for plan in plans {
             let file = self.file(&plan.key)?;
             if file.mime_type == "application/pdf" {

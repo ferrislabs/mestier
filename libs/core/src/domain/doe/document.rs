@@ -50,8 +50,9 @@ impl DoeDocument {
                         per_page: *per_page,
                         photos: photos.clone(),
                     },
-                    DoeSectionContent::Plans { plans } => NumberedContent::Plans {
+                    DoeSectionContent::Plans { plans, listed } => NumberedContent::Plans {
                         plans: plans.clone(),
+                        listed: listed.clone(),
                     },
                     DoeSectionContent::BlankPages { count } => {
                         NumberedContent::BlankPages { count: count.get() }
@@ -209,7 +210,7 @@ impl DoeDocument {
                 NumberedContent::Photos { photos, .. } => {
                     keys.extend(photos.iter().map(|f| f.key.as_str()));
                 }
-                NumberedContent::Plans { plans } => {
+                NumberedContent::Plans { plans, .. } => {
                     keys.extend(plans.iter().map(|f| f.key.as_str()));
                 }
                 NumberedContent::BlankPages { .. } => {}
@@ -508,6 +509,7 @@ mod tests {
                     true,
                     DoeSectionContent::Plans {
                         plans: vec![file("plan1")],
+                        listed: Vec::new(),
                     },
                 ),
             ],

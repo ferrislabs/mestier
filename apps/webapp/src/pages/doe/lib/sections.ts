@@ -48,7 +48,7 @@ export function defaultContent(kind: SectionKind): DoeSectionContent {
 		case 'photos':
 			return { kind: 'photos', per_page: 'two', photos: [] }
 		case 'plans':
-			return { kind: 'plans', plans: [] }
+			return { kind: 'plans', plans: [], listed: [] }
 		case 'blank_pages':
 			return { kind: 'blank_pages', count: 1 }
 	}

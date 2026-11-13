@@ -1256,7 +1256,7 @@ export namespace Schemas {
   export type DoeSectionContent =
     | { kind: "supplies"; maker_label: MakerLabel; supplies: Array<DoeSupply> }
     | { kind: "photos"; per_page: PhotosPerPage; photos: Array<DoeFile> }
-    | { kind: "plans"; plans: Array<DoeFile> }
+    | { kind: "plans"; listed?: Array<string> | undefined; plans: Array<DoeFile> }
     | { count: BlankPageCount; kind: "blank_pages" };
   export type DoeSection = { content: DoeSectionContent; enabled: boolean; id: string; title: string };
   export type DoeResponse = {

@@ -1371,6 +1371,7 @@ mod tests {
                     enabled: true,
                     content: DoeSectionContent::Plans {
                         plans: vec![photo_file("doe/plan.pdf", None)],
+                        listed: Vec::new(),
                     },
                 },
             ],

@@ -360,10 +360,35 @@
   } else if content.kind == "plans" {
     heading(level: 1, numbering: none, title)
     v(10pt)
-    for (index, plan) in content.plans.enumerate() {
-      let label = if plan.caption != none { plan.caption } else { "Plan " + str(index + 1) }
-      [#(index + 1). #label]
-      linebreak()
+    // One table: number, name, and whether the file is attached to the DOE or
+    // handed over apart (named only, no page of its own).
+    let rows = content.plans.enumerate().map(((index, plan)) => (
+      index + 1,
+      if plan.caption != none { plan.caption } else { "Plan " + str(index + 1) },
+      [Annexé],
+    )) + content.listed.enumerate().map(((index, name)) => (
+      content.plans.len() + index + 1,
+      name,
+      text(fill: muted, [Fourni à part]),
+    ))
+    if rows.len() > 0 {
+      table(
+        columns: (1.4cm, 1fr, 3.2cm),
+        stroke: (x: none, y: 0.5pt + luma(200)),
+        inset: (x: 8pt, y: 8pt),
+        fill: (_, row) => if row == 0 { none } else if calc.odd(row) { luma(247) } else { none },
+        align: (center + horizon, left + horizon, left + horizon),
+        table.header(
+          ..([N°], [Désignation], [Statut]).map(label => table.cell(fill: secondary.lighten(85%))[
+            #text(secondary, weight: "bold", size: 9.5pt, label)
+          ]),
+        ),
+        ..rows.map(((number, name, status)) => (
+          text(secondary, weight: "bold", [#number]),
+          name,
+          text(size: 9.5pt, status),
+        )).flatten(),
+      )
     }
     for plan in content.plans { full_pages(plan.key) }
   } else if content.kind == "blank_pages" {

@@ -262,6 +262,10 @@ pub enum DoeSectionContent {
     },
     Plans {
         plans: Vec<DoeFile>,
+        /// Plans only named: the client hands the files over apart, so the
+        /// section lists them without attaching anything.
+        #[serde(default)]
+        listed: Vec<String>,
     },
     BlankPages {
         count: BlankPageCount,

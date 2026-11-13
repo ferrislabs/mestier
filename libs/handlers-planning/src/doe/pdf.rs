@@ -128,7 +128,7 @@ fn owner_of(document: &DoeDocument, key: &str) -> Option<String> {
                 .iter()
                 .any(|photo| photo.key == key)
                 .then(|| format!("section {} {}", section.number, section.title)),
-            NumberedContent::Plans { plans } => plans
+            NumberedContent::Plans { plans, .. } => plans
                 .iter()
                 .any(|plan| plan.key == key)
                 .then(|| format!("section {} {}", section.number, section.title)),
