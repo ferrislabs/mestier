@@ -16,7 +16,7 @@ function HostCompanyDetailPage() {
 			hostCompanyId={hostCompanyId}
 			onOpenParticipant={(participantId) =>
 				void navigate({
-					to: '/o/$organizationSlug/cursus/participants/$participantId',
+					to: '/o/$organizationSlug/cursus/tuteurs/$participantId',
 					params: (previous) => ({ ...previous, participantId }),
 				})
 			}
