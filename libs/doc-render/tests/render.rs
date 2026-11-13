@@ -135,6 +135,7 @@ fn party(role: PartyRole, name: &str, logo: Option<&str>) -> DoeParty {
         contact_role: (role == PartyRole::ProjectManager).then(|| "Paysagiste".to_owned()),
         contact_email: (role == PartyRole::ProjectManager)
             .then(|| "claire@atelier-paysage.fr".to_owned()),
+        contact_phone: (role == PartyRole::ProjectManager).then(|| "06 11 22 33 44".to_owned()),
     }
     .with_owner_contact()
 }
@@ -147,6 +148,7 @@ impl OwnerContact for DoeParty {
     fn with_owner_contact(mut self) -> Self {
         if self.role == PartyRole::ProjectOwner {
             self.contact_name = Some("Marc Leroy".to_owned());
+            self.contact_phone = Some("07 55 66 77 88".to_owned());
         }
         self
     }
@@ -209,6 +211,7 @@ fn fixture() -> (DoeDocument, FileBundle) {
             title: "Plans de récolement".to_owned(),
             content: NumberedContent::Plans {
                 plans: vec![caption("plan1", "Plan masse"), caption("plan2", "Réseaux")],
+                listed: vec!["Détail terrasse A12".to_owned()],
             },
         },
         NumberedSection {
@@ -320,6 +323,8 @@ fn parties_are_tables_with_a_role_row_and_the_contractor_moves_to_the_cover() {
         "Paysagiste",
         "claire@atelier-paysage.fr",
         "Marc Leroy",
+        "06 11 22 33 44",
+        "07 55 66 77 88",
     ] {
         assert!(
             parties.contains(expected),
@@ -635,6 +640,20 @@ fn docx_text(bytes: &[u8]) -> String {
 }
 
 #[test]
+fn plans_only_named_are_listed_after_the_attached_ones() {
+    let (document, bundle) = fixture();
+    let bytes = TypstDoeRenderer.render(&document, &bundle).unwrap();
+    let doc = Document::load_mem(&bytes).unwrap();
+    let pages = doc.get_pages().len() as u32;
+    let text: String = (1..=pages)
+        .map(|page| doc.extract_text(&[page]).unwrap_or_default())
+        .collect();
+    assert!(text.contains("Détail terrasse A12"), "{text}");
+    assert!(text.contains("Fourni à part"), "{text}");
+    assert!(text.contains("Plan masse"), "{text}");
+}
+
+#[test]
 fn the_docx_carries_the_content_of_the_document() {
     let (document, bundle) = fixture();
     let bytes = DocxDoeRenderer.render(&document, &bundle).unwrap();
@@ -647,6 +666,7 @@ fn the_docx_carries_the_content_of_the_document() {
         "Sujet livré",
         "Vue 4",
         "Réseaux",
+        "Détail terrasse A12",
     ] {
         assert!(text.contains(expected), "missing `{expected}`");
     }
@@ -669,7 +689,7 @@ fn every_page_of_a_pdf_plan_or_datasheet_becomes_a_picture() {
                     numbered.supply.datasheet_keys.clear();
                 }
             }
-            NumberedContent::Plans { plans } => plans.clear(),
+            NumberedContent::Plans { plans, .. } => plans.clear(),
             _ => {}
         }
     }

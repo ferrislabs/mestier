@@ -1223,6 +1223,7 @@ export namespace Schemas {
     address?: (string | null) | undefined;
     contact_email?: (string | null) | undefined;
     contact_name?: (string | null) | undefined;
+    contact_phone?: (string | null) | undefined;
     contact_role?: (string | null) | undefined;
     email?: (string | null) | undefined;
     logo_key?: (string | null) | undefined;
@@ -1255,7 +1256,7 @@ export namespace Schemas {
   export type DoeSectionContent =
     | { kind: "supplies"; maker_label: MakerLabel; supplies: Array<DoeSupply> }
     | { kind: "photos"; per_page: PhotosPerPage; photos: Array<DoeFile> }
-    | { kind: "plans"; plans: Array<DoeFile> }
+    | { kind: "plans"; listed?: Array<string> | undefined; plans: Array<DoeFile> }
     | { count: BlankPageCount; kind: "blank_pages" };
   export type DoeSection = { content: DoeSectionContent; enabled: boolean; id: string; title: string };
   export type DoeResponse = {

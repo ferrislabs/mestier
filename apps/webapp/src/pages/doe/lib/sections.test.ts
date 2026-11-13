@@ -73,7 +73,11 @@ describe('defaultContent', () => {
 			per_page: 'two',
 			photos: [],
 		})
-		expect(defaultContent('plans')).toEqual({ kind: 'plans', plans: [] })
+		expect(defaultContent('plans')).toEqual({
+			kind: 'plans',
+			plans: [],
+			listed: [],
+		})
 		expect(defaultContent('blank_pages')).toEqual({
 			kind: 'blank_pages',
 			count: 1,

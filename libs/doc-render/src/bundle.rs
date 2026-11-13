@@ -120,7 +120,7 @@ pub fn prepare(document: &DoeDocument, bundle: &FileBundle) -> Result<Prepared, 
                     collector.add(&photo.key, Use::Picture)?;
                 }
             }
-            NumberedContent::Plans { plans } => {
+            NumberedContent::Plans { plans, .. } => {
                 for plan in plans {
                     collector.add(&plan.key, Use::Page)?;
                 }

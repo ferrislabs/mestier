@@ -324,6 +324,12 @@ export function DoeEditorFeature({
 						: content,
 				),
 			),
+		onPlanListedChange: (sectionId, names) =>
+			setSections((sections) =>
+				updateContent(sections, sectionId, (content) =>
+					content.kind === 'plans' ? { ...content, listed: names } : content,
+				),
+			),
 		onUploadPlans: async (sectionId, files) => {
 			setUploadingSectionId(sectionId)
 			const uploaded = await uploadAll(files)

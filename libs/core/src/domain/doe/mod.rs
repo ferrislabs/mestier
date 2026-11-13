@@ -168,6 +168,15 @@ pub enum PartyRole {
 }
 
 impl PartyRole {
+    /// Printing order: the contractor first, then the owner, then the manager.
+    pub fn rank(self) -> u8 {
+        match self {
+            Self::Contractor => 0,
+            Self::ProjectOwner => 1,
+            Self::ProjectManager => 2,
+        }
+    }
+
     pub fn french(self) -> &'static str {
         match self {
             Self::ProjectOwner => "Maîtrise d’ouvrage",
@@ -187,7 +196,7 @@ pub struct DoeParty {
     pub phone: Option<String>,
     pub email: Option<String>,
     pub logo_key: Option<String>,
-    /// The person to reach, printed by the maîtrise d'œuvre only.
+    /// The person to reach on this party.
     #[serde(default)]
     pub contact_name: Option<String>,
     /// The contact's job title, printed in italics.
@@ -195,6 +204,8 @@ pub struct DoeParty {
     pub contact_role: Option<String>,
     #[serde(default)]
     pub contact_email: Option<String>,
+    #[serde(default)]
+    pub contact_phone: Option<String>,
 }
 
 /// A stored file placed in the DOE: a photo, a plan. `caption` is the photo
@@ -251,6 +262,10 @@ pub enum DoeSectionContent {
     },
     Plans {
         plans: Vec<DoeFile>,
+        /// Plans only named: the client hands the files over apart, so the
+        /// section lists them without attaching anything.
+        #[serde(default)]
+        listed: Vec<String>,
     },
     BlankPages {
         count: BlankPageCount,

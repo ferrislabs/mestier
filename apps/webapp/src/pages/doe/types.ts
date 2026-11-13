@@ -25,6 +25,7 @@ export interface PartyForm {
 	contactName: string
 	contactRole: string
 	contactEmail: string
+	contactPhone: string
 }
 
 export interface DoeForm {
@@ -45,9 +46,9 @@ export interface NumberedSection {
 }
 
 export const PARTY_ROLES: PartyRole[] = [
+	'contractor',
 	'project_owner',
 	'project_manager',
-	'contractor',
 ]
 
 export const PARTY_LABELS: Record<PartyRole, string> = {

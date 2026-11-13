@@ -40,6 +40,7 @@ function form(sections: DoeSection[]): DoeForm {
 				contactName: '',
 				contactRole: '',
 				contactEmail: '',
+				contactPhone: '',
 			},
 			{
 				role: 'contractor',
@@ -51,6 +52,7 @@ function form(sections: DoeSection[]): DoeForm {
 				contactName: '',
 				contactRole: '',
 				contactEmail: '',
+				contactPhone: '',
 			},
 		],
 		sections,

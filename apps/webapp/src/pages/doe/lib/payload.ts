@@ -18,6 +18,7 @@ function emptyParty(role: PartyForm['role']): PartyForm {
 		contactName: '',
 		contactRole: '',
 		contactEmail: '',
+		contactPhone: '',
 	}
 }
 
@@ -32,6 +33,7 @@ function partyToForm(party: DoeParty): PartyForm {
 		contactName: party.contact_name ?? '',
 		contactRole: party.contact_role ?? '',
 		contactEmail: party.contact_email ?? '',
+		contactPhone: party.contact_phone ?? '',
 	}
 }
 
@@ -78,6 +80,7 @@ export function buildUpdatePayload(
 			contact_name: orNull(party.contactName),
 			contact_role: orNull(party.contactRole),
 			contact_email: orNull(party.contactEmail),
+			contact_phone: orNull(party.contactPhone),
 		}))
 
 	return {

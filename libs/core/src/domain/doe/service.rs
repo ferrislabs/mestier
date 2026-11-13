@@ -52,7 +52,7 @@ fn distinct_file_keys(doe: &Doe) -> usize {
             DoeSectionContent::Photos { photos, .. } => {
                 keys.extend(photos.iter().map(|photo| photo.key.as_str()));
             }
-            DoeSectionContent::Plans { plans } => {
+            DoeSectionContent::Plans { plans, .. } => {
                 keys.extend(plans.iter().map(|plan| plan.key.as_str()));
             }
             DoeSectionContent::BlankPages { .. } => {}
@@ -123,8 +123,12 @@ fn clean_content(content: DoeSectionContent) -> Result<DoeSectionContent, CoreEr
             per_page,
             photos: photos.into_iter().map(clean_file).collect(),
         },
-        DoeSectionContent::Plans { plans } => DoeSectionContent::Plans {
+        DoeSectionContent::Plans { plans, listed } => DoeSectionContent::Plans {
             plans: plans.into_iter().map(clean_file).collect(),
+            listed: listed
+                .into_iter()
+                .filter_map(|name| blank_to_none(Some(name)))
+                .collect(),
         },
         blank @ DoeSectionContent::BlankPages { .. } => blank,
     })
@@ -150,6 +154,7 @@ fn clean_party(party: DoeParty) -> Result<DoeParty, CoreError> {
         contact_name: blank_to_none(party.contact_name),
         contact_role: blank_to_none(party.contact_role),
         contact_email: blank_to_none(party.contact_email),
+        contact_phone: blank_to_none(party.contact_phone),
     })
 }
 
@@ -163,7 +168,10 @@ fn section_from_model(section: &DoeModelSection) -> DoeSection {
             per_page: *per_page,
             photos: Vec::new(),
         },
-        DoeModelSectionKind::Plans => DoeSectionContent::Plans { plans: Vec::new() },
+        DoeModelSectionKind::Plans => DoeSectionContent::Plans {
+            plans: Vec::new(),
+            listed: Vec::new(),
+        },
         DoeModelSectionKind::BlankPages { count } => {
             DoeSectionContent::BlankPages { count: *count }
         }
@@ -205,6 +213,7 @@ fn contractor_party(organization: &Organization) -> DoeParty {
         contact_name: None,
         contact_role: None,
         contact_email: None,
+        contact_phone: None,
     }
 }
 
@@ -219,6 +228,7 @@ fn owner_party(customer: &Customer, address: Option<String>) -> DoeParty {
         contact_name: None,
         contact_role: None,
         contact_email: None,
+        contact_phone: None,
     }
 }
 
@@ -304,7 +314,11 @@ where
             ));
         }
 
-        let mut parties = Vec::new();
+        let organization = organizations
+            .find_by_id(command.organization_id)
+            .await?
+            .ok_or(CoreError::NotFound)?;
+        let mut parties = vec![contractor_party(&organization)];
         if let Some(customer_id) = project.customer_id
             && let Some(customer) = customers
                 .find_by_id(customer_id)
@@ -321,11 +335,6 @@ where
             };
             parties.push(owner_party(&customer, blank_to_none(address)));
         }
-        let organization = organizations
-            .find_by_id(command.organization_id)
-            .await?
-            .ok_or(CoreError::NotFound)?;
-        parties.push(contractor_party(&organization));
 
         let now = Utc::now();
         let doe = Doe {
@@ -778,7 +787,10 @@ mod tests {
             .map(|index| {
                 section(
                     &format!("Thème {index}"),
-                    DoeSectionContent::Plans { plans: Vec::new() },
+                    DoeSectionContent::Plans {
+                        plans: Vec::new(),
+                        listed: Vec::new(),
+                    },
                 )
             })
             .collect();
@@ -824,6 +836,7 @@ mod tests {
             contact_name: None,
             contact_role: None,
             contact_email: None,
+            contact_phone: None,
         }];
 
         let err = replace_with(command, doe).await.unwrap_err();
@@ -1474,17 +1487,17 @@ mod tests {
         ));
         assert_ne!(doe.sections[0].id, doe.sections[1].id);
         assert_eq!(doe.parties.len(), 2);
-        assert_eq!(doe.parties[0].role, PartyRole::ProjectOwner);
-        assert_eq!(doe.parties[0].name, "Commune de Lapalisse");
-        assert_eq!(doe.parties[0].address.as_deref(), Some("Avenue du 8 mai"));
-        assert_eq!(doe.parties[0].phone.as_deref(), Some("0400000000"));
-        assert_eq!(doe.parties[1].role, PartyRole::Contractor);
-        assert_eq!(doe.parties[1].name, "Treyve Paysages");
+        assert_eq!(doe.parties[1].role, PartyRole::ProjectOwner);
+        assert_eq!(doe.parties[1].name, "Commune de Lapalisse");
+        assert_eq!(doe.parties[1].address.as_deref(), Some("Avenue du 8 mai"));
+        assert_eq!(doe.parties[1].phone.as_deref(), Some("0400000000"));
+        assert_eq!(doe.parties[0].role, PartyRole::Contractor);
+        assert_eq!(doe.parties[0].name, "Treyve Paysages");
         assert_eq!(
-            doe.parties[1].address.as_deref(),
+            doe.parties[0].address.as_deref(),
             Some("3 chemin des Vignes\n03120 Lapalisse")
         );
-        assert_eq!(doe.parties[1].email.as_deref(), Some("contact@treyve.test"));
+        assert_eq!(doe.parties[0].email.as_deref(), Some("contact@treyve.test"));
     }
 
     #[tokio::test]
@@ -1597,6 +1610,7 @@ mod tests {
             contact_name: None,
             contact_role: None,
             contact_email: None,
+            contact_phone: None,
         }];
         doe.sections = vec![
             DoeSection {
@@ -1620,6 +1634,7 @@ mod tests {
                             caption: None,
                         },
                     ],
+                    listed: Vec::new(),
                 },
             },
         ];

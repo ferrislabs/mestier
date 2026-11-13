@@ -10,6 +10,8 @@ interface DoePlansTabProps {
 	sectionNumber: number
 	title: string
 	plans: DoeFile[]
+	listed: string[]
+	onListedChange: (names: string[]) => void
 	isUploading: boolean
 	onUpload: (files: File[]) => void
 	onCaptionChange: (index: number, caption: string) => void
@@ -21,6 +23,8 @@ export function DoePlansTab({
 	sectionNumber,
 	title,
 	plans,
+	listed,
+	onListedChange,
 	isUploading,
 	onUpload,
 	onCaptionChange,
@@ -97,6 +101,70 @@ export function DoePlansTab({
 						})}
 					</ul>
 				)}
+				<div className="grid gap-2">
+					<span className="font-medium text-sm">Plans fournis à part</span>
+					<p className="text-muted-foreground text-xs">
+						Entrée ajoute une ligne. Ils sont listés dans le DOE, sans pièce
+						jointe.
+					</p>
+					<ul className="grid gap-1.5" data-listed-plans>
+						{(listed.length === 0 ? [''] : listed).map((name, index) => {
+							const position = plans.length + index + 1
+							return (
+								// biome-ignore lint/suspicious/noArrayIndexKey: names are free text and may repeat
+								<li key={index} className="flex items-center gap-3">
+									<span className="w-5 text-right text-muted-foreground text-sm tabular-nums">
+										{position}
+									</span>
+									<Input
+										value={name}
+										placeholder="Nom du plan, par exemple Détail terrasse A12"
+										aria-label={`Nom du plan ${position}`}
+										autoComplete="off"
+										className="h-8 min-w-0 flex-1"
+										onChange={(event) => {
+											const next = listed.length === 0 ? [''] : [...listed]
+											next[index] = event.target.value
+											onListedChange(next)
+										}}
+										onKeyDown={(event) => {
+											const list = event.currentTarget.closest('ul')
+											if (event.key === 'Enter') {
+												event.preventDefault()
+												if (name.trim() === '') return
+												const next = [...listed]
+												next.splice(index + 1, 0, '')
+												onListedChange(next)
+												requestAnimationFrame(() =>
+													list?.querySelectorAll('input')[index + 1]?.focus(),
+												)
+											} else if (
+												event.key === 'Backspace' &&
+												name === '' &&
+												listed.length > 0
+											) {
+												event.preventDefault()
+												onListedChange(listed.filter((_, at) => at !== index))
+												requestAnimationFrame(() =>
+													list
+														?.querySelectorAll('input')
+														[Math.max(index - 1, 0)]?.focus(),
+												)
+											}
+										}}
+									/>
+									<IconButton
+										label={`Retirer le plan ${position}`}
+										icon={X}
+										onClick={() =>
+											onListedChange(listed.filter((_, at) => at !== index))
+										}
+									/>
+								</li>
+							)
+						})}
+					</ul>
+				</div>
 			</div>
 		</SectionFrame>
 	)

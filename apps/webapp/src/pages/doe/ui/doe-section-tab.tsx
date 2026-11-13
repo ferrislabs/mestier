@@ -27,6 +27,7 @@ export interface SectionActions {
 		caption: string,
 	) => void
 	onRemovePhoto: (sectionId: string, index: number) => void
+	onPlanListedChange: (sectionId: string, names: string[]) => void
 	onUploadPlans: (sectionId: string, files: File[]) => void
 	onPlanCaptionChange: (
 		sectionId: string,
@@ -115,6 +116,10 @@ export function DoeSectionTab({
 					sectionNumber={number}
 					title={section.title}
 					plans={content.plans}
+					listed={content.listed ?? []}
+					onListedChange={(names) =>
+						actions.onPlanListedChange(section.id, names)
+					}
 					isUploading={isUploading}
 					onUpload={(files) => actions.onUploadPlans(section.id, files)}
 					onCaptionChange={(index, caption) =>

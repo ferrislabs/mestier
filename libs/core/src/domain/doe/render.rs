@@ -114,6 +114,7 @@ pub enum NumberedContent {
     },
     Plans {
         plans: Vec<DoeFile>,
+        listed: Vec<String>,
     },
     BlankPages {
         count: u8,
