@@ -5,6 +5,7 @@ import { ParticipantDetailFeature } from '#/pages/cursus/participants/feature/pa
 import { ParticipantsListFeature } from '#/pages/cursus/participants/feature/participants-list-feature'
 import {
 	callsTo,
+	chooseOption,
 	createQueryClient,
 	type FakeApi,
 	installFakeTanstackApi,
@@ -86,8 +87,11 @@ describe('ParticipantsListFeature', () => {
 		await user.paste('Dupont')
 		await user.click(screen.getByLabelText('Prénom'))
 		await user.paste('Jo')
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
 		await user.click(screen.getByLabelText('E-mail'))
 		await user.paste('jo@example.fr')
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
+		expect(callsTo(api, 'post', PARTICIPANTS)).toHaveLength(0)
 		await user.click(screen.getByLabelText('Code INE'))
 		await user.paste('123456789AB')
 		await user.click(
@@ -112,6 +116,126 @@ describe('ParticipantsListFeature', () => {
 			},
 		})
 		await waitFor(() => expect(onOpenParticipant).toHaveBeenCalledWith('p-1'))
+	})
+
+	it('stays on the identity step while the name is empty', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		renderWith(
+			['VIEW_CURSUS', 'MANAGE_CURSUS_PARTICIPANTS'],
+			<ParticipantsListFeature
+				kind={undefined}
+				status={undefined}
+				onFiltersChange={vi.fn()}
+				onOpenParticipant={vi.fn()}
+			/>,
+		)
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouveau participant' }),
+		)
+		await user.click(screen.getByLabelText('Prénom'))
+		await user.paste('Jo')
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
+
+		expect(screen.getByRole('alert').textContent).toBe(
+			'Le nom est obligatoire.',
+		)
+		expect(screen.getByLabelText('Nom')).toBeTruthy()
+		expect(screen.queryByLabelText('E-mail')).toBeNull()
+	})
+
+	it('asks for the host company on the tutor step and sends the tutor', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		api.mockMutation('post', PARTICIPANTS, () => ({ data: PARTICIPANT_ROW }))
+		renderWith(
+			['VIEW_CURSUS', 'MANAGE_CURSUS_PARTICIPANTS'],
+			<ParticipantsListFeature
+				kind={undefined}
+				status={undefined}
+				onFiltersChange={vi.fn()}
+				onOpenParticipant={vi.fn()}
+			/>,
+		)
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouveau participant' }),
+		)
+		await user.click(screen.getByLabelText('Nom'))
+		await user.paste('Roux')
+		await chooseOption(
+			user,
+			screen.getByRole('combobox', { name: 'Type de participant' }),
+			'Tuteur entreprise',
+		)
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
+		await user.click(screen.getByLabelText('E-mail'))
+		await user.paste('roux@example.fr')
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
+
+		expect(
+			document.querySelector('[aria-current="step"]')?.textContent,
+		).toContain('Tuteur')
+		expect(screen.queryByLabelText('Code INE')).toBeNull()
+		await chooseOption(
+			user,
+			screen.getByRole('combobox', { name: "Entreprise d'accueil" }),
+			'Menuiserie Roux',
+		)
+		await user.click(screen.getByLabelText('Fonction'))
+		await user.paste('Chef d’atelier')
+		await user.click(
+			screen.getByRole('button', { name: 'Créer le participant' }),
+		)
+
+		await waitFor(() =>
+			expect(callsTo(api, 'post', PARTICIPANTS)).toHaveLength(1),
+		)
+		expect(
+			(callsTo(api, 'post', PARTICIPANTS)[0]?.params as { body: object }).body,
+		).toEqual({
+			last_name: 'Roux',
+			first_name: null,
+			email: 'roux@example.fr',
+			phone: null,
+			company_tutor: { host_company_id: 'hc-1', job_title: 'Chef d’atelier' },
+		})
+	})
+
+	it('restarts at the first step with empty fields when reopened', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		renderWith(
+			['VIEW_CURSUS', 'MANAGE_CURSUS_PARTICIPANTS'],
+			<ParticipantsListFeature
+				kind={undefined}
+				status={undefined}
+				onFiltersChange={vi.fn()}
+				onOpenParticipant={vi.fn()}
+			/>,
+		)
+
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouveau participant' }),
+		)
+		await user.click(screen.getByLabelText('Nom'))
+		await user.paste('Dupont')
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
+		await user.click(screen.getByRole('button', { name: 'Précédent' }))
+		expect((screen.getByLabelText('Nom') as HTMLInputElement).value).toBe(
+			'Dupont',
+		)
+		await user.click(screen.getByRole('button', { name: 'Suivant' }))
+		await user.keyboard('{Escape}')
+		await user.click(
+			await screen.findByRole('button', { name: 'Nouveau participant' }),
+		)
+
+		expect((screen.getByLabelText('Nom') as HTMLInputElement).value).toBe('')
 	})
 
 	it('has no creation button without the manage bit', async () => {
