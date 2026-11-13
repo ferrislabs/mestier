@@ -66,10 +66,10 @@ export const APPRENTICE_NOUN: CountNoun = {
 	one: 'apprenti',
 	many: 'apprentis',
 }
-export const COMPANY_TUTOR_NOUN: CountNoun = {
+export const TUTOR_NOUN: CountNoun = {
 	gender: 'masculine',
-	one: 'tuteur entreprise',
-	many: 'tuteurs entreprise',
+	one: 'tuteur',
+	many: 'tuteurs',
 }
 export const HOST_COMPANY_NOUN: CountNoun = {
 	gender: 'feminine',

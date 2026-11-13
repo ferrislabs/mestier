@@ -5,9 +5,37 @@ import { emptyToNull } from '#/pages/cursus/participants/lib/forms'
 export type ParticipantKind = 'apprentice' | 'company_tutor'
 export type ParticipantStatus = Schemas.ParticipantStatus
 
-export const KIND_LABELS: Record<ParticipantKind, string> = {
-	apprentice: 'Apprenti',
-	company_tutor: 'Tuteur entreprise',
+export interface KindCopy {
+	title: string
+	createLabel: string
+	createDescription: string
+	submitLabel: string
+	steps: readonly string[]
+	empty: string
+	emptyHint: string
+}
+
+export const KIND_COPY: Record<ParticipantKind, KindCopy> = {
+	apprentice: {
+		title: 'Apprentis',
+		createLabel: 'Nouvel apprenti',
+		createDescription:
+			"Créez la fiche de l'apprenti. Vous pourrez ensuite l'inviter à rejoindre son espace.",
+		submitLabel: "Créer l'apprenti",
+		steps: ['Identité', 'Contact', 'Apprentissage'],
+		empty: 'Aucun apprenti ne correspond.',
+		emptyHint: 'Vérifie l’orthographe ou le statut sélectionné.',
+	},
+	company_tutor: {
+		title: 'Tuteurs',
+		createLabel: 'Nouveau tuteur',
+		createDescription:
+			"Créez la fiche du tuteur dans son entreprise d'accueil. Vous pourrez ensuite l'inviter à rejoindre son espace.",
+		submitLabel: 'Créer le tuteur',
+		steps: ['Identité', 'Contact', 'Entreprise'],
+		empty: 'Aucun tuteur ne correspond.',
+		emptyHint: 'Vérifie l’orthographe, le statut ou l’entreprise sélectionnée.',
+	},
 }
 
 export const STATUS_LABELS: Record<ParticipantStatus, string> = {
@@ -17,8 +45,8 @@ export const STATUS_LABELS: Record<ParticipantStatus, string> = {
 }
 
 export const participantsSearchSchema = z.object({
-	kind: z.enum(['apprentice', 'company_tutor']).optional().catch(undefined),
 	status: z.enum(['pending', 'active', 'inactive']).optional().catch(undefined),
+	entreprise: z.string().optional().catch(undefined),
 })
 
 export type ParticipantsSearch = z.infer<typeof participantsSearchSchema>
@@ -32,24 +60,23 @@ export function participantName(participant: {
 		.join(' ')
 }
 
-export interface ParticipantKindInfo {
-	kinds: ParticipantKind[]
+export interface TutorInfo {
 	hostCompanyNames: string[]
+	jobTitles: string[]
 }
 
-export function kindInfo(
-	item: Pick<
-		Schemas.ParticipantListItemResponse,
-		'apprentice_id' | 'company_tutors'
-	>,
-): ParticipantKindInfo {
-	const kinds: ParticipantKind[] = []
-	if (item.apprentice_id) kinds.push('apprentice')
-	if (item.company_tutors.length > 0) kinds.push('company_tutor')
+export function tutorInfo(
+	item: Pick<Schemas.ParticipantListItemResponse, 'company_tutors'>,
+	hostCompanyId: string | undefined,
+): TutorInfo {
+	const records = item.company_tutors.filter(
+		(tutor) =>
+			hostCompanyId === undefined || tutor.host_company_id === hostCompanyId,
+	)
 	return {
-		kinds,
-		hostCompanyNames: item.company_tutors.map(
-			(tutor) => tutor.host_company_name,
+		hostCompanyNames: records.map((tutor) => tutor.host_company_name),
+		jobTitles: records.flatMap((tutor) =>
+			tutor.job_title ? [tutor.job_title] : [],
 		),
 	}
 }
@@ -63,7 +90,6 @@ export interface CreateParticipantValues {
 	firstName: string
 	email: string
 	phone: string
-	kind: ParticipantKind
 	birthDate: string
 	ineCode: string
 	address: string
@@ -76,7 +102,6 @@ export const EMPTY_CREATE_PARTICIPANT: CreateParticipantValues = {
 	firstName: '',
 	email: '',
 	phone: '',
-	kind: 'apprentice',
 	birthDate: '',
 	ineCode: '',
 	address: '',
@@ -87,6 +112,7 @@ export const EMPTY_CREATE_PARTICIPANT: CreateParticipantValues = {
 export const CREATE_PARTICIPANT_STEP_COUNT = 3
 
 export function validateCreateParticipantStep(
+	kind: ParticipantKind,
 	values: CreateParticipantValues,
 	step: number,
 ): string | null {
@@ -96,27 +122,25 @@ export function validateCreateParticipantStep(
 	if (step === 1 && values.email.trim() === '') {
 		return "L'e-mail est obligatoire."
 	}
-	if (
-		step === 2 &&
-		values.kind === 'company_tutor' &&
-		values.hostCompanyId === ''
-	) {
+	if (step === 2 && kind === 'company_tutor' && values.hostCompanyId === '') {
 		return "Choisissez l'entreprise d'accueil du tuteur."
 	}
 	return null
 }
 
 export function validateCreateParticipant(
+	kind: ParticipantKind,
 	values: CreateParticipantValues,
 ): string | null {
 	for (let step = 0; step < CREATE_PARTICIPANT_STEP_COUNT; step += 1) {
-		const problem = validateCreateParticipantStep(values, step)
+		const problem = validateCreateParticipantStep(kind, values, step)
 		if (problem !== null) return problem
 	}
 	return null
 }
 
 export function toCreateParticipantRequest(
+	kind: ParticipantKind,
 	values: CreateParticipantValues,
 ): Schemas.CreateParticipantRequest {
 	const identity = {
@@ -125,7 +149,7 @@ export function toCreateParticipantRequest(
 		email: values.email.trim(),
 		phone: emptyToNull(values.phone),
 	}
-	if (values.kind === 'apprentice') {
+	if (kind === 'apprentice') {
 		return {
 			...identity,
 			apprentice: {

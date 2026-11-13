@@ -71,13 +71,14 @@ import { Route as AppOOrganizationSlugPlanningProjectsIndexRouteImport } from '.
 import { Route as AppOOrganizationSlugPlanificationProjectsIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.index'
 import { Route as AppOOrganizationSlugPlanificationMaintenanceIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.index'
 import { Route as AppOOrganizationSlugPlanificationDoeModelsIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.doe-models.index'
+import { Route as AppOOrganizationSlugCursusTuteursIndexRouteImport } from './routes/_app.o.$organizationSlug.cursus.tuteurs.index'
 import { Route as AppOOrganizationSlugCursusTrinomesIndexRouteImport } from './routes/_app.o.$organizationSlug.cursus.trinomes.index'
 import { Route as AppOOrganizationSlugCursusPromotionsIndexRouteImport } from './routes/_app.o.$organizationSlug.cursus.promotions.index'
-import { Route as AppOOrganizationSlugCursusParticipantsIndexRouteImport } from './routes/_app.o.$organizationSlug.cursus.participants.index'
 import { Route as AppOOrganizationSlugCursusMesTrinomesIndexRouteImport } from './routes/_app.o.$organizationSlug.cursus.mes-trinomes.index'
 import { Route as AppOOrganizationSlugCursusFormationsIndexRouteImport } from './routes/_app.o.$organizationSlug.cursus.formations.index'
 import { Route as AppOOrganizationSlugCursusEtablissementsIndexRouteImport } from './routes/_app.o.$organizationSlug.cursus.etablissements.index'
 import { Route as AppOOrganizationSlugCursusEntreprisesIndexRouteImport } from './routes/_app.o.$organizationSlug.cursus.entreprises.index'
+import { Route as AppOOrganizationSlugCursusApprentisIndexRouteImport } from './routes/_app.o.$organizationSlug.cursus.apprentis.index'
 import { Route as AppOOrganizationSlugCrmFacturesIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.factures.index'
 import { Route as AppOOrganizationSlugCrmDevisIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.devis.index'
 import { Route as AppOOrganizationSlugCrmClientsIndexRouteImport } from './routes/_app.o.$organizationSlug.crm.clients.index'
@@ -100,11 +101,12 @@ import { Route as AppOOrganizationSlugPlanificationMaintenanceValidationRouteImp
 import { Route as AppOOrganizationSlugPlanificationMaintenanceRecapRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.recap'
 import { Route as AppOOrganizationSlugPlanificationMaintenanceContractsRouteImport } from './routes/_app.o.$organizationSlug.planification.maintenance.contracts'
 import { Route as AppOOrganizationSlugPlanificationDoeModelsModelIdRouteImport } from './routes/_app.o.$organizationSlug.planification.doe-models.$modelId'
+import { Route as AppOOrganizationSlugCursusTuteursParticipantIdRouteImport } from './routes/_app.o.$organizationSlug.cursus.tuteurs.$participantId'
 import { Route as AppOOrganizationSlugCursusTrinomesTriadIdRouteImport } from './routes/_app.o.$organizationSlug.cursus.trinomes.$triadId'
 import { Route as AppOOrganizationSlugCursusPromotionsPromotionIdRouteImport } from './routes/_app.o.$organizationSlug.cursus.promotions.$promotionId'
-import { Route as AppOOrganizationSlugCursusParticipantsParticipantIdRouteImport } from './routes/_app.o.$organizationSlug.cursus.participants.$participantId'
 import { Route as AppOOrganizationSlugCursusMesTrinomesTriadIdRouteImport } from './routes/_app.o.$organizationSlug.cursus.mes-trinomes.$triadId'
 import { Route as AppOOrganizationSlugCursusEntreprisesHostCompanyIdRouteImport } from './routes/_app.o.$organizationSlug.cursus.entreprises.$hostCompanyId'
+import { Route as AppOOrganizationSlugCursusApprentisParticipantIdRouteImport } from './routes/_app.o.$organizationSlug.cursus.apprentis.$participantId'
 import { Route as AppOOrganizationSlugCrmFacturesNouvelleRouteImport } from './routes/_app.o.$organizationSlug.crm.factures.nouvelle'
 import { Route as AppOOrganizationSlugCrmFacturesInvoiceIdRouteImport } from './routes/_app.o.$organizationSlug.crm.factures.$invoiceId'
 import { Route as AppOOrganizationSlugCrmDevisNouveauRouteImport } from './routes/_app.o.$organizationSlug.crm.devis.nouveau'
@@ -485,6 +487,12 @@ const AppOOrganizationSlugPlanificationDoeModelsIndexRoute =
     path: '/planification/doe-models/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugCursusTuteursIndexRoute =
+  AppOOrganizationSlugCursusTuteursIndexRouteImport.update({
+    id: '/cursus/tuteurs/',
+    path: '/cursus/tuteurs/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugCursusTrinomesIndexRoute =
   AppOOrganizationSlugCursusTrinomesIndexRouteImport.update({
     id: '/cursus/trinomes/',
@@ -495,12 +503,6 @@ const AppOOrganizationSlugCursusPromotionsIndexRoute =
   AppOOrganizationSlugCursusPromotionsIndexRouteImport.update({
     id: '/cursus/promotions/',
     path: '/cursus/promotions/',
-    getParentRoute: () => AppOOrganizationSlugRoute,
-  } as any)
-const AppOOrganizationSlugCursusParticipantsIndexRoute =
-  AppOOrganizationSlugCursusParticipantsIndexRouteImport.update({
-    id: '/cursus/participants/',
-    path: '/cursus/participants/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugCursusMesTrinomesIndexRoute =
@@ -525,6 +527,12 @@ const AppOOrganizationSlugCursusEntreprisesIndexRoute =
   AppOOrganizationSlugCursusEntreprisesIndexRouteImport.update({
     id: '/cursus/entreprises/',
     path: '/cursus/entreprises/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugCursusApprentisIndexRoute =
+  AppOOrganizationSlugCursusApprentisIndexRouteImport.update({
+    id: '/cursus/apprentis/',
+    path: '/cursus/apprentis/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugCrmFacturesIndexRoute =
@@ -661,6 +669,12 @@ const AppOOrganizationSlugPlanificationDoeModelsModelIdRoute =
     path: '/planification/doe-models/$modelId',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugCursusTuteursParticipantIdRoute =
+  AppOOrganizationSlugCursusTuteursParticipantIdRouteImport.update({
+    id: '/cursus/tuteurs/$participantId',
+    path: '/cursus/tuteurs/$participantId',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugCursusTrinomesTriadIdRoute =
   AppOOrganizationSlugCursusTrinomesTriadIdRouteImport.update({
     id: '/cursus/trinomes/$triadId',
@@ -673,12 +687,6 @@ const AppOOrganizationSlugCursusPromotionsPromotionIdRoute =
     path: '/cursus/promotions/$promotionId',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
-const AppOOrganizationSlugCursusParticipantsParticipantIdRoute =
-  AppOOrganizationSlugCursusParticipantsParticipantIdRouteImport.update({
-    id: '/cursus/participants/$participantId',
-    path: '/cursus/participants/$participantId',
-    getParentRoute: () => AppOOrganizationSlugRoute,
-  } as any)
 const AppOOrganizationSlugCursusMesTrinomesTriadIdRoute =
   AppOOrganizationSlugCursusMesTrinomesTriadIdRouteImport.update({
     id: '/cursus/mes-trinomes/$triadId',
@@ -689,6 +697,12 @@ const AppOOrganizationSlugCursusEntreprisesHostCompanyIdRoute =
   AppOOrganizationSlugCursusEntreprisesHostCompanyIdRouteImport.update({
     id: '/cursus/entreprises/$hostCompanyId',
     path: '/cursus/entreprises/$hostCompanyId',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugCursusApprentisParticipantIdRoute =
+  AppOOrganizationSlugCursusApprentisParticipantIdRouteImport.update({
+    id: '/cursus/apprentis/$participantId',
+    path: '/cursus/apprentis/$participantId',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugCrmFacturesNouvelleRoute =
@@ -848,11 +862,12 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/crm/devis/nouveau': typeof AppOOrganizationSlugCrmDevisNouveauRoute
   '/o/$organizationSlug/crm/factures/$invoiceId': typeof AppOOrganizationSlugCrmFacturesInvoiceIdRoute
   '/o/$organizationSlug/crm/factures/nouvelle': typeof AppOOrganizationSlugCrmFacturesNouvelleRoute
+  '/o/$organizationSlug/cursus/apprentis/$participantId': typeof AppOOrganizationSlugCursusApprentisParticipantIdRoute
   '/o/$organizationSlug/cursus/entreprises/$hostCompanyId': typeof AppOOrganizationSlugCursusEntreprisesHostCompanyIdRoute
   '/o/$organizationSlug/cursus/mes-trinomes/$triadId': typeof AppOOrganizationSlugCursusMesTrinomesTriadIdRoute
-  '/o/$organizationSlug/cursus/participants/$participantId': typeof AppOOrganizationSlugCursusParticipantsParticipantIdRoute
   '/o/$organizationSlug/cursus/promotions/$promotionId': typeof AppOOrganizationSlugCursusPromotionsPromotionIdRoute
   '/o/$organizationSlug/cursus/trinomes/$triadId': typeof AppOOrganizationSlugCursusTrinomesTriadIdRoute
+  '/o/$organizationSlug/cursus/tuteurs/$participantId': typeof AppOOrganizationSlugCursusTuteursParticipantIdRoute
   '/o/$organizationSlug/planification/doe-models/$modelId': typeof AppOOrganizationSlugPlanificationDoeModelsModelIdRoute
   '/o/$organizationSlug/planification/maintenance/contracts': typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   '/o/$organizationSlug/planification/maintenance/recap': typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
@@ -875,13 +890,14 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/crm/clients/': typeof AppOOrganizationSlugCrmClientsIndexRoute
   '/o/$organizationSlug/crm/devis/': typeof AppOOrganizationSlugCrmDevisIndexRoute
   '/o/$organizationSlug/crm/factures/': typeof AppOOrganizationSlugCrmFacturesIndexRoute
+  '/o/$organizationSlug/cursus/apprentis/': typeof AppOOrganizationSlugCursusApprentisIndexRoute
   '/o/$organizationSlug/cursus/entreprises/': typeof AppOOrganizationSlugCursusEntreprisesIndexRoute
   '/o/$organizationSlug/cursus/etablissements/': typeof AppOOrganizationSlugCursusEtablissementsIndexRoute
   '/o/$organizationSlug/cursus/formations/': typeof AppOOrganizationSlugCursusFormationsIndexRoute
   '/o/$organizationSlug/cursus/mes-trinomes/': typeof AppOOrganizationSlugCursusMesTrinomesIndexRoute
-  '/o/$organizationSlug/cursus/participants/': typeof AppOOrganizationSlugCursusParticipantsIndexRoute
   '/o/$organizationSlug/cursus/promotions/': typeof AppOOrganizationSlugCursusPromotionsIndexRoute
   '/o/$organizationSlug/cursus/trinomes/': typeof AppOOrganizationSlugCursusTrinomesIndexRoute
+  '/o/$organizationSlug/cursus/tuteurs/': typeof AppOOrganizationSlugCursusTuteursIndexRoute
   '/o/$organizationSlug/planification/doe-models/': typeof AppOOrganizationSlugPlanificationDoeModelsIndexRoute
   '/o/$organizationSlug/planification/maintenance/': typeof AppOOrganizationSlugPlanificationMaintenanceIndexRoute
   '/o/$organizationSlug/planification/projects/': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
@@ -957,11 +973,12 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/crm/devis/nouveau': typeof AppOOrganizationSlugCrmDevisNouveauRoute
   '/o/$organizationSlug/crm/factures/$invoiceId': typeof AppOOrganizationSlugCrmFacturesInvoiceIdRoute
   '/o/$organizationSlug/crm/factures/nouvelle': typeof AppOOrganizationSlugCrmFacturesNouvelleRoute
+  '/o/$organizationSlug/cursus/apprentis/$participantId': typeof AppOOrganizationSlugCursusApprentisParticipantIdRoute
   '/o/$organizationSlug/cursus/entreprises/$hostCompanyId': typeof AppOOrganizationSlugCursusEntreprisesHostCompanyIdRoute
   '/o/$organizationSlug/cursus/mes-trinomes/$triadId': typeof AppOOrganizationSlugCursusMesTrinomesTriadIdRoute
-  '/o/$organizationSlug/cursus/participants/$participantId': typeof AppOOrganizationSlugCursusParticipantsParticipantIdRoute
   '/o/$organizationSlug/cursus/promotions/$promotionId': typeof AppOOrganizationSlugCursusPromotionsPromotionIdRoute
   '/o/$organizationSlug/cursus/trinomes/$triadId': typeof AppOOrganizationSlugCursusTrinomesTriadIdRoute
+  '/o/$organizationSlug/cursus/tuteurs/$participantId': typeof AppOOrganizationSlugCursusTuteursParticipantIdRoute
   '/o/$organizationSlug/planification/doe-models/$modelId': typeof AppOOrganizationSlugPlanificationDoeModelsModelIdRoute
   '/o/$organizationSlug/planification/maintenance/contracts': typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   '/o/$organizationSlug/planification/maintenance/recap': typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
@@ -984,13 +1001,14 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/crm/clients': typeof AppOOrganizationSlugCrmClientsIndexRoute
   '/o/$organizationSlug/crm/devis': typeof AppOOrganizationSlugCrmDevisIndexRoute
   '/o/$organizationSlug/crm/factures': typeof AppOOrganizationSlugCrmFacturesIndexRoute
+  '/o/$organizationSlug/cursus/apprentis': typeof AppOOrganizationSlugCursusApprentisIndexRoute
   '/o/$organizationSlug/cursus/entreprises': typeof AppOOrganizationSlugCursusEntreprisesIndexRoute
   '/o/$organizationSlug/cursus/etablissements': typeof AppOOrganizationSlugCursusEtablissementsIndexRoute
   '/o/$organizationSlug/cursus/formations': typeof AppOOrganizationSlugCursusFormationsIndexRoute
   '/o/$organizationSlug/cursus/mes-trinomes': typeof AppOOrganizationSlugCursusMesTrinomesIndexRoute
-  '/o/$organizationSlug/cursus/participants': typeof AppOOrganizationSlugCursusParticipantsIndexRoute
   '/o/$organizationSlug/cursus/promotions': typeof AppOOrganizationSlugCursusPromotionsIndexRoute
   '/o/$organizationSlug/cursus/trinomes': typeof AppOOrganizationSlugCursusTrinomesIndexRoute
+  '/o/$organizationSlug/cursus/tuteurs': typeof AppOOrganizationSlugCursusTuteursIndexRoute
   '/o/$organizationSlug/planification/doe-models': typeof AppOOrganizationSlugPlanificationDoeModelsIndexRoute
   '/o/$organizationSlug/planification/maintenance': typeof AppOOrganizationSlugPlanificationMaintenanceIndexRoute
   '/o/$organizationSlug/planification/projects': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
@@ -1071,11 +1089,12 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/crm/devis/nouveau': typeof AppOOrganizationSlugCrmDevisNouveauRoute
   '/_app/o/$organizationSlug/crm/factures/$invoiceId': typeof AppOOrganizationSlugCrmFacturesInvoiceIdRoute
   '/_app/o/$organizationSlug/crm/factures/nouvelle': typeof AppOOrganizationSlugCrmFacturesNouvelleRoute
+  '/_app/o/$organizationSlug/cursus/apprentis/$participantId': typeof AppOOrganizationSlugCursusApprentisParticipantIdRoute
   '/_app/o/$organizationSlug/cursus/entreprises/$hostCompanyId': typeof AppOOrganizationSlugCursusEntreprisesHostCompanyIdRoute
   '/_app/o/$organizationSlug/cursus/mes-trinomes/$triadId': typeof AppOOrganizationSlugCursusMesTrinomesTriadIdRoute
-  '/_app/o/$organizationSlug/cursus/participants/$participantId': typeof AppOOrganizationSlugCursusParticipantsParticipantIdRoute
   '/_app/o/$organizationSlug/cursus/promotions/$promotionId': typeof AppOOrganizationSlugCursusPromotionsPromotionIdRoute
   '/_app/o/$organizationSlug/cursus/trinomes/$triadId': typeof AppOOrganizationSlugCursusTrinomesTriadIdRoute
+  '/_app/o/$organizationSlug/cursus/tuteurs/$participantId': typeof AppOOrganizationSlugCursusTuteursParticipantIdRoute
   '/_app/o/$organizationSlug/planification/doe-models/$modelId': typeof AppOOrganizationSlugPlanificationDoeModelsModelIdRoute
   '/_app/o/$organizationSlug/planification/maintenance/contracts': typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   '/_app/o/$organizationSlug/planification/maintenance/recap': typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
@@ -1098,13 +1117,14 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/crm/clients/': typeof AppOOrganizationSlugCrmClientsIndexRoute
   '/_app/o/$organizationSlug/crm/devis/': typeof AppOOrganizationSlugCrmDevisIndexRoute
   '/_app/o/$organizationSlug/crm/factures/': typeof AppOOrganizationSlugCrmFacturesIndexRoute
+  '/_app/o/$organizationSlug/cursus/apprentis/': typeof AppOOrganizationSlugCursusApprentisIndexRoute
   '/_app/o/$organizationSlug/cursus/entreprises/': typeof AppOOrganizationSlugCursusEntreprisesIndexRoute
   '/_app/o/$organizationSlug/cursus/etablissements/': typeof AppOOrganizationSlugCursusEtablissementsIndexRoute
   '/_app/o/$organizationSlug/cursus/formations/': typeof AppOOrganizationSlugCursusFormationsIndexRoute
   '/_app/o/$organizationSlug/cursus/mes-trinomes/': typeof AppOOrganizationSlugCursusMesTrinomesIndexRoute
-  '/_app/o/$organizationSlug/cursus/participants/': typeof AppOOrganizationSlugCursusParticipantsIndexRoute
   '/_app/o/$organizationSlug/cursus/promotions/': typeof AppOOrganizationSlugCursusPromotionsIndexRoute
   '/_app/o/$organizationSlug/cursus/trinomes/': typeof AppOOrganizationSlugCursusTrinomesIndexRoute
+  '/_app/o/$organizationSlug/cursus/tuteurs/': typeof AppOOrganizationSlugCursusTuteursIndexRoute
   '/_app/o/$organizationSlug/planification/doe-models/': typeof AppOOrganizationSlugPlanificationDoeModelsIndexRoute
   '/_app/o/$organizationSlug/planification/maintenance/': typeof AppOOrganizationSlugPlanificationMaintenanceIndexRoute
   '/_app/o/$organizationSlug/planification/projects/': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
@@ -1184,11 +1204,12 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/devis/nouveau'
     | '/o/$organizationSlug/crm/factures/$invoiceId'
     | '/o/$organizationSlug/crm/factures/nouvelle'
+    | '/o/$organizationSlug/cursus/apprentis/$participantId'
     | '/o/$organizationSlug/cursus/entreprises/$hostCompanyId'
     | '/o/$organizationSlug/cursus/mes-trinomes/$triadId'
-    | '/o/$organizationSlug/cursus/participants/$participantId'
     | '/o/$organizationSlug/cursus/promotions/$promotionId'
     | '/o/$organizationSlug/cursus/trinomes/$triadId'
+    | '/o/$organizationSlug/cursus/tuteurs/$participantId'
     | '/o/$organizationSlug/planification/doe-models/$modelId'
     | '/o/$organizationSlug/planification/maintenance/contracts'
     | '/o/$organizationSlug/planification/maintenance/recap'
@@ -1211,13 +1232,14 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/clients/'
     | '/o/$organizationSlug/crm/devis/'
     | '/o/$organizationSlug/crm/factures/'
+    | '/o/$organizationSlug/cursus/apprentis/'
     | '/o/$organizationSlug/cursus/entreprises/'
     | '/o/$organizationSlug/cursus/etablissements/'
     | '/o/$organizationSlug/cursus/formations/'
     | '/o/$organizationSlug/cursus/mes-trinomes/'
-    | '/o/$organizationSlug/cursus/participants/'
     | '/o/$organizationSlug/cursus/promotions/'
     | '/o/$organizationSlug/cursus/trinomes/'
+    | '/o/$organizationSlug/cursus/tuteurs/'
     | '/o/$organizationSlug/planification/doe-models/'
     | '/o/$organizationSlug/planification/maintenance/'
     | '/o/$organizationSlug/planification/projects/'
@@ -1293,11 +1315,12 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/devis/nouveau'
     | '/o/$organizationSlug/crm/factures/$invoiceId'
     | '/o/$organizationSlug/crm/factures/nouvelle'
+    | '/o/$organizationSlug/cursus/apprentis/$participantId'
     | '/o/$organizationSlug/cursus/entreprises/$hostCompanyId'
     | '/o/$organizationSlug/cursus/mes-trinomes/$triadId'
-    | '/o/$organizationSlug/cursus/participants/$participantId'
     | '/o/$organizationSlug/cursus/promotions/$promotionId'
     | '/o/$organizationSlug/cursus/trinomes/$triadId'
+    | '/o/$organizationSlug/cursus/tuteurs/$participantId'
     | '/o/$organizationSlug/planification/doe-models/$modelId'
     | '/o/$organizationSlug/planification/maintenance/contracts'
     | '/o/$organizationSlug/planification/maintenance/recap'
@@ -1320,13 +1343,14 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/crm/clients'
     | '/o/$organizationSlug/crm/devis'
     | '/o/$organizationSlug/crm/factures'
+    | '/o/$organizationSlug/cursus/apprentis'
     | '/o/$organizationSlug/cursus/entreprises'
     | '/o/$organizationSlug/cursus/etablissements'
     | '/o/$organizationSlug/cursus/formations'
     | '/o/$organizationSlug/cursus/mes-trinomes'
-    | '/o/$organizationSlug/cursus/participants'
     | '/o/$organizationSlug/cursus/promotions'
     | '/o/$organizationSlug/cursus/trinomes'
+    | '/o/$organizationSlug/cursus/tuteurs'
     | '/o/$organizationSlug/planification/doe-models'
     | '/o/$organizationSlug/planification/maintenance'
     | '/o/$organizationSlug/planification/projects'
@@ -1406,11 +1430,12 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/crm/devis/nouveau'
     | '/_app/o/$organizationSlug/crm/factures/$invoiceId'
     | '/_app/o/$organizationSlug/crm/factures/nouvelle'
+    | '/_app/o/$organizationSlug/cursus/apprentis/$participantId'
     | '/_app/o/$organizationSlug/cursus/entreprises/$hostCompanyId'
     | '/_app/o/$organizationSlug/cursus/mes-trinomes/$triadId'
-    | '/_app/o/$organizationSlug/cursus/participants/$participantId'
     | '/_app/o/$organizationSlug/cursus/promotions/$promotionId'
     | '/_app/o/$organizationSlug/cursus/trinomes/$triadId'
+    | '/_app/o/$organizationSlug/cursus/tuteurs/$participantId'
     | '/_app/o/$organizationSlug/planification/doe-models/$modelId'
     | '/_app/o/$organizationSlug/planification/maintenance/contracts'
     | '/_app/o/$organizationSlug/planification/maintenance/recap'
@@ -1433,13 +1458,14 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/crm/clients/'
     | '/_app/o/$organizationSlug/crm/devis/'
     | '/_app/o/$organizationSlug/crm/factures/'
+    | '/_app/o/$organizationSlug/cursus/apprentis/'
     | '/_app/o/$organizationSlug/cursus/entreprises/'
     | '/_app/o/$organizationSlug/cursus/etablissements/'
     | '/_app/o/$organizationSlug/cursus/formations/'
     | '/_app/o/$organizationSlug/cursus/mes-trinomes/'
-    | '/_app/o/$organizationSlug/cursus/participants/'
     | '/_app/o/$organizationSlug/cursus/promotions/'
     | '/_app/o/$organizationSlug/cursus/trinomes/'
+    | '/_app/o/$organizationSlug/cursus/tuteurs/'
     | '/_app/o/$organizationSlug/planification/doe-models/'
     | '/_app/o/$organizationSlug/planification/maintenance/'
     | '/_app/o/$organizationSlug/planification/projects/'
@@ -1898,6 +1924,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPlanificationDoeModelsIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/cursus/tuteurs/': {
+      id: '/_app/o/$organizationSlug/cursus/tuteurs/'
+      path: '/cursus/tuteurs'
+      fullPath: '/o/$organizationSlug/cursus/tuteurs/'
+      preLoaderRoute: typeof AppOOrganizationSlugCursusTuteursIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/cursus/trinomes/': {
       id: '/_app/o/$organizationSlug/cursus/trinomes/'
       path: '/cursus/trinomes'
@@ -1910,13 +1943,6 @@ declare module '@tanstack/react-router' {
       path: '/cursus/promotions'
       fullPath: '/o/$organizationSlug/cursus/promotions/'
       preLoaderRoute: typeof AppOOrganizationSlugCursusPromotionsIndexRouteImport
-      parentRoute: typeof AppOOrganizationSlugRoute
-    }
-    '/_app/o/$organizationSlug/cursus/participants/': {
-      id: '/_app/o/$organizationSlug/cursus/participants/'
-      path: '/cursus/participants'
-      fullPath: '/o/$organizationSlug/cursus/participants/'
-      preLoaderRoute: typeof AppOOrganizationSlugCursusParticipantsIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/cursus/mes-trinomes/': {
@@ -1945,6 +1971,13 @@ declare module '@tanstack/react-router' {
       path: '/cursus/entreprises'
       fullPath: '/o/$organizationSlug/cursus/entreprises/'
       preLoaderRoute: typeof AppOOrganizationSlugCursusEntreprisesIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/cursus/apprentis/': {
+      id: '/_app/o/$organizationSlug/cursus/apprentis/'
+      path: '/cursus/apprentis'
+      fullPath: '/o/$organizationSlug/cursus/apprentis/'
+      preLoaderRoute: typeof AppOOrganizationSlugCursusApprentisIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/crm/factures/': {
@@ -2101,6 +2134,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugPlanificationDoeModelsModelIdRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/cursus/tuteurs/$participantId': {
+      id: '/_app/o/$organizationSlug/cursus/tuteurs/$participantId'
+      path: '/cursus/tuteurs/$participantId'
+      fullPath: '/o/$organizationSlug/cursus/tuteurs/$participantId'
+      preLoaderRoute: typeof AppOOrganizationSlugCursusTuteursParticipantIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/cursus/trinomes/$triadId': {
       id: '/_app/o/$organizationSlug/cursus/trinomes/$triadId'
       path: '/cursus/trinomes/$triadId'
@@ -2115,13 +2155,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugCursusPromotionsPromotionIdRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
-    '/_app/o/$organizationSlug/cursus/participants/$participantId': {
-      id: '/_app/o/$organizationSlug/cursus/participants/$participantId'
-      path: '/cursus/participants/$participantId'
-      fullPath: '/o/$organizationSlug/cursus/participants/$participantId'
-      preLoaderRoute: typeof AppOOrganizationSlugCursusParticipantsParticipantIdRouteImport
-      parentRoute: typeof AppOOrganizationSlugRoute
-    }
     '/_app/o/$organizationSlug/cursus/mes-trinomes/$triadId': {
       id: '/_app/o/$organizationSlug/cursus/mes-trinomes/$triadId'
       path: '/cursus/mes-trinomes/$triadId'
@@ -2134,6 +2167,13 @@ declare module '@tanstack/react-router' {
       path: '/cursus/entreprises/$hostCompanyId'
       fullPath: '/o/$organizationSlug/cursus/entreprises/$hostCompanyId'
       preLoaderRoute: typeof AppOOrganizationSlugCursusEntreprisesHostCompanyIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/cursus/apprentis/$participantId': {
+      id: '/_app/o/$organizationSlug/cursus/apprentis/$participantId'
+      path: '/cursus/apprentis/$participantId'
+      fullPath: '/o/$organizationSlug/cursus/apprentis/$participantId'
+      preLoaderRoute: typeof AppOOrganizationSlugCursusApprentisParticipantIdRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/crm/factures/nouvelle': {
@@ -2331,11 +2371,12 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugCrmDevisNouveauRoute: typeof AppOOrganizationSlugCrmDevisNouveauRoute
   AppOOrganizationSlugCrmFacturesInvoiceIdRoute: typeof AppOOrganizationSlugCrmFacturesInvoiceIdRoute
   AppOOrganizationSlugCrmFacturesNouvelleRoute: typeof AppOOrganizationSlugCrmFacturesNouvelleRoute
+  AppOOrganizationSlugCursusApprentisParticipantIdRoute: typeof AppOOrganizationSlugCursusApprentisParticipantIdRoute
   AppOOrganizationSlugCursusEntreprisesHostCompanyIdRoute: typeof AppOOrganizationSlugCursusEntreprisesHostCompanyIdRoute
   AppOOrganizationSlugCursusMesTrinomesTriadIdRoute: typeof AppOOrganizationSlugCursusMesTrinomesTriadIdRoute
-  AppOOrganizationSlugCursusParticipantsParticipantIdRoute: typeof AppOOrganizationSlugCursusParticipantsParticipantIdRoute
   AppOOrganizationSlugCursusPromotionsPromotionIdRoute: typeof AppOOrganizationSlugCursusPromotionsPromotionIdRoute
   AppOOrganizationSlugCursusTrinomesTriadIdRoute: typeof AppOOrganizationSlugCursusTrinomesTriadIdRoute
+  AppOOrganizationSlugCursusTuteursParticipantIdRoute: typeof AppOOrganizationSlugCursusTuteursParticipantIdRoute
   AppOOrganizationSlugPlanificationDoeModelsModelIdRoute: typeof AppOOrganizationSlugPlanificationDoeModelsModelIdRoute
   AppOOrganizationSlugPlanificationMaintenanceContractsRoute: typeof AppOOrganizationSlugPlanificationMaintenanceContractsRoute
   AppOOrganizationSlugPlanificationMaintenanceRecapRoute: typeof AppOOrganizationSlugPlanificationMaintenanceRecapRoute
@@ -2358,13 +2399,14 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugCrmClientsIndexRoute: typeof AppOOrganizationSlugCrmClientsIndexRoute
   AppOOrganizationSlugCrmDevisIndexRoute: typeof AppOOrganizationSlugCrmDevisIndexRoute
   AppOOrganizationSlugCrmFacturesIndexRoute: typeof AppOOrganizationSlugCrmFacturesIndexRoute
+  AppOOrganizationSlugCursusApprentisIndexRoute: typeof AppOOrganizationSlugCursusApprentisIndexRoute
   AppOOrganizationSlugCursusEntreprisesIndexRoute: typeof AppOOrganizationSlugCursusEntreprisesIndexRoute
   AppOOrganizationSlugCursusEtablissementsIndexRoute: typeof AppOOrganizationSlugCursusEtablissementsIndexRoute
   AppOOrganizationSlugCursusFormationsIndexRoute: typeof AppOOrganizationSlugCursusFormationsIndexRoute
   AppOOrganizationSlugCursusMesTrinomesIndexRoute: typeof AppOOrganizationSlugCursusMesTrinomesIndexRoute
-  AppOOrganizationSlugCursusParticipantsIndexRoute: typeof AppOOrganizationSlugCursusParticipantsIndexRoute
   AppOOrganizationSlugCursusPromotionsIndexRoute: typeof AppOOrganizationSlugCursusPromotionsIndexRoute
   AppOOrganizationSlugCursusTrinomesIndexRoute: typeof AppOOrganizationSlugCursusTrinomesIndexRoute
+  AppOOrganizationSlugCursusTuteursIndexRoute: typeof AppOOrganizationSlugCursusTuteursIndexRoute
   AppOOrganizationSlugPlanificationDoeModelsIndexRoute: typeof AppOOrganizationSlugPlanificationDoeModelsIndexRoute
   AppOOrganizationSlugPlanificationMaintenanceIndexRoute: typeof AppOOrganizationSlugPlanificationMaintenanceIndexRoute
   AppOOrganizationSlugPlanificationProjectsIndexRoute: typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
@@ -2460,16 +2502,18 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugCrmFacturesInvoiceIdRoute,
   AppOOrganizationSlugCrmFacturesNouvelleRoute:
     AppOOrganizationSlugCrmFacturesNouvelleRoute,
+  AppOOrganizationSlugCursusApprentisParticipantIdRoute:
+    AppOOrganizationSlugCursusApprentisParticipantIdRoute,
   AppOOrganizationSlugCursusEntreprisesHostCompanyIdRoute:
     AppOOrganizationSlugCursusEntreprisesHostCompanyIdRoute,
   AppOOrganizationSlugCursusMesTrinomesTriadIdRoute:
     AppOOrganizationSlugCursusMesTrinomesTriadIdRoute,
-  AppOOrganizationSlugCursusParticipantsParticipantIdRoute:
-    AppOOrganizationSlugCursusParticipantsParticipantIdRoute,
   AppOOrganizationSlugCursusPromotionsPromotionIdRoute:
     AppOOrganizationSlugCursusPromotionsPromotionIdRoute,
   AppOOrganizationSlugCursusTrinomesTriadIdRoute:
     AppOOrganizationSlugCursusTrinomesTriadIdRoute,
+  AppOOrganizationSlugCursusTuteursParticipantIdRoute:
+    AppOOrganizationSlugCursusTuteursParticipantIdRoute,
   AppOOrganizationSlugPlanificationDoeModelsModelIdRoute:
     AppOOrganizationSlugPlanificationDoeModelsModelIdRoute,
   AppOOrganizationSlugPlanificationMaintenanceContractsRoute:
@@ -2514,6 +2558,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugCrmDevisIndexRoute,
   AppOOrganizationSlugCrmFacturesIndexRoute:
     AppOOrganizationSlugCrmFacturesIndexRoute,
+  AppOOrganizationSlugCursusApprentisIndexRoute:
+    AppOOrganizationSlugCursusApprentisIndexRoute,
   AppOOrganizationSlugCursusEntreprisesIndexRoute:
     AppOOrganizationSlugCursusEntreprisesIndexRoute,
   AppOOrganizationSlugCursusEtablissementsIndexRoute:
@@ -2522,12 +2568,12 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugCursusFormationsIndexRoute,
   AppOOrganizationSlugCursusMesTrinomesIndexRoute:
     AppOOrganizationSlugCursusMesTrinomesIndexRoute,
-  AppOOrganizationSlugCursusParticipantsIndexRoute:
-    AppOOrganizationSlugCursusParticipantsIndexRoute,
   AppOOrganizationSlugCursusPromotionsIndexRoute:
     AppOOrganizationSlugCursusPromotionsIndexRoute,
   AppOOrganizationSlugCursusTrinomesIndexRoute:
     AppOOrganizationSlugCursusTrinomesIndexRoute,
+  AppOOrganizationSlugCursusTuteursIndexRoute:
+    AppOOrganizationSlugCursusTuteursIndexRoute,
   AppOOrganizationSlugPlanificationDoeModelsIndexRoute:
     AppOOrganizationSlugPlanificationDoeModelsIndexRoute,
   AppOOrganizationSlugPlanificationMaintenanceIndexRoute:

@@ -19,7 +19,7 @@ import {
 	CREATE_PARTICIPANT_STEP_COUNT,
 	type CreateParticipantValues,
 	EMPTY_CREATE_PARTICIPANT,
-	KIND_LABELS,
+	KIND_COPY,
 	type ParticipantKind,
 	validateCreateParticipant,
 	validateCreateParticipantStep,
@@ -38,6 +38,7 @@ export interface HostCompanyOption {
 }
 
 export interface CreateParticipantDialogProps {
+	kind: ParticipantKind
 	open: boolean
 	hostCompanies: HostCompanyOption[]
 	isPending: boolean
@@ -46,11 +47,8 @@ export interface CreateParticipantDialogProps {
 	onSubmit: (values: CreateParticipantValues) => void
 }
 
-function stepLabels(kind: ParticipantKind): string[] {
-	return ['Identité', 'Contact', kind === 'apprentice' ? 'Apprenti' : 'Tuteur']
-}
-
 export function CreateParticipantDialog({
+	kind,
 	open,
 	hostCompanies,
 	isPending,
@@ -58,6 +56,7 @@ export function CreateParticipantDialog({
 	onOpenChange,
 	onSubmit,
 }: CreateParticipantDialogProps) {
+	const copy = KIND_COPY[kind]
 	const [formError, setFormError] = useState<string | null>(null)
 	const steps = useSteps(CREATE_PARTICIPANT_STEP_COUNT)
 	const form = useForm({
@@ -68,8 +67,8 @@ export function CreateParticipantDialog({
 	function advance(event: FormEvent) {
 		event.preventDefault()
 		const problem = steps.isLast
-			? validateCreateParticipant(form.state.values)
-			: validateCreateParticipantStep(form.state.values, steps.index)
+			? validateCreateParticipant(kind, form.state.values)
+			: validateCreateParticipantStep(kind, form.state.values, steps.index)
 		setFormError(problem)
 		if (problem !== null) return
 		if (steps.isLast) void form.handleSubmit()
@@ -85,73 +84,39 @@ export function CreateParticipantDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Nouveau participant</DialogTitle>
-					<DialogDescription>
-						Créez un apprenti ou un tuteur d'entreprise. Vous pourrez ensuite
-						l'inviter à rejoindre son espace.
-					</DialogDescription>
+					<DialogTitle>{copy.createLabel}</DialogTitle>
+					<DialogDescription>{copy.createDescription}</DialogDescription>
 				</DialogHeader>
 				<form className="flex flex-col gap-4" onSubmit={advance}>
-					<form.Subscribe selector={(state) => state.values.kind}>
-						{(kind) => (
-							<StepIndicator
-								steps={stepLabels(kind)}
-								current={steps.index}
-								onSelect={goBack}
-							/>
-						)}
-					</form.Subscribe>
+					<StepIndicator
+						steps={copy.steps}
+						current={steps.index}
+						onSelect={goBack}
+					/>
 
 					{steps.index === 0 ? (
-						<>
-							<div className="grid grid-cols-2 gap-3">
-								<form.Field name="lastName">
-									{(field) => (
-										<FieldInput
-											id="participant-last-name"
-											label="Nom"
-											value={field.state.value}
-											onChange={field.handleChange}
-										/>
-									)}
-								</form.Field>
-								<form.Field name="firstName">
-									{(field) => (
-										<FieldInput
-											id="participant-first-name"
-											label="Prénom"
-											value={field.state.value}
-											onChange={field.handleChange}
-										/>
-									)}
-								</form.Field>
-							</div>
-							<form.Field name="kind">
+						<div className="grid grid-cols-2 gap-3">
+							<form.Field name="lastName">
 								{(field) => (
-									<Field label="Type de participant" htmlFor="participant-kind">
-										<Select
-											value={field.state.value}
-											onValueChange={(value) =>
-												field.handleChange(value as ParticipantKind)
-											}
-										>
-											<SelectTrigger id="participant-kind">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{(Object.keys(KIND_LABELS) as ParticipantKind[]).map(
-													(kind) => (
-														<SelectItem key={kind} value={kind}>
-															{KIND_LABELS[kind]}
-														</SelectItem>
-													),
-												)}
-											</SelectContent>
-										</Select>
-									</Field>
+									<FieldInput
+										id="participant-last-name"
+										label="Nom"
+										value={field.state.value}
+										onChange={field.handleChange}
+									/>
 								)}
 							</form.Field>
-						</>
+							<form.Field name="firstName">
+								{(field) => (
+									<FieldInput
+										id="participant-first-name"
+										label="Prénom"
+										value={field.state.value}
+										onChange={field.handleChange}
+									/>
+								)}
+							</form.Field>
+						</div>
 					) : null}
 
 					{steps.index === 1 ? (
@@ -178,94 +143,86 @@ export function CreateParticipantDialog({
 									/>
 								)}
 							</form.Field>
-							<form.Subscribe selector={(state) => state.values.kind}>
-								{(kind) =>
-									kind === 'apprentice' ? (
-										<div className="col-span-2">
-											<form.Field name="address">
-												{(field) => (
-													<FieldInput
-														id="participant-address"
-														label="Adresse"
-														value={field.state.value}
-														onChange={field.handleChange}
-													/>
-												)}
-											</form.Field>
-										</div>
-									) : null
-								}
-							</form.Subscribe>
+							{kind === 'apprentice' ? (
+								<div className="col-span-2">
+									<form.Field name="address">
+										{(field) => (
+											<FieldInput
+												id="participant-address"
+												label="Adresse"
+												value={field.state.value}
+												onChange={field.handleChange}
+											/>
+										)}
+									</form.Field>
+								</div>
+							) : null}
 						</div>
 					) : null}
 
-					{steps.index === 2 ? (
-						<form.Subscribe selector={(state) => state.values.kind}>
-							{(kind) =>
-								kind === 'apprentice' ? (
-									<div className="grid grid-cols-2 gap-3">
-										<form.Field name="birthDate">
-											{(field) => (
-												<FieldInput
-													id="participant-birth-date"
-													label="Date de naissance"
-													type="date"
-													value={field.state.value}
-													onChange={field.handleChange}
-												/>
-											)}
-										</form.Field>
-										<form.Field name="ineCode">
-											{(field) => (
-												<FieldInput
-													id="participant-ine"
-													label="Code INE"
-													value={field.state.value}
-													onChange={field.handleChange}
-												/>
-											)}
-										</form.Field>
-									</div>
-								) : (
-									<div className="grid grid-cols-2 gap-3">
-										<form.Field name="hostCompanyId">
-											{(field) => (
-												<Field
-													label="Entreprise d'accueil"
-													htmlFor="participant-host-company"
-												>
-													<Select
-														value={field.state.value}
-														onValueChange={field.handleChange}
-													>
-														<SelectTrigger id="participant-host-company">
-															<SelectValue placeholder="Choisir…" />
-														</SelectTrigger>
-														<SelectContent>
-															{hostCompanies.map((company) => (
-																<SelectItem key={company.id} value={company.id}>
-																	{company.name}
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
-												</Field>
-											)}
-										</form.Field>
-										<form.Field name="jobTitle">
-											{(field) => (
-												<FieldInput
-													id="participant-job-title"
-													label="Fonction"
-													value={field.state.value}
-													onChange={field.handleChange}
-												/>
-											)}
-										</form.Field>
-									</div>
-								)
-							}
-						</form.Subscribe>
+					{steps.index === 2 && kind === 'apprentice' ? (
+						<div className="grid grid-cols-2 gap-3">
+							<form.Field name="birthDate">
+								{(field) => (
+									<FieldInput
+										id="participant-birth-date"
+										label="Date de naissance"
+										type="date"
+										value={field.state.value}
+										onChange={field.handleChange}
+									/>
+								)}
+							</form.Field>
+							<form.Field name="ineCode">
+								{(field) => (
+									<FieldInput
+										id="participant-ine"
+										label="Code INE"
+										value={field.state.value}
+										onChange={field.handleChange}
+									/>
+								)}
+							</form.Field>
+						</div>
+					) : null}
+
+					{steps.index === 2 && kind === 'company_tutor' ? (
+						<div className="grid grid-cols-2 gap-3">
+							<form.Field name="hostCompanyId">
+								{(field) => (
+									<Field
+										label="Entreprise d'accueil"
+										htmlFor="participant-host-company"
+									>
+										<Select
+											value={field.state.value}
+											onValueChange={field.handleChange}
+										>
+											<SelectTrigger id="participant-host-company">
+												<SelectValue placeholder="Choisir…" />
+											</SelectTrigger>
+											<SelectContent>
+												{hostCompanies.map((company) => (
+													<SelectItem key={company.id} value={company.id}>
+														{company.name}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</Field>
+								)}
+							</form.Field>
+							<form.Field name="jobTitle">
+								{(field) => (
+									<FieldInput
+										id="participant-job-title"
+										label="Fonction"
+										value={field.state.value}
+										onChange={field.handleChange}
+									/>
+								)}
+							</form.Field>
+						</div>
 					) : null}
 
 					<FormError message={formError ?? (steps.isLast ? error : null)} />
@@ -273,7 +230,7 @@ export function CreateParticipantDialog({
 					<StepperFooter
 						isFirst={steps.isFirst}
 						isLast={steps.isLast}
-						submitLabel="Créer le participant"
+						submitLabel={copy.submitLabel}
 						isPending={isPending}
 						onCancel={() => onOpenChange(false)}
 						onBack={() => goBack(steps.index - 1)}

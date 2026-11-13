@@ -10,11 +10,11 @@ import {
 	useParticipants,
 } from '#/pages/cursus/participants/feature/use-participants'
 import {
-	kindInfo,
 	type ParticipantKind,
 	type ParticipantStatus,
 	participantName,
 	toCreateParticipantRequest,
+	tutorInfo,
 } from '#/pages/cursus/participants/lib/participants'
 import { CreateParticipantDialog } from '#/pages/cursus/participants/ui/create-participant-dialog'
 import {
@@ -24,19 +24,21 @@ import {
 import { useDebouncedSearch } from '#/pages/cursus/shared/feature/use-debounced-search'
 import { searchQuery } from '#/pages/cursus/shared/lib/list-filters'
 
-export interface ParticipantsListFeatureProps {
-	kind: ParticipantKind | undefined
+export interface ParticipantsFilters {
 	status: ParticipantStatus | undefined
-	onFiltersChange: (filters: {
-		kind: ParticipantKind | undefined
-		status: ParticipantStatus | undefined
-	}) => void
+	hostCompanyId: string | undefined
+}
+
+export interface ParticipantsListFeatureProps extends ParticipantsFilters {
+	kind: ParticipantKind
+	onFiltersChange: (filters: ParticipantsFilters) => void
 	onOpenParticipant: (participantId: string) => void
 }
 
 export function ParticipantsListFeature({
 	kind,
 	status,
+	hostCompanyId,
 	onFiltersChange,
 	onOpenParticipant,
 }: ParticipantsListFeatureProps) {
@@ -45,62 +47,69 @@ export function ParticipantsListFeature({
 	const [page, setPage] = useState(1)
 	const [createOpen, setCreateOpen] = useState(false)
 	const search = useDebouncedSearch('', () => setPage(1))
+	const companyFilter = kind === 'company_tutor' ? hostCompanyId : undefined
 
 	const list = useParticipants(activeOrganizationId, {
 		kind,
 		status,
+		...(companyFilter ? { host_company_id: companyFilter } : {}),
 		...searchQuery(search.query),
 		page,
 		per_page: PARTICIPANTS_PER_PAGE,
 	})
-	const participants = list.data?.data ?? []
 	const hostCompanies = useHostCompanies(activeOrganizationId, {
 		per_page: 100,
 	})
 	const createParticipant = useCreateParticipant()
+	const companyOptions = (hostCompanies.data?.data ?? []).map((company) => ({
+		id: company.id,
+		name: company.name,
+	}))
 
-	const rows: ParticipantRowVM[] = participants.map((participant) => {
-		const info = kindInfo(participant)
-		return {
+	const rows: ParticipantRowVM[] = (list.data?.data ?? []).map(
+		(participant) => ({
 			id: participant.id,
 			name: participantName(participant),
 			email: participant.email,
-			kinds: info.kinds,
-			hostCompanyNames: info.hostCompanyNames,
+			...tutorInfo(participant, companyFilter),
 			status: participant.status,
-		}
-	})
+		}),
+	)
 
 	const total = countOf(list.data)
 	const pageCount = Math.max(1, Math.ceil((total ?? 0) / PARTICIPANTS_PER_PAGE))
 
+	function changeFilters(next: ParticipantsFilters) {
+		setPage(1)
+		onFiltersChange(next)
+	}
+
 	return (
 		<>
 			<ParticipantsListUI
+				kind={kind}
 				rows={rows}
 				total={total}
 				search={search.text}
 				isLoading={list.isLoading}
 				error={mutationErrorMessage(list.error)}
-				kind={kind}
 				status={status}
+				hostCompanyId={companyFilter}
+				hostCompanies={companyOptions}
 				canManage={canManage}
 				page={page}
 				pageCount={pageCount}
 				onSearchChange={search.setText}
 				onResetFilters={() => {
 					search.reset()
-					setPage(1)
-					onFiltersChange({ kind: undefined, status: undefined })
+					changeFilters({ status: undefined, hostCompanyId: undefined })
 				}}
-				onKindChange={(next) => {
-					setPage(1)
-					onFiltersChange({ kind: next, status })
-				}}
-				onStatusChange={(next) => {
-					setPage(1)
-					onFiltersChange({ kind, status: next })
-				}}
+				onStatusChange={(next) =>
+					changeFilters({ status: next, hostCompanyId: companyFilter })
+				}
+				onHostCompanyChange={(next) =>
+					changeFilters({ status, hostCompanyId: next })
+				}
 				onPageChange={setPage}
 				onCreate={() => setCreateOpen(true)}
 				onOpen={onOpenParticipant}
@@ -108,11 +117,9 @@ export function ParticipantsListFeature({
 			{canManage ? (
 				<CreateParticipantDialog
 					key={String(createOpen)}
+					kind={kind}
 					open={createOpen}
-					hostCompanies={(hostCompanies.data?.data ?? []).map((company) => ({
-						id: company.id,
-						name: company.name,
-					}))}
+					hostCompanies={companyOptions}
 					isPending={createParticipant.isPending}
 					error={mutationErrorMessage(createParticipant.error)}
 					onOpenChange={setCreateOpen}
@@ -120,7 +127,7 @@ export function ParticipantsListFeature({
 						createParticipant.mutate(
 							{
 								path: { organization_id: activeOrganizationId },
-								body: toCreateParticipantRequest(values),
+								body: toCreateParticipantRequest(kind, values),
 							},
 							{
 								onSuccess: (response) => {
