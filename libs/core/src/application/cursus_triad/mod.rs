@@ -11,6 +11,7 @@ use crate::{
         cursus_catalog::service::CursusCatalogService,
         cursus_host_company::service::CursusHostCompanyService,
         cursus_participant::service::CursusParticipantService,
+        cursus_school_tutor::service::CursusSchoolTutorService,
         cursus_triad::{
             commands::{
                 CloseContractCommand, CloseTriadCommand, CreateContractCommand, CreateTriadCommand,
@@ -69,6 +70,25 @@ where
         .ok_or(CoreError::NotFound)
 }
 
+async fn ensure_school_tutor<R, E>(
+    repository: R,
+    emitter: E,
+    organization_id: OrganizationId,
+    id: Option<MemberId>,
+) -> Result<(), CoreError>
+where
+    R: crate::domain::cursus_school_tutor::ports::CursusSchoolTutorRepository,
+    E: events::EventEmitter,
+{
+    let Some(id) = id else {
+        return Ok(());
+    };
+
+    CursusSchoolTutorService::new(repository, emitter)
+        .ensure_active(organization_id, id)
+        .await
+}
+
 async fn ensure_open_host_company<R>(
     repository: R,
     organization_id: OrganizationId,
@@ -109,6 +129,7 @@ impl MestierUseCase {
         cursus_triad,
         cursus_catalog,
         cursus_participant,
+        cursus_school_tutor,
         role,
         member,
         authz,
@@ -134,6 +155,13 @@ impl MestierUseCase {
             .await?;
         ensure_member(
             &mut member_repository,
+            command.organization_id,
+            command.pedagogic_tutor_member_id,
+        )
+        .await?;
+        ensure_school_tutor(
+            cursus_school_tutor_repository,
+            emitter,
             command.organization_id,
             command.pedagogic_tutor_member_id,
         )
@@ -168,7 +196,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(cursus_triad, role, member, authz, emitter)]
+    #[transactional(cursus_triad, cursus_school_tutor, role, member, authz, emitter)]
     pub async fn update_triad(
         &self,
         command: UpdateTriadCommand,
@@ -192,6 +220,16 @@ impl MestierUseCase {
 
         let organization_id = command.organization_id;
         let mut service = CursusTriadService::new(cursus_triad_repository, emitter);
+        let current = service.get_triad(organization_id, command.id).await?;
+        if current.pedagogic_tutor_member_id != command.pedagogic_tutor_member_id {
+            ensure_school_tutor(
+                cursus_school_tutor_repository,
+                emitter,
+                organization_id,
+                command.pedagogic_tutor_member_id,
+            )
+            .await?;
+        }
         let updated = service.update_triad(command).await?;
 
         service.get_triad_detail(organization_id, updated.id).await

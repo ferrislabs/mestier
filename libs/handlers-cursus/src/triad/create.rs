@@ -23,6 +23,7 @@ use crate::{
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Promotion, apprentice or pedagogic tutor not found in the organization"),
         (status = 409, description = "The apprentice already has a triad in this promotion"),
+        (status = 422, description = "`E_NOT_A_SCHOOL_TUTOR`: the pedagogic tutor is not an active school tutor of the organization"),
     ),
     security(("bearer_auth" = []))
 )]

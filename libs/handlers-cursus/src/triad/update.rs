@@ -24,6 +24,7 @@ use crate::{
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Triad or pedagogic tutor not found in the organization"),
         (status = 409, description = "The triad is closed"),
+        (status = 422, description = "`E_NOT_A_SCHOOL_TUTOR`: the pedagogic tutor is not an active school tutor of the organization"),
     ),
     security(("bearer_auth" = []))
 )]
