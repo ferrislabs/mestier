@@ -126,6 +126,7 @@ export function DocumentEditor({
 			<BlockNoteView
 				editor={editor}
 				editable={editable}
+				theme="light"
 				formattingToolbar={false}
 				slashMenu={false}
 				sideMenu={false}
