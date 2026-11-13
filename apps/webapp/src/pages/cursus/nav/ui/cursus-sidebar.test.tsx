@@ -15,7 +15,7 @@ function props(
 	return {
 		organizationSlug: 'dupont',
 		active: 'companies',
-		counts: { promotions: 4, companies: 21 },
+		counts: { promotions: 4, apprentices: 12, tutors: 7, companies: 21 },
 		canView: true,
 		isParticipant: true,
 		isCollapsed: () => false,
@@ -39,6 +39,22 @@ describe('CursusSidebar', () => {
 				.getByRole('link', { name: /Promotions/ })
 				.getAttribute('aria-current'),
 		).toBeNull()
+	})
+
+	it('lists apprentices and tutors in the directory with their counts', async () => {
+		await renderWithRouter(
+			<CursusSidebar {...props({ active: 'tutors' })} />,
+			PATH,
+		)
+
+		const apprentices = screen.getByRole('link', { name: /Apprentis/ })
+		expect(apprentices.getAttribute('href')).toBe('/o/dupont/cursus/apprentis')
+		expect(apprentices.textContent).toContain('12')
+		const tutors = screen.getByRole('link', { name: /Tuteurs/ })
+		expect(tutors.getAttribute('href')).toBe('/o/dupont/cursus/tuteurs')
+		expect(tutors.getAttribute('aria-current')).toBe('page')
+		expect(tutors.textContent).toContain('7')
+		expect(screen.queryByRole('link', { name: /Participants/ })).toBeNull()
 	})
 
 	it('hides a count that is not loaded yet', async () => {

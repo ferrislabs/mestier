@@ -39,7 +39,16 @@ export function CursusSidebarFeature() {
 		{ promotionId: undefined, closed: false },
 		canView,
 	)
-	const participants = useParticipants(organizationId, { per_page: 1 }, canView)
+	const apprentices = useParticipants(
+		organizationId,
+		{ kind: 'apprentice', per_page: 1 },
+		canView,
+	)
+	const tutors = useParticipants(
+		organizationId,
+		{ kind: 'company_tutor', per_page: 1 },
+		canView,
+	)
 	const companies = useHostCompanies(organizationId, { per_page: 1 }, canView)
 	const trainings = useTrainings(organizationId, {}, canView)
 	const establishments = useEstablishments(organizationId, {}, canView)
@@ -51,7 +60,8 @@ export function CursusSidebarFeature() {
 			counts={{
 				promotions: countOf(promotions.data),
 				triads: countOf(triads.data),
-				participants: countOf(participants.data),
+				apprentices: countOf(apprentices.data),
+				tutors: countOf(tutors.data),
 				companies: countOf(companies.data),
 				trainings: countOf(trainings.data),
 				establishments: countOf(establishments.data),

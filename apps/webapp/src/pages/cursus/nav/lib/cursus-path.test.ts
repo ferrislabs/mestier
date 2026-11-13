@@ -15,6 +15,13 @@ describe('activeCursusEntry', () => {
 		expect(activeCursusEntry('/cursus/mes-trinomes/x')).toBe('myTriads')
 	})
 
+	it('splits apprentices and tutors', () => {
+		expect(activeCursusEntry('/cursus/apprentis')).toBe('apprentices')
+		expect(activeCursusEntry('/cursus/apprentis/x')).toBe('apprentices')
+		expect(activeCursusEntry('/cursus/tuteurs/x')).toBe('tutors')
+		expect(activeCursusEntry('/cursus/participants')).toBeNull()
+	})
+
 	it('returns null outside any section', () => {
 		expect(activeCursusEntry('/cursus')).toBeNull()
 	})

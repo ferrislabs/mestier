@@ -6,6 +6,7 @@ import {
 	Layers,
 	type LucideIcon,
 	School,
+	UserRound,
 	UserRoundCog,
 	Users,
 } from 'lucide-react'
@@ -24,7 +25,8 @@ import {
 export interface CursusSidebarCounts {
 	promotions?: number
 	triads?: number
-	participants?: number
+	apprentices?: number
+	tutors?: number
 	companies?: number
 	trainings?: number
 	establishments?: number
@@ -92,11 +94,19 @@ const GROUPS: readonly GroupDef[] = [
 		title: 'Annuaire',
 		entries: [
 			{
-				key: CURSUS_ENTRY.participants,
-				to: '/cursus/participants',
+				key: CURSUS_ENTRY.apprentices,
+				to: '/cursus/apprentis',
+				icon: UserRound,
+				label: 'Apprentis',
+				count: 'apprentices',
+				audience: 'staff',
+			},
+			{
+				key: CURSUS_ENTRY.tutors,
+				to: '/cursus/tuteurs',
 				icon: UserRoundCog,
-				label: 'Participants',
-				count: 'participants',
+				label: 'Tuteurs',
+				count: 'tutors',
 				audience: 'staff',
 			},
 			{
