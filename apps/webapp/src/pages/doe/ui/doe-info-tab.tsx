@@ -265,6 +265,14 @@ function PartyBlock({
 						onChange={(event) => onPatch({ contactEmail: event.target.value })}
 					/>
 				</FormField>
+				<FormField id={id('contact-phone')} label="Contact : téléphone">
+					<Input
+						id={id('contact-phone')}
+						type="tel"
+						value={party.contactPhone}
+						onChange={(event) => onPatch({ contactPhone: event.target.value })}
+					/>
+				</FormField>
 			</>
 			<div className="grid gap-2">
 				<span className="font-medium text-sm leading-none">

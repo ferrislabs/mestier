@@ -90,6 +90,7 @@
     if party.contact_name != none { text(weight: "bold", party.contact_name) },
     if party.contact_role != none { text(style: "italic", party.contact_role) },
     party.contact_email,
+    party.contact_phone,
   ).filter(item => item != none)
   let contact = if named.len() > 0 {
     named.join(linebreak())

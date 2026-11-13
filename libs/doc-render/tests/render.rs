@@ -135,6 +135,7 @@ fn party(role: PartyRole, name: &str, logo: Option<&str>) -> DoeParty {
         contact_role: (role == PartyRole::ProjectManager).then(|| "Paysagiste".to_owned()),
         contact_email: (role == PartyRole::ProjectManager)
             .then(|| "claire@atelier-paysage.fr".to_owned()),
+        contact_phone: (role == PartyRole::ProjectManager).then(|| "06 11 22 33 44".to_owned()),
     }
     .with_owner_contact()
 }
@@ -147,6 +148,7 @@ impl OwnerContact for DoeParty {
     fn with_owner_contact(mut self) -> Self {
         if self.role == PartyRole::ProjectOwner {
             self.contact_name = Some("Marc Leroy".to_owned());
+            self.contact_phone = Some("07 55 66 77 88".to_owned());
         }
         self
     }
@@ -320,6 +322,8 @@ fn parties_are_tables_with_a_role_row_and_the_contractor_moves_to_the_cover() {
         "Paysagiste",
         "claire@atelier-paysage.fr",
         "Marc Leroy",
+        "06 11 22 33 44",
+        "07 55 66 77 88",
     ] {
         assert!(
             parties.contains(expected),

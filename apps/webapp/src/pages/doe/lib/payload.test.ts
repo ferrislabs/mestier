@@ -29,12 +29,12 @@ describe('doeToForm', () => {
 	it('always yields the three roles in order, blank when absent', () => {
 		const form = doeToForm(DOE)
 		expect(form.parties.map((party) => party.role)).toEqual([
+			'contractor',
 			'project_owner',
 			'project_manager',
-			'contractor',
 		])
-		expect(form.parties[1]?.name).toBe('')
-		expect(form.parties[0]?.address).toBe('Mairie')
+		expect(form.parties[2]?.name).toBe('')
+		expect(form.parties[1]?.address).toBe('Mairie')
 		expect(form.place).toBe('')
 	})
 })
@@ -76,15 +76,19 @@ describe('party contact', () => {
 					name: 'Atelier',
 					contact_name: 'Claire Dupont',
 					contact_role: 'Paysagiste',
+					contact_phone: '06 11 22 33 44',
 				},
 			],
 		})
 		const manager = form.parties.find((p) => p.role === 'project_manager')
 		expect(manager?.contactName).toBe('Claire Dupont')
-		const sent = buildUpdatePayload(form, 'x').parties[0]
+		const sent = buildUpdatePayload(form, 'x').parties.find(
+			(p) => p.role === 'project_manager',
+		)
 		expect(sent?.contact_name).toBe('Claire Dupont')
 		expect(sent?.contact_role).toBe('Paysagiste')
 		expect(sent?.contact_email).toBeNull()
+		expect(sent?.contact_phone).toBe('06 11 22 33 44')
 	})
 })
 

@@ -81,7 +81,11 @@ impl DoeDocument {
             issued_on: doe.issued_on,
             author: doe.author.clone(),
             revision: doe.revision.as_str().to_owned(),
-            parties: doe.parties.clone(),
+            parties: {
+                let mut parties = doe.parties.clone();
+                parties.sort_by_key(|party| party.role.rank());
+                parties
+            },
             sections,
             style: DocumentStyle::from(style),
             header: style.header_text.fill(&values),
@@ -104,6 +108,7 @@ impl DoeDocument {
             contact_name: None,
             contact_role: None,
             contact_email: None,
+            contact_phone: None,
         };
         let supply = |title: &str, designation: &str, specs: &str| DoeSupply {
             id: Uuid::nil(),
@@ -484,6 +489,7 @@ mod tests {
             contact_name: None,
             contact_role: None,
             contact_email: None,
+            contact_phone: None,
         };
         let doe = doe(
             vec![

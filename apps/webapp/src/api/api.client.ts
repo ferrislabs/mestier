@@ -1223,6 +1223,7 @@ export namespace Schemas {
     address?: (string | null) | undefined;
     contact_email?: (string | null) | undefined;
     contact_name?: (string | null) | undefined;
+    contact_phone?: (string | null) | undefined;
     contact_role?: (string | null) | undefined;
     email?: (string | null) | undefined;
     logo_key?: (string | null) | undefined;

@@ -448,6 +448,7 @@ fn party_row(party: &DoeParty) -> TableRow {
     lines.extend(party.contact_name.clone());
     lines.extend(party.contact_role.clone());
     lines.extend(party.contact_email.clone());
+    lines.extend(party.contact_phone.clone());
     labelled_row(party.role.french(), &lines.join("\n"))
 }
 
