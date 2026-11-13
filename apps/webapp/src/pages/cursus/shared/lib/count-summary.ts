@@ -71,11 +71,6 @@ export const COMPANY_TUTOR_NOUN: CountNoun = {
 	one: 'tuteur entreprise',
 	many: 'tuteurs entreprise',
 }
-export const SCHOOL_TUTOR_NOUN: CountNoun = {
-	gender: 'masculine',
-	one: 'tuteur école',
-	many: 'tuteurs école',
-}
 export const HOST_COMPANY_NOUN: CountNoun = {
 	gender: 'feminine',
 	one: 'entreprise',

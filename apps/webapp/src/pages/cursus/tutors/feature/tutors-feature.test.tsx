@@ -99,7 +99,11 @@ describe('Tutors tabs', () => {
 		const onTabChange = vi.fn()
 		renderTutors(['VIEW_CURSUS'], { tab: 'entreprise', onTabChange })
 
-		expect(await screen.findByText('7 tuteurs entreprise')).toBeTruthy()
+		expect(
+			screen.getByText(
+				'Les tuteurs entreprise et école qui suivent vos apprentis.',
+			),
+		).toBeTruthy()
 		await user.click(await screen.findByRole('tab', { name: 'École · 3' }))
 		expect(screen.getByRole('tab', { name: 'Entreprise · 7' })).toBeTruthy()
 		expect(onTabChange).toHaveBeenCalledWith('ecole')
@@ -111,7 +115,11 @@ describe('School tutors tab', () => {
 		renderTutors(['VIEW_CURSUS'])
 
 		expect(await screen.findByText('Alix Martin')).toBeTruthy()
-		expect(screen.getByText('3 tuteurs école')).toBeTruthy()
+		expect(
+			screen.getByText(
+				'Les tuteurs entreprise et école qui suivent vos apprentis.',
+			),
+		).toBeTruthy()
 		for (const header of ['Nom', 'Fonction', 'Trinômes suivis', 'Statut']) {
 			expect(screen.getByRole('columnheader', { name: header })).toBeTruthy()
 		}

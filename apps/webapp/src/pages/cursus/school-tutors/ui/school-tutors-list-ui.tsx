@@ -1,7 +1,6 @@
-import { Archive, ArchiveRestore, Pencil, Plus } from 'lucide-react'
+import { Archive, ArchiveRestore, Pencil } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Button } from '#/components/ui/button'
-import { PageHeader, PageShell, StatusBadge } from '#/components/ui/surface'
+import { PageShell, StatusBadge } from '#/components/ui/surface'
 import {
 	Table,
 	TableBody,
@@ -12,11 +11,6 @@ import {
 } from '#/components/ui/table'
 import { cn } from '#/lib/utils'
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
-import {
-	archiveQualifier,
-	countSummary,
-	SCHOOL_TUTOR_NOUN,
-} from '#/pages/cursus/shared/lib/count-summary'
 import {
 	type ArchiveFilter,
 	MASCULINE_ARCHIVE_OPTIONS,
@@ -35,9 +29,8 @@ export interface SchoolTutorRowVM {
 }
 
 export interface SchoolTutorsListUIProps {
-	tabs: ReactNode
+	header: ReactNode
 	rows: SchoolTutorRowVM[]
-	total: number | undefined
 	search: string
 	archived: ArchiveFilter
 	isLoading: boolean
@@ -49,7 +42,6 @@ export interface SchoolTutorsListUIProps {
 	onArchivedChange: (archived: ArchiveFilter) => void
 	onResetFilters: () => void
 	onPageChange: (page: number) => void
-	onCreate: () => void
 	onEditJobTitle: (id: string) => void
 	onArchive: (id: string) => void
 	onRestore: (id: string) => void
@@ -90,9 +82,8 @@ function rowActions(
 }
 
 export function SchoolTutorsListUI({
-	tabs,
+	header,
 	rows,
-	total,
 	search,
 	archived,
 	isLoading,
@@ -104,36 +95,13 @@ export function SchoolTutorsListUI({
 	onArchivedChange,
 	onResetFilters,
 	onPageChange,
-	onCreate,
 	...actions
 }: SchoolTutorsListUIProps) {
 	const filtered = search.trim() !== '' || archived !== 'active'
 
 	return (
 		<PageShell className="block">
-			<PageHeader
-				className="mb-6"
-				title="Tuteurs"
-				description={
-					total === undefined
-						? undefined
-						: countSummary(
-								total,
-								SCHOOL_TUTOR_NOUN,
-								archived === 'archived'
-									? archiveQualifier(archived)
-									: undefined,
-							)
-				}
-				actions={
-					canManage ? (
-						<Button type="button" size="sm" onClick={onCreate}>
-							<Plus aria-hidden /> Nouveau tuteur
-						</Button>
-					) : null
-				}
-			/>
-			{tabs}
+			{header}
 			<ListToolbar
 				search={search}
 				searchPlaceholder="Rechercher un nom"

@@ -58,7 +58,7 @@ export interface ParticipantsListUIProps {
 	onPageChange: (page: number) => void
 	onCreate: () => void
 	onOpen: (participantId: string) => void
-	tabs?: ReactNode
+	header?: ReactNode
 }
 
 type StatusFilter = ParticipantStatus | 'all'
@@ -110,7 +110,7 @@ export function ParticipantsListUI({
 	onPageChange,
 	onCreate,
 	onOpen,
-	tabs,
+	header,
 }: ParticipantsListUIProps) {
 	const copy = KIND_COPY[kind]
 	const isTutor = kind === 'company_tutor'
@@ -119,23 +119,24 @@ export function ParticipantsListUI({
 
 	return (
 		<PageShell className="block">
-			<PageHeader
-				className="mb-6"
-				title={copy.title}
-				description={
-					total === undefined
-						? undefined
-						: countSummary(total, KIND_NOUN[kind], status)
-				}
-				actions={
-					canManage ? (
-						<Button type="button" size="sm" onClick={onCreate}>
-							<Plus aria-hidden /> {copy.createLabel}
-						</Button>
-					) : null
-				}
-			/>
-			{tabs}
+			{header ?? (
+				<PageHeader
+					className="mb-6"
+					title={copy.title}
+					description={
+						total === undefined
+							? undefined
+							: countSummary(total, KIND_NOUN[kind], status)
+					}
+					actions={
+						canManage ? (
+							<Button type="button" size="sm" onClick={onCreate}>
+								<Plus aria-hidden /> {copy.createLabel}
+							</Button>
+						) : null
+					}
+				/>
+			)}
 			<ListToolbar
 				search={search}
 				searchPlaceholder="Rechercher un nom, un e-mail"

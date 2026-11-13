@@ -25,9 +25,8 @@ import {
 } from '#/pages/cursus/shared/lib/list-filters'
 
 export interface SchoolTutorsListFeatureProps {
-	tabs: ReactNode
+	header: ReactNode
 	canManage: boolean
-	onCreate: () => void
 }
 
 function toRow(tutor: SchoolTutor): SchoolTutorRowVM {
@@ -41,9 +40,8 @@ function toRow(tutor: SchoolTutor): SchoolTutorRowVM {
 }
 
 export function SchoolTutorsListFeature({
-	tabs,
+	header,
 	canManage,
-	onCreate,
 }: SchoolTutorsListFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const [page, setPage] = useState(1)
@@ -75,9 +73,8 @@ export function SchoolTutorsListFeature({
 	return (
 		<>
 			<SchoolTutorsListUI
-				tabs={tabs}
+				header={header}
 				rows={tutors.map(toRow)}
-				total={total}
 				search={search.text}
 				archived={archived}
 				isLoading={list.isLoading}
@@ -98,7 +95,6 @@ export function SchoolTutorsListFeature({
 					setArchived('active')
 				}}
 				onPageChange={setPage}
-				onCreate={onCreate}
 				onEditJobTitle={(id) =>
 					setEditing(tutors.find((tutor) => tutor.id === id) ?? null)
 				}

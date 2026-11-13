@@ -33,7 +33,7 @@ export interface ParticipantsListFeatureProps extends ParticipantsFilters {
 	kind: ParticipantKind
 	onFiltersChange: (filters: ParticipantsFilters) => void
 	onOpenParticipant: (participantId: string) => void
-	tabs?: ReactNode
+	header?: ReactNode
 	onCreate?: () => void
 }
 
@@ -43,7 +43,7 @@ export function ParticipantsListFeature({
 	hostCompanyId,
 	onFiltersChange,
 	onOpenParticipant,
-	tabs,
+	header,
 	onCreate,
 }: ParticipantsListFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
@@ -117,7 +117,7 @@ export function ParticipantsListFeature({
 				onPageChange={setPage}
 				onCreate={onCreate ?? (() => setCreateOpen(true))}
 				onOpen={onOpenParticipant}
-				tabs={tabs}
+				header={header}
 			/>
 			{canManage && !onCreate ? (
 				<CreateParticipantDialog
