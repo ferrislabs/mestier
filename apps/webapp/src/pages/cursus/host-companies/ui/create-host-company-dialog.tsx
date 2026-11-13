@@ -17,6 +17,7 @@ import {
 	HostCompanyActivityFields,
 	HostCompanyContactFields,
 	HostCompanyLegalFields,
+	useHostCompanyForm,
 } from '#/pages/cursus/host-companies/ui/host-company-sections'
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
 import { StepIndicator } from '#/pages/cursus/shared/ui/step-indicator'
@@ -64,13 +65,9 @@ function CreateHostCompanyBody({
 	onCancel,
 	onSubmit,
 }: CreateHostCompanyBodyProps) {
-	const [values, setValues] = useState(EMPTY_HOST_COMPANY)
 	const [formError, setFormError] = useState<string | null>(null)
 	const steps = useSteps(HOST_COMPANY_STEP_COUNT)
-
-	function patch(change: Partial<HostCompanyValues>) {
-		setValues((previous) => ({ ...previous, ...change }))
-	}
+	const form = useHostCompanyForm(EMPTY_HOST_COMPANY, onSubmit)
 
 	function goBack(index: number) {
 		setFormError(null)
@@ -79,27 +76,22 @@ function CreateHostCompanyBody({
 
 	function advance(event: FormEvent) {
 		event.preventDefault()
+		const values = form.state.values
 		const problem = steps.isLast
 			? validateHostCompany(values)
 			: validateHostCompanyStep(values, steps.index)
 		setFormError(problem)
 		if (problem !== null) return
-		if (steps.isLast) onSubmit(values)
+		if (steps.isLast) void form.handleSubmit()
 		else steps.next()
 	}
 
 	return (
 		<form className="flex flex-col gap-4" onSubmit={advance}>
 			<StepIndicator steps={STEPS} current={steps.index} onSelect={goBack} />
-			{steps.index === 0 ? (
-				<HostCompanyLegalFields values={values} onChange={patch} />
-			) : null}
-			{steps.index === 1 ? (
-				<HostCompanyContactFields values={values} onChange={patch} />
-			) : null}
-			{steps.index === 2 ? (
-				<HostCompanyActivityFields values={values} onChange={patch} />
-			) : null}
+			{steps.index === 0 ? <HostCompanyLegalFields form={form} /> : null}
+			{steps.index === 1 ? <HostCompanyContactFields form={form} /> : null}
+			{steps.index === 2 ? <HostCompanyActivityFields form={form} /> : null}
 			<FormError message={formError ?? (steps.isLast ? error : null)} />
 			<StepperFooter
 				isFirst={steps.isFirst}

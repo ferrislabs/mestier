@@ -9,6 +9,7 @@ import {
 	HostCompanyActivityFields,
 	HostCompanyContactFields,
 	HostCompanyLegalFields,
+	useHostCompanyForm,
 } from '#/pages/cursus/host-companies/ui/host-company-sections'
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
 
@@ -29,37 +30,21 @@ export function HostCompanyForm({
 	error,
 	onSubmit,
 }: HostCompanyFormProps) {
-	const [values, setValues] = useState(initialValues)
 	const [formError, setFormError] = useState<string | null>(null)
-
-	function patch(change: Partial<HostCompanyValues>) {
-		setValues((previous) => ({ ...previous, ...change }))
-	}
+	const form = useHostCompanyForm(initialValues, onSubmit)
 
 	function submit(event: FormEvent) {
 		event.preventDefault()
-		const problem = validateHostCompany(values)
+		const problem = validateHostCompany(form.state.values)
 		setFormError(problem)
-		if (problem === null) onSubmit(values)
+		if (problem === null) void form.handleSubmit()
 	}
 
 	return (
 		<form className="flex flex-col gap-3" onSubmit={submit}>
-			<HostCompanyLegalFields
-				values={values}
-				disabled={disabled}
-				onChange={patch}
-			/>
-			<HostCompanyContactFields
-				values={values}
-				disabled={disabled}
-				onChange={patch}
-			/>
-			<HostCompanyActivityFields
-				values={values}
-				disabled={disabled}
-				onChange={patch}
-			/>
+			<HostCompanyLegalFields form={form} disabled={disabled} />
+			<HostCompanyContactFields form={form} disabled={disabled} />
+			<HostCompanyActivityFields form={form} disabled={disabled} />
 			<FormError message={formError ?? error} />
 			{disabled ? null : (
 				<div>
