@@ -43,7 +43,7 @@ export function StepIndicator({
 				return (
 					<li
 						key={label}
-						className="flex min-w-0 flex-1 items-center gap-2 last:flex-none"
+						className="flex min-w-0 flex-1 basis-0 items-center gap-2"
 					>
 						{done ? (
 							<button
