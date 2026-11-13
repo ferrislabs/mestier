@@ -21,6 +21,19 @@ const PROMOTIONS_PATH = `${BASE}/promotions`
 const PARTICIPANTS_PATH = `${BASE}/participants`
 const CLOSURE_REASONS_PATH = `${BASE}/closure-reasons`
 const CONTRACT_CLOSE_PATH = `${BASE}/contracts/{contract_id}/close`
+const SCHOOL_TUTORS_PATH = `${BASE}/school-tutors`
+
+const SCHOOL_TUTOR = {
+	id: 'st-1',
+	organization_id: 'org-1',
+	member_id: 'member-1',
+	member_name: 'Alix Martin',
+	job_title: null,
+	open_triad_count: 0,
+	archived_at: null,
+	created_at: '2026-01-01T00:00:00Z',
+	updated_at: '2026-01-01T00:00:00Z',
+}
 
 const STAMPS = {
 	created_at: '2026-01-01T00:00:00Z',
@@ -60,6 +73,23 @@ function installListReads(api: ReturnType<typeof installFakeTanstackApi>) {
 		],
 	}))
 	api.mockGet(MEMBERS_PATH, () => ({ data: MEMBERS }))
+	api.mockGet(SCHOOL_TUTORS_PATH, () => ({ data: [SCHOOL_TUTOR] }))
+}
+
+function renderCreation(onDeclareSchoolTutor = vi.fn()) {
+	render(
+		<Providers
+			queryClient={createQueryClient(['VIEW_CURSUS', 'MANAGE_CURSUS_TRIADS'])}
+		>
+			<TriadsListFeature
+				promotionId={undefined}
+				status="open"
+				onFiltersChange={vi.fn()}
+				onOpenTriad={vi.fn()}
+				onDeclareSchoolTutor={onDeclareSchoolTutor}
+			/>
+		</Providers>,
+	)
 }
 
 describe('TriadsListFeature', () => {
@@ -99,9 +129,14 @@ describe('TriadsListFeature', () => {
 		)
 		await chooseOption(
 			user,
-			screen.getByRole('combobox', { name: /Tuteur pédagogique/ }),
+			screen.getByRole('combobox', { name: /Tuteur école/ }),
 			'Alix Martin',
 		)
+		expect(
+			callsTo(api, 'get', SCHOOL_TUTORS_PATH).map(
+				(call) => (call.params as { query: object }).query,
+			),
+		).toContainEqual(expect.objectContaining({ archived: 'active' }))
 		await user.click(screen.getByRole('button', { name: 'Créer le trinôme' }))
 
 		await waitFor(() =>
@@ -116,6 +151,70 @@ describe('TriadsListFeature', () => {
 			},
 		})
 		await waitFor(() => expect(onOpenTriad).toHaveBeenCalledWith('triad-new'))
+	})
+
+	it('offers only the active school tutors and a way to declare one', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		const api = installFakeTanstackApi()
+		installListReads(api)
+		const onDeclareSchoolTutor = vi.fn()
+		renderCreation(onDeclareSchoolTutor)
+
+		await user.click(
+			await screen.findByRole('button', { name: /Nouveau trinôme/ }),
+		)
+		await user.click(screen.getByRole('combobox', { name: /Tuteur école/ }))
+		expect(
+			await screen.findByRole('option', { name: 'Alix Martin' }),
+		).toBeTruthy()
+		expect(screen.queryByRole('option', { name: 'Jo Durand' })).toBeNull()
+		await user.keyboard('{Escape}')
+		await user.click(
+			screen.getByRole('button', { name: 'Déclarer un tuteur école' }),
+		)
+		expect(onDeclareSchoolTutor).toHaveBeenCalled()
+	})
+
+	it('shows a refused school tutor under the field', {
+		timeout: 30_000,
+	}, async () => {
+		const user = userEvent.setup()
+		const api = installFakeTanstackApi()
+		installListReads(api)
+		api.mockMutation('post', TRIADS_PATH, () => {
+			throw Object.assign(new Error('not a school tutor'), {
+				status: 422,
+				data: { code: 'E_NOT_A_SCHOOL_TUTOR' },
+			})
+		})
+		renderCreation()
+
+		await user.click(
+			await screen.findByRole('button', { name: /Nouveau trinôme/ }),
+		)
+		await chooseOption(
+			user,
+			await screen.findByRole('combobox', { name: /Promotion/ }),
+			'CAP 2026',
+		)
+		await chooseOption(
+			user,
+			await screen.findByRole('combobox', { name: /Apprenti/ }),
+			'Lea Martin',
+		)
+		await chooseOption(
+			user,
+			screen.getByRole('combobox', { name: /Tuteur école/ }),
+			'Alix Martin',
+		)
+		await user.click(screen.getByRole('button', { name: 'Créer le trinôme' }))
+
+		expect(
+			await screen.findByText("Ce membre n'est pas un tuteur école actif."),
+		).toBeTruthy()
+		expect(screen.queryByRole('alert')).toBeNull()
 	})
 
 	it('has no creation button without MANAGE_CURSUS_TRIADS', async () => {
@@ -240,10 +339,23 @@ function triadDetail(closed: boolean) {
 	}
 }
 
-function renderDetail(permissions: string[], closed: boolean) {
+function renderDetail(
+	permissions: string[],
+	closed: boolean,
+	tutor: { id: string; name: string } | null = null,
+) {
 	const api = installFakeTanstackApi()
-	api.mockGet(TRIAD_PATH, () => triadDetail(closed))
-	api.mockGet(MEMBERS_PATH, () => ({ data: MEMBERS }))
+	api.mockGet(TRIAD_PATH, () => {
+		const detail = triadDetail(closed)
+		return {
+			data: {
+				...detail.data,
+				pedagogic_tutor_member_id: tutor?.id ?? null,
+				pedagogic_tutor_name: tutor?.name ?? null,
+			},
+		}
+	})
+	api.mockGet(SCHOOL_TUTORS_PATH, () => ({ data: [SCHOOL_TUTOR] }))
 	api.mockGet(CLOSURE_REASONS_PATH, () => ({
 		data: [
 			{
@@ -305,6 +417,27 @@ describe('TriadDetailFeature', () => {
 				closure_note: 'Départ',
 			},
 		})
+	})
+
+	it('keeps an archived school tutor selected', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		renderDetail(['VIEW_CURSUS', 'MANAGE_CURSUS_TRIADS'], false, {
+			id: 'member-2',
+			name: 'Jo Durand',
+		})
+
+		expect(await screen.findByText('Tuteur école')).toBeTruthy()
+		const select = await screen.findByRole('combobox', {
+			name: /Tuteur école/,
+		})
+		await waitFor(() => expect(select.textContent).toContain('Jo Durand'))
+		await user.click(select)
+		expect(
+			await screen.findByRole('option', { name: 'Alix Martin' }),
+		).toBeTruthy()
+		expect(screen.getByRole('option', { name: 'Jo Durand' })).toBeTruthy()
 	})
 
 	it('is read-only on a closed triad', async () => {

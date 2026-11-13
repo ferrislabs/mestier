@@ -20,6 +20,13 @@ function PromotionDetailRoute() {
 					params: { organizationSlug },
 				})
 			}
+			onDeclareSchoolTutor={() =>
+				void navigate({
+					to: '/o/$organizationSlug/cursus/tuteurs',
+					params: { organizationSlug },
+					search: { onglet: 'ecole' },
+				})
+			}
 			onOpenTriad={(triadId) =>
 				void navigate({
 					to: '/o/$organizationSlug/cursus/trinomes/$triadId',

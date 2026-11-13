@@ -56,7 +56,7 @@ export function MyTriadView({ triad, onBack }: MyTriadViewProps) {
 						</dd>
 					</div>
 					<div>
-						<dt className="text-muted-foreground">Tuteur pédagogique</dt>
+						<dt className="text-muted-foreground">Tuteur école</dt>
 						<dd>{triad.pedagogic_tutor_name ?? '—'}</dd>
 					</div>
 					<div>

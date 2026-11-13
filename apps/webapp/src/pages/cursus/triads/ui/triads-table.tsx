@@ -38,7 +38,7 @@ export function TriadsTable({
 	}
 	columns.push(
 		{
-			header: 'Tuteur pédagogique',
+			header: 'Tuteur école',
 			cell: ({ row }) => row.original.pedagogic_tutor_name ?? '—',
 		},
 		{

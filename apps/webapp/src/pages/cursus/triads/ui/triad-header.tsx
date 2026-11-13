@@ -10,7 +10,7 @@ import { isClosed } from '#/pages/cursus/triads/lib/triad-form'
 
 interface TriadHeaderProps {
 	triad: TriadDetail
-	members: SelectOption[]
+	schoolTutors: SelectOption[]
 	canManage: boolean
 	isUpdatingTutor: boolean
 	tutorError: string | null
@@ -22,7 +22,7 @@ interface TriadHeaderProps {
 
 export function TriadHeader({
 	triad,
-	members,
+	schoolTutors,
 	canManage,
 	isUpdatingTutor,
 	tutorError,
@@ -80,13 +80,19 @@ export function TriadHeader({
 						</dd>
 					</div>
 					<div>
-						<dt className="text-muted-foreground">Tuteur pédagogique</dt>
+						<dt className="text-muted-foreground">
+							{editable ? (
+								<label htmlFor="triad-pedagogic-tutor">Tuteur école</label>
+							) : (
+								'Tuteur école'
+							)}
+						</dt>
 						<dd>
 							{editable ? (
 								<OptionSelect
 									id="triad-pedagogic-tutor"
 									value={triad.pedagogic_tutor_member_id ?? null}
-									options={members}
+									options={schoolTutors}
 									placeholder="Aucun"
 									noneLabel="Aucun"
 									disabled={isUpdatingTutor}

@@ -21,10 +21,12 @@ interface TriadFormDialogProps {
 	fixedPromotionId: string | undefined
 	promotions: SelectOption[]
 	apprentices: SelectOption[]
-	members: SelectOption[]
+	schoolTutors: SelectOption[]
 	isLoadingOptions: boolean
 	isPending: boolean
 	error: string | null
+	tutorError: string | null
+	onDeclareSchoolTutor?: () => void
 	onOpenChange: (open: boolean) => void
 	onSubmit: (values: TriadFormValues) => void
 }
@@ -52,10 +54,12 @@ function TriadFormBody({
 	fixedPromotionId,
 	promotions,
 	apprentices,
-	members,
+	schoolTutors,
 	isLoadingOptions,
 	isPending,
 	error,
+	tutorError,
+	onDeclareSchoolTutor,
 	onCancel,
 	onSubmit,
 }: TriadFormBodyProps) {
@@ -128,11 +132,20 @@ function TriadFormBody({
 					}
 				/>
 			</FormField>
-			<FormField id="triad-tutor" label="Tuteur pédagogique">
+			<FormField
+				id="triad-tutor"
+				label="Tuteur école"
+				error={tutorError ?? undefined}
+				hint={
+					schoolTutors.length === 0 && !isLoadingOptions
+						? 'Aucun tuteur école actif.'
+						: undefined
+				}
+			>
 				<OptionSelect
 					id="triad-tutor"
 					value={values.pedagogicTutorMemberId}
-					options={members}
+					options={schoolTutors}
 					placeholder="Aucun"
 					noneLabel="Aucun"
 					onChange={(next) =>
@@ -142,6 +155,17 @@ function TriadFormBody({
 						}))
 					}
 				/>
+				{onDeclareSchoolTutor ? (
+					<p className="text-muted-foreground text-xs">
+						<button
+							type="button"
+							className="text-foreground underline underline-offset-2"
+							onClick={onDeclareSchoolTutor}
+						>
+							Déclarer un tuteur école
+						</button>
+					</p>
+				) : null}
 			</FormField>
 			{error ? (
 				<p role="alert" className="text-[13px] text-state-alert">

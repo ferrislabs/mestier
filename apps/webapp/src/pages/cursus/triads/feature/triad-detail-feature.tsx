@@ -3,10 +3,14 @@ import { PageShell } from '#/components/ui/surface'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { mutationErrorMessage } from '#/lib/api-error'
+import { useSchoolTutors } from '#/pages/cursus/school-tutors/feature/use-school-tutors'
+import {
+	schoolTutorOptions,
+	triadTutorErrors,
+} from '#/pages/cursus/school-tutors/lib/school-tutors'
 import {
 	useClosureReasons,
 	useHostCompanies,
-	useOrganizationMembers,
 	useParticipantRecords,
 } from '#/pages/cursus/shared/feature/cursus-queries'
 import { todayIso } from '#/pages/cursus/shared/lib/format'
@@ -67,7 +71,11 @@ export function TriadDetailFeature({
 	const triadQuery = useTriad(activeOrganizationId, triadId)
 	const triad = triadQuery.data?.data
 
-	const members = useOrganizationMembers(activeOrganizationId, canManage)
+	const schoolTutors = useSchoolTutors(
+		activeOrganizationId,
+		{ archived: 'active', page: 1, per_page: 100 },
+		canManage,
+	)
 	const hostCompanies = useHostCompanies(
 		activeOrganizationId,
 		canManage &&
@@ -115,10 +123,16 @@ export function TriadDetailFeature({
 		)
 	}
 
-	const memberOptions: SelectOption[] = members.map((member) => ({
-		value: member.id,
-		label: member.display_name,
-	}))
+	const tutorOptions = schoolTutorOptions(
+		schoolTutors.data?.data ?? [],
+		triad.pedagogic_tutor_member_id
+			? {
+					id: triad.pedagogic_tutor_member_id,
+					name: triad.pedagogic_tutor_name ?? triad.pedagogic_tutor_member_id,
+				}
+			: null,
+	)
+	const tutorErrors = triadTutorErrors(updateTriad.error)
 	const reasonOptions: SelectOption[] = (reasons.data?.data ?? []).map(
 		(reason) => ({ value: reason.id, label: reason.label }),
 	)
@@ -146,10 +160,10 @@ export function TriadDetailFeature({
 		<PageShell>
 			<TriadHeader
 				triad={triad}
-				members={memberOptions}
+				schoolTutors={tutorOptions}
 				canManage={canManage}
 				isUpdatingTutor={updateTriad.isPending}
-				tutorError={mutationErrorMessage(updateTriad.error)}
+				tutorError={tutorErrors.field ?? tutorErrors.general}
 				onBack={onBack}
 				onOpenPromotion={() => onOpenPromotion(triad.promotion_id)}
 				onTutorChange={(memberId) =>

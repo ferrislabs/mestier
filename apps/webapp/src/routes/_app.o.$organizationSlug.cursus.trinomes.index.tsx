@@ -41,6 +41,13 @@ function TriadsRoute() {
 					},
 				})
 			}
+			onDeclareSchoolTutor={() =>
+				void navigate({
+					to: '/o/$organizationSlug/cursus/tuteurs',
+					params: (previous) => previous,
+					search: { onglet: 'ecole' },
+				})
+			}
 			onOpenTriad={(triadId) =>
 				void navigate({
 					to: '/o/$organizationSlug/cursus/trinomes/$triadId',

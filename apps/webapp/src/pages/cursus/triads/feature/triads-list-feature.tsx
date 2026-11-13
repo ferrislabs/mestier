@@ -19,6 +19,7 @@ export interface TriadFiltersState {
 export interface TriadsListFeatureProps extends TriadFiltersState {
 	onFiltersChange: (filters: TriadFiltersState) => void
 	onOpenTriad: (triadId: string) => void
+	onDeclareSchoolTutor?: () => void
 }
 
 function toClosed(status: TriadStatusFilter): boolean | undefined {
@@ -31,6 +32,7 @@ export function TriadsListFeature({
 	status,
 	onFiltersChange,
 	onOpenTriad,
+	onDeclareSchoolTutor,
 }: TriadsListFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const canManage = useHasPermission('MANAGE_CURSUS_TRIADS')
@@ -79,6 +81,7 @@ export function TriadsListFeature({
 					open={creating}
 					onOpenChange={setCreating}
 					onCreated={onOpenTriad}
+					onDeclareSchoolTutor={onDeclareSchoolTutor}
 				/>
 			) : null}
 		</>
