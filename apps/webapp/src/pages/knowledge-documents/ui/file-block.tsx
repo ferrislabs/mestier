@@ -1,5 +1,10 @@
-import { Download, FileText, Loader2 } from 'lucide-react'
+import { Download, FileText, Loader2, Paperclip } from 'lucide-react'
 import { Button } from '#/components/ui/button'
+import { cn } from '#/lib/utils'
+import {
+	BLOCK_TOOL_BUTTON,
+	BLOCK_TOOLBAR,
+} from '#/pages/knowledge-documents/ui/block-toolbar'
 import { DeletedElement } from '#/pages/knowledge-documents/ui/deleted-element'
 
 export type FileBlockState = 'empty' | 'loading' | 'ready' | 'missing'
@@ -23,9 +28,23 @@ export function FileBlock({
 	onPick,
 	onDownload,
 }: FileBlockProps) {
+	if (state === 'empty' && editable) {
+		return (
+			<button
+				type="button"
+				onClick={onPick}
+				className="flex w-full items-center gap-3 rounded-lg bg-muted/50 px-4 py-3 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
+			>
+				<Paperclip aria-hidden className="size-4" />
+				Joindre un fichier du Drive
+			</button>
+		)
+	}
 	return (
-		<div className="flex w-full items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm">
-			<FileText aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+		<div className="group/block relative flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors hover:bg-muted/40">
+			<span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+				<FileText aria-hidden className="size-4" />
+			</span>
 			<div className="min-w-0 flex-1">
 				{state === 'empty' ? (
 					<span className="text-muted-foreground">Aucun fichier choisi.</span>
@@ -42,11 +61,21 @@ export function FileBlock({
 					</>
 				)}
 			</div>
+			{editable ? (
+				<div
+					contentEditable={false}
+					className={cn(BLOCK_TOOLBAR, 'shadow-none')}
+				>
+					<button type="button" onClick={onPick} className={BLOCK_TOOL_BUTTON}>
+						Remplacer
+					</button>
+				</div>
+			) : null}
 			{state === 'ready' ? (
 				<Button
 					type="button"
 					size="sm"
-					variant="outline"
+					variant="ghost"
 					disabled={isDownloading}
 					onClick={onDownload}
 				>
@@ -56,11 +85,6 @@ export function FileBlock({
 						<Download aria-hidden />
 					)}
 					Télécharger
-				</Button>
-			) : null}
-			{editable ? (
-				<Button type="button" size="sm" variant="ghost" onClick={onPick}>
-					{state === 'empty' ? 'Choisir un fichier' : 'Changer'}
 				</Button>
 			) : null}
 		</div>

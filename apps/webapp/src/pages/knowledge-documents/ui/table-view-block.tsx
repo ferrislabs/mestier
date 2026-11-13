@@ -1,5 +1,10 @@
 import { ExternalLink, Loader2, Table2 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
+import { cn } from '#/lib/utils'
+import {
+	BLOCK_TOOL_BUTTON,
+	BLOCK_TOOLBAR,
+} from '#/pages/knowledge-documents/ui/block-toolbar'
 import { DeletedElement } from '#/pages/knowledge-documents/ui/deleted-element'
 import { cellLabel } from '#/pages/knowledge-tables/lib/cells'
 import type { TableColumn, TableRow } from '#/pages/knowledge-tables/lib/types'
@@ -34,24 +39,35 @@ export function TableViewBlock({
 	onOpen,
 	onPick,
 }: TableViewBlockProps) {
+	if (state === 'empty' && editable) {
+		return (
+			<button
+				type="button"
+				onClick={onPick}
+				className="flex w-full items-center gap-3 rounded-lg bg-muted/50 px-4 py-3 text-left text-muted-foreground text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
+			>
+				<Table2 aria-hidden className="size-4" />
+				Choisir une vue de table
+			</button>
+		)
+	}
+
 	if (state !== 'ready') {
 		return (
-			<div className="flex w-full items-center gap-3 rounded-lg border border-dashed px-4 py-6 text-sm">
-				<Table2 aria-hidden className="size-5 text-muted-foreground" />
+			<div className="flex w-full items-center gap-3 rounded-lg bg-muted/50 px-4 py-3 text-muted-foreground text-sm">
+				<Table2 aria-hidden className="size-4" />
 				<span className="flex-1">
 					{state === 'missing' ? (
 						<DeletedElement />
 					) : state === 'loading' ? (
 						<Loader2 aria-hidden className="size-4 animate-spin" />
 					) : (
-						<span className="text-muted-foreground">
-							Aucune vue de table choisie.
-						</span>
+						'Aucune vue de table choisie.'
 					)}
 				</span>
-				{editable ? (
-					<Button type="button" size="sm" variant="outline" onClick={onPick}>
-						{state === 'empty' ? 'Choisir une vue' : 'Remplacer'}
+				{editable && state === 'missing' ? (
+					<Button type="button" size="sm" variant="ghost" onClick={onPick}>
+						Remplacer
 					</Button>
 				) : null}
 			</div>
@@ -62,9 +78,9 @@ export function TableViewBlock({
 	return (
 		<section
 			aria-label={`Vue ${viewName} de la table ${tableName}`}
-			className="w-full overflow-hidden rounded-lg border bg-card"
+			className="group/block w-full overflow-hidden rounded-lg border bg-card"
 		>
-			<header className="flex items-center gap-2 border-b px-3 py-2 text-sm">
+			<header className="flex items-center gap-2 border-b px-3 py-1.5 text-sm">
 				<Table2 aria-hidden className="size-4 text-muted-foreground" />
 				<span className="min-w-0 flex-1 truncate font-medium">
 					{tableName}
@@ -74,11 +90,20 @@ export function TableViewBlock({
 					</span>
 				</span>
 				{editable ? (
-					<Button type="button" size="sm" variant="ghost" onClick={onPick}>
-						Changer
-					</Button>
+					<div
+						contentEditable={false}
+						className={cn(BLOCK_TOOLBAR, 'shadow-none')}
+					>
+						<button
+							type="button"
+							onClick={onPick}
+							className={BLOCK_TOOL_BUTTON}
+						>
+							Changer de vue
+						</button>
+					</div>
 				) : null}
-				<Button type="button" size="sm" variant="outline" onClick={onOpen}>
+				<Button type="button" size="sm" variant="ghost" onClick={onOpen}>
 					<ExternalLink aria-hidden />
 					Ouvrir la table
 				</Button>

@@ -158,10 +158,46 @@ describe('ImageBlock', () => {
 
 	it('lets an editor change the caption and the width', async () => {
 		const onCaptionChange = vi.fn()
-		render(<ImageBlock {...base} editable onCaptionChange={onCaptionChange} />)
+		const onWidthChange = vi.fn()
+		render(
+			<ImageBlock
+				{...base}
+				editable
+				onCaptionChange={onCaptionChange}
+				onWidthChange={onWidthChange}
+			/>,
+		)
 		await userEvent.type(screen.getByLabelText('Légende de l’image'), '!')
 		expect(onCaptionChange).toHaveBeenCalledWith('Haie taillée!')
-		expect(screen.getByText('50 %')).toBeTruthy()
+		expect(
+			screen
+				.getByRole('button', { name: 'Largeur 50 %' })
+				.getAttribute('aria-pressed'),
+		).toBe('true')
+		await userEvent.click(screen.getByRole('button', { name: 'Largeur 75 %' }))
+		expect(onWidthChange).toHaveBeenCalledWith(75)
+	})
+
+	it('shows no width control to a reader', () => {
+		render(<ImageBlock {...base} />)
+		expect(screen.queryByRole('button', { name: /Largeur/ })).toBeNull()
+	})
+
+	it('offers to add an image when the block is empty', async () => {
+		const onPick = vi.fn()
+		render(
+			<ImageBlock
+				{...base}
+				state="empty"
+				url={null}
+				editable
+				onPick={onPick}
+			/>,
+		)
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Ajouter une image' }),
+		)
+		expect(onPick).toHaveBeenCalled()
 	})
 })
 
