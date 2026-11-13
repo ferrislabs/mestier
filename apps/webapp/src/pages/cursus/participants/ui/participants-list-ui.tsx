@@ -10,18 +10,18 @@ import {
 	TableRow,
 } from '#/components/ui/table'
 import {
-	KIND_LABELS,
+	KIND_COPY,
 	type ParticipantKind,
 	type ParticipantStatus,
 	STATUS_LABELS,
 } from '#/pages/cursus/participants/lib/participants'
+import type { HostCompanyOption } from '#/pages/cursus/participants/ui/create-participant-dialog'
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
 import {
 	APPRENTICE_NOUN,
-	COMPANY_TUTOR_NOUN,
 	type CountNoun,
 	countSummary,
-	PARTICIPANT_NOUN,
+	TUTOR_NOUN,
 } from '#/pages/cursus/shared/lib/count-summary'
 import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
 import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
@@ -31,33 +31,36 @@ export interface ParticipantRowVM {
 	id: string
 	name: string
 	email: string
-	kinds: ParticipantKind[]
 	hostCompanyNames: string[]
+	jobTitles: string[]
 	status: ParticipantStatus
 }
 
 export interface ParticipantsListUIProps {
+	kind: ParticipantKind
 	rows: ParticipantRowVM[]
 	total: number | undefined
 	search: string
 	isLoading: boolean
 	error: string | null
-	kind: ParticipantKind | undefined
 	status: ParticipantStatus | undefined
+	hostCompanyId: string | undefined
+	hostCompanies: HostCompanyOption[]
 	canManage: boolean
 	page: number
 	pageCount: number
 	onSearchChange: (search: string) => void
 	onResetFilters: () => void
-	onKindChange: (kind: ParticipantKind | undefined) => void
 	onStatusChange: (status: ParticipantStatus | undefined) => void
+	onHostCompanyChange: (hostCompanyId: string | undefined) => void
 	onPageChange: (page: number) => void
 	onCreate: () => void
 	onOpen: (participantId: string) => void
 }
 
 type StatusFilter = ParticipantStatus | 'all'
-type KindFilter = ParticipantKind | 'all'
+
+const ALL_COMPANIES = 'all'
 
 const STATUS_OPTIONS: FilterOption<StatusFilter>[] = [
 	{ value: 'all', label: 'Tous' },
@@ -66,16 +69,9 @@ const STATUS_OPTIONS: FilterOption<StatusFilter>[] = [
 	{ value: 'inactive', label: 'Inactifs' },
 ]
 
-const KIND_OPTIONS: FilterOption<KindFilter>[] = [
-	{ value: 'all', label: 'Tous les types' },
-	{ value: 'apprentice', label: 'Apprentis' },
-	{ value: 'company_tutor', label: 'Tuteurs entreprise' },
-]
-
-const KIND_NOUN: Record<KindFilter, CountNoun> = {
-	all: PARTICIPANT_NOUN,
+const KIND_NOUN: Record<ParticipantKind, CountNoun> = {
 	apprentice: APPRENTICE_NOUN,
-	company_tutor: COMPANY_TUTOR_NOUN,
+	company_tutor: TUTOR_NOUN,
 }
 
 const STATUS_TONE: Record<
@@ -87,42 +83,50 @@ const STATUS_TONE: Record<
 	inactive: 'neutral',
 }
 
+function joined(values: string[]): string {
+	return values.length === 0 ? '—' : values.join(', ')
+}
+
 export function ParticipantsListUI({
+	kind,
 	rows,
 	total,
 	search,
 	isLoading,
 	error,
-	kind,
 	status,
+	hostCompanyId,
+	hostCompanies,
 	canManage,
 	page,
 	pageCount,
 	onSearchChange,
 	onResetFilters,
-	onKindChange,
 	onStatusChange,
+	onHostCompanyChange,
 	onPageChange,
 	onCreate,
 	onOpen,
 }: ParticipantsListUIProps) {
+	const copy = KIND_COPY[kind]
+	const isTutor = kind === 'company_tutor'
 	const filtered =
-		search.trim() !== '' || kind !== undefined || status !== undefined
+		search.trim() !== '' || status !== undefined || hostCompanyId !== undefined
 
 	return (
 		<PageShell className="block">
 			<PageHeader
 				className="mb-6"
-				title="Participants"
+				title={copy.title}
 				description={
 					total === undefined
 						? undefined
-						: countSummary(total, KIND_NOUN[kind ?? 'all'], status)
+						: countSummary(total, KIND_NOUN[kind], status)
 				}
 				actions={
 					canManage ? (
 						<Button type="button" size="sm" onClick={onCreate}>
-							<Plus aria-hidden /> Nouveau participant
+							<Plus aria-hidden /> {copy.createLabel}
 						</Button>
 					) : null
 				}
@@ -135,22 +139,31 @@ export function ParticipantsListUI({
 				statusOptions={STATUS_OPTIONS}
 				statusLabel="Filtrer par statut"
 				onStatus={(next) => onStatusChange(next === 'all' ? undefined : next)}
-				select={{
-					value: kind ?? 'all',
-					label: 'Filtrer par type',
-					options: KIND_OPTIONS,
-					onChange: (next) => onKindChange(next === 'all' ? undefined : next),
-				}}
+				select={
+					isTutor
+						? {
+								value: hostCompanyId ?? ALL_COMPANIES,
+								label: 'Filtrer par entreprise',
+								options: [
+									{ value: ALL_COMPANIES, label: 'Toutes les entreprises' },
+									...hostCompanies.map((company) => ({
+										value: company.id,
+										label: company.name,
+									})),
+								],
+								onChange: (next) =>
+									onHostCompanyChange(
+										next === ALL_COMPANIES ? undefined : next,
+									),
+							}
+						: undefined
+				}
 			/>
 			<FormError message={error} />
 			{isLoading || error ? null : rows.length === 0 ? (
 				<ListEmpty
-					title="Aucun participant ne correspond."
-					hint={
-						filtered
-							? 'Vérifie l’orthographe, le statut ou le type sélectionné.'
-							: undefined
-					}
+					title={copy.empty}
+					hint={filtered ? copy.emptyHint : undefined}
 					onReset={filtered ? onResetFilters : undefined}
 				/>
 			) : (
@@ -159,9 +172,14 @@ export function ParticipantsListUI({
 						<TableHeader>
 							<TableRow className="hover:bg-transparent">
 								<TableHead className="pl-4">Nom</TableHead>
-								<TableHead>E-mail</TableHead>
-								<TableHead>Type</TableHead>
-								<TableHead>Entreprise</TableHead>
+								{isTutor ? (
+									<>
+										<TableHead>Entreprise</TableHead>
+										<TableHead>Fonction</TableHead>
+									</>
+								) : (
+									<TableHead>E-mail</TableHead>
+								)}
 								<TableHead className="pr-4">Statut</TableHead>
 							</TableRow>
 						</TableHeader>
@@ -180,19 +198,18 @@ export function ParticipantsListUI({
 											{row.name}
 										</button>
 									</TableCell>
-									<TableCell className="text-muted-foreground">
-										{row.email}
-									</TableCell>
-									<TableCell>
-										{row.kinds.length === 0
-											? '—'
-											: row.kinds.map((value) => KIND_LABELS[value]).join(', ')}
-									</TableCell>
-									<TableCell>
-										{row.hostCompanyNames.length === 0
-											? '—'
-											: row.hostCompanyNames.join(', ')}
-									</TableCell>
+									{isTutor ? (
+										<>
+											<TableCell>{joined(row.hostCompanyNames)}</TableCell>
+											<TableCell className="text-muted-foreground">
+												{joined(row.jobTitles)}
+											</TableCell>
+										</>
+									) : (
+										<TableCell className="text-muted-foreground">
+											{row.email}
+										</TableCell>
+									)}
 									<TableCell className="pr-4">
 										<StatusBadge tone={STATUS_TONE[row.status]}>
 											{STATUS_LABELS[row.status]}

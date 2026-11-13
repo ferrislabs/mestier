@@ -3,26 +3,33 @@ import { ParticipantsListFeature } from '#/pages/cursus/participants/feature/par
 import { participantsSearchSchema } from '#/pages/cursus/participants/lib/participants'
 
 export const Route = createFileRoute(
-	'/_app/o/$organizationSlug/cursus/participants/',
+	'/_app/o/$organizationSlug/cursus/tuteurs/',
 )({
 	validateSearch: (search) => participantsSearchSchema.parse(search),
-	component: ParticipantsPage,
+	component: TutorsPage,
 })
 
-function ParticipantsPage() {
-	const { kind, status } = Route.useSearch()
+function TutorsPage() {
+	const { status, entreprise } = Route.useSearch()
 	const navigate = Route.useNavigate()
 
 	return (
 		<ParticipantsListFeature
-			kind={kind}
+			kind="company_tutor"
 			status={status}
+			hostCompanyId={entreprise}
 			onFiltersChange={(next) =>
-				void navigate({ replace: true, search: () => next })
+				void navigate({
+					replace: true,
+					search: () => ({
+						status: next.status,
+						entreprise: next.hostCompanyId,
+					}),
+				})
 			}
 			onOpenParticipant={(participantId) =>
 				void navigate({
-					to: '/o/$organizationSlug/cursus/participants/$participantId',
+					to: '/o/$organizationSlug/cursus/tuteurs/$participantId',
 					params: (previous) => ({ ...previous, participantId }),
 					search: {},
 				})
