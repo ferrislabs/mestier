@@ -8,6 +8,7 @@ export interface StepperFooterProps {
 	isPending: boolean
 	onCancel: () => void
 	onBack: () => void
+	onFirstBack?: () => void
 }
 
 export function StepperFooter({
@@ -17,15 +18,21 @@ export function StepperFooter({
 	isPending,
 	onCancel,
 	onBack,
+	onFirstBack,
 }: StepperFooterProps) {
 	return (
 		<DialogFooter>
-			{isFirst ? (
+			{isFirst && !onFirstBack ? (
 				<Button key="cancel" type="button" variant="ghost" onClick={onCancel}>
 					Annuler
 				</Button>
 			) : (
-				<Button key="back" type="button" variant="ghost" onClick={onBack}>
+				<Button
+					key="back"
+					type="button"
+					variant="ghost"
+					onClick={isFirst ? onFirstBack : onBack}
+				>
 					Précédent
 				</Button>
 			)}

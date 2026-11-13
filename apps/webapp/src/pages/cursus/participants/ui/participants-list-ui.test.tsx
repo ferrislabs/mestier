@@ -98,7 +98,7 @@ describe('ParticipantsListUI tutors', () => {
 		renderList({ kind: 'company_tutor', total: 7 })
 
 		expect(screen.getByRole('heading', { name: 'Tuteurs' })).toBeTruthy()
-		expect(screen.getByText('7 tuteurs')).toBeTruthy()
+		expect(screen.getByText('7 tuteurs entreprise')).toBeTruthy()
 		expect(screen.getByText('Fonction')).toBeTruthy()
 		expect(screen.getByText('Chef d’atelier')).toBeTruthy()
 		expect(screen.queryByText('paul@example.fr')).toBeNull()

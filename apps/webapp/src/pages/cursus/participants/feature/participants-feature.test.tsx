@@ -271,7 +271,7 @@ describe('Tutors list', () => {
 	it('asks only for tutors and shows their company and job', async () => {
 		renderList(['VIEW_CURSUS'], { kind: 'company_tutor' })
 
-		expect(await screen.findByText('7 tuteurs')).toBeTruthy()
+		expect(await screen.findByText('7 tuteurs entreprise')).toBeTruthy()
 		expect(lastListQuery()).toMatchObject({ kind: 'company_tutor' })
 		expect(screen.getByText('Chef d’atelier')).toBeTruthy()
 		expect(screen.getByText('Menuiserie Roux', { selector: 'td' })).toBeTruthy()

@@ -48,14 +48,34 @@ export interface CreateParticipantDialogProps {
 }
 
 export function CreateParticipantDialog({
-	kind,
 	open,
+	onOpenChange,
+	...form
+}: CreateParticipantDialogProps) {
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+				<CreateParticipantForm {...form} onCancel={() => onOpenChange(false)} />
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+export interface CreateParticipantFormProps
+	extends Omit<CreateParticipantDialogProps, 'open' | 'onOpenChange'> {
+	onCancel: () => void
+	onFirstBack?: () => void
+}
+
+export function CreateParticipantForm({
+	kind,
 	hostCompanies,
 	isPending,
 	error,
-	onOpenChange,
+	onCancel,
+	onFirstBack,
 	onSubmit,
-}: CreateParticipantDialogProps) {
+}: CreateParticipantFormProps) {
 	const copy = KIND_COPY[kind]
 	const [formError, setFormError] = useState<string | null>(null)
 	const steps = useSteps(CREATE_PARTICIPANT_STEP_COUNT)
@@ -81,162 +101,161 @@ export function CreateParticipantDialog({
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-				<DialogHeader>
-					<DialogTitle>{copy.createLabel}</DialogTitle>
-					<DialogDescription>{copy.createDescription}</DialogDescription>
-				</DialogHeader>
-				<form className="flex flex-col gap-4" onSubmit={advance}>
-					<StepIndicator
-						steps={copy.steps}
-						current={steps.index}
-						onSelect={goBack}
-					/>
+		<>
+			<DialogHeader>
+				<DialogTitle>{copy.createLabel}</DialogTitle>
+				<DialogDescription>{copy.createDescription}</DialogDescription>
+			</DialogHeader>
+			<form className="flex flex-col gap-4" onSubmit={advance}>
+				<StepIndicator
+					steps={copy.steps}
+					current={steps.index}
+					onSelect={goBack}
+				/>
 
-					{steps.index === 0 ? (
-						<div className="grid grid-cols-2 gap-3">
-							<form.Field name="lastName">
-								{(field) => (
-									<FieldInput
-										id="participant-last-name"
-										label="Nom"
-										value={field.state.value}
-										onChange={field.handleChange}
-									/>
-								)}
-							</form.Field>
-							<form.Field name="firstName">
-								{(field) => (
-									<FieldInput
-										id="participant-first-name"
-										label="Prénom"
-										value={field.state.value}
-										onChange={field.handleChange}
-									/>
-								)}
-							</form.Field>
-						</div>
-					) : null}
+				{steps.index === 0 ? (
+					<div className="grid grid-cols-2 gap-3">
+						<form.Field name="lastName">
+							{(field) => (
+								<FieldInput
+									id="participant-last-name"
+									label="Nom"
+									value={field.state.value}
+									onChange={field.handleChange}
+								/>
+							)}
+						</form.Field>
+						<form.Field name="firstName">
+							{(field) => (
+								<FieldInput
+									id="participant-first-name"
+									label="Prénom"
+									value={field.state.value}
+									onChange={field.handleChange}
+								/>
+							)}
+						</form.Field>
+					</div>
+				) : null}
 
-					{steps.index === 1 ? (
-						<div className="grid grid-cols-2 gap-3">
-							<form.Field name="email">
-								{(field) => (
-									<FieldInput
-										id="participant-email"
-										label="E-mail"
-										type="email"
-										value={field.state.value}
-										onChange={field.handleChange}
-									/>
-								)}
-							</form.Field>
-							<form.Field name="phone">
-								{(field) => (
-									<FieldInput
-										id="participant-phone"
-										label="Téléphone"
-										type="tel"
-										value={field.state.value}
-										onChange={field.handleChange}
-									/>
-								)}
-							</form.Field>
-							{kind === 'apprentice' ? (
-								<div className="col-span-2">
-									<form.Field name="address">
-										{(field) => (
-											<FieldInput
-												id="participant-address"
-												label="Adresse"
-												value={field.state.value}
-												onChange={field.handleChange}
-											/>
-										)}
-									</form.Field>
-								</div>
-							) : null}
-						</div>
-					) : null}
-
-					{steps.index === 2 && kind === 'apprentice' ? (
-						<div className="grid grid-cols-2 gap-3">
-							<form.Field name="birthDate">
-								{(field) => (
-									<FieldInput
-										id="participant-birth-date"
-										label="Date de naissance"
-										type="date"
-										value={field.state.value}
-										onChange={field.handleChange}
-									/>
-								)}
-							</form.Field>
-							<form.Field name="ineCode">
-								{(field) => (
-									<FieldInput
-										id="participant-ine"
-										label="Code INE"
-										value={field.state.value}
-										onChange={field.handleChange}
-									/>
-								)}
-							</form.Field>
-						</div>
-					) : null}
-
-					{steps.index === 2 && kind === 'company_tutor' ? (
-						<div className="grid grid-cols-2 gap-3">
-							<form.Field name="hostCompanyId">
-								{(field) => (
-									<Field
-										label="Entreprise d'accueil"
-										htmlFor="participant-host-company"
-									>
-										<Select
+				{steps.index === 1 ? (
+					<div className="grid grid-cols-2 gap-3">
+						<form.Field name="email">
+							{(field) => (
+								<FieldInput
+									id="participant-email"
+									label="E-mail"
+									type="email"
+									value={field.state.value}
+									onChange={field.handleChange}
+								/>
+							)}
+						</form.Field>
+						<form.Field name="phone">
+							{(field) => (
+								<FieldInput
+									id="participant-phone"
+									label="Téléphone"
+									type="tel"
+									value={field.state.value}
+									onChange={field.handleChange}
+								/>
+							)}
+						</form.Field>
+						{kind === 'apprentice' ? (
+							<div className="col-span-2">
+								<form.Field name="address">
+									{(field) => (
+										<FieldInput
+											id="participant-address"
+											label="Adresse"
 											value={field.state.value}
-											onValueChange={field.handleChange}
-										>
-											<SelectTrigger id="participant-host-company">
-												<SelectValue placeholder="Choisir…" />
-											</SelectTrigger>
-											<SelectContent>
-												{hostCompanies.map((company) => (
-													<SelectItem key={company.id} value={company.id}>
-														{company.name}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</Field>
-								)}
-							</form.Field>
-							<form.Field name="jobTitle">
-								{(field) => (
-									<FieldInput
-										id="participant-job-title"
-										label="Fonction"
+											onChange={field.handleChange}
+										/>
+									)}
+								</form.Field>
+							</div>
+						) : null}
+					</div>
+				) : null}
+
+				{steps.index === 2 && kind === 'apprentice' ? (
+					<div className="grid grid-cols-2 gap-3">
+						<form.Field name="birthDate">
+							{(field) => (
+								<FieldInput
+									id="participant-birth-date"
+									label="Date de naissance"
+									type="date"
+									value={field.state.value}
+									onChange={field.handleChange}
+								/>
+							)}
+						</form.Field>
+						<form.Field name="ineCode">
+							{(field) => (
+								<FieldInput
+									id="participant-ine"
+									label="Code INE"
+									value={field.state.value}
+									onChange={field.handleChange}
+								/>
+							)}
+						</form.Field>
+					</div>
+				) : null}
+
+				{steps.index === 2 && kind === 'company_tutor' ? (
+					<div className="grid grid-cols-2 gap-3">
+						<form.Field name="hostCompanyId">
+							{(field) => (
+								<Field
+									label="Entreprise d'accueil"
+									htmlFor="participant-host-company"
+								>
+									<Select
 										value={field.state.value}
-										onChange={field.handleChange}
-									/>
-								)}
-							</form.Field>
-						</div>
-					) : null}
+										onValueChange={field.handleChange}
+									>
+										<SelectTrigger id="participant-host-company">
+											<SelectValue placeholder="Choisir…" />
+										</SelectTrigger>
+										<SelectContent>
+											{hostCompanies.map((company) => (
+												<SelectItem key={company.id} value={company.id}>
+													{company.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</Field>
+							)}
+						</form.Field>
+						<form.Field name="jobTitle">
+							{(field) => (
+								<FieldInput
+									id="participant-job-title"
+									label="Fonction"
+									value={field.state.value}
+									onChange={field.handleChange}
+								/>
+							)}
+						</form.Field>
+					</div>
+				) : null}
 
-					<FormError message={formError ?? (steps.isLast ? error : null)} />
+				<FormError message={formError ?? (steps.isLast ? error : null)} />
 
-					<StepperFooter
-						isFirst={steps.isFirst}
-						isLast={steps.isLast}
-						submitLabel={copy.submitLabel}
-						isPending={isPending}
-						onCancel={() => onOpenChange(false)}
-						onBack={() => goBack(steps.index - 1)}
-					/>
-				</form>
-			</DialogContent>
-		</Dialog>
+				<StepperFooter
+					isFirst={steps.isFirst}
+					isLast={steps.isLast}
+					submitLabel={copy.submitLabel}
+					isPending={isPending}
+					onCancel={onCancel}
+					onBack={() => goBack(steps.index - 1)}
+					onFirstBack={onFirstBack}
+				/>
+			</form>
+		</>
 	)
 }

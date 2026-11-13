@@ -14,6 +14,8 @@ import { CursusSidebar } from '#/pages/cursus/nav/ui/cursus-sidebar'
 import { useParticipants } from '#/pages/cursus/participants/feature/use-participants'
 import { usePromotions } from '#/pages/cursus/promotions/feature/use-promotions'
 import { useTriads } from '#/pages/cursus/triads/feature/use-triads'
+import { useTutorCounts } from '#/pages/cursus/tutors/feature/use-tutor-counts'
+import { sumCounts } from '#/pages/cursus/tutors/lib/tutors'
 import { useSidebarGroups } from '#/pages/projet/feature/use-sidebar-groups'
 
 const COLLAPSED_KEY = 'mestier:cursus:sidebar-collapsed'
@@ -44,11 +46,7 @@ export function CursusSidebarFeature() {
 		{ kind: 'apprentice', per_page: 1 },
 		canView,
 	)
-	const tutors = useParticipants(
-		organizationId,
-		{ kind: 'company_tutor', per_page: 1 },
-		canView,
-	)
+	const tutors = useTutorCounts(organizationId, canView)
 	const companies = useHostCompanies(organizationId, { per_page: 1 }, canView)
 	const trainings = useTrainings(organizationId, {}, canView)
 	const establishments = useEstablishments(organizationId, {}, canView)
@@ -61,7 +59,7 @@ export function CursusSidebarFeature() {
 				promotions: countOf(promotions.data),
 				triads: countOf(triads.data),
 				apprentices: countOf(apprentices.data),
-				tutors: countOf(tutors.data),
+				tutors: sumCounts(tutors.company, tutors.school),
 				companies: countOf(companies.data),
 				trainings: countOf(trainings.data),
 				establishments: countOf(establishments.data),

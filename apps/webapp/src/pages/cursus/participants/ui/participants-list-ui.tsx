@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, StatusBadge } from '#/components/ui/surface'
 import {
@@ -19,12 +20,13 @@ import type { HostCompanyOption } from '#/pages/cursus/participants/ui/create-pa
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
 import {
 	APPRENTICE_NOUN,
+	COMPANY_TUTOR_NOUN,
 	type CountNoun,
 	countSummary,
-	TUTOR_NOUN,
 } from '#/pages/cursus/shared/lib/count-summary'
 import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
 import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListPagination } from '#/pages/cursus/shared/ui/list-pagination'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 
 export interface ParticipantRowVM {
@@ -56,6 +58,7 @@ export interface ParticipantsListUIProps {
 	onPageChange: (page: number) => void
 	onCreate: () => void
 	onOpen: (participantId: string) => void
+	tabs?: ReactNode
 }
 
 type StatusFilter = ParticipantStatus | 'all'
@@ -71,7 +74,7 @@ const STATUS_OPTIONS: FilterOption<StatusFilter>[] = [
 
 const KIND_NOUN: Record<ParticipantKind, CountNoun> = {
 	apprentice: APPRENTICE_NOUN,
-	company_tutor: TUTOR_NOUN,
+	company_tutor: COMPANY_TUTOR_NOUN,
 }
 
 const STATUS_TONE: Record<
@@ -107,6 +110,7 @@ export function ParticipantsListUI({
 	onPageChange,
 	onCreate,
 	onOpen,
+	tabs,
 }: ParticipantsListUIProps) {
 	const copy = KIND_COPY[kind]
 	const isTutor = kind === 'company_tutor'
@@ -131,6 +135,7 @@ export function ParticipantsListUI({
 					) : null
 				}
 			/>
+			{tabs}
 			<ListToolbar
 				search={search}
 				searchPlaceholder="Rechercher un nom, un e-mail"
@@ -222,31 +227,11 @@ export function ParticipantsListUI({
 				</div>
 			)}
 
-			{pageCount > 1 ? (
-				<div className="mt-3 flex items-center justify-end gap-3 text-sm">
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={page <= 1}
-						onClick={() => onPageChange(page - 1)}
-					>
-						Précédent
-					</Button>
-					<span>
-						Page {page} sur {pageCount}
-					</span>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={page >= pageCount}
-						onClick={() => onPageChange(page + 1)}
-					>
-						Suivant
-					</Button>
-				</div>
-			) : null}
+			<ListPagination
+				page={page}
+				pageCount={pageCount}
+				onPageChange={onPageChange}
+			/>
 		</PageShell>
 	)
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { mutationErrorMessage } from '#/lib/api-error'
@@ -33,6 +33,8 @@ export interface ParticipantsListFeatureProps extends ParticipantsFilters {
 	kind: ParticipantKind
 	onFiltersChange: (filters: ParticipantsFilters) => void
 	onOpenParticipant: (participantId: string) => void
+	tabs?: ReactNode
+	onCreate?: () => void
 }
 
 export function ParticipantsListFeature({
@@ -41,6 +43,8 @@ export function ParticipantsListFeature({
 	hostCompanyId,
 	onFiltersChange,
 	onOpenParticipant,
+	tabs,
+	onCreate,
 }: ParticipantsListFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const canManage = useHasPermission('MANAGE_CURSUS_PARTICIPANTS')
@@ -111,10 +115,11 @@ export function ParticipantsListFeature({
 					changeFilters({ status, hostCompanyId: next })
 				}
 				onPageChange={setPage}
-				onCreate={() => setCreateOpen(true)}
+				onCreate={onCreate ?? (() => setCreateOpen(true))}
 				onOpen={onOpenParticipant}
+				tabs={tabs}
 			/>
-			{canManage ? (
+			{canManage && !onCreate ? (
 				<CreateParticipantDialog
 					key={String(createOpen)}
 					kind={kind}

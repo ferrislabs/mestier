@@ -1,23 +1,29 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { ParticipantsListFeature } from '#/pages/cursus/participants/feature/participants-list-feature'
-import { participantsSearchSchema } from '#/pages/cursus/participants/lib/participants'
+import { TutorsFeature } from '#/pages/cursus/tutors/feature/tutors-feature'
+import { tutorsSearchSchema, tutorTab } from '#/pages/cursus/tutors/lib/tutors'
 
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/cursus/tuteurs/',
 )({
-	validateSearch: (search) => participantsSearchSchema.parse(search),
+	validateSearch: (search) => tutorsSearchSchema.parse(search),
 	component: TutorsPage,
 })
 
 function TutorsPage() {
-	const { status, entreprise } = Route.useSearch()
+	const { status, entreprise, onglet } = Route.useSearch()
 	const navigate = Route.useNavigate()
 
 	return (
-		<ParticipantsListFeature
-			kind="company_tutor"
+		<TutorsFeature
+			tab={tutorTab(onglet)}
 			status={status}
 			hostCompanyId={entreprise}
+			onTabChange={(next) =>
+				void navigate({
+					replace: true,
+					search: () => (next === 'ecole' ? { onglet: 'ecole' } : {}),
+				})
+			}
 			onFiltersChange={(next) =>
 				void navigate({
 					replace: true,
