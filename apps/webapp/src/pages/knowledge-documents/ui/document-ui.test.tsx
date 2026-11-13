@@ -83,6 +83,11 @@ describe('SaveIndicator', () => {
 		expect(screen.getByText('Enregistrement…')).toBeTruthy()
 	})
 
+	it('does not spin while saving', () => {
+		const { container } = render(<SaveIndicator state="saving" error={null} />)
+		expect(container.querySelector('.animate-spin')).toBeNull()
+	})
+
 	it('shows nothing before any change and the reason after a failure', () => {
 		const { container, rerender } = render(
 			<SaveIndicator state="idle" error={null} />,
