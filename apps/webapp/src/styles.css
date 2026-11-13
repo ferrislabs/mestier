@@ -316,3 +316,47 @@
 	--bn-colors-border: var(--border);
 	--bn-font-family: inherit;
 }
+
+/* A document reads as a page: one column of about 46rem, the title and the
+   blocks sharing the gutter BlockNote keeps for its side menu, and headings
+   that stay below the title. */
+.document-surface {
+	--document-gutter: 54px;
+	width: 100%;
+	max-width: calc(46rem + 2 * var(--document-gutter));
+	margin-inline: auto;
+}
+
+@media (max-width: 40rem) {
+	.document-surface {
+		--document-gutter: 1.25rem;
+	}
+}
+
+.document-surface .bn-editor {
+	padding-inline: var(--document-gutter);
+}
+
+.document-surface [data-content-type="heading"][data-level="1"] {
+	--level: 1.875em;
+}
+
+.document-surface [data-prev-level="1"] {
+	--prev-level: 1.875em;
+}
+
+.document-surface [data-content-type="heading"][data-level="2"] {
+	--level: 1.5em;
+}
+
+.document-surface [data-prev-level="2"] {
+	--prev-level: 1.5em;
+}
+
+.document-surface [data-content-type="heading"][data-level="3"] {
+	--level: 1.25em;
+}
+
+.document-surface [data-prev-level="3"] {
+	--prev-level: 1.25em;
+}

@@ -1,102 +1,173 @@
-import { ArrowLeft, Info, Loader2, Trash2 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { FolderInput, MoreHorizontal, PanelRight, Trash2 } from 'lucide-react'
+import { Fragment, type ReactNode } from 'react'
+import {
+	Breadcrumb,
+	BreadcrumbItem,
+	BreadcrumbList,
+	BreadcrumbPage,
+	BreadcrumbSeparator,
+} from '#/components/ui/breadcrumb'
 import { Button } from '#/components/ui/button'
-import { Input } from '#/components/ui/input'
-import { cn } from '#/lib/utils'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu'
+import { Skeleton } from '#/components/ui/skeleton'
+
+export interface DocumentCrumb {
+	id: string
+	name: string
+}
 
 interface DocumentPageProps {
 	title: string
 	canManage: boolean
-	infoOpen: boolean
+	path: readonly DocumentCrumb[]
 	indicator: ReactNode
+	properties: ReactNode
 	banner: ReactNode
-	panel: ReactNode
 	children: ReactNode
 	onTitleChange: (title: string) => void
 	onTitleCommit: () => void
-	onToggleInfo: () => void
+	onOpenFolder: (folderId: string | null) => void
+	onOpenInfo: () => void
+	onMove: () => void
 	onDelete: () => void
-	onBack: () => void
 }
+
+const CRUMB_CLASS =
+	'max-w-48 truncate rounded px-1 py-0.5 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50'
 
 export function DocumentPage({
 	title,
 	canManage,
-	infoOpen,
+	path,
 	indicator,
+	properties,
 	banner,
-	panel,
 	children,
 	onTitleChange,
 	onTitleCommit,
-	onToggleInfo,
+	onOpenFolder,
+	onOpenInfo,
+	onMove,
 	onDelete,
-	onBack,
 }: DocumentPageProps) {
 	return (
-		<div className="mx-auto grid w-full max-w-6xl gap-4 px-6 py-8 lg:px-10">
-			<header className="flex flex-wrap items-center gap-3">
-				<Button type="button" variant="ghost" size="sm" onClick={onBack}>
-					<ArrowLeft aria-hidden />
-					Drive
-				</Button>
-				<span className="flex-1" />
+		<div className="flex min-h-full flex-col bg-background">
+			<header className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 bg-background/90 px-4 backdrop-blur">
+				<Breadcrumb className="min-w-0 flex-1">
+					<BreadcrumbList className="flex-nowrap gap-1 sm:gap-1">
+						<BreadcrumbItem>
+							<button
+								type="button"
+								className={CRUMB_CLASS}
+								onClick={() => onOpenFolder(null)}
+							>
+								Drive
+							</button>
+						</BreadcrumbItem>
+						{path.map((folder) => (
+							<Fragment key={folder.id}>
+								<BreadcrumbSeparator />
+								<BreadcrumbItem className="min-w-0">
+									<button
+										type="button"
+										className={CRUMB_CLASS}
+										onClick={() => onOpenFolder(folder.id)}
+									>
+										{folder.name}
+									</button>
+								</BreadcrumbItem>
+							</Fragment>
+						))}
+						<BreadcrumbSeparator />
+						<BreadcrumbItem className="min-w-0">
+							<BreadcrumbPage className="truncate px-1">
+								{title.trim() === '' ? 'Sans titre' : title}
+							</BreadcrumbPage>
+						</BreadcrumbItem>
+					</BreadcrumbList>
+				</Breadcrumb>
 				{indicator}
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					aria-pressed={infoOpen}
-					onClick={onToggleInfo}
-				>
-					<Info aria-hidden />
+				<Button type="button" variant="ghost" size="sm" onClick={onOpenInfo}>
+					<PanelRight aria-hidden />
 					Infos
 				</Button>
 				{canManage ? (
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						aria-label="Supprimer le document"
-						onClick={onDelete}
-					>
-						<Trash2 aria-hidden />
-					</Button>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Actions du document"
+							>
+								<MoreHorizontal aria-hidden />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end" className="min-w-44">
+							<DropdownMenuItem onSelect={onMove}>
+								<FolderInput aria-hidden />
+								Déplacer
+							</DropdownMenuItem>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem variant="destructive" onSelect={onDelete}>
+								<Trash2 aria-hidden />
+								Supprimer
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				) : null}
 			</header>
-			<Input
-				aria-label="Titre du document"
-				value={title}
-				maxLength={200}
-				readOnly={!canManage}
-				placeholder="Sans titre"
-				autoComplete="off"
-				className="h-auto border-0 px-0 font-semibold text-3xl shadow-none focus-visible:ring-0"
-				onChange={(event) => onTitleChange(event.target.value)}
-				onBlur={onTitleCommit}
-				onKeyDown={(event) => {
-					if (event.key === 'Enter') event.currentTarget.blur()
-				}}
-			/>
-			{banner}
-			<div
-				className={cn(
-					'grid gap-6',
-					infoOpen && 'lg:grid-cols-[minmax(0,1fr)_18rem]',
-				)}
-			>
-				<div className="min-w-0">{children}</div>
-				{infoOpen ? panel : null}
-			</div>
+			<article className="document-surface pt-10 pb-40 sm:pt-16">
+				<div className="grid gap-3 px-(--document-gutter) pb-6">
+					<input
+						type="text"
+						aria-label="Titre du document"
+						value={title}
+						maxLength={200}
+						readOnly={!canManage}
+						placeholder="Sans titre"
+						autoComplete="off"
+						className="w-full bg-transparent font-semibold text-4xl leading-tight tracking-tight outline-none placeholder:text-muted-foreground/50"
+						onChange={(event) => onTitleChange(event.target.value)}
+						onBlur={onTitleCommit}
+						onKeyDown={(event) => {
+							if (event.key === 'Enter') event.currentTarget.blur()
+						}}
+					/>
+					{properties}
+					{banner}
+				</div>
+				{children}
+			</article>
 		</div>
 	)
 }
 
 export function DocumentLoading() {
 	return (
-		<div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm">
-			<Loader2 aria-hidden className="size-4 animate-spin" />
-			Chargement du document…
+		<div className="flex min-h-full flex-col bg-background">
+			<output className="sr-only">Chargement du document…</output>
+			<div aria-hidden className="flex h-12 items-center gap-2 px-4">
+				<Skeleton className="h-4 w-48" />
+			</div>
+			<div aria-hidden className="document-surface pt-10 sm:pt-16">
+				<div className="grid gap-4 px-(--document-gutter)">
+					<Skeleton className="h-10 w-2/3" />
+					<Skeleton className="h-4 w-40" />
+					<div className="grid gap-3 pt-6">
+						<Skeleton className="h-4 w-full" />
+						<Skeleton className="h-4 w-11/12" />
+						<Skeleton className="h-4 w-4/5" />
+						<Skeleton className="h-4 w-3/5" />
+					</div>
+				</div>
+			</div>
 		</div>
 	)
 }
