@@ -874,6 +874,7 @@ export namespace Schemas {
     valid_until?: (string | null) | undefined;
   };
   export type CreateRoleRequest = { name: string; permissions: Array<string> };
+  export type CreateSchoolTutorRequest = { job_title?: (string | null) | undefined; member_id: MemberId };
   export type CreateServiceRateRequest = {
     archived?: (boolean | null) | undefined;
     billing_frequency?: (null | BillingFrequency) | undefined;
@@ -2582,6 +2583,19 @@ export namespace Schemas {
   };
   export type WorkflowLayoutDto = Record<string, unknown>;
   export type SaveWorkflowVersionRequest = { graph: GraphDto; layout?: (null | WorkflowLayoutDto) | undefined };
+  export type SchoolTutorId = string;
+  export type SchoolTutorResponse = {
+    archived_at?: (string | null) | undefined;
+    created_at: string;
+    id: SchoolTutorId;
+    job_title?: (string | null) | undefined;
+    member_email?: (string | null) | undefined;
+    member_id: MemberId;
+    member_name: string;
+    open_triad_count: number;
+    organization_id: OrganizationId;
+    updated_at: string;
+  };
   export type SeriesNumberingResponse = {
     kind: NumberSeriesKind;
     last_assigned_number: number;
@@ -3028,6 +3042,7 @@ export namespace Schemas {
     status: QuoteStatus;
   };
   export type UpdateRoleRequest = { name: string; permissions: Array<string> };
+  export type UpdateSchoolTutorRequest = Partial<{ job_title: string | null }>;
   export type UpdateServiceRateRequest = {
     archived?: (boolean | null) | undefined;
     billing_frequency?: (null | BillingFrequency) | undefined;
@@ -8614,6 +8629,179 @@ export namespace Endpoints {
       404: unknown;
     };
   };
+  export type get_ListCursusSchoolTutors = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/school-tutors";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ archived: "active" | "archived" | "all"; q: string; page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SchoolTutorId;
+          job_title?: (string | null) | undefined;
+          member_email?: (string | null) | undefined;
+          member_id: Schemas.MemberId;
+          member_name: string;
+          open_triad_count: number;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+    };
+  };
+  export type post_CreateCursusSchoolTutor = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/school-tutors";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateSchoolTutorRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SchoolTutorId;
+          job_title?: (string | null) | undefined;
+          member_email?: (string | null) | undefined;
+          member_id: Schemas.MemberId;
+          member_name: string;
+          open_triad_count: number;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_GetCursusSchoolTutor = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; school_tutor_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SchoolTutorId;
+          job_title?: (string | null) | undefined;
+          member_email?: (string | null) | undefined;
+          member_id: Schemas.MemberId;
+          member_name: string;
+          open_triad_count: number;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type patch_UpdateCursusSchoolTutor = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; school_tutor_id: string };
+
+      body: Schemas.UpdateSchoolTutorRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SchoolTutorId;
+          job_title?: (string | null) | undefined;
+          member_email?: (string | null) | undefined;
+          member_id: Schemas.MemberId;
+          member_name: string;
+          open_triad_count: number;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_ArchiveCursusSchoolTutor = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}/archive";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; school_tutor_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SchoolTutorId;
+          job_title?: (string | null) | undefined;
+          member_email?: (string | null) | undefined;
+          member_id: Schemas.MemberId;
+          member_name: string;
+          open_triad_count: number;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_RestoreCursusSchoolTutor = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}/restore";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; school_tutor_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          archived_at?: (string | null) | undefined;
+          created_at: string;
+          id: Schemas.SchoolTutorId;
+          job_title?: (string | null) | undefined;
+          member_email?: (string | null) | undefined;
+          member_id: Schemas.MemberId;
+          member_name: string;
+          open_triad_count: number;
+          organization_id: Schemas.OrganizationId;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_ListCursusTrainings = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/cursus/trainings";
@@ -8822,6 +9010,7 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type get_GetCursusTriad = {
@@ -8875,6 +9064,7 @@ export namespace Endpoints {
       403: unknown;
       404: unknown;
       409: unknown;
+      422: unknown;
     };
   };
   export type post_CloseCursusTriad = {
@@ -15125,6 +15315,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/cursus/host-companies/{host_company_id}": Endpoints.patch_UpdateCursusHostCompany;
     "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}": Endpoints.patch_UpdateCursusParticipant;
     "/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}": Endpoints.patch_UpdateCursusPromotion;
+    "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}": Endpoints.patch_UpdateCursusSchoolTutor;
     "/api/v1/organizations/{organization_id}/cursus/trainings/{training_id}": Endpoints.patch_UpdateCursusTraining;
     "/api/v1/organizations/{organization_id}/cursus/triads/{triad_id}": Endpoints.patch_UpdateCursusTriad;
     "/api/v1/organizations/{organization_id}/legal-identity": Endpoints.patch_UpdateOrganizationLegalIdentity;
@@ -15259,6 +15450,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}": Endpoints.get_GetCursusParticipant;
     "/api/v1/organizations/{organization_id}/cursus/promotions": Endpoints.get_ListCursusPromotions;
     "/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}": Endpoints.get_GetCursusPromotion;
+    "/api/v1/organizations/{organization_id}/cursus/school-tutors": Endpoints.get_ListCursusSchoolTutors;
+    "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}": Endpoints.get_GetCursusSchoolTutor;
     "/api/v1/organizations/{organization_id}/cursus/trainings": Endpoints.get_ListCursusTrainings;
     "/api/v1/organizations/{organization_id}/cursus/trainings/{training_id}": Endpoints.get_GetCursusTraining;
     "/api/v1/organizations/{organization_id}/cursus/triads": Endpoints.get_ListCursusTriads;
@@ -15413,6 +15606,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/cursus/participants/{participant_id}/reactivate": Endpoints.post_ReactivateCursusParticipant;
     "/api/v1/organizations/{organization_id}/cursus/promotions": Endpoints.post_CreateCursusPromotion;
     "/api/v1/organizations/{organization_id}/cursus/promotions/{promotion_id}/archive": Endpoints.post_ArchiveCursusPromotion;
+    "/api/v1/organizations/{organization_id}/cursus/school-tutors": Endpoints.post_CreateCursusSchoolTutor;
+    "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}/archive": Endpoints.post_ArchiveCursusSchoolTutor;
+    "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}/restore": Endpoints.post_RestoreCursusSchoolTutor;
     "/api/v1/organizations/{organization_id}/cursus/trainings": Endpoints.post_CreateCursusTraining;
     "/api/v1/organizations/{organization_id}/cursus/trainings/{training_id}/archive": Endpoints.post_ArchiveCursusTraining;
     "/api/v1/organizations/{organization_id}/cursus/triads": Endpoints.post_CreateCursusTriad;
