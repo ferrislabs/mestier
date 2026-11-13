@@ -1,7 +1,7 @@
 use axum_extra::routing::TypedPath;
 use mestier_core::{
     ClosureReasonId, CompanyTutorId, ContractFileKind, ContractId, EstablishmentId, HostCompanyId,
-    OrganizationId, ParticipantId, PromotionId, TrainingId, TriadId,
+    OrganizationId, ParticipantId, PromotionId, SchoolTutorId, TrainingId, TriadId,
 };
 use serde::Deserialize;
 
@@ -109,6 +109,37 @@ pub struct HostCompanyPath {
 pub struct HostCompanyArchivePath {
     pub organization_id: OrganizationId,
     pub host_company_id: HostCompanyId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/school-tutors")]
+pub struct SchoolTutorCollectionPath {
+    pub organization_id: OrganizationId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}")]
+pub struct SchoolTutorPath {
+    pub organization_id: OrganizationId,
+    pub school_tutor_id: SchoolTutorId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}/archive"
+)]
+pub struct SchoolTutorArchivePath {
+    pub organization_id: OrganizationId,
+    pub school_tutor_id: SchoolTutorId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/cursus/school-tutors/{school_tutor_id}/restore"
+)]
+pub struct SchoolTutorRestorePath {
+    pub organization_id: OrganizationId,
+    pub school_tutor_id: SchoolTutorId,
 }
 
 #[derive(TypedPath, Deserialize)]

@@ -16,6 +16,7 @@ pub mod paths;
 pub mod promotion;
 pub mod request;
 pub mod response;
+pub mod school_tutor;
 pub mod training;
 pub mod triad;
 
@@ -70,6 +71,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(participant::router(state))
         .merge(apprentice::router(state))
         .merge(company_tutor::router(state))
+        .merge(school_tutor::router(state))
         .merge(invitation::router(state))
         .merge(triad::router(state))
         .merge(contract::router(state))

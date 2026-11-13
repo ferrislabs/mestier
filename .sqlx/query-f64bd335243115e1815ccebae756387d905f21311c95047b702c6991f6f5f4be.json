@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id, s.org_id, s.member_id, s.job_title, s.archived_at, s.created_at, s.updated_at,\n                   m.last_name AS member_last_name, m.first_name AS member_first_name,\n                   u.email AS \"member_email?\",\n                   (SELECT COUNT(*) FROM cursus.triad t\n                     WHERE t.org_id = s.org_id\n                       AND t.pedagogic_tutor_member_id = s.member_id\n                       AND t.closed_at IS NULL) AS \"open_triad_count!\"\n            FROM cursus.school_tutor s\n            JOIN organization_members m ON m.id = s.member_id AND m.organization_id = s.org_id\n            LEFT JOIN users u ON u.id = m.user_id\n            WHERE s.org_id = $1\n              AND ($2::bool IS NULL OR (s.archived_at IS NOT NULL) = $2)\n              AND ($3::text IS NULL\n                   OR m.last_name ILIKE $3\n                   OR m.first_name ILIKE $3\n                   OR concat_ws(' ', m.last_name, m.first_name) ILIKE $3\n                   OR concat_ws(' ', m.first_name, m.last_name) ILIKE $3\n                   OR u.email ILIKE $3)\n            ORDER BY m.last_name ASC, m.first_name ASC NULLS FIRST, s.created_at ASC\n            LIMIT $4 OFFSET $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "job_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "archived_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "member_last_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "member_first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "member_email?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "open_triad_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "f64bd335243115e1815ccebae756387d905f21311c95047b702c6991f6f5f4be"
+}

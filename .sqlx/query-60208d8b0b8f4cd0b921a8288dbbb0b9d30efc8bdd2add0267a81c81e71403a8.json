@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM cursus.school_tutor s\n            JOIN organization_members m ON m.id = s.member_id AND m.organization_id = s.org_id\n            LEFT JOIN users u ON u.id = m.user_id\n            WHERE s.org_id = $1\n              AND ($2::bool IS NULL OR (s.archived_at IS NOT NULL) = $2)\n              AND ($3::text IS NULL\n                   OR m.last_name ILIKE $3\n                   OR m.first_name ILIKE $3\n                   OR concat_ws(' ', m.last_name, m.first_name) ILIKE $3\n                   OR concat_ws(' ', m.first_name, m.last_name) ILIKE $3\n                   OR u.email ILIKE $3)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "60208d8b0b8f4cd0b921a8288dbbb0b9d30efc8bdd2add0267a81c81e71403a8"
+}

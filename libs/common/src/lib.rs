@@ -75,6 +75,9 @@ pub enum CoreError {
     #[error("resource is gone")]
     Gone,
 
+    #[error("{message}")]
+    Unprocessable { code: &'static str, message: String },
+
     /// The actor was authenticated but the policy engine refused the
     /// action. `reason` carries an optional, human-readable explanation
     /// for logs and (when safe) for the API response.

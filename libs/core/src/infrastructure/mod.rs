@@ -8,6 +8,7 @@ pub mod channel;
 pub mod cursus_catalog;
 pub mod cursus_host_company;
 pub mod cursus_participant;
+pub mod cursus_school_tutor;
 pub mod cursus_triad;
 pub mod custom_unit;
 pub mod customer;

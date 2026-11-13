@@ -139,6 +139,7 @@ pub use domain::{
     cursus_catalog::ports::MockCursusCatalogRepository,
     cursus_host_company::ports::MockCursusHostCompanyRepository,
     cursus_participant::ports::MockCursusParticipantRepository,
+    cursus_school_tutor::ports::MockCursusSchoolTutorRepository,
     cursus_triad::ports::MockCursusTriadRepository,
     custom_unit::ports::MockCustomUnitRepository,
     customer::ports::MockCustomerRepository,
@@ -359,6 +360,9 @@ pub use domain::{
         CompanyTutorInput, CreateParticipantCommand, ParticipantFilter, RemoveCompanyTutorCommand,
         UpdateParticipantCommand, UpsertApprenticeCommand,
     },
+    cursus_school_tutor::commands::{
+        CreateSchoolTutorCommand, SchoolTutorFilter, UpdateSchoolTutorCommand,
+    },
     cursus_triad::commands::{
         CloseContractCommand, CloseTriadCommand, ContractTutorInput, CreateContractCommand,
         CreateTriadCommand, SetContractFileCommand, SetContractTutorsCommand, TriadFilter,
@@ -486,3 +490,4 @@ pub use domain::{
     },
     work_time::service::expand_work_slots,
 };
+pub use domain::{NOT_A_SCHOOL_TUTOR, SchoolTutor, SchoolTutorId, SchoolTutorView};

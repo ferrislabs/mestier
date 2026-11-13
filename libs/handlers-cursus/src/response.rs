@@ -4,8 +4,9 @@ use mestier_core::{
     ContractId, ContractTutorView, ContractView, CursusContractKind, CursusSpace, Establishment,
     EstablishmentId, HostCompany, HostCompanyAddress, HostCompanyId, MemberId, MyTriad,
     MyTriadDetail, OrganizationId, Participant, ParticipantDetail, ParticipantId,
-    ParticipantInvite, ParticipantListItem, ParticipantStatus, Promotion, PromotionId, Training,
-    TrainingId, Triad, TriadAccess, TriadDetail, TriadId, TriadRole, TriadSummary, UserId,
+    ParticipantInvite, ParticipantListItem, ParticipantStatus, Promotion, PromotionId,
+    SchoolTutorId, SchoolTutorView, Training, TrainingId, Triad, TriadAccess, TriadDetail, TriadId,
+    TriadRole, TriadSummary, UserId,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -120,6 +121,37 @@ impl From<ClosureReason> for ClosureReasonResponse {
             label: value.label,
             archived_at: value.archived_at,
             created_at: value.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct SchoolTutorResponse {
+    pub id: SchoolTutorId,
+    pub organization_id: OrganizationId,
+    pub member_id: MemberId,
+    pub member_name: String,
+    pub member_email: Option<String>,
+    pub job_title: Option<String>,
+    pub open_triad_count: i64,
+    pub archived_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<SchoolTutorView> for SchoolTutorResponse {
+    fn from(value: SchoolTutorView) -> Self {
+        Self {
+            id: value.tutor.id,
+            organization_id: value.tutor.organization_id,
+            member_id: value.tutor.member_id,
+            member_name: value.member_name,
+            member_email: value.member_email,
+            job_title: value.tutor.job_title,
+            open_triad_count: value.open_triad_count,
+            archived_at: value.tutor.archived_at,
+            created_at: value.tutor.created_at,
+            updated_at: value.tutor.updated_at,
         }
     }
 }
