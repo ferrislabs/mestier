@@ -242,34 +242,30 @@ function PartyBlock({
 					onChange={(event) => onPatch({ email: event.target.value })}
 				/>
 			</FormField>
-			{party.role === 'project_manager' && (
-				<>
-					<FormField id={id('contact-name')} label="Contact : nom">
-						<Input
-							id={id('contact-name')}
-							value={party.contactName}
-							onChange={(event) => onPatch({ contactName: event.target.value })}
-						/>
-					</FormField>
-					<FormField id={id('contact-role')} label="Contact : fonction">
-						<Input
-							id={id('contact-role')}
-							value={party.contactRole}
-							onChange={(event) => onPatch({ contactRole: event.target.value })}
-						/>
-					</FormField>
-					<FormField id={id('contact-email')} label="Contact : e-mail">
-						<Input
-							id={id('contact-email')}
-							type="email"
-							value={party.contactEmail}
-							onChange={(event) =>
-								onPatch({ contactEmail: event.target.value })
-							}
-						/>
-					</FormField>
-				</>
-			)}
+			<>
+				<FormField id={id('contact-name')} label="Contact : nom">
+					<Input
+						id={id('contact-name')}
+						value={party.contactName}
+						onChange={(event) => onPatch({ contactName: event.target.value })}
+					/>
+				</FormField>
+				<FormField id={id('contact-role')} label="Contact : fonction">
+					<Input
+						id={id('contact-role')}
+						value={party.contactRole}
+						onChange={(event) => onPatch({ contactRole: event.target.value })}
+					/>
+				</FormField>
+				<FormField id={id('contact-email')} label="Contact : e-mail">
+					<Input
+						id={id('contact-email')}
+						type="email"
+						value={party.contactEmail}
+						onChange={(event) => onPatch({ contactEmail: event.target.value })}
+					/>
+				</FormField>
+			</>
 			<div className="grid gap-2">
 				<span className="font-medium text-sm leading-none">
 					Logo{' '}

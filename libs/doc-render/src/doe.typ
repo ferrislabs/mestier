@@ -75,9 +75,9 @@
 }
 
 // One table per party, so a party never splits across two pages: a coloured
-// row with the role, then logo | details | contact. The owner has no contact
-// column, its details take the room; the contractor leaves a blank area for
-// the site contact, filled by hand.
+// row with the role, then logo | details | contact. Every role has a contact
+// column; the contractor keeps a blank "Contact chantier" area to fill by hand
+// when no contact is set.
 #let party_table(party) = {
   let logo = if party.logo_key != none {
     picture(party.logo_key, height: 1.8cm, width: 3cm, fit: "contain")
@@ -86,15 +86,17 @@
     #text(weight: "bold", size: 11pt, party.name) \
     #lines_of(party.address, party.phone, party.email)
   ]
-  let contact = if party.role == "contractor" {
+  let named = (
+    if party.contact_name != none { text(weight: "bold", party.contact_name) },
+    if party.contact_role != none { text(style: "italic", party.contact_role) },
+    party.contact_email,
+  ).filter(item => item != none)
+  let contact = if named.len() > 0 {
+    named.join(linebreak())
+  } else if party.role == "contractor" {
     block(height: 1.8cm, text(size: 9pt, fill: muted, [Contact chantier]))
-  } else if party.role == "project_manager" {
-    let named = (
-      if party.contact_name != none { text(weight: "bold", party.contact_name) },
-      if party.contact_role != none { text(style: "italic", party.contact_role) },
-      party.contact_email,
-    ).filter(item => item != none)
-    if named.len() == 0 { [—] } else { named.join(linebreak()) }
+  } else {
+    [—]
   }
   block(breakable: false, width: 100%, below: 14pt, table(
     columns: (3.4cm, 1fr, 1fr),
@@ -105,7 +107,8 @@
       #titled(on_primary, weight: "bold", size: 11pt, party.role_label)
     ],
     logo,
-    ..if contact == none { (table.cell(colspan: 2, details),) } else { (details, contact) },
+    details,
+    contact,
   ))
 }
 
