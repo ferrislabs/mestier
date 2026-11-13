@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({ canManage: true }))
@@ -156,7 +157,7 @@ describe('DocumentFeature', () => {
 		expect(editor()?.getAttribute('contenteditable')).toBe('false')
 		expect(calls.some((call) => call.url.endsWith('/lock'))).toBe(false)
 		expect(
-			screen.queryByRole('button', { name: 'Supprimer le document' }),
+			screen.queryByRole('button', { name: 'Actions du document' }),
 		).toBeNull()
 	})
 
@@ -173,6 +174,33 @@ describe('DocumentFeature', () => {
 		).toBeTruthy()
 		expect(editor()?.getAttribute('contenteditable')).toBe('false')
 		expect(screen.getByRole('button', { name: 'Recharger' })).toBeTruthy()
+	})
+
+	it('keeps the editor light when the system prefers dark', async () => {
+		vi.stubGlobal('matchMedia', (query: string) => ({
+			matches: query.includes('dark'),
+			media: query,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		}))
+		renderPage()
+		await screen.findByText('Bonjour le monde')
+		expect(
+			document
+				.querySelector('.bn-container')
+				?.getAttribute('data-color-scheme'),
+		).toBe('light')
+	})
+
+	it('opens the infos from the properties under the title', async () => {
+		article = { ...article, tags: ['paiement'] }
+		renderPage()
+		await userEvent.click(
+			await screen.findByRole('button', { name: /paiement/ }),
+		)
+		expect(
+			await screen.findByRole('dialog', { name: 'Infos du document' }),
+		).toBeTruthy()
 	})
 
 	it('says so when the element is not a document', async () => {

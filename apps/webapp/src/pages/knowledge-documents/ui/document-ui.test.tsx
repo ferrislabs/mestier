@@ -3,6 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { CalloutBlock } from '#/pages/knowledge-documents/ui/callout-block'
 import { DocumentBanner } from '#/pages/knowledge-documents/ui/document-banner'
+import {
+	DocumentLoading,
+	DocumentPage,
+} from '#/pages/knowledge-documents/ui/document-page'
+import { DocumentProperties } from '#/pages/knowledge-documents/ui/document-properties'
 import { FileBlock } from '#/pages/knowledge-documents/ui/file-block'
 import { ImageBlock } from '#/pages/knowledge-documents/ui/image-block'
 import { MentionChip } from '#/pages/knowledge-documents/ui/mention-chip'
@@ -83,6 +88,11 @@ describe('SaveIndicator', () => {
 		expect(screen.getByText('Enregistrement…')).toBeTruthy()
 	})
 
+	it('does not spin while saving', () => {
+		const { container } = render(<SaveIndicator state="saving" error={null} />)
+		expect(container.querySelector('.animate-spin')).toBeNull()
+	})
+
 	it('shows nothing before any change and the reason after a failure', () => {
 		const { container, rerender } = render(
 			<SaveIndicator state="idle" error={null} />,
@@ -153,10 +163,46 @@ describe('ImageBlock', () => {
 
 	it('lets an editor change the caption and the width', async () => {
 		const onCaptionChange = vi.fn()
-		render(<ImageBlock {...base} editable onCaptionChange={onCaptionChange} />)
+		const onWidthChange = vi.fn()
+		render(
+			<ImageBlock
+				{...base}
+				editable
+				onCaptionChange={onCaptionChange}
+				onWidthChange={onWidthChange}
+			/>,
+		)
 		await userEvent.type(screen.getByLabelText('Légende de l’image'), '!')
 		expect(onCaptionChange).toHaveBeenCalledWith('Haie taillée!')
-		expect(screen.getByText('50 %')).toBeTruthy()
+		expect(
+			screen
+				.getByRole('button', { name: 'Largeur 50 %' })
+				.getAttribute('aria-pressed'),
+		).toBe('true')
+		await userEvent.click(screen.getByRole('button', { name: 'Largeur 75 %' }))
+		expect(onWidthChange).toHaveBeenCalledWith(75)
+	})
+
+	it('shows no width control to a reader', () => {
+		render(<ImageBlock {...base} />)
+		expect(screen.queryByRole('button', { name: /Largeur/ })).toBeNull()
+	})
+
+	it('offers to add an image when the block is empty', async () => {
+		const onPick = vi.fn()
+		render(
+			<ImageBlock
+				{...base}
+				state="empty"
+				url={null}
+				editable
+				onPick={onPick}
+			/>,
+		)
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Ajouter une image' }),
+		)
+		expect(onPick).toHaveBeenCalled()
 	})
 })
 
@@ -242,5 +288,126 @@ describe('CalloutBlock', () => {
 			/>,
 		)
 		expect(screen.queryByRole('button', { name: 'Attention' })).toBeNull()
+	})
+})
+
+function documentPage(
+	overrides: Partial<Parameters<typeof DocumentPage>[0]> = {},
+) {
+	const props: Parameters<typeof DocumentPage>[0] = {
+		title: 'Conditions de paiement',
+		canManage: true,
+		path: [
+			{ id: 'f1', name: 'Administratif' },
+			{ id: 'f2', name: 'Clients' },
+		],
+		indicator: null,
+		properties: null,
+		banner: null,
+		children: null,
+		onTitleChange: vi.fn(),
+		onTitleCommit: vi.fn(),
+		onOpenFolder: vi.fn(),
+		onOpenInfo: vi.fn(),
+		onMove: vi.fn(),
+		onDelete: vi.fn(),
+		...overrides,
+	}
+	render(<DocumentPage {...props} />)
+	return props
+}
+
+describe('DocumentPage', () => {
+	it('shows where the document lives and opens a folder of the path', async () => {
+		const props = documentPage()
+		const trail = screen.getByRole('navigation', { name: 'breadcrumb' })
+		expect(trail.textContent).toContain('Drive')
+		expect(trail.textContent).toContain('Administratif')
+		expect(trail.textContent).toContain('Conditions de paiement')
+		await userEvent.click(screen.getByRole('button', { name: 'Clients' }))
+		expect(props.onOpenFolder).toHaveBeenCalledWith('f2')
+		await userEvent.click(screen.getByRole('button', { name: 'Drive' }))
+		expect(props.onOpenFolder).toHaveBeenCalledWith(null)
+	})
+
+	it('names an untitled document in the path', () => {
+		documentPage({ title: '  ' })
+		expect(
+			screen.getByRole('navigation', { name: 'breadcrumb' }).textContent,
+		).toContain('Sans titre')
+	})
+
+	it('groups moving and deleting in the actions menu', async () => {
+		const props = documentPage()
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Actions du document' }),
+		)
+		await userEvent.click(screen.getByRole('menuitem', { name: 'Supprimer' }))
+		expect(props.onDelete).toHaveBeenCalled()
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Actions du document' }),
+		)
+		await userEvent.click(screen.getByRole('menuitem', { name: 'Déplacer' }))
+		expect(props.onMove).toHaveBeenCalled()
+	})
+
+	it('shows no actions menu and a read-only title to a reader', () => {
+		documentPage({ canManage: false })
+		expect(
+			screen.queryByRole('button', { name: 'Actions du document' }),
+		).toBeNull()
+		expect(
+			screen.getByLabelText('Titre du document').hasAttribute('readonly'),
+		).toBe(true)
+	})
+
+	it('announces the loading of the document', () => {
+		render(<DocumentLoading />)
+		expect(screen.getByText('Chargement du document…')).toBeTruthy()
+	})
+})
+
+describe('DocumentProperties', () => {
+	it('shows the tags and the links and opens the infos', async () => {
+		const onOpenInfo = vi.fn()
+		render(
+			<DocumentProperties
+				canManage
+				tags={['paiement', 'cgv']}
+				links={[{ key: 'customer:c1', label: 'Client · Jardins du Parc' }]}
+				onOpenInfo={onOpenInfo}
+			/>,
+		)
+		expect(screen.getByText('paiement')).toBeTruthy()
+		expect(screen.getByText('Client · Jardins du Parc')).toBeTruthy()
+		await userEvent.click(screen.getByRole('button', { name: /paiement/ }))
+		expect(onOpenInfo).toHaveBeenCalled()
+	})
+
+	it('invites an editor to fill empty properties', () => {
+		render(
+			<DocumentProperties
+				canManage
+				tags={[]}
+				links={[]}
+				onOpenInfo={vi.fn()}
+			/>,
+		)
+		expect(screen.getByText('Ajouter des étiquettes')).toBeTruthy()
+		expect(
+			screen.getByText('Rattacher à un projet, client ou devis'),
+		).toBeTruthy()
+	})
+
+	it('shows nothing to a reader when there is nothing to show', () => {
+		const { container } = render(
+			<DocumentProperties
+				canManage={false}
+				tags={[]}
+				links={[]}
+				onOpenInfo={vi.fn()}
+			/>,
+		)
+		expect(container.textContent).toBe('')
 	})
 })

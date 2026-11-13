@@ -16,7 +16,11 @@ import { useKnowledgeDocument } from '#/hooks/use-knowledge-documents'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
-import { useResourceOptions } from '#/pages/knowledge/feature/use-resource-options'
+import {
+	RESOURCE_TYPE_LABELS,
+	resourceLabel,
+	useResourceOptions,
+} from '#/pages/knowledge/feature/use-resource-options'
 import { pathTo } from '#/pages/knowledge/lib/folders'
 import { FolderPickerDialog } from '#/pages/knowledge/ui/folder-picker-dialog'
 import { DocumentEditor } from '#/pages/knowledge-documents/feature/document-editor'
@@ -34,6 +38,7 @@ import {
 	DocumentPage,
 	DocumentUnavailable,
 } from '#/pages/knowledge-documents/ui/document-page'
+import { DocumentProperties } from '#/pages/knowledge-documents/ui/document-properties'
 import { SaveIndicator } from '#/pages/knowledge-documents/ui/save-indicator'
 import { addTags, removeTag } from '#/pages/photo-library/lib/tags'
 
@@ -173,6 +178,18 @@ function DocumentWorkspace({
 		() => pathTo(folders.data ?? [], folderId),
 		[folders.data, folderId],
 	)
+	const linkLabels = useMemo(
+		() =>
+			(live.links ?? []).map((target) => ({
+				key: `${target.resource_type}:${target.resource_id}`,
+				label: `${RESOURCE_TYPE_LABELS[target.resource_type]} · ${resourceLabel(
+					resources,
+					target.resource_type,
+					target.resource_id,
+				)}`,
+			})),
+		[live.links, resources],
+	)
 	const initialBlocks = useMemo(
 		() => toEditorBlocks(loaded.content),
 		[loaded.content],
@@ -249,52 +266,30 @@ function DocumentWorkspace({
 			<DocumentPage
 				title={titleDraft ?? live.title}
 				canManage={canManage}
-				infoOpen={infoOpen}
+				path={path}
 				indicator={
 					<SaveIndicator
 						state={session.state.saveState}
 						error={session.state.saveError}
 					/>
 				}
+				properties={
+					<DocumentProperties
+						canManage={canManage}
+						tags={live.tags}
+						links={linkLabels}
+						onOpenInfo={() => setInfoOpen(true)}
+					/>
+				}
 				banner={
 					banner ? <DocumentBanner banner={banner} onReload={onReload} /> : null
 				}
-				panel={
-					<DocumentInfoPanel
-						canManage={canManage}
-						tags={live.tags}
-						tagInput={tagInput}
-						path={path}
-						links={live.links ?? []}
-						resources={resources}
-						isLinking={link.isPending || unlink.isPending}
-						error={mutationErrorMessage(
-							patch.error ?? link.error ?? unlink.error,
-						)}
-						onTagInputChange={setTagInput}
-						onAddTags={() => {
-							savePatchedTags(addTags(live.tags, tagInput))
-							setTagInput('')
-						}}
-						onRemoveTag={(tag) => savePatchedTags(removeTag(live.tags, tag))}
-						onMove={() => setMoving(folderId)}
-						onLink={(resourceType, resourceId) =>
-							link.mutate({ articleId: live.id, resourceType, resourceId })
-						}
-						onUnlink={(target) =>
-							unlink.mutate({
-								articleId: live.id,
-								resourceType: target.resource_type,
-								resourceId: target.resource_id,
-							})
-						}
-					/>
-				}
 				onTitleChange={setTitleDraft}
 				onTitleCommit={commitTitle}
-				onToggleInfo={() => setInfoOpen((open) => !open)}
+				onOpenFolder={openDrive}
+				onOpenInfo={() => setInfoOpen(true)}
+				onMove={() => setMoving(folderId)}
 				onDelete={() => setConfirmDelete(true)}
-				onBack={() => openDrive(folderId)}
 			>
 				<DocumentEditor
 					initialBlocks={initialBlocks}
@@ -303,6 +298,33 @@ function DocumentWorkspace({
 					onChange={session.change}
 				/>
 			</DocumentPage>
+			<DocumentInfoPanel
+				open={infoOpen}
+				canManage={canManage}
+				tags={live.tags}
+				tagInput={tagInput}
+				links={live.links ?? []}
+				resources={resources}
+				isLinking={link.isPending || unlink.isPending}
+				error={mutationErrorMessage(patch.error ?? link.error ?? unlink.error)}
+				onOpenChange={setInfoOpen}
+				onTagInputChange={setTagInput}
+				onAddTags={() => {
+					savePatchedTags(addTags(live.tags, tagInput))
+					setTagInput('')
+				}}
+				onRemoveTag={(tag) => savePatchedTags(removeTag(live.tags, tag))}
+				onLink={(resourceType, resourceId) =>
+					link.mutate({ articleId: live.id, resourceType, resourceId })
+				}
+				onUnlink={(target) =>
+					unlink.mutate({
+						articleId: live.id,
+						resourceType: target.resource_type,
+						resourceId: target.resource_id,
+					})
+				}
+			/>
 			<FolderPickerDialog
 				open={moving !== undefined}
 				title="Déplacer le document"

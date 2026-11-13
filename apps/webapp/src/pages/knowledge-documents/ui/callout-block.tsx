@@ -2,6 +2,10 @@ import { CircleCheck, Info, OctagonAlert, TriangleAlert } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { cn } from '#/lib/utils'
 import type { CalloutTone } from '#/pages/knowledge-documents/lib/document-api-types'
+import {
+	BLOCK_TOOL_BUTTON,
+	BLOCK_TOOLBAR,
+} from '#/pages/knowledge-documents/ui/block-toolbar'
 
 export const CALLOUT_TONES: readonly {
 	tone: CalloutTone
@@ -56,7 +60,7 @@ export function CalloutBlock({
 		<div
 			data-callout-tone={current.tone}
 			className={cn(
-				'flex w-full items-start gap-3 rounded-lg border px-4 py-3',
+				'group/block relative flex w-full items-start gap-3 rounded-lg border px-4 py-3',
 				current.className,
 			)}
 		>
@@ -66,7 +70,10 @@ export function CalloutBlock({
 			</span>
 			<div ref={contentRef} className="min-w-0 flex-1" />
 			{editable ? (
-				<span contentEditable={false} className="flex shrink-0 gap-1">
+				<span
+					contentEditable={false}
+					className={cn(BLOCK_TOOLBAR, 'absolute -top-4 right-2')}
+				>
 					{CALLOUT_TONES.map((entry) => {
 						const ToneIcon = entry.icon
 						return (
@@ -78,9 +85,9 @@ export function CalloutBlock({
 								title={entry.label}
 								onClick={() => onToneChange(entry.tone)}
 								className={cn(
-									'rounded p-1 text-muted-foreground outline-none hover:bg-background/60 focus-visible:ring-[3px] focus-visible:ring-ring/50',
-									entry.tone === current.tone &&
-										'bg-background text-foreground',
+									BLOCK_TOOL_BUTTON,
+									'w-7 justify-center px-0',
+									entry.tone === current.tone && 'bg-muted text-foreground',
 								)}
 							>
 								<ToneIcon aria-hidden className="size-4" />
