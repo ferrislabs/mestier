@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
 	contractFormErrors,
+	contractStepErrors,
 	EMPTY_CONTRACT_FORM,
 	toContractRequest,
 } from '#/pages/cursus/triads/lib/contract-form'
@@ -52,5 +53,15 @@ describe('contract form', () => {
 				endDate: '2027-08-31',
 			}).comment,
 		).toBe('**Important**')
+	})
+
+	it('limits step errors to the fields of that step', () => {
+		expect(Object.keys(contractStepErrors(EMPTY_CONTRACT_FORM, 0))).toEqual([
+			'hostCompanyId',
+		])
+		expect(
+			Object.keys(contractStepErrors(EMPTY_CONTRACT_FORM, 1)).sort(),
+		).toEqual(['endDate', 'startDate'])
+		expect(contractStepErrors(EMPTY_CONTRACT_FORM, 2)).toEqual({})
 	})
 })

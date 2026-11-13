@@ -50,6 +50,25 @@ export function contractFormErrors(
 	return errors
 }
 
+export const CONTRACT_STEP_FIELDS: readonly (keyof ContractFormErrors)[][] = [
+	['hostCompanyId'],
+	['startDate', 'endDate'],
+	[],
+]
+
+export function contractStepErrors(
+	values: ContractFormValues,
+	step: number,
+): ContractFormErrors {
+	const errors = contractFormErrors(values)
+	const fields = CONTRACT_STEP_FIELDS[step] ?? []
+	return Object.fromEntries(
+		fields.flatMap((field) =>
+			errors[field] === undefined ? [] : [[field, errors[field]]],
+		),
+	)
+}
+
 export function toContractRequest(
 	values: ContractFormValues,
 ): Schemas.ContractRequest {
