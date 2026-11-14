@@ -7,12 +7,19 @@ use uuid::Uuid;
 pub mod aggregate;
 pub mod campaign;
 pub mod error;
+pub mod events;
 pub mod graph;
 pub mod metadata;
+pub mod ports;
+pub mod record;
 pub mod response;
 mod validation;
 pub mod value;
 
+mod descriptors;
+
+#[cfg(test)]
+mod events_tests;
 #[cfg(test)]
 mod tests;
 
@@ -23,6 +30,7 @@ pub use graph::{
     Answers, Branch, ConditionNode, Edge, EndNode, Graph, GraphPath, Node, NodeRef, QuestionNode,
 };
 pub use metadata::Metadata;
+pub use record::{ResponseRecord, SurveyRecord};
 pub use response::{Completed, InProgress, Response, ResumeToken};
 pub use value::{Answer, EmailAddress, PhoneNumber, QuestionId, QuestionKind, Visibility};
 
