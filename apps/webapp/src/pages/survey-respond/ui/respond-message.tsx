@@ -26,10 +26,7 @@ export function RespondMessage({
 	headingRef?: RefObject<HTMLHeadingElement | null>
 }) {
 	return (
-		<section
-			aria-live="polite"
-			className="flex flex-1 flex-col items-start gap-5 py-8 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300"
-		>
+		<section className="flex flex-1 flex-col items-start gap-5 py-8 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300">
 			<span
 				className={cn(
 					'flex size-14 items-center justify-center rounded-2xl',

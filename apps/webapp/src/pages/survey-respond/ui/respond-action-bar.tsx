@@ -38,7 +38,7 @@ export function SaveStatus({
 						type="button"
 						variant="link"
 						size="xs"
-						className="h-auto px-0"
+						className="h-auto min-h-11 px-2"
 						onClick={onRetry}
 					>
 						Réessayer

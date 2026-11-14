@@ -15,6 +15,7 @@ export function RespondLayout({
 	description?: string | null
 	children: ReactNode
 }) {
+	const Content = variant === 'member' ? 'div' : 'main'
 	return (
 		<div
 			className={cn(
@@ -44,7 +45,7 @@ export function RespondLayout({
 						</p>
 					) : null}
 				</header>
-				<main className="flex flex-1 flex-col">{children}</main>
+				<Content className="flex flex-1 flex-col">{children}</Content>
 			</div>
 		</div>
 	)
