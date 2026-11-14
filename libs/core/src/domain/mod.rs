@@ -43,6 +43,7 @@ pub(crate) mod service_rate;
 pub(crate) mod supplier_invoice;
 pub(crate) mod support;
 pub(crate) mod surcharge;
+pub(crate) mod survey;
 pub(crate) mod task;
 pub(crate) mod task_comment;
 pub(crate) mod task_label;
@@ -94,6 +95,15 @@ pub use service_rate::*;
 pub use supplier_invoice::*;
 pub use support::*;
 pub use surcharge::*;
+pub use survey::{
+    Answer, Answers, Branch as SurveyBranch, Campaign, CampaignId, CampaignStatus, Closed,
+    Completed, ConditionNode as SurveyConditionNode, Draft, Edge as SurveyEdge,
+    EmailAddress as SurveyEmailAddress, EndNode as SurveyEndNode, Graph as SurveyGraph, GraphPath,
+    InProgress, Metadata, Node as SurveyNode, NodeRef as SurveyNodeRef, Opened,
+    PhoneNumber as SurveyPhoneNumber, PublicSlug, QuestionId, QuestionKind,
+    QuestionNode as SurveyQuestionNode, Response as SurveyResponse, ResponseId, ResponseRecord,
+    ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord, Visibility, Window as SurveyWindow,
+};
 pub use task::*;
 pub use task_comment::*;
 pub use task_label::*;

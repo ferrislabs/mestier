@@ -8,6 +8,7 @@ pub mod ports;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FeatureFlag {
     DriveAi,
+    Surveys,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -15,23 +16,28 @@ pub enum FeatureFlag {
 pub struct UnknownFeatureFlag(pub String);
 
 impl FeatureFlag {
-    pub const ALL: &'static [FeatureFlag] = &[FeatureFlag::DriveAi];
+    pub const ALL: &'static [FeatureFlag] = &[FeatureFlag::DriveAi, FeatureFlag::Surveys];
 
     pub fn key(self) -> &'static str {
         match self {
             Self::DriveAi => "drive_ai",
+            Self::Surveys => "surveys",
         }
     }
 
     pub fn label(self) -> &'static str {
         match self {
             Self::DriveAi => "Drive : assistant IA",
+            Self::Surveys => "Questionnaires",
         }
     }
 
     pub fn description(self) -> &'static str {
         match self {
             Self::DriveAi => "Assistant IA du Drive (résumés, recherche en langage naturel).",
+            Self::Surveys => {
+                "Questionnaires et campagnes de réponses, ouverts au public ou aux membres."
+            }
         }
     }
 }
