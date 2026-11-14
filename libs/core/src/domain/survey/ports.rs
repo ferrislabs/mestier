@@ -97,23 +97,27 @@ pub trait ResponseRepository: Send {
 
     fn find_by_resume_token(
         &mut self,
+        organization_id: OrganizationId,
         survey_id: SurveyId,
         token: &ResumeToken,
     ) -> impl Future<Output = Result<Option<ResponseRecord>, CoreError>> + Send;
 
     fn count_completed(
         &mut self,
+        organization_id: OrganizationId,
         survey_id: SurveyId,
     ) -> impl Future<Output = Result<u64, CoreError>> + Send;
 
     fn find_completed_by_member(
         &mut self,
+        organization_id: OrganizationId,
         survey_id: SurveyId,
         member_id: MemberId,
     ) -> impl Future<Output = Result<Option<ResponseRecord>, CoreError>> + Send;
 
     fn find_completed_by_identifier(
         &mut self,
+        organization_id: OrganizationId,
         survey_id: SurveyId,
         value: &str,
     ) -> impl Future<Output = Result<Option<ResponseRecord>, CoreError>> + Send;

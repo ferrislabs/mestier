@@ -1810,3 +1810,59 @@ mod lifecycle {
         assert!(graph.question(&qid(2)).is_none());
     }
 }
+
+mod ports {
+    use uuid::Uuid;
+
+    use super::super::ResumeToken;
+    use super::super::SurveyId;
+    use super::super::ports::{MockResponseRepository, ResponseRepository};
+    use crate::{MemberId, OrganizationId};
+
+    #[tokio::test]
+    async fn the_response_lookups_are_scoped_by_organization() {
+        let org = OrganizationId(Uuid::from_u128(900));
+        let survey = SurveyId(Uuid::from_u128(1));
+        let mut repository = MockResponseRepository::new();
+        repository
+            .expect_find_by_resume_token()
+            .withf(move |o, s, _| *o == org && *s == survey)
+            .returning(|_, _, _| Box::pin(async { Ok(None) }));
+        repository
+            .expect_count_completed()
+            .withf(move |o, s| *o == org && *s == survey)
+            .returning(|_, _| Box::pin(async { Ok(0) }));
+        repository
+            .expect_find_completed_by_member()
+            .withf(move |o, s, _| *o == org && *s == survey)
+            .returning(|_, _, _| Box::pin(async { Ok(None) }));
+        repository
+            .expect_find_completed_by_identifier()
+            .withf(move |o, s, _| *o == org && *s == survey)
+            .returning(|_, _, _| Box::pin(async { Ok(None) }));
+        let token = ResumeToken::new("resume".to_string()).unwrap();
+        let member = MemberId(Uuid::from_u128(4));
+        assert!(
+            repository
+                .find_by_resume_token(org, survey, &token)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(repository.count_completed(org, survey).await.unwrap(), 0);
+        assert!(
+            repository
+                .find_completed_by_member(org, survey, member)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            repository
+                .find_completed_by_identifier(org, survey, "x")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+}
