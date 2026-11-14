@@ -164,6 +164,21 @@ impl<S> Response<S> {
     pub fn completed_at(&self) -> Option<DateTime<Utc>> {
         self.body.completed_at
     }
+
+    pub fn photo_directory(&self) -> String {
+        photo_directory(self.body.organization_id, self.body.survey_id, self.body.id)
+    }
+}
+
+pub fn photo_directory(
+    organization_id: OrganizationId,
+    survey_id: SurveyId,
+    response_id: ResponseId,
+) -> String {
+    format!(
+        "survey-{}/{}/{}",
+        organization_id.0, survey_id.0, response_id.0
+    )
 }
 
 fn check_respondent(
@@ -225,7 +240,7 @@ impl Response<InProgress> {
     ) -> Result<(), SurveyError> {
         self.ensure_survey(survey)?;
         let graph = survey.definition();
-        validate(graph, &answers)?;
+        validate(graph, &answers, &self.photo_directory())?;
         drop_blank(&mut answers);
         let path = graph.path(&answers);
         answers.retain(|id, _| path.questions.contains(id));
@@ -252,7 +267,7 @@ impl Response<InProgress> {
         self.body
             .answers
             .retain(|id, _| path.questions.contains(id));
-        validate(graph, &self.body.answers)?;
+        validate(graph, &self.body.answers, &self.photo_directory())?;
         self.body.identifier_value = identifier_of(graph, &path.questions, &self.body.answers);
         self.body.unique_respondent = !survey.allow_multiple_responses();
         self.body.completed_at = Some(at);

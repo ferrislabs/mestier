@@ -94,6 +94,10 @@ pub enum SurveyError {
     AnswerTooManyPhotos(QuestionId),
     #[error("response: the answer to question {0} has an empty photo")]
     AnswerEmptyPhoto(QuestionId),
+    #[error(
+        "response: the answer to question {0} names a photo that was not uploaded for this response"
+    )]
+    AnswerForeignPhoto(QuestionId),
     #[error("public_slug: must be 8 to 64 ASCII letters, digits, dashes or underscores")]
     PublicSlugInvalid,
     #[error("survey: a public survey needs a public slug to open")]
@@ -138,6 +142,8 @@ pub enum SurveyError {
     RespondentAlreadyAnswered,
     #[error("survey: its state changed since it was read")]
     SurveyStateChanged,
+    #[error("response: has reached its photo upload cap")]
+    ResponsePhotoCapReached,
 }
 
 impl SurveyError {
@@ -188,6 +194,7 @@ impl SurveyError {
             Self::AnswerDuplicateOption(_) => "answer_duplicate_option",
             Self::AnswerTooManyPhotos(_) => "answer_too_many_photos",
             Self::AnswerEmptyPhoto(_) => "answer_empty_photo",
+            Self::AnswerForeignPhoto(_) => "answer_foreign_photo",
             Self::PublicSlugInvalid => "public_slug_invalid",
             Self::SurveyPublicSlugRequired => "survey_public_slug_required",
             Self::SurveyPublicSlugForbidden => "survey_public_slug_forbidden",
@@ -210,6 +217,7 @@ impl SurveyError {
             Self::ResponseCapReached => "response_cap_reached",
             Self::RespondentAlreadyAnswered => "respondent_already_answered",
             Self::SurveyStateChanged => "survey_state_changed",
+            Self::ResponsePhotoCapReached => "response_photo_cap_reached",
         }
     }
 
@@ -241,7 +249,8 @@ impl SurveyError {
             | Self::AnswerUnknownOption(id)
             | Self::AnswerDuplicateOption(id)
             | Self::AnswerTooManyPhotos(id)
-            | Self::AnswerEmptyPhoto(id) => Some(*id),
+            | Self::AnswerEmptyPhoto(id)
+            | Self::AnswerForeignPhoto(id) => Some(*id),
             Self::EmailInvalid
             | Self::PhoneInvalid
             | Self::GraphEmpty
@@ -281,7 +290,8 @@ impl SurveyError {
             | Self::ResponseAlreadyCompleted
             | Self::ResponseCapReached
             | Self::RespondentAlreadyAnswered
-            | Self::SurveyStateChanged => None,
+            | Self::SurveyStateChanged
+            | Self::ResponsePhotoCapReached => None,
         }
     }
 
@@ -340,7 +350,8 @@ impl From<SurveyError> for CoreError {
             | SurveyError::AnswerUnknownOption(_)
             | SurveyError::AnswerDuplicateOption(_)
             | SurveyError::AnswerTooManyPhotos(_)
-            | SurveyError::AnswerEmptyPhoto(_) => error.refused(RefusalKind::Validation),
+            | SurveyError::AnswerEmptyPhoto(_)
+            | SurveyError::AnswerForeignPhoto(_) => error.refused(RefusalKind::Validation),
             SurveyError::ResponseMemberRequired
             | SurveyError::ResponseMemberForbidden
             | SurveyError::ResponseResumeTokenRequired
@@ -364,7 +375,8 @@ impl From<SurveyError> for CoreError {
             | SurveyError::ResponseAlreadyCompleted
             | SurveyError::ResponseCapReached
             | SurveyError::RespondentAlreadyAnswered
-            | SurveyError::SurveyStateChanged => error.refused(RefusalKind::Conflict),
+            | SurveyError::SurveyStateChanged
+            | SurveyError::ResponsePhotoCapReached => error.refused(RefusalKind::Conflict),
         }
     }
 }
