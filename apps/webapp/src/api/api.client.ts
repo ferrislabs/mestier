@@ -8271,7 +8271,7 @@ export namespace Endpoints {
     parameters: {
       query: Partial<{
         kind: "apprentice" | "company_tutor";
-        status: "pending" | "active" | "inactive";
+        status: string;
         host_company_id: string;
         q: string;
         page: number;
