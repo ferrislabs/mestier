@@ -18,6 +18,8 @@ import {
 } from '#/pages/cursus/shared/lib/count-summary'
 import {
 	type ArchiveFilter,
+	archiveChoices,
+	archiveFromChoices,
 	FEMININE_ARCHIVE_OPTIONS,
 } from '#/pages/cursus/shared/lib/list-filters'
 import type { SelectOption } from '#/pages/cursus/shared/lib/options'
@@ -93,10 +95,10 @@ export function PromotionsList({
 				search={search}
 				searchPlaceholder="Rechercher une promotion"
 				onSearch={onSearchChange}
-				status={archived}
+				status={archiveChoices(archived)}
 				statusOptions={FEMININE_ARCHIVE_OPTIONS}
-				statusLabel="Filtrer par statut"
-				onStatus={onArchivedChange}
+				statusLabel="Statut"
+				onStatus={(choices) => onArchivedChange(archiveFromChoices(choices))}
 				select={{
 					value: trainingId ?? ALL_TRAININGS,
 					label: 'Filtrer par formation',

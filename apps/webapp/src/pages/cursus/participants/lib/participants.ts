@@ -44,8 +44,29 @@ export const STATUS_LABELS: Record<ParticipantStatus, string> = {
 	inactive: 'Inactif',
 }
 
+const PARTICIPANT_STATUSES: readonly ParticipantStatus[] = [
+	'pending',
+	'active',
+	'inactive',
+]
+
+export function parseStatusSearch(raw: unknown): ParticipantStatus[] {
+	const values = Array.isArray(raw)
+		? raw
+		: typeof raw === 'string'
+			? raw.split(',')
+			: []
+	return PARTICIPANT_STATUSES.filter((status) => values.includes(status))
+}
+
 export const participantsSearchSchema = z.object({
-	status: z.enum(['pending', 'active', 'inactive']).optional().catch(undefined),
+	status: z
+		.unknown()
+		.transform((raw) => {
+			const statuses = parseStatusSearch(raw)
+			return statuses.length > 0 ? statuses : undefined
+		})
+		.optional(),
 	entreprise: z.string().optional().catch(undefined),
 })
 

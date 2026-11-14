@@ -16,7 +16,7 @@ function TutorsPage() {
 	return (
 		<TutorsFeature
 			tab={tutorTab(onglet)}
-			status={status}
+			status={status ?? []}
 			hostCompanyId={entreprise}
 			onTabChange={(next) =>
 				void navigate({
@@ -28,7 +28,7 @@ function TutorsPage() {
 				void navigate({
 					replace: true,
 					search: () => ({
-						status: next.status,
+						status: next.status.length > 0 ? next.status : undefined,
 						entreprise: next.hostCompanyId,
 					}),
 				})

@@ -22,7 +22,7 @@ export const PARTICIPANTS_PER_PAGE = 25
 
 export interface ParticipantsQuery {
 	kind?: 'apprentice' | 'company_tutor'
-	status?: 'pending' | 'active' | 'inactive'
+	status?: string
 	host_company_id?: string
 	q?: string
 	page?: number

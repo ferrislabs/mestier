@@ -1,4 +1,12 @@
-import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
+import { ChevronDown } from 'lucide-react'
+import { Button } from '#/components/ui/button'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu'
 import type { TutorTab } from '#/pages/cursus/tutors/lib/tutors'
 
 export interface TutorKindFilterProps {
@@ -18,23 +26,36 @@ export function TutorKindFilter({
 	schoolCount,
 	onTabChange,
 }: TutorKindFilterProps) {
+	const company = label('Entreprise', companyCount)
+	const school = label('École', schoolCount)
+
 	return (
-		<ToggleGroup
-			type="single"
-			variant="outline"
-			size="sm"
-			value={tab}
-			onValueChange={(next) => {
-				if (next === 'entreprise' || next === 'ecole') onTabChange(next)
-			}}
-			aria-label="Type de tuteur"
-		>
-			<ToggleGroupItem value="entreprise">
-				{label('Entreprise', companyCount)}
-			</ToggleGroupItem>
-			<ToggleGroupItem value="ecole">
-				{label('École', schoolCount)}
-			</ToggleGroupItem>
-		</ToggleGroup>
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					className="bg-card"
+					aria-label="Type de tuteur"
+				>
+					{tab === 'ecole' ? school : company}
+					<ChevronDown aria-hidden />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start">
+				<DropdownMenuRadioGroup
+					value={tab}
+					onValueChange={(next) => {
+						if (next === 'entreprise' || next === 'ecole') onTabChange(next)
+					}}
+				>
+					<DropdownMenuRadioItem value="entreprise">
+						{company}
+					</DropdownMenuRadioItem>
+					<DropdownMenuRadioItem value="ecole">{school}</DropdownMenuRadioItem>
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	)
 }

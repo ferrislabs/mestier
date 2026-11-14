@@ -8,8 +8,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '#/components/ui/select'
-import { ToggleGroup, ToggleGroupItem } from '#/components/ui/toggle-group'
 import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
+import { MultiFilterButton } from '#/pages/cursus/shared/ui/multi-filter-button'
 
 export interface ListToolbarSelect<Value extends string> {
 	value: Value
@@ -22,10 +22,10 @@ export interface ListToolbarProps<Status extends string, Value extends string> {
 	search: string
 	searchPlaceholder: string
 	onSearch: (search: string) => void
-	status: Status
+	status: readonly Status[]
 	statusOptions: readonly FilterOption<Status>[]
 	statusLabel: string
-	onStatus: (status: Status) => void
+	onStatus: (status: Status[]) => void
 	select?: ListToolbarSelect<Value>
 	extra?: ReactNode
 }
@@ -56,23 +56,12 @@ export function ListToolbar<Status extends string, Value extends string>({
 					className="h-8 bg-card pl-8"
 				/>
 			</div>
-			<ToggleGroup
-				type="single"
-				variant="outline"
-				size="sm"
-				value={status}
-				onValueChange={(value) => {
-					const next = statusOptions.find((option) => option.value === value)
-					if (next) onStatus(next.value)
-				}}
-				aria-label={statusLabel}
-			>
-				{statusOptions.map((option) => (
-					<ToggleGroupItem key={option.value} value={option.value}>
-						{option.label}
-					</ToggleGroupItem>
-				))}
-			</ToggleGroup>
+			<MultiFilterButton
+				name={statusLabel}
+				options={statusOptions}
+				selected={status}
+				onChange={onStatus}
+			/>
 			{extra}
 			{select ? (
 				<Select

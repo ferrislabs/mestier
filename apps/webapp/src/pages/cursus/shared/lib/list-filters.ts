@@ -1,20 +1,20 @@
 export type ArchiveFilter = 'active' | 'archived' | 'all'
 
+export type ArchiveChoice = Exclude<ArchiveFilter, 'all'>
+
 export interface FilterOption<Value extends string> {
 	value: Value
 	label: string
 }
 
-export const FEMININE_ARCHIVE_OPTIONS: FilterOption<ArchiveFilter>[] = [
+export const FEMININE_ARCHIVE_OPTIONS: FilterOption<ArchiveChoice>[] = [
 	{ value: 'active', label: 'Actives' },
 	{ value: 'archived', label: 'Archivées' },
-	{ value: 'all', label: 'Toutes' },
 ]
 
-export const MASCULINE_ARCHIVE_OPTIONS: FilterOption<ArchiveFilter>[] = [
+export const MASCULINE_ARCHIVE_OPTIONS: FilterOption<ArchiveChoice>[] = [
 	{ value: 'active', label: 'Actifs' },
 	{ value: 'archived', label: 'Archivés' },
-	{ value: 'all', label: 'Tous' },
 ]
 
 export function parseArchiveSearch(
@@ -30,4 +30,15 @@ export function archiveQuery(filter: ArchiveFilter) {
 export function searchQuery(q: string | undefined) {
 	const trimmed = q?.trim() ?? ''
 	return trimmed === '' ? {} : { q: trimmed }
+}
+
+export function archiveChoices(filter: ArchiveFilter): ArchiveChoice[] {
+	return filter === 'all' ? ['active', 'archived'] : [filter]
+}
+
+export function archiveFromChoices(
+	choices: readonly ArchiveChoice[],
+): ArchiveFilter {
+	const [only] = choices
+	return choices.length === 1 && only ? only : 'all'
 }

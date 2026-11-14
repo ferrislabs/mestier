@@ -45,7 +45,7 @@ export interface ParticipantsListUIProps {
 	search: string
 	isLoading: boolean
 	error: string | null
-	status: ParticipantStatus | undefined
+	status: readonly ParticipantStatus[]
 	hostCompanyId: string | undefined
 	hostCompanies: HostCompanyOption[]
 	canManage: boolean
@@ -53,7 +53,7 @@ export interface ParticipantsListUIProps {
 	pageCount: number
 	onSearchChange: (search: string) => void
 	onResetFilters: () => void
-	onStatusChange: (status: ParticipantStatus | undefined) => void
+	onStatusChange: (status: ParticipantStatus[]) => void
 	onHostCompanyChange: (hostCompanyId: string | undefined) => void
 	onPageChange: (page: number) => void
 	onCreate: () => void
@@ -62,12 +62,9 @@ export interface ParticipantsListUIProps {
 	toolbarExtra?: ReactNode
 }
 
-type StatusFilter = ParticipantStatus | 'all'
-
 const ALL_COMPANIES = 'all'
 
-const STATUS_OPTIONS: FilterOption<StatusFilter>[] = [
-	{ value: 'all', label: 'Tous' },
+const STATUS_OPTIONS: FilterOption<ParticipantStatus>[] = [
 	{ value: 'pending', label: 'En attente' },
 	{ value: 'active', label: 'Actifs' },
 	{ value: 'inactive', label: 'Inactifs' },
@@ -117,7 +114,7 @@ export function ParticipantsListUI({
 	const copy = KIND_COPY[kind]
 	const isTutor = kind === 'company_tutor'
 	const filtered =
-		search.trim() !== '' || status !== undefined || hostCompanyId !== undefined
+		search.trim() !== '' || status.length > 0 || hostCompanyId !== undefined
 
 	return (
 		<PageShell className="block">
@@ -128,7 +125,11 @@ export function ParticipantsListUI({
 					description={
 						total === undefined
 							? undefined
-							: countSummary(total, KIND_NOUN[kind], status)
+							: countSummary(
+									total,
+									KIND_NOUN[kind],
+									status.length === 1 ? status[0] : undefined,
+								)
 					}
 					actions={
 						canManage ? (
@@ -144,10 +145,10 @@ export function ParticipantsListUI({
 				search={search}
 				searchPlaceholder="Rechercher un nom, un e-mail"
 				onSearch={onSearchChange}
-				status={status ?? 'all'}
+				status={status}
 				statusOptions={STATUS_OPTIONS}
-				statusLabel="Filtrer par statut"
-				onStatus={(next) => onStatusChange(next === 'all' ? undefined : next)}
+				statusLabel="Statut"
+				onStatus={onStatusChange}
 				select={
 					isTutor
 						? {

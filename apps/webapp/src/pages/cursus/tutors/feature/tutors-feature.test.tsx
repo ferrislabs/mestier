@@ -76,7 +76,7 @@ function renderTutors(
 		<Providers queryClient={createQueryClient(permissions)}>
 			<TutorsFeature
 				tab="ecole"
-				status={undefined}
+				status={[]}
 				hostCompanyId={undefined}
 				onTabChange={vi.fn()}
 				onFiltersChange={vi.fn()}
@@ -104,8 +104,13 @@ describe('Tutors tabs', () => {
 				'Les tuteurs entreprise et école qui suivent vos apprentis.',
 			),
 		).toBeTruthy()
-		await user.click(await screen.findByRole('radio', { name: 'École · 3' }))
-		expect(screen.getByRole('radio', { name: 'Entreprise · 7' })).toBeTruthy()
+		await user.click(
+			await screen.findByRole('button', { name: 'Type de tuteur' }),
+		)
+		expect(
+			screen.getByRole('menuitemradio', { name: 'Entreprise · 7' }),
+		).toBeTruthy()
+		await user.click(screen.getByRole('menuitemradio', { name: 'École · 3' }))
 		expect(onTabChange).toHaveBeenCalledWith('ecole')
 	})
 })
@@ -147,7 +152,9 @@ describe('School tutors tab', () => {
 				archived: 'active',
 			}),
 		)
-		await user.click(screen.getByRole('radio', { name: 'Archivés' }))
+		await user.click(screen.getByRole('button', { name: 'Statut' }))
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Archivés' }))
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Actifs' }))
 		await waitFor(() =>
 			expect(schoolQueries().at(-1)).toMatchObject({
 				q: 'ali',

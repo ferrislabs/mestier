@@ -85,7 +85,7 @@ function renderList(
 		permissions,
 		<ParticipantsListFeature
 			kind="apprentice"
-			status={undefined}
+			status={[]}
 			hostCompanyId={undefined}
 			onFiltersChange={vi.fn()}
 			onOpenParticipant={vi.fn()}
@@ -205,12 +205,12 @@ describe('Apprentices list', () => {
 	})
 
 	it('asks only for apprentices with the status filter', async () => {
-		renderList(['VIEW_CURSUS'], { status: 'pending' })
+		renderList(['VIEW_CURSUS'], { status: ['pending', 'active'] })
 
 		await screen.findByText('Léa Martin')
 		expect(lastListQuery()).toMatchObject({
 			kind: 'apprentice',
-			status: 'pending',
+			status: 'pending,active',
 			per_page: 25,
 		})
 		expect(lastListQuery()).not.toHaveProperty('host_company_id')
@@ -291,7 +291,7 @@ describe('Tutors list', () => {
 		)
 
 		expect(onFiltersChange).toHaveBeenCalledWith({
-			status: undefined,
+			status: [],
 			hostCompanyId: 'hc-1',
 		})
 	})

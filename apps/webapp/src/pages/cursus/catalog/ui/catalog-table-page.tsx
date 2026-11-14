@@ -17,9 +17,12 @@ import {
 	type CountNoun,
 	countSummary,
 } from '#/pages/cursus/shared/lib/count-summary'
-import type {
-	ArchiveFilter,
-	FilterOption,
+import {
+	type ArchiveChoice,
+	type ArchiveFilter,
+	archiveChoices,
+	archiveFromChoices,
+	type FilterOption,
 } from '#/pages/cursus/shared/lib/list-filters'
 import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
@@ -54,7 +57,7 @@ export interface CatalogTablePageProps<Item extends CatalogItem>
 	addLabel: string
 	noun: CountNoun
 	searchPlaceholder: string
-	archiveOptions: readonly FilterOption<ArchiveFilter>[]
+	archiveOptions: readonly FilterOption<ArchiveChoice>[]
 	emptyTitle: string
 	archivedLabel: string
 	activeLabel: string
@@ -115,10 +118,10 @@ export function CatalogTablePage<Item extends CatalogItem>({
 				search={search}
 				searchPlaceholder={searchPlaceholder}
 				onSearch={onSearchChange}
-				status={archived}
+				status={archiveChoices(archived)}
 				statusOptions={archiveOptions}
-				statusLabel="Filtrer par statut"
-				onStatus={onArchivedChange}
+				statusLabel="Statut"
+				onStatus={(choices) => onArchivedChange(archiveFromChoices(choices))}
 			/>
 			<FormError message={error} />
 			<div className="overflow-hidden rounded-lg border bg-card">

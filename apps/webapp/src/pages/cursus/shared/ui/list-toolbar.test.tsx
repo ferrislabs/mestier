@@ -21,9 +21,9 @@ function renderToolbar() {
 			search=""
 			searchPlaceholder="Rechercher une promotion"
 			onSearch={handlers.onSearch}
-			status="active"
+			status={['active']}
 			statusOptions={FEMININE_ARCHIVE_OPTIONS}
-			statusLabel="Filtrer par statut"
+			statusLabel="Statut"
 			onStatus={handlers.onStatus}
 			select={{
 				value: 'all',
@@ -50,13 +50,16 @@ describe('ListToolbar', () => {
 		expect(handlers.onSearch).toHaveBeenCalledWith('CAP')
 	})
 
-	it('reports the chosen status', async () => {
+	it('reports the chosen status', { timeout: 15_000 }, async () => {
 		const user = userEvent.setup()
 		const handlers = renderToolbar()
 
-		await user.click(screen.getByRole('radio', { name: 'Archivées' }))
+		await user.click(screen.getByRole('button', { name: 'Statut' }))
+		await user.click(
+			screen.getByRole('menuitemcheckbox', { name: 'Archivées' }),
+		)
 
-		expect(handlers.onStatus).toHaveBeenCalledWith('archived')
+		expect(handlers.onStatus).toHaveBeenCalledWith(['active', 'archived'])
 	})
 
 	it('reports the chosen select option', { timeout: 15_000 }, async () => {
@@ -78,9 +81,9 @@ describe('ListToolbar', () => {
 				search=""
 				searchPlaceholder="Rechercher"
 				onSearch={vi.fn()}
-				status="active"
+				status={['active']}
 				statusOptions={FEMININE_ARCHIVE_OPTIONS}
-				statusLabel="Filtrer par statut"
+				statusLabel="Statut"
 				onStatus={vi.fn()}
 			/>,
 		)

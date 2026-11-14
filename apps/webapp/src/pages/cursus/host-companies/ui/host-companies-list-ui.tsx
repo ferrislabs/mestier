@@ -20,6 +20,8 @@ import {
 } from '#/pages/cursus/shared/lib/count-summary'
 import {
 	type ArchiveFilter,
+	archiveChoices,
+	archiveFromChoices,
 	FEMININE_ARCHIVE_OPTIONS,
 } from '#/pages/cursus/shared/lib/list-filters'
 import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
@@ -100,10 +102,10 @@ export function HostCompaniesListUI({
 				search={search}
 				searchPlaceholder="Rechercher un nom, un SIRET"
 				onSearch={onSearchChange}
-				status={archived}
+				status={archiveChoices(archived)}
 				statusOptions={FEMININE_ARCHIVE_OPTIONS}
-				statusLabel="Filtrer par statut"
-				onStatus={onArchivedChange}
+				statusLabel="Statut"
+				onStatus={(choices) => onArchivedChange(archiveFromChoices(choices))}
 			/>
 			<FormError message={error} />
 			<div className="overflow-hidden rounded-lg border bg-card">

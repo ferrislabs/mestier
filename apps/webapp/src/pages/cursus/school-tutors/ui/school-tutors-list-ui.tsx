@@ -13,6 +13,8 @@ import { cn } from '#/lib/utils'
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
 import {
 	type ArchiveFilter,
+	archiveChoices,
+	archiveFromChoices,
 	MASCULINE_ARCHIVE_OPTIONS,
 } from '#/pages/cursus/shared/lib/list-filters'
 import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
@@ -109,10 +111,10 @@ export function SchoolTutorsListUI({
 				search={search}
 				searchPlaceholder="Rechercher un nom"
 				onSearch={onSearchChange}
-				status={archived}
+				status={archiveChoices(archived)}
 				statusOptions={MASCULINE_ARCHIVE_OPTIONS}
-				statusLabel="Filtrer par statut"
-				onStatus={onArchivedChange}
+				statusLabel="Statut"
+				onStatus={(choices) => onArchivedChange(archiveFromChoices(choices))}
 			/>
 			<FormError message={error} />
 			<div className="overflow-hidden rounded-lg border bg-card">

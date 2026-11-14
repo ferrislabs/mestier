@@ -25,7 +25,7 @@ import { useDebouncedSearch } from '#/pages/cursus/shared/feature/use-debounced-
 import { searchQuery } from '#/pages/cursus/shared/lib/list-filters'
 
 export interface ParticipantsFilters {
-	status: ParticipantStatus | undefined
+	status: ParticipantStatus[]
 	hostCompanyId: string | undefined
 }
 
@@ -57,7 +57,7 @@ export function ParticipantsListFeature({
 
 	const list = useParticipants(activeOrganizationId, {
 		kind,
-		status,
+		...(status.length > 0 ? { status: status.join(',') } : {}),
 		...(companyFilter ? { host_company_id: companyFilter } : {}),
 		...searchQuery(search.query),
 		page,
@@ -108,7 +108,7 @@ export function ParticipantsListFeature({
 				onSearchChange={search.setText}
 				onResetFilters={() => {
 					search.reset()
-					changeFilters({ status: undefined, hostCompanyId: undefined })
+					changeFilters({ status: [], hostCompanyId: undefined })
 				}}
 				onStatusChange={(next) =>
 					changeFilters({ status: next, hostCompanyId: companyFilter })
