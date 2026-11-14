@@ -32,7 +32,7 @@ fn visibility(word: &str) -> Visibility {
 fn describe(error: &CoreError) -> String {
     match error {
         CoreError::NotFound => "not found".to_owned(),
-        CoreError::Conflict(message) => message.clone(),
+        CoreError::Conflict(message) | CoreError::Validation(message) => message.clone(),
         other => other.to_string(),
     }
 }

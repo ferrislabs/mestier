@@ -57,14 +57,55 @@ fn a_survey_error_is_a_conflict_for_the_core() {
 }
 
 #[test]
-fn a_state_change_and_a_respondent_input_error_stay_conflicts_for_the_core() {
+fn a_state_conflict_stays_a_conflict_for_the_core() {
     for error in [
         SurveyError::SurveyStateChanged,
         SurveyError::RespondentAlreadyAnswered,
-        SurveyError::SurveyTitleEmpty,
+        SurveyError::ResponseAlreadyCompleted,
+        SurveyError::ResponseCapReached,
+        SurveyError::CampaignNotStarted,
+        SurveyError::CampaignEnded,
+        SurveyError::SurveyNotDraft,
+        SurveyError::SurveyHasResponses,
+        SurveyError::CampaignHasSurveys,
+        SurveyError::SurveyWithoutGraph,
     ] {
-        let expected = common::CoreError::Conflict(error.to_string()).to_string();
-        assert_eq!(common::CoreError::from(error).to_string(), expected);
+        assert!(
+            matches!(common::CoreError::from(error), common::CoreError::Conflict(ref message) if *message == error.to_string()),
+            "{error:?}"
+        );
+    }
+}
+
+#[test]
+fn a_respondent_input_error_is_a_validation_error_for_the_core() {
+    let question = super::QuestionId(uuid::Uuid::nil());
+    for error in [
+        SurveyError::SurveyTitleEmpty,
+        SurveyError::CampaignNameEmpty,
+        SurveyError::EmailInvalid,
+        SurveyError::PhoneInvalid,
+        SurveyError::MetadataEmptyKey,
+        SurveyError::MetadataEmptyValue,
+        SurveyError::PublicSlugInvalid,
+        SurveyError::WindowInverted,
+        SurveyError::GraphEmpty,
+        SurveyError::GraphCycle(question),
+        SurveyError::GraphQuestionLabelEmpty(question),
+        SurveyError::GraphOptionEmpty(question),
+        SurveyError::ConditionQuestionNotAsked(question),
+        SurveyError::RequiredQuestionUnanswered(question),
+        SurveyError::AnswerUnknownQuestion(question),
+        SurveyError::AnswerKindMismatch(question),
+        SurveyError::AnswerUnknownOption(question),
+        SurveyError::AnswerTooManyPhotos(question),
+        SurveyError::ResponseMemberRequired,
+        SurveyError::ResponseResumeTokenForbidden,
+    ] {
+        assert!(
+            matches!(common::CoreError::from(error), common::CoreError::Validation(ref message) if *message == error.to_string()),
+            "{error:?}"
+        );
     }
 }
 

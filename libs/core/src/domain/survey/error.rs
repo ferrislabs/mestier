@@ -146,7 +146,70 @@ impl From<SurveyError> for CoreError {
             SurveyError::SurveyNotFound
             | SurveyError::CampaignNotFound
             | SurveyError::ResponseNotFound => Self::NotFound,
-            _ => Self::Conflict(error.to_string()),
+            SurveyError::EmailInvalid
+            | SurveyError::PhoneInvalid
+            | SurveyError::GraphEmpty
+            | SurveyError::GraphWithoutEnd
+            | SurveyError::GraphDuplicateNode(_)
+            | SurveyError::GraphUnknownStart
+            | SurveyError::GraphStartNotQuestion
+            | SurveyError::GraphUnknownEdgeNode(_)
+            | SurveyError::GraphInvalidBranch(_)
+            | SurveyError::GraphDuplicateExit(_)
+            | SurveyError::GraphDeadEnd(_)
+            | SurveyError::GraphCycle(_)
+            | SurveyError::GraphUnreachableNode(_)
+            | SurveyError::GraphSecondIdentifier(_)
+            | SurveyError::GraphIdentifierOnInvalidKind(_)
+            | SurveyError::GraphMaxPhotosOnInvalidKind(_)
+            | SurveyError::GraphZeroMaxPhotos(_)
+            | SurveyError::GraphChoiceWithoutOptions(_)
+            | SurveyError::GraphQuestionLabelEmpty(_)
+            | SurveyError::GraphOptionEmpty(_)
+            | SurveyError::GraphDuplicateOption(_)
+            | SurveyError::ConditionUnknownQuestion(_)
+            | SurveyError::ConditionOnNonChoice(_)
+            | SurveyError::ConditionUnknownOption(_)
+            | SurveyError::ConditionQuestionNotAsked(_)
+            | SurveyError::WindowInverted
+            | SurveyError::MetadataEmptyKey
+            | SurveyError::MetadataEmptyValue
+            | SurveyError::SurveyTitleEmpty
+            | SurveyError::CampaignNameEmpty
+            | SurveyError::PublicSlugInvalid
+            | SurveyError::ResumeTokenEmpty
+            | SurveyError::RequiredQuestionUnanswered(_)
+            | SurveyError::AnswerNotFinite(_)
+            | SurveyError::AnswerUnknownQuestion(_)
+            | SurveyError::AnswerKindMismatch(_)
+            | SurveyError::AnswerUnknownOption(_)
+            | SurveyError::AnswerDuplicateOption(_)
+            | SurveyError::AnswerTooManyPhotos(_)
+            | SurveyError::AnswerEmptyPhoto(_)
+            | SurveyError::ResponseMemberRequired
+            | SurveyError::ResponseMemberForbidden
+            | SurveyError::ResponseResumeTokenRequired
+            | SurveyError::ResponseResumeTokenForbidden => Self::Validation(error.to_string()),
+            SurveyError::SurveyWithoutGraph
+            | SurveyError::SurveyClosed
+            | SurveyError::CampaignNotStarted
+            | SurveyError::CampaignEnded
+            | SurveyError::SurveyInconsistentState
+            | SurveyError::ResponseInconsistentState
+            | SurveyError::SurveyClosedBeforeOpened
+            | SurveyError::SurveyPublicSlugRequired
+            | SurveyError::SurveyPublicSlugForbidden
+            | SurveyError::SurveyCampaignMismatch
+            | SurveyError::SurveyCampaignOrganizationMismatch
+            | SurveyError::ResponseSurveyMismatch
+            | SurveyError::SurveyNotDraft
+            | SurveyError::SurveyNotOpened
+            | SurveyError::SurveyHasResponses
+            | SurveyError::CampaignHasSurveys
+            | SurveyError::ResponseAlreadyCompleted
+            | SurveyError::ResponseCapReached
+            | SurveyError::RespondentAlreadyAnswered
+            | SurveyError::SurveyStateChanged => Self::Conflict(error.to_string()),
         }
     }
 }

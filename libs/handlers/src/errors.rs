@@ -176,6 +176,7 @@ impl From<CoreError> for ApiError {
         match err {
             CoreError::NotFound => Self::NotFound,
             CoreError::Conflict(msg) => Self::Conflict(msg),
+            CoreError::Validation(msg) => Self::UnprocessableEntity(msg),
             CoreError::Forbidden { .. } => Self::Forbidden,
             CoreError::Database(msg) => {
                 tracing::error!(error = %msg, "core database error");
@@ -378,6 +379,15 @@ mod tests {
         assert_eq!(json["code"], "E_CONFLICT");
         assert_eq!(json["status"], 409);
         assert!(json["message"].as_str().unwrap().contains("slug taken"));
+    }
+
+    #[tokio::test]
+    async fn from_core_error_validation_maps_to_422_with_its_message() {
+        let api: ApiError = CoreError::Validation("graph: has no node".into()).into();
+        let (status, json) = parse_response(api).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(json["code"], "E_UNPROCESSABLE_ENTITY");
+        assert!(json["message"].as_str().unwrap().contains("graph: has no node"));
     }
 
     #[tokio::test]
