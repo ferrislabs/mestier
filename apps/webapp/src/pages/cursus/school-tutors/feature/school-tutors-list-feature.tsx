@@ -26,6 +26,7 @@ import {
 
 export interface SchoolTutorsListFeatureProps {
 	header: ReactNode
+	toolbarExtra?: ReactNode
 	canManage: boolean
 }
 
@@ -41,6 +42,7 @@ function toRow(tutor: SchoolTutor): SchoolTutorRowVM {
 
 export function SchoolTutorsListFeature({
 	header,
+	toolbarExtra,
 	canManage,
 }: SchoolTutorsListFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
@@ -74,6 +76,7 @@ export function SchoolTutorsListFeature({
 		<>
 			<SchoolTutorsListUI
 				header={header}
+				toolbarExtra={toolbarExtra}
 				rows={tutors.map(toRow)}
 				search={search.text}
 				archived={archived}

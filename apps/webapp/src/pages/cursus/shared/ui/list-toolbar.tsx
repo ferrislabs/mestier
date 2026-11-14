@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Input } from '#/components/ui/input'
 import {
 	Select,
@@ -26,6 +27,7 @@ export interface ListToolbarProps<Status extends string, Value extends string> {
 	statusLabel: string
 	onStatus: (status: Status) => void
 	select?: ListToolbarSelect<Value>
+	extra?: ReactNode
 }
 
 export function ListToolbar<Status extends string, Value extends string>({
@@ -37,6 +39,7 @@ export function ListToolbar<Status extends string, Value extends string>({
 	statusLabel,
 	onStatus,
 	select,
+	extra,
 }: ListToolbarProps<Status, Value>) {
 	return (
 		<div className="mb-3 flex flex-wrap items-center gap-2">
@@ -70,6 +73,7 @@ export function ListToolbar<Status extends string, Value extends string>({
 					</ToggleGroupItem>
 				))}
 			</ToggleGroup>
+			{extra}
 			{select ? (
 				<Select
 					value={select.value}

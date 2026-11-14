@@ -59,6 +59,7 @@ export interface ParticipantsListUIProps {
 	onCreate: () => void
 	onOpen: (participantId: string) => void
 	header?: ReactNode
+	toolbarExtra?: ReactNode
 }
 
 type StatusFilter = ParticipantStatus | 'all'
@@ -111,6 +112,7 @@ export function ParticipantsListUI({
 	onCreate,
 	onOpen,
 	header,
+	toolbarExtra,
 }: ParticipantsListUIProps) {
 	const copy = KIND_COPY[kind]
 	const isTutor = kind === 'company_tutor'
@@ -138,6 +140,7 @@ export function ParticipantsListUI({
 				/>
 			)}
 			<ListToolbar
+				extra={toolbarExtra}
 				search={search}
 				searchPlaceholder="Rechercher un nom, un e-mail"
 				onSearch={onSearchChange}

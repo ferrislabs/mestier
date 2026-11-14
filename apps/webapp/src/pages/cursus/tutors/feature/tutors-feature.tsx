@@ -23,6 +23,7 @@ import { useOrganizationMembers } from '#/pages/cursus/shared/feature/cursus-que
 import { useTutorCounts } from '#/pages/cursus/tutors/feature/use-tutor-counts'
 import type { TutorTab } from '#/pages/cursus/tutors/lib/tutors'
 import { NewTutorDialog } from '#/pages/cursus/tutors/ui/new-tutor-dialog'
+import { TutorKindFilter } from '#/pages/cursus/tutors/ui/tutor-kind-filter'
 import { TutorsHeader } from '#/pages/cursus/tutors/ui/tutors-header'
 
 export interface TutorsFeatureProps extends ParticipantsFilters {
@@ -61,21 +62,24 @@ export function TutorsFeature({
 		createSchoolTutor.reset()
 		setCreateOpen(true)
 	}
-	const header = (
-		<TutorsHeader
+	const header = <TutorsHeader canManage={canManage} onCreate={openCreate} />
+	const toolbarExtra = (
+		<TutorKindFilter
 			tab={tab}
 			companyCount={counts.company}
 			schoolCount={counts.school}
 			onTabChange={onTabChange}
-			canManage={canManage}
-			onCreate={openCreate}
 		/>
 	)
 
 	return (
 		<>
 			{tab === 'ecole' ? (
-				<SchoolTutorsListFeature header={header} canManage={canManage} />
+				<SchoolTutorsListFeature
+					header={header}
+					toolbarExtra={toolbarExtra}
+					canManage={canManage}
+				/>
 			) : (
 				<ParticipantsListFeature
 					kind="company_tutor"
@@ -84,6 +88,7 @@ export function TutorsFeature({
 					onFiltersChange={onFiltersChange}
 					onOpenParticipant={onOpenParticipant}
 					header={header}
+					toolbarExtra={toolbarExtra}
 					onCreate={openCreate}
 				/>
 			)}

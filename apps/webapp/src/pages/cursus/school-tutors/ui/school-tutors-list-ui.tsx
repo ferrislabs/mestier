@@ -30,6 +30,7 @@ export interface SchoolTutorRowVM {
 
 export interface SchoolTutorsListUIProps {
 	header: ReactNode
+	toolbarExtra?: ReactNode
 	rows: SchoolTutorRowVM[]
 	search: string
 	archived: ArchiveFilter
@@ -83,6 +84,7 @@ function rowActions(
 
 export function SchoolTutorsListUI({
 	header,
+	toolbarExtra,
 	rows,
 	search,
 	archived,
@@ -103,6 +105,7 @@ export function SchoolTutorsListUI({
 		<PageShell className="block">
 			{header}
 			<ListToolbar
+				extra={toolbarExtra}
 				search={search}
 				searchPlaceholder="Rechercher un nom"
 				onSearch={onSearchChange}

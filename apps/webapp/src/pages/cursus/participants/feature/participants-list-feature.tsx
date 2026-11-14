@@ -34,6 +34,7 @@ export interface ParticipantsListFeatureProps extends ParticipantsFilters {
 	onFiltersChange: (filters: ParticipantsFilters) => void
 	onOpenParticipant: (participantId: string) => void
 	header?: ReactNode
+	toolbarExtra?: ReactNode
 	onCreate?: () => void
 }
 
@@ -44,6 +45,7 @@ export function ParticipantsListFeature({
 	onFiltersChange,
 	onOpenParticipant,
 	header,
+	toolbarExtra,
 	onCreate,
 }: ParticipantsListFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
@@ -118,6 +120,7 @@ export function ParticipantsListFeature({
 				onCreate={onCreate ?? (() => setCreateOpen(true))}
 				onOpen={onOpenParticipant}
 				header={header}
+				toolbarExtra={toolbarExtra}
 			/>
 			{canManage && !onCreate ? (
 				<CreateParticipantDialog

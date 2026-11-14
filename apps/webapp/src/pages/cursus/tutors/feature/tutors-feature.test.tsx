@@ -104,8 +104,8 @@ describe('Tutors tabs', () => {
 				'Les tuteurs entreprise et école qui suivent vos apprentis.',
 			),
 		).toBeTruthy()
-		await user.click(await screen.findByRole('tab', { name: 'École · 3' }))
-		expect(screen.getByRole('tab', { name: 'Entreprise · 7' })).toBeTruthy()
+		await user.click(await screen.findByRole('radio', { name: 'École · 3' }))
+		expect(screen.getByRole('radio', { name: 'Entreprise · 7' })).toBeTruthy()
 		expect(onTabChange).toHaveBeenCalledWith('ecole')
 	})
 })
