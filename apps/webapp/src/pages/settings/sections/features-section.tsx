@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useFeatures, useSetSelfServiceFeature } from '#/hooks/use-features'
 import { useHasPermission } from '#/hooks/use-permissions'
@@ -28,15 +29,30 @@ function FeaturesPanel({ organizationId }: { organizationId: string }) {
 				setFeature.isPending ? (setFeature.variables?.path.flag ?? null) : null
 			}
 			loadError={mutationErrorMessage(error)}
-			toggleError={mutationErrorMessage(setFeature.error)}
 			onToggle={(flag, enabled) => {
 				if (!canManage) return
-				setFeature.mutate({
-					path: { organization_id: organizationId, flag },
-					body: { enabled },
-				})
+				setFeature.mutate(
+					{
+						path: { organization_id: organizationId, flag },
+						body: { enabled },
+					},
+					{
+						onSuccess: () =>
+							toast.success(
+								enabled
+									? 'Fonctionnalité activée.'
+									: 'Fonctionnalité désactivée.',
+							),
+						onError: (cause) =>
+							toast.error(
+								mutationErrorMessage(cause) ?? 'Une erreur est survenue.',
+								{
+									duration: 6000,
+								},
+							),
+					},
+				)
 			}}
-			onDismissError={() => setFeature.reset()}
 		/>
 	)
 }

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	ActiveOrganizationProvider,
 	OrganizationListProvider,
@@ -11,6 +11,13 @@ import { useVisibleModules } from '#/modules/use-visible-modules'
 import { FeaturesSection } from '#/pages/settings/sections/features-section'
 import { renderWithRouter } from '#/test/render-with-router'
 import { seedPermissionsCacheForOrganization } from '#/test/with-permissions'
+
+const toastMock = vi.hoisted(() => ({
+	success: vi.fn(),
+	error: vi.fn(),
+}))
+
+vi.mock('sonner', () => ({ toast: toastMock }))
 
 const FEATURES_PATH = '/api/v1/organizations/{organization_id}/features'
 const FEATURE_PATH = '/api/v1/organizations/{organization_id}/features/{flag}'
@@ -150,6 +157,11 @@ function putCalls(calls: { method: string; path: string; params: unknown }[]) {
 }
 
 describe('FeaturesSection', () => {
+	beforeEach(() => {
+		toastMock.success.mockClear()
+		toastMock.error.mockClear()
+	})
+
 	it('shows each self-service feature with its label, description and a switch', async () => {
 		await renderSection()
 
@@ -181,6 +193,7 @@ describe('FeaturesSection', () => {
 		await waitFor(() => {
 			expect(modules.textContent).toContain('Questionnaires')
 		})
+		expect(toastMock.success).toHaveBeenCalledWith('Fonctionnalité activée.')
 	})
 
 	it('turns surveys off and the Questionnaires module disappears', async () => {
@@ -196,6 +209,7 @@ describe('FeaturesSection', () => {
 		await waitFor(() => {
 			expect(modules.textContent).not.toContain('Questionnaires')
 		})
+		expect(toastMock.success).toHaveBeenCalledWith('Fonctionnalité désactivée.')
 	})
 
 	it('disables the switch while the change is pending', async () => {
@@ -219,7 +233,7 @@ describe('FeaturesSection', () => {
 		})
 	})
 
-	it('shows the refusal and keeps the previous state when the change fails', async () => {
+	it('toasts the refusal and keeps the previous state when the change fails', async () => {
 		const user = userEvent.setup()
 		await renderSection({
 			putError: Object.assign(new Error('Forbidden'), { status: 403 }),
@@ -228,12 +242,14 @@ describe('FeaturesSection', () => {
 		const toggle = await screen.findByRole('switch', { name: 'Questionnaires' })
 		await user.click(toggle)
 
-		expect((await screen.findByRole('alert')).textContent).toContain(
-			"Vous n'avez plus la permission nécessaire pour cette action.",
-		)
+		await waitFor(() => {
+			expect(toastMock.error).toHaveBeenCalledWith(
+				"Vous n'avez plus la permission nécessaire pour cette action.",
+				{ duration: 6000 },
+			)
+		})
+		expect(toastMock.success).not.toHaveBeenCalled()
 		expect(toggle.getAttribute('aria-checked')).toBe('false')
-
-		await user.click(screen.getByRole('button', { name: 'Fermer le message' }))
 		expect(screen.queryByRole('alert')).toBeNull()
 	})
 

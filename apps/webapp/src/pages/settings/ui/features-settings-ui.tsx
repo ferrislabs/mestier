@@ -1,5 +1,4 @@
-import { Loader2, X } from 'lucide-react'
-import { Button } from '#/components/ui/button'
+import { Loader2 } from 'lucide-react'
 import { SectionCard } from '#/components/ui/surface'
 import { Switch } from '#/components/ui/switch'
 import type { SelfServiceFeature } from '#/hooks/use-features'
@@ -11,9 +10,7 @@ export interface FeaturesSettingsUIProps {
 	canManage: boolean
 	pendingKey: string | null
 	loadError: string | null
-	toggleError: string | null
 	onToggle: (key: string, enabled: boolean) => void
-	onDismissError: () => void
 }
 
 export function FeaturesSettingsUI({
@@ -22,9 +19,7 @@ export function FeaturesSettingsUI({
 	canManage,
 	pendingKey,
 	loadError,
-	toggleError,
 	onToggle,
-	onDismissError,
 }: FeaturesSettingsUIProps) {
 	if (isLoading) {
 		return (
@@ -94,23 +89,6 @@ export function FeaturesSettingsUI({
 						ou désactiver une fonctionnalité.
 					</p>
 				)}
-				{toggleError ? (
-					<div
-						role="alert"
-						className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-3 text-sm text-destructive"
-					>
-						<p className="min-w-0 flex-1">{toggleError}</p>
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon-sm"
-							aria-label="Fermer le message"
-							onClick={onDismissError}
-						>
-							<X aria-hidden />
-						</Button>
-					</div>
-				) : null}
 			</div>
 		</SettingsCard>
 	)

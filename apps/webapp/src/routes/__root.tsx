@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { ConfigGate } from '../components/config-gate'
+import { Toaster } from '../components/ui/sonner'
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 import appCss from '../styles.css?url'
 
@@ -83,6 +84,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 			</head>
 			<body>
 				<ConfigGate>{children}</ConfigGate>
+				<Toaster />
 				{import.meta.env.DEV && (
 					<TanStackDevtools
 						config={{
