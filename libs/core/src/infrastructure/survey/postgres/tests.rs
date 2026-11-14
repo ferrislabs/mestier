@@ -128,25 +128,25 @@ fn campaign(
 }
 
 fn already_complete<T: std::fmt::Debug>(result: Result<T, CoreError>) {
-    let expected = SurveyError::ResponseAlreadyCompleted.to_string();
+    let expected = SurveyError::ResponseAlreadyCompleted.code();
     assert!(
-        matches!(&result, Err(CoreError::Conflict(message)) if *message == expected),
+        matches!(&result, Err(CoreError::Refused(refusal)) if refusal.reason == expected),
         "expected the response already complete error, got {result:?}"
     );
 }
 
 fn already_answered<T: std::fmt::Debug>(result: Result<T, CoreError>) {
-    let expected = SurveyError::RespondentAlreadyAnswered.to_string();
+    let expected = SurveyError::RespondentAlreadyAnswered.code();
     assert!(
-        matches!(&result, Err(CoreError::Conflict(message)) if *message == expected),
+        matches!(&result, Err(CoreError::Refused(refusal)) if refusal.reason == expected),
         "expected the respondent already answered error, got {result:?}"
     );
 }
 
 fn state_changed<T: std::fmt::Debug>(result: Result<T, CoreError>) {
-    let expected = SurveyError::SurveyStateChanged.to_string();
+    let expected = SurveyError::SurveyStateChanged.code();
     assert!(
-        matches!(&result, Err(CoreError::Conflict(message)) if *message == expected),
+        matches!(&result, Err(CoreError::Refused(refusal)) if refusal.reason == expected),
         "expected the survey state changed error, got {result:?}"
     );
 }

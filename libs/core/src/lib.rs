@@ -239,8 +239,8 @@ pub use domain::{
     },
     survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository},
     survey::service::{
-        CampaignPatch, CampaignService, ResponseLocator, ResponseService, SurveyPatch,
-        SurveyService,
+        CampaignPatch, CampaignService, ResponseLocator, ResponseService, StartedResponse,
+        SurveyPatch, SurveyService,
     },
     validate_api_key_name,
 };

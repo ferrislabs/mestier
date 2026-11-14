@@ -9,7 +9,8 @@ use uuid::Uuid;
 
 use super::ports::{MockCampaignRepository, MockResponseRepository, MockSurveyRepository};
 use super::service::{
-    CampaignPatch, CampaignService, ResponseLocator, ResponseService, SurveyPatch, SurveyService,
+    CampaignPatch, CampaignService, ResponseLocator, ResponseService, StartedResponse, SurveyPatch,
+    SurveyService,
 };
 use super::{
     Answer, Answers, Campaign, CampaignId, CampaignStatus, Completed, Draft, Edge, EndNode, Graph,
@@ -627,7 +628,10 @@ async fn the_response_cap_refuses_the_completion_beyond_it() {
         )
         .await
         .unwrap();
-    assert_eq!(started.id(), ResponseId(Uuid::from_u128(60)));
+    assert_eq!(
+        started.into_response().id(),
+        ResponseId(Uuid::from_u128(60))
+    );
     refused(
         service.complete(org(), &member_locator(), at(3)).await,
         SurveyError::ResponseCapReached,
@@ -1008,4 +1012,151 @@ async fn a_draft_survey_is_not_found_by_its_respondents() {
         SurveyError::SurveyNotFound,
     );
     assert!(emitter.names().is_empty());
+}
+
+fn public() -> Shape {
+    Shape {
+        visibility: Visibility::Public,
+        ..Shape::default()
+    }
+}
+
+#[tokio::test]
+async fn a_member_path_does_not_find_a_public_survey() {
+    let emitter = RecordingEmitter::new();
+    let members_survey = opened(&Shape::default());
+    let mut service: Responses<'_> = ResponseService::new(
+        responses_holding(in_progress(&members_survey, 50, "Jane").into()),
+        surveys_holding(opened(&public()).into()),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    refused(
+        service
+            .start_member(
+                org(),
+                survey_id(),
+                ResponseId(Uuid::from_u128(60)),
+                member(),
+                at(2),
+            )
+            .await,
+        SurveyError::SurveyNotFound,
+    );
+    refused(
+        service
+            .save(org(), &member_locator(), answers("Jane"), at(2))
+            .await,
+        SurveyError::SurveyNotFound,
+    );
+    refused(
+        service.complete(org(), &member_locator(), at(2)).await,
+        SurveyError::SurveyNotFound,
+    );
+    assert!(emitter.names().is_empty());
+}
+
+#[tokio::test]
+async fn a_public_path_does_not_find_a_members_survey() {
+    let emitter = RecordingEmitter::new();
+    let public_survey = opened(&public());
+    let mut service: Responses<'_> = ResponseService::new(
+        responses_holding(in_progress(&public_survey, 50, "Jane").into()),
+        surveys_holding(opened(&Shape::default()).into()),
+        campaigns_holding(None),
+        &emitter,
+    );
+    let locator = ResponseLocator::Public {
+        survey_id: survey_id(),
+        token: token(),
+    };
+
+    refused(
+        service
+            .start_public(
+                org(),
+                survey_id(),
+                ResponseId(Uuid::from_u128(60)),
+                token(),
+                at(2),
+            )
+            .await,
+        SurveyError::SurveyNotFound,
+    );
+    refused(
+        service.save(org(), &locator, answers("Jane"), at(2)).await,
+        SurveyError::SurveyNotFound,
+    );
+    refused(
+        service.complete(org(), &locator, at(2)).await,
+        SurveyError::SurveyNotFound,
+    );
+    assert!(emitter.names().is_empty());
+}
+
+#[tokio::test]
+async fn starting_tells_a_created_response_from_a_resumed_one() {
+    let survey = opened(&Shape::default());
+    let existing = in_progress(&survey, 50, "Jane");
+    let emitter = RecordingEmitter::new();
+    let mut fresh = MockResponseRepository::new();
+    fresh
+        .expect_find_in_progress_by_member()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+    fresh
+        .expect_find_completed_by_member()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+    fresh.expect_insert().returning(|response| {
+        let saved = response.clone();
+        Box::pin(async move { Ok(saved) })
+    });
+    let mut resuming = MockResponseRepository::new();
+    let found = ResponseRecord::from(existing.clone());
+    resuming
+        .expect_find_in_progress_by_member()
+        .returning(move |_, _, _| {
+            let found = found.clone();
+            Box::pin(async move { Ok(Some(found)) })
+        });
+    let mut creating: Responses<'_> = ResponseService::new(
+        fresh,
+        surveys_holding(survey.clone().into()),
+        campaigns_holding(None),
+        &emitter,
+    );
+    let mut resumed: Responses<'_> = ResponseService::new(
+        resuming,
+        surveys_holding(survey.into()),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    let created = creating
+        .start_member(
+            org(),
+            survey_id(),
+            ResponseId(Uuid::from_u128(60)),
+            member(),
+            at(2),
+        )
+        .await
+        .unwrap();
+    let again = resumed
+        .start_member(
+            org(),
+            survey_id(),
+            ResponseId(Uuid::from_u128(61)),
+            member(),
+            at(2),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        matches!(created, StartedResponse::Created(ref response) if response.id() == ResponseId(Uuid::from_u128(60)))
+    );
+    assert!(!created.is_resumed());
+    assert!(again.is_resumed());
+    assert_eq!(again.into_response(), existing);
 }

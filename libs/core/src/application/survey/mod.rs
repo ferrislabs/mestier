@@ -8,7 +8,7 @@ use crate::domain::feature_flag::ports::FeatureFlagRepository;
 use crate::domain::member::ports::MemberRepository;
 use crate::domain::role::ports::RoleRepository;
 use crate::domain::survey::ports::SurveyRepository;
-use crate::domain::survey::{PublicSlug, ResumeToken, SurveyError, SurveyRecord};
+use crate::domain::survey::{PublicSlug, ResumeToken, SurveyError, SurveyRecord, Visibility};
 use crate::{FeatureFlag, MemberId, OrganizationId};
 
 mod clock;
@@ -156,9 +156,10 @@ where
         .find_by_public_slug(slug)
         .await?
         .ok_or(SurveyError::SurveyNotFound)?;
-    if flags
-        .is_enabled(record.organization_id(), FeatureFlag::Surveys)
-        .await?
+    if record.visibility() == Visibility::Public
+        && flags
+            .is_enabled(record.organization_id(), FeatureFlag::Surveys)
+            .await?
     {
         Ok(record)
     } else {
