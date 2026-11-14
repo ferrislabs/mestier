@@ -464,6 +464,15 @@ Décisions S1 (branche `feat/surveys-s1`) :
 - **Permissions** : `survey.manage` et `survey.view` (lecture : l'une ou l'autre) pour les administrateurs ; répondre en mode membres ne demande que d'être membre de l'organisation.
 - **Reste à traiter** : deux réponses en cours simultanées pour un même membre (index à ajouter), `list_due` ne résout pas la famine d'une campagne qui échoue en boucle (index partiel seulement), `advance_due` supprimé.
 
+Décisions S2 et S4 :
+
+- **Routes (S2)** : gestion sous `/api/v1/organizations/{organization_id}/...` (questionnaires, campagnes, réponses) ; réponse membres sous `/member-surveys/...` et `/member-survey-responses/...`, à garder séparées. Une route membres sur un questionnaire public répond 404. `start_member` répond 200 quand elle reprend une réponse en cours, 201 quand elle en crée une. Les routes publiques (S3) vivent à une racine à part, jamais sous `/organizations/{id}`.
+- **Erreurs** : `CoreError` a deux variantes de plus, `Validation` (422) et `Refused`, qui porte une raison stable. L'enveloppe d'erreur expose `details.reason` (code `snake_case` de `SurveyError::code()`) et `details.question_id` pour les erreurs de question. Les 422 levés par le handler avant le cas d'usage (forme du graphe, e-mail dans `answers`, plafond à 0) n'ont pas de `details.reason`, et les 404 n'ont pas de `details`.
+- **OpenAPI** : le graphe et les réponses sont typés dans le document par des types miroirs côté handler. Le client généré type encore `answers` en `Record<string, unknown>` (limite de typed-openapi).
+- **Lien public** : la page publique est servie à `/s/{slug}`, à la racine du webapp, hors `_app` et hors `/organizations/{id}` (fichier de route `s.$slug.tsx`). `PublicSlug::path()` est la seule source du format. Aucun réglage d'adresse publique n'existe : les actions renvoient le chemin relatif ; quand un réglage arrivera, un champ `url` s'ajoutera à côté de `path`.
+- **Actions d'automatisation (S4)** : `mestier.survey.open`, `.close`, `.get_link`, `.list_responses`, exécutées en acteur système, la portée d'organisation vient du workflow. `open` rattache à la campagne et ouvre dans une seule transaction. `list_responses` renvoie `{ total, responses }`, réponses complètes seulement, les plus récentes d'abord, `limit` par défaut 50, plafond 100, mêmes entrées `answers` que `survey.response_completed`.
+- **Pour S5 et S6** : la disposition du canevas n'a pas encore de stockage (colonne et API à décider au début de S5) ; aucun listing des questionnaires ouverts d'un membre ; pas de filtre sur les listes ; `Graph::new` refuse un libellé vide, donc un brouillon ne s'enregistre pas avec une question sans libellé.
+
 ## Risks / open questions
 
 Choix de l'assistant après relecture (à corriger) :
@@ -504,3 +513,4 @@ Amended: 2026-11-14 questions conditionnelles (affichage selon les cases cochée
 Amended: 2026-11-14 la définition du questionnaire devient un graphe sans cycle (nœuds question, condition, fin) édité dans un canevas `@xyflow/react` propre au module ; remplace l'affichage conditionnel `visible_when`. Les branches peuvent se rejoindre (choix de l'assistant, à confirmer).
 Amended: 2026-11-14 contrats figés régénérés après la relecture finale de S0 (réponse liée au questionnaire ouvert, campagne à statut persisté, métadonnées fusionnées dans les événements, clés étrangères avec org_id, index d unicité par répondant).
 Amended: 2026-11-14 décisions de S1 consignées (horloge, deux temps, vue du répondant, verrous, erreurs).
+Amended: 2026-11-14 décisions de S2 et S4 consignées (routes, raisons d erreur, chemin public, actions).
