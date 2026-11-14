@@ -110,12 +110,14 @@ pub use domain::{
     ExpenseCategoryId, ExpenseCategoryService, ExpenseDisplayState, ExpenseError, ExpenseField,
     ExpenseId, ExpenseOutcome, ExpenseService, ExpenseStatus, GraphPath, InProgress, Ledger,
     LedgerEntry, LedgerError, LedgerKind, LedgerMonth, LedgerMonthError, LedgerOutcome,
-    LedgerService, LedgerStatus, LedgerSummary, Metadata, MonthTrend, Opened, Payables, QuestionId,
-    QuestionKind, Receipt, ReceiptId, ReceiptRow, ReceiptService, Response, ResponseId,
+    LedgerService, LedgerStatus, LedgerSummary, Metadata, MonthTrend, Opened, Payables, PublicSlug,
+    QuestionId, QuestionKind, Receipt, ReceiptId, ReceiptRow, ReceiptService, ResponseId,
     ResponseRecord, ResumeToken, SupplierAddress, SupplierAddressInput, SupplierContact,
     SupplierContactInput, SupplierError, SupplierField, SupplierOutcome, SupplierProfile,
-    SupplierProfileInput, Survey, SurveyError, SurveyGraph, SurveyId, SurveyRecord, SurveyWindow,
-    VatSummary, Visibility, build_ledger,
+    SupplierProfileInput, Survey, SurveyBranch, SurveyConditionNode, SurveyEdge,
+    SurveyEmailAddress, SurveyEndNode, SurveyError, SurveyGraph, SurveyId, SurveyNode,
+    SurveyNodeRef, SurveyPhoneNumber, SurveyQuestionNode, SurveyRecord, SurveyResponse,
+    SurveyWindow, VatSummary, Visibility, build_ledger,
 };
 
 /// The profitability calculation, and the port it reads through. Exposed so the

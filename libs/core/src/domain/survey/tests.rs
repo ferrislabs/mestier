@@ -1866,3 +1866,74 @@ mod ports {
         );
     }
 }
+
+mod exports {
+    use uuid::Uuid;
+
+    use crate::{
+        Completed, InProgress, PublicSlug, QuestionId, QuestionKind, SurveyBranch,
+        SurveyConditionNode, SurveyEdge, SurveyEmailAddress, SurveyEndNode, SurveyGraph,
+        SurveyNode, SurveyNodeRef, SurveyPhoneNumber, SurveyQuestionNode, SurveyResponse,
+        SurveyWindow,
+    };
+
+    fn qid(n: u128) -> QuestionId {
+        QuestionId(Uuid::from_u128(n))
+    }
+
+    #[test]
+    fn the_survey_types_are_reachable_from_the_crate_root() {
+        let graph = SurveyGraph::new(
+            vec![
+                SurveyNode::Question(SurveyQuestionNode {
+                    id: qid(1),
+                    kind: QuestionKind::SingleChoice,
+                    label: "Q".to_string(),
+                    required: false,
+                    options: vec!["A".to_string()],
+                    max_photos: None,
+                    identifier: false,
+                }),
+                SurveyNode::Condition(SurveyConditionNode {
+                    id: qid(2),
+                    question: qid(1),
+                    option: "A".to_string(),
+                    checked: true,
+                }),
+                SurveyNode::End(SurveyEndNode {
+                    id: qid(3),
+                    message: None,
+                }),
+            ],
+            vec![
+                SurveyEdge {
+                    from: qid(1),
+                    to: qid(2),
+                    branch: SurveyBranch::Next,
+                },
+                SurveyEdge {
+                    from: qid(2),
+                    to: qid(3),
+                    branch: SurveyBranch::Then,
+                },
+                SurveyEdge {
+                    from: qid(2),
+                    to: qid(3),
+                    branch: SurveyBranch::Else,
+                },
+            ],
+            qid(1),
+        )
+        .unwrap();
+        assert!(matches!(
+            graph.nodes().next(),
+            Some(SurveyNodeRef::Question(_))
+        ));
+        assert!(SurveyEmailAddress::try_from("a@b.fr").is_ok());
+        assert!(SurveyPhoneNumber::try_from("0612345678").is_ok());
+        assert!(PublicSlug::new("abcdefgh".to_string()).is_ok());
+        assert!(SurveyWindow::new(None, None).is_ok());
+        let _: Option<SurveyResponse<InProgress>> = None;
+        let _: Option<SurveyResponse<Completed>> = None;
+    }
+}
