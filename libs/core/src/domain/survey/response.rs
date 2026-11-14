@@ -17,17 +17,19 @@ pub struct InProgress;
 pub struct Completed;
 
 mod sealed {
-    pub trait Sealed {}
+    use super::{ResponseBody, SurveyError};
+
+    pub trait Sealed {
+        fn check(body: &ResponseBody) -> Result<(), SurveyError>;
+    }
 }
 
-impl sealed::Sealed for InProgress {}
-impl sealed::Sealed for Completed {}
+pub trait Phase: sealed::Sealed {}
 
-pub trait Phase: sealed::Sealed {
-    fn check(body: &ResponseBody) -> Result<(), SurveyError>;
-}
+impl Phase for InProgress {}
+impl Phase for Completed {}
 
-impl Phase for InProgress {
+impl sealed::Sealed for InProgress {
     fn check(body: &ResponseBody) -> Result<(), SurveyError> {
         if body.completed_at.is_none() && body.identifier_value.is_none() {
             check_finite(&body.answers)
@@ -37,7 +39,7 @@ impl Phase for InProgress {
     }
 }
 
-impl Phase for Completed {
+impl sealed::Sealed for Completed {
     fn check(body: &ResponseBody) -> Result<(), SurveyError> {
         if body.completed_at.is_some() {
             check_finite(&body.answers)
@@ -74,7 +76,8 @@ impl TryFrom<String> for ResumeToken {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(crate) struct ResponseBody {
+#[doc(hidden)]
+pub struct ResponseBody {
     id: ResponseId,
     survey_id: SurveyId,
     organization_id: OrganizationId,

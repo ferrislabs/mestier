@@ -21,12 +21,12 @@ pub struct Opened;
 pub struct Closed;
 
 mod sealed {
-    pub trait Sealed {}
-}
+    use super::{Body, SurveyError};
 
-impl sealed::Sealed for Draft {}
-impl sealed::Sealed for Opened {}
-impl sealed::Sealed for Closed {}
+    pub trait Sealed {
+        fn check(body: &Body) -> Result<(), SurveyError>;
+    }
+}
 
 fn check_title(body: &Body) -> Result<(), SurveyError> {
     if body.title.trim().is_empty() {
@@ -36,11 +36,13 @@ fn check_title(body: &Body) -> Result<(), SurveyError> {
     }
 }
 
-pub trait Stage: sealed::Sealed {
-    fn check(body: &Body) -> Result<(), SurveyError>;
-}
+pub trait Stage: sealed::Sealed {}
 
-impl Stage for Draft {
+impl Stage for Draft {}
+impl Stage for Opened {}
+impl Stage for Closed {}
+
+impl sealed::Sealed for Draft {
     fn check(body: &Body) -> Result<(), SurveyError> {
         match (body.opened_at, body.closed_at) {
             (None, None) => Ok(()),
@@ -49,7 +51,7 @@ impl Stage for Draft {
     }
 }
 
-impl Stage for Opened {
+impl sealed::Sealed for Opened {
     fn check(body: &Body) -> Result<(), SurveyError> {
         if body.graph.is_none() {
             return Err(SurveyError::SurveyWithoutGraph);
@@ -61,7 +63,7 @@ impl Stage for Opened {
     }
 }
 
-impl Stage for Closed {
+impl sealed::Sealed for Closed {
     fn check(body: &Body) -> Result<(), SurveyError> {
         if body.graph.is_none() {
             return Err(SurveyError::SurveyWithoutGraph);
@@ -74,7 +76,8 @@ impl Stage for Closed {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(crate) struct Body {
+#[doc(hidden)]
+pub struct Body {
     id: SurveyId,
     organization_id: OrganizationId,
     title: String,

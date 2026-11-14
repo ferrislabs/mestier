@@ -95,6 +95,12 @@ pub use service_rate::*;
 pub use supplier_invoice::*;
 pub use support::*;
 pub use surcharge::*;
+pub use survey::{
+    Answer, Answers, Campaign, CampaignId, CampaignStatus, Closed, Completed, Draft,
+    Graph as SurveyGraph, GraphPath, InProgress, Metadata, Opened, QuestionId, QuestionKind,
+    Response, ResponseId, ResponseRecord, ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord,
+    Visibility, Window as SurveyWindow,
+};
 pub use task::*;
 pub use task_comment::*;
 pub use task_label::*;

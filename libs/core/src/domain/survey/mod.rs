@@ -26,13 +26,16 @@ mod tests;
 pub use aggregate::{Closed, Draft, Opened, Survey};
 pub use campaign::{Campaign, CampaignStatus, Window};
 pub use error::SurveyError;
-pub use graph::{
-    Answers, Branch, ConditionNode, Edge, EndNode, Graph, GraphPath, Node, NodeRef, QuestionNode,
-};
+pub use graph::{Answers, Graph, GraphPath};
 pub use metadata::Metadata;
 pub use record::{ResponseRecord, SurveyRecord};
 pub use response::{Completed, InProgress, Response, ResumeToken};
-pub use value::{Answer, EmailAddress, PhoneNumber, QuestionId, QuestionKind, Visibility};
+pub use value::{Answer, QuestionId, QuestionKind, Visibility};
+
+#[cfg(test)]
+pub(crate) use graph::{Branch, ConditionNode, Edge, EndNode, Node, QuestionNode};
+#[cfg(test)]
+pub(crate) use value::{EmailAddress, PhoneNumber};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub struct SurveyId(pub Uuid);

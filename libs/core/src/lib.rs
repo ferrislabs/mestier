@@ -105,14 +105,17 @@ pub use domain::member::service::MemberService;
 pub use domain::role::service::RoleService;
 
 pub use domain::{
-    CatalogProfile, CatalogProfileInput, CatalogUsage, DocumentVatRow, Expense, ExpenseCategory,
+    Answer, Answers, Campaign, CampaignId, CampaignStatus, CatalogProfile, CatalogProfileInput,
+    CatalogUsage, Closed, Completed, DocumentVatRow, Draft, Expense, ExpenseCategory,
     ExpenseCategoryId, ExpenseCategoryService, ExpenseDisplayState, ExpenseError, ExpenseField,
-    ExpenseId, ExpenseOutcome, ExpenseService, ExpenseStatus, Ledger, LedgerEntry, LedgerError,
-    LedgerKind, LedgerMonth, LedgerMonthError, LedgerOutcome, LedgerService, LedgerStatus,
-    LedgerSummary, MonthTrend, Payables, Receipt, ReceiptId, ReceiptRow, ReceiptService,
-    SupplierAddress, SupplierAddressInput, SupplierContact, SupplierContactInput, SupplierError,
-    SupplierField, SupplierOutcome, SupplierProfile, SupplierProfileInput, VatSummary,
-    build_ledger,
+    ExpenseId, ExpenseOutcome, ExpenseService, ExpenseStatus, GraphPath, InProgress, Ledger,
+    LedgerEntry, LedgerError, LedgerKind, LedgerMonth, LedgerMonthError, LedgerOutcome,
+    LedgerService, LedgerStatus, LedgerSummary, Metadata, MonthTrend, Opened, Payables, QuestionId,
+    QuestionKind, Receipt, ReceiptId, ReceiptRow, ReceiptService, Response, ResponseId,
+    ResponseRecord, ResumeToken, SupplierAddress, SupplierAddressInput, SupplierContact,
+    SupplierContactInput, SupplierError, SupplierField, SupplierOutcome, SupplierProfile,
+    SupplierProfileInput, Survey, SurveyError, SurveyGraph, SurveyId, SurveyRecord, SurveyWindow,
+    VatSummary, Visibility, build_ledger,
 };
 
 /// The profitability calculation, and the port it reads through. Exposed so the
@@ -222,6 +225,11 @@ pub use domain::{
         TicketFilter, TicketPage, TicketRepository,
     },
     support::thread_service::NewAttachment,
+    survey::events::{
+        SurveyCampaignEnded, SurveyCampaignStarted, SurveyOpened, SurveyResponseCompleted,
+        SurveyResponseSubmitted,
+    },
+    survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository},
     validate_api_key_name,
 };
 

@@ -16,3 +16,9 @@ View: saved way to show a table (grid or kanban) with its filters, sorts and hid
 Document: knowledge article written block by block in the webapp, shown as "document". Replaces the plain-text note. Rejected: "page", Notion's word, confused with a page of the app.
 Block: one unit of a document's content (paragraph, heading, list item, callout, image, table view…), shown as "bloc".
 Edit lock: 90-second lease that lets one person at a time change a document's content, shown as "en cours de modification par…". Rejected: "checkout".
+Survey: set of questions put to an audience, shown as "questionnaire". Rejected: "sondage" and "formulaire", too broad; `survey` stays the name in code (module, schema, crate).
+Campaign: groups surveys and sets the window during which their responses are accepted, shown as "campagne". Rejected: "envoi".
+Open: make a survey available to its audience, shown as "ouvrir". Rejected: "envoyer", "publier".
+Visibility: `PUBLIC` (anyone with the link) or `MEMBERS` (authenticated members of the organization), shown as "visibilité".
+Response: all the answers of one respondent to a survey, shown as "réponse". Rejected: "soumission", kept for the act of saving.
+Window: start-end interval of a campaign during which responses are accepted, shown as "fenêtre".
