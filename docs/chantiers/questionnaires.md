@@ -1,0 +1,303 @@
+# Questionnaires
+
+État : **spec validée le 2026-11-14. Découpage en attente de validation. Rien n'est implémenté.**
+
+Taille : **L**. Le découpage en workstreams est à valider avant tout lancement (voir Workstreams).
+
+## Goal
+
+Un utilisateur crée un questionnaire, l'ouvre à son audience (n'importe qui avec le lien, ou les membres de l'organisation), reçoit les réponses, et l'automatisation réagit aux événements émis (ouverture, réponse enregistrée, réponse complète, début et fin de campagne).
+
+## Context
+
+Deux usages réels :
+
+1. **Intervenant de formation.** Un questionnaire envoyé à un intervenant pour qu'il renseigne des informations. Sa réponse déclenche la création de ressources métier. Aujourd'hui : Drag'n Survey, qui rappelle un webhook entrant.
+2. **QCM de fin de session.** Les élèves ouvrent un lien, saisissent leur nom et répondent. Le formateur calcule une note.
+
+Ce qui existe et qu'on réutilise :
+
+- Le moteur d'automatisation et son déclencheur `Events` : chaque module décrit ses événements dans `libs/core/src/domain/<module>/events.rs`, assemblés par `event_catalogue()` (voir `docs/events.md`).
+- Le connecteur SMTP et le catalogue d'actions (`libs/core/src/domain/automation/connector/`). L'envoi d'e-mail passe par là, jamais par le module questionnaire.
+- Le déclencheur `Schedule` des workflows et le code à date de `application/task_recurrence/`.
+- `libs/rate-limit`, pour protéger les routes sans authentification.
+
+Ce qui n'existe pas : aucune route ni page ouverte sans compte (tout est sous `_app` côté webapp).
+
+Décisions prises avec le demandeur (2026-11-14) :
+
+1. Deux visibilités seulement : **publique** et **membres**.
+2. En public, l'identité du répondant n'est pas gérée par le système. « Nom » et « prénom » sont des questions que l'auteur ajoute s'il le souhaite.
+3. En membres, l'authentification est obligatoire et la réponse est rattachée au membre.
+4. Un questionnaire est **indépendant** ou **dans une campagne**. Une campagne a une date de début et une date de fin.
+5. La date de début d'une campagne est le moment à partir duquel les réponses sont acceptées. La date de fin est le moment après lequel elles sont refusées.
+6. **On n'envoie pas un questionnaire, on l'ouvre.** L'envoi par e-mail est fait par une automatisation (bouton, récurrence, événement) via le connecteur SMTP.
+7. **La notation est hors module.** Le module stocke les réponses fidèlement. Un workflow calcule la note à partir du payload de l'événement.
+8. Les réponses vivent **uniquement dans le module**, dans un **schéma SQL `survey`**. Pas de réutilisation des tables du module Connaissances.
+9. **Métadonnées privées.** Un questionnaire (et une campagne) porte un jeu de métadonnées clé-valeur que le répondant ne voit jamais. Elles sont recopiées dans les payloads d'événements pour servir de contexte à l'automatisation (session de formation, intervenant, etc.).
+10. **Types de question** : texte, texte long, nombre, choix unique, choix multiple, date, date et heure, téléphone, e-mail, photo.
+11. **Une même personne ne répond qu'une fois**, sauf si le questionnaire l'autorise : le questionnaire porte un réglage « réponses multiples » (refusées par défaut).
+
+Choix de l'assistant (à corriger) :
+
+- Une campagne regroupe un ou plusieurs questionnaires. Un questionnaire appartient à une campagne au plus.
+- Une réponse est « en cours » dès son premier enregistrement, puis « complète » à la soumission finale.
+- La définition des questions est un JSON versionné, figé à l'ouverture. Les réponses sont en JSONB.
+- Un questionnaire de campagne accepte des réponses s'il est ouvert **et** que la campagne est dans sa fenêtre.
+- Le répondant ne voit pas de note. Il voit un message de fin configuré par l'auteur.
+
+## Glossary
+
+Questionnaire : ensemble de questions soumis à une audience, affiché « questionnaire ». Rejeté : « sondage » et « formulaire », trop larges ; « survey » reste le nom du code (module, schéma, crate).
+Campagne : regroupe des questionnaires et fixe la fenêtre pendant laquelle leurs réponses sont acceptées. Rejeté : « envoi ».
+Ouvrir : rendre un questionnaire disponible à son audience. Rejeté : « envoyer », « publier ».
+Visibilité : `PUBLIC` (n'importe qui avec le lien) ou `MEMBERS` (membres authentifiés de l'organisation).
+Réponse : l'ensemble des réponses d'un répondant à un questionnaire. Rejeté : « soumission », réservé à l'acte d'enregistrer.
+Fenêtre : intervalle début-fin d'une campagne pendant lequel les réponses sont acceptées.
+
+## Invariants
+
+- Toute requête est filtrée par `org_id`.  [test : une requête sans `org_id` ne compile pas avec `query!` ; le filtre est vérifié par test d'intégration]
+- Une campagne dont la fin précède le début n'existe pas.  [type : constructeur `Window::new` renvoie `Result`]
+- Un questionnaire n'a des questions modifiables qu'à l'état brouillon. Après ouverture la définition est figée.  [type : `Survey<Draft>` expose l'édition, pas `Survey<Opened>`]
+- Une réponse complète ne change plus.  [type : état `Completed` sans méthode de modification]
+- Une réponse n'est acceptée que si le questionnaire est ouvert et, s'il est dans une campagne, que l'instant est dans la fenêtre.  [test : garde dans le cas d'usage de soumission ; l'horloge est injectée]
+- Une réponse ne peut pas être complète si une question obligatoire **du chemin parcouru** est sans réponse, ou si le chemin ne se termine pas sur un nœud `End`.  [test : validation de la réponse contre la définition figée]
+- Un graphe n'a pas de cycle, a un seul nœud de départ, et chaque nœud mène à un `End`.  [type : `Graph::new` renvoie `Result`, la définition ne se construit pas autrement]
+- Une condition ne référence qu'une question de choix posée sur tous les chemins qui y mènent, et une option qui existe.  [type : vérifié dans `Graph::new`]
+- Une réponse hors du chemin parcouru n'est ni conservée ni envoyée dans un événement.  [test]
+- Un téléphone et un e-mail enregistrés sont valides ; une date et une date et heure sont bien formées.  [type : `PhoneNumber`, `EmailAddress`, `Answer` construits par `TryFrom`]
+- Si `allow_multiple_responses` est faux, un membre ne complète qu'une réponse par questionnaire.  [test d'intégration : contrainte unique `(survey_id, member_id)` sur les réponses complètes]
+- Si `allow_multiple_responses` est faux, deux réponses publiques ne partagent pas la même valeur de la question « identifiant ».  [test d'intégration : contrainte unique sur la valeur normalisée]
+- Une photo n'est acceptée que si c'est une image JPEG, PNG ou WebP dans la limite de taille ; elle est normalisée avant stockage.  [test]
+- Les métadonnées ne sont jamais renvoyées par une route de réponse (publique ou membres).  [test]
+- Un événement existe si et seulement si sa transaction a validé (`with_tx_emitting`).  [test : règle du projet, vérifiée pour chaque événement du lot]
+- `survey.response_completed` part au plus une fois par réponse.  [test]
+- Un questionnaire `MEMBERS` ne reçoit jamais de réponse d'un non-membre de son organisation.  [test d'intégration sur la route]
+- Une route publique ne révèle rien de l'organisation au-delà du questionnaire ouvert (pas d'identifiant d'organisation, pas de liste).  [test]
+- La visibilité d'un questionnaire ne change plus après sa première ouverture.  [type : visibilité absente de `Survey<Opened>` en écriture] — *choix de l'assistant, à confirmer*
+- Les réponses ne sont écrites que dans le schéma `survey`.  [test : migration et revue, aucun autre schéma ne référence ses tables en écriture]
+
+## Out of scope
+
+- Envoi d'e-mail, de SMS ou de notification : tout passe par l'automatisation.
+- Notation, points, bonnes réponses, corrigé : un workflow calcule.
+- Affichage d'une note au répondant.
+- Statistiques et tableaux de bord de résultats (la lecture brute des réponses suffit à ce lot).
+- Export CSV ou PDF.
+- Boucles dans le graphe (retour à une question précédente) et pages regroupant plusieurs questions. Le branchement conditionnel est dans le lot.
+- Conditions sur autre chose que des questions de choix (nombre, texte, date) : à ajouter plus tard si besoin.
+- Import depuis Drag'n Survey.
+- Garantie forte d'unicité en mode public : sans compte, seul un identifiant déclaré par l'auteur (voir Unicité) ou un jeton navigateur permet de reconnaître un répondant.
+- Métadonnées propres à chaque lien ou à chaque répondant (paramètres d'URL) : les métadonnées sont portées par le questionnaire et la campagne.
+- Photos placées dans la photothèque de l'organisation : elles restent attachées à la réponse.
+- Questionnaires envoyés à des destinataires connus avec lien personnel : écarté par le demandeur (deux typologies seulement).
+
+## Design
+
+### Domain (`libs/core/src/domain/survey/`)
+
+Entités :
+
+- `Survey` : id, `org_id`, titre, description, visibilité, définition (questions), message de fin, réglages (`allow_multiple_responses`, plafond de réponses optionnel), métadonnées privées, état (`Draft`, `Opened`, `Closed`), `campaign_id` optionnel, `opened_at` et `closed_at` (audit).
+- `Question` (dans la définition JSON versionnée) : id stable, type (`TEXT`, `LONG_TEXT`, `NUMBER`, `SINGLE_CHOICE`, `MULTIPLE_CHOICE`, `DATE`, `DATETIME`, `PHONE`, `EMAIL`, `PHOTO`), libellé, obligatoire, options pour les choix, indicateur « identifiant » (voir Unicité), nombre maximal de photos pour `PHOTO`.
+- `Graph` (la définition d'un questionnaire, JSONB versionné, voir Arbre de décision) : nœuds `Question`, `Condition` et `End`, et arêtes.
+- `Campaign` : id, `org_id`, nom, `Window` optionnelle (début et fin chacun optionnel), métadonnées privées, état (`Scheduled`, `Running`, `Ended`). Les métadonnées d'un questionnaire de campagne se superposent à celles de la campagne (celles du questionnaire gagnent).
+- `Response` : id, `org_id`, `survey_id`, `member_id` optionnel (rempli en mode membres), réponses (JSONB indexé par id de question), état (`InProgress`, `Completed`), jeton de reprise (mode public).
+
+Valeurs : `Visibility`, `Window`, `QuestionId`, `Answer` (enum aligné sur les types de question).
+
+Cas d'usage (`application/survey/`, méthodes `#[transactional]` sur `MestierUseCase`) :
+
+- gestion : créer, modifier (brouillon), ouvrir, fermer, supprimer un questionnaire ; créer, modifier, supprimer une campagne ; rattacher un questionnaire à une campagne ;
+- réponse : enregistrer une réponse (création au premier appel, mise à jour ensuite), compléter une réponse ;
+- lecture : lister les réponses d'un questionnaire, lire une réponse ;
+- horloge : avancer l'état des campagnes (`Scheduled` → `Running` → `Ended`) et émettre `survey_campaign.started` et `survey_campaign.ended`.
+
+### Arbre de décision
+
+La définition d'un questionnaire est un **graphe orienté sans cycle**, construit dans un canevas comme l'éditeur d'automatisation (`@xyflow/react`), avec un modèle propre au module : on ne réutilise pas le code de l'éditeur d'automatisation, couplé à ses connecteurs. *Modèle : choix de l'assistant, à confirmer.*
+
+- **Nœuds** : `Question` (un des dix types, libellé, obligatoire, options, etc.), `Condition` et `End` (avec le message de fin). Un nœud de départ unique : la première question.
+- **Condition** : compare la réponse d'une question de choix (`SINGLE_CHOICE` ou `MULTIPLE_CHOICE`) déjà posée sur **tous les chemins** qui mènent à la condition. Elle a une branche `Then` et une branche `Else`. Formes : « l'option X est cochée » ou « n'est pas cochée ».
+- **Arêtes** : une seule forme, `from` / `to` / branche, comme dans l'automatisation. Une question a une seule sortie ; une condition en a deux.
+- **Rejoindre** : plusieurs arêtes peuvent arriver sur le même nœud (une question commune après deux branches). Ce n'est donc pas un arbre strict. *Choix de l'assistant : sans cela, une question commune doit être copiée dans chaque branche.*
+- **Chemin** : le chemin d'une réponse est calculé par le backend en suivant le graphe à partir des réponses. Une réponse donnée sur un chemin abandonné (le répondant est revenu en arrière et a changé une réponse de choix) est écartée à l'enregistrement.
+- **Validation de la complétion** : seules les questions obligatoires **du chemin parcouru** doivent être renseignées, et le chemin doit se terminer sur un nœud `End`.
+- Les payloads d'événements ne contiennent que les réponses du chemin parcouru, dans l'ordre du chemin.
+- Le graphe fait partie de la définition figée à l'ouverture.
+
+**Où se fait le calcul du chemin.** Le backend fait foi, à chaque enregistrement et à la complétion. Le navigateur doit aussi trouver la question suivante sans attendre le réseau, donc il suit le graphe lui aussi. Pour qu'il n'y ait pas deux vérités, un même jeu de cas de test (fichier JSON de graphes, réponses et chemins attendus) est exécuté par les tests Rust et par les tests vitest.
+
+### Interface de gestion
+
+- **Éditeur** : le canevas du graphe. Un panneau de détails édite la question ou la condition sélectionnée.
+- **Ajout d'un nœud** : un sélecteur présente les dix types de question et le nœud `Condition` sous forme de cartes. Chaque carte a une **icône** du type, un **titre** et une **description** courte en français. Le catalogue (icône, titre, description) est une donnée du front, une seule source pour le sélecteur et le canevas.
+- **Validation à l'édition** : le canevas signale un graphe invalide (nœud sans sortie, chemin sans `End`, condition sur une question non posée, cycle) avant l'ouverture.
+- **Réponse** : le répondant voit **une question à la fois**, dans l'ordre du chemin, avec un bouton pour revenir en arrière.
+- Réglages du questionnaire : visibilité, message de fin, réponses multiples, plafond de réponses, métadonnées, campagne de rattachement.
+
+### Unicité
+
+Le réglage `allow_multiple_responses` vaut faux par défaut.
+
+- **Mode membres** : unicité par `(survey_id, member_id)`. Le membre reprend sa réponse en cours.
+- **Mode public** : le système ne connaît pas le répondant. L'auteur peut marquer **une** question `EMAIL`, `PHONE` ou `TEXT` comme « identifiant » : la valeur normalisée est unique parmi les réponses complètes, et un second dépôt est refusé avec un message clair. Sans question identifiant, seul le jeton de reprise (navigateur) évite le doublon, ce qui n'est pas une garantie. *Choix de l'assistant, à confirmer.*
+
+### Photos
+
+Une réponse `PHOTO` stocke les clés d'objets, jamais des octets dans le JSONB. Le dépôt passe par une route du module (publique ou membres selon la visibilité) qui normalise l'image comme la photothèque (rotation EXIF, redimensionnement, retrait du GPS, JPEG) et écrit via le port `FileStorage` sous un préfixe propre au questionnaire. La logique de normalisation de `domain/photo_library/normalize.rs` doit être partagée plutôt que copiée : c'est sa deuxième utilisation. Un fichier dont la réponse n'est jamais complétée est orphelin : un nettoyage des fichiers de réponses abandonnées est à prévoir (S3).
+
+### Événements
+
+Ajoutés au catalogue (un `EventDescriptor` par événement, une ligne dans `emitted_events()`, le nom dans `EVENT_DOMAINS` du webapp, le contrat dans `event-contracts.ts`) :
+
+| Événement | Libellé | Sujet | Quand |
+|---|---|---|---|
+| `survey.opened` | Questionnaire ouvert | `survey` | passage `Draft` → `Opened` |
+| `survey.response_submitted` | Réponse enregistrée | `survey_response` | chaque enregistrement d'une réponse en cours |
+| `survey.response_completed` | Réponse complète | `survey_response` | soumission finale ; le payload porte toutes les réponses |
+| `survey_campaign.started` | Campagne démarrée | `survey_campaign` | la fenêtre s'ouvre |
+| `survey_campaign.ended` | Campagne terminée | `survey_campaign` | la fenêtre se ferme |
+
+`docs/events.md` passe de 46 à 51 événements.
+
+**Identifiants portés par chaque événement :**
+
+- Les trois événements de questionnaire (`survey.opened`, `survey.response_submitted`, `survey.response_completed`) portent `survey_id` et `campaign_id`. `campaign_id` est `null` pour un questionnaire indépendant, jamais absent du payload.
+- Les deux événements de campagne portent `campaign_id`.
+- Le contrat est figé en S0 et décrit dans `event-contracts.ts`, pour que le sélecteur de l'éditeur propose ces deux champs.
+
+### Ports
+
+- `SurveyRepository`, `CampaignRepository`, `ResponseRepository` : définis par le domaine, adaptateurs Postgres dans `infrastructure/survey/postgres/`, marqueurs dans `infrastructure/registry.rs` avec `#[repository(domain = X, backend = Postgres)]`. Choix de dispatch : générique statique, comme les autres dépôts.
+- `Clock` : port d'horloge pour les gardes de fenêtre. *Vérifier s'il en existe déjà un avant d'en créer un.*
+
+### Adaptateurs et routes
+
+Crate `libs/handlers-survey`, découpée par agrégat (`survey/`, `campaign/`, `response/`), branchée dans `apps/api/src/router.rs` et `openapi.rs`.
+
+- **Gestion** (authentifiée, permission dédiée `MANAGE_SURVEYS`, lecture `VIEW_SURVEYS`) : CRUD des questionnaires et campagnes, ouverture, fermeture, lecture des réponses.
+- **Réponse membres** (authentifiée, membre de l'organisation) : lire un questionnaire ouvert, enregistrer, compléter.
+- **Réponse publique** (sans authentification, limitée par `libs/rate-limit`) : lire un questionnaire ouvert par son lien, enregistrer, compléter avec le jeton de reprise. Le lien public contient un identifiant non devinable, jamais l'`org_id`.
+
+Webapp :
+
+- Modules dans `apps/webapp/src/modules/registry.ts` (menu de gestion), pages `src/pages/survey/` en séparation `feature/` et `ui/`.
+- Page de réponse publique : une **route hors de `_app`**, la première du produit. Design à faire avec soin (mobile d'abord, les élèves répondent sur téléphone).
+- Page de réponse membres : sous `_app`.
+
+Automatisation : actions ajoutées au catalogue des connecteurs (`connector/actions/`), au minimum « ouvrir un questionnaire », « fermer un questionnaire », « lire le lien d'un questionnaire », « lister les réponses ». La liste définitive est fixée dans le workstream S4.
+
+### Données
+
+Migration `survey` : `CREATE SCHEMA survey`, tables `survey.survey`, `survey.campaign`, `survey.response`. Migrations réversibles, `.down.sql` écrit et testé. Index sur `(org_id, survey_id)` et sur le lien public.
+
+Chaque nouveau `query!` demande une base vivante et `cargo sqlx prepare --workspace -- --all-targets`.
+
+### Erreurs
+
+Une énumération par frontière : `SurveyError` (domaine), erreurs de handler vers `CoreError`/type partagé de `libs/handlers`. Cas visibles côté répondant : questionnaire introuvable, fermé, hors fenêtre, réponse déjà complète, question obligatoire manquante, réponse invalide pour le type de la question.
+
+## Acceptance (Gherkin)
+
+```
+@spec-survey-1  Scenario: un questionnaire public ouvert reçoit une réponse sans compte
+@spec-survey-2  Scenario: un questionnaire membres refuse un répondant non authentifié
+@spec-survey-3  Scenario: un questionnaire membres refuse un membre d'une autre organisation
+@spec-survey-4  Scenario: ouvrir un questionnaire fige sa définition et émet survey.opened
+@spec-survey-5  Scenario: enregistrer une réponse en cours émet survey.response_submitted
+@spec-survey-6  Scenario: compléter une réponse émet survey.response_completed avec toutes les réponses, une seule fois
+@spec-survey-7  Scenario: compléter sans réponse à une question obligatoire est refusé
+@spec-survey-8  Scenario: une réponse complète ne peut plus être modifiée
+@spec-survey-9  Scenario: un questionnaire de campagne refuse une réponse avant le début de la fenêtre
+@spec-survey-10 Scenario: un questionnaire de campagne refuse une réponse après la fin de la fenêtre
+@spec-survey-11 Scenario: l'horloge démarre la campagne à sa date de début et émet survey_campaign.started
+@spec-survey-12 Scenario: l'horloge termine la campagne à sa date de fin et émet survey_campaign.ended
+@spec-survey-13 Scenario: une campagne dont la fin précède le début est refusée
+@spec-survey-14 Scenario: un workflow abonné à survey.response_completed s'exécute avec les réponses dans son payload
+@spec-survey-15 Scenario: une route publique n'expose ni l'org_id ni la liste des questionnaires
+@spec-survey-16 Scenario: le jeton de reprise permet de reprendre une réponse publique en cours
+@spec-survey-17 Scenario: les réponses d'une organisation ne sont jamais visibles d'une autre
+@spec-survey-18 Scenario: un membre ne peut compléter deux fois un questionnaire qui n'autorise pas les réponses multiples
+@spec-survey-19 Scenario: un membre peut répondre plusieurs fois si le questionnaire l'autorise
+@spec-survey-20 Scenario: une réponse publique avec un identifiant déjà utilisé est refusée
+@spec-survey-21 Scenario: un e-mail, un téléphone ou une date invalides sont refusés à l'enregistrement
+@spec-survey-22 Scenario: une photo est normalisée et stockée, et la réponse en porte la clé
+@spec-survey-23 Scenario: un fichier qui n'est pas une image est refusé
+@spec-survey-24 Scenario: les métadonnées du questionnaire et de la campagne sont dans le payload des événements et jamais dans une route de réponse
+@spec-survey-25 Scenario: chaque événement de questionnaire porte survey_id et campaign_id, null pour un questionnaire indépendant
+@spec-survey-26 Scenario: chaque événement de campagne porte campaign_id
+@spec-survey-27 Scenario: la branche Then ou Else d'une condition décide de la question suivante
+@spec-survey-28 Scenario: une question obligatoire hors du chemin parcouru n'empêche pas la complétion
+@spec-survey-29 Scenario: une réponse donnée sur un chemin abandonné est écartée et absente du payload de survey.response_completed
+@spec-survey-30 Scenario: un graphe avec un cycle, un nœud sans issue ou une condition sur une question non posée est refusé à l'édition
+@spec-survey-31 Scenario: deux branches qui se rejoignent sur une question commune sont acceptées
+@spec-survey-32 Scenario: le navigateur et le backend calculent le même chemin sur le jeu de cas partagé
+@spec-survey-33 Scenario: un chemin qui ne se termine pas sur un nœud End empêche la complétion
+```
+
+Chaque ligne devient un test avant le code. Les scénarios 1 à 17 sont écrits en Gherkin quand le workstream S0 démarre.
+
+## Simulation
+
+Non pour la fenêtre : l'horloge est injectée, des tests unitaires à instants fixes suffisent (1 seconde avant le début, au début, à la fin, 1 seconde après). À reconsidérer pour la concurrence « deux compléments simultanés de la même réponse » : couvert par un test d'intégration sur la contrainte, pas par une simulation.
+
+## Workstreams
+
+À valider avant lancement (attente bloquante de `dev-methodology`).
+
+| Id | Mission | Dépend de | Fichiers |
+|---|---|---|---|
+| S0 | Migration `survey`, entités, états typés, ports, événements et descripteurs, glossaire | rien | `migrations/`, `libs/core/src/domain/survey/` |
+| S1 | Dépôts Postgres, cas d'usage de gestion et de réponse, horloge de campagne | S0 | `libs/core/src/application/survey/`, `infrastructure/survey/` |
+| S2 | Crate `handlers-survey` : gestion et réponse membres, permissions, OpenAPI | S1 | `libs/handlers-survey/`, `apps/api/src/{router,openapi}.rs` |
+| S3 | Routes publiques, limitation de débit, jeton de reprise, dépôt de photos, nettoyage des fichiers abandonnés | S2 | `libs/handlers-survey/src/response/` |
+| S4 | Actions d'automatisation, contrats d'événements côté webapp, `docs/events.md` | S1 | `connector/actions/`, `event-contracts.ts`, `event-search.ts` |
+| S5 | Webapp de gestion : liste, éditeur de graphe (`@xyflow/react`) avec nœuds question et condition et sélecteur de type (cartes icône, titre, description), campagnes, lecture des réponses | S2 | `apps/webapp/src/pages/survey/` |
+| S6 | Webapp de réponse : page publique hors `_app`, page membres, une question à la fois, suivi du chemin côté navigateur | S3 | `apps/webapp/src/routes/`, `pages/survey/` |
+
+S0 d'abord seul. S1 puis S2 et S4 en parallèle. S3 après S2. S5 et S6 en parallèle côté webapp. Aucun fichier n'a deux auteurs.
+
+## Frozen contracts
+
+À figer à la fin de S0 : les types `Visibility`, `Window`, `QuestionId`, `Answer`, `Graph` (nœuds, arêtes, branches), les états `Survey<Draft|Opened|Closed>` et `Response<InProgress|Completed>`, les traits des dépôts, et les payloads des 5 événements. Ils seront copiés ici, verbatim, avant de lancer S1.
+
+## Risks / open questions
+
+Choix de l'assistant après relecture (à corriger) :
+
+- **Dates d'un questionnaire** : `opened_at` et `closed_at` sont des horodatages d'audit. Seule une campagne a une fenêtre programmée. Un questionnaire indépendant s'ouvre et se ferme à la main ou par une action d'automatisation.
+- **Cycle de vie** : `Draft` → `Opened` → `Closed`. Pas de réouverture. Pour corriger une faute dans un questionnaire ouvert, on le **duplique** en brouillon. Un questionnaire sans réponse peut être supprimé ; avec des réponses, il peut seulement être fermé.
+- **Payload de `survey.response_completed`** : `response_id`, `survey_id`, titre du questionnaire, `member_id` (mode membres), les métadonnées fusionnées (campagne puis questionnaire), et pour chaque question son id, son libellé, son type, la réponse et, pour un choix, le libellé de l'option. Le payload est lisible sans la définition.
+- **Abus du public** : limitation de débit, plus un plafond de réponses optionnel par questionnaire (valeur choisie par l'auteur). Pas de captcha dans ce lot. `survey.response_submitted` part aussi pour une réponse anonyme.
+- **Données personnelles** : l'auteur peut supprimer une réponse. Pas de purge automatique dans ce lot. À rouvrir si les payloads d'événements doivent aussi être purgés.
+- **Feature flag** : le module est derrière un flag par organisation (ADR 0017). Une route publique dont l'organisation n'a pas le flag répond comme un questionnaire introuvable, sans rien révéler.
+- **Événement `survey.closed`** : absent du lot, non demandé.
+
+Questions ouvertes :
+
+| Question | Propriétaire |
+|---|---|
+| Les métadonnées sont-elles portées uniquement par le questionnaire et la campagne (mon interprétation), ou faut-il aussi un contexte propre à chaque lien ? | demandeur |
+| Unicité en mode public : « question identifiant » choisie par l'auteur (ma proposition) convient-elle ? | demandeur |
+| Plafond de photos par réponse et taille maximale par photo (je propose 5 photos et `file_storage.max_upload_bytes`) | demandeur |
+| Quels fichiers de réponses abandonnés purger, et après combien de temps ? | S3 |
+| Où vit le lien public (domaine, préfixe de route) et comment il est servi derrière la passerelle ? | S3 |
+| Existe-t-il déjà un port d'horloge dans le domaine ? | S0 |
+| L'horloge de campagne : tâche de fond dans le binaire `apps/api`, ou déclencheur `Schedule` d'un workflow ? Le premier est plus fiable, le second réutilise l'existant. | S1 |
+
+## Verify (exit)
+
+```bash
+cargo fmt --all --check
+SQLX_OFFLINE=true cargo check --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo test -p mestier-core -- --ignored        # intégration, DATABASE_URL requis
+cd apps/webapp && pnpm check && pnpm test && pnpm build
+```
+
+Amended: 2026-11-14 les événements portent survey_id et campaign_id (null si questionnaire indépendant), demandé pour l'automatisation.
+Amended: 2026-11-14 questions conditionnelles (affichage selon les cases cochées) et sélecteur de type en cartes ajoutés au lot ; `Condition` rejoint les contrats figés en S0.
+Amended: 2026-11-14 la définition du questionnaire devient un graphe sans cycle (nœuds question, condition, fin) édité dans un canevas `@xyflow/react` propre au module ; remplace l'affichage conditionnel `visible_when`. Les branches peuvent se rejoindre (choix de l'assistant, à confirmer).
