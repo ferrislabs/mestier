@@ -123,6 +123,8 @@ pub fn default_authorizer() -> MestierAuthorizer {
         .action("support.manage", Permissions::MANAGE_SUPPORT.0)
         .action("knowledge.view", Permissions::VIEW_KNOWLEDGE.0)
         .action("knowledge.manage", Permissions::MANAGE_KNOWLEDGE.0)
+        .action("survey.view", Permissions::VIEW_SURVEYS.0)
+        .action("survey.manage", Permissions::MANAGE_SURVEYS.0)
         // #309: `planning.view`, `cost.view`, `cost.manage` and
         // `report.view` used to be registered here too, from #304, on the
         // assumption a handler would eventually call
