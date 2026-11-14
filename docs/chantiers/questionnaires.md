@@ -263,12 +263,12 @@ S0 d'abord seul. S1 puis S2 et S4 en parallèle. S3 après S2. S5 et S6 en paral
 
 Figés à l'intégration de S0 (commit `c2b684c6` sur `feat/surveys`). Les types complets, avec leurs champs et variants, sont dans `libs/core/src/domain/survey/` : ces fichiers font foi. Aucun workstream ne modifie un type ou une signature ci-dessous. Un besoin nouveau passe par un ajout (méthode, variant, méthode de port) et est annoncé dans le rapport du workstream.
 
-Exports à la racine de `mestier-core` : `Answer`, `Answers`, `Campaign`, `CampaignId`, `CampaignStatus`, `Closed`, `Completed`, `Draft`, `GraphPath`, `InProgress`, `Metadata`, `Opened`, `QuestionId`, `QuestionKind`, `Response`, `ResponseId`, `ResponseRecord`, `ResumeToken`, `Survey`, `SurveyError`, `SurveyGraph` (le `Graph` du questionnaire), `SurveyId`, `SurveyRecord`, `SurveyWindow` (la `Window` du questionnaire), `Visibility`, les trois traits de dépôt et les cinq événements. `PhoneNumber` et `EmailAddress` du module survey ne sont pas exportés (noms déjà pris par le profil de membre) : on y accède par `domain::survey::value`.
+Exports à la racine de `mestier-core` (liste réelle, de `domain/mod.rs`) : `pub use survey::{ Answer, Answers, Branch as SurveyBranch, Campaign, CampaignId, CampaignStatus, Closed, Completed, ConditionNode as SurveyConditionNode, Draft, Edge as SurveyEdge, EmailAddress as SurveyEmailAddress, EndNode as SurveyEndNode, Graph as SurveyGraph, GraphPath, InProgress, Metadata, Node as SurveyNode, NodeRef as SurveyNodeRef, Opened, PhoneNumber as SurveyPhoneNumber, PublicSlug, QuestionId, QuestionKind, QuestionNode as SurveyQuestionNode, Response as SurveyResponse, ResponseId, ResponseRecord, ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord, Visibility, Window as SurveyWindow, };`. Les noms trop génériques ou déjà pris sont préfixés : `SurveyGraph`, `SurveyWindow`, `SurveyResponse`, `SurveyNode`, `SurveyEdge`, `SurveyBranch`, `SurveyQuestionNode`, `SurveyConditionNode`, `SurveyEndNode`, `SurveyNodeRef`, `SurveyEmailAddress`, `SurveyPhoneNumber`. `domain` est `pub(crate)` : tout ce que S2 doit toucher passe par la racine.
 
-Signatures publiques (extraites du code) :
+Signatures publiques (extraites du code à l'intégration finale de S0) :
 
 ```text
-// libs/core/src/domain/survey/value.rs
+// value.rs
 pub enum Visibility
 pub fn as_str(self) -> &'static str
 pub struct QuestionId(pub Uuid);
@@ -279,28 +279,44 @@ pub fn as_str(&self) -> &str
 pub struct PhoneNumber(String);
 pub fn as_str(&self) -> &str
 pub enum Answer
+pub fn is_blank(&self) -> bool
+pub struct PublicSlug(String);
+pub fn new(value: String) -> Result<Self, SurveyError>
+pub fn as_str(&self) -> &str
 
-// libs/core/src/domain/survey/error.rs
+// error.rs
 pub enum SurveyError
 
-// libs/core/src/domain/survey/metadata.rs
+// metadata.rs
 pub struct Metadata(BTreeMap<String, String>);
 pub fn new(entries: BTreeMap<String, String>) -> Result<Self, SurveyError>
 pub fn merged(campaign: &Metadata, survey: &Metadata) -> Metadata
 pub fn get(&self, key: &str) -> Option<&str>
 pub fn iter(&self) -> impl Iterator<Item = (&str, &str)>
 
-// libs/core/src/domain/survey/campaign.rs
+// campaign.rs
 pub struct Window
 pub fn new( starts_at: Option<DateTime<Utc>>, ends_at: Option<DateTime<Utc>>, ) -> Result<Self, SurveyError>
 pub fn starts_at(&self) -> Option<DateTime<Utc>>
 pub fn ends_at(&self) -> Option<DateTime<Utc>>
 pub fn contains(&self, now: DateTime<Utc>) -> bool
 pub enum CampaignStatus
+pub fn as_str(self) -> &'static str
 pub struct Campaign
+pub fn new( id: CampaignId, organization_id: OrganizationId, name: String, window: Window, metadata: Metadata, now: DateTime<Utc>, ) -> Result<Self, SurveyError>
+pub fn id(&self) -> CampaignId
+pub fn organization_id(&self) -> OrganizationId
+pub fn name(&self) -> &str
+pub fn window(&self) -> &Window
+pub fn metadata(&self) -> &Metadata
+pub fn status(&self) -> CampaignStatus
 pub fn status_at(&self, now: DateTime<Utc>) -> CampaignStatus
+pub fn advance(&mut self, now: DateTime<Utc>) -> Option<CampaignStatus>
+pub fn rename(&mut self, name: String) -> Result<(), SurveyError>
+pub fn reschedule(&mut self, window: Window, now: DateTime<Utc>) -> Option<CampaignStatus>
+pub fn edit_metadata(&mut self, metadata: Metadata)
 
-// libs/core/src/domain/survey/graph.rs
+// graph.rs
 pub type Answers = BTreeMap<QuestionId, Answer>;
 pub struct QuestionNode
 pub struct ConditionNode
@@ -319,11 +335,11 @@ pub fn nodes(&self) -> impl Iterator<Item = NodeRef<'_>>
 pub fn question(&self, id: &QuestionId) -> Option<&QuestionNode>
 pub fn edges(&self) -> impl Iterator<Item = Edge>
 
-// libs/core/src/domain/survey/aggregate.rs
+// aggregate.rs
 pub struct Draft;
 pub struct Opened;
 pub struct Closed;
-pub struct Survey<S>
+pub struct Survey<S: Stage>
 pub fn id(&self) -> SurveyId
 pub fn organization_id(&self) -> OrganizationId
 pub fn title(&self) -> &str
@@ -345,12 +361,15 @@ pub fn edit_response_cap(&mut self, cap: Option<NonZeroU32>)
 pub fn edit_metadata(&mut self, metadata: Metadata)
 pub fn edit_campaign(&mut self, campaign_id: Option<CampaignId>)
 pub fn edit_graph(&mut self, graph: Option<Graph>)
-pub fn open(mut self, at: DateTime<Utc>) -> Result<Survey<Opened>, SurveyError>
+pub fn open( mut self, at: DateTime<Utc>, public_slug: Option<PublicSlug>, ) -> Result<Survey<Opened>, SurveyError>
+pub fn definition(&self) -> &Graph
+pub fn public_slug(&self) -> Option<&PublicSlug>
 pub fn close(mut self, at: DateTime<Utc>) -> Result<Survey<Closed>, SurveyError>
 pub fn accepts( &self, campaign: Option<&Campaign>, now: DateTime<Utc>, ) -> Result<(), SurveyError>
+pub fn public_slug(&self) -> Option<&PublicSlug>
 pub fn accepts( &self, _campaign: Option<&Campaign>, _now: DateTime<Utc>, ) -> Result<(), SurveyError>
 
-// libs/core/src/domain/survey/response.rs
+// response.rs
 pub struct InProgress;
 pub struct Completed;
 pub struct ResumeToken(String);
@@ -365,12 +384,13 @@ pub fn resume_token(&self) -> Option<&ResumeToken>
 pub fn answers(&self) -> &Answers
 pub fn started_at(&self) -> DateTime<Utc>
 pub fn completed_at(&self) -> Option<DateTime<Utc>>
-pub fn start( id: ResponseId, survey_id: SurveyId, organization_id: OrganizationId, member_id: Option<MemberId>, resume_token: Option<ResumeToken>, at: DateTime<Utc>, ) -> Self
-pub fn save(&mut self, graph: &Graph, answers: Answers) -> Result<(), SurveyError>
-pub fn complete( mut self, graph: &Graph, at: DateTime<Utc>, ) -> Result<Response<Completed>, SurveyError>
+pub fn start( id: ResponseId, survey: &Survey<Opened>, member_id: Option<MemberId>, resume_token: Option<ResumeToken>, at: DateTime<Utc>, ) -> Result<Self, SurveyError>
+pub fn save( &mut self, survey: &Survey<Opened>, mut answers: Answers, ) -> Result<(), SurveyError>
+pub fn complete( mut self, survey: &Survey<Opened>, at: DateTime<Utc>, ) -> Result<Response<Completed>, SurveyError>
 pub fn identifier_value(&self) -> Option<&str>
+pub fn unique_respondent(&self) -> bool
 
-// libs/core/src/domain/survey/record.rs
+// record.rs
 pub enum SurveyRecord
 pub fn id(&self) -> SurveyId
 pub fn organization_id(&self) -> OrganizationId
@@ -379,15 +399,18 @@ pub fn id(&self) -> ResponseId
 pub fn survey_id(&self) -> SurveyId
 pub fn organization_id(&self) -> OrganizationId
 
-// libs/core/src/domain/survey/ports.rs
+// ports.rs
 pub trait SurveyRepository: Send
 pub trait CampaignRepository: Send
 pub trait ResponseRepository: Send
 
-// libs/core/src/domain/survey/events.rs
-pub struct SurveyOpened
-pub struct SurveyResponseSubmitted
-pub struct SurveyResponseCompleted
+// events.rs
+pub struct SurveyOpened<'a>
+pub fn new( survey: &'a Survey<Opened>, campaign: Option<&Campaign>, ) -> Result<Self, SurveyError>
+pub struct SurveyResponseSubmitted<'a>
+pub fn new( survey: &'a Survey<Opened>, campaign: Option<&Campaign>, response: &'a Response<InProgress>, ) -> Result<Self, SurveyError>
+pub struct SurveyResponseCompleted<'a>
+pub fn new( survey: &'a Survey<Opened>, campaign: Option<&Campaign>, response: &'a Response<Completed>, ) -> Result<Self, SurveyError>
 pub struct SurveyCampaignStarted
 pub struct SurveyCampaignEnded
 ```
@@ -395,8 +418,8 @@ pub struct SurveyCampaignEnded
 Payloads des cinq événements (exemples complets dans `survey/descriptors.rs`) :
 
 ```text
-survey.opened                sujet survey          {survey_id, campaign_id|null, survey: {id, organization_id, title, description, visibility, allow_multiple_responses, response_cap|null, metadata, opened_at}}
-survey.response_submitted    sujet survey_response {survey_id, campaign_id|null, response: {id, member_id|null, status}, answered_questions}
+survey.opened                sujet survey          {survey_id, campaign_id|null, metadata, survey: {id, organization_id, title, description, visibility, allow_multiple_responses, response_cap|null, opened_at}}
+survey.response_submitted    sujet survey_response {survey_id, campaign_id|null, metadata, response: {id, member_id|null, status}, answered_questions}
 survey.response_completed    sujet survey_response {survey_id, campaign_id|null, survey: {id, title}, response: {id, member_id|null, completed_at, identifier_value|null}, metadata, answers: [{question_id, label, kind, value}]}
 survey_campaign.started      sujet survey_campaign {campaign_id, campaign: {id, organization_id, name, starts_at|null, ends_at|null, metadata}}
 survey_campaign.ended        sujet survey_campaign {campaign_id, campaign: {id, organization_id, name, starts_at|null, ends_at|null, metadata}}
@@ -405,14 +428,30 @@ survey_campaign.ended        sujet survey_campaign {campaign_id, campaign: {id, 
 Écarts acceptés par rapport au plan de S0 (décisions de l'orchestrateur) :
 
 - `Graph::path` renvoie `GraphPath { questions, end }` et ne s'arrête jamais : une question sans réponse est traversée, une condition sur une source sans réponse prend `Else`.
-- `Response<InProgress>::save` et `complete` prennent le `&Graph` et partagent une validation : question inconnue, type de réponse, option inconnue, photos au plus `max_photos` (5 par défaut), nombres finis.
+- `Response::start`, `save` et `complete` prennent le `&Survey<Opened>` (et non le graphe) : ils refusent un autre questionnaire, imposent `member_id` pour `MEMBERS` et jeton de reprise pour `PUBLIC` (jamais les deux), et partagent une validation : question inconnue, type de réponse, option inconnue, photos au plus `max_photos` (5 par défaut), nombres finis. `save` écarte les réponses hors chemin et les réponses vides (texte vide, choix ou photos vides = non répondu). `complete` fixe `unique_respondent = !allow_multiple_responses`.
+- `Campaign` a des champs privés, un `new` validé, un statut persisté et `advance(now)`/`reschedule` qui ne reculent jamais.
+- `Survey<Draft>::open(at, public_slug)` : un questionnaire `PUBLIC` exige un `PublicSlug`, un `MEMBERS` en refuse un. `Survey<Opened>::accepts` refuse aussi une campagne qui n'est pas celle du questionnaire.
+- Les trois événements de questionnaire se construisent depuis `&Survey<Opened>` et `Option<&Campaign>` : `campaign_id` et la fusion des métadonnées (campagne puis questionnaire, le questionnaire gagne) viennent de là. Le payload porte un `metadata` fusionné au premier niveau ; `survey.metadata` a disparu de `survey.opened`. Versions inchangées (1) : rien n'est publié.
+- La migration porte des clés étrangères avec `org_id`, un `unique_respondent` et deux index uniques partiels : l'unicité « une réponse par personne » est tenue par la base, pas seulement par le cas d'usage.
 - `Survey<Opened>::close` renvoie un `Result` et refuse une date antérieure à l'ouverture.
 - `Graph::new` refuse aussi : plus d'une question « identifiant », un identifiant hors `TEXT`/`EMAIL`/`PHONE`, `max_photos` hors `PHOTO` ou nul, une question à choix sans option.
 - `SurveyRecord` et `ResponseRecord` portent un questionnaire ou une réponse dans l'état où il est stocké. La conversion depuis et vers les lignes SQL est du ressort de S1.
-- Les ports acceptent des ajouts de méthodes par S1.
+- Les ports acceptent des ajouts de méthodes par S1. Les quatre recherches de `ResponseRepository` prennent `organization_id` en premier.
 - La mise en page du canevas (positions des nœuds) n'est pas dans `Graph` : S5 la stocke dans un JSON de disposition séparé.
 - Les réponses du jeu de cas partagé `survey/fixtures/paths.json` gardent l'étiquetage serde de `Answer` (`{"Choice":"Oui"}`) : S6 le lit tel quel.
 - Aucun port d'horloge n'existe dans le domaine : S1 tranche pour l'horloge de campagne.
+
+À savoir pour S1 (relecture finale de S0) :
+
+1. **Horloge de campagne.** Lire `status()` avant `advance` ou `reschedule`. Si le statut était `Scheduled` et que l'appel renvoie `Some(Ended)`, émettre `survey_campaign.started` puis `survey_campaign.ended` dans la même transaction, sinon `started` est perdu.
+2. **Statut persisté et `accepts` peuvent diverger.** `accepts` suit la fenêtre, le statut ne recule jamais. Ne jamais décider d'accepter une réponse d'après `status()`.
+3. **Réhydratation par serde seulement** (`Survey`, `Campaign`, `Response` : champs privés, pas de constructeur depuis les colonnes). S1 construit la forme JSON : `graph` frère, nul en brouillon, `window` imbriquée, `unique_respondent` obligatoire.
+4. **Colonnes.** `ResponseBody.started_at` correspond à `created_at` (l'écrire explicitement). `response_cap` : `i32` vers `u32` vers `NonZeroU32`. `survey.status` se déduit de la variante de `SurveyRecord`.
+5. **Suppression d'un membre** met `member_id` à nul : les lignes restent lisibles mais aucune recherche ne peut les reprendre, et l'index unique par membre ne les couvre plus.
+6. **Port manquant** : aucune recherche de la réponse en cours d'un membre (reprise en mode membres). S1 l'ajoute, avec `organization_id`, ou décide ce que « reprendre » veut dire pour un membre.
+7. **Ordre.** Émettre `survey.response_submitted` juste après `save`. Traduire une violation d'index unique à la complétion en « réponse déjà complète ».
+8. **Éditeur (S5).** `Graph::new` refuse un libellé de question vide : un brouillon ne s'enregistre pas tant qu'une question n'a pas de libellé.
+9. **Événements (S4).** `event-contracts.ts` doit décrire les payloads actuels ; `docs/events.md` passe de 46 à 51 événements.
 
 ## Risks / open questions
 
@@ -452,3 +491,4 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 Amended: 2026-11-14 les événements portent survey_id et campaign_id (null si questionnaire indépendant), demandé pour l'automatisation.
 Amended: 2026-11-14 questions conditionnelles (affichage selon les cases cochées) et sélecteur de type en cartes ajoutés au lot ; `Condition` rejoint les contrats figés en S0.
 Amended: 2026-11-14 la définition du questionnaire devient un graphe sans cycle (nœuds question, condition, fin) édité dans un canevas `@xyflow/react` propre au module ; remplace l'affichage conditionnel `visible_when`. Les branches peuvent se rejoindre (choix de l'assistant, à confirmer).
+Amended: 2026-11-14 contrats figés régénérés après la relecture finale de S0 (réponse liée au questionnaire ouvert, campagne à statut persisté, métadonnées fusionnées dans les événements, clés étrangères avec org_id, index d unicité par répondant).
