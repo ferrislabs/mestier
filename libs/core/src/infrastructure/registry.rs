@@ -98,6 +98,9 @@ pub mod domain {
     pub struct Subscription;
     pub struct WebhookRoute;
     pub struct Schedule;
+    pub struct Survey;
+    pub struct Campaign;
+    pub struct SurveyResponse;
 }
 
 /// Backend markers — one zero-sized type per supported persistence layer.

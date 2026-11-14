@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, name, starts_at, ends_at, status, metadata\n            FROM survey.campaign\n            WHERE (status = 'SCHEDULED' AND (starts_at IS NULL OR starts_at <= $1))\n               OR (status = 'RUNNING' AND ends_at IS NOT NULL AND ends_at <= $1)\n            ORDER BY COALESCE(\n                CASE WHEN status = 'SCHEDULED' THEN starts_at ELSE ends_at END,\n                created_at\n            ), id\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "bb2bb8a2fe2b1d03545ea1bc8e6afddb59dc61f474e44e3e2f9b6378a794fe6a"
+}
