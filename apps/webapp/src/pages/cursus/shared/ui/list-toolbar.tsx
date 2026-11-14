@@ -1,15 +1,9 @@
 import { Search } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Input } from '#/components/ui/input'
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '#/components/ui/select'
 import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
 import { MultiFilterButton } from '#/pages/cursus/shared/ui/multi-filter-button'
+import { SearchSelectButton } from '#/pages/cursus/shared/ui/search-select-button'
 
 export interface ListToolbarSelect<Value extends string> {
 	value: Value
@@ -64,28 +58,12 @@ export function ListToolbar<Status extends string, Value extends string>({
 			/>
 			{extra}
 			{select ? (
-				<Select
+				<SearchSelectButton
 					value={select.value}
-					onValueChange={(value) => {
-						const next = select.options.find((option) => option.value === value)
-						if (next) select.onChange(next.value)
-					}}
-				>
-					<SelectTrigger
-						size="sm"
-						className="w-52 bg-card"
-						aria-label={select.label}
-					>
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						{select.options.map((option) => (
-							<SelectItem key={option.value} value={option.value}>
-								{option.label}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+					label={select.label}
+					options={select.options}
+					onChange={select.onChange}
+				/>
 			) : null}
 		</div>
 	)

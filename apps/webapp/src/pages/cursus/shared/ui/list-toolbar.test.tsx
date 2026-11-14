@@ -75,6 +75,23 @@ describe('ListToolbar', () => {
 		expect(handlers.onSelect).toHaveBeenCalledWith('training-1')
 	})
 
+	it('narrows the select options with its search box', {
+		timeout: 15_000,
+	}, async () => {
+		const user = userEvent.setup()
+		renderToolbar()
+
+		await user.click(
+			screen.getByRole('combobox', { name: 'Filtrer par formation' }),
+		)
+		await user.type(await screen.findByPlaceholderText('Rechercher…'), 'menu')
+
+		expect(screen.getByRole('option', { name: 'CAP Menuisier' })).toBeTruthy()
+		expect(
+			screen.queryByRole('option', { name: 'Toutes les formations' }),
+		).toBeNull()
+	})
+
 	it('has no select when none is given', () => {
 		render(
 			<ListToolbar
