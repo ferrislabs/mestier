@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { validateGraph } from '#/pages/survey/lib/graph-validation'
+import {
+	validateGraph,
+	validateSentGraph,
+} from '#/pages/survey/lib/graph-validation'
+import { toSchema } from '#/pages/survey/lib/survey-graph'
 import type {
 	ConditionNode,
 	EditorGraph,
@@ -311,5 +315,39 @@ describe('validateGraph', () => {
 		for (const issue of validateGraph({ ...branching(), start: null })) {
 			expect(issue.message.trim()).not.toBe('')
 		}
+	})
+})
+
+describe('validateSentGraph', () => {
+	it('reports options that only differ by spaces as a duplicate', () => {
+		const graph: EditorGraph = {
+			start: 'q1',
+			nodes: [
+				question('q1', 'SINGLE_CHOICE', { options: ['Oui', 'Oui '] }),
+				end('e1'),
+			],
+			edges: [next('q1', 'e1')],
+		}
+		expect(validateSentGraph(graph).map((issue) => issue.code)).toEqual([
+			'graph_duplicate_option',
+		])
+	})
+
+	it('matches a condition option picked from an untrimmed option once normalised', () => {
+		const graph = branching()
+		const untrimmed: EditorGraph = {
+			...graph,
+			nodes: graph.nodes.map((node) =>
+				node.id === 'q1'
+					? question('q1', 'SINGLE_CHOICE', { options: ['Oui ', 'Non'] })
+					: node.id === 'c1'
+						? condition('c1', 'q1', 'Oui ')
+						: node,
+			),
+		}
+		expect(validateSentGraph(untrimmed)).toEqual([])
+		const sent = toSchema(untrimmed)
+		const sentCondition = sent?.nodes.find((node) => node.id === 'c1')
+		expect(sentCondition).toMatchObject({ type: 'CONDITION', option: 'Oui' })
 	})
 })

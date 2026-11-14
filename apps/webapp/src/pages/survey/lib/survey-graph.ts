@@ -29,7 +29,7 @@ export function fromSchema(
 	}
 }
 
-function cleanNode(node: GraphNode): Schemas.SurveyNodeSchema {
+function cleanNode(node: GraphNode): GraphNode {
 	if (node.type === 'QUESTION') {
 		return {
 			type: 'QUESTION',
@@ -52,15 +52,24 @@ function cleanNode(node: GraphNode): Schemas.SurveyNodeSchema {
 			message: message === '' ? null : message,
 		}
 	}
-	return { ...node }
+	return { ...node, option: node.option.trim() }
 }
 
-export function toSchema(graph: EditorGraph): Schemas.SurveyGraphSchema | null {
-	if (graph.nodes.length === 0 || !graph.start) return null
+export function normalizeGraph(graph: EditorGraph): EditorGraph {
 	return {
 		start: graph.start,
 		nodes: graph.nodes.map(cleanNode),
 		edges: graph.edges.map((edge) => ({ ...edge })),
+	}
+}
+
+export function toSchema(graph: EditorGraph): Schemas.SurveyGraphSchema | null {
+	if (graph.nodes.length === 0 || !graph.start) return null
+	const normalized = normalizeGraph(graph)
+	return {
+		start: graph.start,
+		nodes: normalized.nodes,
+		edges: normalized.edges,
 	}
 }
 

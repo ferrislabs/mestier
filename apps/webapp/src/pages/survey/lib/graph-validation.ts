@@ -3,6 +3,7 @@ import {
 	isIdentifierKind,
 } from '#/pages/survey/lib/question-kinds'
 import { reasonMessage } from '#/pages/survey/lib/reason-messages'
+import { normalizeGraph } from '#/pages/survey/lib/survey-graph'
 import type {
 	Branch,
 	EditorGraph,
@@ -252,6 +253,10 @@ export function validateGraph(graph: EditorGraph): GraphIssue[] {
 		issues.push(...conditionIssues(graph, ''))
 	}
 	return issues
+}
+
+export function validateSentGraph(graph: EditorGraph): GraphIssue[] {
+	return validateGraph(normalizeGraph(graph))
 }
 
 export function issuesByNode(
