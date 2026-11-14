@@ -5,9 +5,9 @@ use handlers::{ApiError, AppState, auth::auth_middleware, rate_limit::rate_limit
 use mestier_core::{OrganizationId, User};
 
 use crate::paths::{
-    CurrentUserOrganizationsPath, OrganizationBillingSettingsPath, OrganizationFeaturesPath,
-    OrganizationLegalIdentityPath, OrganizationNumberingPath, OrganizationNumberingSeriesPath,
-    OrganizationPath, OrganizationsPath,
+    CurrentUserOrganizationsPath, OrganizationBillingSettingsPath, OrganizationFeaturePath,
+    OrganizationFeaturesPath, OrganizationLegalIdentityPath, OrganizationNumberingPath,
+    OrganizationNumberingSeriesPath, OrganizationPath, OrganizationsPath,
 };
 
 pub mod billing_error;
@@ -68,6 +68,10 @@ pub fn router(state: &AppState) -> Router<AppState> {
         )
         .route(CurrentUserOrganizationsPath::PATH, get(list_mine::handler))
         .route(OrganizationFeaturesPath::PATH, get(features::handler))
+        .route(
+            OrganizationFeaturePath::PATH,
+            axum::routing::put(features::put_handler),
+        )
         .route(
             OrganizationLegalIdentityPath::PATH,
             axum::routing::patch(update_legal_identity::handler),

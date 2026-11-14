@@ -3415,6 +3415,7 @@ dependencies = [
  "clap",
  "common",
  "handlers",
+ "handlers-organization",
  "http 1.4.0",
  "jsonwebtoken",
  "mestier-core",

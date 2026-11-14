@@ -24,6 +24,7 @@ utoipa = { workspace = true }
 [dev-dependencies]
 args = { workspace = true }
 clap = { workspace = true }
+handlers-organization = { workspace = true }
 jsonwebtoken = { workspace = true }
 reqwest = { workspace = true }
 sqlx = { workspace = true }

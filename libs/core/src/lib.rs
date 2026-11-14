@@ -259,9 +259,10 @@ pub use domain::{
 
 pub use domain::{
     CreationCounts, FeatureActivation, FeatureChange, FeatureFlag, FlagAdoption, HISTORY_LIMIT,
-    OrganizationDetail, OrganizationFeature, OrganizationMemberSummary, OrganizationOverview,
-    OrganizationSummary, PlatformAdmin, PlatformStats, RECENT_DAYS, STATS_WEEKS,
-    UnknownFeatureFlag, UserOrganization, UserSummary, WeeklyCount,
+    NotSelfServiceFeature, OrganizationDetail, OrganizationFeature, OrganizationMemberSummary,
+    OrganizationOverview, OrganizationSummary, PlatformAdmin, PlatformStats, RECENT_DAYS,
+    STATS_WEEKS, SetSelfServiceFeatureCommand, UnknownFeatureFlag, UserOrganization, UserSummary,
+    WeeklyCount,
     feature_flag::events::{FEATURE_DISABLED, FEATURE_ENABLED, FeatureDisabled, FeatureEnabled},
     feature_flag::ports::FeatureFlagRepository,
     platform::ports::PlatformAdminRepository,
