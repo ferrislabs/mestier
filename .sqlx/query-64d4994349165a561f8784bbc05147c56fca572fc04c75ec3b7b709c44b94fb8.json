@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT key FROM survey.response_photo\n            WHERE org_id = $1 AND response_id = $2\n            ORDER BY created_at, key\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "64d4994349165a561f8784bbc05147c56fca572fc04c75ec3b7b709c44b94fb8"
+}

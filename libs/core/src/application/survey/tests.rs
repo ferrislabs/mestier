@@ -17,14 +17,14 @@ use crate::{
     Visibility,
 };
 
-struct Fixture {
-    organization_id: OrganizationId,
-    users: Vec<Uuid>,
+pub(super) struct Fixture {
+    pub(super) organization_id: OrganizationId,
+    pub(super) users: Vec<Uuid>,
     organizations: Vec<Uuid>,
-    member: Subject,
-    outsider: Subject,
+    pub(super) member: Subject,
+    pub(super) outsider: Subject,
     survey_id: SurveyId,
-    campaign_id: CampaignId,
+    pub(super) campaign_id: CampaignId,
 }
 
 fn make_usecase(pool: PgPool) -> MestierUseCase {
@@ -66,7 +66,7 @@ fn answers(name: &str) -> Answers {
     Answers::from([(qid(10), Answer::Text(name.to_owned()))])
 }
 
-async fn seed_user(pool: &PgPool) -> Uuid {
+pub(super) async fn seed_user(pool: &PgPool) -> Uuid {
     let id = generate_uuid_v7();
     sqlx::query(
         "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, 'Survey', $4)",
@@ -111,7 +111,7 @@ async fn set_flag(pool: &PgPool, organization: Uuid, enabled: bool) {
         .unwrap();
 }
 
-async fn seed_member(pool: &PgPool, organization: Uuid, user: Uuid) {
+pub(super) async fn seed_member(pool: &PgPool, organization: Uuid, user: Uuid) {
     sqlx::query(
         "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, 'Claire')",
     )
@@ -193,7 +193,7 @@ async fn opened(usecase: &MestierUseCase, fixture: &Fixture, visibility: Visibil
     id
 }
 
-fn survey_command(fixture: &Fixture, actor: Subject, id: SurveyId) -> SurveyCommand {
+pub(super) fn survey_command(fixture: &Fixture, actor: Subject, id: SurveyId) -> SurveyCommand {
     SurveyCommand {
         actor,
         organization_id: fixture.organization_id,
@@ -241,14 +241,14 @@ fn forbidden<T: std::fmt::Debug>(result: Result<T, CoreError>) {
     );
 }
 
-fn not_found<T: std::fmt::Debug>(result: Result<T, CoreError>) {
+pub(super) fn not_found<T: std::fmt::Debug>(result: Result<T, CoreError>) {
     assert!(
         matches!(result, Err(CoreError::NotFound)),
         "expected not found, got {result:?}"
     );
 }
 
-async fn with_fixture<F>(flag: bool, check: F)
+pub(super) async fn with_fixture<F>(flag: bool, check: F)
 where
     F: AsyncFnOnce(MestierUseCase, Fixture) -> Fixture,
 {

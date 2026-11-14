@@ -177,6 +177,7 @@ pub struct MestierUseCase {
     pub(crate) oauth_http: reqwest::Client,
     pub(crate) oauth_access: Option<PrivateNetworkAccess>,
     pub(crate) oauth: Arc<OauthCoordinator>,
+    pub(crate) file_storage: Option<MestierFileStorageService>,
 }
 
 impl MestierUseCase {
@@ -191,6 +192,7 @@ impl MestierUseCase {
                 .expect("building the guarded HTTP client failed"),
             oauth_access: Some(PrivateNetworkAccess::Denied),
             oauth: Arc::default(),
+            file_storage: None,
         }
     }
 
@@ -236,6 +238,11 @@ impl MestierUseCase {
     /// mutating one from another module.
     pub fn with_cipher(mut self, cipher: Option<Arc<SecretCipher>>) -> Self {
         self.cipher = cipher;
+        self
+    }
+
+    pub fn with_file_storage(mut self, file_storage: MestierFileStorageService) -> Self {
+        self.file_storage = Some(file_storage);
         self
     }
 
@@ -329,7 +336,8 @@ pub async fn create_service(config: Config) -> Result<MestierService, CoreError>
     };
     let usecase = MestierUseCase::new(pool.clone(), default_authorizer(), hub.clone())
         .with_cipher(cipher)
-        .with_private_network(private_network);
+        .with_private_network(private_network)
+        .with_file_storage(file_storage.clone());
 
     spawn_automation_worker(usecase.clone(), &config.automation);
 

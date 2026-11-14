@@ -12,6 +12,7 @@ pub use application::survey::commands::{
     ListCampaignsCommand, ListSurveyResponsesCommand, ListSurveysCommand,
     OpenSurveyInCampaignCommand, SaveMemberResponseCommand, StartMemberResponseCommand,
     SurveyCommand, SurveyResponseCommand, UpdateCampaignCommand, UpdateSurveyCommand,
+    UploadMemberResponsePhotoCommand,
 };
 pub use application::*;
 pub use domain::automation::collection::{
@@ -239,8 +240,8 @@ pub use domain::{
     },
     survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository},
     survey::service::{
-        CampaignPatch, CampaignService, ResponseLocator, ResponseService, StartedResponse,
-        SurveyPatch, SurveyService,
+        CampaignPatch, CampaignService, MAX_UPLOADED_PHOTOS as MAX_UPLOADED_SURVEY_PHOTOS,
+        ResponseLocator, ResponseService, StartedResponse, SurveyPatch, SurveyService,
     },
     validate_api_key_name,
 };

@@ -159,6 +159,12 @@ async fn pass(
         Err(error) => error!(%error, "advancing survey campaigns failed"),
     }
 
+    match usecase.purge_abandoned_survey_photos(Utc::now()).await {
+        Ok(purged) if purged > 0 => info!(purged, "purged abandoned survey responses"),
+        Ok(_) => {}
+        Err(error) => error!(%error, "purging abandoned survey responses failed"),
+    }
+
     match usecase.fire_due_schedules(Utc::now(), schedule.batch).await {
         Ok(ScheduleOutcome {
             fired,

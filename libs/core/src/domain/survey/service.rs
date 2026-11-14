@@ -11,7 +11,7 @@ mod survey_service;
 
 pub use campaign_service::CampaignService;
 pub use commands::{CampaignPatch, ResponseLocator, StartedResponse, SurveyPatch};
-pub use response_service::ResponseService;
+pub use response_service::{MAX_UPLOADED_PHOTOS, ResponseService};
 pub use survey_service::SurveyService;
 
 async fn campaign_of<C: CampaignRepository>(

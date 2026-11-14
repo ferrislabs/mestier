@@ -1,15 +1,20 @@
 use chrono::{DateTime, Utc};
-use common::CoreError;
+use common::{CoreError, generate_uuid_v7};
 use events::EventEmitter;
 
 use super::{ResponseLocator, StartedResponse, campaign_of};
+use crate::domain::file_storage::{ports::FileStorage, service::FileStorageService};
+use crate::domain::photo_library::normalize::STORED_MIME_TYPE;
 use crate::domain::survey::events::{SurveyResponseCompleted, SurveyResponseSubmitted};
 use crate::domain::survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository};
+use crate::domain::survey::validation::stored_under;
 use crate::domain::survey::{
-    Answers, Campaign, Completed, InProgress, Opened, Response, ResponseId, ResponseRecord,
+    Answer, Answers, Campaign, Completed, InProgress, Opened, Response, ResponseId, ResponseRecord,
     ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord, Visibility,
 };
 use crate::{MemberId, OrganizationId};
+
+pub const MAX_UPLOADED_PHOTOS: u64 = 20;
 
 pub struct ResponseService<R, S, C, E>
 where
@@ -36,6 +41,20 @@ fn completed_of(record: ResponseRecord) -> Result<Response<Completed>, SurveyErr
         ResponseRecord::Completed(response) => Ok(response),
         ResponseRecord::InProgress(_) => Err(SurveyError::ResponseInconsistentState),
     }
+}
+
+fn photos_to_purge(response: &Response<InProgress>, mut keys: Vec<String>) -> Vec<String> {
+    let directory = response.photo_directory();
+    let referenced = response.answers().values().flat_map(|answer| match answer {
+        Answer::Photos(photos) => photos.as_slice(),
+        _ => &[],
+    });
+    for key in referenced {
+        if stored_under(&directory, key) && !keys.contains(key) {
+            keys.push(key.clone());
+        }
+    }
+    keys
 }
 
 fn answered_by(record: &ResponseRecord, member_id: MemberId) -> bool {
@@ -269,6 +288,66 @@ where
             &SurveyResponseCompleted::new(&survey, campaign.as_ref(), &saved)?,
         )?;
         Ok(saved)
+    }
+
+    pub async fn upload_photo<F: FileStorage>(
+        &mut self,
+        organization_id: OrganizationId,
+        locator: &ResponseLocator,
+        jpeg: Vec<u8>,
+        now: DateTime<Utc>,
+        storage: &FileStorageService<F>,
+    ) -> Result<String, CoreError> {
+        let response = self.locate(organization_id, locator).await?;
+        self.accepting(
+            organization_id,
+            response.survey_id(),
+            locator.visibility(),
+            now,
+        )
+        .await?;
+        let uploaded = self
+            .responses
+            .count_photos_for_update(organization_id, response.id())
+            .await?;
+        if uploaded >= MAX_UPLOADED_PHOTOS {
+            return Err(SurveyError::ResponsePhotoCapReached.into());
+        }
+        let relative = format!("{}/{}.jpg", response.photo_directory(), generate_uuid_v7());
+        let stored = storage.upload_at(&relative, STORED_MIME_TYPE, jpeg).await?;
+        if let Err(error) = self
+            .responses
+            .insert_photo(organization_id, response.id(), &stored.key)
+            .await
+        {
+            if let Err(cleanup) = storage.delete(&stored.key).await {
+                tracing::warn!(key = %stored.key, error = %cleanup, "could not remove an unrecorded survey photo");
+            }
+            return Err(error);
+        }
+        Ok(stored.key)
+    }
+
+    pub async fn purge_abandoned<F: FileStorage>(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+        before: DateTime<Utc>,
+        storage: &FileStorageService<F>,
+    ) -> Result<bool, CoreError> {
+        let Some(ResponseRecord::InProgress(response)) = self
+            .responses
+            .find_abandoned_for_update(organization_id, id, before)
+            .await?
+        else {
+            return Ok(false);
+        };
+        let recorded = self.responses.photo_keys(organization_id, id).await?;
+        for key in photos_to_purge(&response, recorded) {
+            storage.delete(&key).await?;
+        }
+        self.responses.delete(organization_id, id).await?;
+        Ok(true)
     }
 
     pub async fn delete(
