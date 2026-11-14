@@ -1,7 +1,8 @@
+use chrono::{DateTime, Utc};
 use common::CoreError;
 
 use super::record::{ResponseRecord, SurveyRecord};
-use super::{Campaign, CampaignId, ResponseId, ResumeToken, SurveyId};
+use super::{Campaign, CampaignId, PublicSlug, ResponseId, ResumeToken, SurveyId};
 use crate::{MemberId, OrganizationId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -34,6 +35,23 @@ pub trait SurveyRepository: Send {
         organization_id: OrganizationId,
         campaign_id: CampaignId,
     ) -> impl Future<Output = Result<Vec<SurveyRecord>, CoreError>> + Send;
+
+    fn find_by_public_slug(
+        &mut self,
+        slug: &PublicSlug,
+    ) -> impl Future<Output = Result<Option<SurveyRecord>, CoreError>> + Send;
+
+    fn delete(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn has_responses(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
 }
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -60,6 +78,18 @@ pub trait CampaignRepository: Send {
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<Campaign>, u64), CoreError>> + Send;
+
+    fn delete(
+        &mut self,
+        organization_id: OrganizationId,
+        id: CampaignId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn list_due(
+        &mut self,
+        now: DateTime<Utc>,
+        limit: u64,
+    ) -> impl Future<Output = Result<Vec<Campaign>, CoreError>> + Send;
 }
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -121,4 +151,17 @@ pub trait ResponseRepository: Send {
         survey_id: SurveyId,
         value: &str,
     ) -> impl Future<Output = Result<Option<ResponseRecord>, CoreError>> + Send;
+
+    fn find_in_progress_by_member(
+        &mut self,
+        organization_id: OrganizationId,
+        survey_id: SurveyId,
+        member_id: MemberId,
+    ) -> impl Future<Output = Result<Option<ResponseRecord>, CoreError>> + Send;
+
+    fn delete(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }

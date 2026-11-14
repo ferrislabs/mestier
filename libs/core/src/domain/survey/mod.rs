@@ -13,6 +13,7 @@ pub mod metadata;
 pub mod ports;
 pub mod record;
 pub mod response;
+pub mod service;
 mod validation;
 pub mod value;
 
@@ -20,6 +21,8 @@ mod descriptors;
 
 #[cfg(test)]
 mod events_tests;
+#[cfg(test)]
+mod service_tests;
 #[cfg(test)]
 mod tests;
 
