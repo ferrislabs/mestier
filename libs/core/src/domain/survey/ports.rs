@@ -52,6 +52,12 @@ pub trait SurveyRepository: Send {
         organization_id: OrganizationId,
         id: SurveyId,
     ) -> impl Future<Output = Result<bool, CoreError>> + Send;
+
+    fn find_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+    ) -> impl Future<Output = Result<Option<SurveyRecord>, CoreError>> + Send;
 }
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]

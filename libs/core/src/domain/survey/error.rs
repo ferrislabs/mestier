@@ -136,6 +136,8 @@ pub enum SurveyError {
     ResponseCapReached,
     #[error("response: the respondent has already answered this survey")]
     RespondentAlreadyAnswered,
+    #[error("survey: its state changed since it was read")]
+    SurveyStateChanged,
 }
 
 impl From<SurveyError> for CoreError {

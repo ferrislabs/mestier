@@ -102,13 +102,13 @@ where
         }
     }
 
-    async fn find(
+    async fn find_locked(
         &mut self,
         organization_id: OrganizationId,
         id: SurveyId,
     ) -> Result<SurveyRecord, CoreError> {
         self.surveys
-            .find(organization_id, id)
+            .find_for_update(organization_id, id)
             .await?
             .ok_or_else(|| SurveyError::SurveyNotFound.into())
     }
@@ -136,7 +136,7 @@ where
         id: SurveyId,
         patch: SurveyPatch,
     ) -> Result<Survey<Draft>, CoreError> {
-        let mut survey = draft_of(self.find(organization_id, id).await?)?;
+        let mut survey = draft_of(self.find_locked(organization_id, id).await?)?;
         apply(&mut survey, patch)?;
         self.save_draft(survey).await
     }
@@ -147,7 +147,7 @@ where
         id: SurveyId,
         new_id: SurveyId,
     ) -> Result<Survey<Draft>, CoreError> {
-        let copy = match &self.find(organization_id, id).await? {
+        let copy = match &self.find_locked(organization_id, id).await? {
             SurveyRecord::Draft(survey) => copy_of(survey, new_id),
             SurveyRecord::Opened(survey) => copy_of(survey, new_id),
             SurveyRecord::Closed(survey) => copy_of(survey, new_id),
@@ -163,7 +163,7 @@ where
         now: DateTime<Utc>,
         public_slug: Option<PublicSlug>,
     ) -> Result<Survey<Opened>, CoreError> {
-        let survey = draft_of(self.find(organization_id, id).await?)?;
+        let survey = draft_of(self.find_locked(organization_id, id).await?)?;
         let campaign =
             campaign_of(&mut self.campaigns, organization_id, survey.campaign_id()).await?;
         let opened = survey.open(now, public_slug)?;
@@ -181,7 +181,7 @@ where
         id: SurveyId,
         now: DateTime<Utc>,
     ) -> Result<Survey<Closed>, CoreError> {
-        let survey = opened_of(self.find(organization_id, id).await?)?;
+        let survey = opened_of(self.find_locked(organization_id, id).await?)?;
         let closed = survey.close(now)?;
         let saved = self.surveys.update(&closed.into()).await?;
         Ok(closed_of(saved)?)
@@ -192,7 +192,7 @@ where
         organization_id: OrganizationId,
         id: SurveyId,
     ) -> Result<(), CoreError> {
-        self.find(organization_id, id).await?;
+        self.find_locked(organization_id, id).await?;
         if self.surveys.has_responses(organization_id, id).await? {
             return Err(SurveyError::SurveyHasResponses.into());
         }
@@ -205,7 +205,7 @@ where
         id: SurveyId,
         campaign_id: Option<CampaignId>,
     ) -> Result<Survey<Draft>, CoreError> {
-        let mut survey = draft_of(self.find(organization_id, id).await?)?;
+        let mut survey = draft_of(self.find_locked(organization_id, id).await?)?;
         campaign_of(&mut self.campaigns, organization_id, campaign_id).await?;
         survey.edit_campaign(campaign_id);
         self.save_draft(survey).await

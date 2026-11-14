@@ -1,4 +1,5 @@
 use std::num::NonZeroU32;
+use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, TimeZone, Utc};
 use common::CoreError;
@@ -7,7 +8,9 @@ use serde_json::json;
 use uuid::Uuid;
 
 use super::ports::{MockCampaignRepository, MockResponseRepository, MockSurveyRepository};
-use super::service::{CampaignService, ResponseLocator, ResponseService, SurveyService};
+use super::service::{
+    CampaignService, ResponseLocator, ResponseService, SurveyPatch, SurveyService,
+};
 use super::{
     Answer, Answers, Campaign, CampaignId, CampaignStatus, Completed, Draft, Edge, EndNode, Graph,
     InProgress, Metadata, Node, Opened, PublicSlug, QuestionId, QuestionKind, QuestionNode,
@@ -175,8 +178,13 @@ fn completed(survey: &Survey<Opened>, n: u128, name: &str) -> Response<Completed
 
 fn surveys_holding(record: SurveyRecord) -> MockSurveyRepository {
     let mut surveys = MockSurveyRepository::new();
+    let locked = record.clone();
     surveys.expect_find().returning(move |_, _| {
         let found = record.clone();
+        Box::pin(async move { Ok(Some(found)) })
+    });
+    surveys.expect_find_for_update().returning(move |_, _| {
+        let found = locked.clone();
         Box::pin(async move { Ok(Some(found)) })
     });
     surveys.expect_update().returning(|survey| {
@@ -184,6 +192,25 @@ fn surveys_holding(record: SurveyRecord) -> MockSurveyRepository {
         Box::pin(async move { Ok(saved) })
     });
     surveys.expect_insert().returning(|survey| {
+        let saved = survey.clone();
+        Box::pin(async move { Ok(saved) })
+    });
+    surveys
+}
+
+fn surveys_stored(stored: &Arc<Mutex<SurveyRecord>>) -> MockSurveyRepository {
+    let mut surveys = MockSurveyRepository::new();
+    let read = Arc::clone(stored);
+    surveys
+        .expect_find_for_update()
+        .withf(|organization_id, id| *organization_id == org() && *id == survey_id())
+        .returning(move |_, _| {
+            let found = read.lock().unwrap().clone();
+            Box::pin(async move { Ok(Some(found)) })
+        });
+    let write = Arc::clone(stored);
+    surveys.expect_update().returning(move |survey| {
+        *write.lock().unwrap() = survey.clone();
         let saved = survey.clone();
         Box::pin(async move { Ok(saved) })
     });
@@ -262,6 +289,81 @@ async fn opening_a_survey_emits_survey_opened_with_campaign_metadata() {
         event.payload["metadata"],
         json!({"season": "spring", "theme": "survey"})
     );
+}
+
+#[tokio::test]
+async fn a_draft_update_after_opening_is_refused_under_the_lock() {
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(draft(&Shape::default()))));
+    let emitter = RecordingEmitter::new();
+    let mut opening: Surveys<'_> =
+        SurveyService::new(surveys_stored(&stored), campaigns_holding(None), &emitter);
+    let mut editing: Surveys<'_> =
+        SurveyService::new(surveys_stored(&stored), campaigns_holding(None), &emitter);
+
+    opening.open(org(), survey_id(), at(1), None).await.unwrap();
+    let stale = editing
+        .update_draft(
+            org(),
+            survey_id(),
+            SurveyPatch {
+                title: Some("Trop tard".to_string()),
+                ..SurveyPatch::default()
+            },
+        )
+        .await;
+
+    refused(stale, SurveyError::SurveyNotDraft);
+    assert!(matches!(*stored.lock().unwrap(), SurveyRecord::Opened(_)));
+}
+
+#[tokio::test]
+async fn opening_twice_emits_survey_opened_once() {
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(draft(&Shape::default()))));
+    let emitter = RecordingEmitter::new();
+    let mut first: Surveys<'_> =
+        SurveyService::new(surveys_stored(&stored), campaigns_holding(None), &emitter);
+    let mut second: Surveys<'_> =
+        SurveyService::new(surveys_stored(&stored), campaigns_holding(None), &emitter);
+
+    first.open(org(), survey_id(), at(1), None).await.unwrap();
+    let again = second.open(org(), survey_id(), at(2), None).await;
+
+    refused(again, SurveyError::SurveyNotDraft);
+    assert_eq!(emitter.names(), vec!["survey.opened"]);
+}
+
+#[tokio::test]
+async fn every_survey_transition_loads_the_survey_locked() {
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(draft(&Shape::default()))));
+    let emitter = RecordingEmitter::new();
+    let mut surveys = surveys_stored(&stored);
+    surveys.expect_insert().returning(|survey| {
+        let saved = survey.clone();
+        Box::pin(async move { Ok(saved) })
+    });
+    surveys
+        .expect_has_responses()
+        .returning(|_, _| Box::pin(async { Ok(false) }));
+    surveys
+        .expect_delete()
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let mut service: Surveys<'_> = SurveyService::new(surveys, campaigns_holding(None), &emitter);
+
+    service
+        .update_draft(org(), survey_id(), SurveyPatch::default())
+        .await
+        .unwrap();
+    service
+        .attach_campaign(org(), survey_id(), None)
+        .await
+        .unwrap();
+    service
+        .duplicate(org(), survey_id(), SurveyId(Uuid::from_u128(78)))
+        .await
+        .unwrap();
+    service.open(org(), survey_id(), at(1), None).await.unwrap();
+    service.close(org(), survey_id(), at(2)).await.unwrap();
+    service.delete(org(), survey_id()).await.unwrap();
 }
 
 #[tokio::test]

@@ -54,6 +54,14 @@ fn slug_of(record: &SurveyRecord) -> Option<&PublicSlug> {
     }
 }
 
+fn stage_of(record: &SurveyRecord) -> u8 {
+    match record {
+        SurveyRecord::Draft(_) => 0,
+        SurveyRecord::Opened(_) => 1,
+        SurveyRecord::Closed(_) => 2,
+    }
+}
+
 fn member_of(record: &ResponseRecord) -> Option<MemberId> {
     match record {
         ResponseRecord::InProgress(response) => response.member_id(),
@@ -149,12 +157,13 @@ impl SurveyRepository for MemorySurveys {
 
     async fn update(&mut self, survey: &SurveyRecord) -> Result<SurveyRecord, CoreError> {
         let mut guard = state(&self.store);
-        let owned = guard
+        let stored = guard
             .surveys
             .get(&survey.id())
-            .is_some_and(|stored| stored.organization_id() == survey.organization_id());
-        if !owned {
-            return Err(CoreError::NotFound);
+            .filter(|stored| stored.organization_id() == survey.organization_id())
+            .ok_or(CoreError::NotFound)?;
+        if stage_of(stored) > stage_of(survey) {
+            return Err(SurveyError::SurveyStateChanged.into());
         }
         guard.surveys.insert(survey.id(), survey.clone());
         Ok(survey.clone())
@@ -225,6 +234,14 @@ impl SurveyRepository for MemorySurveys {
             .responses
             .values()
             .any(|record| record.organization_id() == organization_id && record.survey_id() == id))
+    }
+
+    async fn find_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+    ) -> Result<Option<SurveyRecord>, CoreError> {
+        self.find(organization_id, id).await
     }
 }
 

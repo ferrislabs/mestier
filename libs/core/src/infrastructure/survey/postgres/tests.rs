@@ -135,6 +135,14 @@ fn already_complete<T: std::fmt::Debug>(result: Result<T, CoreError>) {
     );
 }
 
+fn state_changed<T: std::fmt::Debug>(result: Result<T, CoreError>) {
+    let expected = SurveyError::SurveyStateChanged.to_string();
+    assert!(
+        matches!(&result, Err(CoreError::Conflict(message)) if *message == expected),
+        "expected the survey state changed error, got {result:?}"
+    );
+}
+
 pub(crate) async fn survey_contract<S: SurveyRepository>(
     surveys: &mut S,
     tenants: &Tenants,
@@ -156,13 +164,28 @@ pub(crate) async fn survey_contract<S: SurveyRepository>(
     assert_eq!(surveys.insert(&stored).await?, stored);
     assert_eq!(surveys.find(org, stored.id()).await?, Some(stored.clone()));
 
+    let stale_draft = stored.clone();
     let members = members.open(now, None)?;
     let stored = SurveyRecord::from(members.clone());
     assert_eq!(surveys.update(&stored).await?, stored);
     assert_eq!(surveys.find(org, stored.id()).await?, Some(stored.clone()));
+    assert_eq!(
+        surveys.find_for_update(org, stored.id()).await?,
+        Some(stored.clone())
+    );
+    assert_eq!(
+        surveys.find_for_update(tenants.other, stored.id()).await?,
+        None
+    );
+    state_changed(surveys.update(&stale_draft).await);
+    assert_eq!(surveys.find(org, stored.id()).await?, Some(stored.clone()));
 
+    let stale_opened = stored.clone();
     let closed = SurveyRecord::from(members.close(now + Duration::hours(1))?);
     assert_eq!(surveys.update(&closed).await?, closed);
+    assert_eq!(surveys.find(org, closed.id()).await?, Some(closed.clone()));
+    state_changed(surveys.update(&stale_opened).await);
+    state_changed(surveys.update(&stale_draft).await);
     assert_eq!(surveys.find(org, closed.id()).await?, Some(closed.clone()));
 
     let public_slug = slug();

@@ -2,7 +2,7 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    CampaignId, OrganizationId, PublicSlug, SurveyId, SurveyRecord,
+    CampaignId, OrganizationId, PublicSlug, SurveyError, SurveyId, SurveyRecord,
     domain::survey::ports::SurveyRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
@@ -100,6 +100,8 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
                 allow_multiple_responses = $8, response_cap = $9, metadata = $10, status = $11,
                 public_slug = $12, opened_at = $13, closed_at = $14, updated_at = now()
             WHERE org_id = $1 AND id = $2
+              AND CASE status WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END
+                  <= CASE $11::text WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END
             RETURNING id, org_id, campaign_id, title, description, visibility, graph,
                       allow_multiple_responses, response_cap, metadata, status, public_slug,
                       opened_at, closed_at
@@ -123,8 +125,27 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
         .await
         .map_err(map_sqlx_error)?;
 
-        row.ok_or(CoreError::NotFound)
-            .and_then(SurveyRecord::try_from)
+        if let Some(row) = row {
+            return SurveyRecord::try_from(row);
+        }
+        let exists = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM survey.survey WHERE org_id = $1 AND id = $2
+            ) AS "exists!"
+            "#,
+            columns.org_id,
+            columns.id,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        if exists {
+            Err(SurveyError::SurveyStateChanged.into())
+        } else {
+            Err(CoreError::NotFound)
+        }
     }
 
     async fn list(
@@ -252,5 +273,31 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
         .fetch_one(&mut ***tx)
         .await
         .map_err(map_sqlx_error)
+    }
+
+    async fn find_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+    ) -> Result<Option<SurveyRecord>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            SurveyRow,
+            r#"
+            SELECT id, org_id, campaign_id, title, description, visibility, graph,
+                   allow_multiple_responses, response_cap, metadata, status, public_slug,
+                   opened_at, closed_at
+            FROM survey.survey
+            WHERE org_id = $1 AND id = $2
+            FOR UPDATE
+            "#,
+            organization_id.0,
+            id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(SurveyRecord::try_from).transpose()
     }
 }
