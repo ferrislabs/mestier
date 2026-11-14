@@ -795,8 +795,11 @@ mod lifecycle {
     use chrono::{DateTime, TimeZone, Utc};
     use uuid::Uuid;
 
+    use events::DomainEvent;
+
     use super::super::aggregate::{Closed, Draft, Opened, Survey};
     use super::super::campaign::{Campaign, CampaignStatus, Window};
+    use super::super::events::SurveyResponseSubmitted;
     use super::super::metadata::Metadata;
     use super::super::response::{Completed, InProgress, Response, ResumeToken};
     use super::super::{
@@ -1643,6 +1646,8 @@ mod lifecycle {
             response.answers().keys().copied().collect::<Vec<_>>(),
             vec![qid(1), qid(3)]
         );
+        let event = SurveyResponseSubmitted::new(&survey, None, &response).unwrap();
+        assert_eq!(event.payload()["answered_questions"], serde_json::json!(2));
     }
 
     #[test]

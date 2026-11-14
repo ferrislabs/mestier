@@ -36,15 +36,15 @@ pub fn descriptors() -> Vec<EventDescriptor> {
             payload_example: json!({
                 "survey_id": "018f3b2a-0000-7000-8000-000000000030",
                 "campaign_id": "018f3b2a-0000-7000-8000-000000000040",
+                "metadata": { "saison": "printemps", "chantier": "Rénovation Dupont" },
                 "survey": {
                     "id": "018f3b2a-0000-7000-8000-000000000030",
                     "organization_id": "018f3b2a-0000-7000-8000-000000000002",
                     "title": "Satisfaction après chantier",
                     "description": "Quelques questions sur votre chantier",
-                    "visibility": "PUBLIC",
+                    "visibility": "MEMBERS",
                     "allow_multiple_responses": false,
                     "response_cap": 100,
-                    "metadata": { "saison": "printemps" },
                     "opened_at": "2026-03-01T08:00:00Z",
                 },
             }),
@@ -57,6 +57,7 @@ pub fn descriptors() -> Vec<EventDescriptor> {
             payload_example: json!({
                 "survey_id": "018f3b2a-0000-7000-8000-000000000030",
                 "campaign_id": "018f3b2a-0000-7000-8000-000000000040",
+                "metadata": { "saison": "printemps", "chantier": "Rénovation Dupont" },
                 "response": {
                     "id": "018f3b2a-0000-7000-8000-000000000050",
                     "member_id": "018f3b2a-0000-7000-8000-000000000004",
@@ -81,9 +82,9 @@ pub fn descriptors() -> Vec<EventDescriptor> {
                     "id": "018f3b2a-0000-7000-8000-000000000050",
                     "member_id": "018f3b2a-0000-7000-8000-000000000004",
                     "completed_at": "2026-03-02T10:30:00Z",
-                    "identifier_value": "jane@example.com",
+                    "identifier_value": null,
                 },
-                "metadata": { "saison": "printemps" },
+                "metadata": { "saison": "printemps", "chantier": "Rénovation Dupont" },
                 "answers": [
                     {
                         "question_id": "018f3b2a-0000-7000-8000-000000000061",

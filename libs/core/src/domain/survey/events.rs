@@ -3,17 +3,50 @@ use serde_json::{Value, json};
 
 use super::{
     Answer, Campaign, CampaignId, Completed, InProgress, Metadata, Opened, Response, Survey,
+    SurveyError,
 };
 
 pub use super::descriptors::descriptors;
 #[cfg(test)]
 pub use super::descriptors::emitted_events;
 
-pub struct SurveyOpened {
-    pub survey: Survey<Opened>,
+fn merged_metadata(
+    survey: &Survey<Opened>,
+    campaign: Option<&Campaign>,
+) -> Result<Metadata, SurveyError> {
+    survey.check_campaign(campaign)?;
+    Ok(campaign.map_or_else(
+        || survey.metadata().clone(),
+        |campaign| Metadata::merged(campaign.metadata(), survey.metadata()),
+    ))
 }
 
-impl DomainEvent for SurveyOpened {
+fn ensure_response<S>(survey: &Survey<Opened>, response: &Response<S>) -> Result<(), SurveyError> {
+    if response.survey_id() == survey.id() {
+        Ok(())
+    } else {
+        Err(SurveyError::ResponseSurveyMismatch)
+    }
+}
+
+pub struct SurveyOpened<'a> {
+    survey: &'a Survey<Opened>,
+    metadata: Metadata,
+}
+
+impl<'a> SurveyOpened<'a> {
+    pub fn new(
+        survey: &'a Survey<Opened>,
+        campaign: Option<&Campaign>,
+    ) -> Result<Self, SurveyError> {
+        Ok(Self {
+            metadata: merged_metadata(survey, campaign)?,
+            survey,
+        })
+    }
+}
+
+impl DomainEvent for SurveyOpened<'_> {
     fn name(&self) -> &'static str {
         "survey.opened"
     }
@@ -27,10 +60,11 @@ impl DomainEvent for SurveyOpened {
     }
 
     fn payload(&self) -> Value {
-        let survey = &self.survey;
+        let survey = self.survey;
         json!({
             "survey_id": survey.id().0,
             "campaign_id": campaign_id(survey.campaign_id()),
+            "metadata": metadata_payload(&self.metadata),
             "survey": {
                 "id": survey.id().0,
                 "organization_id": survey.organization_id().0,
@@ -39,19 +73,34 @@ impl DomainEvent for SurveyOpened {
                 "visibility": survey.visibility().as_str(),
                 "allow_multiple_responses": survey.allow_multiple_responses(),
                 "response_cap": survey.response_cap().map(|cap| cap.get()),
-                "metadata": metadata_payload(survey.metadata()),
                 "opened_at": survey.opened_at(),
             },
         })
     }
 }
 
-pub struct SurveyResponseSubmitted {
-    pub response: Response<InProgress>,
-    pub campaign_id: Option<CampaignId>,
+pub struct SurveyResponseSubmitted<'a> {
+    survey: &'a Survey<Opened>,
+    response: &'a Response<InProgress>,
+    metadata: Metadata,
 }
 
-impl DomainEvent for SurveyResponseSubmitted {
+impl<'a> SurveyResponseSubmitted<'a> {
+    pub fn new(
+        survey: &'a Survey<Opened>,
+        campaign: Option<&Campaign>,
+        response: &'a Response<InProgress>,
+    ) -> Result<Self, SurveyError> {
+        ensure_response(survey, response)?;
+        Ok(Self {
+            metadata: merged_metadata(survey, campaign)?,
+            survey,
+            response,
+        })
+    }
+}
+
+impl DomainEvent for SurveyResponseSubmitted<'_> {
     fn name(&self) -> &'static str {
         "survey.response_submitted"
     }
@@ -65,10 +114,11 @@ impl DomainEvent for SurveyResponseSubmitted {
     }
 
     fn payload(&self) -> Value {
-        let response = &self.response;
+        let response = self.response;
         json!({
-            "survey_id": response.survey_id().0,
-            "campaign_id": campaign_id(self.campaign_id),
+            "survey_id": self.survey.id().0,
+            "campaign_id": campaign_id(self.survey.campaign_id()),
+            "metadata": metadata_payload(&self.metadata),
             "response": {
                 "id": response.id().0,
                 "member_id": response.member_id().map(|id| id.0),
@@ -79,17 +129,28 @@ impl DomainEvent for SurveyResponseSubmitted {
     }
 }
 
-pub struct SurveyResponseCompleted {
-    pub response: Response<Completed>,
-    pub survey: Survey<Opened>,
-    pub metadata: Metadata,
+pub struct SurveyResponseCompleted<'a> {
+    survey: &'a Survey<Opened>,
+    response: &'a Response<Completed>,
+    metadata: Metadata,
 }
 
-impl SurveyResponseCompleted {
+impl<'a> SurveyResponseCompleted<'a> {
+    pub fn new(
+        survey: &'a Survey<Opened>,
+        campaign: Option<&Campaign>,
+        response: &'a Response<Completed>,
+    ) -> Result<Self, SurveyError> {
+        ensure_response(survey, response)?;
+        Ok(Self {
+            metadata: merged_metadata(survey, campaign)?,
+            survey,
+            response,
+        })
+    }
+
     fn answers_payload(&self) -> Vec<Value> {
-        let Some(graph) = self.survey.graph() else {
-            return Vec::new();
-        };
+        let graph = self.survey.definition();
         let answers = self.response.answers();
         graph
             .path(answers)
@@ -108,7 +169,7 @@ impl SurveyResponseCompleted {
     }
 }
 
-impl DomainEvent for SurveyResponseCompleted {
+impl DomainEvent for SurveyResponseCompleted<'_> {
     fn name(&self) -> &'static str {
         "survey.response_completed"
     }
@@ -122,7 +183,7 @@ impl DomainEvent for SurveyResponseCompleted {
     }
 
     fn payload(&self) -> Value {
-        let response = &self.response;
+        let response = self.response;
         json!({
             "survey_id": self.survey.id().0,
             "campaign_id": campaign_id(self.survey.campaign_id()),
