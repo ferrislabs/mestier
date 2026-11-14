@@ -38,9 +38,11 @@ export function PhotoAnswer({
 }) {
 	const kept = items.filter((item) => item.status !== 'error').length
 	const full = kept >= limit
+	const limitId = `${id}-limit`
+	const inputDescription = [limitId, describedBy].filter(Boolean).join(' ')
 	return (
 		<div className="flex flex-col gap-4">
-			<p id={`${id}-limit`} className="text-sm text-muted-foreground">
+			<p id={limitId} className="text-sm text-muted-foreground">
 				{kept} sur {limit} photo{limit > 1 ? 's' : ''} au plus.
 			</p>
 			{full ? null : (
@@ -53,7 +55,7 @@ export function PhotoAnswer({
 							accept="image/*"
 							capture="environment"
 							className="sr-only"
-							aria-describedby={describedBy}
+							aria-describedby={inputDescription}
 							onChange={(event) => onAdd(filesOf(event))}
 						/>
 					</label>
@@ -66,7 +68,7 @@ export function PhotoAnswer({
 							accept="image/*,.heic,.heif"
 							multiple
 							className="sr-only"
-							aria-describedby={describedBy}
+							aria-describedby={inputDescription}
 							onChange={(event) => onAdd(filesOf(event))}
 						/>
 					</label>
@@ -116,6 +118,7 @@ export function PhotoAnswer({
 								<div className="min-w-0 flex-1">
 									<p className="truncate text-sm">{item.name}</p>
 									<p
+										aria-live="polite"
 										className={cn(
 											'text-xs',
 											item.status === 'error'
@@ -129,10 +132,7 @@ export function PhotoAnswer({
 								<button
 									type="button"
 									aria-label={`Retirer ${item.name}`}
-									disabled={
-										item.status === 'converting' || item.status === 'uploading'
-									}
-									className="-m-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-40"
+									className="-m-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
 									onClick={() => onRemove(item.id)}
 								>
 									<X className="size-5" aria-hidden />

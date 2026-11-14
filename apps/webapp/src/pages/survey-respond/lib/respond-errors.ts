@@ -101,6 +101,9 @@ export const EXPIRED = {
 		'Les réponses laissées en cours trop longtemps sont effacées. Vous pouvez recommencer depuis le début.',
 }
 
+export const IDENTIFIER_TAKEN =
+	'Une réponse a déjà été envoyée avec cette valeur. Vérifiez votre saisie ou indiquez-en une autre.'
+
 export const RATE_LIMITED =
 	'Trop de tentatives en peu de temps. Patientez une minute puis réessayez.'
 export const NETWORK =

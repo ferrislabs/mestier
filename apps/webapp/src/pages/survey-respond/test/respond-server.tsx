@@ -8,6 +8,8 @@ export interface RecordedCall {
 	url: string
 	headers: Headers
 	credentials: RequestCredentials | undefined
+	referrerPolicy: ReferrerPolicy | undefined
+	signal: AbortSignal | null
 	body: unknown
 }
 
@@ -16,7 +18,7 @@ export interface Reply {
 	body?: unknown
 }
 
-type Handler = (call: RecordedCall) => Reply
+type Handler = (call: RecordedCall) => Reply | Promise<Reply>
 
 export function data(value: unknown, status = 200): Reply {
 	return { status, body: { data: value, pagination: null } }
@@ -34,6 +36,14 @@ export function refusal(status: number, reason?: string): Reply {
 	}
 }
 
+export function hangUntilAborted(call: RecordedCall): Promise<Reply> {
+	return new Promise((_, reject) => {
+		call.signal?.addEventListener('abort', () =>
+			reject(new DOMException('Aborted', 'AbortError')),
+		)
+	})
+}
+
 export function installServer(routes: Record<string, Handler>) {
 	const calls: RecordedCall[] = []
 	const fetchMock = vi.fn(
@@ -45,13 +55,15 @@ export function installServer(routes: Record<string, Handler>) {
 				url,
 				headers: new Headers(init?.headers),
 				credentials: init?.credentials,
+				referrerPolicy: init?.referrerPolicy,
+				signal: init?.signal ?? null,
 				body:
 					typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body,
 			}
 			calls.push(call)
 			const handler = routes[`${method} ${url}`]
 			if (!handler) throw new TypeError(`unmocked ${method} ${url}`)
-			const reply = handler(call)
+			const reply = await handler(call)
 			return new Response(
 				reply.body === undefined ? null : JSON.stringify(reply.body),
 				{

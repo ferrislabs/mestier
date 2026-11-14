@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { prepareFile } from '#/pages/photo-library/lib/files'
-import { fromSchema } from '#/pages/survey/lib/survey-graph'
+import { fromSchema, identifierQuestion } from '#/pages/survey/lib/survey-graph'
 import type { EditorGraph, QuestionNode } from '#/pages/survey/types'
 import type { RespondSource } from '#/pages/survey-respond/feature/respond-sources'
 import {
@@ -10,6 +10,7 @@ import {
 	type Draft,
 	draftsFromAnswers,
 	isBlank,
+	MESSAGES,
 	maxPhotos,
 	tooManyPhotosMessage,
 	validateDraft,
@@ -17,6 +18,7 @@ import {
 import {
 	classifyFailure,
 	type Failure,
+	IDENTIFIER_TAKEN,
 	NETWORK,
 	photoErrorMessage,
 	RATE_LIMITED,
@@ -58,6 +60,28 @@ function photoKeys(items: readonly PhotoItem[] | undefined): string[] {
 
 function retryMessage(failure: Failure): string {
 	return failure.kind === 'rate_limited' ? RATE_LIMITED : NETWORK
+}
+
+const UPLOAD_TIMEOUT = 60_000
+
+function uploadSignal(controller: AbortController): {
+	signal: AbortSignal
+	release: () => void
+} {
+	if (
+		typeof AbortSignal.any === 'function' &&
+		typeof AbortSignal.timeout === 'function'
+	) {
+		return {
+			signal: AbortSignal.any([
+				controller.signal,
+				AbortSignal.timeout(UPLOAD_TIMEOUT),
+			]),
+			release: () => undefined,
+		}
+	}
+	const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT)
+	return { signal: controller.signal, release: () => clearTimeout(timer) }
 }
 
 let photoSequence = 0
@@ -105,7 +129,7 @@ export function useSurveyRespondent(
 	const [fresh, setFresh] = useState(false)
 	const [initialized, setInitialized] = useState(false)
 	const [drafts, setDrafts] = useState<Record<string, Draft>>({})
-	const [photos, setPhotos] = useState<Record<string, PhotoItem[]>>({})
+	const [photos, setPhotoState] = useState<Record<string, PhotoItem[]>>({})
 	const [photoNotice, setPhotoNotice] = useState<Record<string, string>>({})
 	const [index, setIndex] = useState(0)
 	const [stepError, setStepError] = useState<string | null>(null)
@@ -121,6 +145,20 @@ export function useSurveyRespondent(
 	const saveChain = useRef<Promise<boolean>>(Promise.resolve(true))
 	const latestAnswers = useRef<AnswerMap | null>(null)
 	const objectUrls = useRef(new Set<string>())
+	const photosRef = useRef<Record<string, PhotoItem[]>>({})
+	const uploads = useRef(new Map<string, AbortController>())
+
+	const updatePhotos = useCallback(
+		(
+			change: (
+				previous: Record<string, PhotoItem[]>,
+			) => Record<string, PhotoItem[]>,
+		) => {
+			photosRef.current = change(photosRef.current)
+			setPhotoState(photosRef.current)
+		},
+		[],
+	)
 
 	const effectiveDrafts = useMemo(() => {
 		const merged: Record<string, Draft> = { ...drafts }
@@ -162,12 +200,12 @@ export function useSurveyRespondent(
 					status: 'done',
 					previewUrl: null,
 					key,
-					message: null,
+					message: 'Photo envoyée précédemment',
 				}),
 			)
 		}
 		setDrafts(restoredDrafts)
-		setPhotos(restoredPhotos)
+		updatePhotos(() => restoredPhotos)
 		const resumedPath = respondPath(graph, buildAnswers(questions, merged))
 		const firstOpen = resumedPath.questions.findIndex((node) =>
 			isBlank(node, merged[node.id]),
@@ -177,7 +215,14 @@ export function useSurveyRespondent(
 				? Math.max(resumedPath.questions.length - 1, 0)
 				: firstOpen,
 		)
-	}, [initialized, graph, restoreQuery.isSuccess, restored, questions])
+	}, [
+		initialized,
+		graph,
+		restoreQuery.isSuccess,
+		restored,
+		questions,
+		updatePhotos,
+	])
 
 	useEffect(() => {
 		if (!restoreQuery.isError || fresh) return
@@ -205,7 +250,10 @@ export function useSurveyRespondent(
 
 	useEffect(() => {
 		const urls = objectUrls.current
+		const pending = uploads.current
 		return () => {
+			for (const controller of pending.values()) controller.abort()
+			pending.clear()
 			for (const url of urls) URL.revokeObjectURL(url)
 			urls.clear()
 		}
@@ -263,21 +311,25 @@ export function useSurveyRespondent(
 				}
 			: null
 
-	const fail = useCallback((failure: Failure): boolean => {
-		switch (failure.kind) {
-			case 'blocked':
-				setOverride({ name: 'blocked', reason: failure.reason })
-				return true
-			case 'expired':
-				setOverride({ name: 'expired' })
-				return true
-			case 'unavailable':
-				setOverride({ name: 'unavailable' })
-				return true
-			default:
-				return false
-		}
-	}, [])
+	const fail = useCallback(
+		(failure: Failure): boolean => {
+			switch (failure.kind) {
+				case 'blocked':
+					setOverride({ name: 'blocked', reason: failure.reason })
+					return true
+				case 'expired':
+					source.forget()
+					setOverride({ name: 'expired' })
+					return true
+				case 'unavailable':
+					setOverride({ name: 'unavailable' })
+					return true
+				default:
+					return false
+			}
+		},
+		[source],
+	)
 
 	const ensureHandle = useCallback(async (): Promise<string | null> => {
 		if (handleRef.current) return handleRef.current
@@ -354,6 +406,12 @@ export function useSurveyRespondent(
 		[photos],
 	)
 
+	const pendingAnywhere = useCallback(
+		() =>
+			path.questions.some((node) => (photos[node.id] ?? []).some(isPending)),
+		[photos, path.questions],
+	)
+
 	const setDraft = useCallback((questionId: string, draft: Draft) => {
 		setDrafts((previous) => ({ ...previous, [questionId]: draft }))
 		setStepError(null)
@@ -368,6 +426,10 @@ export function useSurveyRespondent(
 		)
 		if (problem) {
 			setStepError(problem)
+			return
+		}
+		if (isLast && pendingAnywhere()) {
+			setActionError(MESSAGES.photoPending)
 			return
 		}
 		setBusy(true)
@@ -398,6 +460,22 @@ export function useSurveyRespondent(
 				})
 			} catch (error: unknown) {
 				const failure = classifyFailure(error, 'response')
+				if (
+					source.mode === 'public' &&
+					failure.kind === 'blocked' &&
+					failure.reason === 'respondent_already_answered' &&
+					graph
+				) {
+					const identifier = identifierQuestion(graph)
+					const found = identifier
+						? path.questions.findIndex((node) => node.id === identifier.id)
+						: -1
+					if (found >= 0) {
+						goTo(found)
+						setStepError(IDENTIFIER_TAKEN)
+						return
+					}
+				}
 				if (fail(failure)) return
 				if (failure.kind === 'invalid') {
 					const found = failure.questionId
@@ -421,7 +499,9 @@ export function useSurveyRespondent(
 		busy,
 		effectiveDrafts,
 		pendingFor,
+		pendingAnywhere,
 		ensureHandle,
+		graph,
 		path,
 		isLast,
 		persist,
@@ -447,21 +527,21 @@ export function useSurveyRespondent(
 
 	const patchPhoto = useCallback(
 		(questionId: string, id: string, patch: Partial<PhotoItem>) => {
-			setPhotos((previous) => ({
+			updatePhotos((previous) => ({
 				...previous,
 				[questionId]: (previous[questionId] ?? []).map((item) =>
 					item.id === id ? { ...item, ...patch } : item,
 				),
 			}))
 		},
-		[],
+		[updatePhotos],
 	)
 
 	const addPhotos = useCallback(
 		async (questionId: string, files: readonly File[]) => {
 			const node = questions.find((candidate) => candidate.id === questionId)
 			if (!node || files.length === 0) return
-			const taken = (photos[questionId] ?? []).filter(
+			const taken = (photosRef.current[questionId] ?? []).filter(
 				(item) => item.status !== 'error',
 			).length
 			const room = Math.max(maxPhotos(node) - taken, 0)
@@ -474,86 +554,112 @@ export function useSurveyRespondent(
 			})
 			if (accepted.length === 0) return
 			setStepError(null)
-			const items = accepted.map((file) => ({
-				file,
-				item: {
+			const items = accepted.map((file) => {
+				const controller = new AbortController()
+				const item: PhotoItem = {
 					id: nextPhotoId(),
 					name: file.name,
-					status: 'converting' as const,
+					status: 'converting',
 					previewUrl: null,
 					key: null,
 					message: null,
-				},
-			}))
-			setPhotos((previous) => ({
+				}
+				uploads.current.set(item.id, controller)
+				return { file, item, controller }
+			})
+			updatePhotos((previous) => ({
 				...previous,
 				[questionId]: [
 					...(previous[questionId] ?? []),
 					...items.map(({ item }) => item),
 				],
 			}))
-			const target = await ensureHandle()
-			if (!target) {
-				for (const { item } of items) {
-					patchPhoto(questionId, item.id, {
-						status: 'error',
-						message: 'La photo n’a pas pu être envoyée.',
-					})
-				}
-				return
-			}
-			for (const { file, item } of items) {
+			for (const { file, item, controller } of items) {
+				if (!uploads.current.has(item.id)) continue
 				const prepared = await prepareFile(file, convertHeic)
+				if (!uploads.current.has(item.id)) continue
 				if (prepared.kind === 'rejected') {
+					uploads.current.delete(item.id)
 					patchPhoto(questionId, item.id, {
 						status: 'error',
 						message: prepared.message,
 					})
 					continue
 				}
+				const target = await ensureHandle()
+				if (!uploads.current.has(item.id)) continue
+				if (!target) {
+					uploads.current.delete(item.id)
+					patchPhoto(questionId, item.id, {
+						status: 'error',
+						message: 'La photo n’a pas pu être envoyée.',
+					})
+					continue
+				}
 				const previewUrl = URL.createObjectURL(prepared.file)
 				objectUrls.current.add(previewUrl)
 				patchPhoto(questionId, item.id, { status: 'uploading', previewUrl })
+				const { signal, release } = uploadSignal(controller)
 				try {
-					const key = await source.uploadPhoto(target, prepared.file)
+					const key = await source.uploadPhoto(target, prepared.file, signal)
 					patchPhoto(questionId, item.id, { status: 'done', key })
 				} catch (error: unknown) {
+					if (!uploads.current.has(item.id)) continue
 					if (fail(classifyFailure(error, 'response'))) return
 					patchPhoto(questionId, item.id, {
 						status: 'error',
 						message: photoErrorMessage(error),
 					})
+				} finally {
+					release()
+					uploads.current.delete(item.id)
 				}
 			}
 		},
-		[questions, photos, ensureHandle, patchPhoto, convertHeic, source, fail],
+		[
+			questions,
+			updatePhotos,
+			ensureHandle,
+			patchPhoto,
+			convertHeic,
+			source,
+			fail,
+		],
 	)
 
-	const removePhoto = useCallback((questionId: string, id: string) => {
-		setPhotos((previous) => {
-			const items = previous[questionId] ?? []
-			const removed = items.find((item) => item.id === id)
+	const removePhoto = useCallback(
+		(questionId: string, id: string) => {
+			uploads.current.get(id)?.abort()
+			uploads.current.delete(id)
+			const removed = (photosRef.current[questionId] ?? []).find(
+				(item) => item.id === id,
+			)
 			if (removed?.previewUrl) {
 				URL.revokeObjectURL(removed.previewUrl)
 				objectUrls.current.delete(removed.previewUrl)
 			}
-			return {
+			updatePhotos((previous) => ({
 				...previous,
-				[questionId]: items.filter((item) => item.id !== id),
-			}
-		})
-		setPhotoNotice((previous) => {
-			const { [questionId]: _, ...rest } = previous
-			return rest
-		})
-	}, [])
+				[questionId]: (previous[questionId] ?? []).filter(
+					(item) => item.id !== id,
+				),
+			}))
+			setPhotoNotice((previous) => {
+				const { [questionId]: _, ...rest } = previous
+				return rest
+			})
+		},
+		[updatePhotos],
+	)
 
 	const restart = useCallback(() => {
 		source.forget()
 		handleRef.current = null
 		latestAnswers.current = null
+		for (const controller of uploads.current.values()) controller.abort()
+		uploads.current.clear()
 		setDrafts({})
-		setPhotos({})
+		updatePhotos(() => ({}))
 		setPhotoNotice({})
 		setIndex(0)
 		setStepError(null)
@@ -562,7 +668,8 @@ export function useSurveyRespondent(
 		setFresh(true)
 		setInitialized(true)
 		setOverride(null)
-	}, [source])
+		setStepChange((count) => count + 1)
+	}, [source, updatePhotos])
 
 	const reload = useCallback(() => {
 		if (surveyQuery.isError) void surveyQuery.refetch()

@@ -58,7 +58,7 @@ afterEach(() => {
 })
 
 describe('MemberSurveyFeature', () => {
-	it('lets a member without any survey permission resume, answer and complete through the member routes', async () => {
+	it('checks no survey permission itself and lets a member resume, answer and complete through the member routes', async () => {
 		installFakePermissionsApi([])
 		setAuth({ accessToken: 'member-token', isAuthenticated: true })
 		const { calls } = installServer({
@@ -106,7 +106,7 @@ describe('MemberSurveyFeature', () => {
 		}
 	})
 
-	it('tells a member who already answered that a single answer is allowed', async () => {
+	it('blocks with « Déjà répondu » when the member already answered, refused at start', async () => {
 		installFakePermissionsApi([])
 		installServer({
 			[`GET ${SURVEY}`]: () => data(respondentSurvey(GRAPH)),

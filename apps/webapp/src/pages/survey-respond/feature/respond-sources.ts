@@ -18,12 +18,17 @@ export interface RespondentResponse {
 }
 
 export interface RespondSource {
+	mode: 'public' | 'member'
 	loadSurvey: () => Promise<RespondentSurvey>
 	restore: () => Promise<RespondentResponse | null>
 	start: () => Promise<RespondentResponse>
 	save: (handle: string, answers: Record<string, unknown>) => Promise<void>
 	complete: (handle: string) => Promise<void>
-	uploadPhoto: (handle: string, photo: Blob) => Promise<string>
+	uploadPhoto: (
+		handle: string,
+		photo: Blob,
+		signal: AbortSignal,
+	) => Promise<string>
 	forget: () => void
 }
 
@@ -32,6 +37,7 @@ interface SendInit {
 	body?: BodyInit
 	contentType?: string
 	authenticated: boolean
+	signal?: AbortSignal
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -62,6 +68,8 @@ async function send<T>(path: string, init: SendInit): Promise<T> {
 			headers,
 			body: init.body,
 			credentials: init.authenticated ? 'include' : 'omit',
+			referrerPolicy: init.authenticated ? undefined : 'no-referrer',
+			signal: init.signal,
 		})
 	} catch {
 		throw new RespondError(null, null, null)
@@ -98,6 +106,7 @@ export function publicSource(slug: string): RespondSource {
 	const responsePath = (token: string) =>
 		`${base}/responses/${encodeURIComponent(token)}`
 	return {
+		mode: 'public',
 		loadSurvey: () => send<RespondentSurvey>(base, { authenticated: false }),
 		restore: async () => {
 			const token = readResumeToken(slug)
@@ -127,12 +136,13 @@ export function publicSource(slug: string): RespondSource {
 				authenticated: false,
 			})
 		},
-		uploadPhoto: async (token, photo) => {
+		uploadPhoto: async (token, photo, signal) => {
 			const view = await send<{ key: string }>(
 				`${responsePath(token)}/photos`,
 				{
 					method: 'POST',
 					authenticated: false,
+					signal,
 					...photoBody(photo),
 				},
 			)
@@ -158,6 +168,7 @@ export function memberSource(
 		return asResponse(view.id, view)
 	}
 	return {
+		mode: 'member',
 		loadSurvey: () =>
 			send<RespondentSurvey>(surveyPath, { authenticated: true }),
 		restore: start,
@@ -175,10 +186,11 @@ export function memberSource(
 				authenticated: true,
 			})
 		},
-		uploadPhoto: async (id, photo) => {
+		uploadPhoto: async (id, photo, signal) => {
 			const view = await send<{ key: string }>(`${responsePath(id)}/photos`, {
 				method: 'POST',
 				authenticated: true,
+				signal,
 				...photoBody(photo),
 			})
 			return view.key

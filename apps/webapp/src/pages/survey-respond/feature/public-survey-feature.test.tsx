@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PublicSurveyFeature } from '#/pages/survey-respond/feature/public-survey-feature'
 import { resumeKey } from '#/pages/survey-respond/lib/resume-store'
-import { respondentSurvey } from '#/pages/survey-respond/test/respond-fixtures'
+import {
+	question,
+	respondentSurvey,
+} from '#/pages/survey-respond/test/respond-fixtures'
 import {
 	data,
 	installServer,
@@ -38,6 +41,35 @@ function happyRoutes(
 			data(response({}, 'COMPLETED')),
 		...extra,
 	}
+}
+
+const IDENTIFIER_GRAPH = {
+	start: 'q-email',
+	nodes: [
+		question('q-email', 'EMAIL', {
+			label: 'Votre e-mail',
+			required: true,
+			identifier: true,
+		}),
+		question('q-note', 'TEXT', { label: 'Un commentaire' }),
+		{ type: 'END' as const, id: 'end', message: 'Merci !' },
+	],
+	edges: [
+		{ from: 'q-email', to: 'q-note', branch: 'NEXT' as const },
+		{ from: 'q-note', to: 'end', branch: 'NEXT' as const },
+	],
+}
+
+async function answerToEmail() {
+	await heading()
+	await userEvent.click(screen.getByRole('radio', { name: 'Élève' }))
+	await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+	await userEvent.type(
+		await screen.findByRole('textbox', { name: 'Votre classe' }),
+		'2nde',
+	)
+	await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+	await screen.findByRole('textbox', { name: 'Votre e-mail' })
 }
 
 function heading() {
@@ -81,6 +113,10 @@ describe('PublicSurveyFeature', () => {
 		})
 		expect(window.localStorage.getItem(resumeKey('lien-bilan'))).toBe(TOKEN)
 
+		await userEvent.type(
+			screen.getByRole('textbox', { name: 'Quelle matière enseignez-vous ?' }),
+			'Maçonnerie',
+		)
 		await userEvent.click(screen.getByRole('button', { name: /Précédent/ }))
 		await screen.findByRole('heading', { name: 'Vous êtes' })
 		expect(
@@ -95,6 +131,19 @@ describe('PublicSurveyFeature', () => {
 		expect(
 			calls.filter((call) => call.url === `${BASE}/responses`),
 		).toHaveLength(1)
+		await waitFor(() =>
+			expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(3),
+		)
+		const puts = calls.filter((call) => call.method === 'PUT')
+		expect(puts[1]?.body).toEqual({
+			answers: {
+				'q-role': { Choice: 'Professeur' },
+				'q-subject': { Text: 'Maçonnerie' },
+			},
+		})
+		expect(puts[2]?.body).toEqual({
+			answers: { 'q-role': { Choice: 'Élève' } },
+		})
 	})
 
 	it('sends no Authorization header and no credentials, even with a session open', async () => {
@@ -109,6 +158,7 @@ describe('PublicSurveyFeature', () => {
 		for (const call of calls) {
 			expect(call.headers.has('Authorization')).toBe(false)
 			expect(call.credentials).toBe('omit')
+			expect(call.referrerPolicy).toBe('no-referrer')
 		}
 	})
 
@@ -198,9 +248,154 @@ describe('PublicSurveyFeature', () => {
 		).toBeTruthy()
 		expect(window.localStorage.getItem(resumeKey('lien-bilan'))).toBeNull()
 		await userEvent.click(screen.getByRole('button', { name: 'Recommencer' }))
+		const first = await screen.findByRole('heading', { name: 'Vous êtes' })
+		await waitFor(() => expect(document.activeElement).toBe(first))
+	})
+
+	it('forgets the token when a save finds the response expired', async () => {
+		installServer(
+			happyRoutes({
+				[`PUT ${BASE}/responses/${TOKEN}`]: () => ({ status: 404 }),
+			}),
+		)
+		renderWithQuery(<PublicSurveyFeature slug="lien-bilan" />)
+		await heading()
+		await userEvent.click(screen.getByRole('radio', { name: 'Élève' }))
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
 		expect(
-			await screen.findByRole('heading', { name: 'Vous êtes' }),
+			await screen.findByRole('heading', { name: 'Votre réponse a expiré' }),
 		).toBeTruthy()
+		expect(window.localStorage.getItem(resumeKey('lien-bilan'))).toBeNull()
+	})
+
+	it('sends the respondent back to the identifier question, answers kept, when its value was already used', async () => {
+		let completes = 0
+		const { calls } = installServer({
+			[`GET ${BASE}`]: () => data(respondentSurvey(IDENTIFIER_GRAPH)),
+			[`POST ${BASE}/responses`]: () =>
+				data({ ...response(), resume_token: TOKEN }, 201),
+			[`PUT ${BASE}/responses/${TOKEN}`]: () => data(response()),
+			[`POST ${BASE}/responses/${TOKEN}/complete`]: () => {
+				completes += 1
+				return completes === 1
+					? refusal(409, 'respondent_already_answered')
+					: data(response({}, 'COMPLETED'))
+			},
+		})
+		renderWithQuery(<PublicSurveyFeature slug="lien-bilan" />)
+		await userEvent.type(
+			await screen.findByRole('textbox', { name: 'Votre e-mail' }),
+			'lea@exemple.fr',
+		)
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+		await userEvent.type(
+			await screen.findByRole('textbox', { name: 'Un commentaire' }),
+			'RAS',
+		)
+		await userEvent.click(screen.getByRole('button', { name: 'Terminer' }))
+
+		const email = (await screen.findByRole('textbox', {
+			name: 'Votre e-mail',
+		})) as HTMLInputElement
+		expect(
+			screen.getByText(
+				'Une réponse a déjà été envoyée avec cette valeur. Vérifiez votre saisie ou indiquez-en une autre.',
+			),
+		).toBeTruthy()
+		expect(screen.queryByRole('heading', { name: 'Déjà répondu' })).toBeNull()
+		expect(email.value).toBe('lea@exemple.fr')
+		expect(window.localStorage.getItem(resumeKey('lien-bilan'))).toBe(TOKEN)
+
+		await userEvent.clear(email)
+		await userEvent.type(email, 'lea.martin@exemple.fr')
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+		expect(
+			(
+				(await screen.findByRole('textbox', {
+					name: 'Un commentaire',
+				})) as HTMLInputElement
+			).value,
+		).toBe('RAS')
+		await userEvent.click(screen.getByRole('button', { name: 'Terminer' }))
+		expect(await screen.findByText('Merci !')).toBeTruthy()
+		expect(calls.filter((call) => call.method === 'PUT').at(-1)?.body).toEqual({
+			answers: {
+				'q-email': { Email: 'lea.martin@exemple.fr' },
+				'q-note': { Text: 'RAS' },
+			},
+		})
+	})
+
+	it('shows the closing message and no form when the survey closes during a save', async () => {
+		installServer(
+			happyRoutes({
+				[`PUT ${BASE}/responses/${TOKEN}`]: () => refusal(409, 'survey_closed'),
+			}),
+		)
+		renderWithQuery(<PublicSurveyFeature slug="lien-bilan" />)
+		await heading()
+		await userEvent.click(screen.getByRole('radio', { name: 'Élève' }))
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+		expect(
+			await screen.findByRole('heading', { name: 'Questionnaire fermé' }),
+		).toBeTruthy()
+		expect(
+			screen.getByText('Ce questionnaire n’accepte plus de réponses.'),
+		).toBeTruthy()
+		expect(screen.queryByRole('textbox')).toBeNull()
+		expect(screen.queryByRole('button')).toBeNull()
+	})
+
+	it('shows the closing message and no form when the survey closes before completion', async () => {
+		installServer(
+			happyRoutes({
+				[`POST ${BASE}/responses/${TOKEN}/complete`]: () =>
+					refusal(409, 'survey_closed'),
+			}),
+		)
+		renderWithQuery(<PublicSurveyFeature slug="lien-bilan" />)
+		await answerToEmail()
+		await userEvent.click(screen.getByRole('button', { name: 'Terminer' }))
+		expect(
+			await screen.findByRole('heading', { name: 'Questionnaire fermé' }),
+		).toBeTruthy()
+		expect(screen.queryByRole('textbox')).toBeNull()
+		expect(screen.queryByRole('button')).toBeNull()
+	})
+
+	it('keeps the answers and lets the respondent retry when completion loses the network', async () => {
+		let completes = 0
+		const { calls } = installServer(
+			happyRoutes({
+				[`POST ${BASE}/responses/${TOKEN}/complete`]: () => {
+					completes += 1
+					return completes === 1
+						? refusal(503)
+						: data(response({}, 'COMPLETED'))
+				},
+			}),
+		)
+		renderWithQuery(<PublicSurveyFeature slug="lien-bilan" />)
+		await answerToEmail()
+		await userEvent.type(
+			screen.getByRole('textbox', { name: 'Votre e-mail' }),
+			'lea@exemple.fr',
+		)
+		await userEvent.click(screen.getByRole('button', { name: 'Terminer' }))
+		expect(await screen.findByText(/Connexion impossible/)).toBeTruthy()
+		expect(
+			(
+				screen.getByRole('textbox', {
+					name: 'Votre e-mail',
+				}) as HTMLInputElement
+			).value,
+		).toBe('lea@exemple.fr')
+		expect(window.localStorage.getItem(resumeKey('lien-bilan'))).toBe(TOKEN)
+		await userEvent.click(screen.getByRole('button', { name: 'Terminer' }))
+		expect(await screen.findByText('Merci, à bientôt !')).toBeTruthy()
+		expect(calls.filter((call) => call.url.endsWith('/complete'))).toHaveLength(
+			2,
+		)
 	})
 
 	it('shows the French closing message and no form when the survey is closed', async () => {

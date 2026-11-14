@@ -1,13 +1,15 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PublicSurveyFeature } from '#/pages/survey-respond/feature/public-survey-feature'
+import { resumeKey } from '#/pages/survey-respond/lib/resume-store'
 import {
 	photoGraph,
 	respondentSurvey,
 } from '#/pages/survey-respond/test/respond-fixtures'
 import {
 	data,
+	hangUntilAborted,
 	installServer,
 	type RecordedCall,
 	refusal,
@@ -23,7 +25,11 @@ vi.mock('heic-to', () => ({ heicTo }))
 const BASE = '/api/v1/public/surveys/lien-photo'
 const TOKEN = 'photo-token-123456'
 
-function routes(upload: (call: RecordedCall) => ReturnType<typeof data>) {
+function routes(
+	upload: (
+		call: RecordedCall,
+	) => ReturnType<typeof data> | Promise<ReturnType<typeof data>>,
+) {
 	return {
 		[`GET ${BASE}`]: () => data(respondentSurvey(photoGraph(2))),
 		[`POST ${BASE}/responses`]: () =>
@@ -62,6 +68,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+	vi.useRealTimers()
 	vi.unstubAllGlobals()
 })
 
@@ -154,5 +161,80 @@ describe('photo answers', () => {
 		).toBeTruthy()
 		await userEvent.click(screen.getByRole('button', { name: 'Terminer' }))
 		expect(screen.getByText('Ajoutez au moins une photo.')).toBeTruthy()
+	})
+
+	it('times out a stalled upload into an error the respondent can remove', async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true })
+		const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+		installServer(routes(hangUntilAborted))
+		renderWithQuery(<PublicSurveyFeature slug="lien-photo" />)
+		await user.upload(await picker(), jpeg('lent.jpg'))
+		expect(await screen.findByText('Envoi…')).toBeTruthy()
+		await user.click(screen.getByRole('button', { name: 'Terminer' }))
+		expect(
+			screen.getByText('Attendez la fin de l’envoi des photos.'),
+		).toBeTruthy()
+		await act(async () => {
+			vi.advanceTimersByTime(60_000)
+		})
+		expect(
+			await screen.findByText(
+				'Connexion perdue : la photo n’a pas été envoyée.',
+			),
+		).toBeTruthy()
+		await user.click(screen.getByRole('button', { name: 'Retirer lent.jpg' }))
+		expect(screen.queryByText('lent.jpg')).toBeNull()
+	})
+
+	it('aborts the upload when a pending photo is removed', async () => {
+		const { calls } = installServer(routes(hangUntilAborted))
+		renderWithQuery(<PublicSurveyFeature slug="lien-photo" />)
+		await userEvent.upload(await picker(), jpeg('lent.jpg'))
+		await screen.findByText('Envoi…')
+		const upload = calls.find((call) => call.url.endsWith('/photos'))
+		expect(upload?.signal?.aborted).toBe(false)
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Retirer lent.jpg' }),
+		)
+		expect(upload?.signal?.aborted).toBe(true)
+		expect(screen.queryByText('lent.jpg')).toBeNull()
+		expect(screen.queryByText(/Connexion perdue/)).toBeNull()
+		await userEvent.click(screen.getByRole('button', { name: 'Terminer' }))
+		expect(screen.getByText('Ajoutez au moins une photo.')).toBeTruthy()
+	})
+
+	it('starts no response for a file that is not an image', async () => {
+		const { calls } = installServer(routes(() => data({ key: 'k' }, 201)))
+		renderWithQuery(<PublicSurveyFeature slug="lien-photo" />)
+		const input = await picker()
+		expect(input.getAttribute('aria-describedby')).toContain(
+			'answer-q-photo-limit',
+		)
+		await userEvent.upload(
+			input,
+			new File(['%PDF'], 'devis.pdf', { type: 'application/pdf' }),
+			{ applyAccept: false },
+		)
+		await waitFor(() =>
+			expect(
+				within(screen.getByRole('list')).getByText('devis.pdf'),
+			).toBeTruthy(),
+		)
+		expect(calls.map((call) => call.method)).toEqual(['GET'])
+	})
+
+	it('labels a photo kept from a resumed response as sent earlier', async () => {
+		window.localStorage.setItem(resumeKey('lien-photo'), TOKEN)
+		installServer({
+			...routes(() => data({ key: 'k' }, 201)),
+			[`GET ${BASE}/responses/${TOKEN}`]: () =>
+				data({
+					id: 'r1',
+					answers: { 'q-photo': { Photos: ['k-old'] } },
+					status: 'IN_PROGRESS',
+				}),
+		})
+		renderWithQuery(<PublicSurveyFeature slug="lien-photo" />)
+		expect(await screen.findByText('Photo envoyée précédemment')).toBeTruthy()
 	})
 })
