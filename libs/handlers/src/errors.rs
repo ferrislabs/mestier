@@ -2,7 +2,7 @@ use axum::{
     Json,
     response::{IntoResponse, Response},
 };
-use common::CoreError;
+use common::{CoreError, Refusal, RefusalKind};
 use http::StatusCode;
 use serde::Serialize;
 use thiserror::Error;
@@ -104,6 +104,9 @@ pub enum ApiError {
     #[error("Unprocessable entity: {0}")]
     UnprocessableEntity(String),
 
+    #[error("{}", refused_message(.0))]
+    Refused(Refusal),
+
     // 429
     #[error("Too many requests")]
     TooManyRequests,
@@ -141,6 +144,10 @@ impl ApiError {
             Self::NotFound | Self::ResourceNotFound(_, _) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::Refused(refusal) => match refusal.kind {
+                RefusalKind::Conflict => StatusCode::CONFLICT,
+                RefusalKind::Validation => StatusCode::UNPROCESSABLE_ENTITY,
+            },
             Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal | Self::Database | Self::ExternalService(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -163,11 +170,34 @@ impl ApiError {
             Self::ResourceNotFound(_, _) => "E_RESOURCE_NOT_FOUND",
             Self::Conflict(_) => "E_CONFLICT",
             Self::UnprocessableEntity(_) => "E_UNPROCESSABLE_ENTITY",
+            Self::Refused(refusal) => match refusal.kind {
+                RefusalKind::Conflict => "E_CONFLICT",
+                RefusalKind::Validation => "E_UNPROCESSABLE_ENTITY",
+            },
             Self::TooManyRequests => "E_TOO_MANY_REQUESTS",
             Self::Internal => "E_INTERNAL",
             Self::Database => "E_DATABASE",
             Self::ExternalService(_) => "E_EXTERNAL_SERVICE",
         }
+    }
+
+    fn details(&self) -> Option<serde_json::Value> {
+        let Self::Refused(refusal) = self else {
+            return None;
+        };
+        let mut details = serde_json::Map::new();
+        details.insert("reason".to_owned(), refusal.reason.into());
+        if let Some(question_id) = refusal.question_id {
+            details.insert("question_id".to_owned(), question_id.to_string().into());
+        }
+        Some(details.into())
+    }
+}
+
+fn refused_message(refusal: &Refusal) -> String {
+    match refusal.kind {
+        RefusalKind::Conflict => format!("Conflict: {}", refusal.message),
+        RefusalKind::Validation => format!("Unprocessable entity: {}", refusal.message),
     }
 }
 
@@ -177,6 +207,7 @@ impl From<CoreError> for ApiError {
             CoreError::NotFound => Self::NotFound,
             CoreError::Conflict(msg) => Self::Conflict(msg),
             CoreError::Validation(msg) => Self::UnprocessableEntity(msg),
+            CoreError::Refused(refusal) => Self::Refused(refusal),
             CoreError::Forbidden { .. } => Self::Forbidden,
             CoreError::Database(msg) => {
                 tracing::error!(error = %msg, "core database error");
@@ -197,7 +228,7 @@ impl IntoResponse for ApiError {
             code: self.code(),
             message: self.to_string(),
             status: status.as_u16(),
-            details: None,
+            details: self.details(),
         };
         (status, Json(body)).into_response()
     }
@@ -379,6 +410,50 @@ mod tests {
         assert_eq!(json["code"], "E_CONFLICT");
         assert_eq!(json["status"], 409);
         assert!(json["message"].as_str().unwrap().contains("slug taken"));
+    }
+
+    #[tokio::test]
+    async fn a_refused_conflict_answers_409_with_its_reason_in_details() {
+        let api: ApiError = CoreError::Refused(common::Refusal {
+            kind: common::RefusalKind::Conflict,
+            reason: "survey_closed",
+            question_id: None,
+            message: "survey: is closed".into(),
+        })
+        .into();
+        let (status, json) = parse_response(api).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(json["code"], "E_CONFLICT");
+        assert_eq!(json["status"], 409);
+        assert!(
+            json["message"]
+                .as_str()
+                .unwrap()
+                .contains("survey: is closed")
+        );
+        assert_eq!(
+            json["details"],
+            serde_json::json!({"reason": "survey_closed"})
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refused_validation_answers_422_naming_its_reason_and_question() {
+        let question = uuid::Uuid::from_u128(7);
+        let api: ApiError = CoreError::Refused(common::Refusal {
+            kind: common::RefusalKind::Validation,
+            reason: "required_question_unanswered",
+            question_id: Some(question),
+            message: "response: required question is unanswered".into(),
+        })
+        .into();
+        let (status, json) = parse_response(api).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(json["code"], "E_UNPROCESSABLE_ENTITY");
+        assert_eq!(
+            json["details"],
+            serde_json::json!({"reason": "required_question_unanswered", "question_id": question.to_string()})
+        );
     }
 
     #[tokio::test]
