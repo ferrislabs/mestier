@@ -291,7 +291,10 @@ pub use domain::{
         MAX_PLACEMENTS, PlaceLibraryPhotosCommand, PlacementRequest, PlacementTargetKind,
         UpdateLibraryPhotoCommand, UploadLibraryPhotoCommand,
     },
-    photo_library::normalize::{NormalizedImage, normalize_image},
+    photo_library::normalize::{
+        DecodeLimits, LIBRARY_DECODE_LIMITS, NormalizedImage, PixelBudget, SURVEY_DECODE_LIMITS,
+        normalize_image, normalize_image_with,
+    },
 };
 
 pub use domain::knowledge::documents::{

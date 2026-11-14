@@ -23,13 +23,20 @@ use crate::{
     UploadMemberResponsePhotoCommand, UserId, Visibility,
 };
 
+static PURGES: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[derive(Clone, Default)]
-struct FakeStorage {
+pub(super) struct FakeStorage {
     uploaded: Arc<Mutex<Vec<String>>>,
     deleted: Arc<Mutex<Vec<String>>>,
+    failing: Arc<Mutex<Option<String>>>,
 }
 
 impl FakeStorage {
+    fn fail_deleting_under(&self, fragment: String) {
+        *self.failing.lock().unwrap() = Some(fragment);
+    }
+
     fn uploaded(&self) -> Vec<String> {
         self.uploaded.lock().unwrap().clone()
     }
@@ -66,12 +73,19 @@ impl FileStorage for FakeStorage {
     }
 
     async fn delete(&self, key: &str) -> Result<(), CoreError> {
+        if let Some(fragment) = self.failing.lock().unwrap().as_deref()
+            && key.contains(fragment)
+        {
+            return Err(CoreError::Internal(format!(
+                "storage refused to delete {key}"
+            )));
+        }
         self.deleted.lock().unwrap().push(key.to_owned());
         Ok(())
     }
 }
 
-fn storage() -> (FakeStorage, FileStorageService<FakeStorage>) {
+pub(super) fn storage() -> (FakeStorage, FileStorageService<FakeStorage>) {
     let fake = FakeStorage::default();
     let service = FileStorageService::new(fake.clone(), "uploads");
     (fake, service)
@@ -462,6 +476,7 @@ async fn exists(response: ResponseId) -> bool {
 #[tokio::test]
 #[ignore = "requires live postgres"]
 async fn an_abandoned_response_loses_its_photos_and_a_completed_one_is_never_touched() {
+    let _purges = PURGES.lock().await;
     with_fixture(true, async |usecase, fixture| {
         let (fake, storage) = storage();
         let (_, slug, token, abandoned) = public_response(&usecase, &fixture).await;
@@ -527,6 +542,229 @@ async fn the_purge_without_a_file_storage_does_nothing() {
             usecase.purge_abandoned_survey_photos(Utc::now()).await.ok(),
             Some(0)
         );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn the_cheap_photo_checks_refuse_a_capped_response_before_any_normalization() {
+    with_fixture(true, async |usecase, fixture| {
+        let (_, storage) = storage();
+        let (_, slug, token, _) = public_response(&usecase, &fixture).await;
+        let open = usecase
+            .check_public_response_photo(&slug, token.clone())
+            .await;
+        for _ in 0..MAX_UPLOADED_SURVEY_PHOTOS {
+            usecase
+                .upload_public_response_photo(&slug, token.clone(), image(), &storage)
+                .await
+                .unwrap();
+        }
+
+        let capped = usecase.check_public_response_photo(&slug, token).await;
+        let forged = usecase
+            .check_public_response_photo(&slug, ResumeToken::new("x".repeat(43)).unwrap())
+            .await;
+
+        assert!(open.is_ok(), "{open:?}");
+        refused_with(capped, RefusalKind::Conflict, "response_photo_cap_reached");
+        not_found(forged);
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn the_member_photo_check_is_reserved_to_the_member_who_owns_the_response() {
+    with_fixture(true, async |usecase, mut fixture| {
+        let pool = dev_pool().await;
+        let colleague = seed_user(&pool).await;
+        seed_member(&pool, fixture.organization_id.0, colleague).await;
+        fixture.users.push(colleague);
+        let survey_id = photo_survey(&usecase, &fixture, Visibility::Members, false).await;
+        let response_id = usecase
+            .start_member_response(StartMemberResponseCommand {
+                actor: fixture.member.clone(),
+                organization_id: fixture.organization_id,
+                survey_id,
+            })
+            .await
+            .unwrap()
+            .response()
+            .id();
+        let check = |actor: Subject| {
+            usecase.check_member_response_photo(SurveyResponseCommand {
+                actor,
+                organization_id: fixture.organization_id,
+                id: response_id,
+            })
+        };
+
+        let owner = check(fixture.member.clone()).await;
+        let by_colleague = check(user_subject(UserId(colleague), Vec::new())).await;
+
+        assert!(owner.is_ok(), "{owner:?}");
+        not_found(by_colleague);
+        fixture
+    })
+    .await;
+}
+
+async fn forget_upload(key: &str) {
+    sqlx::query("DELETE FROM survey.response_photo WHERE key = $1")
+        .bind(key)
+        .execute(&dev_pool().await)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_key_under_the_response_directory_that_was_never_uploaded_is_refused() {
+    with_fixture(true, async |usecase, fixture| {
+        let (_, storage) = storage();
+        let (survey_id, slug, token, response_id) = public_response(&usecase, &fixture).await;
+        let invented = format!(
+            "uploads/survey-{}/{}/{}/0195f0a0-0000-7000-8000-00000000abcd.jpg",
+            fixture.organization_id.0, survey_id.0, response_id.0
+        );
+        let on_save = usecase
+            .save_public_response(&slug, token.clone(), photo_answers(&[&invented]))
+            .await;
+        let key = usecase
+            .upload_public_response_photo(&slug, token.clone(), image(), &storage)
+            .await
+            .unwrap();
+        usecase
+            .save_public_response(&slug, token.clone(), photo_answers(&[&key]))
+            .await
+            .unwrap();
+        forget_upload(&key).await;
+
+        let on_complete = usecase.complete_public_response(&slug, token).await;
+
+        refused_with(on_save, RefusalKind::Validation, "answer_foreign_photo");
+        refused_with(on_complete, RefusalKind::Validation, "answer_foreign_photo");
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn the_purge_deletes_only_the_recorded_uploads() {
+    let _purges = PURGES.lock().await;
+    with_fixture(true, async |usecase, fixture| {
+        let (fake, storage) = storage();
+        let (_, slug, token, abandoned) = public_response(&usecase, &fixture).await;
+        let answered = usecase
+            .upload_public_response_photo(&slug, token.clone(), image(), &storage)
+            .await
+            .unwrap();
+        let recorded = usecase
+            .upload_public_response_photo(&slug, token.clone(), image(), &storage)
+            .await
+            .unwrap();
+        usecase
+            .save_public_response(&slug, token, photo_answers(&[&answered]))
+            .await
+            .unwrap();
+        forget_upload(&answered).await;
+        age(abandoned, 4000).await;
+
+        usecase
+            .purge_abandoned_survey_photos_in(Utc::now(), &storage)
+            .await
+            .unwrap();
+
+        let deleted = fake.deleted();
+        assert!(!exists(abandoned).await);
+        assert!(deleted.contains(&recorded), "{deleted:?}");
+        assert!(!deleted.contains(&answered), "{deleted:?}");
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_storage_failure_on_one_abandoned_response_does_not_block_the_others_of_the_run() {
+    let _purges = PURGES.lock().await;
+    with_fixture(true, async |usecase, fixture| {
+        let (fake, storage) = storage();
+        let (_, slug, token, poisoned) = public_response(&usecase, &fixture).await;
+        usecase
+            .upload_public_response_photo(&slug, token, image(), &storage)
+            .await
+            .unwrap();
+        let healthy = usecase.start_public_response(&slug).await.unwrap();
+        let healthy_key = usecase
+            .upload_public_response_photo(
+                &slug,
+                healthy.resume_token().cloned().unwrap(),
+                image(),
+                &storage,
+            )
+            .await
+            .unwrap();
+        age(poisoned, 9000).await;
+        age(healthy.id(), 8999).await;
+        fake.fail_deleting_under(poisoned.0.to_string());
+
+        let purged = usecase
+            .purge_abandoned_survey_photos_paged(Utc::now(), &storage, 1)
+            .await
+            .unwrap();
+
+        assert!(purged >= 1);
+        assert!(exists(poisoned).await);
+        assert_eq!(recorded_photos(poisoned).await, 1);
+        assert!(!exists(healthy.id()).await);
+        assert!(fake.deleted().contains(&healthy_key));
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn deleting_a_response_removes_its_photos_from_storage_first() {
+    with_fixture(true, async |usecase, fixture| {
+        let (fake, storage) = storage();
+        let (_, slug, token, response_id) = public_response(&usecase, &fixture).await;
+        let first = usecase
+            .upload_public_response_photo(&slug, token.clone(), image(), &storage)
+            .await
+            .unwrap();
+        let second = usecase
+            .upload_public_response_photo(&slug, token, image(), &storage)
+            .await
+            .unwrap();
+        let command = || SurveyResponseCommand {
+            actor: Subject::system(),
+            organization_id: fixture.organization_id,
+            id: response_id,
+        };
+        fake.fail_deleting_under(second.clone());
+
+        let failed = usecase.delete_survey_response(command(), &storage).await;
+        let kept = exists(response_id).await;
+        fake.fail_deleting_under("never-matches-a-key".to_owned());
+        usecase
+            .delete_survey_response(command(), &storage)
+            .await
+            .unwrap();
+
+        assert!(failed.is_err(), "{failed:?}");
+        assert!(kept);
+        assert!(!exists(response_id).await);
+        assert_eq!(recorded_photos(response_id).await, 0);
+        let deleted = fake.deleted();
+        assert!(deleted.contains(&first), "{deleted:?}");
+        assert!(deleted.contains(&second), "{deleted:?}");
         fixture
     })
     .await;

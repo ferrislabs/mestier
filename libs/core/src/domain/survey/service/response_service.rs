@@ -7,10 +7,9 @@ use crate::domain::file_storage::{ports::FileStorage, service::FileStorageServic
 use crate::domain::photo_library::normalize::STORED_MIME_TYPE;
 use crate::domain::survey::events::{SurveyResponseCompleted, SurveyResponseSubmitted};
 use crate::domain::survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository};
-use crate::domain::survey::validation::stored_under;
 use crate::domain::survey::{
-    Answer, Answers, Campaign, Completed, InProgress, Opened, Response, ResponseId, ResponseRecord,
-    ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord, Visibility,
+    Answer, Answers, Campaign, Completed, InProgress, Opened, QuestionId, Response, ResponseId,
+    ResponseRecord, ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord, Visibility,
 };
 use crate::{MemberId, OrganizationId};
 
@@ -43,18 +42,17 @@ fn completed_of(record: ResponseRecord) -> Result<Response<Completed>, SurveyErr
     }
 }
 
-fn photos_to_purge(response: &Response<InProgress>, mut keys: Vec<String>) -> Vec<String> {
-    let directory = response.photo_directory();
-    let referenced = response.answers().values().flat_map(|answer| match answer {
-        Answer::Photos(photos) => photos.as_slice(),
-        _ => &[],
-    });
-    for key in referenced {
-        if stored_under(&directory, key) && !keys.contains(key) {
-            keys.push(key.clone());
-        }
-    }
-    keys
+fn unrecorded_photo(answers: &Answers, recorded: &[String]) -> Option<QuestionId> {
+    answers.iter().find_map(|(id, answer)| match answer {
+        Answer::Photos(photos) if photos.iter().any(|photo| !recorded.contains(photo)) => Some(*id),
+        _ => None,
+    })
+}
+
+fn answers_photos(answers: &Answers) -> bool {
+    answers
+        .values()
+        .any(|answer| matches!(answer, Answer::Photos(photos) if !photos.is_empty()))
 }
 
 fn answered_by(record: &ResponseRecord, member_id: MemberId) -> bool {
@@ -147,6 +145,22 @@ where
         Ok(in_progress_of(record)?)
     }
 
+    async fn require_recorded_photos(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+        answers: &Answers,
+    ) -> Result<(), CoreError> {
+        if !answers_photos(answers) {
+            return Ok(());
+        }
+        let recorded = self.responses.photo_keys(organization_id, id).await?;
+        match unrecorded_photo(answers, &recorded) {
+            Some(question) => Err(SurveyError::AnswerForeignPhoto(question).into()),
+            None => Ok(()),
+        }
+    }
+
     async fn insert(
         &mut self,
         response: Response<InProgress>,
@@ -225,6 +239,8 @@ where
             )
             .await?;
         response.save(&survey, answers)?;
+        self.require_recorded_photos(organization_id, response.id(), response.answers())
+            .await?;
         let saved = in_progress_of(self.responses.update(&response.into()).await?)?;
         self.emitter.emit(
             saved.organization_id(),
@@ -279,6 +295,8 @@ where
             return Err(SurveyError::ResponseCapReached.into());
         }
         let completed = response.complete(&survey, now)?;
+        self.require_recorded_photos(organization_id, completed.id(), completed.answers())
+            .await?;
         if self.already_answered(organization_id, &completed).await? {
             return Err(SurveyError::RespondentAlreadyAnswered.into());
         }
@@ -290,14 +308,12 @@ where
         Ok(saved)
     }
 
-    pub async fn upload_photo<F: FileStorage>(
+    pub async fn check_photo(
         &mut self,
         organization_id: OrganizationId,
         locator: &ResponseLocator,
-        jpeg: Vec<u8>,
         now: DateTime<Utc>,
-        storage: &FileStorageService<F>,
-    ) -> Result<String, CoreError> {
+    ) -> Result<Response<InProgress>, CoreError> {
         let response = self.locate(organization_id, locator).await?;
         self.accepting(
             organization_id,
@@ -313,6 +329,18 @@ where
         if uploaded >= MAX_UPLOADED_PHOTOS {
             return Err(SurveyError::ResponsePhotoCapReached.into());
         }
+        Ok(response)
+    }
+
+    pub async fn upload_photo<F: FileStorage>(
+        &mut self,
+        organization_id: OrganizationId,
+        locator: &ResponseLocator,
+        jpeg: Vec<u8>,
+        now: DateTime<Utc>,
+        storage: &FileStorageService<F>,
+    ) -> Result<String, CoreError> {
+        let response = self.check_photo(organization_id, locator, now).await?;
         let relative = format!("{}/{}.jpg", response.photo_directory(), generate_uuid_v7());
         let stored = storage.upload_at(&relative, STORED_MIME_TYPE, jpeg).await?;
         if let Err(error) = self
@@ -335,30 +363,33 @@ where
         before: DateTime<Utc>,
         storage: &FileStorageService<F>,
     ) -> Result<bool, CoreError> {
-        let Some(ResponseRecord::InProgress(response)) = self
+        let Some(ResponseRecord::InProgress(_)) = self
             .responses
             .find_abandoned_for_update(organization_id, id, before)
             .await?
         else {
             return Ok(false);
         };
-        let recorded = self.responses.photo_keys(organization_id, id).await?;
-        for key in photos_to_purge(&response, recorded) {
+        for key in self.responses.photo_keys(organization_id, id).await? {
             storage.delete(&key).await?;
         }
         self.responses.delete(organization_id, id).await?;
         Ok(true)
     }
 
-    pub async fn delete(
+    pub async fn delete<F: FileStorage>(
         &mut self,
         organization_id: OrganizationId,
         id: ResponseId,
+        storage: &FileStorageService<F>,
     ) -> Result<(), CoreError> {
         self.responses
             .find(organization_id, id)
             .await?
             .ok_or(SurveyError::ResponseNotFound)?;
+        for key in self.responses.photo_keys(organization_id, id).await? {
+            storage.delete(&key).await?;
+        }
         self.responses.delete(organization_id, id).await
     }
 }

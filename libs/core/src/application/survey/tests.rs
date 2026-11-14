@@ -545,7 +545,10 @@ async fn delete_survey_response_refuses_a_member_without_survey_manage() {
         let id = ResponseId(generate_uuid_v7());
         forbidden(
             usecase
-                .delete_survey_response(response_command(&fixture, fixture.member.clone(), id))
+                .delete_survey_response(
+                    response_command(&fixture, fixture.member.clone(), id),
+                    &super::photos_tests::storage().1,
+                )
                 .await,
         );
         fixture

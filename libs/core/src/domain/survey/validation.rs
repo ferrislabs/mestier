@@ -109,6 +109,10 @@ fn is_segment(segment: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
+fn is_root_segment(segment: &str) -> bool {
+    is_segment(segment) && !segment.starts_with("survey-") && !segment.starts_with("library-")
+}
+
 pub(crate) fn stored_under(directory: &str, key: &str) -> bool {
     let Some((parent, name)) = key.rsplit_once('/') else {
         return false;
@@ -122,5 +126,5 @@ pub(crate) fn stored_under(directory: &str, key: &str) -> bool {
     parent
         .strip_suffix(directory)
         .and_then(|root| root.strip_suffix('/'))
-        .is_some_and(|root| root.split('/').all(is_segment))
+        .is_some_and(|root| root.split('/').all(is_root_segment))
 }

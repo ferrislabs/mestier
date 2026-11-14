@@ -1636,6 +1636,12 @@ mod lifecycle {
             format!("/survey-{organization}/{survey}/{own}/a.jpg"),
             format!("x/survey-{organization}/{survey}/{own}x/a.jpg"),
             format!("xsurvey-{organization}/{survey}/{own}/a.jpg"),
+            format!("survey-{other}/{other}/{other}/survey-{organization}/{survey}/{own}/a.jpg"),
+            format!(
+                "uploads/survey-{other}/{other}/{other}/survey-{organization}/{survey}/{own}/a.jpg"
+            ),
+            format!("library-{other}/survey-{organization}/{survey}/{own}/a.jpg"),
+            format!("uploads/library-{other}/survey-{organization}/{survey}/{own}/a.jpg"),
             "a.jpg".to_string(),
         ] {
             assert_eq!(

@@ -244,6 +244,15 @@ impl App {
         id
     }
 
+    pub async fn recorded_photos(&self, response_id: &str) -> i64 {
+        let id = Uuid::parse_str(response_id).expect("a response id is a uuid");
+        sqlx::query_scalar("SELECT count(*) FROM survey.response_photo WHERE response_id = $1")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
+            .expect("count the recorded photos")
+    }
+
     pub async fn cleanup(&self) {
         for organization in [
             self.organization_id,
