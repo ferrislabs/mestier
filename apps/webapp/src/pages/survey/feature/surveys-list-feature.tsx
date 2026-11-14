@@ -129,9 +129,10 @@ export function SurveysListFeature() {
 		() =>
 			surveyColumns({
 				canManage,
+				duplicating: duplicateSurvey.isPending,
 				onAction: (action, row) => onActionRef.current(action, row),
 			}),
-		[canManage],
+		[canManage, duplicateSurvey.isPending],
 	)
 
 	const table = useReactTable({

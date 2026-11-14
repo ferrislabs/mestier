@@ -100,6 +100,7 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 				},
 			})
 			setOpenId(null)
+			if (rows.length === 1 && page > 1) setPage(page - 1)
 			notice.show('Réponse supprimée.')
 		} catch (failure) {
 			setActionError(refusalOf(failure).message)

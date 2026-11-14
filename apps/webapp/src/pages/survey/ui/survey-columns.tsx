@@ -81,10 +81,12 @@ const ACTION_ICONS = {
 function RowActions({
 	row,
 	canManage,
+	duplicating,
 	onAction,
 }: {
 	row: SurveyRow
 	canManage: boolean
+	duplicating: boolean
 	onAction: (action: SurveyAction, row: SurveyRow) => void
 }) {
 	const actions = availableActions(row.survey, canManage)
@@ -110,6 +112,7 @@ function RowActions({
 						<DropdownMenuItem
 							key={action}
 							variant={action === 'delete' ? 'destructive' : 'default'}
+							disabled={action === 'duplicate' && duplicating}
 							onSelect={() => onAction(action, row)}
 						>
 							<Icon aria-hidden />
@@ -124,9 +127,11 @@ function RowActions({
 
 export function surveyColumns({
 	canManage,
+	duplicating,
 	onAction,
 }: {
 	canManage: boolean
+	duplicating: boolean
 	onAction: (action: SurveyAction, row: SurveyRow) => void
 }): ColumnDef<SurveyRow>[] {
 	return [
@@ -183,6 +188,7 @@ export function surveyColumns({
 					<RowActions
 						row={row.original}
 						canManage={canManage}
+						duplicating={duplicating}
 						onAction={onAction}
 					/>
 				</div>

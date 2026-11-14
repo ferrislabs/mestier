@@ -5,6 +5,7 @@ import { SurveysListFeature } from '#/pages/survey/feature/surveys-list-feature'
 import {
 	campaign,
 	installSurveyApi,
+	PATHS,
 	renderSurveyPage,
 	survey,
 } from '#/pages/survey/test/survey-harness'
@@ -115,5 +116,39 @@ describe('SurveysListFeature', () => {
 				.getAllByRole('menuitem')
 				.map((item) => item.textContent),
 		).toEqual(['Ouvrir l’éditeur', 'Voir les réponses'])
+	})
+
+	it('disables the duplicate action while a duplicate is running', async () => {
+		const api = installSurveyApi({
+			permissions: ['VIEW_SURVEYS', 'MANAGE_SURVEYS'],
+			surveys: SURVEYS,
+		})
+		api.mockMutation(
+			'post',
+			`${PATHS.survey}/duplicate`,
+			() => new Promise(() => {}),
+		)
+		await renderSurveyPage(<SurveysListFeature />)
+
+		const openMenu = async () => {
+			await userEvent.click(
+				within(await rowOf('QCM ouvert')).getByRole('button', {
+					name: 'Actions sur « QCM ouvert »',
+				}),
+			)
+			return within(await screen.findByRole('menu')).getByRole('menuitem', {
+				name: 'Dupliquer',
+			})
+		}
+		await userEvent.click(await openMenu())
+		await waitFor(() =>
+			expect(api.calls.filter((call) => call.method === 'post')).toHaveLength(
+				1,
+			),
+		)
+		const again = await openMenu()
+		expect(again.getAttribute('aria-disabled')).toBe('true')
+		await userEvent.click(again)
+		expect(api.calls.filter((call) => call.method === 'post')).toHaveLength(1)
 	})
 })
