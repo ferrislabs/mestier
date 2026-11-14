@@ -20,4 +20,6 @@ Questionnaires, campaigns and responses live in a dedicated Postgres schema, `su
 
 - Gains: one row read yields the whole definition; the schema is isolated and dropped with a single statement; the graph shape can evolve without a migration.
 - Costs: the database cannot enforce the graph's integrity, so the domain must validate it before opening. JSONB contents are not covered by foreign keys.
-- What becomes harder: querying across questions in SQL, for example statistics per question, needs JSONB operators or a read model. The rule of one completed response per member depends on `allow_multiple_responses`, so no unique index states it, and the use case enforces it.
+- What becomes harder: querying across questions in SQL, for example statistics per question, needs JSONB operators or a read model.
+- One completed response per person is enforced by the database. `survey.response.unique_respondent` copies `NOT allow_multiple_responses` when the response completes; the setting cannot change once the questionnaire is open, so the copy never goes stale. Two partial unique indexes state the rule: `(survey_id, member_id)` and `(survey_id, identifier_value)`, each restricted to completed responses whose `unique_respondent` is true and whose key is not null.
+- Tenant isolation holds in the schema too: `survey.survey` references its campaign through `(org_id, campaign_id)`, a response references its questionnaire through `(org_id, survey_id)` and its member through `(member_id, org_id)`, so no row can point at another organization's row.
