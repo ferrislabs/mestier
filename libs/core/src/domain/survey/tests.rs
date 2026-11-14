@@ -698,3 +698,395 @@ mod graph {
         }
     }
 }
+
+mod lifecycle {
+    use std::collections::BTreeMap;
+
+    use chrono::{DateTime, TimeZone, Utc};
+    use uuid::Uuid;
+
+    use super::super::aggregate::{Closed, Draft, Opened, Survey};
+    use super::super::campaign::{Campaign, CampaignStatus, Window};
+    use super::super::metadata::Metadata;
+    use super::super::response::{Completed, InProgress, Response, ResumeToken};
+    use super::super::{
+        Answer, Answers, Branch, CampaignId, ConditionNode, Edge, EmailAddress, EndNode, Graph,
+        Node, QuestionId, QuestionKind, QuestionNode, ResponseId, SurveyError, SurveyId,
+        Visibility,
+    };
+    use crate::OrganizationId;
+
+    fn at(day: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 3, day, 12, 0, 0).unwrap()
+    }
+
+    fn qid(n: u128) -> QuestionId {
+        QuestionId(Uuid::from_u128(n))
+    }
+
+    fn org() -> OrganizationId {
+        OrganizationId(Uuid::from_u128(900))
+    }
+
+    fn node(n: u128, kind: QuestionKind, required: bool, identifier: bool) -> Node {
+        Node::Question(QuestionNode {
+            id: qid(n),
+            kind,
+            label: format!("Question {n}"),
+            required,
+            options: if kind == QuestionKind::SingleChoice {
+                vec!["Oui".to_string(), "Non".to_string()]
+            } else {
+                Vec::new()
+            },
+            max_photos: None,
+            identifier,
+        })
+    }
+
+    fn edge(from: u128, to: u128, branch: Branch) -> Edge {
+        Edge {
+            from: qid(from),
+            to: qid(to),
+            branch,
+        }
+    }
+
+    fn end(n: u128) -> Node {
+        Node::End(EndNode {
+            id: qid(n),
+            message: Some("Merci".to_string()),
+        })
+    }
+
+    fn branching(required_else: bool) -> Graph {
+        Graph::new(
+            vec![
+                node(1, QuestionKind::SingleChoice, true, false),
+                Node::Condition(ConditionNode {
+                    id: qid(2),
+                    question: qid(1),
+                    option: "Oui".to_string(),
+                    checked: true,
+                }),
+                node(3, QuestionKind::Text, true, false),
+                node(4, QuestionKind::Text, required_else, false),
+                end(5),
+            ],
+            vec![
+                edge(1, 2, Branch::Next),
+                edge(2, 3, Branch::Then),
+                edge(2, 4, Branch::Else),
+                edge(3, 5, Branch::Next),
+                edge(4, 5, Branch::Next),
+            ],
+            qid(1),
+        )
+        .unwrap()
+    }
+
+    fn identified() -> Graph {
+        Graph::new(
+            vec![node(1, QuestionKind::Text, true, true), end(2)],
+            vec![edge(1, 2, Branch::Next)],
+            qid(1),
+        )
+        .unwrap()
+    }
+
+    fn draft() -> Survey<Draft> {
+        Survey::new(
+            SurveyId(Uuid::from_u128(1)),
+            org(),
+            "Satisfaction".to_string(),
+            Visibility::Public,
+        )
+        .unwrap()
+    }
+
+    fn opened() -> Survey<Opened> {
+        let mut survey = draft();
+        survey.edit_graph(Some(branching(true)));
+        survey.open(at(1)).unwrap()
+    }
+
+    fn campaign(starts: Option<u32>, ends: Option<u32>) -> Campaign {
+        Campaign {
+            id: CampaignId(Uuid::from_u128(2)),
+            organization_id: org(),
+            name: "Printemps".to_string(),
+            window: Window::new(starts.map(at), ends.map(at)).unwrap(),
+            metadata: Metadata::default(),
+        }
+    }
+
+    fn response() -> Response<InProgress> {
+        Response::start(
+            ResponseId(Uuid::from_u128(3)),
+            SurveyId(Uuid::from_u128(1)),
+            org(),
+            None,
+            None,
+            at(1),
+        )
+    }
+
+    fn text(value: &str) -> Answer {
+        Answer::Text(value.to_string())
+    }
+
+    fn choice(value: &str) -> Answer {
+        Answer::Choice(value.to_string())
+    }
+
+    #[test]
+    fn a_window_with_an_end_before_its_start_is_refused() {
+        assert_eq!(
+            Window::new(Some(at(5)), Some(at(2))),
+            Err(SurveyError::WindowInverted)
+        );
+    }
+
+    #[test]
+    fn a_window_starting_when_it_ends_is_refused() {
+        assert_eq!(
+            Window::new(Some(at(5)), Some(at(5))),
+            Err(SurveyError::WindowInverted)
+        );
+    }
+
+    #[test]
+    fn a_window_with_only_a_start_is_open_forever_after() {
+        let window = Window::new(Some(at(5)), None).unwrap();
+        assert!(!window.contains(at(4)));
+        assert!(window.contains(at(5)));
+        assert!(window.contains(at(30)));
+    }
+
+    #[test]
+    fn a_window_with_only_an_end_is_open_until_then() {
+        let window = Window::new(None, Some(at(5))).unwrap();
+        assert!(window.contains(at(1)));
+        assert!(!window.contains(at(5)));
+    }
+
+    #[test]
+    fn a_window_includes_its_start_and_excludes_its_end() {
+        let window = Window::new(Some(at(2)), Some(at(5))).unwrap();
+        assert!(window.contains(at(2)));
+        assert!(window.contains(at(4)));
+        assert!(!window.contains(at(5)));
+    }
+
+    #[test]
+    fn a_window_cannot_be_deserialized_inverted() {
+        let json = serde_json::to_value(Window::new(Some(at(2)), Some(at(5))).unwrap()).unwrap();
+        let inverted = serde_json::json!({
+            "starts_at": json["ends_at"],
+            "ends_at": json["starts_at"],
+        });
+        assert!(serde_json::from_value::<Window>(inverted).is_err());
+    }
+
+    #[test]
+    fn campaign_status_follows_the_clock() {
+        let campaign = campaign(Some(2), Some(5));
+        assert_eq!(campaign.status_at(at(1)), CampaignStatus::Scheduled);
+        assert_eq!(campaign.status_at(at(2)), CampaignStatus::Running);
+        assert_eq!(campaign.status_at(at(5)), CampaignStatus::Ended);
+        assert_eq!(
+            self::campaign(None, None).status_at(at(1)),
+            CampaignStatus::Running
+        );
+    }
+
+    #[test]
+    fn merged_metadata_lets_the_survey_win() {
+        let entries = |pairs: &[(&str, &str)]| {
+            Metadata::new(
+                pairs
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            )
+            .unwrap()
+        };
+        let merged = Metadata::merged(
+            &entries(&[("source", "campaign"), ("zone", "nord")]),
+            &entries(&[("source", "survey")]),
+        );
+        assert_eq!(merged.get("source"), Some("survey"));
+        assert_eq!(merged.get("zone"), Some("nord"));
+    }
+
+    #[test]
+    fn metadata_refuses_an_empty_key() {
+        let entries = BTreeMap::from([(String::new(), "x".to_string())]);
+        assert_eq!(Metadata::new(entries), Err(SurveyError::MetadataEmptyKey));
+    }
+
+    #[test]
+    fn a_draft_cannot_open_without_a_graph() {
+        assert_eq!(
+            draft().open(at(1)).err(),
+            Some(SurveyError::SurveyWithoutGraph)
+        );
+    }
+
+    #[test]
+    fn an_opened_survey_cannot_be_deserialized_without_a_graph() {
+        let json = serde_json::to_string(&draft()).unwrap();
+        assert!(serde_json::from_str::<Survey<Opened>>(&json).is_err());
+        assert!(serde_json::from_str::<Survey<Draft>>(&json).is_ok());
+    }
+
+    #[test]
+    fn an_opened_survey_survives_a_serde_round_trip() {
+        let survey = opened();
+        let json = serde_json::to_string(&survey).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Survey<Opened>>(&json).unwrap(),
+            survey
+        );
+    }
+
+    #[test]
+    fn a_survey_in_a_running_campaign_accepts_a_response() {
+        assert_eq!(
+            opened().accepts(Some(&campaign(Some(1), Some(9))), at(3)),
+            Ok(())
+        );
+        assert_eq!(opened().accepts(None, at(3)), Ok(()));
+    }
+
+    #[test]
+    fn a_survey_before_its_campaign_window_refuses() {
+        assert_eq!(
+            opened().accepts(Some(&campaign(Some(4), None)), at(3)),
+            Err(SurveyError::CampaignNotStarted)
+        );
+    }
+
+    #[test]
+    fn a_survey_after_its_campaign_window_refuses() {
+        assert_eq!(
+            opened().accepts(Some(&campaign(None, Some(3))), at(3)),
+            Err(SurveyError::CampaignEnded)
+        );
+    }
+
+    #[test]
+    fn a_closed_survey_refuses() {
+        let closed: Survey<Closed> = opened().close(at(2));
+        assert_eq!(closed.accepts(None, at(3)), Err(SurveyError::SurveyClosed));
+        assert_eq!(closed.closed_at(), Some(at(2)));
+    }
+
+    #[test]
+    fn a_response_cannot_complete_with_a_required_question_on_its_path_unanswered() {
+        let mut response = response();
+        response
+            .save(Answers::from([(qid(1), choice("Oui"))]))
+            .unwrap();
+        assert_eq!(
+            response.complete(&branching(true), at(2)).err(),
+            Some(SurveyError::RequiredQuestionUnanswered(qid(3)))
+        );
+    }
+
+    #[test]
+    fn a_response_ignores_a_required_question_off_its_path() {
+        let mut response = response();
+        response
+            .save(Answers::from([
+                (qid(1), choice("Oui")),
+                (qid(3), text("ok")),
+            ]))
+            .unwrap();
+        assert!(response.complete(&branching(true), at(2)).is_ok());
+    }
+
+    #[test]
+    fn completion_discards_answers_off_the_path() {
+        let mut response = response();
+        response
+            .save(Answers::from([
+                (qid(1), choice("Oui")),
+                (qid(3), text("ok")),
+                (qid(4), text("stale")),
+            ]))
+            .unwrap();
+        let completed: Response<Completed> = response.complete(&branching(true), at(2)).unwrap();
+        assert_eq!(
+            completed.answers().keys().copied().collect::<Vec<_>>(),
+            vec![qid(1), qid(3)]
+        );
+        assert_eq!(completed.completed_at(), Some(at(2)));
+    }
+
+    #[test]
+    fn a_non_finite_number_is_refused_on_save() {
+        let mut response = response();
+        assert_eq!(
+            response.save(Answers::from([(qid(1), Answer::Number(f64::NAN))])),
+            Err(SurveyError::AnswerNotFinite(qid(1)))
+        );
+        assert!(response.answers().is_empty());
+    }
+
+    #[test]
+    fn the_identifier_value_is_normalized_on_completion() {
+        let mut response = response();
+        response
+            .save(Answers::from([(qid(1), text("  Jane DOE "))]))
+            .unwrap();
+        let completed = response.complete(&identified(), at(2)).unwrap();
+        assert_eq!(completed.identifier_value(), Some("jane doe"));
+    }
+
+    #[test]
+    fn a_blank_identifier_counts_as_none() {
+        let mut response = response();
+        response
+            .save(Answers::from([(qid(1), text("   "))]))
+            .unwrap();
+        let completed = response.complete(&identified(), at(2)).unwrap();
+        assert_eq!(completed.identifier_value(), None);
+    }
+
+    #[test]
+    fn an_email_identifier_uses_its_normalized_form() {
+        let graph = Graph::new(
+            vec![node(1, QuestionKind::Email, true, true), end(2)],
+            vec![edge(1, 2, Branch::Next)],
+            qid(1),
+        )
+        .unwrap();
+        let mut response = response();
+        let email = EmailAddress::try_from(" A@B.fr ").unwrap();
+        response
+            .save(Answers::from([(qid(1), Answer::Email(email))]))
+            .unwrap();
+        let completed = response.complete(&graph, at(2)).unwrap();
+        assert_eq!(completed.identifier_value(), Some("a@b.fr"));
+    }
+
+    #[test]
+    fn an_empty_resume_token_is_refused() {
+        assert_eq!(
+            ResumeToken::new(String::new()),
+            Err(SurveyError::ResumeTokenEmpty)
+        );
+        assert!(serde_json::from_str::<ResumeToken>("\"\"").is_err());
+    }
+
+    #[test]
+    fn the_graph_exposes_its_start_nodes_edges_and_questions() {
+        let graph = branching(true);
+        assert_eq!(graph.start(), qid(1));
+        assert_eq!(graph.nodes().count(), 5);
+        assert_eq!(graph.edges().count(), 5);
+        assert!(graph.question(&qid(3)).is_some());
+        assert!(graph.question(&qid(2)).is_none());
+    }
+}

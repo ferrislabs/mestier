@@ -46,4 +46,30 @@ pub enum SurveyError {
     ConditionUnknownOption(QuestionId),
     #[error("graph: condition {0} refers to a question not asked on every path to it")]
     ConditionQuestionNotAsked(QuestionId),
+    #[error("window: the start is not before the end")]
+    WindowInverted,
+    #[error("metadata: a key is empty")]
+    MetadataEmptyKey,
+    #[error("metadata: the value of a key is empty")]
+    MetadataEmptyValue,
+    #[error("survey: the title is empty")]
+    SurveyTitleEmpty,
+    #[error("survey: has no graph")]
+    SurveyWithoutGraph,
+    #[error("survey: is closed")]
+    SurveyClosed,
+    #[error("survey: its campaign has not started")]
+    CampaignNotStarted,
+    #[error("survey: its campaign has ended")]
+    CampaignEnded,
+    #[error("survey: the stored state does not match its status")]
+    SurveyInconsistentState,
+    #[error("response: the resume token is empty")]
+    ResumeTokenEmpty,
+    #[error("response: required question {0} is unanswered")]
+    RequiredQuestionUnanswered(QuestionId),
+    #[error("response: the answer to question {0} is not a finite number")]
+    AnswerNotFinite(QuestionId),
+    #[error("response: the stored state does not match its status")]
+    ResponseInconsistentState,
 }

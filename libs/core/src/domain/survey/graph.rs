@@ -157,9 +157,9 @@ impl TryFrom<GraphDraft> for Graph {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
-enum NodeView<'a> {
+pub enum NodeRef<'a> {
     Question(&'a QuestionNode),
     Condition(&'a ConditionNode),
     End(&'a EndNode),
@@ -167,7 +167,7 @@ enum NodeView<'a> {
 
 #[derive(Serialize)]
 struct GraphView<'a> {
-    nodes: Vec<NodeView<'a>>,
+    nodes: Vec<NodeRef<'a>>,
     edges: Vec<Edge>,
     start: QuestionId,
 }
@@ -175,15 +175,15 @@ struct GraphView<'a> {
 impl Serialize for Graph {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         GraphView {
-            nodes: self.vertices.iter().map(NodeView::from).collect(),
-            edges: self.edges(),
+            nodes: self.nodes().collect(),
+            edges: self.edges().collect(),
             start: self.vertices[self.start].id(),
         }
         .serialize(serializer)
     }
 }
 
-impl<'a> From<&'a Vertex> for NodeView<'a> {
+impl<'a> From<&'a Vertex> for NodeRef<'a> {
     fn from(vertex: &'a Vertex) -> Self {
         match vertex {
             Vertex::Question { node, .. } => Self::Question(node),
@@ -253,35 +253,52 @@ impl Graph {
         }
     }
 
-    fn edges(&self) -> Vec<Edge> {
-        let mut edges = Vec::with_capacity(self.vertices.len() * 2);
-        for vertex in &self.vertices {
+    pub fn start(&self) -> QuestionId {
+        self.vertices[self.start].id()
+    }
+
+    pub fn nodes(&self) -> impl Iterator<Item = NodeRef<'_>> {
+        self.vertices.iter().map(NodeRef::from)
+    }
+
+    pub fn question(&self, id: &QuestionId) -> Option<&QuestionNode> {
+        self.vertices.iter().find_map(|vertex| match vertex {
+            Vertex::Question { node, .. } if node.id == *id => Some(node),
+            _ => None,
+        })
+    }
+
+    pub fn edges(&self) -> impl Iterator<Item = Edge> {
+        self.vertices.iter().flat_map(|vertex| {
             let from = vertex.id();
             let id = |position: usize| self.vertices[position].id();
-            match vertex {
-                Vertex::Question { next, .. } => edges.push(Edge {
-                    from,
-                    to: id(*next),
-                    branch: Branch::Next,
-                }),
+            let pair = match vertex {
+                Vertex::Question { next, .. } => [
+                    Some(Edge {
+                        from,
+                        to: id(*next),
+                        branch: Branch::Next,
+                    }),
+                    None,
+                ],
                 Vertex::Condition {
                     then, otherwise, ..
-                } => {
-                    edges.push(Edge {
+                } => [
+                    Some(Edge {
                         from,
                         to: id(*then),
                         branch: Branch::Then,
-                    });
-                    edges.push(Edge {
+                    }),
+                    Some(Edge {
                         from,
                         to: id(*otherwise),
                         branch: Branch::Else,
-                    });
-                }
-                Vertex::End(_) => {}
-            }
-        }
-        edges
+                    }),
+                ],
+                Vertex::End(_) => [None, None],
+            };
+            pair.into_iter().flatten()
+        })
     }
 
     fn check_questions(nodes: &[Node]) -> Result<(), SurveyError> {
