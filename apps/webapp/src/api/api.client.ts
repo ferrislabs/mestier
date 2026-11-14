@@ -299,6 +299,9 @@ export namespace Schemas {
     oauth_verifier: string | null;
     state: string | null;
   }>;
+  export type CampaignId = string;
+  export type CampaignStatus = "SCHEDULED" | "RUNNING" | "ENDED";
+  export type CampaignWindowRequest = Partial<{ ends_at: string | null; starts_at: string | null }>;
   export type CategoryId = string;
   export type CategoryResponse = {
     created_at: string;
@@ -520,6 +523,11 @@ export namespace Schemas {
     start_part?: (null | DayPart) | undefined;
     starts_at?: (string | null) | undefined;
     type_id?: (null | AbsenceTypeId) | undefined;
+  };
+  export type CreateCampaignRequest = {
+    metadata?: (Record<string, string> | null) | undefined;
+    name: string;
+    window: CampaignWindowRequest;
   };
   export type CreateCategoryRequest = {
     allowed_role_ids?: (Array<RoleId> | null) | undefined;
@@ -894,6 +902,8 @@ export namespace Schemas {
     vat_number?: (string | null) | undefined;
   };
   export type CreateSupportApiKeyRequest = { name: string };
+  export type Visibility = "PUBLIC" | "MEMBERS";
+  export type CreateSurveyRequest = { title: string; visibility: Visibility };
   export type CreateTableColumnRequest = { config?: ColumnConfig | undefined; kind: ColumnKind; name: string };
   export type TableColumnId = string;
   export type FilterOperator =
@@ -2602,6 +2612,8 @@ export namespace Schemas {
     resolution: AssignmentReportResolution;
     resolution_note?: (string | null) | undefined;
   };
+  export type ResponseId = string;
+  export type ResponseStatus = "IN_PROGRESS" | "COMPLETED";
   export type RhythmSlotResponse = { ends_minute: number; starts_minute: number; weekday: number };
   export type RhythmResponse = {
     created_at: string;
@@ -2662,6 +2674,7 @@ export namespace Schemas {
     steps: Array<RunStepResponse>;
   };
   export type SaveDocumentContentRequest = { content: Record<string, unknown>; revision: number };
+  export type SaveSurveyAnswersRequest = { answers: Record<string, Record<string, unknown>> };
   export type WorkflowLayoutDto = Record<string, unknown>;
   export type SaveWorkflowVersionRequest = { graph: GraphDto; layout?: (null | WorkflowLayoutDto) | undefined };
   export type SavedDocumentResponse = { revision: number; updated_at: string };
@@ -2782,6 +2795,8 @@ export namespace Schemas {
     organization_id: OrganizationId;
     rate_bp: number;
   };
+  export type SurveyId = string;
+  export type SurveyStatus = "DRAFT" | "OPENED" | "CLOSED";
   export type TableCellLabelResponse = { label?: (string | null) | undefined; missing: boolean };
   export type TableRowResponse = {
     created_at: string;
@@ -2882,6 +2897,11 @@ export namespace Schemas {
     note: string | null;
     proof_file_key: string | null;
     starts_at: string | null;
+  }>;
+  export type UpdateCampaignRequest = Partial<{
+    metadata: Record<string, string> | null;
+    name: string | null;
+    window: null | CampaignWindowRequest;
   }>;
   export type UpdateCategoryRequest = { name: string; position: number };
   export type UpdateChannelRequest = {
@@ -3094,6 +3114,16 @@ export namespace Schemas {
     registration_number?: (string | null) | undefined;
     vat_number?: (string | null) | undefined;
   };
+  export type UpdateSurveyRequest = Partial<{
+    allow_multiple_responses: boolean | null;
+    campaign_id: null | CampaignId;
+    description: string | null;
+    graph: Record<string, unknown> | null;
+    metadata: Record<string, string> | null;
+    response_cap: number | null;
+    title: string | null;
+    visibility: null | Visibility;
+  }>;
   export type UpdateTableColumnRequest = Partial<{
     config: null | ColumnConfig;
     kind: null | ColumnKind;
@@ -10989,6 +11019,100 @@ export namespace Endpoints {
       403: unknown;
     };
   };
+  export type put_SaveMemberSurveyResponse = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; response_id: string };
+
+      body: Schemas.SaveSurveyAnswersRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          answers: Record<string, Record<string, unknown>>;
+          id: Schemas.ResponseId;
+          status: Schemas.ResponseStatus;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type post_CompleteMemberSurveyResponse = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/complete";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; response_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          answers: Record<string, Record<string, unknown>>;
+          id: Schemas.ResponseId;
+          status: Schemas.ResponseStatus;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type get_OpenMemberSurvey = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          description?: (string | null) | undefined;
+          graph: Record<string, unknown>;
+          id: Schemas.SurveyId;
+          title: string;
+          visibility: Schemas.Visibility;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_StartMemberSurveyResponse = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}/responses";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string };
+    };
+    responses: {
+      201: {
+        data: {
+          answers: Record<string, Record<string, unknown>>;
+          id: Schemas.ResponseId;
+          status: Schemas.ResponseStatus;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListMembers = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/members";
@@ -13438,6 +13562,401 @@ export namespace Endpoints {
       404: unknown;
     };
   };
+  export type get_ListSurveyCampaigns = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/survey-campaigns";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          ends_at?: (string | null) | undefined;
+          id: Schemas.CampaignId;
+          metadata: Record<string, string>;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          starts_at?: (string | null) | undefined;
+          status: Schemas.CampaignStatus;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateSurveyCampaign = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/survey-campaigns";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateCampaignRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          ends_at?: (string | null) | undefined;
+          id: Schemas.CampaignId;
+          metadata: Record<string, string>;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          starts_at?: (string | null) | undefined;
+          status: Schemas.CampaignStatus;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type delete_DeleteSurveyCampaign = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; campaign_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateSurveyCampaign = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; campaign_id: string };
+
+      body: Schemas.UpdateCampaignRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          ends_at?: (string | null) | undefined;
+          id: Schemas.CampaignId;
+          metadata: Record<string, string>;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          starts_at?: (string | null) | undefined;
+          status: Schemas.CampaignStatus;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetSurveyResponse = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/survey-responses/{response_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; response_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          answers: Record<string, Record<string, unknown>>;
+          completed_at?: (string | null) | undefined;
+          id: Schemas.ResponseId;
+          member_id?: (null | Schemas.MemberId) | undefined;
+          started_at: string;
+          status: Schemas.ResponseStatus;
+          survey_id: Schemas.SurveyId;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteSurveyResponse = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/survey-responses/{response_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; response_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type get_ListSurveys = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/surveys";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          allow_multiple_responses: boolean;
+          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          closed_at?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          graph?: (Record<string, unknown> | null) | undefined;
+          id: Schemas.SurveyId;
+          metadata: Record<string, string>;
+          opened_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          public_slug?: (string | null) | undefined;
+          response_cap?: (number | null) | undefined;
+          status: Schemas.SurveyStatus;
+          title: string;
+          visibility: Schemas.Visibility;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateSurvey = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/surveys";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string };
+
+      body: Schemas.CreateSurveyRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          allow_multiple_responses: boolean;
+          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          closed_at?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          graph?: (Record<string, unknown> | null) | undefined;
+          id: Schemas.SurveyId;
+          metadata: Record<string, string>;
+          opened_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          public_slug?: (string | null) | undefined;
+          response_cap?: (number | null) | undefined;
+          status: Schemas.SurveyStatus;
+          title: string;
+          visibility: Schemas.Visibility;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      422: unknown;
+    };
+  };
+  export type get_GetSurvey = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          allow_multiple_responses: boolean;
+          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          closed_at?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          graph?: (Record<string, unknown> | null) | undefined;
+          id: Schemas.SurveyId;
+          metadata: Record<string, string>;
+          opened_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          public_slug?: (string | null) | undefined;
+          response_cap?: (number | null) | undefined;
+          status: Schemas.SurveyStatus;
+          title: string;
+          visibility: Schemas.Visibility;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type delete_DeleteSurvey = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type patch_UpdateSurvey = {
+    method: "PATCH";
+    path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string };
+
+      body: Schemas.UpdateSurveyRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          allow_multiple_responses: boolean;
+          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          closed_at?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          graph?: (Record<string, unknown> | null) | undefined;
+          id: Schemas.SurveyId;
+          metadata: Record<string, string>;
+          opened_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          public_slug?: (string | null) | undefined;
+          response_cap?: (number | null) | undefined;
+          status: Schemas.SurveyStatus;
+          title: string;
+          visibility: Schemas.Visibility;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      422: unknown;
+    };
+  };
+  export type post_CloseSurvey = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}/close";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          allow_multiple_responses: boolean;
+          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          closed_at?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          graph?: (Record<string, unknown> | null) | undefined;
+          id: Schemas.SurveyId;
+          metadata: Record<string, string>;
+          opened_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          public_slug?: (string | null) | undefined;
+          response_cap?: (number | null) | undefined;
+          status: Schemas.SurveyStatus;
+          title: string;
+          visibility: Schemas.Visibility;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_DuplicateSurvey = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}/duplicate";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string };
+    };
+    responses: {
+      201: {
+        data: {
+          allow_multiple_responses: boolean;
+          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          closed_at?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          graph?: (Record<string, unknown> | null) | undefined;
+          id: Schemas.SurveyId;
+          metadata: Record<string, string>;
+          opened_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          public_slug?: (string | null) | undefined;
+          response_cap?: (number | null) | undefined;
+          status: Schemas.SurveyStatus;
+          title: string;
+          visibility: Schemas.Visibility;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type post_OpenSurvey = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}/open";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          allow_multiple_responses: boolean;
+          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          closed_at?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          graph?: (Record<string, unknown> | null) | undefined;
+          id: Schemas.SurveyId;
+          metadata: Record<string, string>;
+          opened_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          public_slug?: (string | null) | undefined;
+          response_cap?: (number | null) | undefined;
+          status: Schemas.SurveyStatus;
+          title: string;
+          visibility: Schemas.Visibility;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListSurveyResponses = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}/responses";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string; survey_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{
+          answers: Record<string, Record<string, unknown>>;
+          completed_at?: (string | null) | undefined;
+          id: Schemas.ResponseId;
+          member_id?: (null | Schemas.MemberId) | undefined;
+          started_at: string;
+          status: Schemas.ResponseStatus;
+          survey_id: Schemas.SurveyId;
+        }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_ListTaskLabels = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/task-labels";
@@ -15279,6 +15798,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/member-contracts": Endpoints.get_ListOrganizationMemberContracts;
     "/api/v1/organizations/{organization_id}/member-documents": Endpoints.get_ListMemberDocuments;
     "/api/v1/organizations/{organization_id}/member-profiles": Endpoints.get_ListMemberProfiles;
+    "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}": Endpoints.get_OpenMemberSurvey;
     "/api/v1/organizations/{organization_id}/members": Endpoints.get_ListMembers;
     "/api/v1/organizations/{organization_id}/members/me": Endpoints.get_GetMyMember;
     "/api/v1/organizations/{organization_id}/members/me/permissions": Endpoints.get_GetMyPermissions;
@@ -15313,6 +15833,11 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}": Endpoints.get_GetSupportTicket;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/entries": Endpoints.get_ListSupportTicketEntries;
     "/api/v1/organizations/{organization_id}/surcharges": Endpoints.get_ListSurcharges;
+    "/api/v1/organizations/{organization_id}/survey-campaigns": Endpoints.get_ListSurveyCampaigns;
+    "/api/v1/organizations/{organization_id}/survey-responses/{response_id}": Endpoints.get_GetSurveyResponse;
+    "/api/v1/organizations/{organization_id}/surveys": Endpoints.get_ListSurveys;
+    "/api/v1/organizations/{organization_id}/surveys/{survey_id}": Endpoints.get_GetSurvey;
+    "/api/v1/organizations/{organization_id}/surveys/{survey_id}/responses": Endpoints.get_ListSurveyResponses;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.get_ListTaskRecurrences;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.get_ListTasks;
@@ -15433,6 +15958,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/maintenance/interventions/{intervention_id}/validate": Endpoints.post_ValidateMaintenanceIntervention;
     "/api/v1/organizations/{organization_id}/maintenance/lines/{line_id}/interventions": Endpoints.post_RecordMaintenanceIntervention;
     "/api/v1/organizations/{organization_id}/maintenance/recap/plan": Endpoints.post_PlanMaintenanceLines;
+    "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/complete": Endpoints.post_CompleteMemberSurveyResponse;
+    "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}/responses": Endpoints.post_StartMemberSurveyResponse;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
     "/api/v1/organizations/{organization_id}/members/{member_id}/archive": Endpoints.post_ArchiveMember;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts": Endpoints.post_CreateMemberContract;
@@ -15464,6 +15991,11 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/surcharges": Endpoints.post_CreateSurcharge;
     "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}/archive": Endpoints.post_ArchiveSurcharge;
     "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}/restore": Endpoints.post_RestoreSurcharge;
+    "/api/v1/organizations/{organization_id}/survey-campaigns": Endpoints.post_CreateSurveyCampaign;
+    "/api/v1/organizations/{organization_id}/surveys": Endpoints.post_CreateSurvey;
+    "/api/v1/organizations/{organization_id}/surveys/{survey_id}/close": Endpoints.post_CloseSurvey;
+    "/api/v1/organizations/{organization_id}/surveys/{survey_id}/duplicate": Endpoints.post_DuplicateSurvey;
+    "/api/v1/organizations/{organization_id}/surveys/{survey_id}/open": Endpoints.post_OpenSurvey;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.post_CreateTaskRecurrence;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
@@ -15509,6 +16041,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/order": Endpoints.put_ReorderTableColumns;
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}": Endpoints.put_UpdateLeaveAccount;
     "/api/v1/organizations/{organization_id}/maintenance/contracts/{contract_id}": Endpoints.put_UpdateMaintenanceContract;
+    "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}": Endpoints.put_SaveMemberSurveyResponse;
     "/api/v1/organizations/{organization_id}/members/{member_id}/contracts/{contract_id}": Endpoints.put_UpdateMemberContract;
     "/api/v1/organizations/{organization_id}/members/{member_id}/day-overrides/{date}": Endpoints.put_PutDayOverride;
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.put_PutMemberProfile;
@@ -15572,6 +16105,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/support/api-keys/{key_id}": Endpoints.delete_RevokeSupportApiKey;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.delete_DeleteSupportDraft;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/badges/{label}": Endpoints.delete_RemoveSupportTicketBadge;
+    "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}": Endpoints.delete_DeleteSurveyCampaign;
+    "/api/v1/organizations/{organization_id}/survey-responses/{response_id}": Endpoints.delete_DeleteSurveyResponse;
+    "/api/v1/organizations/{organization_id}/surveys/{survey_id}": Endpoints.delete_DeleteSurvey;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.delete_DeleteTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.delete_DeleteTask;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.delete_DeleteTaskComment;
@@ -15616,6 +16152,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.patch_PatchProject;
     "/api/v1/organizations/{organization_id}/support/entries/{entry_id}": Endpoints.patch_EditSupportDraft;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/status": Endpoints.patch_TransitionSupportTicket;
+    "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}": Endpoints.patch_UpdateSurveyCampaign;
+    "/api/v1/organizations/{organization_id}/surveys/{survey_id}": Endpoints.patch_UpdateSurvey;
     "/api/v1/organizations/{organization_id}/task-labels/{label_id}": Endpoints.patch_UpdateTaskLabel;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}": Endpoints.patch_PatchTask;
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments/{comment_id}": Endpoints.patch_UpdateTaskComment;
