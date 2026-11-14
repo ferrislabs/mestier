@@ -1,4 +1,5 @@
 import { Button } from '#/components/ui/button'
+import { TableCell, TableRow } from '#/components/ui/table'
 
 export interface ListEmptyProps {
 	title: string
@@ -6,9 +7,13 @@ export interface ListEmptyProps {
 	onReset?: () => void
 }
 
-export function ListEmpty({ title, hint, onReset }: ListEmptyProps) {
+export interface ListEmptyRowProps extends ListEmptyProps {
+	colSpan: number
+}
+
+function ListEmptyContent({ title, hint, onReset }: ListEmptyProps) {
 	return (
-		<div className="rounded-lg border border-dashed bg-card px-6 py-12 text-center">
+		<>
 			<p className="font-medium">{title}</p>
 			{hint ? (
 				<p className="mt-1 text-[13px] text-muted-foreground">{hint}</p>
@@ -18,6 +23,16 @@ export function ListEmpty({ title, hint, onReset }: ListEmptyProps) {
 					Réinitialiser les filtres
 				</Button>
 			) : null}
-		</div>
+		</>
+	)
+}
+
+export function ListEmptyRow({ colSpan, ...content }: ListEmptyRowProps) {
+	return (
+		<TableRow className="hover:bg-transparent">
+			<TableCell colSpan={colSpan} className="py-12 text-center">
+				<ListEmptyContent {...content} />
+			</TableCell>
+		</TableRow>
 	)
 }

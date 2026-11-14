@@ -8,7 +8,6 @@ import {
 } from '#/pages/cursus/shared/lib/count-summary'
 import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
 import type { SelectOption } from '#/pages/cursus/shared/lib/options'
-import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 import type { TriadSummary } from '#/pages/cursus/triads/feature/use-triads'
 import { TriadsTable } from '#/pages/cursus/triads/ui/triads-table'
@@ -103,19 +102,22 @@ export function TriadsList({
 						onPromotionChange(next === ALL_PROMOTIONS ? undefined : next),
 				}}
 			/>
-			{isLoading ? null : triads.length === 0 ? (
-				<ListEmpty
-					title="Aucun trinôme ne correspond."
-					hint={
-						filtered
-							? 'Vérifie l’orthographe, le statut ou la promotion sélectionnée.'
-							: undefined
-					}
-					onReset={filtered ? onResetFilters : undefined}
-				/>
-			) : (
-				<TriadsTable triads={triads} showPromotion onOpen={onOpen} />
-			)}
+			<TriadsTable
+				triads={isLoading ? [] : triads}
+				showPromotion
+				onOpen={onOpen}
+				empty={
+					isLoading
+						? undefined
+						: {
+								title: 'Aucun trinôme ne correspond.',
+								hint: filtered
+									? 'Vérifie l’orthographe, le statut ou la promotion sélectionnée.'
+									: undefined,
+								onReset: filtered ? onResetFilters : undefined,
+							}
+				}
+			/>
 		</PageShell>
 	)
 }

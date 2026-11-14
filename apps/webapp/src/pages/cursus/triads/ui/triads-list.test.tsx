@@ -86,4 +86,12 @@ describe('TriadsList', () => {
 			screen.getByRole('button', { name: 'Réinitialiser les filtres' }),
 		).toBeTruthy()
 	})
+
+	it('keeps the headers and spans the empty state across the columns', () => {
+		render(<TriadsList {...props(true, [])} />)
+
+		expect(screen.getByRole('columnheader', { name: 'Apprenti' })).toBeDefined()
+		const cell = screen.getByText('Aucun trinôme ne correspond.').closest('td')
+		expect(cell?.getAttribute('colspan')).toBe('5')
+	})
 })

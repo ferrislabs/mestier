@@ -25,7 +25,7 @@ import {
 	countSummary,
 } from '#/pages/cursus/shared/lib/count-summary'
 import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
-import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
 import { ListPagination } from '#/pages/cursus/shared/ui/list-pagination'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 
@@ -166,31 +166,32 @@ export function ParticipantsListUI({
 				}
 			/>
 			<FormError message={error} />
-			{isLoading || error ? null : rows.length === 0 ? (
-				<ListEmpty
-					title={copy.empty}
-					hint={filtered ? copy.emptyHint : undefined}
-					onReset={filtered ? onResetFilters : undefined}
-				/>
-			) : (
-				<div className="overflow-hidden rounded-lg border bg-card">
-					<Table>
-						<TableHeader>
-							<TableRow className="hover:bg-transparent">
-								<TableHead className="pl-4">Nom</TableHead>
-								{isTutor ? (
-									<>
-										<TableHead>Entreprise</TableHead>
-										<TableHead>Fonction</TableHead>
-									</>
-								) : (
-									<TableHead>E-mail</TableHead>
-								)}
-								<TableHead className="pr-4">Statut</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{rows.map((row) => (
+			<div className="overflow-hidden rounded-lg border bg-card">
+				<Table>
+					<TableHeader>
+						<TableRow className="hover:bg-transparent">
+							<TableHead className="pl-4">Nom</TableHead>
+							{isTutor ? (
+								<>
+									<TableHead>Entreprise</TableHead>
+									<TableHead>Fonction</TableHead>
+								</>
+							) : (
+								<TableHead>E-mail</TableHead>
+							)}
+							<TableHead className="pr-4">Statut</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{isLoading || error ? null : rows.length === 0 ? (
+							<ListEmptyRow
+								colSpan={isTutor ? 4 : 3}
+								title={copy.empty}
+								hint={filtered ? copy.emptyHint : undefined}
+								onReset={filtered ? onResetFilters : undefined}
+							/>
+						) : (
+							rows.map((row) => (
 								<TableRow
 									key={row.id}
 									className="relative cursor-pointer focus-within:bg-muted/50"
@@ -222,11 +223,11 @@ export function ParticipantsListUI({
 										</StatusBadge>
 									</TableCell>
 								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</div>
-			)}
+							))
+						)}
+					</TableBody>
+				</Table>
+			</div>
 
 			<ListPagination
 				page={page}

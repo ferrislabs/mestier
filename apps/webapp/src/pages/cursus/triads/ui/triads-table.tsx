@@ -12,6 +12,10 @@ import {
 	TableHeader,
 	TableRow,
 } from '#/components/ui/table'
+import {
+	type ListEmptyProps,
+	ListEmptyRow,
+} from '#/pages/cursus/shared/ui/list-empty'
 import { ClosedBadge } from '#/pages/cursus/shared/ui/status-badge'
 import type { TriadSummary } from '#/pages/cursus/triads/feature/use-triads'
 
@@ -19,12 +23,14 @@ interface TriadsTableProps {
 	triads: TriadSummary[]
 	showPromotion: boolean
 	onOpen: (triadId: string) => void
+	empty?: ListEmptyProps
 }
 
 export function TriadsTable({
 	triads,
 	showPromotion,
 	onOpen,
+	empty,
 }: TriadsTableProps) {
 	const columns: ColumnDef<TriadSummary>[] = [
 		{ header: 'Apprenti', accessorKey: 'apprentice_name' },
@@ -82,6 +88,9 @@ export function TriadsTable({
 					))}
 				</TableHeader>
 				<TableBody>
+					{empty && triads.length === 0 ? (
+						<ListEmptyRow colSpan={columns.length} {...empty} />
+					) : null}
 					{table.getRowModel().rows.map((row) => (
 						<TableRow
 							key={row.id}

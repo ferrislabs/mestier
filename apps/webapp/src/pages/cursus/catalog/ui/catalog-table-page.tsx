@@ -21,7 +21,7 @@ import type {
 	ArchiveFilter,
 	FilterOption,
 } from '#/pages/cursus/shared/lib/list-filters'
-import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 import { RowActions } from '#/pages/cursus/shared/ui/row-actions'
 
@@ -121,33 +121,34 @@ export function CatalogTablePage<Item extends CatalogItem>({
 				onStatus={onArchivedChange}
 			/>
 			<FormError message={error} />
-			{isLoading ? null : items.length === 0 ? (
-				<ListEmpty
-					title={emptyTitle}
-					hint={
-						filtered
-							? 'Vérifie l’orthographe ou le statut sélectionné.'
-							: undefined
-					}
-					onReset={filtered ? onResetFilters : undefined}
-				/>
-			) : (
-				<div className="overflow-hidden rounded-lg border bg-card">
-					<Table>
-						<TableHeader>
-							<TableRow className="hover:bg-transparent">
-								<TableHead className="pl-4">Nom</TableHead>
-								{columns.map((column) => (
-									<TableHead key={column.header}>{column.header}</TableHead>
-								))}
-								<TableHead>Statut</TableHead>
-								<TableHead className="w-12 pr-4">
-									<span className="sr-only">Actions</span>
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{items.map((item) => {
+			<div className="overflow-hidden rounded-lg border bg-card">
+				<Table>
+					<TableHeader>
+						<TableRow className="hover:bg-transparent">
+							<TableHead className="pl-4">Nom</TableHead>
+							{columns.map((column) => (
+								<TableHead key={column.header}>{column.header}</TableHead>
+							))}
+							<TableHead>Statut</TableHead>
+							<TableHead className="w-12 pr-4">
+								<span className="sr-only">Actions</span>
+							</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{isLoading ? null : items.length === 0 ? (
+							<ListEmptyRow
+								colSpan={columns.length + 3}
+								title={emptyTitle}
+								hint={
+									filtered
+										? 'Vérifie l’orthographe ou le statut sélectionné.'
+										: undefined
+								}
+								onReset={filtered ? onResetFilters : undefined}
+							/>
+						) : (
+							items.map((item) => {
 								const isArchived = Boolean(item.archived_at)
 								return (
 									<TableRow
@@ -190,11 +191,11 @@ export function CatalogTablePage<Item extends CatalogItem>({
 										</TableCell>
 									</TableRow>
 								)
-							})}
-						</TableBody>
-					</Table>
-				</div>
-			)}
+							})
+						)}
+					</TableBody>
+				</Table>
+			</div>
 			{dialog}
 		</PageShell>
 	)

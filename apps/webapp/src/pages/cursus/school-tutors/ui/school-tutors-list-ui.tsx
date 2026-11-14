@@ -15,7 +15,7 @@ import {
 	type ArchiveFilter,
 	MASCULINE_ARCHIVE_OPTIONS,
 } from '#/pages/cursus/shared/lib/list-filters'
-import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
 import { ListPagination } from '#/pages/cursus/shared/ui/list-pagination'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 import { RowActions } from '#/pages/cursus/shared/ui/row-actions'
@@ -112,32 +112,33 @@ export function SchoolTutorsListUI({
 				onStatus={onArchivedChange}
 			/>
 			<FormError message={error} />
-			{isLoading ? null : rows.length === 0 ? (
-				<ListEmpty
-					title="Aucun tuteur école ne correspond."
-					hint={
-						filtered
-							? 'Vérifie l’orthographe ou le statut sélectionné.'
-							: undefined
-					}
-					onReset={filtered ? onResetFilters : undefined}
-				/>
-			) : (
-				<div className="overflow-hidden rounded-lg border bg-card">
-					<Table>
-						<TableHeader>
-							<TableRow className="hover:bg-transparent">
-								<TableHead className="pl-4">Nom</TableHead>
-								<TableHead>Fonction</TableHead>
-								<TableHead>Trinômes suivis</TableHead>
-								<TableHead>Statut</TableHead>
-								<TableHead className="w-12 pr-4">
-									<span className="sr-only">Actions</span>
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{rows.map((row) => (
+			<div className="overflow-hidden rounded-lg border bg-card">
+				<Table>
+					<TableHeader>
+						<TableRow className="hover:bg-transparent">
+							<TableHead className="pl-4">Nom</TableHead>
+							<TableHead>Fonction</TableHead>
+							<TableHead>Trinômes suivis</TableHead>
+							<TableHead>Statut</TableHead>
+							<TableHead className="w-12 pr-4">
+								<span className="sr-only">Actions</span>
+							</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{isLoading ? null : rows.length === 0 ? (
+							<ListEmptyRow
+								colSpan={5}
+								title="Aucun tuteur école ne correspond."
+								hint={
+									filtered
+										? 'Vérifie l’orthographe ou le statut sélectionné.'
+										: undefined
+								}
+								onReset={filtered ? onResetFilters : undefined}
+							/>
+						) : (
+							rows.map((row) => (
 								<TableRow
 									key={row.id}
 									className={cn('group', row.archived && 'opacity-60')}
@@ -163,11 +164,11 @@ export function SchoolTutorsListUI({
 										/>
 									</TableCell>
 								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</div>
-			)}
+							))
+						)}
+					</TableBody>
+				</Table>
+			</div>
 			<ListPagination
 				page={page}
 				pageCount={pageCount}
