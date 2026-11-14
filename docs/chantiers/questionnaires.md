@@ -1,6 +1,6 @@
 # Questionnaires
 
-État : **spec validée le 2026-11-14. Découpage en attente de validation. Rien n'est implémenté.**
+État : **spec validée le 2026-11-14. S0 intégré sur `feat/surveys` (voir Workstreams). S1 à S6 à planifier.**
 
 Taille : **L**. Le découpage en workstreams est à valider avant tout lancement (voir Workstreams).
 
@@ -249,7 +249,7 @@ Non pour la fenêtre : l'horloge est injectée, des tests unitaires à instants 
 
 | Id | Mission | Dépend de | Fichiers |
 |---|---|---|---|
-| S0 | Migration `survey`, entités, états typés, ports, événements et descripteurs, glossaire | rien | `migrations/`, `libs/core/src/domain/survey/` |
+| S0 (**intégré**) | Migration `survey`, entités, états typés, ports, événements et descripteurs, glossaire | rien | `migrations/`, `libs/core/src/domain/survey/` |
 | S1 | Dépôts Postgres, cas d'usage de gestion et de réponse, horloge de campagne | S0 | `libs/core/src/application/survey/`, `infrastructure/survey/` |
 | S2 | Crate `handlers-survey` : gestion et réponse membres, permissions, OpenAPI | S1 | `libs/handlers-survey/`, `apps/api/src/{router,openapi}.rs` |
 | S3 | Routes publiques, limitation de débit, jeton de reprise, dépôt de photos, nettoyage des fichiers abandonnés | S2 | `libs/handlers-survey/src/response/` |
@@ -261,7 +261,158 @@ S0 d'abord seul. S1 puis S2 et S4 en parallèle. S3 après S2. S5 et S6 en paral
 
 ## Frozen contracts
 
-À figer à la fin de S0 : les types `Visibility`, `Window`, `QuestionId`, `Answer`, `Graph` (nœuds, arêtes, branches), les états `Survey<Draft|Opened|Closed>` et `Response<InProgress|Completed>`, les traits des dépôts, et les payloads des 5 événements. Ils seront copiés ici, verbatim, avant de lancer S1.
+Figés à l'intégration de S0 (commit `c2b684c6` sur `feat/surveys`). Les types complets, avec leurs champs et variants, sont dans `libs/core/src/domain/survey/` : ces fichiers font foi. Aucun workstream ne modifie un type ou une signature ci-dessous. Un besoin nouveau passe par un ajout (méthode, variant, méthode de port) et est annoncé dans le rapport du workstream.
+
+Exports à la racine de `mestier-core` : `Answer`, `Answers`, `Campaign`, `CampaignId`, `CampaignStatus`, `Closed`, `Completed`, `Draft`, `GraphPath`, `InProgress`, `Metadata`, `Opened`, `QuestionId`, `QuestionKind`, `Response`, `ResponseId`, `ResponseRecord`, `ResumeToken`, `Survey`, `SurveyError`, `SurveyGraph` (le `Graph` du questionnaire), `SurveyId`, `SurveyRecord`, `SurveyWindow` (la `Window` du questionnaire), `Visibility`, les trois traits de dépôt et les cinq événements. `PhoneNumber` et `EmailAddress` du module survey ne sont pas exportés (noms déjà pris par le profil de membre) : on y accède par `domain::survey::value`.
+
+Signatures publiques (extraites du code) :
+
+```text
+// libs/core/src/domain/survey/value.rs
+pub enum Visibility
+pub fn as_str(self) -> &'static str
+pub struct QuestionId(pub Uuid);
+pub enum QuestionKind
+pub fn as_str(self) -> &'static str
+pub struct EmailAddress(String);
+pub fn as_str(&self) -> &str
+pub struct PhoneNumber(String);
+pub fn as_str(&self) -> &str
+pub enum Answer
+
+// libs/core/src/domain/survey/error.rs
+pub enum SurveyError
+
+// libs/core/src/domain/survey/metadata.rs
+pub struct Metadata(BTreeMap<String, String>);
+pub fn new(entries: BTreeMap<String, String>) -> Result<Self, SurveyError>
+pub fn merged(campaign: &Metadata, survey: &Metadata) -> Metadata
+pub fn get(&self, key: &str) -> Option<&str>
+pub fn iter(&self) -> impl Iterator<Item = (&str, &str)>
+
+// libs/core/src/domain/survey/campaign.rs
+pub struct Window
+pub fn new( starts_at: Option<DateTime<Utc>>, ends_at: Option<DateTime<Utc>>, ) -> Result<Self, SurveyError>
+pub fn starts_at(&self) -> Option<DateTime<Utc>>
+pub fn ends_at(&self) -> Option<DateTime<Utc>>
+pub fn contains(&self, now: DateTime<Utc>) -> bool
+pub enum CampaignStatus
+pub struct Campaign
+pub fn status_at(&self, now: DateTime<Utc>) -> CampaignStatus
+
+// libs/core/src/domain/survey/graph.rs
+pub type Answers = BTreeMap<QuestionId, Answer>;
+pub struct QuestionNode
+pub struct ConditionNode
+pub struct EndNode
+pub enum Node
+pub fn id(&self) -> QuestionId
+pub enum Branch
+pub struct Edge
+pub struct GraphPath
+pub struct Graph
+pub enum NodeRef<'a>
+pub fn new(nodes: Vec<Node>, edges: Vec<Edge>, start: QuestionId) -> Result<Self, SurveyError>
+pub fn path(&self, answers: &Answers) -> GraphPath
+pub fn start(&self) -> QuestionId
+pub fn nodes(&self) -> impl Iterator<Item = NodeRef<'_>>
+pub fn question(&self, id: &QuestionId) -> Option<&QuestionNode>
+pub fn edges(&self) -> impl Iterator<Item = Edge>
+
+// libs/core/src/domain/survey/aggregate.rs
+pub struct Draft;
+pub struct Opened;
+pub struct Closed;
+pub struct Survey<S>
+pub fn id(&self) -> SurveyId
+pub fn organization_id(&self) -> OrganizationId
+pub fn title(&self) -> &str
+pub fn description(&self) -> Option<&str>
+pub fn visibility(&self) -> Visibility
+pub fn allow_multiple_responses(&self) -> bool
+pub fn response_cap(&self) -> Option<NonZeroU32>
+pub fn metadata(&self) -> &Metadata
+pub fn campaign_id(&self) -> Option<CampaignId>
+pub fn graph(&self) -> Option<&Graph>
+pub fn opened_at(&self) -> Option<DateTime<Utc>>
+pub fn closed_at(&self) -> Option<DateTime<Utc>>
+pub fn new( id: SurveyId, organization_id: OrganizationId, title: String, visibility: Visibility, ) -> Result<Self, SurveyError>
+pub fn edit_title(&mut self, title: String) -> Result<(), SurveyError>
+pub fn edit_description(&mut self, description: Option<String>)
+pub fn edit_visibility(&mut self, visibility: Visibility)
+pub fn edit_allow_multiple_responses(&mut self, allowed: bool)
+pub fn edit_response_cap(&mut self, cap: Option<NonZeroU32>)
+pub fn edit_metadata(&mut self, metadata: Metadata)
+pub fn edit_campaign(&mut self, campaign_id: Option<CampaignId>)
+pub fn edit_graph(&mut self, graph: Option<Graph>)
+pub fn open(mut self, at: DateTime<Utc>) -> Result<Survey<Opened>, SurveyError>
+pub fn close(mut self, at: DateTime<Utc>) -> Result<Survey<Closed>, SurveyError>
+pub fn accepts( &self, campaign: Option<&Campaign>, now: DateTime<Utc>, ) -> Result<(), SurveyError>
+pub fn accepts( &self, _campaign: Option<&Campaign>, _now: DateTime<Utc>, ) -> Result<(), SurveyError>
+
+// libs/core/src/domain/survey/response.rs
+pub struct InProgress;
+pub struct Completed;
+pub struct ResumeToken(String);
+pub fn new(value: String) -> Result<Self, SurveyError>
+pub fn as_str(&self) -> &str
+pub struct Response<S>
+pub fn id(&self) -> ResponseId
+pub fn survey_id(&self) -> SurveyId
+pub fn organization_id(&self) -> OrganizationId
+pub fn member_id(&self) -> Option<MemberId>
+pub fn resume_token(&self) -> Option<&ResumeToken>
+pub fn answers(&self) -> &Answers
+pub fn started_at(&self) -> DateTime<Utc>
+pub fn completed_at(&self) -> Option<DateTime<Utc>>
+pub fn start( id: ResponseId, survey_id: SurveyId, organization_id: OrganizationId, member_id: Option<MemberId>, resume_token: Option<ResumeToken>, at: DateTime<Utc>, ) -> Self
+pub fn save(&mut self, graph: &Graph, answers: Answers) -> Result<(), SurveyError>
+pub fn complete( mut self, graph: &Graph, at: DateTime<Utc>, ) -> Result<Response<Completed>, SurveyError>
+pub fn identifier_value(&self) -> Option<&str>
+
+// libs/core/src/domain/survey/record.rs
+pub enum SurveyRecord
+pub fn id(&self) -> SurveyId
+pub fn organization_id(&self) -> OrganizationId
+pub enum ResponseRecord
+pub fn id(&self) -> ResponseId
+pub fn survey_id(&self) -> SurveyId
+pub fn organization_id(&self) -> OrganizationId
+
+// libs/core/src/domain/survey/ports.rs
+pub trait SurveyRepository: Send
+pub trait CampaignRepository: Send
+pub trait ResponseRepository: Send
+
+// libs/core/src/domain/survey/events.rs
+pub struct SurveyOpened
+pub struct SurveyResponseSubmitted
+pub struct SurveyResponseCompleted
+pub struct SurveyCampaignStarted
+pub struct SurveyCampaignEnded
+```
+
+Payloads des cinq événements (exemples complets dans `survey/descriptors.rs`) :
+
+```text
+survey.opened                sujet survey          {survey_id, campaign_id|null, survey: {id, organization_id, title, description, visibility, allow_multiple_responses, response_cap|null, metadata, opened_at}}
+survey.response_submitted    sujet survey_response {survey_id, campaign_id|null, response: {id, member_id|null, status}, answered_questions}
+survey.response_completed    sujet survey_response {survey_id, campaign_id|null, survey: {id, title}, response: {id, member_id|null, completed_at, identifier_value|null}, metadata, answers: [{question_id, label, kind, value}]}
+survey_campaign.started      sujet survey_campaign {campaign_id, campaign: {id, organization_id, name, starts_at|null, ends_at|null, metadata}}
+survey_campaign.ended        sujet survey_campaign {campaign_id, campaign: {id, organization_id, name, starts_at|null, ends_at|null, metadata}}
+```
+
+Écarts acceptés par rapport au plan de S0 (décisions de l'orchestrateur) :
+
+- `Graph::path` renvoie `GraphPath { questions, end }` et ne s'arrête jamais : une question sans réponse est traversée, une condition sur une source sans réponse prend `Else`.
+- `Response<InProgress>::save` et `complete` prennent le `&Graph` et partagent une validation : question inconnue, type de réponse, option inconnue, photos au plus `max_photos` (5 par défaut), nombres finis.
+- `Survey<Opened>::close` renvoie un `Result` et refuse une date antérieure à l'ouverture.
+- `Graph::new` refuse aussi : plus d'une question « identifiant », un identifiant hors `TEXT`/`EMAIL`/`PHONE`, `max_photos` hors `PHOTO` ou nul, une question à choix sans option.
+- `SurveyRecord` et `ResponseRecord` portent un questionnaire ou une réponse dans l'état où il est stocké. La conversion depuis et vers les lignes SQL est du ressort de S1.
+- Les ports acceptent des ajouts de méthodes par S1.
+- La mise en page du canevas (positions des nœuds) n'est pas dans `Graph` : S5 la stocke dans un JSON de disposition séparé.
+- Les réponses du jeu de cas partagé `survey/fixtures/paths.json` gardent l'étiquetage serde de `Answer` (`{"Choice":"Oui"}`) : S6 le lit tel quel.
+- Aucun port d'horloge n'existe dans le domaine : S1 tranche pour l'horloge de campagne.
 
 ## Risks / open questions
 
