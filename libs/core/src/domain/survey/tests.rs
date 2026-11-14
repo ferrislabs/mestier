@@ -509,8 +509,159 @@ mod graph {
 
     #[test]
     fn an_invalid_graph_cannot_be_deserialized() {
-        let json = r#"{"nodes":[],"edges":[],"start":"00000000-0000-0000-0000-000000000001"}"#;
-        assert!(serde_json::from_str::<Graph>(json).is_err());
+        let json = r#"{
+            "nodes": [
+                {"type": "QUESTION", "id": "00000000-0000-0000-0000-000000000001", "kind": "TEXT", "label": "A", "required": true},
+                {"type": "QUESTION", "id": "00000000-0000-0000-0000-000000000002", "kind": "TEXT", "label": "B", "required": true},
+                {"type": "END", "id": "00000000-0000-0000-0000-000000000003"}
+            ],
+            "edges": [
+                {"from": "00000000-0000-0000-0000-000000000001", "to": "00000000-0000-0000-0000-000000000002", "branch": "NEXT"},
+                {"from": "00000000-0000-0000-0000-000000000002", "to": "00000000-0000-0000-0000-000000000001", "branch": "NEXT"}
+            ],
+            "start": "00000000-0000-0000-0000-000000000001"
+        }"#;
+        let error = serde_json::from_str::<Graph>(json).unwrap_err().to_string();
+        assert!(
+            error.contains(&SurveyError::GraphCycle(id(1)).to_string()),
+            "{error}"
+        );
+    }
+
+    fn shaped(n: u128, kind: QuestionKind, max_photos: Option<u8>, identifier: bool) -> Node {
+        Node::Question(QuestionNode {
+            id: id(n),
+            kind,
+            label: format!("Question {n}"),
+            required: true,
+            options: vec![],
+            max_photos,
+            identifier,
+        })
+    }
+
+    fn linear(first: Node, second: Node) -> Result<Graph, SurveyError> {
+        Graph::new(
+            vec![first, second, end(3)],
+            vec![next(1, 2), next(2, 3)],
+            id(1),
+        )
+    }
+
+    #[test]
+    fn a_self_loop_is_refused() {
+        assert_eq!(
+            Graph::new(vec![text(1), end(2)], vec![next(1, 1)], id(1)),
+            Err(SurveyError::GraphCycle(id(1)))
+        );
+    }
+
+    #[test]
+    fn a_cycle_away_from_the_start_is_refused() {
+        assert_eq!(
+            Graph::new(
+                vec![
+                    choice(1),
+                    condition(2, 1, "Oui", true),
+                    text(3),
+                    text(4),
+                    end(5)
+                ],
+                vec![
+                    next(1, 2),
+                    then(2, 3),
+                    otherwise(2, 5),
+                    next(3, 4),
+                    next(4, 3),
+                ],
+                id(1),
+            ),
+            Err(SurveyError::GraphCycle(id(3)))
+        );
+    }
+
+    #[test]
+    fn a_condition_with_two_then_branches_is_refused() {
+        assert_eq!(
+            Graph::new(
+                vec![choice(1), condition(2, 1, "Oui", true), end(3), end(4)],
+                vec![next(1, 2), then(2, 3), then(2, 4), otherwise(2, 3)],
+                id(1),
+            ),
+            Err(SurveyError::GraphDuplicateExit(id(2)))
+        );
+    }
+
+    #[test]
+    fn a_second_identifier_is_refused() {
+        assert_eq!(
+            linear(
+                shaped(1, QuestionKind::Email, None, true),
+                shaped(2, QuestionKind::Phone, None, true),
+            ),
+            Err(SurveyError::GraphSecondIdentifier(id(2)))
+        );
+    }
+
+    #[test]
+    fn an_identifier_on_a_number_question_is_refused() {
+        assert_eq!(
+            linear(text(1), shaped(2, QuestionKind::Number, None, true)),
+            Err(SurveyError::GraphIdentifierOnInvalidKind(id(2)))
+        );
+    }
+
+    #[test]
+    fn an_identifier_on_a_photo_question_is_refused() {
+        assert_eq!(
+            linear(text(1), shaped(2, QuestionKind::Photo, None, true)),
+            Err(SurveyError::GraphIdentifierOnInvalidKind(id(2)))
+        );
+    }
+
+    #[test]
+    fn one_identifier_on_an_email_phone_or_text_question_is_accepted() {
+        for kind in [QuestionKind::Email, QuestionKind::Phone, QuestionKind::Text] {
+            assert!(linear(shaped(1, kind, None, true), text(2)).is_ok());
+        }
+    }
+
+    #[test]
+    fn a_photo_limit_on_a_text_question_is_refused() {
+        assert_eq!(
+            linear(text(1), shaped(2, QuestionKind::Text, Some(5), false)),
+            Err(SurveyError::GraphMaxPhotosOnInvalidKind(id(2)))
+        );
+    }
+
+    #[test]
+    fn a_photo_limit_of_zero_is_refused() {
+        assert_eq!(
+            linear(text(1), shaped(2, QuestionKind::Photo, Some(0), false)),
+            Err(SurveyError::GraphZeroMaxPhotos(id(2)))
+        );
+    }
+
+    #[test]
+    fn a_photo_question_with_or_without_a_limit_is_accepted() {
+        assert!(linear(shaped(1, QuestionKind::Photo, Some(3), false), text(2)).is_ok());
+        assert!(linear(shaped(1, QuestionKind::Photo, None, false), text(2)).is_ok());
+    }
+
+    #[test]
+    fn a_single_choice_without_options_is_refused() {
+        assert_eq!(
+            linear(text(1), question(2, QuestionKind::SingleChoice, &[])),
+            Err(SurveyError::GraphChoiceWithoutOptions(id(2)))
+        );
+    }
+
+    #[test]
+    fn a_multiple_choice_without_options_is_refused() {
+        assert_eq!(
+            linear(text(1), question(2, QuestionKind::MultipleChoice, &[])),
+            Err(SurveyError::GraphChoiceWithoutOptions(id(2)))
+        );
     }
 
     #[test]

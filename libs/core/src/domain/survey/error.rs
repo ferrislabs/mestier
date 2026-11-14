@@ -28,6 +28,16 @@ pub enum SurveyError {
     GraphCycle(QuestionId),
     #[error("graph: node {0} is unreachable from the start")]
     GraphUnreachableNode(QuestionId),
+    #[error("graph: question {0} is a second identifier")]
+    GraphSecondIdentifier(QuestionId),
+    #[error("graph: question {0} is an identifier but is not an email, phone or text question")]
+    GraphIdentifierOnInvalidKind(QuestionId),
+    #[error("graph: question {0} has a photo limit but is not a photo question")]
+    GraphMaxPhotosOnInvalidKind(QuestionId),
+    #[error("graph: question {0} has a photo limit of zero")]
+    GraphZeroMaxPhotos(QuestionId),
+    #[error("graph: choice question {0} has no option")]
+    GraphChoiceWithoutOptions(QuestionId),
     #[error("graph: condition {0} refers to an unknown question")]
     ConditionUnknownQuestion(QuestionId),
     #[error("graph: condition {0} refers to a node that is not a choice question")]

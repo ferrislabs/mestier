@@ -211,6 +211,7 @@ impl Graph {
         if !matches!(nodes[start], Node::Question(_)) {
             return Err(SurveyError::GraphStartNotQuestion);
         }
+        Self::check_questions(&nodes)?;
         let exits = Self::exits(&nodes, &edges, &index)?;
         let vertices = nodes
             .into_iter()
@@ -281,6 +282,44 @@ impl Graph {
             }
         }
         edges
+    }
+
+    fn check_questions(nodes: &[Node]) -> Result<(), SurveyError> {
+        let mut identified = false;
+        for node in nodes {
+            let Node::Question(question) = node else {
+                continue;
+            };
+            if question.identifier {
+                if !matches!(
+                    question.kind,
+                    QuestionKind::Email | QuestionKind::Phone | QuestionKind::Text
+                ) {
+                    return Err(SurveyError::GraphIdentifierOnInvalidKind(question.id));
+                }
+                if identified {
+                    return Err(SurveyError::GraphSecondIdentifier(question.id));
+                }
+                identified = true;
+            }
+            match (question.kind, question.max_photos) {
+                (QuestionKind::Photo, Some(0)) => {
+                    return Err(SurveyError::GraphZeroMaxPhotos(question.id));
+                }
+                (QuestionKind::Photo, _) | (_, None) => {}
+                (_, Some(_)) => {
+                    return Err(SurveyError::GraphMaxPhotosOnInvalidKind(question.id));
+                }
+            }
+            if matches!(
+                question.kind,
+                QuestionKind::SingleChoice | QuestionKind::MultipleChoice
+            ) && question.options.is_empty()
+            {
+                return Err(SurveyError::GraphChoiceWithoutOptions(question.id));
+            }
+        }
+        Ok(())
     }
 
     fn exits(
