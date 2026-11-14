@@ -99,7 +99,7 @@ pub mod domain {
     pub struct WebhookRoute;
     pub struct Schedule;
     pub struct Survey;
-    pub struct Campaign;
+    pub struct SurveyCampaign;
     pub struct SurveyResponse;
 }
 

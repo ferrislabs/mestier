@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-#[repository(domain = Campaign, backend = Postgres)]
+#[repository(domain = SurveyCampaign, backend = Postgres)]
 pub struct PgCampaignRepository<'tx> {
     tx: SharedTx<'tx>,
 }

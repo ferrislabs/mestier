@@ -17,7 +17,7 @@ use crate::domain::survey::{
 };
 
 impl MestierUseCase {
-    #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn create_survey(
         &self,
         command: CreateSurveyCommand,
@@ -32,7 +32,8 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = SurveyService::new(survey_repository, campaign_repository, emitter);
+        let mut service =
+            SurveyService::new(survey_repository, survey_campaign_repository, emitter);
         service
             .create(
                 command.organization_id,
@@ -43,7 +44,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn update_survey(
         &self,
         command: UpdateSurveyCommand,
@@ -58,7 +59,8 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = SurveyService::new(survey_repository, campaign_repository, emitter);
+        let mut service =
+            SurveyService::new(survey_repository, survey_campaign_repository, emitter);
         let updated = service
             .update_draft(command.organization_id, command.id, command.patch)
             .await?;
@@ -72,7 +74,7 @@ impl MestierUseCase {
         }
     }
 
-    #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn open_survey(&self, command: SurveyCommand) -> Result<Survey<Opened>, CoreError> {
         let mut survey_repository = survey_repository;
         guard_manage(
@@ -94,13 +96,14 @@ impl MestierUseCase {
             }
             _ => None,
         };
-        let mut service = SurveyService::new(survey_repository, campaign_repository, emitter);
+        let mut service =
+            SurveyService::new(survey_repository, survey_campaign_repository, emitter);
         service
             .open(command.organization_id, command.id, Utc::now(), public_slug)
             .await
     }
 
-    #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn close_survey(&self, command: SurveyCommand) -> Result<Survey<Closed>, CoreError> {
         guard_manage(
             command.actor,
@@ -112,13 +115,14 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = SurveyService::new(survey_repository, campaign_repository, emitter);
+        let mut service =
+            SurveyService::new(survey_repository, survey_campaign_repository, emitter);
         service
             .close(command.organization_id, command.id, Utc::now())
             .await
     }
 
-    #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn duplicate_survey(
         &self,
         command: SurveyCommand,
@@ -133,7 +137,8 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = SurveyService::new(survey_repository, campaign_repository, emitter);
+        let mut service =
+            SurveyService::new(survey_repository, survey_campaign_repository, emitter);
         service
             .duplicate(
                 command.organization_id,
@@ -143,7 +148,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn delete_survey(&self, command: SurveyCommand) -> Result<(), CoreError> {
         guard_manage(
             command.actor,
@@ -155,7 +160,8 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = SurveyService::new(survey_repository, campaign_repository, emitter);
+        let mut service =
+            SurveyService::new(survey_repository, survey_campaign_repository, emitter);
         service.delete(command.organization_id, command.id).await
     }
 
@@ -199,7 +205,7 @@ impl MestierUseCase {
             .ok_or_else(|| SurveyError::SurveyNotFound.into())
     }
 
-    #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn create_campaign(
         &self,
         command: CreateCampaignCommand,
@@ -214,7 +220,8 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = CampaignService::new(campaign_repository, survey_repository, emitter);
+        let mut service =
+            CampaignService::new(survey_campaign_repository, survey_repository, emitter);
         service
             .create(
                 command.organization_id,
@@ -227,7 +234,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn update_campaign(
         &self,
         command: UpdateCampaignCommand,
@@ -242,7 +249,8 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = CampaignService::new(campaign_repository, survey_repository, emitter);
+        let mut service =
+            CampaignService::new(survey_campaign_repository, survey_repository, emitter);
         service
             .update(
                 command.organization_id,
@@ -253,7 +261,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn delete_campaign(&self, command: CampaignCommand) -> Result<(), CoreError> {
         guard_manage(
             command.actor,
@@ -265,16 +273,17 @@ impl MestierUseCase {
         )
         .await?;
 
-        let mut service = CampaignService::new(campaign_repository, survey_repository, emitter);
+        let mut service =
+            CampaignService::new(survey_campaign_repository, survey_repository, emitter);
         service.delete(command.organization_id, command.id).await
     }
 
-    #[transactional(campaign, feature_flag, member, role, authz)]
+    #[transactional(survey_campaign, feature_flag, member, role, authz)]
     pub async fn list_campaigns(
         &self,
         command: ListCampaignsCommand,
     ) -> Result<(Vec<Campaign>, u64), CoreError> {
-        let mut campaign_repository = campaign_repository;
+        let mut survey_campaign_repository = survey_campaign_repository;
         guard_read(
             command.actor,
             command.organization_id,
@@ -285,7 +294,7 @@ impl MestierUseCase {
         )
         .await?;
 
-        campaign_repository
+        survey_campaign_repository
             .list(command.organization_id, command.limit, command.offset)
             .await
     }
@@ -345,7 +354,7 @@ impl MestierUseCase {
 
     #[transactional(
         survey,
-        campaign,
+        survey_campaign,
         survey_response,
         feature_flag,
         member,
@@ -370,7 +379,7 @@ impl MestierUseCase {
         let mut service = ResponseService::new(
             survey_response_repository,
             survey_repository,
-            campaign_repository,
+            survey_campaign_repository,
             emitter,
         );
         service.delete(command.organization_id, command.id).await

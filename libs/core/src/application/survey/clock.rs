@@ -28,13 +28,13 @@ impl MestierUseCase {
         Ok(advanced)
     }
 
-    #[transactional(campaign)]
+    #[transactional(survey_campaign)]
     async fn due_survey_campaigns(
         &self,
         now: DateTime<Utc>,
     ) -> Result<Vec<(OrganizationId, CampaignId)>, CoreError> {
-        let mut campaign_repository = campaign_repository;
-        let due = campaign_repository
+        let mut survey_campaign_repository = survey_campaign_repository;
+        let due = survey_campaign_repository
             .list_due(now, DUE_CAMPAIGNS_PER_TICK)
             .await?;
         Ok(due
@@ -43,14 +43,15 @@ impl MestierUseCase {
             .collect())
     }
 
-    #[transactional(campaign, survey, emitter)]
+    #[transactional(survey_campaign, survey, emitter)]
     async fn advance_survey_campaign(
         &self,
         organization_id: OrganizationId,
         id: CampaignId,
         now: DateTime<Utc>,
     ) -> Result<Vec<CampaignStatus>, CoreError> {
-        let mut service = CampaignService::new(campaign_repository, survey_repository, emitter);
+        let mut service =
+            CampaignService::new(survey_campaign_repository, survey_repository, emitter);
         service.advance(organization_id, id, now).await
     }
 }

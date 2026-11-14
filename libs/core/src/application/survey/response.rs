@@ -15,7 +15,15 @@ use crate::domain::survey::{
 };
 
 impl MestierUseCase {
-    #[transactional(survey, campaign, survey_response, feature_flag, member, role, emitter)]
+    #[transactional(
+        survey,
+        survey_campaign,
+        survey_response,
+        feature_flag,
+        member,
+        role,
+        emitter
+    )]
     pub async fn start_member_response(
         &self,
         command: StartMemberResponseCommand,
@@ -35,7 +43,7 @@ impl MestierUseCase {
         let mut service = ResponseService::new(
             survey_response_repository,
             survey_repository,
-            campaign_repository,
+            survey_campaign_repository,
             emitter,
         );
         service
@@ -49,7 +57,15 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(survey, campaign, survey_response, feature_flag, member, role, emitter)]
+    #[transactional(
+        survey,
+        survey_campaign,
+        survey_response,
+        feature_flag,
+        member,
+        role,
+        emitter
+    )]
     pub async fn save_member_response(
         &self,
         command: SaveMemberResponseCommand,
@@ -69,7 +85,7 @@ impl MestierUseCase {
         let mut service = ResponseService::new(
             survey_response_repository,
             survey_repository,
-            campaign_repository,
+            survey_campaign_repository,
             emitter,
         );
         let locator = ResponseLocator::Member {
@@ -86,7 +102,15 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(survey, campaign, survey_response, feature_flag, member, role, emitter)]
+    #[transactional(
+        survey,
+        survey_campaign,
+        survey_response,
+        feature_flag,
+        member,
+        role,
+        emitter
+    )]
     pub async fn complete_member_response(
         &self,
         command: SurveyResponseCommand,
@@ -106,7 +130,7 @@ impl MestierUseCase {
         let mut service = ResponseService::new(
             survey_response_repository,
             survey_repository,
-            campaign_repository,
+            survey_campaign_repository,
             emitter,
         );
         let locator = ResponseLocator::Member {
@@ -163,7 +187,7 @@ impl MestierUseCase {
         }
     }
 
-    #[transactional(survey, campaign, survey_response, feature_flag, emitter)]
+    #[transactional(survey, survey_campaign, survey_response, feature_flag, emitter)]
     pub async fn start_public_response(
         &self,
         slug: &PublicSlug,
@@ -176,7 +200,7 @@ impl MestierUseCase {
         let mut service = ResponseService::new(
             survey_response_repository,
             survey_repository,
-            campaign_repository,
+            survey_campaign_repository,
             emitter,
         );
         service
@@ -211,7 +235,7 @@ impl MestierUseCase {
         }
     }
 
-    #[transactional(survey, campaign, survey_response, feature_flag, emitter)]
+    #[transactional(survey, survey_campaign, survey_response, feature_flag, emitter)]
     pub async fn save_public_response(
         &self,
         slug: &PublicSlug,
@@ -226,7 +250,7 @@ impl MestierUseCase {
         let mut service = ResponseService::new(
             survey_response_repository,
             survey_repository,
-            campaign_repository,
+            survey_campaign_repository,
             emitter,
         );
         let locator = ResponseLocator::Public {
@@ -238,7 +262,7 @@ impl MestierUseCase {
             .await
     }
 
-    #[transactional(survey, campaign, survey_response, feature_flag, emitter)]
+    #[transactional(survey, survey_campaign, survey_response, feature_flag, emitter)]
     pub async fn complete_public_response(
         &self,
         slug: &PublicSlug,
@@ -252,7 +276,7 @@ impl MestierUseCase {
         let mut service = ResponseService::new(
             survey_response_repository,
             survey_repository,
-            campaign_repository,
+            survey_campaign_repository,
             emitter,
         );
         let locator = ResponseLocator::Public {
