@@ -84,6 +84,7 @@ pub mod support_settings;
 pub mod support_thread;
 pub mod support_ticket;
 pub mod surcharge;
+pub mod survey;
 pub mod task;
 pub mod task_comment;
 pub mod task_label;

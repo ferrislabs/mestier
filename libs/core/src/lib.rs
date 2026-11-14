@@ -7,6 +7,12 @@ pub mod infrastructure;
 pub use application::automation::oauth::StartOauthCommand;
 pub use application::automation::trigger::WebhookAuthentication;
 pub use application::supplier_invoice::{ImportSupplierInvoiceOutcome, TotalsMismatch};
+pub use application::survey::commands::{
+    CampaignCommand, CreateCampaignCommand, CreateSurveyCommand, ListCampaignsCommand,
+    ListSurveyResponsesCommand, ListSurveysCommand, SaveMemberResponseCommand,
+    StartMemberResponseCommand, SurveyCommand, SurveyResponseCommand, UpdateCampaignCommand,
+    UpdateSurveyCommand,
+};
 pub use application::*;
 pub use domain::automation::collection::{
     ApiKeyLocation, Collection, CollectionDetail, CollectionDraft, CollectionDraftInput,
