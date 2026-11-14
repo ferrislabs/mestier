@@ -27,7 +27,7 @@ const CHOICES: readonly ChoiceCard[] = [
 ]
 
 export interface TutorKindChoiceProps {
-	value: TutorKindChoice
+	value: TutorKindChoice | null
 	onChange: (value: TutorKindChoice) => void
 }
 

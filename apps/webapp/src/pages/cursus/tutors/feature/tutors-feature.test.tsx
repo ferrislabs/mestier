@@ -277,7 +277,17 @@ describe('New tutor', () => {
 		await user.click(
 			await screen.findByRole('button', { name: 'Nouveau tuteur' }),
 		)
-		await user.click(screen.getByRole('button', { name: 'Suivant' }))
+		const next = screen.getByRole('button', { name: 'Suivant' })
+		expect((next as HTMLButtonElement).disabled).toBe(true)
+		expect(
+			(
+				screen.getByRole('radio', {
+					name: /Tuteur entreprise/,
+				}) as HTMLInputElement
+			).checked,
+		).toBe(false)
+		await user.click(screen.getByRole('radio', { name: /Tuteur entreprise/ }))
+		await user.click(next)
 
 		expect(
 			document.querySelector('[aria-current="step"]')?.textContent,

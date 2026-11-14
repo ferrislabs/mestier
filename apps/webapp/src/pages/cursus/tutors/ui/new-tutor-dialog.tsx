@@ -46,7 +46,7 @@ export function NewTutorDialog({
 	school,
 	onOpenChange,
 }: NewTutorDialogProps) {
-	const [choice, setChoice] = useState<TutorKindChoice>('company')
+	const [choice, setChoice] = useState<TutorKindChoice | null>(null)
 	const [screen, setScreen] = useState<Screen>('choose')
 	const backToChoice = () => setScreen('choose')
 
@@ -70,7 +70,13 @@ export function NewTutorDialog({
 							>
 								Annuler
 							</Button>
-							<Button type="button" onClick={() => setScreen(choice)}>
+							<Button
+								type="button"
+								disabled={choice === null}
+								onClick={() => {
+									if (choice) setScreen(choice)
+								}}
+							>
 								Suivant
 							</Button>
 						</DialogFooter>
