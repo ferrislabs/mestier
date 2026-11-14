@@ -1,6 +1,60 @@
 use proptest::prelude::*;
 
-use super::{EmailAddress, PhoneNumber, SurveyError};
+use super::{Answer, EmailAddress, PhoneNumber, PublicSlug, SurveyError};
+
+#[test]
+fn a_blank_answer_is_recognised_per_kind() {
+    assert!(Answer::Text("   ".to_string()).is_blank());
+    assert!(Answer::Text(String::new()).is_blank());
+    assert!(!Answer::Text(" a ".to_string()).is_blank());
+    assert!(Answer::Choices(vec![]).is_blank());
+    assert!(!Answer::Choices(vec!["A".to_string()]).is_blank());
+    assert!(Answer::Photos(vec![]).is_blank());
+    assert!(!Answer::Photos(vec!["k".to_string()]).is_blank());
+    assert!(!Answer::Number(0.0).is_blank());
+    assert!(!Answer::Choice("A".to_string()).is_blank());
+}
+
+#[test]
+fn a_public_slug_accepts_letters_digits_dashes_and_underscores() {
+    let slug = PublicSlug::new("Ab3-x_9Zq".to_string()).unwrap();
+    assert_eq!(slug.as_str(), "Ab3-x_9Zq");
+    assert!(PublicSlug::try_from("a".repeat(64)).is_ok());
+}
+
+#[test]
+fn a_public_slug_outside_its_shape_is_refused() {
+    for raw in [
+        String::new(),
+        "short7".to_string(),
+        "a".repeat(65),
+        "has space1".to_string(),
+        "accentué12".to_string(),
+        "slash/abc".to_string(),
+    ] {
+        assert_eq!(
+            PublicSlug::new(raw.clone()),
+            Err(SurveyError::PublicSlugInvalid),
+            "{raw}"
+        );
+    }
+}
+
+#[test]
+fn a_public_slug_is_validated_on_deserialization() {
+    assert!(serde_json::from_str::<PublicSlug>("\"bad slug\"").is_err());
+    let slug = PublicSlug::new("abcdefgh".to_string()).unwrap();
+    let json = serde_json::to_string(&slug).unwrap();
+    assert_eq!(serde_json::from_str::<PublicSlug>(&json).unwrap(), slug);
+}
+
+#[test]
+fn a_survey_error_is_a_conflict_for_the_core() {
+    assert_eq!(
+        common::CoreError::from(SurveyError::SurveyClosed).to_string(),
+        common::CoreError::Conflict(SurveyError::SurveyClosed.to_string()).to_string()
+    );
+}
 
 #[test]
 fn an_email_is_trimmed_and_lowercased() {
@@ -661,6 +715,42 @@ mod graph {
         assert_eq!(
             linear(text(1), question(2, QuestionKind::MultipleChoice, &[])),
             Err(SurveyError::GraphChoiceWithoutOptions(id(2)))
+        );
+    }
+
+    fn labelled(label: &str, options: &[&str]) -> Node {
+        Node::Question(QuestionNode {
+            id: id(2),
+            kind: QuestionKind::SingleChoice,
+            label: label.to_string(),
+            required: true,
+            options: options.iter().map(|option| option.to_string()).collect(),
+            max_photos: None,
+            identifier: false,
+        })
+    }
+
+    #[test]
+    fn a_blank_question_label_is_refused() {
+        assert_eq!(
+            linear(text(1), labelled("  ", &["A"])),
+            Err(SurveyError::GraphQuestionLabelEmpty(id(2)))
+        );
+    }
+
+    #[test]
+    fn a_blank_option_is_refused() {
+        assert_eq!(
+            linear(text(1), labelled("Q", &["A", " "])),
+            Err(SurveyError::GraphOptionEmpty(id(2)))
+        );
+    }
+
+    #[test]
+    fn a_duplicate_option_is_refused() {
+        assert_eq!(
+            linear(text(1), labelled("Q", &["A", "B", "A"])),
+            Err(SurveyError::GraphDuplicateOption(id(2)))
         );
     }
 

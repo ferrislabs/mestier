@@ -335,6 +335,17 @@ impl Graph {
             {
                 return Err(SurveyError::GraphChoiceWithoutOptions(question.id));
             }
+            if question.label.trim().is_empty() {
+                return Err(SurveyError::GraphQuestionLabelEmpty(question.id));
+            }
+            for (position, option) in question.options.iter().enumerate() {
+                if option.trim().is_empty() {
+                    return Err(SurveyError::GraphOptionEmpty(question.id));
+                }
+                if question.options[..position].contains(option) {
+                    return Err(SurveyError::GraphDuplicateOption(question.id));
+                }
+            }
         }
         Ok(())
     }

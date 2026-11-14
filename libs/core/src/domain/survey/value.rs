@@ -168,3 +168,44 @@ pub enum Answer {
     Email(EmailAddress),
     Photos(Vec<String>),
 }
+
+impl Answer {
+    pub fn is_blank(&self) -> bool {
+        match self {
+            Self::Text(text) => text.trim().is_empty(),
+            Self::Choices(options) => options.is_empty(),
+            Self::Photos(photos) => photos.is_empty(),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+pub struct PublicSlug(String);
+
+impl PublicSlug {
+    pub fn new(value: String) -> Result<Self, SurveyError> {
+        let well_formed = (8..=64).contains(&value.len())
+            && value
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        if well_formed {
+            Ok(Self(value))
+        } else {
+            Err(SurveyError::PublicSlugInvalid)
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for PublicSlug {
+    type Error = SurveyError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}

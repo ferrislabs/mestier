@@ -30,7 +30,7 @@ pub use graph::{Answers, Graph, GraphPath};
 pub use metadata::Metadata;
 pub use record::{ResponseRecord, SurveyRecord};
 pub use response::{Completed, InProgress, Response, ResumeToken};
-pub use value::{Answer, QuestionId, QuestionKind, Visibility};
+pub use value::{Answer, PublicSlug, QuestionId, QuestionKind, Visibility};
 
 #[cfg(test)]
 pub(crate) use graph::{Branch, ConditionNode, Edge, EndNode, Node, QuestionNode};

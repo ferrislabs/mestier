@@ -1,3 +1,5 @@
+use common::CoreError;
+
 use super::value::QuestionId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -38,6 +40,12 @@ pub enum SurveyError {
     GraphZeroMaxPhotos(QuestionId),
     #[error("graph: choice question {0} has no option")]
     GraphChoiceWithoutOptions(QuestionId),
+    #[error("graph: question {0} has an empty label")]
+    GraphQuestionLabelEmpty(QuestionId),
+    #[error("graph: question {0} has an empty option")]
+    GraphOptionEmpty(QuestionId),
+    #[error("graph: question {0} repeats an option")]
+    GraphDuplicateOption(QuestionId),
     #[error("graph: condition {0} refers to an unknown question")]
     ConditionUnknownQuestion(QuestionId),
     #[error("graph: condition {0} refers to a node that is not a choice question")]
@@ -86,4 +94,32 @@ pub enum SurveyError {
     AnswerTooManyPhotos(QuestionId),
     #[error("response: the answer to question {0} has an empty photo")]
     AnswerEmptyPhoto(QuestionId),
+    #[error("public_slug: must be 8 to 64 ASCII letters, digits, dashes or underscores")]
+    PublicSlugInvalid,
+    #[error("survey: a public survey needs a public slug to open")]
+    SurveyPublicSlugRequired,
+    #[error("survey: a members survey cannot have a public slug")]
+    SurveyPublicSlugForbidden,
+    #[error("survey: the campaign is not the campaign of the survey")]
+    SurveyCampaignMismatch,
+    #[error("survey: the campaign belongs to another organization")]
+    SurveyCampaignOrganizationMismatch,
+    #[error("campaign: the name is empty")]
+    CampaignNameEmpty,
+    #[error("response: belongs to another survey")]
+    ResponseSurveyMismatch,
+    #[error("response: a members survey needs a member")]
+    ResponseMemberRequired,
+    #[error("response: a public survey cannot record a member")]
+    ResponseMemberForbidden,
+    #[error("response: a public survey needs a resume token")]
+    ResponseResumeTokenRequired,
+    #[error("response: a members survey cannot use a resume token")]
+    ResponseResumeTokenForbidden,
+}
+
+impl From<SurveyError> for CoreError {
+    fn from(error: SurveyError) -> Self {
+        Self::Conflict(error.to_string())
+    }
 }
