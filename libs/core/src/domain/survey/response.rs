@@ -3,10 +3,11 @@ use std::marker::PhantomData;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use super::aggregate::{Opened, Survey};
 use super::error::SurveyError;
 use super::graph::{Answers, Graph};
 use super::validation::{check_finite, ensure_known, validate};
-use super::value::Answer;
+use super::value::{Answer, Visibility};
 use super::{ResponseId, SurveyId};
 use crate::{MemberId, OrganizationId};
 
@@ -31,7 +32,8 @@ impl Phase for Completed {}
 
 impl sealed::Sealed for InProgress {
     fn check(body: &ResponseBody) -> Result<(), SurveyError> {
-        if body.completed_at.is_none() && body.identifier_value.is_none() {
+        if body.completed_at.is_none() && body.identifier_value.is_none() && !body.unique_respondent
+        {
             check_finite(&body.answers)
         } else {
             Err(SurveyError::ResponseInconsistentState)
@@ -87,6 +89,7 @@ pub struct ResponseBody {
     started_at: DateTime<Utc>,
     completed_at: Option<DateTime<Utc>>,
     identifier_value: Option<String>,
+    unique_respondent: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -163,43 +166,82 @@ impl<S> Response<S> {
     }
 }
 
+fn check_respondent(
+    visibility: Visibility,
+    member_id: Option<MemberId>,
+    resume_token: Option<&ResumeToken>,
+) -> Result<(), SurveyError> {
+    match (visibility, member_id, resume_token) {
+        (Visibility::Members, None, _) => Err(SurveyError::ResponseMemberRequired),
+        (Visibility::Members, Some(_), Some(_)) => Err(SurveyError::ResponseResumeTokenForbidden),
+        (Visibility::Public, Some(_), _) => Err(SurveyError::ResponseMemberForbidden),
+        (Visibility::Public, None, None) => Err(SurveyError::ResponseResumeTokenRequired),
+        _ => Ok(()),
+    }
+}
+
+fn drop_blank(answers: &mut Answers) {
+    answers.retain(|_, answer| !answer.is_blank());
+}
+
 impl Response<InProgress> {
     pub fn start(
         id: ResponseId,
-        survey_id: SurveyId,
-        organization_id: OrganizationId,
+        survey: &Survey<Opened>,
         member_id: Option<MemberId>,
         resume_token: Option<ResumeToken>,
         at: DateTime<Utc>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, SurveyError> {
+        check_respondent(survey.visibility(), member_id, resume_token.as_ref())?;
+        Ok(Self {
             body: ResponseBody {
                 id,
-                survey_id,
-                organization_id,
+                survey_id: survey.id(),
+                organization_id: survey.organization_id(),
                 member_id,
                 resume_token,
                 answers: Answers::new(),
                 started_at: at,
                 completed_at: None,
                 identifier_value: None,
+                unique_respondent: false,
             },
             phase: PhantomData,
+        })
+    }
+
+    fn ensure_survey(&self, survey: &Survey<Opened>) -> Result<(), SurveyError> {
+        if survey.id() == self.body.survey_id {
+            Ok(())
+        } else {
+            Err(SurveyError::ResponseSurveyMismatch)
         }
     }
 
-    pub fn save(&mut self, graph: &Graph, answers: Answers) -> Result<(), SurveyError> {
+    pub fn save(
+        &mut self,
+        survey: &Survey<Opened>,
+        mut answers: Answers,
+    ) -> Result<(), SurveyError> {
+        self.ensure_survey(survey)?;
+        let graph = survey.definition();
         validate(graph, &answers)?;
+        drop_blank(&mut answers);
+        let path = graph.path(&answers);
+        answers.retain(|id, _| path.questions.contains(id));
         self.body.answers = answers;
         Ok(())
     }
 
     pub fn complete(
         mut self,
-        graph: &Graph,
+        survey: &Survey<Opened>,
         at: DateTime<Utc>,
     ) -> Result<Response<Completed>, SurveyError> {
+        self.ensure_survey(survey)?;
+        let graph = survey.definition();
         ensure_known(graph, &self.body.answers)?;
+        drop_blank(&mut self.body.answers);
         let path = graph.path(&self.body.answers);
         for id in &path.questions {
             let required = graph.question(id).is_some_and(|node| node.required);
@@ -212,6 +254,7 @@ impl Response<InProgress> {
             .retain(|id, _| path.questions.contains(id));
         validate(graph, &self.body.answers)?;
         self.body.identifier_value = identifier_of(graph, &path.questions, &self.body.answers);
+        self.body.unique_respondent = !survey.allow_multiple_responses();
         self.body.completed_at = Some(at);
         Ok(Response {
             body: self.body,
@@ -223,5 +266,9 @@ impl Response<InProgress> {
 impl Response<Completed> {
     pub fn identifier_value(&self) -> Option<&str> {
         self.body.identifier_value.as_deref()
+    }
+
+    pub fn unique_respondent(&self) -> bool {
+        self.body.unique_respondent
     }
 }

@@ -125,12 +125,12 @@ fn campaign() -> Campaign {
 fn response() -> Response<super::InProgress> {
     Response::start(
         ResponseId(Uuid::from_u128(3)),
-        SurveyId(Uuid::from_u128(1)),
-        org(),
+        &opened(None),
         Some(MemberId(Uuid::from_u128(4))),
         None,
         at(2),
     )
+    .unwrap()
 }
 
 fn answers(entries: Vec<(u128, Answer)>) -> Answers {
@@ -138,7 +138,7 @@ fn answers(entries: Vec<(u128, Answer)>) -> Answers {
 }
 
 fn completed() -> super::Response<super::Completed> {
-    let graph = graph();
+    let graph = opened(None);
     let mut response = response();
     response
         .save(
@@ -200,7 +200,7 @@ fn response_submitted_payload_is_locked() {
     let mut response = response();
     response
         .save(
-            &graph(),
+            &opened(None),
             answers(vec![(1, Answer::Choice("Oui".to_string()))]),
         )
         .unwrap();
@@ -228,7 +228,7 @@ fn response_submitted_payload_is_locked() {
 
 #[test]
 fn response_completed_payload_lists_only_the_path_in_order_with_labels() {
-    let graph = graph();
+    let graph = opened(None);
     let mut response = response();
     response
         .save(
@@ -369,7 +369,7 @@ fn every_descriptor_example_has_the_keys_of_the_real_payload() {
     let mut in_progress = response();
     in_progress
         .save(
-            &graph(),
+            &opened(None),
             answers(vec![(1, Answer::Choice("Oui".to_string()))]),
         )
         .unwrap();

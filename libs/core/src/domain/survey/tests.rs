@@ -804,7 +804,7 @@ mod lifecycle {
         Node, PhoneNumber, PublicSlug, QuestionId, QuestionKind, QuestionNode, ResponseId,
         SurveyError, SurveyId, Visibility,
     };
-    use crate::OrganizationId;
+    use crate::{MemberId, OrganizationId};
 
     fn at(day: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 3, day, 12, 0, 0).unwrap()
@@ -921,15 +921,29 @@ mod lifecycle {
         .unwrap()
     }
 
-    fn response() -> Response<InProgress> {
+    fn token() -> ResumeToken {
+        ResumeToken::new("resume".to_string()).unwrap()
+    }
+
+    fn survey_of(graph: Graph) -> Survey<Opened> {
+        let mut survey = draft();
+        survey.edit_graph(Some(graph));
+        survey.open(at(1), Some(slug())).unwrap()
+    }
+
+    fn response_to(survey: &Survey<Opened>) -> Response<InProgress> {
         Response::start(
             ResponseId(Uuid::from_u128(3)),
-            SurveyId(Uuid::from_u128(1)),
-            org(),
+            survey,
             None,
-            None,
+            Some(token()),
             at(1),
         )
+        .unwrap()
+    }
+
+    fn response() -> Response<InProgress> {
+        response_to(&opened())
     }
 
     fn text(value: &str) -> Answer {
@@ -1308,9 +1322,12 @@ mod lifecycle {
         assert!(serde_json::from_value::<Survey<Draft>>(json).is_err());
     }
 
-    fn saved(graph: &Graph, answers: Answers) -> Result<Response<InProgress>, SurveyError> {
-        let mut response = response();
-        response.save(graph, answers)?;
+    fn saved(
+        survey: &Survey<Opened>,
+        answers: Answers,
+    ) -> Result<Response<InProgress>, SurveyError> {
+        let mut response = response_to(survey);
+        response.save(survey, answers)?;
         Ok(response)
     }
 
@@ -1335,7 +1352,7 @@ mod lifecycle {
     }
 
     fn answer_one(graph: &Graph, answer: Answer) -> Result<(), SurveyError> {
-        saved(graph, Answers::from([(qid(1), answer)])).map(|_| ())
+        saved(&survey_of(graph.clone()), Answers::from([(qid(1), answer)])).map(|_| ())
     }
 
     fn photos(count: usize) -> Answer {
@@ -1448,7 +1465,7 @@ mod lifecycle {
 
     #[test]
     fn an_answer_to_an_unknown_question_is_refused_on_save_and_on_complete() {
-        let graph = branching(true);
+        let graph = survey_of(branching(true));
         assert_eq!(
             saved(&graph, Answers::from([(qid(99), text("x"))])).err(),
             Some(SurveyError::AnswerUnknownQuestion(qid(99)))
@@ -1479,7 +1496,7 @@ mod lifecycle {
 
     #[test]
     fn a_response_cannot_complete_with_a_required_question_on_its_path_unanswered() {
-        let graph = branching(true);
+        let graph = survey_of(branching(true));
         let response = saved(&graph, Answers::from([(qid(1), choice("Oui"))])).unwrap();
         assert_eq!(
             response.complete(&graph, at(2)).err(),
@@ -1489,7 +1506,7 @@ mod lifecycle {
 
     #[test]
     fn a_response_ignores_a_required_question_off_its_path() {
-        let graph = branching(true);
+        let graph = survey_of(branching(true));
         let response = saved(
             &graph,
             Answers::from([(qid(1), choice("Oui")), (qid(3), text("ok"))]),
@@ -1500,7 +1517,7 @@ mod lifecycle {
 
     #[test]
     fn completion_discards_answers_off_the_path() {
-        let graph = branching(true);
+        let graph = survey_of(branching(true));
         let response = saved(
             &graph,
             Answers::from([
@@ -1530,8 +1547,9 @@ mod lifecycle {
     }
 
     fn identifier_of(graph: &Graph, answers: Answers) -> Option<String> {
-        let response = saved(graph, answers).unwrap();
-        let completed = response.complete(graph, at(2)).unwrap();
+        let survey = survey_of(graph.clone());
+        let response = saved(&survey, answers).unwrap();
+        let completed = response.complete(&survey, at(2)).unwrap();
         completed.identifier_value().map(str::to_string)
     }
 
@@ -1542,13 +1560,174 @@ mod lifecycle {
         assert_eq!(value.as_deref(), Some("jane doe"));
     }
 
+    fn optional_identifier() -> Graph {
+        Graph::new(
+            vec![node(1, QuestionKind::Text, false, true), end(3)],
+            vec![edge(1, 3, Branch::Next)],
+            qid(1),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn a_blank_identifier_counts_as_none() {
-        let graph = identifying(QuestionKind::Text, false);
         assert_eq!(
-            identifier_of(&graph, Answers::from([(qid(1), text("   "))])),
+            identifier_of(
+                &optional_identifier(),
+                Answers::from([(qid(1), text("   "))])
+            ),
             None
         );
+    }
+
+    #[test]
+    fn a_blank_required_identifier_refuses_completion() {
+        let survey = survey_of(identifying(QuestionKind::Text, false));
+        let response = saved(&survey, Answers::from([(qid(1), text("  "))])).unwrap();
+        assert!(response.answers().is_empty());
+        assert_eq!(
+            response.complete(&survey, at(2)).err(),
+            Some(SurveyError::RequiredQuestionUnanswered(qid(1)))
+        );
+    }
+
+    #[test]
+    fn a_blank_answer_is_dropped_at_save_for_every_blank_kind() {
+        let cases = [
+            (QuestionKind::Text, vec![], text("   ")),
+            (QuestionKind::LongText, vec![], text("")),
+            (
+                QuestionKind::MultipleChoice,
+                vec!["A"],
+                Answer::Choices(vec![]),
+            ),
+            (QuestionKind::Photo, vec![], Answer::Photos(vec![])),
+        ];
+        for (kind, options, answer) in cases {
+            let survey = survey_of(one(kind, &options, None));
+            let response = saved(&survey, Answers::from([(qid(1), answer)])).unwrap();
+            assert!(response.answers().is_empty(), "{kind:?}");
+            assert_eq!(
+                response.complete(&survey, at(2)).err(),
+                Some(SurveyError::RequiredQuestionUnanswered(qid(1))),
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stored_blank_answer_is_unanswered_at_completion() {
+        let survey = survey_of(one(QuestionKind::Text, &[], None));
+        let mut json = serde_json::to_value(response_to(&survey)).unwrap();
+        json["answers"] = serde_json::json!({ qid(1).to_string(): { "Text": "  " } });
+        let response = serde_json::from_value::<Response<InProgress>>(json).unwrap();
+        assert_eq!(
+            response.complete(&survey, at(2)).err(),
+            Some(SurveyError::RequiredQuestionUnanswered(qid(1)))
+        );
+    }
+
+    #[test]
+    fn a_save_discards_answers_off_the_path() {
+        let survey = survey_of(branching(true));
+        let response = saved(
+            &survey,
+            Answers::from([
+                (qid(1), choice("Oui")),
+                (qid(3), text("ok")),
+                (qid(4), text("stale")),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(
+            response.answers().keys().copied().collect::<Vec<_>>(),
+            vec![qid(1), qid(3)]
+        );
+    }
+
+    #[test]
+    fn a_response_starts_on_its_survey() {
+        let survey = opened();
+        let response = response_to(&survey);
+        assert_eq!(response.survey_id(), survey.id());
+        assert_eq!(response.organization_id(), survey.organization_id());
+        assert_eq!(response.resume_token(), Some(&token()));
+        assert_eq!(response.member_id(), None);
+    }
+
+    #[test]
+    fn a_public_survey_needs_a_token_and_refuses_a_member() {
+        let survey = opened();
+        let id = ResponseId(Uuid::from_u128(3));
+        let member = Some(MemberId(Uuid::from_u128(4)));
+        assert_eq!(
+            Response::start(id, &survey, member, Some(token()), at(1)).err(),
+            Some(SurveyError::ResponseMemberForbidden)
+        );
+        assert_eq!(
+            Response::start(id, &survey, None, None, at(1)).err(),
+            Some(SurveyError::ResponseResumeTokenRequired)
+        );
+    }
+
+    #[test]
+    fn a_members_survey_needs_a_member_and_refuses_a_token() {
+        let survey = members_draft().open(at(1), None).unwrap();
+        let id = ResponseId(Uuid::from_u128(3));
+        let member = Some(MemberId(Uuid::from_u128(4)));
+        assert_eq!(
+            Response::start(id, &survey, None, None, at(1)).err(),
+            Some(SurveyError::ResponseMemberRequired)
+        );
+        assert_eq!(
+            Response::start(id, &survey, member, Some(token()), at(1)).err(),
+            Some(SurveyError::ResponseResumeTokenForbidden)
+        );
+        let response = Response::start(id, &survey, member, None, at(1)).unwrap();
+        assert_eq!(response.member_id(), member);
+    }
+
+    #[test]
+    fn a_response_refuses_another_survey_on_save_and_on_complete() {
+        let mut other = Survey::new(
+            SurveyId(Uuid::from_u128(5)),
+            org(),
+            "Autre".to_string(),
+            Visibility::Public,
+        )
+        .unwrap();
+        other.edit_graph(Some(branching(true)));
+        let other = other.open(at(1), Some(slug())).unwrap();
+        let mut response = response();
+        assert_eq!(
+            response.save(&other, Answers::new()),
+            Err(SurveyError::ResponseSurveyMismatch)
+        );
+        assert_eq!(
+            response.complete(&other, at(2)).err(),
+            Some(SurveyError::ResponseSurveyMismatch)
+        );
+    }
+
+    #[test]
+    fn a_completed_response_records_whether_its_respondent_is_unique() {
+        let complete = |allow: bool| {
+            let mut draft = draft();
+            draft.edit_allow_multiple_responses(allow);
+            draft.edit_graph(Some(optional_identifier()));
+            let survey = draft.open(at(1), Some(slug())).unwrap();
+            response_to(&survey).complete(&survey, at(2)).unwrap()
+        };
+        assert!(complete(false).unique_respondent());
+        assert!(!complete(true).unique_respondent());
+    }
+
+    #[test]
+    fn an_in_progress_response_cannot_be_deserialized_as_unique() {
+        let mut json = serde_json::to_value(response()).unwrap();
+        assert_eq!(json["unique_respondent"], serde_json::json!(false));
+        json["unique_respondent"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<Response<InProgress>>(json).is_err());
     }
 
     #[test]
