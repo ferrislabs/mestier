@@ -68,7 +68,30 @@ where
         survey_id: SurveyId,
         now: DateTime<Utc>,
     ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
-        let survey = match self.surveys.find(organization_id, survey_id).await? {
+        let record = self.surveys.find(organization_id, survey_id).await?;
+        self.accept(organization_id, record, now).await
+    }
+
+    async fn accepting_locked(
+        &mut self,
+        organization_id: OrganizationId,
+        survey_id: SurveyId,
+        now: DateTime<Utc>,
+    ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
+        let record = self
+            .surveys
+            .find_for_update(organization_id, survey_id)
+            .await?;
+        self.accept(organization_id, record, now).await
+    }
+
+    async fn accept(
+        &mut self,
+        organization_id: OrganizationId,
+        record: Option<SurveyRecord>,
+        now: DateTime<Utc>,
+    ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
+        let survey = match record {
             Some(SurveyRecord::Opened(survey)) => survey,
             Some(SurveyRecord::Draft(_)) => return Err(SurveyError::SurveyNotOpened.into()),
             Some(SurveyRecord::Closed(_)) => return Err(SurveyError::SurveyClosed.into()),
@@ -211,7 +234,9 @@ where
     ) -> Result<Response<Completed>, CoreError> {
         let response = self.locate(organization_id, locator).await?;
         let survey_id = response.survey_id();
-        let (survey, campaign) = self.accepting(organization_id, survey_id, now).await?;
+        let (survey, campaign) = self
+            .accepting_locked(organization_id, survey_id, now)
+            .await?;
         if let Some(cap) = survey.response_cap()
             && self
                 .responses

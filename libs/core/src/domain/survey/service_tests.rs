@@ -635,6 +635,91 @@ async fn the_response_cap_refuses_the_completion_beyond_it() {
     assert!(emitter.names().is_empty());
 }
 
+fn surveys_locked(record: SurveyRecord) -> MockSurveyRepository {
+    let mut surveys = MockSurveyRepository::new();
+    surveys
+        .expect_find_for_update()
+        .withf(|organization_id, id| *organization_id == org() && *id == survey_id())
+        .returning(move |_, _| {
+            let found = record.clone();
+            Box::pin(async move { Ok(Some(found)) })
+        });
+    surveys
+}
+
+fn counting_responses(record: ResponseRecord, count: &Arc<Mutex<u64>>) -> MockResponseRepository {
+    let mut responses = MockResponseRepository::new();
+    responses.expect_find().returning(move |_, _| {
+        let found = record.clone();
+        Box::pin(async move { Ok(Some(found)) })
+    });
+    let read = Arc::clone(count);
+    responses.expect_count_completed().returning(move |_, _| {
+        let counted = *read.lock().unwrap();
+        Box::pin(async move { Ok(counted) })
+    });
+    let write = Arc::clone(count);
+    responses.expect_update().returning(move |response| {
+        *write.lock().unwrap() += 1;
+        let saved = response.clone();
+        Box::pin(async move { Ok(saved) })
+    });
+    responses
+}
+
+#[tokio::test]
+async fn the_last_completion_under_the_cap_is_accepted_and_the_next_refused() {
+    let survey = opened(&Shape {
+        cap: Some(2),
+        allow_multiple: true,
+        ..Shape::default()
+    });
+    let count = Arc::new(Mutex::new(1));
+    let emitter = RecordingEmitter::new();
+    let mut last: Responses<'_> = ResponseService::new(
+        counting_responses(in_progress(&survey, 50, "Jane").into(), &count),
+        surveys_locked(survey.clone().into()),
+        campaigns_holding(None),
+        &emitter,
+    );
+    let mut beyond: Responses<'_> = ResponseService::new(
+        counting_responses(in_progress(&survey, 51, "Jo").into(), &count),
+        surveys_locked(survey.into()),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    last.complete(org(), &member_locator(), at(3))
+        .await
+        .unwrap();
+    refused(
+        beyond.complete(org(), &member_locator(), at(3)).await,
+        SurveyError::ResponseCapReached,
+    );
+    assert_eq!(*count.lock().unwrap(), 2);
+    assert_eq!(emitter.names(), vec!["survey.response_completed"]);
+}
+
+#[tokio::test]
+async fn a_completion_after_the_close_is_refused() {
+    let survey = opened(&Shape::default());
+    let response = in_progress(&survey, 50, "Jane");
+    let closed = survey.close(at(3)).unwrap();
+    let emitter = RecordingEmitter::new();
+    let mut service: Responses<'_> = ResponseService::new(
+        responses_holding(response.into()),
+        surveys_locked(closed.into()),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    refused(
+        service.complete(org(), &member_locator(), at(4)).await,
+        SurveyError::SurveyClosed,
+    );
+    assert!(emitter.names().is_empty());
+}
+
 #[tokio::test]
 async fn deleting_a_survey_with_responses_is_refused() {
     let closed = opened(&Shape::default()).close(at(3)).unwrap();
