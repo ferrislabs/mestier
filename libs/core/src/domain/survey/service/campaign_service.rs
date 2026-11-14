@@ -132,6 +132,24 @@ where
         self.campaigns.delete(organization_id, id).await
     }
 
+    pub async fn advance(
+        &mut self,
+        organization_id: OrganizationId,
+        id: CampaignId,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<CampaignStatus>, CoreError> {
+        let Some(mut campaign) = self.campaigns.find_for_update(organization_id, id).await? else {
+            return Ok(Vec::new());
+        };
+        let steps = steps(campaign.status(), campaign.advance(now));
+        if steps.is_empty() {
+            return Ok(steps);
+        }
+        let saved = self.campaigns.update(&campaign).await?;
+        self.emit_steps(&saved, &steps)?;
+        Ok(steps)
+    }
+
     pub async fn advance_due(
         &mut self,
         now: DateTime<Utc>,

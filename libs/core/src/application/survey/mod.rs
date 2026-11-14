@@ -11,6 +11,7 @@ use crate::domain::survey::ports::SurveyRepository;
 use crate::domain::survey::{PublicSlug, ResumeToken, SurveyError, SurveyRecord};
 use crate::{FeatureFlag, MemberId, OrganizationId};
 
+mod clock;
 pub mod commands;
 mod management;
 mod response;

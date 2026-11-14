@@ -604,6 +604,69 @@ async fn advance_due_emits_ended_only_from_running() {
     assert_eq!(emitter.names(), vec!["survey_campaign.ended"]);
 }
 
+fn locked(campaign: Option<Campaign>) -> MockCampaignRepository {
+    let mut campaigns = MockCampaignRepository::new();
+    campaigns
+        .expect_find_for_update()
+        .withf(|organization_id, id| *organization_id == org() && *id == campaign_id())
+        .times(1)
+        .returning(move |_, _| {
+            let found = campaign.clone();
+            Box::pin(async move { Ok(found) })
+        });
+    campaigns
+}
+
+#[tokio::test]
+async fn advance_rereads_the_campaign_locked_and_emits_started_then_ended() {
+    let scheduled = campaign(Window::new(Some(at(2)), Some(at(4))).unwrap(), at(1));
+    let mut campaigns = locked(Some(scheduled));
+    campaigns
+        .expect_update()
+        .withf(|campaign| campaign.status() == CampaignStatus::Ended)
+        .times(1)
+        .returning(|campaign| {
+            let saved = campaign.clone();
+            Box::pin(async move { Ok(saved) })
+        });
+    let emitter = RecordingEmitter::new();
+    let mut service: Campaigns<'_> =
+        CampaignService::new(campaigns, MockSurveyRepository::new(), &emitter);
+
+    let steps = service.advance(org(), campaign_id(), at(5)).await.unwrap();
+
+    assert_eq!(steps, vec![CampaignStatus::Running, CampaignStatus::Ended]);
+    assert_eq!(
+        emitter.names(),
+        vec!["survey_campaign.started", "survey_campaign.ended"]
+    );
+}
+
+#[tokio::test]
+async fn advance_leaves_an_already_advanced_campaign_untouched() {
+    let running = campaign(Window::new(Some(at(2)), Some(at(4))).unwrap(), at(3));
+    let emitter = RecordingEmitter::new();
+    let mut service: Campaigns<'_> =
+        CampaignService::new(locked(Some(running)), MockSurveyRepository::new(), &emitter);
+
+    let steps = service.advance(org(), campaign_id(), at(3)).await.unwrap();
+
+    assert!(steps.is_empty());
+    assert!(emitter.names().is_empty());
+}
+
+#[tokio::test]
+async fn advance_ignores_a_campaign_deleted_since_it_was_listed() {
+    let emitter = RecordingEmitter::new();
+    let mut service: Campaigns<'_> =
+        CampaignService::new(locked(None), MockSurveyRepository::new(), &emitter);
+
+    let steps = service.advance(org(), campaign_id(), at(5)).await.unwrap();
+
+    assert!(steps.is_empty());
+    assert!(emitter.names().is_empty());
+}
+
 #[tokio::test]
 async fn duplicate_creates_a_draft_without_slug_or_dates() {
     let shape = Shape {

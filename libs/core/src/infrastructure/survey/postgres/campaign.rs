@@ -188,4 +188,28 @@ impl<'tx> CampaignRepository for PgCampaignRepository<'tx> {
 
         campaigns(rows)
     }
+
+    async fn find_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: CampaignId,
+    ) -> Result<Option<Campaign>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            CampaignRow,
+            r#"
+            SELECT id, org_id, name, starts_at, ends_at, status, metadata
+            FROM survey.campaign
+            WHERE org_id = $1 AND id = $2
+            FOR UPDATE
+            "#,
+            organization_id.0,
+            id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(Campaign::try_from).transpose()
+    }
 }

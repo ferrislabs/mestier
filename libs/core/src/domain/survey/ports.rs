@@ -90,6 +90,12 @@ pub trait CampaignRepository: Send {
         now: DateTime<Utc>,
         limit: u64,
     ) -> impl Future<Output = Result<Vec<Campaign>, CoreError>> + Send;
+
+    fn find_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: CampaignId,
+    ) -> impl Future<Output = Result<Option<Campaign>, CoreError>> + Send;
 }
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]

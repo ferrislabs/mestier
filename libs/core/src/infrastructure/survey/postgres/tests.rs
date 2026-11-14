@@ -225,6 +225,16 @@ pub(crate) async fn campaign_contract<C: CampaignRepository, S: SurveyRepository
         Some(running.clone())
     );
 
+    assert_eq!(
+        campaigns.find_for_update(org, running.id()).await?,
+        Some(running.clone())
+    );
+    assert_eq!(
+        campaigns
+            .find_for_update(tenants.other, running.id())
+            .await?,
+        None
+    );
     assert_eq!(campaigns.find(tenants.other, running.id()).await?, None);
     assert_eq!(campaigns.list(tenants.other, 10, 0).await?, (vec![], 0));
     assert_eq!(

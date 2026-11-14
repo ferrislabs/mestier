@@ -4,13 +4,13 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::application::policy::user_subject;
-use crate::application::test_support::{dev_pool, purge};
+use crate::application::test_support::{dev_pool, now_storable, purge};
 use crate::application::{MestierUseCase, default_authorizer};
 use crate::infrastructure::realtime::EventHub;
 use crate::{
-    Answer, Answers, CampaignCommand, CampaignId, CampaignPatch, CreateCampaignCommand,
-    CreateSurveyCommand, ListCampaignsCommand, ListSurveyResponsesCommand, ListSurveysCommand,
-    Metadata, PublicSlug, QuestionId, QuestionKind, ResponseId, ResumeToken,
+    Answer, Answers, CampaignCommand, CampaignId, CampaignPatch, CampaignStatus,
+    CreateCampaignCommand, CreateSurveyCommand, ListCampaignsCommand, ListSurveyResponsesCommand,
+    ListSurveysCommand, Metadata, PublicSlug, QuestionId, QuestionKind, ResponseId, ResumeToken,
     SaveMemberResponseCommand, StartMemberResponseCommand, SurveyBranch, SurveyCommand, SurveyEdge,
     SurveyEndNode, SurveyGraph, SurveyId, SurveyNode, SurveyPatch, SurveyQuestionNode,
     SurveyResponseCommand, SurveyWindow, UpdateCampaignCommand, UpdateSurveyCommand, UserId,
@@ -721,6 +721,121 @@ async fn a_public_survey_of_an_organization_without_the_flag_answers_like_an_unk
         assert_eq!(format!("{disabled:?}"), format!("{missing:?}"));
         not_found(disabled);
         not_found(start);
+        fixture
+    })
+    .await;
+}
+
+async fn scheduled_campaign(
+    usecase: &MestierUseCase,
+    fixture: &Fixture,
+    starts_at: Option<chrono::DateTime<chrono::Utc>>,
+    ends_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> CampaignId {
+    usecase
+        .create_campaign(CreateCampaignCommand {
+            actor: Subject::system(),
+            organization_id: fixture.organization_id,
+            name: "Horloge".to_owned(),
+            window: SurveyWindow::new(starts_at, ends_at).unwrap(),
+            metadata: Metadata::default(),
+        })
+        .await
+        .unwrap()
+        .id()
+}
+
+async fn campaign_events(pool: &PgPool, fixture: &Fixture, id: CampaignId) -> Vec<String> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT name FROM automation.event WHERE org_id = $1 AND payload->>'campaign_id' = $2 ORDER BY id",
+    )
+    .bind(fixture.organization_id.0)
+    .bind(id.0.to_string())
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+async fn campaign_status(
+    usecase: &MestierUseCase,
+    fixture: &Fixture,
+    id: CampaignId,
+) -> CampaignStatus {
+    let (campaigns, _) = usecase
+        .list_campaigns(ListCampaignsCommand {
+            actor: Subject::system(),
+            organization_id: fixture.organization_id,
+            limit: 100,
+            offset: 0,
+        })
+        .await
+        .unwrap();
+    campaigns
+        .into_iter()
+        .find(|campaign| campaign.id() == id)
+        .map(|campaign| campaign.status())
+        .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn the_survey_campaign_clock_emits_each_step_once() {
+    with_fixture(true, async |usecase, fixture| {
+        let pool = dev_pool().await;
+        let now = now_storable();
+        let hours = chrono::Duration::hours;
+        let opening = scheduled_campaign(
+            &usecase,
+            &fixture,
+            Some(now + hours(1)),
+            Some(now + hours(3)),
+        )
+        .await;
+        let skipped = scheduled_campaign(
+            &usecase,
+            &fixture,
+            Some(now + hours(1)),
+            Some(now + hours(2)),
+        )
+        .await;
+        let windowless = fixture.campaign_id;
+        let windowless_before = campaign_events(&pool, &fixture, windowless).await;
+
+        let quiet = campaign_events(&pool, &fixture, opening).await;
+        usecase
+            .advance_survey_campaigns(now + hours(2) + hours(1) / 2)
+            .await
+            .unwrap();
+        usecase
+            .advance_survey_campaigns(now + hours(2) + hours(1) / 2)
+            .await
+            .unwrap();
+        let opened = campaign_events(&pool, &fixture, opening).await;
+        let both = campaign_events(&pool, &fixture, skipped).await;
+        let running = campaign_status(&usecase, &fixture, opening).await;
+        usecase
+            .advance_survey_campaigns(now + hours(4))
+            .await
+            .unwrap();
+        let ended = campaign_events(&pool, &fixture, opening).await;
+        let windowless_after = campaign_events(&pool, &fixture, windowless).await;
+
+        assert!(quiet.is_empty());
+        assert_eq!(opened, vec!["survey_campaign.started"]);
+        assert_eq!(running, CampaignStatus::Running);
+        assert_eq!(
+            both,
+            vec!["survey_campaign.started", "survey_campaign.ended"]
+        );
+        assert_eq!(
+            ended,
+            vec!["survey_campaign.started", "survey_campaign.ended"]
+        );
+        assert_eq!(
+            campaign_status(&usecase, &fixture, skipped).await,
+            CampaignStatus::Ended
+        );
+        assert_eq!(windowless_after, windowless_before);
         fixture
     })
     .await;
