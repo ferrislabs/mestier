@@ -386,7 +386,7 @@ impl ResponseRepository for MemoryResponses {
                             && identifier_of(other) == identifier_of(response))
             });
             if clash {
-                return Err(already_complete());
+                return Err(SurveyError::RespondentAlreadyAnswered.into());
             }
         }
         guard.responses.insert(response.id(), response.clone());

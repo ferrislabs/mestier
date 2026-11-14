@@ -26,7 +26,7 @@ pub fn map_response_error(error: sqlx::Error) -> CoreError {
                     .constraint()
                     .is_some_and(|name| UNIQUE_RESPONDENT_CONSTRAINTS.contains(&name)) =>
         {
-            SurveyError::ResponseAlreadyCompleted.into()
+            SurveyError::RespondentAlreadyAnswered.into()
         }
         _ => crate::infrastructure::postgres::error::map_sqlx_error(error),
     }

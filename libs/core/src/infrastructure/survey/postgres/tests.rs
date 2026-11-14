@@ -135,6 +135,14 @@ fn already_complete<T: std::fmt::Debug>(result: Result<T, CoreError>) {
     );
 }
 
+fn already_answered<T: std::fmt::Debug>(result: Result<T, CoreError>) {
+    let expected = SurveyError::RespondentAlreadyAnswered.to_string();
+    assert!(
+        matches!(&result, Err(CoreError::Conflict(message)) if *message == expected),
+        "expected the respondent already answered error, got {result:?}"
+    );
+}
+
 fn state_changed<T: std::fmt::Debug>(result: Result<T, CoreError>) {
     let expected = SurveyError::SurveyStateChanged.to_string();
     assert!(
@@ -479,7 +487,7 @@ pub(crate) async fn member_uniqueness_contract<S: SurveyRepository, R: ResponseR
         outcomes.push(responses.update(&completed).await);
     }
     assert!(outcomes[0].is_ok());
-    already_complete(outcomes.remove(1));
+    already_answered(outcomes.remove(1));
     Ok(())
 }
 
@@ -508,7 +516,7 @@ pub(crate) async fn identifier_uniqueness_contract<S: SurveyRepository, R: Respo
         outcomes.push(responses.update(&completed).await);
     }
     assert!(outcomes[0].is_ok());
-    already_complete(outcomes.remove(1));
+    already_answered(outcomes.remove(1));
     Ok(())
 }
 
@@ -628,7 +636,7 @@ async fn survey_postgres_honours_the_response_contract() {
 
 #[tokio::test]
 #[ignore = "requires live postgres"]
-async fn survey_postgres_turns_a_second_member_completion_into_already_complete() {
+async fn survey_postgres_turns_a_second_member_completion_into_already_answered() {
     run(async |tx| {
         let tenants = seed_tenants(&tx).await;
         member_uniqueness_contract(
@@ -643,7 +651,7 @@ async fn survey_postgres_turns_a_second_member_completion_into_already_complete(
 
 #[tokio::test]
 #[ignore = "requires live postgres"]
-async fn survey_postgres_turns_a_reused_identifier_into_already_complete() {
+async fn survey_postgres_turns_a_reused_identifier_into_already_answered() {
     run(async |tx| {
         let tenants = seed_tenants(&tx).await;
         identifier_uniqueness_contract(
