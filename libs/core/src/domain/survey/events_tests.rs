@@ -111,13 +111,15 @@ fn opened(campaign: Option<CampaignId>) -> Survey<Opened> {
 }
 
 fn campaign() -> Campaign {
-    Campaign {
-        id: CampaignId(Uuid::from_u128(2)),
-        organization_id: org(),
-        name: "Printemps".to_string(),
-        window: Window::new(Some(at(1)), None).unwrap(),
-        metadata: metadata(&[("season", "spring")]),
-    }
+    Campaign::new(
+        CampaignId(Uuid::from_u128(2)),
+        org(),
+        "Printemps".to_string(),
+        Window::new(Some(at(1)), None).unwrap(),
+        metadata(&[("season", "spring")]),
+        at(1),
+    )
+    .unwrap()
 }
 
 fn response() -> Response<super::InProgress> {
@@ -270,8 +272,8 @@ fn response_completed_payload_lists_only_the_path_in_order_with_labels() {
 #[test]
 fn response_completed_payload_carries_merged_metadata() {
     let campaign = campaign();
-    let survey = opened(Some(campaign.id));
-    let merged = Metadata::merged(&campaign.metadata, survey.metadata());
+    let survey = opened(Some(campaign.id()));
+    let merged = Metadata::merged(campaign.metadata(), survey.metadata());
     let event = SurveyResponseCompleted {
         response: completed(),
         survey,
@@ -363,7 +365,7 @@ fn every_emitted_event_has_a_descriptor() {
 #[test]
 fn every_descriptor_example_has_the_keys_of_the_real_payload() {
     let campaign = campaign();
-    let survey = opened(Some(campaign.id));
+    let survey = opened(Some(campaign.id()));
     let mut in_progress = response();
     in_progress
         .save(
@@ -383,7 +385,7 @@ fn every_descriptor_example_has_the_keys_of_the_real_payload() {
             "survey.response_submitted",
             SurveyResponseSubmitted {
                 response: in_progress,
-                campaign_id: Some(campaign.id),
+                campaign_id: Some(campaign.id()),
             }
             .payload(),
         ),

@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::CampaignId;
 use super::error::SurveyError;
@@ -51,7 +52,9 @@ impl Window {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CampaignStatus {
     Scheduled,
@@ -59,23 +62,141 @@ pub enum CampaignStatus {
     Ended,
 }
 
+impl CampaignStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Scheduled => "SCHEDULED",
+            Self::Running => "RUNNING",
+            Self::Ended => "ENDED",
+        }
+    }
+
+    fn of(window: &Window, now: DateTime<Utc>) -> Self {
+        if window.starts_at.is_some_and(|start| now < start) {
+            Self::Scheduled
+        } else if window.ends_at.is_some_and(|end| now >= end) {
+            Self::Ended
+        } else {
+            Self::Running
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "CampaignDraft")]
 pub struct Campaign {
-    pub id: CampaignId,
-    pub organization_id: OrganizationId,
-    pub name: String,
-    pub window: Window,
-    pub metadata: Metadata,
+    id: CampaignId,
+    organization_id: OrganizationId,
+    name: String,
+    window: Window,
+    metadata: Metadata,
+    status: CampaignStatus,
+}
+
+#[derive(Deserialize)]
+struct CampaignDraft {
+    id: CampaignId,
+    organization_id: OrganizationId,
+    name: String,
+    window: Window,
+    metadata: Metadata,
+    status: CampaignStatus,
+}
+
+impl TryFrom<CampaignDraft> for Campaign {
+    type Error = SurveyError;
+
+    fn try_from(draft: CampaignDraft) -> Result<Self, Self::Error> {
+        check_name(&draft.name)?;
+        Ok(Self {
+            id: draft.id,
+            organization_id: draft.organization_id,
+            name: draft.name,
+            window: draft.window,
+            metadata: draft.metadata,
+            status: draft.status,
+        })
+    }
+}
+
+fn check_name(name: &str) -> Result<(), SurveyError> {
+    if name.trim().is_empty() {
+        Err(SurveyError::CampaignNameEmpty)
+    } else {
+        Ok(())
+    }
 }
 
 impl Campaign {
+    pub fn new(
+        id: CampaignId,
+        organization_id: OrganizationId,
+        name: String,
+        window: Window,
+        metadata: Metadata,
+        now: DateTime<Utc>,
+    ) -> Result<Self, SurveyError> {
+        check_name(&name)?;
+        Ok(Self {
+            id,
+            organization_id,
+            name,
+            status: CampaignStatus::of(&window, now),
+            window,
+            metadata,
+        })
+    }
+
+    pub fn id(&self) -> CampaignId {
+        self.id
+    }
+
+    pub fn organization_id(&self) -> OrganizationId {
+        self.organization_id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn window(&self) -> &Window {
+        &self.window
+    }
+
+    pub fn metadata(&self) -> &Metadata {
+        &self.metadata
+    }
+
+    pub fn status(&self) -> CampaignStatus {
+        self.status
+    }
+
     pub fn status_at(&self, now: DateTime<Utc>) -> CampaignStatus {
-        if self.window.starts_at.is_some_and(|start| now < start) {
-            CampaignStatus::Scheduled
-        } else if self.window.ends_at.is_some_and(|end| now >= end) {
-            CampaignStatus::Ended
+        CampaignStatus::of(&self.window, now)
+    }
+
+    pub fn advance(&mut self, now: DateTime<Utc>) -> Option<CampaignStatus> {
+        let target = self.status_at(now);
+        if target > self.status {
+            self.status = target;
+            Some(target)
         } else {
-            CampaignStatus::Running
+            None
         }
+    }
+
+    pub fn rename(&mut self, name: String) -> Result<(), SurveyError> {
+        check_name(&name)?;
+        self.name = name;
+        Ok(())
+    }
+
+    pub fn reschedule(&mut self, window: Window, now: DateTime<Utc>) -> Option<CampaignStatus> {
+        self.window = window;
+        self.advance(now)
+    }
+
+    pub fn edit_metadata(&mut self, metadata: Metadata) {
+        self.metadata = metadata;
     }
 }

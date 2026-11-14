@@ -263,7 +263,7 @@ impl Survey<Opened> {
         let Some(campaign) = campaign else {
             return Ok(());
         };
-        let window = campaign.window;
+        let window = campaign.window();
         if window.starts_at().is_some_and(|start| now < start) {
             return Err(SurveyError::CampaignNotStarted);
         }

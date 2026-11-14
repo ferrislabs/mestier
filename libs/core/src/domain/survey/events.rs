@@ -153,7 +153,7 @@ impl DomainEvent for SurveyCampaignStarted {
     }
 
     fn subject(&self) -> EventSubject {
-        EventSubject::new("survey_campaign", self.campaign.id.0)
+        EventSubject::new("survey_campaign", self.campaign.id().0)
     }
 
     fn payload(&self) -> Value {
@@ -175,7 +175,7 @@ impl DomainEvent for SurveyCampaignEnded {
     }
 
     fn subject(&self) -> EventSubject {
-        EventSubject::new("survey_campaign", self.campaign.id.0)
+        EventSubject::new("survey_campaign", self.campaign.id().0)
     }
 
     fn payload(&self) -> Value {
@@ -198,14 +198,14 @@ fn metadata_payload(metadata: &Metadata) -> Value {
 
 fn campaign_payload(campaign: &Campaign) -> Value {
     json!({
-        "campaign_id": campaign.id.0,
+        "campaign_id": campaign.id().0,
         "campaign": {
-            "id": campaign.id.0,
-            "organization_id": campaign.organization_id.0,
-            "name": campaign.name,
-            "starts_at": campaign.window.starts_at(),
-            "ends_at": campaign.window.ends_at(),
-            "metadata": metadata_payload(&campaign.metadata),
+            "id": campaign.id().0,
+            "organization_id": campaign.organization_id().0,
+            "name": campaign.name(),
+            "starts_at": campaign.window().starts_at(),
+            "ends_at": campaign.window().ends_at(),
+            "metadata": metadata_payload(campaign.metadata()),
         },
     })
 }

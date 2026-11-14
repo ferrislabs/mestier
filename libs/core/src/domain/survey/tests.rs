@@ -892,13 +892,15 @@ mod lifecycle {
     }
 
     fn campaign(starts: Option<u32>, ends: Option<u32>) -> Campaign {
-        Campaign {
-            id: CampaignId(Uuid::from_u128(2)),
-            organization_id: org(),
-            name: "Printemps".to_string(),
-            window: Window::new(starts.map(at), ends.map(at)).unwrap(),
-            metadata: Metadata::default(),
-        }
+        Campaign::new(
+            CampaignId(Uuid::from_u128(2)),
+            org(),
+            "Printemps".to_string(),
+            Window::new(starts.map(at), ends.map(at)).unwrap(),
+            Metadata::default(),
+            at(1),
+        )
+        .unwrap()
     }
 
     fn response() -> Response<InProgress> {
@@ -979,6 +981,113 @@ mod lifecycle {
             self::campaign(None, None).status_at(at(1)),
             CampaignStatus::Running
         );
+    }
+
+    #[test]
+    fn a_campaign_with_a_blank_name_is_refused() {
+        assert_eq!(
+            Campaign::new(
+                CampaignId(Uuid::from_u128(2)),
+                org(),
+                "  ".to_string(),
+                Window::new(None, None).unwrap(),
+                Metadata::default(),
+                at(1),
+            ),
+            Err(SurveyError::CampaignNameEmpty)
+        );
+    }
+
+    #[test]
+    fn a_new_campaign_starts_in_the_status_of_its_clock() {
+        let campaign = campaign(Some(2), Some(5));
+        assert_eq!(campaign.status(), CampaignStatus::Scheduled);
+        assert_eq!(campaign.id(), CampaignId(Uuid::from_u128(2)));
+        assert_eq!(campaign.organization_id(), org());
+        assert_eq!(campaign.name(), "Printemps");
+        assert_eq!(campaign.window().starts_at(), Some(at(2)));
+        assert_eq!(campaign.metadata(), &Metadata::default());
+        assert_eq!(
+            self::campaign(None, Some(1)).status(),
+            CampaignStatus::Ended
+        );
+    }
+
+    #[test]
+    fn a_campaign_advances_scheduled_then_running_then_ended() {
+        let mut campaign = campaign(Some(2), Some(5));
+        assert_eq!(campaign.advance(at(1)), None);
+        assert_eq!(campaign.advance(at(2)), Some(CampaignStatus::Running));
+        assert_eq!(campaign.advance(at(3)), None);
+        assert_eq!(campaign.advance(at(5)), Some(CampaignStatus::Ended));
+        assert_eq!(campaign.advance(at(6)), None);
+        assert_eq!(campaign.status(), CampaignStatus::Ended);
+    }
+
+    #[test]
+    fn a_campaign_whose_window_passed_jumps_to_ended() {
+        let mut campaign = campaign(Some(2), Some(5));
+        assert_eq!(campaign.advance(at(9)), Some(CampaignStatus::Ended));
+        assert_eq!(campaign.status(), CampaignStatus::Ended);
+    }
+
+    #[test]
+    fn a_campaign_never_goes_back() {
+        let mut campaign = campaign(Some(2), Some(5));
+        campaign.advance(at(3));
+        assert_eq!(campaign.advance(at(1)), None);
+        assert_eq!(campaign.status(), CampaignStatus::Running);
+    }
+
+    #[test]
+    fn a_rescheduled_campaign_advances_but_never_regresses() {
+        let mut running = campaign(Some(1), None);
+        assert_eq!(running.status(), CampaignStatus::Running);
+        assert_eq!(
+            running.reschedule(Window::new(Some(at(8)), None).unwrap(), at(2)),
+            None
+        );
+        assert_eq!(running.status(), CampaignStatus::Running);
+        assert_eq!(running.window().starts_at(), Some(at(8)));
+        let mut ended = campaign(None, Some(1));
+        assert_eq!(
+            ended.reschedule(Window::new(None, Some(at(9))).unwrap(), at(2)),
+            None
+        );
+        assert_eq!(ended.status(), CampaignStatus::Ended);
+        let mut scheduled = campaign(Some(5), None);
+        assert_eq!(
+            scheduled.reschedule(Window::new(None, Some(at(3))).unwrap(), at(4)),
+            Some(CampaignStatus::Ended)
+        );
+    }
+
+    #[test]
+    fn a_campaign_can_be_renamed_and_its_metadata_edited() {
+        let mut campaign = campaign(None, None);
+        assert_eq!(
+            campaign.rename(" ".to_string()),
+            Err(SurveyError::CampaignNameEmpty)
+        );
+        campaign.rename("Automne".to_string()).unwrap();
+        assert_eq!(campaign.name(), "Automne");
+        let metadata = Metadata::new(BTreeMap::from([("k".to_string(), "v".to_string())])).unwrap();
+        campaign.edit_metadata(metadata.clone());
+        assert_eq!(campaign.metadata(), &metadata);
+    }
+
+    #[test]
+    fn a_campaign_survives_a_serde_round_trip_and_refuses_a_blank_name() {
+        let campaign = campaign(Some(2), Some(5));
+        let json = serde_json::to_value(&campaign).unwrap();
+        assert_eq!(json["status"], serde_json::json!("SCHEDULED"));
+        assert_eq!(
+            serde_json::from_value::<Campaign>(json.clone()).unwrap(),
+            campaign
+        );
+        let mut blank = json;
+        blank["name"] = serde_json::json!(" ");
+        assert!(serde_json::from_value::<Campaign>(blank).is_err());
     }
 
     #[test]
