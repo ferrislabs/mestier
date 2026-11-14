@@ -2459,6 +2459,18 @@ export namespace Schemas {
     offset: number | null;
     sorts: Array<RowSort>;
   }>;
+  export type QuestionId = string;
+  export type QuestionKind =
+    | "TEXT"
+    | "LONG_TEXT"
+    | "NUMBER"
+    | "SINGLE_CHOICE"
+    | "MULTIPLE_CHOICE"
+    | "DATE"
+    | "DATETIME"
+    | "PHONE"
+    | "EMAIL"
+    | "PHOTO";
   export type QuoteInvoicingBlockerResponse = "QUOTE_NOT_ACCEPTED" | "QUOTE_ALREADY_INVOICED" | "DEPOSITS_COVER_QUOTE";
   export type QuoteInvoicingResponse = {
     blocker?: (null | QuoteInvoicingBlockerResponse) | undefined;
@@ -2674,7 +2686,17 @@ export namespace Schemas {
     steps: Array<RunStepResponse>;
   };
   export type SaveDocumentContentRequest = { content: Record<string, unknown>; revision: number };
-  export type SaveSurveyAnswersRequest = { answers: Record<string, Record<string, unknown>> };
+  export type SurveyAnswerSchema =
+    | { Text: string }
+    | { Number: number }
+    | { Choice: string }
+    | { Choices: Array<string> }
+    | { Date: string }
+    | { DateTime: string }
+    | { Phone: string }
+    | { Email: string }
+    | { Photos: Array<string> };
+  export type SaveSurveyAnswersRequest = { answers: Record<string, unknown> };
   export type WorkflowLayoutDto = Record<string, unknown>;
   export type SaveWorkflowVersionRequest = { graph: GraphDto; layout?: (null | WorkflowLayoutDto) | undefined };
   export type SavedDocumentResponse = { revision: number; updated_at: string };
@@ -2795,6 +2817,24 @@ export namespace Schemas {
     organization_id: OrganizationId;
     rate_bp: number;
   };
+  export type SurveyBranchSchema = "NEXT" | "THEN" | "ELSE";
+  export type SurveyConditionNodeSchema = { checked: boolean; id: QuestionId; option: string; question: QuestionId };
+  export type SurveyEdgeSchema = { branch: SurveyBranchSchema; from: QuestionId; to: QuestionId };
+  export type SurveyEndNodeSchema = { id: QuestionId; message?: (string | null) | undefined };
+  export type SurveyQuestionNodeSchema = {
+    id: QuestionId;
+    identifier?: boolean | undefined;
+    kind: QuestionKind;
+    label: string;
+    max_photos?: (number | null) | undefined;
+    options?: Array<string> | undefined;
+    required: boolean;
+  };
+  export type SurveyNodeSchema =
+    | (SurveyQuestionNodeSchema & { type: "QUESTION" })
+    | (SurveyConditionNodeSchema & { type: "CONDITION" })
+    | (SurveyEndNodeSchema & { type: "END" });
+  export type SurveyGraphSchema = { edges: Array<SurveyEdgeSchema>; nodes: Array<SurveyNodeSchema>; start: QuestionId };
   export type SurveyId = string;
   export type SurveyStatus = "DRAFT" | "OPENED" | "CLOSED";
   export type TableCellLabelResponse = { label?: (string | null) | undefined; missing: boolean };
@@ -3118,7 +3158,7 @@ export namespace Schemas {
     allow_multiple_responses: boolean | null;
     campaign_id: null | CampaignId;
     description: string | null;
-    graph: Record<string, unknown> | null;
+    graph: null | SurveyGraphSchema;
     metadata: Record<string, string> | null;
     response_cap: number | null;
     title: string | null;
@@ -11030,11 +11070,7 @@ export namespace Endpoints {
     };
     responses: {
       200: {
-        data: {
-          answers: Record<string, Record<string, unknown>>;
-          id: Schemas.ResponseId;
-          status: Schemas.ResponseStatus;
-        };
+        data: { answers: Record<string, unknown>; id: Schemas.ResponseId; status: Schemas.ResponseStatus };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       401: unknown;
@@ -11053,11 +11089,7 @@ export namespace Endpoints {
     };
     responses: {
       200: {
-        data: {
-          answers: Record<string, Record<string, unknown>>;
-          id: Schemas.ResponseId;
-          status: Schemas.ResponseStatus;
-        };
+        data: { answers: Record<string, unknown>; id: Schemas.ResponseId; status: Schemas.ResponseStatus };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       401: unknown;
@@ -11078,7 +11110,7 @@ export namespace Endpoints {
       200: {
         data: {
           description?: (string | null) | undefined;
-          graph: Record<string, unknown>;
+          graph: Schemas.SurveyGraphSchema;
           id: Schemas.SurveyId;
           title: string;
           visibility: Schemas.Visibility;
@@ -11099,12 +11131,12 @@ export namespace Endpoints {
       path: { organization_id: string; survey_id: string };
     };
     responses: {
+      200: {
+        data: { answers: Record<string, unknown>; id: Schemas.ResponseId; status: Schemas.ResponseStatus };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
       201: {
-        data: {
-          answers: Record<string, Record<string, unknown>>;
-          id: Schemas.ResponseId;
-          status: Schemas.ResponseStatus;
-        };
+        data: { answers: Record<string, unknown>; id: Schemas.ResponseId; status: Schemas.ResponseStatus };
         pagination?: (null | Schemas.PaginationMetadata) | undefined;
       };
       401: unknown;
@@ -13616,6 +13648,31 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type get_GetSurveyCampaign = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; campaign_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          ends_at?: (string | null) | undefined;
+          id: Schemas.CampaignId;
+          metadata: Record<string, string>;
+          name: string;
+          organization_id: Schemas.OrganizationId;
+          starts_at?: (string | null) | undefined;
+          status: Schemas.CampaignStatus;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type delete_DeleteSurveyCampaign = {
     method: "DELETE";
     path: "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}";
@@ -13663,7 +13720,7 @@ export namespace Endpoints {
     responses: {
       200: {
         data: {
-          answers: Record<string, Record<string, unknown>>;
+          answers: Record<string, unknown>;
           completed_at?: (string | null) | undefined;
           id: Schemas.ResponseId;
           member_id?: (null | Schemas.MemberId) | undefined;
@@ -13702,7 +13759,7 @@ export namespace Endpoints {
           campaign_id?: (null | Schemas.CampaignId) | undefined;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
-          graph?: (Record<string, unknown> | null) | undefined;
+          graph?: (null | Schemas.SurveyGraphSchema) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13736,7 +13793,7 @@ export namespace Endpoints {
           campaign_id?: (null | Schemas.CampaignId) | undefined;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
-          graph?: (Record<string, unknown> | null) | undefined;
+          graph?: (null | Schemas.SurveyGraphSchema) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13769,7 +13826,7 @@ export namespace Endpoints {
           campaign_id?: (null | Schemas.CampaignId) | undefined;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
-          graph?: (Record<string, unknown> | null) | undefined;
+          graph?: (null | Schemas.SurveyGraphSchema) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13812,7 +13869,7 @@ export namespace Endpoints {
           campaign_id?: (null | Schemas.CampaignId) | undefined;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
-          graph?: (Record<string, unknown> | null) | undefined;
+          graph?: (null | Schemas.SurveyGraphSchema) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13846,7 +13903,7 @@ export namespace Endpoints {
           campaign_id?: (null | Schemas.CampaignId) | undefined;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
-          graph?: (Record<string, unknown> | null) | undefined;
+          graph?: (null | Schemas.SurveyGraphSchema) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13879,7 +13936,7 @@ export namespace Endpoints {
           campaign_id?: (null | Schemas.CampaignId) | undefined;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
-          graph?: (Record<string, unknown> | null) | undefined;
+          graph?: (null | Schemas.SurveyGraphSchema) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13912,7 +13969,7 @@ export namespace Endpoints {
           campaign_id?: (null | Schemas.CampaignId) | undefined;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
-          graph?: (Record<string, unknown> | null) | undefined;
+          graph?: (null | Schemas.SurveyGraphSchema) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13942,7 +13999,7 @@ export namespace Endpoints {
     responses: {
       200: {
         data: Array<{
-          answers: Record<string, Record<string, unknown>>;
+          answers: Record<string, unknown>;
           completed_at?: (string | null) | undefined;
           id: Schemas.ResponseId;
           member_id?: (null | Schemas.MemberId) | undefined;
@@ -15834,6 +15891,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/entries": Endpoints.get_ListSupportTicketEntries;
     "/api/v1/organizations/{organization_id}/surcharges": Endpoints.get_ListSurcharges;
     "/api/v1/organizations/{organization_id}/survey-campaigns": Endpoints.get_ListSurveyCampaigns;
+    "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}": Endpoints.get_GetSurveyCampaign;
     "/api/v1/organizations/{organization_id}/survey-responses/{response_id}": Endpoints.get_GetSurveyResponse;
     "/api/v1/organizations/{organization_id}/surveys": Endpoints.get_ListSurveys;
     "/api/v1/organizations/{organization_id}/surveys/{survey_id}": Endpoints.get_GetSurvey;
