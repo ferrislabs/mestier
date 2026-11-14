@@ -5,13 +5,11 @@ import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
 import { Switch } from '#/components/ui/switch'
 import { Textarea } from '#/components/ui/textarea'
+import { NdvPanel } from '#/pages/automation/ui/ndv-panel'
 import { MAX_PHOTOS_LIMIT } from '#/pages/survey/lib/graph-validation'
 import {
-	CONDITION_ENTRY,
-	END_ENTRY,
 	isChoiceKind,
 	isIdentifierKind,
-	questionKindEntry,
 } from '#/pages/survey/lib/question-kinds'
 import { questionLabel } from '#/pages/survey/lib/survey-graph'
 import type {
@@ -324,18 +322,24 @@ function EndDetails({
 	)
 }
 
-function heading(node: GraphNode): { title: string; icon: ReactNode } {
-	if (node.type === 'QUESTION') {
-		const entry = questionKindEntry(node.kind)
-		const Icon = entry.icon
-		return { title: entry.title, icon: <Icon className="size-4" aria-hidden /> }
-	}
-	const entry = node.type === 'CONDITION' ? CONDITION_ENTRY : END_ENTRY
-	const Icon = entry.icon
-	return { title: entry.title, icon: <Icon className="size-4" aria-hidden /> }
+export function NodeDetailsPanes({
+	settings,
+	preview,
+}: {
+	settings: ReactNode
+	preview: ReactNode
+}) {
+	return (
+		<div className="grid min-h-0 grid-cols-1 divide-y divide-border lg:col-span-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0 lg:overflow-hidden">
+			<NdvPanel title="Paramètres" tone="center">
+				<form onSubmit={(event) => event.preventDefault()}>{settings}</form>
+			</NdvPanel>
+			{preview}
+		</div>
+	)
 }
 
-export function NodeDetailsPanel({
+export function NodeSettings({
 	node,
 	issues,
 	choiceQuestions,
@@ -350,7 +354,6 @@ export function NodeDetailsPanel({
 	onRemoveOption,
 	onMakeStart,
 	onDelete,
-	onClose,
 }: {
 	node: GraphNode
 	issues: readonly string[]
@@ -366,66 +369,43 @@ export function NodeDetailsPanel({
 	onRemoveOption: (position: number) => void
 	onMakeStart: () => void
 	onDelete: () => void
-	onClose: () => void
 }) {
-	const { title, icon } = heading(node)
 	return (
-		<section aria-label="Détails du nœud" className="flex min-h-0 flex-col">
-			<header className="flex items-center justify-between gap-2 border-b px-4 py-3">
-				<h2 className="flex items-center gap-2 font-medium">
-					{icon}
-					{title}
-					{isStart ? (
-						<span className="rounded bg-brand-soft px-1.5 py-0.5 text-[11px] text-primary">
-							Départ
-						</span>
-					) : null}
-				</h2>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Fermer les détails"
-					onClick={onClose}
+		<div className="grid content-start gap-4">
+			{issues.length > 0 ? (
+				<ul
+					aria-label="Problèmes de ce nœud"
+					className="grid gap-1 rounded-md border border-destructive/30 bg-destructive-soft px-3 py-2 text-destructive text-xs"
 				>
-					<X aria-hidden />
-				</Button>
-			</header>
-			<div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4">
-				{issues.length > 0 ? (
-					<ul
-						aria-label="Problèmes de ce nœud"
-						className="grid gap-1 rounded-md border border-destructive/30 bg-destructive-soft px-3 py-2 text-destructive text-xs"
-					>
-						{issues.map((message) => (
-							<li key={message}>{message}</li>
-						))}
-					</ul>
-				) : null}
-				{node.type === 'QUESTION' ? (
-					<QuestionDetails
-						node={node}
-						optionKeys={optionKeys}
-						readOnly={readOnly}
-						otherIdentifier={otherIdentifier}
-						onChange={onChange}
-						onAddOption={onAddOption}
-						onRemoveOption={onRemoveOption}
-					/>
-				) : node.type === 'CONDITION' ? (
-					<ConditionDetails
-						node={node}
-						choiceQuestions={choiceQuestions}
-						conditionQuestion={conditionQuestion}
-						sentence={sentence}
-						readOnly={readOnly}
-						onChange={onChange}
-					/>
-				) : (
-					<EndDetails node={node} readOnly={readOnly} onChange={onChange} />
-				)}
-			</div>
+					{issues.map((message) => (
+						<li key={message}>{message}</li>
+					))}
+				</ul>
+			) : null}
+			{node.type === 'QUESTION' ? (
+				<QuestionDetails
+					node={node}
+					optionKeys={optionKeys}
+					readOnly={readOnly}
+					otherIdentifier={otherIdentifier}
+					onChange={onChange}
+					onAddOption={onAddOption}
+					onRemoveOption={onRemoveOption}
+				/>
+			) : node.type === 'CONDITION' ? (
+				<ConditionDetails
+					node={node}
+					choiceQuestions={choiceQuestions}
+					conditionQuestion={conditionQuestion}
+					sentence={sentence}
+					readOnly={readOnly}
+					onChange={onChange}
+				/>
+			) : (
+				<EndDetails node={node} readOnly={readOnly} onChange={onChange} />
+			)}
 			{readOnly ? null : (
-				<footer className="flex flex-wrap justify-between gap-2 border-t px-4 py-3">
+				<div className="flex flex-wrap justify-between gap-2 border-t pt-4">
 					{node.type === 'QUESTION' && !isStart ? (
 						<Button variant="outline" size="sm" onClick={onMakeStart}>
 							Définir comme départ
@@ -437,8 +417,8 @@ export function NodeDetailsPanel({
 						<Trash2 aria-hidden />
 						Supprimer le nœud
 					</Button>
-				</footer>
+				</div>
 			)}
-		</section>
+		</div>
 	)
 }
