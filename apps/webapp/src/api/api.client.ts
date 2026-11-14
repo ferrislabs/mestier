@@ -11099,6 +11099,23 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type post_UploadMemberSurveyPhoto = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/photos";
+    requestFormat: "text";
+    parameters: {
+      path: { organization_id: string; response_id: string };
+    };
+    responses: {
+      201: { data: { key: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+      413: unknown;
+      422: unknown;
+    };
+  };
   export type get_OpenMemberSurvey = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}";
@@ -14770,6 +14787,122 @@ export namespace Endpoints {
       404: unknown;
     };
   };
+  export type get_OpenPublicSurvey = {
+    method: "GET";
+    path: "/api/v1/public/surveys/{slug}";
+    requestFormat: "json";
+    parameters: {
+      path: { slug: string };
+    };
+    responses: {
+      200: {
+        data: {
+          description?: (string | null) | undefined;
+          graph: Schemas.SurveyGraphSchema;
+          id: Schemas.SurveyId;
+          title: string;
+          visibility: Schemas.Visibility;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      404: unknown;
+      409: unknown;
+      429: unknown;
+    };
+  };
+  export type post_StartPublicSurveyResponse = {
+    method: "POST";
+    path: "/api/v1/public/surveys/{slug}/responses";
+    requestFormat: "json";
+    parameters: {
+      path: { slug: string };
+    };
+    responses: {
+      201: {
+        data: {
+          answers: Record<string, unknown>;
+          id: Schemas.ResponseId;
+          resume_token: string;
+          status: Schemas.ResponseStatus;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      404: unknown;
+      409: unknown;
+      429: unknown;
+    };
+  };
+  export type get_ResumePublicSurveyResponse = {
+    method: "GET";
+    path: "/api/v1/public/surveys/{slug}/responses/{resume_token}";
+    requestFormat: "json";
+    parameters: {
+      path: { slug: string; resume_token: string };
+    };
+    responses: {
+      200: {
+        data: { answers: Record<string, unknown>; id: Schemas.ResponseId; status: Schemas.ResponseStatus };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      404: unknown;
+      409: unknown;
+      429: unknown;
+    };
+  };
+  export type put_SavePublicSurveyResponse = {
+    method: "PUT";
+    path: "/api/v1/public/surveys/{slug}/responses/{resume_token}";
+    requestFormat: "json";
+    parameters: {
+      path: { slug: string; resume_token: string };
+
+      body: Schemas.SaveSurveyAnswersRequest;
+    };
+    responses: {
+      200: {
+        data: { answers: Record<string, unknown>; id: Schemas.ResponseId; status: Schemas.ResponseStatus };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      404: unknown;
+      409: unknown;
+      422: unknown;
+      429: unknown;
+    };
+  };
+  export type post_CompletePublicSurveyResponse = {
+    method: "POST";
+    path: "/api/v1/public/surveys/{slug}/responses/{resume_token}/complete";
+    requestFormat: "json";
+    parameters: {
+      path: { slug: string; resume_token: string };
+    };
+    responses: {
+      200: {
+        data: { answers: Record<string, unknown>; id: Schemas.ResponseId; status: Schemas.ResponseStatus };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      404: unknown;
+      409: unknown;
+      422: unknown;
+      429: unknown;
+    };
+  };
+  export type post_UploadPublicSurveyPhoto = {
+    method: "POST";
+    path: "/api/v1/public/surveys/{slug}/responses/{resume_token}/photos";
+    requestFormat: "text";
+    parameters: {
+      path: { slug: string; resume_token: string };
+    };
+    responses: {
+      201: { data: { key: string }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      404: unknown;
+      409: unknown;
+      413: unknown;
+      422: unknown;
+      429: unknown;
+    };
+  };
   export type get_GetQuote = {
     method: "GET";
     path: "/api/v1/quotes/{quote_id}";
@@ -15905,6 +16038,8 @@ export type EndpointByMethod = {
     "/api/v1/projects/{project_id}/billing-summary": Endpoints.get_GetProjectBillingSummary;
     "/api/v1/projects/{project_id}/invoices": Endpoints.get_ListProjectInvoices;
     "/api/v1/projects/{project_id}/supplier-costs": Endpoints.get_GetProjectSupplierCosts;
+    "/api/v1/public/surveys/{slug}": Endpoints.get_OpenPublicSurvey;
+    "/api/v1/public/surveys/{slug}/responses/{resume_token}": Endpoints.get_ResumePublicSurveyResponse;
     "/api/v1/quotes/{quote_id}": Endpoints.get_GetQuote;
     "/api/v1/quotes/{quote_id}/invoicing": Endpoints.get_GetQuoteInvoicing;
     "/api/v1/quotes/{quote_id}/pdf": Endpoints.get_ExportQuotePdf;
@@ -16017,6 +16152,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/maintenance/lines/{line_id}/interventions": Endpoints.post_RecordMaintenanceIntervention;
     "/api/v1/organizations/{organization_id}/maintenance/recap/plan": Endpoints.post_PlanMaintenanceLines;
     "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/complete": Endpoints.post_CompleteMemberSurveyResponse;
+    "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/photos": Endpoints.post_UploadMemberSurveyPhoto;
     "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}/responses": Endpoints.post_StartMemberSurveyResponse;
     "/api/v1/organizations/{organization_id}/members": Endpoints.post_CreateMember;
     "/api/v1/organizations/{organization_id}/members/{member_id}/archive": Endpoints.post_ArchiveMember;
@@ -16061,6 +16197,9 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/tasks/{task_id}/comments": Endpoints.post_CreateTaskComment;
     "/api/v1/projects/{project_id}/invoices/deposit": Endpoints.post_IssueProjectDeposit;
     "/api/v1/projects/{project_id}/invoices/final": Endpoints.post_IssueProjectFinalInvoice;
+    "/api/v1/public/surveys/{slug}/responses": Endpoints.post_StartPublicSurveyResponse;
+    "/api/v1/public/surveys/{slug}/responses/{resume_token}/complete": Endpoints.post_CompletePublicSurveyResponse;
+    "/api/v1/public/surveys/{slug}/responses/{resume_token}/photos": Endpoints.post_UploadPublicSurveyPhoto;
     "/api/v1/quotes/{quote_id}/invoices": Endpoints.post_CreateInvoiceFromQuote;
     "/api/v1/quotes/{quote_id}/plan": Endpoints.post_CreateQuotePlan;
     "/api/v1/quotes/{quote_id}/revision": Endpoints.post_ReviseQuote;
@@ -16110,6 +16249,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/support/settings": Endpoints.put_ReplaceSupportSettings;
     "/api/v1/organizations/{organization_id}/support/tickets/{ticket_id}/assignee": Endpoints.put_AssignSupportTicket;
     "/api/v1/organizations/{organization_id}/surcharges/{surcharge_id}": Endpoints.put_UpdateSurcharge;
+    "/api/v1/public/surveys/{slug}/responses/{resume_token}": Endpoints.put_SavePublicSurveyResponse;
     "/api/v1/supplier-invoice-lines/{supplier_invoice_line_id}/allocations": Endpoints.put_ReplaceSupplierInvoiceLineAllocations;
   };
   delete: {
