@@ -93,7 +93,7 @@ where
     ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
         let survey = match record {
             Some(SurveyRecord::Opened(survey)) => survey,
-            Some(SurveyRecord::Draft(_)) => return Err(SurveyError::SurveyNotOpened.into()),
+            Some(SurveyRecord::Draft(_)) => return Err(SurveyError::SurveyNotFound.into()),
             Some(SurveyRecord::Closed(_)) => return Err(SurveyError::SurveyClosed.into()),
             None => return Err(SurveyError::SurveyNotFound.into()),
         };

@@ -960,3 +960,52 @@ fn the_respondent_view_of_a_members_survey_has_no_public_slug() {
         vec!["description", "graph", "id", "title", "visibility"]
     );
 }
+
+#[tokio::test]
+async fn a_draft_survey_is_not_found_by_its_respondents() {
+    let emitter = RecordingEmitter::new();
+    let mut members: Responses<'_> = ResponseService::new(
+        MockResponseRepository::new(),
+        surveys_holding(draft(&Shape::default()).into()),
+        campaigns_holding(None),
+        &emitter,
+    );
+    let mut visitors: Responses<'_> = ResponseService::new(
+        MockResponseRepository::new(),
+        surveys_holding(
+            draft(&Shape {
+                visibility: Visibility::Public,
+                ..Shape::default()
+            })
+            .into(),
+        ),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    refused(
+        members
+            .start_member(
+                org(),
+                survey_id(),
+                ResponseId(Uuid::from_u128(50)),
+                member(),
+                at(2),
+            )
+            .await,
+        SurveyError::SurveyNotFound,
+    );
+    refused(
+        visitors
+            .start_public(
+                org(),
+                survey_id(),
+                ResponseId(Uuid::from_u128(51)),
+                token(),
+                at(2),
+            )
+            .await,
+        SurveyError::SurveyNotFound,
+    );
+    assert!(emitter.names().is_empty());
+}
