@@ -486,6 +486,15 @@ Décisions S5 :
 - Le module est visible avec `VIEW_SURVEYS` et le flag `surveys`. La disposition du canevas se recalcule à chaque chargement : rien n'est stocké. L'éditeur contrôle côté client les règles de `Graph::new` ; un brouillon ne s'enregistre pas tant que son graphe est refusé par le serveur.
 - **Manques de l'API** : pas de nombre de réponses ni de nombre de questionnaires par campagne (comptés côté client sur les 100 premiers), pas de route de gestion pour lire une photo de réponse (l'interface affiche la clé). Une route de gestion qui présigne uniquement les clés de `survey.response_photo` reste à écrire.
 
+Décisions S6 :
+
+- **Page publique** : `/s/$slug`, hors `_app`, sans en-tête d'autorisation ni cookie (`credentials: 'omit'`, `referrerPolicy: 'no-referrer'`), sans hook d'authentification ni d'organisation. La réponse ne démarre qu'à la première étape validée. Le jeton de reprise est gardé dans `localStorage` par slug (accès protégé), jamais dans l'URL, effacé à la complétion et sur un 404 « expiré ».
+- **Page membres** : `/o/$organizationSlug/repondre/$surveyId`, sans permission de questionnaire. Elle démarre ou reprend la réponse au chargement (200 reprise, 201 création) pour restituer les réponses et afficher « déjà répondu » avant la saisie ; aucun garde de route ne lit le gating des modules, la page affiche donc la navigation de l'accueil.
+- **Parcours** : une question à la fois, suivant le chemin du même parcoureur que l'éditeur (jeu de cas `paths.json`), retour arrière, enregistrement en quittant une étape, validation par type alignée sur le backend. Un identifiant déjà utilisé à la complétion renvoie à la question identifiant avec le message, réponses conservées (en public) ; au démarrage, l'écran « Déjà répondu » reste bloquant (membres).
+- **Photos** : HEIC converti dans le navigateur par `heic-to` (chargé à la demande, 3,1 Mo), envoi en octets bruts, délai de 60 s par envoi avec annulation, retrait possible d'une photo en cours d'envoi. Une photo déjà envoyée n'a pas de route de relecture : elle s'affiche comme « Photo envoyée précédemment ».
+- **Non vérifié sans navigateur** : barre d'actions collante face au clavier iOS, invite caméra, conversion HEIC sur un vrai fichier iPhone, contrastes dans les deux thèmes, annonces de lecteur d'écran, CORS derrière la passerelle.
+- **Suites à donner** : exposer `allow_multiple_responses` dans la vue du répondant pour afficher « Réponse déjà envoyée » au rechargement d'un questionnaire à réponse unique (aujourd'hui le jeton est effacé à la complétion, un rechargement rouvre un formulaire vierge) ; route de gestion qui présigne les photos de réponse ; listing des questionnaires ouverts d'un membre ; index d'unicité des réponses en cours par membre ; lien membre copiable depuis la liste de gestion.
+
 ## Risks / open questions
 
 Choix de l'assistant après relecture (à corriger) :
@@ -528,3 +537,4 @@ Amended: 2026-11-14 contrats figés régénérés après la relecture finale de 
 Amended: 2026-11-14 décisions de S1 consignées (horloge, deux temps, vue du répondant, verrous, erreurs).
 Amended: 2026-11-14 décisions de S2 et S4 consignées (routes, raisons d erreur, chemin public, actions).
 Amended: 2026-11-14 décisions de S3 et S5 consignées.
+Amended: 2026-11-14 décisions de S6 consignées.
