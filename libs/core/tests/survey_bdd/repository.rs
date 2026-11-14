@@ -354,9 +354,10 @@ impl ResponseRepository for MemoryResponses {
     async fn insert(&mut self, response: &ResponseRecord) -> Result<ResponseRecord, CoreError> {
         let mut guard = state(&self.store);
         let token_taken = token_of(response).is_some_and(|token| {
-            guard.responses.values().any(|other| {
-                other.survey_id() == response.survey_id() && token_of(other) == Some(token)
-            })
+            guard
+                .responses
+                .values()
+                .any(|other| token_of(other) == Some(token))
         });
         if token_taken || guard.responses.contains_key(&response.id()) {
             return Err(CoreError::Conflict("response: already stored".to_owned()));

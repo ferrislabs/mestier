@@ -7,11 +7,11 @@ use super::commands::{
 };
 use super::{new_resume_token, public_survey, require_member, require_surveys};
 use crate::application::MestierUseCase;
-use crate::domain::survey::ports::SurveyRepository;
+use crate::domain::survey::ports::{ResponseRepository, SurveyRepository};
 use crate::domain::survey::service::{ResponseLocator, ResponseService};
 use crate::domain::survey::{
     Answers, Completed, InProgress, PublicSlug, RespondentSurvey, Response, ResponseId,
-    ResumeToken, SurveyError, SurveyRecord, Visibility,
+    ResponseRecord, ResumeToken, SurveyError, SurveyRecord, Visibility,
 };
 
 impl MestierUseCase {
@@ -167,16 +167,11 @@ impl MestierUseCase {
     pub async fn start_public_response(
         &self,
         slug: &PublicSlug,
-        resume_token: Option<ResumeToken>,
     ) -> Result<Response<InProgress>, CoreError> {
         let mut survey_repository = survey_repository;
         let mut feature_flag_repository = feature_flag_repository;
         let survey =
             public_survey(&mut survey_repository, &mut feature_flag_repository, slug).await?;
-        let resume_token = match resume_token {
-            Some(token) => token,
-            None => new_resume_token()?,
-        };
 
         let mut service = ResponseService::new(
             survey_response_repository,
@@ -189,10 +184,31 @@ impl MestierUseCase {
                 survey.organization_id(),
                 survey.id(),
                 ResponseId(generate_uuid_v7()),
-                resume_token,
+                new_resume_token()?,
                 Utc::now(),
             )
             .await
+    }
+
+    #[transactional(survey, survey_response, feature_flag)]
+    pub async fn resume_public_response(
+        &self,
+        slug: &PublicSlug,
+        resume_token: ResumeToken,
+    ) -> Result<Response<InProgress>, CoreError> {
+        let mut survey_repository = survey_repository;
+        let mut feature_flag_repository = feature_flag_repository;
+        let mut survey_response_repository = survey_response_repository;
+        let survey =
+            public_survey(&mut survey_repository, &mut feature_flag_repository, slug).await?;
+        match survey_response_repository
+            .find_by_resume_token(survey.organization_id(), survey.id(), &resume_token)
+            .await?
+        {
+            Some(ResponseRecord::InProgress(response)) => Ok(response),
+            Some(ResponseRecord::Completed(_)) => Err(SurveyError::ResponseAlreadyCompleted.into()),
+            None => Err(SurveyError::ResponseNotFound.into()),
+        }
     }
 
     #[transactional(survey, campaign, survey_response, feature_flag, emitter)]

@@ -647,12 +647,15 @@ async fn a_public_survey_is_answered_without_an_account() {
         };
 
         let read = usecase.open_public_survey(&slug).await.unwrap();
-        let started = usecase.start_public_response(&slug, None).await.unwrap();
+        let started = usecase.start_public_response(&slug).await.unwrap();
         let token = started.resume_token().cloned().unwrap();
         let resumed = usecase
-            .start_public_response(&slug, Some(token.clone()))
+            .resume_public_response(&slug, token.clone())
             .await
             .unwrap();
+        let another = usecase.start_public_response(&slug).await.unwrap();
+        let forged = ResumeToken::new("x".repeat(43)).unwrap();
+        let unknown = usecase.resume_public_response(&slug, forged).await;
         usecase
             .save_public_response(&slug, token.clone(), answers("Claire"))
             .await
@@ -676,9 +679,16 @@ async fn a_public_survey_is_answered_without_an_account() {
         assert!(slug.as_str().len() >= 16);
         assert!(token_is_long(started.resume_token()));
         assert_eq!(resumed.id(), started.id());
+        assert_ne!(another.id(), started.id());
+        assert_ne!(another.resume_token(), started.resume_token());
+        not_found(unknown);
         assert_eq!(completed.member_id(), None);
-        assert_eq!(total, 1);
-        assert_eq!(responses[0].id(), started.id());
+        assert_eq!(total, 2);
+        assert!(
+            responses
+                .iter()
+                .any(|response| response.id() == started.id())
+        );
         fixture
     })
     .await;
@@ -713,10 +723,7 @@ async fn a_public_survey_of_an_organization_without_the_flag_answers_like_an_unk
             .open_public_survey(&unknown)
             .await
             .map(|survey| survey.id());
-        let start = usecase
-            .start_public_response(&slug, None)
-            .await
-            .map(|r| r.id());
+        let start = usecase.start_public_response(&slug).await.map(|r| r.id());
 
         assert_eq!(format!("{disabled:?}"), format!("{missing:?}"));
         not_found(disabled);
