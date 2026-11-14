@@ -22,7 +22,8 @@ use crate::{
         ("survey_id" = mestier_core::SurveyId, Path, description = "Survey identifier"),
     ),
     responses(
-        (status = 201, description = "Response started, or the member's response in progress resumed", body = inline(DataEnvelope<RespondentResponseView>)),
+        (status = 200, description = "The member's response in progress resumed", body = inline(DataEnvelope<RespondentResponseView>)),
+        (status = 201, description = "Response started", body = inline(DataEnvelope<RespondentResponseView>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Not a member of the organization"),
         (status = 404, description = "No opened members survey with this id, or surveys not enabled"),
@@ -41,7 +42,7 @@ pub async fn handler(
     require_org_membership(&state, &identity, organization_id).await?;
     let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
-    let response = state
+    let started = state
         .usecase
         .acting_as(user_id)
         .start_member_response(StartMemberResponseCommand {
@@ -51,5 +52,10 @@ pub async fn handler(
         })
         .await?;
 
-    Ok(Response::Created(RespondentResponseView::from(&response)).into_response())
+    let view = RespondentResponseView::from(started.response());
+    if started.is_resumed() {
+        Ok(Response::OK(view).into_response())
+    } else {
+        Ok(Response::Created(view).into_response())
+    }
 }

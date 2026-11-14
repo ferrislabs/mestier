@@ -159,7 +159,29 @@ impl App {
     }
 
     pub async fn opened_survey(&self, path: impl Fn(&str) -> String, token: &str) -> String {
-        let id = self.draft_survey(&path, token, "MEMBERS").await;
+        self.opened_survey_as(path, token, "MEMBERS").await
+    }
+
+    pub async fn set_surveys_flag(&self, organization_id: Uuid, enabled: bool) {
+        let statement = if enabled {
+            "INSERT INTO organization_feature_flags (org_id, flag) VALUES ($1, 'surveys') ON CONFLICT DO NOTHING"
+        } else {
+            "DELETE FROM organization_feature_flags WHERE org_id = $1 AND flag = 'surveys'"
+        };
+        sqlx::query(statement)
+            .bind(organization_id)
+            .execute(&self.pool)
+            .await
+            .expect("toggle the surveys flag");
+    }
+
+    pub async fn opened_survey_as(
+        &self,
+        path: impl Fn(&str) -> String,
+        token: &str,
+        visibility: &str,
+    ) -> String {
+        let id = self.draft_survey(&path, token, visibility).await;
         let (status, body) = self
             .call(
                 Method::POST,
@@ -344,6 +366,14 @@ fn args_for(database_url: &str, redis_url: &str, issuer_url: &str) -> Vec<String
         "100000".to_owned(),
         "--auth-issuer".to_owned(),
         issuer_url.to_owned(),
+        "--auth-audience".to_owned(),
+        "mestier-api".to_owned(),
+        "--auth-client-id".to_owned(),
+        "mestier".to_owned(),
+        "--auth-client-secret".to_owned(),
+        "mestier".to_owned(),
+        "--auth-trusted-clients".to_owned(),
+        "mestier".to_owned(),
         "--file-storage-auto-create-bucket".to_owned(),
         "false".to_owned(),
     ]

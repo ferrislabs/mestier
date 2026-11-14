@@ -108,7 +108,11 @@ async fn a_member_answers_a_members_survey_and_only_sees_what_a_respondent_needs
             None,
         )
         .await;
-    assert_eq!(status, StatusCode::CREATED, "{resumed}");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "a resume is not a creation: {resumed}"
+    );
     assert_eq!(
         resumed["data"]["id"],
         response.as_str(),
@@ -127,6 +131,11 @@ async fn a_member_answers_a_members_survey_and_only_sees_what_a_respondent_needs
         status,
         StatusCode::UNPROCESSABLE_ENTITY,
         "a required question is unanswered: {early}"
+    );
+    assert_eq!(
+        early["details"],
+        json!({"reason": "required_question_unanswered", "question_id": QUESTION}),
+        "{early}"
     );
 
     for answers in [
@@ -336,12 +345,35 @@ async fn a_member_of_another_organization_cannot_answer_and_a_foreign_survey_is_
         assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {answer}");
     }
 
+    for (method, path) in [
+        (
+            Method::GET,
+            app.org(&format!("/surveys/{foreign}/responses")),
+        ),
+        (
+            Method::DELETE,
+            app.org(&format!("/survey-responses/{foreign_response}")),
+        ),
+    ] {
+        let (status, answer) = app.call(method, &path, Some(&app.manager), None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {answer}");
+    }
+    let (status, still) = app
+        .call(
+            Method::GET,
+            &app.other_org(&format!("/survey-responses/{foreign_response}")),
+            Some(&app.other_manager),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{still}");
+
     app.cleanup().await;
 }
 
 #[tokio::test]
 #[ignore = "requires live postgres and redis"]
-async fn a_draft_closed_or_flag_off_survey_is_refused_to_its_respondents() {
+async fn a_draft_or_closed_survey_is_refused_to_its_respondents() {
     let app = harness::start().await;
     let draft = app
         .draft_survey(|s| app.org(s), &app.manager, "MEMBERS")
@@ -375,6 +407,11 @@ async fn a_draft_closed_or_flag_off_survey_is_refused_to_its_respondents() {
         )
         .await;
     assert_eq!(status, StatusCode::CONFLICT, "{answer}");
+    assert_eq!(
+        answer["details"],
+        json!({"reason": "survey_closed"}),
+        "{answer}"
+    );
     let (status, answer) = app
         .call(
             Method::POST,
@@ -384,16 +421,132 @@ async fn a_draft_closed_or_flag_off_survey_is_refused_to_its_respondents() {
         )
         .await;
     assert_eq!(status, StatusCode::CONFLICT, "{answer}");
+    assert_eq!(answer["details"]["reason"], "survey_closed", "{answer}");
 
-    let (status, answer) = app
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_survey_of_an_organization_whose_flag_is_off_is_not_found_by_its_members() {
+    let app = harness::start().await;
+    let organization = app.flag_off_organization_id;
+    app.set_surveys_flag(organization, true).await;
+    let survey = app
+        .opened_survey(|s| app.flag_off_org(s), &app.flag_off_manager)
+        .await;
+    let (status, started) = app
         .call(
-            Method::GET,
-            &app.flag_off_org(&format!("/member-surveys/{draft}")),
+            Method::POST,
+            &app.flag_off_org(&format!("/member-surveys/{survey}/responses")),
             Some(&app.flag_off_manager),
             None,
         )
         .await;
-    assert_eq!(status, StatusCode::NOT_FOUND, "{answer}");
+    assert_eq!(status, StatusCode::CREATED, "{started}");
+    let response = started["data"]["id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    app.set_surveys_flag(organization, false).await;
+
+    for (method, path, body) in [
+        (
+            Method::GET,
+            app.flag_off_org(&format!("/member-surveys/{survey}")),
+            None,
+        ),
+        (
+            Method::POST,
+            app.flag_off_org(&format!("/member-surveys/{survey}/responses")),
+            None,
+        ),
+        (
+            Method::PUT,
+            app.flag_off_org(&format!("/member-survey-responses/{response}")),
+            Some(json!({"answers": {QUESTION: {"Choice": "Oui"}}})),
+        ),
+        (
+            Method::POST,
+            app.flag_off_org(&format!("/member-survey-responses/{response}/complete")),
+            None,
+        ),
+    ] {
+        let (status, answer) = app
+            .call(method, &path, Some(&app.flag_off_manager), body)
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {answer}");
+    }
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn the_member_routes_do_not_find_an_opened_public_survey() {
+    let app = harness::start().await;
+    let survey = app
+        .opened_survey_as(|s| app.org(s), &app.manager, "PUBLIC")
+        .await;
+
+    for method in [Method::GET, Method::POST] {
+        let path = if method == Method::GET {
+            app.org(&format!("/member-surveys/{survey}"))
+        } else {
+            app.org(&format!("/member-surveys/{survey}/responses"))
+        };
+        let (status, answer) = app.call(method, &path, Some(&app.member), None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {answer}");
+    }
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn another_member_of_the_organization_cannot_save_nor_complete_my_response() {
+    let app = harness::start().await;
+    let survey = app.opened_survey(|s| app.org(s), &app.manager).await;
+    let (status, started) = app
+        .call(
+            Method::POST,
+            &app.org(&format!("/member-surveys/{survey}/responses")),
+            Some(&app.member),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{started}");
+    let response = started["data"]["id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+
+    for (method, path, body) in [
+        (
+            Method::PUT,
+            app.org(&format!("/member-survey-responses/{response}")),
+            Some(json!({"answers": {QUESTION: {"Choice": "Oui"}}})),
+        ),
+        (
+            Method::POST,
+            app.org(&format!("/member-survey-responses/{response}/complete")),
+            None,
+        ),
+    ] {
+        let (status, answer) = app.call(method, &path, Some(&app.viewer), body).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {answer}");
+    }
+
+    let (status, mine) = app
+        .call(
+            Method::GET,
+            &app.org(&format!("/survey-responses/{response}")),
+            Some(&app.manager),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{mine}");
+    assert_eq!(mine["data"]["answers"], json!({}), "{mine}");
 
     app.cleanup().await;
 }

@@ -30,7 +30,7 @@ pub struct UpdateSurveyRequest {
     pub response_cap: Option<Option<u32>>,
     pub metadata: Option<BTreeMap<String, String>>,
     #[serde(default, deserialize_with = "deserialize_present")]
-    #[schema(value_type = Option<Object>, nullable)]
+    #[schema(value_type = Option<crate::schema::SurveyGraphSchema>, nullable)]
     pub graph: Option<Option<serde_json::Value>>,
     #[serde(default, deserialize_with = "deserialize_present")]
     #[schema(value_type = Option<CampaignId>, nullable)]
@@ -76,6 +76,7 @@ fn response_cap(cap: u32) -> Result<NonZeroU32, ApiError> {
     path = "/api/v1/organizations/{organization_id}/surveys/{survey_id}",
     operation_id = "updateSurvey",
     tag = super::super::TAG,
+    description = "Updates a draft survey. The body shape (graph, metadata, response cap) is checked before the permission, so a caller without survey.manage who sends an invalid body gets 422 rather than 403.",
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
         ("survey_id" = mestier_core::SurveyId, Path, description = "Survey identifier"),

@@ -17,7 +17,7 @@ use crate::{
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SaveSurveyAnswersRequest {
-    #[schema(value_type = std::collections::BTreeMap<String, Object>)]
+    #[schema(value_type = std::collections::BTreeMap<String, crate::schema::SurveyAnswerSchema>)]
     pub answers: serde_json::Value,
 }
 

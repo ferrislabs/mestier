@@ -52,7 +52,7 @@ pub struct ResponseView<'a> {
     pub survey_id: SurveyId,
     pub member_id: Option<MemberId>,
     pub status: ResponseStatus,
-    #[schema(value_type = BTreeMap<String, Object>)]
+    #[schema(value_type = BTreeMap<String, crate::schema::SurveyAnswerSchema>)]
     pub answers: &'a Answers,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
@@ -85,7 +85,7 @@ impl<'a> From<&'a ResponseRecord> for ResponseView<'a> {
 pub struct RespondentResponseView<'a> {
     pub id: ResponseId,
     pub status: ResponseStatus,
-    #[schema(value_type = BTreeMap<String, Object>)]
+    #[schema(value_type = BTreeMap<String, crate::schema::SurveyAnswerSchema>)]
     pub answers: &'a Answers,
 }
 
@@ -115,7 +115,7 @@ pub struct RespondentSurveyView<'a> {
     pub title: &'a str,
     pub description: Option<&'a str>,
     pub visibility: Visibility,
-    #[schema(value_type = Object)]
+    #[schema(value_type = crate::schema::SurveyGraphSchema)]
     pub graph: &'a SurveyGraph,
 }
 

@@ -141,6 +141,20 @@ async fn every_survey_route_family_refuses_a_caller_without_a_token() {
             Method::POST,
             app.org(&format!("/member-surveys/{survey}/responses")),
         ),
+        (
+            Method::PUT,
+            app.org(&format!("/member-survey-responses/{survey}")),
+        ),
+        (
+            Method::POST,
+            app.org(&format!("/member-survey-responses/{survey}/complete")),
+        ),
+        (Method::GET, app.org(&format!("/survey-responses/{survey}"))),
+        (
+            Method::DELETE,
+            app.org(&format!("/survey-responses/{survey}")),
+        ),
+        (Method::GET, app.org(&format!("/survey-campaigns/{survey}"))),
     ] {
         let (status, body) = app.call(method, &path, None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "{path}: {body}");

@@ -85,7 +85,7 @@ pub struct SurveyView<'a> {
     #[schema(value_type = BTreeMap<String, String>)]
     pub metadata: &'a Metadata,
     pub campaign_id: Option<CampaignId>,
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<crate::schema::SurveyGraphSchema>)]
     pub graph: Option<&'a SurveyGraph>,
     #[schema(value_type = Option<String>)]
     pub public_slug: Option<&'a PublicSlug>,

@@ -41,6 +41,7 @@ impl UpdateCampaignRequest {
     patch,
     path = "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}",
     operation_id = "updateSurveyCampaign",
+    description = "Updates a campaign. The body shape (window, metadata) is checked before the permission, so a caller without survey.manage who sends an invalid body gets 422 rather than 403.",
     tag = super::super::TAG,
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),

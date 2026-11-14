@@ -28,6 +28,7 @@ pub struct CreateCampaignRequest {
     post,
     path = "/api/v1/organizations/{organization_id}/survey-campaigns",
     operation_id = "createSurveyCampaign",
+    description = "Creates a campaign. The body shape (window, metadata) is checked before the permission, so a caller without survey.manage who sends an invalid body gets 422 rather than 403.",
     tag = super::super::TAG,
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),

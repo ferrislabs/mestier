@@ -10,6 +10,7 @@ use crate::request::refused;
 
 pub mod create;
 pub mod delete;
+pub mod get_one;
 pub mod list;
 pub mod update;
 
@@ -17,6 +18,7 @@ pub fn router(_state: &AppState) -> Router<AppState> {
     Router::new()
         .typed_get(list::handler)
         .typed_post(create::handler)
+        .typed_get(get_one::handler)
         .typed_patch(update::handler)
         .typed_delete(delete::handler)
 }

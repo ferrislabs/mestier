@@ -511,6 +511,7 @@ impl Modify for SecurityAddon {
         survey::survey::duplicate::handler,
         survey::campaign::list::handler,
         survey::campaign::create::handler,
+        survey::campaign::get_one::handler,
         survey::campaign::update::handler,
         survey::campaign::delete::handler,
         survey::response::list::handler,

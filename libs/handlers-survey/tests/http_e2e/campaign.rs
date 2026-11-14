@@ -79,6 +79,44 @@ async fn a_manager_creates_lists_reschedules_and_deletes_a_campaign() {
         "another organization's campaign: {answer}"
     );
 
+    let (status, read) = app
+        .call(
+            Method::GET,
+            &app.org(&format!("/survey-campaigns/{id}")),
+            Some(&app.viewer),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{read}");
+    assert_eq!(read["data"]["id"], id.as_str(), "{read}");
+    assert_eq!(read["data"]["name"], "Printemps 2099", "{read}");
+
+    let (status, answer) = app
+        .call(
+            Method::GET,
+            &app.org(&format!("/survey-campaigns/{id}")),
+            Some(&app.member),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{answer}");
+
+    for method in [Method::GET, Method::DELETE] {
+        let (status, answer) = app
+            .call(
+                method,
+                &app.other_org(&format!("/survey-campaigns/{id}")),
+                Some(&app.other_manager),
+                None,
+            )
+            .await;
+        assert_eq!(
+            status,
+            StatusCode::NOT_FOUND,
+            "another organization's campaign: {answer}"
+        );
+    }
+
     let (status, answer) = app
         .call(
             Method::DELETE,

@@ -4,6 +4,7 @@ use handlers::{AppState, auth::auth_middleware, rate_limit::rate_limit_middlewar
 pub mod campaign;
 mod request;
 pub mod response;
+pub mod schema;
 pub mod survey;
 
 pub const TAG: &str = "surveys";
