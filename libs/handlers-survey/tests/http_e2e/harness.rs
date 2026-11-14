@@ -146,6 +146,25 @@ impl App {
         (status, json)
     }
 
+    pub async fn send(
+        &self,
+        method: Method,
+        path: &str,
+        client_ip: &str,
+        body: Option<(&'static str, Vec<u8>)>,
+    ) -> (StatusCode, String) {
+        let mut request = self
+            .client
+            .request(method, format!("{}/api/v1{path}", self.base_url))
+            .header("x-forwarded-for", client_ip);
+        if let Some((content_type, bytes)) = body {
+            request = request.header("content-type", content_type).body(bytes);
+        }
+        let response = request.send().await.expect("the api answers");
+        let status = response.status();
+        (status, response.text().await.expect("the api sends a body"))
+    }
+
     pub fn org(&self, suffix: &str) -> String {
         format!("/organizations/{}{suffix}", self.organization_id)
     }

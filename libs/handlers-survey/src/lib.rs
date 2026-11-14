@@ -18,4 +18,5 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .merge(response::router(state))
         .layer(from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .merge(response::public::router(state))
 }

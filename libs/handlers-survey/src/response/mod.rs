@@ -1,4 +1,4 @@
-use axum::Router;
+use axum::{Router, extract::DefaultBodyLimit, routing::post};
 use axum_extra::routing::{RouterExt, TypedPath};
 use chrono::{DateTime, Utc};
 use handlers::AppState;
@@ -13,8 +13,10 @@ pub mod delete;
 pub mod get_one;
 pub mod list;
 pub mod member;
+pub mod photo;
+pub mod public;
 
-pub fn router(_state: &AppState) -> Router<AppState> {
+pub fn router(state: &AppState) -> Router<AppState> {
     Router::new()
         .typed_get(list::handler)
         .typed_get(get_one::handler)
@@ -23,6 +25,12 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_post(member::start::handler)
         .typed_put(member::save::handler)
         .typed_post(member::complete::handler)
+        .route(
+            member::MemberResponsePhotosPath::PATH,
+            post(member::photo::handler).layer(DefaultBodyLimit::max(photo::body_limit(
+                state.args.file_storage.max_upload_bytes,
+            ))),
+        )
 }
 
 #[derive(TypedPath, Deserialize)]
