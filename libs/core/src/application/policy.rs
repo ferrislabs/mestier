@@ -181,6 +181,30 @@ pub async fn require<A: Authorizer>(
     Err(CoreError::Forbidden { reason })
 }
 
+pub(crate) async fn require_permission<M, R, A>(
+    actor: Subject,
+    organization_id: OrganizationId,
+    action: &str,
+    members: &mut M,
+    roles: &mut R,
+    authz: &A,
+) -> Result<Subject, CoreError>
+where
+    M: MemberRepository,
+    R: RoleRepository,
+    A: Authorizer,
+{
+    let actor = enrich_for_organization(actor, organization_id, members, roles).await?;
+    require(
+        authz,
+        &actor,
+        action,
+        Resource::new("organization", organization_id.0.to_string()),
+    )
+    .await?;
+    Ok(actor)
+}
+
 /// Like [`require`], but a deny answers `false` instead of an error.
 pub async fn holds<A: Authorizer>(
     authorizer: &A,

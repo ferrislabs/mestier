@@ -4,7 +4,7 @@ use mestier_macros::transactional;
 
 use crate::{
     LeaveAdjustment, LeaveAdjustmentOutcome,
-    application::{MestierUseCase, leave_account::require_permission, policy},
+    application::{MestierUseCase, policy, policy::require_permission},
     domain::leave_adjustment::{
         LeaveAdjustmentService,
         commands::{

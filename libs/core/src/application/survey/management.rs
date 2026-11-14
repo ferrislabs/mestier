@@ -7,8 +7,8 @@ use super::commands::{
     ListSurveyResponsesCommand, ListSurveysCommand, SurveyCommand, SurveyResponseCommand,
     UpdateCampaignCommand, UpdateSurveyCommand,
 };
-use super::{new_public_slug, require_survey_reader, require_surveys};
-use crate::application::{MestierUseCase, leave_account::require_permission};
+use super::{guard_manage, guard_read, new_public_slug};
+use crate::application::MestierUseCase;
 use crate::domain::survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository};
 use crate::domain::survey::service::{CampaignService, ResponseService, SurveyService};
 use crate::domain::survey::{
@@ -22,16 +22,12 @@ impl MestierUseCase {
         &self,
         command: CreateSurveyCommand,
     ) -> Result<Survey<Draft>, CoreError> {
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -52,16 +48,12 @@ impl MestierUseCase {
         &self,
         command: UpdateSurveyCommand,
     ) -> Result<Survey<Draft>, CoreError> {
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -83,16 +75,12 @@ impl MestierUseCase {
     #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
     pub async fn open_survey(&self, command: SurveyCommand) -> Result<Survey<Opened>, CoreError> {
         let mut survey_repository = survey_repository;
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -114,16 +102,12 @@ impl MestierUseCase {
 
     #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
     pub async fn close_survey(&self, command: SurveyCommand) -> Result<Survey<Closed>, CoreError> {
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -139,16 +123,12 @@ impl MestierUseCase {
         &self,
         command: SurveyCommand,
     ) -> Result<Survey<Draft>, CoreError> {
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -165,16 +145,12 @@ impl MestierUseCase {
 
     #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
     pub async fn delete_survey(&self, command: SurveyCommand) -> Result<(), CoreError> {
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -189,15 +165,12 @@ impl MestierUseCase {
         command: ListSurveysCommand,
     ) -> Result<(Vec<SurveyRecord>, u64), CoreError> {
         let mut survey_repository = survey_repository;
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_survey_reader(
+        guard_read(
             command.actor,
             command.organization_id,
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -210,15 +183,12 @@ impl MestierUseCase {
     #[transactional(survey, feature_flag, member, role, authz)]
     pub async fn get_survey(&self, command: SurveyCommand) -> Result<SurveyRecord, CoreError> {
         let mut survey_repository = survey_repository;
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_survey_reader(
+        guard_read(
             command.actor,
             command.organization_id,
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -234,16 +204,12 @@ impl MestierUseCase {
         &self,
         command: CreateCampaignCommand,
     ) -> Result<Campaign, CoreError> {
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -266,16 +232,12 @@ impl MestierUseCase {
         &self,
         command: UpdateCampaignCommand,
     ) -> Result<Campaign, CoreError> {
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -293,16 +255,12 @@ impl MestierUseCase {
 
     #[transactional(survey, campaign, feature_flag, member, role, authz, emitter)]
     pub async fn delete_campaign(&self, command: CampaignCommand) -> Result<(), CoreError> {
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -317,15 +275,12 @@ impl MestierUseCase {
         command: ListCampaignsCommand,
     ) -> Result<(Vec<Campaign>, u64), CoreError> {
         let mut campaign_repository = campaign_repository;
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_survey_reader(
+        guard_read(
             command.actor,
             command.organization_id,
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -342,15 +297,12 @@ impl MestierUseCase {
     ) -> Result<(Vec<ResponseRecord>, u64), CoreError> {
         let mut survey_repository = survey_repository;
         let mut survey_response_repository = survey_response_repository;
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_survey_reader(
+        guard_read(
             command.actor,
             command.organization_id,
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -375,15 +327,12 @@ impl MestierUseCase {
         command: SurveyResponseCommand,
     ) -> Result<ResponseRecord, CoreError> {
         let mut survey_response_repository = survey_response_repository;
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_survey_reader(
+        guard_read(
             command.actor,
             command.organization_id,
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;
@@ -408,16 +357,12 @@ impl MestierUseCase {
         &self,
         command: SurveyResponseCommand,
     ) -> Result<(), CoreError> {
-        let mut feature_flag_repository = feature_flag_repository;
-        let mut member_repository = member_repository;
-        let mut role_repository = role_repository;
-        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
-        require_permission(
+        guard_manage(
             command.actor,
             command.organization_id,
-            "survey.manage",
-            &mut member_repository,
-            &mut role_repository,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
             authz,
         )
         .await?;

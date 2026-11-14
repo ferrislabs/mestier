@@ -82,6 +82,51 @@ where
     policy::require(authz, &actor, "survey.view", organization(organization_id)).await
 }
 
+async fn guard_manage<F, M, R, A>(
+    actor: Subject,
+    organization_id: OrganizationId,
+    mut flags: F,
+    mut members: M,
+    mut roles: R,
+    authz: &A,
+) -> Result<(), CoreError>
+where
+    F: FeatureFlagRepository,
+    M: MemberRepository,
+    R: RoleRepository,
+    A: Authorizer,
+{
+    require_surveys(&mut flags, organization_id).await?;
+    policy::require_permission(
+        actor,
+        organization_id,
+        "survey.manage",
+        &mut members,
+        &mut roles,
+        authz,
+    )
+    .await?;
+    Ok(())
+}
+
+async fn guard_read<F, M, R, A>(
+    actor: Subject,
+    organization_id: OrganizationId,
+    mut flags: F,
+    mut members: M,
+    mut roles: R,
+    authz: &A,
+) -> Result<(), CoreError>
+where
+    F: FeatureFlagRepository,
+    M: MemberRepository,
+    R: RoleRepository,
+    A: Authorizer,
+{
+    require_surveys(&mut flags, organization_id).await?;
+    require_survey_reader(actor, organization_id, &mut members, &mut roles, authz).await
+}
+
 async fn require_member<M, R>(
     actor: Subject,
     organization_id: OrganizationId,
