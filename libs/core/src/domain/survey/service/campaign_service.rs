@@ -64,13 +64,13 @@ where
         Ok(())
     }
 
-    async fn find(
+    async fn find_locked(
         &mut self,
         organization_id: OrganizationId,
         id: CampaignId,
     ) -> Result<Campaign, CoreError> {
         self.campaigns
-            .find(organization_id, id)
+            .find_for_update(organization_id, id)
             .await?
             .ok_or_else(|| SurveyError::CampaignNotFound.into())
     }
@@ -102,7 +102,7 @@ where
         patch: CampaignPatch,
         now: DateTime<Utc>,
     ) -> Result<Campaign, CoreError> {
-        let mut campaign = self.find(organization_id, id).await?;
+        let mut campaign = self.find_locked(organization_id, id).await?;
         let before = campaign.status();
         if let Some(name) = patch.name {
             campaign.rename(name)?;
@@ -124,7 +124,7 @@ where
         organization_id: OrganizationId,
         id: CampaignId,
     ) -> Result<(), CoreError> {
-        self.find(organization_id, id).await?;
+        self.find_locked(organization_id, id).await?;
         let attached = self.surveys.list_by_campaign(organization_id, id).await?;
         if !attached.is_empty() {
             return Err(SurveyError::CampaignHasSurveys.into());

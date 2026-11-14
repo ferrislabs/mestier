@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::ports::{MockCampaignRepository, MockResponseRepository, MockSurveyRepository};
 use super::service::{
-    CampaignService, ResponseLocator, ResponseService, SurveyPatch, SurveyService,
+    CampaignPatch, CampaignService, ResponseLocator, ResponseService, SurveyPatch, SurveyService,
 };
 use super::{
     Answer, Answers, Campaign, CampaignId, CampaignStatus, Completed, Draft, Edge, EndNode, Graph,
@@ -888,4 +888,55 @@ async fn duplicate_creates_a_draft_without_slug_or_dates() {
     let json = serde_json::to_value(&copy).unwrap();
     assert!(json["public_slug"].is_null());
     assert!(emitter.names().is_empty());
+}
+
+#[tokio::test]
+async fn editing_a_campaign_loads_it_locked() {
+    let running = campaign(Window::new(Some(at(2)), Some(at(4))).unwrap(), at(3));
+    let mut campaigns = locked(Some(running));
+    campaigns
+        .expect_update()
+        .withf(|campaign| campaign.status() == CampaignStatus::Ended)
+        .times(1)
+        .returning(|campaign| {
+            let saved = campaign.clone();
+            Box::pin(async move { Ok(saved) })
+        });
+    let emitter = RecordingEmitter::new();
+    let mut service: Campaigns<'_> =
+        CampaignService::new(campaigns, MockSurveyRepository::new(), &emitter);
+
+    let saved = service
+        .update(
+            org(),
+            campaign_id(),
+            CampaignPatch {
+                name: Some("Automne".to_string()),
+                ..CampaignPatch::default()
+            },
+            at(5),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(saved.name(), "Automne");
+    assert_eq!(emitter.names(), vec!["survey_campaign.ended"]);
+}
+
+#[tokio::test]
+async fn deleting_a_campaign_loads_it_locked() {
+    let scheduled = campaign(Window::new(Some(at(2)), Some(at(4))).unwrap(), at(1));
+    let mut campaigns = locked(Some(scheduled));
+    campaigns
+        .expect_delete()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let mut surveys = MockSurveyRepository::new();
+    surveys
+        .expect_list_by_campaign()
+        .returning(|_, _| Box::pin(async { Ok(Vec::new()) }));
+    let emitter = RecordingEmitter::new();
+    let mut service: Campaigns<'_> = CampaignService::new(campaigns, surveys, &emitter);
+
+    service.delete(org(), campaign_id()).await.unwrap();
 }
