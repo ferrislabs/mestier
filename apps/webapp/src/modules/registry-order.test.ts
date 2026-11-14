@@ -21,6 +21,7 @@ describe('MODULES order and labels', () => {
 			'support',
 			'hr',
 			'automatisation',
+			'questionnaires',
 			'purchase',
 			'settings',
 		])
@@ -70,5 +71,34 @@ describe('automatisation module entry', () => {
 		expect(moduleLandingPath('automatisation')).toBe(
 			'/automatisation/workflows',
 		)
+	})
+})
+
+describe('questionnaires module entry', () => {
+	function questionnairesModule() {
+		const module = MODULES.find((module) => module.id === 'questionnaires')
+		if (!module) throw new Error('registry: questionnaires module missing')
+		return module
+	}
+
+	it('is gated on the survey read bit and the surveys flag', () => {
+		expect(questionnairesModule().requiredPermission).toBe('VIEW_SURVEYS')
+		expect(questionnairesModule().requiredFeature).toBe('surveys')
+	})
+
+	it('lists the questionnaires then the campaigns', () => {
+		expect(
+			questionnairesModule().sections.map((section) => [
+				section.label,
+				section.to,
+			]),
+		).toEqual([
+			['Questionnaires', '/questionnaires'],
+			['Campagnes', '/questionnaires/campagnes'],
+		])
+	})
+
+	it('lands on the questionnaire list', () => {
+		expect(moduleLandingPath('questionnaires')).toBe('/questionnaires')
 	})
 })

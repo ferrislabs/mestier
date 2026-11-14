@@ -13,6 +13,7 @@ export type ModuleId =
 	| 'planification'
 	| 'chat'
 	| 'automatisation'
+	| 'questionnaires'
 	| 'support'
 	| 'knowledge'
 	| 'settings'

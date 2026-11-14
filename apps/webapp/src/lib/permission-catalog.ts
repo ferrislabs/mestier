@@ -12,6 +12,7 @@ export type PermissionArea =
 	| 'chat'
 	| 'support'
 	| 'knowledge'
+	| 'surveys'
 	| 'administration'
 
 export const PERMISSION_AREA_LABELS: Record<PermissionArea, string> = {
@@ -22,6 +23,7 @@ export const PERMISSION_AREA_LABELS: Record<PermissionArea, string> = {
 	chat: 'Discussion',
 	support: 'Support',
 	knowledge: 'Connaissances',
+	surveys: 'Questionnaires',
 	administration: 'Administration',
 }
 
@@ -194,6 +196,21 @@ export const PERMISSION_CATALOG: PermissionDescriptor[] = [
 		description:
 			'Déposer des documents, écrire et modifier des notes, les étiqueter, les rattacher à un projet, un client ou un devis, ou les supprimer.',
 		note: 'Sans « Voir la base de connaissances », ce droit n’ouvre aucun écran.',
+	},
+
+	{
+		name: 'VIEW_SURVEYS',
+		area: 'surveys',
+		label: 'Voir les questionnaires',
+		description:
+			'Consulter les questionnaires, les campagnes et les réponses reçues.',
+	},
+	{
+		name: 'MANAGE_SURVEYS',
+		area: 'surveys',
+		label: 'Gérer les questionnaires',
+		description:
+			'Créer et modifier les questionnaires et les campagnes, les ouvrir, les fermer, les supprimer et supprimer une réponse.',
 	},
 
 	// Administration

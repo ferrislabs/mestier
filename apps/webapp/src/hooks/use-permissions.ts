@@ -36,6 +36,8 @@ export type PermissionName =
 	| 'MANAGE_SUPPORT'
 	| 'VIEW_KNOWLEDGE'
 	| 'MANAGE_KNOWLEDGE'
+	| 'VIEW_SURVEYS'
+	| 'MANAGE_SURVEYS'
 
 /**
  * The caller's own granted bits in the active organization (#307) —

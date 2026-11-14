@@ -4,7 +4,7 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 const ORGANIZATION_FEATURES_PATH =
 	'/api/v1/organizations/{organization_id}/features'
 
-export type FeatureKey = 'drive_ai'
+export type FeatureKey = 'drive_ai' | 'surveys'
 
 export function useFeatures() {
 	const { activeOrganizationId } = useActiveOrganization()
