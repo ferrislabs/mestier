@@ -64,6 +64,11 @@ const PROTOTYPE_EVENTS: readonly (readonly [string, string])[] = [
 	['extra_period.approved', 'Heures supplémentaires'],
 	['extra_period.rejected', 'Heures supplémentaires'],
 	['extra_period.cancelled', 'Heures supplémentaires'],
+	['survey.opened', 'Questionnaires'],
+	['survey.response_submitted', 'Questionnaires'],
+	['survey.response_completed', 'Questionnaires'],
+	['survey_campaign.started', 'Questionnaires'],
+	['survey_campaign.ended', 'Questionnaires'],
 ]
 
 const catalogue = PROTOTYPE_EVENTS.map(([name]) => event(name))
@@ -88,6 +93,25 @@ describe('groupEvents', () => {
 			'Opportunités',
 			'Absences',
 			'Heures supplémentaires',
+			'Questionnaires',
+		])
+	})
+
+	it('never drops a survey or campaign event into Autres', () => {
+		const surveyEvents = PROTOTYPE_EVENTS.filter(([name]) =>
+			name.startsWith('survey'),
+		).map(([name]) => event(name))
+
+		const groups = groupEvents(surveyEvents)
+
+		expect(surveyEvents).toHaveLength(5)
+		expect(groups.map((group) => group.id)).toEqual(['survey'])
+		expect(groups[0].events.map((item) => item.name)).toEqual([
+			'survey.opened',
+			'survey.response_submitted',
+			'survey.response_completed',
+			'survey_campaign.started',
+			'survey_campaign.ended',
 		])
 	})
 

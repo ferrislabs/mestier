@@ -119,6 +119,17 @@ const EVENT_DOMAINS: readonly EventDomain[] = [
 			'extra_period.cancelled',
 		],
 	},
+	{
+		id: 'survey',
+		label: 'Questionnaires',
+		events: [
+			'survey.opened',
+			'survey.response_submitted',
+			'survey.response_completed',
+			'survey_campaign.started',
+			'survey_campaign.ended',
+		],
+	},
 ]
 
 const OTHER_DOMAIN = { id: 'other', label: 'Autres' }

@@ -32,6 +32,19 @@ const DEAL_STAGES = ['NEW', 'VISIT', 'QUOTE_SENT', 'NEGOTIATION', 'WON', 'LOST']
 const DECISION_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']
 const ABSENCE_KINDS = ['LEAVE', 'SICK', 'UNAVAILABLE']
 const DAY_PARTS = ['MORNING', 'AFTERNOON']
+const SURVEY_VISIBILITIES = ['PUBLIC', 'MEMBERS']
+const SURVEY_QUESTION_KINDS = [
+	'TEXT',
+	'LONG_TEXT',
+	'NUMBER',
+	'SINGLE_CHOICE',
+	'MULTIPLE_CHOICE',
+	'DATE',
+	'DATETIME',
+	'PHONE',
+	'EMAIL',
+	'PHOTO',
+]
 
 const DECLARATIONS: Record<string, Declaration> = {
 	Uuid: { source: 'type Uuid = string', uses: [] },
@@ -359,6 +372,72 @@ const DECLARATIONS: Record<string, Declaration> = {
 		]),
 		uses: ['Uuid', 'Cents'],
 	},
+	SurveyVisibility: {
+		source: `type SurveyVisibility = ${union(SURVEY_VISIBILITIES)}`,
+		uses: [],
+	},
+	SurveyQuestionKind: {
+		source: `type SurveyQuestionKind = ${union(SURVEY_QUESTION_KINDS)}`,
+		uses: [],
+	},
+	SurveyAnswerValue: {
+		source: 'type SurveyAnswerValue = string | number | string[] | null',
+		uses: [],
+	},
+	OpenedSurvey: {
+		source: block('interface', 'OpenedSurvey', [
+			'id: Uuid',
+			'organization_id: Uuid',
+			'title: string',
+			'description: string | null',
+			'visibility: SurveyVisibility',
+			'allow_multiple_responses: boolean',
+			'response_cap: number | null',
+			'opened_at: DateTime',
+		]),
+		uses: ['SurveyVisibility', 'Uuid', 'DateTime'],
+	},
+	SurveyResponseInProgress: {
+		source: block('interface', 'SurveyResponseInProgress', [
+			'id: Uuid',
+			'member_id: Uuid | null',
+			"status: 'IN_PROGRESS'",
+		]),
+		uses: ['Uuid'],
+	},
+	SurveyResponseCompleted: {
+		source: block('interface', 'SurveyResponseCompleted', [
+			'id: Uuid',
+			'member_id: Uuid | null',
+			'completed_at: DateTime',
+			'identifier_value: string | null',
+		]),
+		uses: ['Uuid', 'DateTime'],
+	},
+	SurveySummary: {
+		source: block('interface', 'SurveySummary', ['id: Uuid', 'title: string']),
+		uses: ['Uuid'],
+	},
+	SurveyAnswer: {
+		source: block('interface', 'SurveyAnswer', [
+			'question_id: Uuid',
+			'label: string',
+			'kind: SurveyQuestionKind',
+			'value: SurveyAnswerValue',
+		]),
+		uses: ['SurveyQuestionKind', 'SurveyAnswerValue', 'Uuid'],
+	},
+	SurveyCampaign: {
+		source: block('interface', 'SurveyCampaign', [
+			'id: Uuid',
+			'organization_id: Uuid',
+			'name: string',
+			'starts_at: DateTime | null',
+			'ends_at: DateTime | null',
+			'metadata: Record<string, string>',
+		]),
+		uses: ['Uuid', 'DateTime'],
+	},
 }
 
 function created(field: string, type: string): PayloadContract {
@@ -390,6 +469,17 @@ function transitioned(
 
 function deleted(field: string): PayloadContract {
 	return { fields: [`${field}: Uuid`], uses: ['Uuid'] }
+}
+
+const SURVEY_IDS = ['survey_id: Uuid', 'campaign_id: Uuid | null']
+
+const SURVEY_METADATA = 'metadata: Record<string, string>'
+
+function campaignEvent(): PayloadContract {
+	return {
+		fields: ['campaign_id: Uuid', 'campaign: SurveyCampaign'],
+		uses: ['SurveyCampaign', 'Uuid'],
+	}
 }
 
 const PAYLOADS: Record<string, PayloadContract> = {
@@ -556,6 +646,31 @@ const PAYLOADS: Record<string, PayloadContract> = {
 		],
 		uses: ['Uuid'],
 	},
+	'survey.opened': {
+		fields: [...SURVEY_IDS, SURVEY_METADATA, 'survey: OpenedSurvey'],
+		uses: ['OpenedSurvey', 'Uuid'],
+	},
+	'survey.response_submitted': {
+		fields: [
+			...SURVEY_IDS,
+			SURVEY_METADATA,
+			'response: SurveyResponseInProgress',
+			'answered_questions: number',
+		],
+		uses: ['SurveyResponseInProgress', 'Uuid'],
+	},
+	'survey.response_completed': {
+		fields: [
+			...SURVEY_IDS,
+			'survey: SurveySummary',
+			'response: SurveyResponseCompleted',
+			SURVEY_METADATA,
+			'answers: SurveyAnswer[]',
+		],
+		uses: ['SurveySummary', 'SurveyResponseCompleted', 'SurveyAnswer', 'Uuid'],
+	},
+	'survey_campaign.started': campaignEvent(),
+	'survey_campaign.ended': campaignEvent(),
 }
 
 export function payloadTypeName(eventName: string): string {

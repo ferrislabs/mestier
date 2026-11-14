@@ -53,6 +53,11 @@ const EVENT_NAMES = [
 	'extra_period.approved',
 	'extra_period.rejected',
 	'extra_period.cancelled',
+	'survey.opened',
+	'survey.response_submitted',
+	'survey.response_completed',
+	'survey_campaign.started',
+	'survey_campaign.ended',
 ]
 
 function declaredNames(source: string): Set<string> {
@@ -119,6 +124,45 @@ describe('eventContractSource', () => {
 			)
 			expect(undeclared, name).toEqual([])
 		}
+	})
+
+	it('describes the survey payloads with a nullable campaign and merged metadata', () => {
+		for (const name of [
+			'survey.opened',
+			'survey.response_submitted',
+			'survey.response_completed',
+		]) {
+			const fields = payloadContractFields(name)
+			expect(fields.slice(0, 2), name).toEqual([
+				'survey_id: Uuid',
+				'campaign_id: Uuid | null',
+			])
+			expect(fields, name).toContain('metadata: Record<string, string>')
+		}
+	})
+
+	it('lists the answers of a completed response with their question', () => {
+		const source = eventContractSource('survey.response_completed')
+
+		expect(source).toContain('  answers: SurveyAnswer[]')
+		expect(source).toContain('interface SurveyAnswer {')
+		expect(source).toContain('  question_id: Uuid')
+		expect(source).toContain('  label: string')
+		expect(source).toContain('  kind: SurveyQuestionKind')
+		expect(source).toContain('  identifier_value: string | null')
+		expect(source).toContain("'SINGLE_CHOICE'")
+	})
+
+	it('carries the campaign and its id on both campaign events', () => {
+		for (const name of ['survey_campaign.started', 'survey_campaign.ended']) {
+			expect(payloadContractFields(name), name).toEqual([
+				'campaign_id: Uuid',
+				'campaign: SurveyCampaign',
+			])
+		}
+		const source = eventContractSource('survey_campaign.started')
+		expect(source).toContain('  starts_at: DateTime | null')
+		expect(source).toContain('  metadata: Record<string, string>')
 	})
 
 	it('is empty for an event without a contract', () => {
