@@ -3,14 +3,15 @@ use common::{CoreError, generate_uuid_v7};
 use mestier_macros::transactional;
 
 use super::commands::{
-    SaveMemberResponseCommand, StartMemberResponseCommand, SurveyResponseCommand,
+    SaveMemberResponseCommand, StartMemberResponseCommand, SurveyCommand, SurveyResponseCommand,
 };
 use super::{new_resume_token, public_survey, require_member, require_surveys};
 use crate::application::MestierUseCase;
+use crate::domain::survey::ports::SurveyRepository;
 use crate::domain::survey::service::{ResponseLocator, ResponseService};
 use crate::domain::survey::{
-    Answers, Completed, InProgress, Opened, PublicSlug, Response, ResponseId, ResumeToken, Survey,
-    SurveyError, SurveyRecord,
+    Answers, Completed, InProgress, PublicSlug, RespondentSurvey, Response, ResponseId,
+    ResumeToken, SurveyError, SurveyRecord, Visibility,
 };
 
 impl MestierUseCase {
@@ -117,12 +118,46 @@ impl MestierUseCase {
             .await
     }
 
+    #[transactional(survey, feature_flag, member, role)]
+    pub async fn open_member_survey(
+        &self,
+        command: SurveyCommand,
+    ) -> Result<RespondentSurvey, CoreError> {
+        let mut survey_repository = survey_repository;
+        let mut feature_flag_repository = feature_flag_repository;
+        let mut member_repository = member_repository;
+        let mut role_repository = role_repository;
+        require_surveys(&mut feature_flag_repository, command.organization_id).await?;
+        require_member(
+            command.actor,
+            command.organization_id,
+            &mut member_repository,
+            &mut role_repository,
+        )
+        .await?;
+        match survey_repository
+            .find(command.organization_id, command.id)
+            .await?
+        {
+            Some(SurveyRecord::Opened(survey)) if survey.visibility() == Visibility::Members => {
+                Ok(survey.respondent_view())
+            }
+            Some(SurveyRecord::Closed(survey)) if survey.visibility() == Visibility::Members => {
+                Err(SurveyError::SurveyClosed.into())
+            }
+            _ => Err(SurveyError::SurveyNotFound.into()),
+        }
+    }
+
     #[transactional(survey, feature_flag)]
-    pub async fn open_public_survey(&self, slug: &PublicSlug) -> Result<Survey<Opened>, CoreError> {
+    pub async fn open_public_survey(
+        &self,
+        slug: &PublicSlug,
+    ) -> Result<RespondentSurvey, CoreError> {
         let mut survey_repository = survey_repository;
         let mut feature_flag_repository = feature_flag_repository;
         match public_survey(&mut survey_repository, &mut feature_flag_repository, slug).await? {
-            SurveyRecord::Opened(survey) => Ok(survey),
+            SurveyRecord::Opened(survey) => Ok(survey.respondent_view()),
             SurveyRecord::Closed(_) => Err(SurveyError::SurveyClosed.into()),
             SurveyRecord::Draft(_) => Err(SurveyError::SurveyNotFound.into()),
         }

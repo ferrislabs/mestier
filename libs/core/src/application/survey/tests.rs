@@ -840,3 +840,59 @@ async fn the_survey_campaign_clock_emits_each_step_once() {
     })
     .await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_member_reads_an_opened_members_survey_without_any_survey_permission() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Members).await;
+
+        let view = usecase
+            .open_member_survey(survey_command(&fixture, fixture.member.clone(), survey_id))
+            .await
+            .unwrap();
+
+        assert_eq!(view.id(), survey_id);
+        assert_eq!(view.visibility(), Visibility::Members);
+        assert_eq!(view.public_slug(), None);
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_member_survey_read_is_refused_outside_an_opened_members_survey() {
+    with_fixture(true, async |usecase, fixture| {
+        let members = opened(&usecase, &fixture, Visibility::Members).await;
+        let public = opened(&usecase, &fixture, Visibility::Public).await;
+        let read = |actor: Subject, id: SurveyId| {
+            usecase.open_member_survey(survey_command(&fixture, actor, id))
+        };
+
+        forbidden(read(fixture.outsider.clone(), members).await);
+        not_found(read(fixture.member.clone(), public).await);
+        not_found(read(fixture.member.clone(), fixture.survey_id).await);
+        not_found(read(fixture.member.clone(), SurveyId(generate_uuid_v7())).await);
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_member_survey_read_answers_not_found_when_the_flag_is_off() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Members).await;
+        let pool = dev_pool().await;
+        set_flag(&pool, fixture.organization_id.0, false).await;
+
+        not_found(
+            usecase
+                .open_member_survey(survey_command(&fixture, fixture.member.clone(), survey_id))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}

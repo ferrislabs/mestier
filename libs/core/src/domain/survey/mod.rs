@@ -12,6 +12,7 @@ pub mod graph;
 pub mod metadata;
 pub mod ports;
 pub mod record;
+pub mod respondent;
 pub mod response;
 pub mod service;
 mod validation;
@@ -34,6 +35,7 @@ pub use graph::{
 };
 pub use metadata::Metadata;
 pub use record::{ResponseRecord, SurveyRecord};
+pub use respondent::RespondentSurvey;
 pub use response::{Completed, InProgress, Response, ResumeToken};
 pub use value::{
     Answer, EmailAddress, PhoneNumber, PublicSlug, QuestionId, QuestionKind, Visibility,

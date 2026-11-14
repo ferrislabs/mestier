@@ -940,3 +940,54 @@ async fn deleting_a_campaign_loads_it_locked() {
 
     service.delete(org(), campaign_id()).await.unwrap();
 }
+
+fn keys(value: &serde_json::Value) -> Vec<String> {
+    let mut keys: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+    keys.sort();
+    keys
+}
+
+#[test]
+fn the_respondent_view_of_a_public_survey_hides_the_organization_and_the_settings() {
+    let survey = opened(&Shape {
+        visibility: Visibility::Public,
+        campaign: Some(campaign_id()),
+        allow_multiple: true,
+        cap: Some(5),
+        ..Shape::default()
+    });
+
+    let view = survey.respondent_view();
+    let json = serde_json::to_value(&view).unwrap();
+
+    assert_eq!(
+        keys(&json),
+        vec![
+            "description",
+            "graph",
+            "id",
+            "public_slug",
+            "title",
+            "visibility"
+        ]
+    );
+    assert_eq!(json["public_slug"], "abcdefgh");
+    assert_eq!(json["title"], "Satisfaction");
+    assert_eq!(
+        json["graph"],
+        serde_json::to_value(survey.definition()).unwrap()
+    );
+    assert_eq!(view.id(), survey_id());
+}
+
+#[test]
+fn the_respondent_view_of_a_members_survey_has_no_public_slug() {
+    let survey = opened(&Shape::default());
+
+    let json = serde_json::to_value(survey.respondent_view()).unwrap();
+
+    assert_eq!(
+        keys(&json),
+        vec!["description", "graph", "id", "title", "visibility"]
+    );
+}
