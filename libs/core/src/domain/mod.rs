@@ -43,6 +43,7 @@ pub(crate) mod service_rate;
 pub(crate) mod supplier_invoice;
 pub(crate) mod support;
 pub(crate) mod surcharge;
+pub(crate) mod survey;
 pub(crate) mod task;
 pub(crate) mod task_comment;
 pub(crate) mod task_label;
