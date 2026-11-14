@@ -521,6 +521,13 @@ impl Modify for SecurityAddon {
         survey::response::member::start::handler,
         survey::response::member::save::handler,
         survey::response::member::complete::handler,
+        survey::response::member::photo::handler,
+        survey::response::public::open::handler,
+        survey::response::public::start::handler,
+        survey::response::public::resume::handler,
+        survey::response::public::save::handler,
+        survey::response::public::complete::handler,
+        survey::response::public::photo::handler,
     ),
     components(schemas(
         knowledge::response::KnowledgeArticleResponse,
@@ -1049,7 +1056,7 @@ impl Modify for SecurityAddon {
         (name = "news", description = "Product news: published to every user, written from a back-office reserved to platform administrators"),
         (name = "admin", description = "Platform back-office, reserved to platform administrators: organizations, users, feature flags and global counts"),
         (name = "support", description = "Support tickets — kanban, thread, intake by organization API key"),
-        (name = "surveys", description = "Questionnaires — surveys, campagnes and réponses: management, and answering as a member of the organization"),
+        (name = "surveys", description = "Questionnaires — surveys, campagnes and réponses: management, answering as a member of the organization, and answering a public survey by its link without an account"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
 )]
@@ -1137,6 +1144,80 @@ mod tests {
                 assert!(!data.contains(hidden), "{path} exposes {hidden}: {data}");
             }
         }
+    }
+
+    #[test]
+    fn the_public_survey_routes_take_no_token_and_reveal_no_organization() {
+        let document = ApiDoc::openapi();
+        let json = serde_json::to_value(&document).expect("the document serializes");
+        let routes = [
+            ("/api/v1/public/surveys/{slug}", "get", false),
+            ("/api/v1/public/surveys/{slug}/responses", "post", true),
+            (
+                "/api/v1/public/surveys/{slug}/responses/{resume_token}",
+                "get",
+                false,
+            ),
+            (
+                "/api/v1/public/surveys/{slug}/responses/{resume_token}",
+                "put",
+                false,
+            ),
+            (
+                "/api/v1/public/surveys/{slug}/responses/{resume_token}/complete",
+                "post",
+                false,
+            ),
+            (
+                "/api/v1/public/surveys/{slug}/responses/{resume_token}/photos",
+                "post",
+                false,
+            ),
+        ];
+        for (path, method, carries_token) in routes {
+            let operation = &json["paths"][path][method];
+            assert!(operation.is_object(), "{method} {path} is missing");
+            assert_eq!(operation["tags"], json!(["surveys"]), "{path}");
+            assert!(
+                operation.get("security").is_none(),
+                "{path} asks for a token"
+            );
+            let responses = operation["responses"].as_object().expect("responses");
+            assert!(responses.contains_key("404"), "{path}");
+            assert!(responses.contains_key("429"), "{path}");
+            let success = responses
+                .get("200")
+                .or_else(|| responses.get("201"))
+                .expect("a success response");
+            let data = &success["content"]["application/json"]["schema"]["properties"]["data"];
+            let data = match data["$ref"].as_str().and_then(|r| r.rsplit('/').next()) {
+                Some(name) => json["components"]["schemas"][name].to_string(),
+                None => data.to_string(),
+            };
+            assert!(
+                data.contains("\"id\"") || data.contains("\"key\""),
+                "{path} has no readable data schema: {data}"
+            );
+            assert_eq!(
+                data.contains("resume_token"),
+                carries_token,
+                "{path}: {data}"
+            );
+            for hidden in [
+                "organization_id",
+                "metadata",
+                "allow_multiple_responses",
+                "response_cap",
+                "campaign_id",
+                "member_id",
+            ] {
+                assert!(!data.contains(hidden), "{path} exposes {hidden}: {data}");
+            }
+        }
+        assert!(
+            json["paths"]["/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/photos"]["post"]
+                .is_object()
+        );
     }
 
     #[test]
