@@ -673,7 +673,7 @@ async fn records_are_upserted_added_once_per_company_and_removed() {
         world.usecase.list_participants(
             tenant.organization_id,
             ParticipantFilter {
-                status: Some(status),
+                status: vec![status],
                 ..ParticipantFilter::default()
             },
             10,
@@ -688,6 +688,20 @@ async fn records_are_upserted_added_once_per_company_and_removed() {
         .await
         .unwrap();
     assert_eq!(by_status(ParticipantStatus::Inactive).await.unwrap().1, 1);
+    let several = world
+        .usecase
+        .list_participants(
+            tenant.organization_id,
+            ParticipantFilter {
+                status: vec![ParticipantStatus::Active, ParticipantStatus::Inactive],
+                ..ParticipantFilter::default()
+            },
+            10,
+            0,
+        )
+        .await
+        .unwrap();
+    assert_eq!(several.1, 1);
     assert_eq!(by_status(ParticipantStatus::Pending).await.unwrap().1, 0);
     let reactivated = world
         .usecase

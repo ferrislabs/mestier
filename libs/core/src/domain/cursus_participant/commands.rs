@@ -8,7 +8,7 @@ use crate::{
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ParticipantFilter {
     pub kind: Option<ParticipantKind>,
-    pub status: Option<ParticipantStatus>,
+    pub status: Vec<ParticipantStatus>,
     pub host_company_id: Option<HostCompanyId>,
     pub search: Option<SearchPattern>,
 }
