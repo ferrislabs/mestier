@@ -19,7 +19,7 @@ use crate::{
     path = "/api/v1/public/surveys/{slug}/responses/{resume_token}",
     operation_id = "savePublicSurveyResponse",
     tag = super::super::super::TAG,
-    description = "Saves every answer given so far to a public response in progress. A photo answer lists keys returned by the photo upload of this same response. Rate limited per client address (600 calls a minute).",
+    description = "Saves every answer given so far to a public response in progress. A photo answer lists keys returned by the photo upload of this same response. Rate limited per client address (600 calls a minute) and per survey (3000 saves a minute).",
     params(
         ("slug" = String, Path, description = "The public slug of the survey"),
         ("resume_token" = String, Path, description = "The resume token returned when the response was started"),

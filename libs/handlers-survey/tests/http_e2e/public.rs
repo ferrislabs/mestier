@@ -425,6 +425,30 @@ async fn a_public_photo_is_normalized_stored_and_answered_by_its_key() {
         json_of(&completed)["data"]["answers"][&question]["Photos"][0],
         key
     );
+    let (_, resumed_other) = app
+        .send(
+            Method::GET,
+            &format!("/public/surveys/{slug}/responses/{other}"),
+            &ip,
+            None,
+        )
+        .await;
+    for id in [
+        json_of(&completed)["data"]["id"].clone(),
+        json_of(&resumed_other)["data"]["id"].clone(),
+    ] {
+        let id = id.as_str().expect("a response has an id").to_owned();
+        let (status, body) = app
+            .call(
+                Method::DELETE,
+                &app.org(&format!("/survey-responses/{id}")),
+                Some(&app.manager),
+                None,
+            )
+            .await;
+        assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+        assert_eq!(app.recorded_photos(&id).await, 0);
+    }
     app.cleanup().await;
 }
 
@@ -502,5 +526,35 @@ async fn the_six_hundred_and_first_read_of_a_minute_from_one_address_is_refused(
         600,
     )
     .await;
+    app.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_survey_flooded_from_rotating_addresses_is_refused_after_six_hundred_starts() {
+    let app = harness::start().await;
+    let slug = format!("inconnu-{}", Uuid::now_v7().simple());
+    let path = format!("/public/surveys/{slug}/responses");
+    for call in 1..=600 {
+        let (status, text) = app.send(Method::POST, &path, &client_ip(), None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "call {call}: {text}");
+    }
+
+    let (status, text) = app.send(Method::POST, &path, &client_ip(), None).await;
+    let (other_status, _) = app
+        .send(
+            Method::POST,
+            &format!(
+                "/public/surveys/inconnu-{}/responses",
+                Uuid::now_v7().simple()
+            ),
+            &client_ip(),
+            None,
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{text}");
+    assert_eq!(json_of(&text)["code"], "E_TOO_MANY_REQUESTS");
+    assert_eq!(other_status, StatusCode::NOT_FOUND);
     app.cleanup().await;
 }
