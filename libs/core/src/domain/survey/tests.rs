@@ -801,8 +801,8 @@ mod lifecycle {
     use super::super::response::{Completed, InProgress, Response, ResumeToken};
     use super::super::{
         Answer, Answers, Branch, CampaignId, ConditionNode, Edge, EmailAddress, EndNode, Graph,
-        Node, PhoneNumber, QuestionId, QuestionKind, QuestionNode, ResponseId, SurveyError,
-        SurveyId, Visibility,
+        Node, PhoneNumber, PublicSlug, QuestionId, QuestionKind, QuestionNode, ResponseId,
+        SurveyError, SurveyId, Visibility,
     };
     use crate::OrganizationId;
 
@@ -885,10 +885,28 @@ mod lifecycle {
         .unwrap()
     }
 
+    fn slug() -> PublicSlug {
+        PublicSlug::new("abcdefgh".to_string()).unwrap()
+    }
+
     fn opened() -> Survey<Opened> {
         let mut survey = draft();
         survey.edit_graph(Some(branching(true)));
-        survey.open(at(1)).unwrap()
+        survey.open(at(1), Some(slug())).unwrap()
+    }
+
+    fn opened_in_campaign() -> Survey<Opened> {
+        let mut survey = draft();
+        survey.edit_graph(Some(branching(true)));
+        survey.edit_campaign(Some(CampaignId(Uuid::from_u128(2))));
+        survey.open(at(1), Some(slug())).unwrap()
+    }
+
+    fn members_draft() -> Survey<Draft> {
+        let mut survey = draft();
+        survey.edit_visibility(Visibility::Members);
+        survey.edit_graph(Some(branching(true)));
+        survey
     }
 
     fn campaign(starts: Option<u32>, ends: Option<u32>) -> Campaign {
@@ -1118,7 +1136,7 @@ mod lifecycle {
     #[test]
     fn a_draft_cannot_open_without_a_graph() {
         assert_eq!(
-            draft().open(at(1)).err(),
+            draft().open(at(1), Some(slug())).err(),
             Some(SurveyError::SurveyWithoutGraph)
         );
     }
@@ -1143,7 +1161,7 @@ mod lifecycle {
     #[test]
     fn a_survey_in_a_running_campaign_accepts_a_response() {
         assert_eq!(
-            opened().accepts(Some(&campaign(Some(1), Some(9))), at(3)),
+            opened_in_campaign().accepts(Some(&campaign(Some(1), Some(9))), at(3)),
             Ok(())
         );
         assert_eq!(opened().accepts(None, at(3)), Ok(()));
@@ -1152,7 +1170,7 @@ mod lifecycle {
     #[test]
     fn a_survey_before_its_campaign_window_refuses() {
         assert_eq!(
-            opened().accepts(Some(&campaign(Some(4), None)), at(3)),
+            opened_in_campaign().accepts(Some(&campaign(Some(4), None)), at(3)),
             Err(SurveyError::CampaignNotStarted)
         );
     }
@@ -1160,9 +1178,101 @@ mod lifecycle {
     #[test]
     fn a_survey_after_its_campaign_window_refuses() {
         assert_eq!(
-            opened().accepts(Some(&campaign(None, Some(3))), at(3)),
+            opened_in_campaign().accepts(Some(&campaign(None, Some(3))), at(3)),
             Err(SurveyError::CampaignEnded)
         );
+    }
+
+    #[test]
+    fn a_survey_in_a_campaign_refuses_without_its_campaign() {
+        assert_eq!(
+            opened_in_campaign().accepts(None, at(3)),
+            Err(SurveyError::SurveyCampaignMismatch)
+        );
+    }
+
+    #[test]
+    fn a_survey_refuses_a_campaign_that_is_not_its_own() {
+        let other = Campaign::new(
+            CampaignId(Uuid::from_u128(7)),
+            org(),
+            "Autre".to_string(),
+            Window::new(None, None).unwrap(),
+            Metadata::default(),
+            at(1),
+        )
+        .unwrap();
+        assert_eq!(
+            opened_in_campaign().accepts(Some(&other), at(3)),
+            Err(SurveyError::SurveyCampaignMismatch)
+        );
+        assert_eq!(
+            opened().accepts(Some(&campaign(None, None)), at(3)),
+            Err(SurveyError::SurveyCampaignMismatch)
+        );
+    }
+
+    #[test]
+    fn a_survey_refuses_a_campaign_of_another_organization() {
+        let foreign = Campaign::new(
+            CampaignId(Uuid::from_u128(2)),
+            OrganizationId(Uuid::from_u128(901)),
+            "Ailleurs".to_string(),
+            Window::new(None, None).unwrap(),
+            Metadata::default(),
+            at(1),
+        )
+        .unwrap();
+        assert_eq!(
+            opened_in_campaign().accepts(Some(&foreign), at(3)),
+            Err(SurveyError::SurveyCampaignOrganizationMismatch)
+        );
+    }
+
+    #[test]
+    fn an_opened_survey_exposes_its_definition() {
+        assert_eq!(opened().definition(), &branching(true));
+    }
+
+    #[test]
+    fn a_public_survey_needs_a_slug_to_open() {
+        let mut survey = draft();
+        survey.edit_graph(Some(branching(true)));
+        assert_eq!(
+            survey.open(at(1), None).err(),
+            Some(SurveyError::SurveyPublicSlugRequired)
+        );
+    }
+
+    #[test]
+    fn a_members_survey_refuses_a_slug() {
+        assert_eq!(
+            members_draft().open(at(1), Some(slug())).err(),
+            Some(SurveyError::SurveyPublicSlugForbidden)
+        );
+        let opened = members_draft().open(at(1), None).unwrap();
+        assert_eq!(opened.public_slug(), None);
+    }
+
+    #[test]
+    fn an_opened_and_a_closed_survey_carry_their_slug() {
+        let opened = opened();
+        assert_eq!(opened.public_slug(), Some(&slug()));
+        let closed = opened.close(at(2)).unwrap();
+        assert_eq!(closed.public_slug(), Some(&slug()));
+    }
+
+    #[test]
+    fn a_slug_inconsistent_with_the_visibility_cannot_be_deserialized() {
+        let mut json = serde_json::to_value(opened()).unwrap();
+        json["public_slug"] = serde_json::Value::Null;
+        assert!(serde_json::from_value::<Survey<Opened>>(json).is_err());
+        let mut json = serde_json::to_value(members_draft().open(at(1), None).unwrap()).unwrap();
+        json["public_slug"] = serde_json::json!("abcdefgh");
+        assert!(serde_json::from_value::<Survey<Opened>>(json).is_err());
+        let mut json = serde_json::to_value(draft()).unwrap();
+        json["public_slug"] = serde_json::json!("abcdefgh");
+        assert!(serde_json::from_value::<Survey<Draft>>(json).is_err());
     }
 
     #[test]

@@ -107,7 +107,7 @@ fn draft(campaign: Option<CampaignId>) -> Survey<Draft> {
 }
 
 fn opened(campaign: Option<CampaignId>) -> Survey<Opened> {
-    draft(campaign).open(at(1)).unwrap()
+    draft(campaign).open(at(1), None).unwrap()
 }
 
 fn campaign() -> Campaign {
