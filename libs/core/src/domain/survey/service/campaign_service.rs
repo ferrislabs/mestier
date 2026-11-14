@@ -149,23 +149,4 @@ where
         self.emit_steps(&saved, &steps)?;
         Ok(steps)
     }
-
-    pub async fn advance_due(
-        &mut self,
-        now: DateTime<Utc>,
-        limit: u64,
-    ) -> Result<Vec<(CampaignId, Vec<CampaignStatus>)>, CoreError> {
-        let mut advanced = Vec::new();
-        for mut campaign in self.campaigns.list_due(now, limit).await? {
-            let before = campaign.status();
-            let steps = steps(before, campaign.advance(now));
-            if steps.is_empty() {
-                continue;
-            }
-            let saved = self.campaigns.update(&campaign).await?;
-            self.emit_steps(&saved, &steps)?;
-            advanced.push((saved.id(), steps));
-        }
-        Ok(advanced)
-    }
 }

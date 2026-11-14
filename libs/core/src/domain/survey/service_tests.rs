@@ -737,60 +737,6 @@ async fn deleting_a_survey_with_responses_is_refused() {
     );
 }
 
-fn due(campaign: Campaign) -> MockCampaignRepository {
-    let mut campaigns = MockCampaignRepository::new();
-    campaigns.expect_list_due().returning(move |_, _| {
-        let found = vec![campaign.clone()];
-        Box::pin(async move { Ok(found) })
-    });
-    campaigns
-        .expect_update()
-        .withf(|campaign| campaign.status() == CampaignStatus::Ended)
-        .times(1)
-        .returning(|campaign| {
-            let saved = campaign.clone();
-            Box::pin(async move { Ok(saved) })
-        });
-    campaigns
-}
-
-#[tokio::test]
-async fn advance_due_emits_started_then_ended_on_a_skipped_step() {
-    let scheduled = campaign(Window::new(Some(at(2)), Some(at(4))).unwrap(), at(1));
-    assert_eq!(scheduled.status(), CampaignStatus::Scheduled);
-    let emitter = RecordingEmitter::new();
-    let mut service: Campaigns<'_> =
-        CampaignService::new(due(scheduled), MockSurveyRepository::new(), &emitter);
-
-    let advanced = service.advance_due(at(5), 10).await.unwrap();
-
-    assert_eq!(
-        advanced,
-        vec![(
-            campaign_id(),
-            vec![CampaignStatus::Running, CampaignStatus::Ended]
-        )]
-    );
-    assert_eq!(
-        emitter.names(),
-        vec!["survey_campaign.started", "survey_campaign.ended"]
-    );
-}
-
-#[tokio::test]
-async fn advance_due_emits_ended_only_from_running() {
-    let running = campaign(Window::new(Some(at(2)), Some(at(4))).unwrap(), at(3));
-    assert_eq!(running.status(), CampaignStatus::Running);
-    let emitter = RecordingEmitter::new();
-    let mut service: Campaigns<'_> =
-        CampaignService::new(due(running), MockSurveyRepository::new(), &emitter);
-
-    let advanced = service.advance_due(at(5), 10).await.unwrap();
-
-    assert_eq!(advanced, vec![(campaign_id(), vec![CampaignStatus::Ended])]);
-    assert_eq!(emitter.names(), vec!["survey_campaign.ended"]);
-}
-
 fn locked(campaign: Option<Campaign>) -> MockCampaignRepository {
     let mut campaigns = MockCampaignRepository::new();
     campaigns
@@ -827,6 +773,29 @@ async fn advance_rereads_the_campaign_locked_and_emits_started_then_ended() {
         emitter.names(),
         vec!["survey_campaign.started", "survey_campaign.ended"]
     );
+}
+
+#[tokio::test]
+async fn advance_emits_ended_only_from_running() {
+    let running = campaign(Window::new(Some(at(2)), Some(at(4))).unwrap(), at(3));
+    assert_eq!(running.status(), CampaignStatus::Running);
+    let mut campaigns = locked(Some(running));
+    campaigns
+        .expect_update()
+        .withf(|campaign| campaign.status() == CampaignStatus::Ended)
+        .times(1)
+        .returning(|campaign| {
+            let saved = campaign.clone();
+            Box::pin(async move { Ok(saved) })
+        });
+    let emitter = RecordingEmitter::new();
+    let mut service: Campaigns<'_> =
+        CampaignService::new(campaigns, MockSurveyRepository::new(), &emitter);
+
+    let steps = service.advance(org(), campaign_id(), at(5)).await.unwrap();
+
+    assert_eq!(steps, vec![CampaignStatus::Ended]);
+    assert_eq!(emitter.names(), vec!["survey_campaign.ended"]);
 }
 
 #[tokio::test]
