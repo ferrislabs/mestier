@@ -3,7 +3,8 @@ use authz::Subject;
 use crate::OrganizationId;
 use crate::domain::survey::service::{CampaignPatch, SurveyPatch};
 use crate::domain::survey::{
-    Answers, CampaignId, Metadata, ResponseId, SurveyId, Visibility, Window,
+    Answers, CampaignId, Completed, Metadata, Response, ResponseId, SurveyId, SurveyRecord,
+    Visibility, Window,
 };
 
 #[derive(Debug, Clone)]
@@ -77,6 +78,21 @@ pub struct ListSurveyResponsesCommand {
     pub survey_id: SurveyId,
     pub limit: u64,
     pub offset: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompletedSurveyResponses {
+    pub survey: SurveyRecord,
+    pub responses: Vec<Response<Completed>>,
+    pub total: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct OpenSurveyInCampaignCommand {
+    pub actor: Subject,
+    pub organization_id: OrganizationId,
+    pub id: SurveyId,
+    pub campaign_id: CampaignId,
 }
 
 #[derive(Debug, Clone)]

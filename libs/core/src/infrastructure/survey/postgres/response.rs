@@ -3,7 +3,7 @@ use mestier_macros::repository;
 
 use crate::{
     MemberId, OrganizationId, ResponseId, ResponseRecord, ResumeToken, SurveyError, SurveyId,
-    domain::survey::ports::ResponseRepository,
+    domain::survey::{Completed, Response, ports::ResponseRepository},
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
         survey::postgres::model::{ResponseColumns, ResponseRow, map_response_error},
@@ -214,6 +214,56 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
         .map_err(map_sqlx_error)?;
 
         Ok((records(rows)?, u64::try_from(total).unwrap_or(0)))
+    }
+
+    async fn list_completed_for_survey(
+        &mut self,
+        organization_id: OrganizationId,
+        survey_id: SurveyId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<Response<Completed>>, u64), CoreError> {
+        let (limit, offset) = page(limit, offset);
+        let mut tx = self.tx.lock().await;
+        let total = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) AS "count!"
+            FROM survey.response
+            WHERE org_id = $1 AND survey_id = $2 AND status = 'COMPLETED'
+            "#,
+            organization_id.0,
+            survey_id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        let rows = sqlx::query_as!(
+            ResponseRow,
+            r#"
+            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
+                   identifier_value, unique_respondent, completed_at, created_at
+            FROM survey.response
+            WHERE org_id = $1 AND survey_id = $2 AND status = 'COMPLETED'
+            ORDER BY completed_at DESC, id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+            organization_id.0,
+            survey_id.0,
+            limit,
+            offset,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let completed = records(rows)?
+            .into_iter()
+            .filter_map(|record| match record {
+                ResponseRecord::Completed(response) => Some(response),
+                ResponseRecord::InProgress(_) => None,
+            })
+            .collect();
+        Ok((completed, u64::try_from(total).unwrap_or(0)))
     }
 
     async fn find_by_resume_token(

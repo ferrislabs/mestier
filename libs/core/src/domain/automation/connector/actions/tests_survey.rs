@@ -58,7 +58,7 @@ fn each_action_asks_for_its_own_fields() {
 #[test]
 fn the_listed_answers_sample_the_entries_of_the_completed_event() {
     let sample = responses_sample();
-    let answer = &sample[0]["answers"][0];
+    let answer = &sample["responses"][0]["answers"][0];
 
     let mut keys: Vec<&str> = answer
         .as_object()
@@ -69,16 +69,34 @@ fn the_listed_answers_sample_the_entries_of_the_completed_event() {
     keys.sort_unstable();
 
     assert_eq!(keys, ["kind", "label", "question_id", "value"]);
-    assert!(sample[0].get("completed_at").is_some());
-    assert!(sample[0].get("identifier_value").is_some());
+    assert!(sample["responses"][0].get("completed_at").is_some());
+    assert!(sample["responses"][0].get("identifier_value").is_some());
+    assert_eq!(sample["total"], 1);
+}
+
+#[test]
+fn the_responses_field_labels_tell_the_order_the_default_and_the_cap() {
+    let spec = SPECS
+        .iter()
+        .find(|spec| spec.kind == "mestier.survey.list_responses")
+        .unwrap();
+    let limit = spec
+        .fields
+        .iter()
+        .find(|field| field.name == "limit")
+        .unwrap();
+
+    assert!(limit.label.contains("les plus récentes d’abord"));
+    assert!(limit.label.contains("50") && limit.label.contains("100"));
+    assert!(spec.description.contains("les plus récentes d’abord"));
 }
 
 #[test]
 fn the_link_sample_names_the_public_path() {
     let sample = link_sample();
+    let slug =
+        crate::domain::survey::PublicSlug::new(sample["public_slug"].as_str().unwrap().to_owned())
+            .unwrap();
 
-    assert_eq!(
-        sample["path"],
-        format!("/s/{}", sample["public_slug"].as_str().unwrap())
-    );
+    assert_eq!(sample["path"], slug.path());
 }

@@ -20,8 +20,16 @@ const OPEN_FIELDS: &[Field] = &[
 
 const RESPONSES_FIELDS: &[Field] = &[
     Field::text("survey_id", "Questionnaire", true),
-    Field::number("limit", "Nombre maximum de réponses", false),
-    Field::number("offset", "Décalage", false),
+    Field::number(
+        "limit",
+        "Nombre de réponses, les plus récentes d’abord (50 par défaut, 100 au plus)",
+        false,
+    ),
+    Field::number(
+        "offset",
+        "Réponses à sauter avant de lister (0 par défaut)",
+        false,
+    ),
 ];
 
 fn survey_sample() -> Value {
@@ -60,25 +68,28 @@ pub(super) fn link_sample() -> Value {
 }
 
 pub(super) fn responses_sample() -> Value {
-    json!([{
-        "id": NIL,
-        "member_id": null,
-        "completed_at": "2026-01-02T00:00:00Z",
-        "identifier_value": null,
-        "answers": [{
-            "question_id": NIL,
-            "label": "Nom",
-            "kind": "TEXT",
-            "value": "Claire Fontaine",
+    json!({
+        "total": 1,
+        "responses": [{
+            "id": NIL,
+            "member_id": null,
+            "completed_at": "2026-01-02T00:00:00Z",
+            "identifier_value": null,
+            "answers": [{
+                "question_id": NIL,
+                "label": "Nom",
+                "kind": "TEXT",
+                "value": "Claire Fontaine",
+            }],
         }],
-    }])
+    })
 }
 
 pub(super) const SPECS: &[ActionSpec] = &[
     ActionSpec {
         kind: "mestier.survey.open",
         label: "Ouvrir un questionnaire",
-        description: "Ouvre un questionnaire en brouillon à son audience, après l’avoir rattaché à une campagne si elle est renseignée.",
+        description: "Ouvre un questionnaire en brouillon à son audience, en le rattachant dans le même temps à une campagne si elle est renseignée : si l’ouverture échoue, le brouillon reste inchangé.",
         group: GROUP,
         fields: OPEN_FIELDS,
         read_only: false,
@@ -105,7 +116,7 @@ pub(super) const SPECS: &[ActionSpec] = &[
     ActionSpec {
         kind: "mestier.survey.list_responses",
         label: "Lister les réponses d’un questionnaire",
-        description: "Renvoie les réponses complètes d’un questionnaire, page par page, avec les réponses du chemin parcouru.",
+        description: "Renvoie les réponses complétées d’un questionnaire, les plus récentes d’abord, 50 par défaut et 100 au plus par appel, avec leur nombre total et les réponses du chemin parcouru.",
         group: GROUP,
         fields: RESPONSES_FIELDS,
         read_only: true,

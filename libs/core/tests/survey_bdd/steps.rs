@@ -872,6 +872,66 @@ async fn the_other_company_sees(world: &mut SurveyWorld, count: usize) {
     assert_eq!(world.listed, Some(count));
 }
 
+async fn completed_names(
+    world: &SurveyWorld,
+    organization_id: OrganizationId,
+    survey: &str,
+) -> (Vec<String>, u64) {
+    let survey_id = survey_named(world, survey);
+    let question = world
+        .questions
+        .iter()
+        .find_map(|((title, _), id)| (title == survey).then_some(*id))
+        .expect("the survey has a question");
+    let (listed, total) = repository::responses(&world.store)
+        .list_completed_for_survey(organization_id, survey_id, 100, 0)
+        .await
+        .expect("no infrastructure failure here");
+    let names = listed
+        .iter()
+        .map(|response| match response.answers().get(&question) {
+            Some(Answer::Text(text)) => text.clone(),
+            other => panic!("unexpected answer {other:?}"),
+        })
+        .collect();
+    (names, total)
+}
+
+fn expected_names(names: &str) -> Vec<String> {
+    names
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[then(
+    expr = "the company lists {int} completed response(s) of the survey {string} answering {string}"
+)]
+async fn the_company_lists_completed(
+    world: &mut SurveyWorld,
+    count: u64,
+    survey: String,
+    names: String,
+) {
+    let listed = completed_names(world, world.organization_id(), &survey).await;
+    assert_eq!(listed, (expected_names(&names), count));
+}
+
+#[then(
+    expr = "the other company lists {int} completed response(s) of the survey {string} answering {string}"
+)]
+async fn the_other_company_lists_completed(
+    world: &mut SurveyWorld,
+    count: u64,
+    survey: String,
+    names: String,
+) {
+    let listed = completed_names(world, world.other_organization_id(), &survey).await;
+    assert_eq!(listed, (expected_names(&names), count));
+}
+
 #[then(expr = "the company sees {int} response(s) of the survey {string}")]
 async fn the_company_sees(world: &mut SurveyWorld, count: usize, survey: String) {
     let (listed, _) = repository::responses(&world.store)

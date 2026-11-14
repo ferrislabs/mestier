@@ -6,9 +6,9 @@ use std::{
 use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_core::{
-    Campaign, CampaignId, CampaignRepository, MemberId, OrganizationId, PublicSlug, ResponseId,
-    ResponseRecord, ResponseRepository, ResumeToken, SurveyError, SurveyId, SurveyRecord,
-    SurveyRepository,
+    Campaign, CampaignId, CampaignRepository, Completed, MemberId, OrganizationId, PublicSlug,
+    ResponseId, ResponseRecord, ResponseRepository, ResumeToken, SurveyError, SurveyId,
+    SurveyRecord, SurveyRepository, SurveyResponse,
 };
 
 #[derive(Debug, Default)]
@@ -424,6 +424,37 @@ impl ResponseRepository for MemoryResponses {
             .map(|record| (record.id().0, record.clone()))
             .collect();
         Ok(page(items, limit, offset))
+    }
+
+    async fn list_completed_for_survey(
+        &mut self,
+        organization_id: OrganizationId,
+        survey_id: SurveyId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<SurveyResponse<Completed>>, u64), CoreError> {
+        let mut completed: Vec<SurveyResponse<Completed>> = state(&self.store)
+            .responses
+            .values()
+            .filter_map(|record| match record {
+                ResponseRecord::Completed(response)
+                    if response.organization_id() == organization_id
+                        && response.survey_id() == survey_id =>
+                {
+                    Some(response.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        completed
+            .sort_by_key(|response| std::cmp::Reverse((response.completed_at(), response.id().0)));
+        let total = completed.len() as u64;
+        let kept = completed
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .collect();
+        Ok((kept, total))
     }
 
     async fn find_by_resume_token(
