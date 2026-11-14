@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
@@ -11,7 +12,6 @@ import {
 	useSurveyResponses,
 } from '#/hooks/use-surveys'
 import { buildOrgPath } from '#/modules/org-path'
-import { useNotice } from '#/pages/customers/feature/use-notice'
 import { answerText } from '#/pages/survey/lib/answer-format'
 import { refusalOf } from '#/pages/survey/lib/reason-messages'
 import { surveyPath } from '#/pages/survey/lib/survey-format'
@@ -34,11 +34,9 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 	const organizationId = activeOrganization.id
 	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_SURVEYS')
-	const notice = useNotice()
 	const [page, setPage] = useState(1)
 	const [openId, setOpenId] = useState<string | null>(null)
 	const [confirmDelete, setConfirmDelete] = useState(false)
-	const [actionError, setActionError] = useState<string | null>(null)
 
 	const survey = useSurvey(organizationId, surveyId)
 	const responses = useSurveyResponses(organizationId, surveyId, page)
@@ -91,7 +89,6 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 	const remove = async () => {
 		if (!opened) return
 		setConfirmDelete(false)
-		setActionError(null)
 		try {
 			await deleteResponse.mutateAsync({
 				path: {
@@ -101,9 +98,9 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 			})
 			setOpenId(null)
 			if (rows.length === 1 && page > 1) setPage(page - 1)
-			notice.show('Réponse supprimée.')
+			toast.success('Réponse supprimée.')
 		} catch (failure) {
-			setActionError(refusalOf(failure).message)
+			toast.error(refusalOf(failure).message, { duration: 6000 })
 		}
 	}
 
@@ -114,15 +111,10 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 				table={table}
 				isEmpty={rows.length === 0}
 				isLoading={responses.isLoading}
-				error={
-					actionError ??
-					(responses.error ? refusalOf(responses.error).message : null)
-				}
-				notice={notice.message}
+				error={responses.error ? refusalOf(responses.error).message : null}
 				page={page}
 				pageCount={pagination?.last_page ?? null}
 				total={pagination?.total ?? null}
-				onDismissNotice={notice.clear}
 				onBack={() =>
 					void navigate({
 						to: buildOrgPath(activeOrganization.slug, surveyPath(surveyId)),

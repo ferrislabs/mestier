@@ -3,7 +3,6 @@ import { Loader2, Plus } from 'lucide-react'
 import { EmptyState } from '#/components/empty-state'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
-import { Notice } from '#/pages/customers/ui/notice'
 import type { SurveyRow } from '#/pages/survey/ui/survey-columns'
 import { SurveyDataTable } from '#/pages/survey/ui/survey-data-table'
 
@@ -34,8 +33,6 @@ export function SurveysList({
 	isLoading,
 	error,
 	canManage,
-	notice,
-	onDismissNotice,
 	onCreate,
 }: {
 	table: Table<SurveyRow>
@@ -43,8 +40,6 @@ export function SurveysList({
 	isLoading: boolean
 	error: string | null
 	canManage: boolean
-	notice: string | null
-	onDismissNotice: () => void
 	onCreate: () => void
 }) {
 	const createButton = canManage ? (
@@ -60,7 +55,6 @@ export function SurveysList({
 				description="Construisez un questionnaire, ouvrez-le à votre audience et lisez les réponses reçues."
 				actions={createButton}
 			/>
-			<Notice message={notice} onDismiss={onDismissNotice} />
 			<ErrorBanner message={error} />
 			{isLoading ? (
 				<LoadingCard label="Chargement des questionnaires…" />

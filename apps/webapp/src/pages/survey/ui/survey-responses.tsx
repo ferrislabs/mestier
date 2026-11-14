@@ -16,7 +16,6 @@ import {
 	SheetTitle,
 } from '#/components/ui/sheet'
 import { PageHeader, PageShell } from '#/components/ui/surface'
-import { Notice } from '#/pages/customers/ui/notice'
 import { type AnswerView, answerView } from '#/pages/survey/lib/answer-format'
 import { questionKindEntry } from '#/pages/survey/lib/question-kinds'
 import { formatDateTime } from '#/pages/survey/lib/survey-format'
@@ -65,11 +64,9 @@ export function SurveyResponsesList({
 	isEmpty,
 	isLoading,
 	error,
-	notice,
 	page,
 	pageCount,
 	total,
-	onDismissNotice,
 	onBack,
 	onPage,
 	onOpen,
@@ -79,11 +76,9 @@ export function SurveyResponsesList({
 	isEmpty: boolean
 	isLoading: boolean
 	error: string | null
-	notice: string | null
 	page: number
 	pageCount: number | null
 	total: number | null
-	onDismissNotice: () => void
 	onBack: () => void
 	onPage: (page: number) => void
 	onOpen: (row: ResponseRow) => void
@@ -109,7 +104,6 @@ export function SurveyResponsesList({
 						: `${total} réponse${total > 1 ? 's' : ''} reçue${total > 1 ? 's' : ''}.`
 				}
 			/>
-			<Notice message={notice} onDismiss={onDismissNotice} />
 			<ErrorBanner message={error} />
 			{isLoading ? (
 				<LoadingCard label="Chargement des réponses…" />

@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, SectionCard } from '#/components/ui/surface'
@@ -12,8 +13,6 @@ import {
 	useUpdateCampaign,
 } from '#/hooks/use-surveys'
 import { buildOrgPath } from '#/modules/org-path'
-import { useNotice } from '#/pages/customers/feature/use-notice'
-import { Notice } from '#/pages/customers/ui/notice'
 import { CampaignFormFeature } from '#/pages/survey/feature/campaign-form-feature'
 import {
 	type CampaignFormValues,
@@ -30,12 +29,10 @@ export function CampaignEditFeature({ campaignId }: { campaignId: string }) {
 	const organizationId = activeOrganization.id
 	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_SURVEYS')
-	const notice = useNotice()
 	const campaign = useCampaign(organizationId, campaignId)
 	const updateCampaign = useUpdateCampaign()
 	const deleteCampaign = useDeleteCampaign()
 	const [confirmDelete, setConfirmDelete] = useState(false)
-	const [deleteError, setDeleteError] = useState<string | null>(null)
 
 	const back = () =>
 		navigate({ to: buildOrgPath(activeOrganization.slug, campaignsPath()) })
@@ -45,19 +42,18 @@ export function CampaignEditFeature({ campaignId }: { campaignId: string }) {
 			path: { organization_id: organizationId, campaign_id: campaignId },
 			body: campaignRequest(values),
 		})
-		notice.show('Campagne enregistrée.')
+		toast.success('Campagne enregistrée.')
 	}
 
 	const remove = async () => {
 		setConfirmDelete(false)
-		setDeleteError(null)
 		try {
 			await deleteCampaign.mutateAsync({
 				path: { organization_id: organizationId, campaign_id: campaignId },
 			})
 			await back()
 		} catch (failure) {
-			setDeleteError(refusalOf(failure).message)
+			toast.error(refusalOf(failure).message, { duration: 6000 })
 		}
 	}
 
@@ -79,8 +75,6 @@ export function CampaignEditFeature({ campaignId }: { campaignId: string }) {
 				title={data?.name ?? 'Campagne'}
 				actions={data ? <CampaignStatusBadge status={data.status} /> : null}
 			/>
-			<Notice message={notice.message} onDismiss={notice.clear} />
-			<ErrorBanner message={deleteError} />
 			{campaign.isLoading ? (
 				<LoadingCard label="Chargement de la campagne…" />
 			) : !data ? (

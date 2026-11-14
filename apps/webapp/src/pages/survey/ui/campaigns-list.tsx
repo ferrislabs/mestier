@@ -3,7 +3,6 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { EmptyState } from '#/components/empty-state'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
-import { Notice } from '#/pages/customers/ui/notice'
 import { formatWindow } from '#/pages/survey/lib/survey-format'
 import type { Campaign } from '#/pages/survey/types'
 import { CampaignStatusBadge } from '#/pages/survey/ui/survey-badges'
@@ -94,8 +93,6 @@ export function CampaignsList({
 	isLoading,
 	error,
 	canManage,
-	notice,
-	onDismissNotice,
 	onCreate,
 }: {
 	table: Table<CampaignRow>
@@ -103,8 +100,6 @@ export function CampaignsList({
 	isLoading: boolean
 	error: string | null
 	canManage: boolean
-	notice: string | null
-	onDismissNotice: () => void
 	onCreate: () => void
 }) {
 	const createButton = canManage ? (
@@ -120,7 +115,6 @@ export function CampaignsList({
 				description="Une campagne regroupe des questionnaires et fixe la fenêtre pendant laquelle leurs réponses sont acceptées."
 				actions={createButton}
 			/>
-			<Notice message={notice} onDismiss={onDismissNotice} />
 			<ErrorBanner message={error} />
 			{isLoading ? (
 				<LoadingCard label="Chargement des campagnes…" />

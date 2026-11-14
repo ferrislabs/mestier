@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
@@ -12,8 +13,6 @@ import {
 } from '#/hooks/use-surveys'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
-import { useNotice } from '#/pages/customers/feature/use-notice'
-import { Notice } from '#/pages/customers/ui/notice'
 import { UnsavedGuard } from '#/pages/projects/ui/unsaved-guard'
 import { SurveyCanvasFeature } from '#/pages/survey/feature/survey-canvas-feature'
 import { SurveyNodeDetailsFeature } from '#/pages/survey/feature/survey-node-details-feature'
@@ -101,7 +100,6 @@ export function SurveyEditorWorkspace({
 	const organizationId = activeOrganization.id
 	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_SURVEYS')
-	const notice = useNotice()
 	const updateSurvey = useUpdateSurvey()
 	const openSurvey = useOpenSurvey()
 	const duplicateSurvey = useDuplicateSurvey()
@@ -187,8 +185,10 @@ export function SurveyEditorWorkspace({
 			})
 			setSelectedId(refusal.questionId)
 			setOpenNodeId(refusal.questionId)
+			setError(refusal.message)
+			return
 		}
-		setError(refusal.message)
+		toast.error(refusal.message, { duration: 6000 })
 	}
 
 	const save = async (): Promise<boolean> => {
@@ -210,7 +210,7 @@ export function SurveyEditorWorkspace({
 				graph: graphSignature(graph),
 				settings: settingsSignature(settings),
 			})
-			notice.show('Questionnaire enregistré.')
+			toast.success('Questionnaire enregistré.')
 			return true
 		} catch (failure) {
 			refuse(failure)
@@ -239,7 +239,7 @@ export function SurveyEditorWorkspace({
 			await openSurvey.mutateAsync({
 				path: { organization_id: organizationId, survey_id: survey.id },
 			})
-			notice.show(lifecycleCopy('open', survey.title).done)
+			toast.success(lifecycleCopy('open', survey.title).done)
 		} catch (failure) {
 			refuse(failure)
 		}
@@ -252,7 +252,7 @@ export function SurveyEditorWorkspace({
 			})
 			await goTo(surveyPath(created.data.id))
 		} catch (failure) {
-			setError(mutationErrorMessage(failure))
+			toast.error(mutationErrorMessage(failure), { duration: 6000 })
 		}
 	}
 
@@ -262,8 +262,10 @@ export function SurveyEditorWorkspace({
 			? () =>
 					void navigator.clipboard
 						.writeText(publicSurveyUrl(window.location.origin, slug))
-						.then(() => notice.show('Lien public copié.'))
-						.catch(() => setError('Le lien n’a pas pu être copié.'))
+						.then(() => toast.success('Lien public copié.'))
+						.catch(() =>
+							toast.error('Le lien n’a pas pu être copié.', { duration: 6000 }),
+						)
 			: null
 
 	return (
@@ -299,10 +301,9 @@ export function SurveyEditorWorkspace({
 				onCopyLink={copyLink}
 			/>
 			<ReadOnlyBanner survey={survey} canManage={canManage} />
-			{error || notice.message ? (
+			{error ? (
 				<div className="grid gap-2 border-b px-4 py-2">
 					<ErrorBanner message={error} />
-					<Notice message={notice.message} onDismiss={notice.clear} />
 				</div>
 			) : null}
 			<div className="flex min-h-[480px] flex-1">

@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFlowTestEnvironment } from '#/pages/automation/test/flow-test-env'
 import { SurveyEditorFeature } from '#/pages/survey/feature/survey-editor-feature'
 import { REASON_MESSAGES } from '#/pages/survey/lib/reason-messages'
@@ -11,8 +11,17 @@ import {
 } from '#/pages/survey/test/survey-harness'
 import type { Survey } from '#/pages/survey/types'
 
+const toastMock = vi.hoisted(() => ({
+	success: vi.fn(),
+	error: vi.fn(),
+}))
+
+vi.mock('sonner', () => ({ toast: toastMock }))
+
 beforeEach(() => {
 	installFlowTestEnvironment()
+	toastMock.success.mockClear()
+	toastMock.error.mockClear()
 })
 
 const GRAPH: NonNullable<Survey['graph']> = {
@@ -368,7 +377,61 @@ describe('SurveyEditorFeature', () => {
 			within(dialog).getByRole('button', { name: 'Ouvrir et figer' }),
 		)
 
-		expect(await screen.findByText(REASON_MESSAGES.survey_closed)).toBeTruthy()
+		await waitFor(() =>
+			expect(toastMock.error).toHaveBeenCalledWith(
+				REASON_MESSAGES.survey_closed,
+				{
+					duration: 6000,
+				},
+			),
+		)
+	})
+
+	it('toasts the saved questionnaire', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		api.mockMutation('patch', PATHS.survey, () => ({
+			data: survey({ graph: GRAPH }),
+		}))
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await editLabel('Question Texte court : Immatriculation', 'Plaque')
+		await closeDetails()
+		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() =>
+			expect(toastMock.success).toHaveBeenCalledWith(
+				'Questionnaire enregistré.',
+			),
+		)
+		expect(screen.queryByText('Questionnaire enregistré.')).toBe(null)
+	})
+
+	it('toasts a failed save with the French message', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		api.mockMutation('patch', PATHS.survey, () => {
+			throw refusal(409, 'survey_closed')
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await editLabel('Question Texte court : Immatriculation', 'Plaque')
+		await closeDetails()
+		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() =>
+			expect(toastMock.error).toHaveBeenCalledWith(
+				REASON_MESSAGES.survey_closed,
+				{
+					duration: 6000,
+				},
+			),
+		)
+		expect(toastMock.success).not.toHaveBeenCalled()
 	})
 
 	it('removes a selected node and an unrelated selected edge deleted together', async () => {
