@@ -387,7 +387,12 @@ mod tests {
         let (status, json) = parse_response(api).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(json["code"], "E_UNPROCESSABLE_ENTITY");
-        assert!(json["message"].as_str().unwrap().contains("graph: has no node"));
+        assert!(
+            json["message"]
+                .as_str()
+                .unwrap()
+                .contains("graph: has no node")
+        );
     }
 
     #[tokio::test]
