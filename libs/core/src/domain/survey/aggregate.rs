@@ -20,7 +20,23 @@ pub struct Opened;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Closed;
 
-pub trait Stage {
+mod sealed {
+    pub trait Sealed {}
+}
+
+impl sealed::Sealed for Draft {}
+impl sealed::Sealed for Opened {}
+impl sealed::Sealed for Closed {}
+
+fn check_title(body: &Body) -> Result<(), SurveyError> {
+    if body.title.trim().is_empty() {
+        Err(SurveyError::SurveyTitleEmpty)
+    } else {
+        Ok(())
+    }
+}
+
+pub trait Stage: sealed::Sealed {
     fn check(body: &Body) -> Result<(), SurveyError>;
 }
 
@@ -58,7 +74,7 @@ impl Stage for Closed {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Body {
+pub(crate) struct Body {
     id: SurveyId,
     organization_id: OrganizationId,
     title: String,
@@ -88,7 +104,9 @@ impl<S> Serialize for Survey<S> {
 impl<'de, S: Stage> Deserialize<'de> for Survey<S> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let body = Body::deserialize(deserializer)?;
-        S::check(&body).map_err(serde::de::Error::custom)?;
+        check_title(&body)
+            .and_then(|()| S::check(&body))
+            .map_err(serde::de::Error::custom)?;
         Ok(Self {
             body,
             stage: PhantomData,
@@ -223,12 +241,15 @@ impl Survey<Draft> {
 }
 
 impl Survey<Opened> {
-    pub fn close(mut self, at: DateTime<Utc>) -> Survey<Closed> {
+    pub fn close(mut self, at: DateTime<Utc>) -> Result<Survey<Closed>, SurveyError> {
+        if self.body.opened_at.is_some_and(|opened| at < opened) {
+            return Err(SurveyError::SurveyClosedBeforeOpened);
+        }
         self.body.closed_at = Some(at);
-        Survey {
+        Ok(Survey {
             body: self.body,
             stage: PhantomData,
-        }
+        })
     }
 
     pub fn accepts(

@@ -5,6 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::error::SurveyError;
 use super::graph::{Answers, Graph};
+use super::validation::{check_finite, ensure_known, validate};
 use super::value::Answer;
 use super::{ResponseId, SurveyId};
 use crate::{MemberId, OrganizationId};
@@ -15,7 +16,14 @@ pub struct InProgress;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Completed;
 
-pub trait Phase {
+mod sealed {
+    pub trait Sealed {}
+}
+
+impl sealed::Sealed for InProgress {}
+impl sealed::Sealed for Completed {}
+
+pub trait Phase: sealed::Sealed {
     fn check(body: &ResponseBody) -> Result<(), SurveyError>;
 }
 
@@ -66,7 +74,7 @@ impl TryFrom<String> for ResumeToken {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ResponseBody {
+pub(crate) struct ResponseBody {
     id: ResponseId,
     survey_id: SurveyId,
     organization_id: OrganizationId,
@@ -99,15 +107,6 @@ impl<'de, S: Phase> Deserialize<'de> for Response<S> {
             phase: PhantomData,
         })
     }
-}
-
-fn check_finite(answers: &Answers) -> Result<(), SurveyError> {
-    for (id, answer) in answers {
-        if matches!(answer, Answer::Number(number) if !number.is_finite()) {
-            return Err(SurveyError::AnswerNotFinite(*id));
-        }
-    }
-    Ok(())
 }
 
 fn identifier_of(
@@ -186,8 +185,8 @@ impl Response<InProgress> {
         }
     }
 
-    pub fn save(&mut self, answers: Answers) -> Result<(), SurveyError> {
-        check_finite(&answers)?;
+    pub fn save(&mut self, graph: &Graph, answers: Answers) -> Result<(), SurveyError> {
+        validate(graph, &answers)?;
         self.body.answers = answers;
         Ok(())
     }
@@ -197,6 +196,7 @@ impl Response<InProgress> {
         graph: &Graph,
         at: DateTime<Utc>,
     ) -> Result<Response<Completed>, SurveyError> {
+        ensure_known(graph, &self.body.answers)?;
         let path = graph.path(&self.body.answers);
         for id in &path.questions {
             let required = graph.question(id).is_some_and(|node| node.required);
@@ -207,7 +207,7 @@ impl Response<InProgress> {
         self.body
             .answers
             .retain(|id, _| path.questions.contains(id));
-        check_finite(&self.body.answers)?;
+        validate(graph, &self.body.answers)?;
         self.body.identifier_value = identifier_of(graph, &path.questions, &self.body.answers);
         self.body.completed_at = Some(at);
         Ok(Response {

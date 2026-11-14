@@ -72,4 +72,18 @@ pub enum SurveyError {
     AnswerNotFinite(QuestionId),
     #[error("response: the stored state does not match its status")]
     ResponseInconsistentState,
+    #[error("survey: cannot be closed before it was opened")]
+    SurveyClosedBeforeOpened,
+    #[error("response: question {0} is not a question of the survey")]
+    AnswerUnknownQuestion(QuestionId),
+    #[error("response: the answer to question {0} does not match its kind")]
+    AnswerKindMismatch(QuestionId),
+    #[error("response: the answer to question {0} names an unknown option")]
+    AnswerUnknownOption(QuestionId),
+    #[error("response: the answer to question {0} repeats an option")]
+    AnswerDuplicateOption(QuestionId),
+    #[error("response: the answer to question {0} has too many photos")]
+    AnswerTooManyPhotos(QuestionId),
+    #[error("response: the answer to question {0} has an empty photo")]
+    AnswerEmptyPhoto(QuestionId),
 }

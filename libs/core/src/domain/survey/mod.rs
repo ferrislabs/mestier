@@ -10,6 +10,7 @@ pub mod error;
 pub mod graph;
 pub mod metadata;
 pub mod response;
+mod validation;
 pub mod value;
 
 #[cfg(test)]

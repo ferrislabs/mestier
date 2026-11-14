@@ -711,8 +711,8 @@ mod lifecycle {
     use super::super::response::{Completed, InProgress, Response, ResumeToken};
     use super::super::{
         Answer, Answers, Branch, CampaignId, ConditionNode, Edge, EmailAddress, EndNode, Graph,
-        Node, QuestionId, QuestionKind, QuestionNode, ResponseId, SurveyError, SurveyId,
-        Visibility,
+        Node, PhoneNumber, QuestionId, QuestionKind, QuestionNode, ResponseId, SurveyError,
+        SurveyId, Visibility,
     };
     use crate::OrganizationId;
 
@@ -780,15 +780,6 @@ mod lifecycle {
                 edge(3, 5, Branch::Next),
                 edge(4, 5, Branch::Next),
             ],
-            qid(1),
-        )
-        .unwrap()
-    }
-
-    fn identified() -> Graph {
-        Graph::new(
-            vec![node(1, QuestionKind::Text, true, true), end(2)],
-            vec![edge(1, 2, Branch::Next)],
             qid(1),
         )
         .unwrap()
@@ -977,46 +968,240 @@ mod lifecycle {
 
     #[test]
     fn a_closed_survey_refuses() {
-        let closed: Survey<Closed> = opened().close(at(2));
+        let closed: Survey<Closed> = opened().close(at(2)).unwrap();
         assert_eq!(closed.accepts(None, at(3)), Err(SurveyError::SurveyClosed));
         assert_eq!(closed.closed_at(), Some(at(2)));
     }
 
     #[test]
-    fn a_response_cannot_complete_with_a_required_question_on_its_path_unanswered() {
-        let mut response = response();
-        response
-            .save(Answers::from([(qid(1), choice("Oui"))]))
-            .unwrap();
+    fn a_survey_cannot_close_before_it_opened() {
+        let before = at(1) - chrono::Duration::days(1);
         assert_eq!(
-            response.complete(&branching(true), at(2)).err(),
+            opened().close(before).err(),
+            Some(SurveyError::SurveyClosedBeforeOpened)
+        );
+    }
+
+    #[test]
+    fn a_closed_survey_survives_a_serde_round_trip() {
+        let closed = opened().close(at(2)).unwrap();
+        let json = serde_json::to_string(&closed).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Survey<Closed>>(&json).unwrap(),
+            closed
+        );
+    }
+
+    #[test]
+    fn a_draft_with_a_blank_title_cannot_be_deserialized() {
+        let mut json = serde_json::to_value(draft()).unwrap();
+        json["title"] = serde_json::json!("   ");
+        assert!(serde_json::from_value::<Survey<Draft>>(json).is_err());
+    }
+
+    fn saved(graph: &Graph, answers: Answers) -> Result<Response<InProgress>, SurveyError> {
+        let mut response = response();
+        response.save(graph, answers)?;
+        Ok(response)
+    }
+
+    fn one(kind: QuestionKind, options: &[&str], max_photos: Option<u8>) -> Graph {
+        Graph::new(
+            vec![
+                Node::Question(QuestionNode {
+                    id: qid(1),
+                    kind,
+                    label: "Q".to_string(),
+                    required: true,
+                    options: options.iter().map(|o| o.to_string()).collect(),
+                    max_photos,
+                    identifier: false,
+                }),
+                end(2),
+            ],
+            vec![edge(1, 2, Branch::Next)],
+            qid(1),
+        )
+        .unwrap()
+    }
+
+    fn answer_one(graph: &Graph, answer: Answer) -> Result<(), SurveyError> {
+        saved(graph, Answers::from([(qid(1), answer)])).map(|_| ())
+    }
+
+    fn photos(count: usize) -> Answer {
+        Answer::Photos((0..count).map(|n| format!("p{n}")).collect())
+    }
+
+    #[test]
+    fn every_question_kind_accepts_its_own_answer() {
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 3, 1).unwrap();
+        let cases = [
+            (QuestionKind::Text, vec![], text("a")),
+            (QuestionKind::LongText, vec![], text("a\nb")),
+            (QuestionKind::Number, vec![], Answer::Number(1.5)),
+            (QuestionKind::SingleChoice, vec!["A", "B"], choice("B")),
+            (
+                QuestionKind::MultipleChoice,
+                vec!["A", "B"],
+                Answer::Choices(vec!["A".to_string(), "B".to_string()]),
+            ),
+            (QuestionKind::Date, vec![], Answer::Date(day)),
+            (QuestionKind::Datetime, vec![], Answer::DateTime(at(1))),
+            (
+                QuestionKind::Phone,
+                vec![],
+                Answer::Phone(PhoneNumber::try_from("0612345678").unwrap()),
+            ),
+            (
+                QuestionKind::Email,
+                vec![],
+                Answer::Email(EmailAddress::try_from("a@b.fr").unwrap()),
+            ),
+            (QuestionKind::Photo, vec![], photos(5)),
+        ];
+        for (kind, options, answer) in cases {
+            assert_eq!(
+                answer_one(&one(kind, &options, None), answer),
+                Ok(()),
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_answer_of_the_wrong_kind_is_refused() {
+        assert_eq!(
+            answer_one(&one(QuestionKind::Text, &[], None), choice("zzz")),
+            Err(SurveyError::AnswerKindMismatch(qid(1)))
+        );
+        assert_eq!(
+            answer_one(&one(QuestionKind::Number, &[], None), text("1")),
+            Err(SurveyError::AnswerKindMismatch(qid(1)))
+        );
+    }
+
+    #[test]
+    fn a_choice_outside_the_options_is_refused() {
+        assert_eq!(
+            answer_one(
+                &one(QuestionKind::SingleChoice, &["A"], None),
+                choice("zzz")
+            ),
+            Err(SurveyError::AnswerUnknownOption(qid(1)))
+        );
+        assert_eq!(
+            answer_one(
+                &one(QuestionKind::MultipleChoice, &["A"], None),
+                Answer::Choices(vec!["A".to_string(), "zzz".to_string()])
+            ),
+            Err(SurveyError::AnswerUnknownOption(qid(1)))
+        );
+    }
+
+    #[test]
+    fn a_repeated_option_is_refused() {
+        assert_eq!(
+            answer_one(
+                &one(QuestionKind::MultipleChoice, &["A", "B"], None),
+                Answer::Choices(vec!["A".to_string(), "A".to_string()])
+            ),
+            Err(SurveyError::AnswerDuplicateOption(qid(1)))
+        );
+    }
+
+    #[test]
+    fn too_many_photos_are_refused() {
+        assert_eq!(
+            answer_one(&one(QuestionKind::Photo, &[], None), photos(6)),
+            Err(SurveyError::AnswerTooManyPhotos(qid(1)))
+        );
+        assert_eq!(
+            answer_one(&one(QuestionKind::Photo, &[], Some(2)), photos(3)),
+            Err(SurveyError::AnswerTooManyPhotos(qid(1)))
+        );
+        assert_eq!(
+            answer_one(&one(QuestionKind::Photo, &[], Some(2)), photos(2)),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn an_empty_photo_is_refused() {
+        assert_eq!(
+            answer_one(
+                &one(QuestionKind::Photo, &[], None),
+                Answer::Photos(vec![String::new()])
+            ),
+            Err(SurveyError::AnswerEmptyPhoto(qid(1)))
+        );
+    }
+
+    #[test]
+    fn an_answer_to_an_unknown_question_is_refused_on_save_and_on_complete() {
+        let graph = branching(true);
+        assert_eq!(
+            saved(&graph, Answers::from([(qid(99), text("x"))])).err(),
+            Some(SurveyError::AnswerUnknownQuestion(qid(99)))
+        );
+        assert_eq!(
+            saved(&graph, Answers::from([(qid(2), text("x"))])).err(),
+            Some(SurveyError::AnswerUnknownQuestion(qid(2)))
+        );
+        let mut json = serde_json::to_value(response()).unwrap();
+        json["answers"] = serde_json::json!({ qid(99).to_string(): { "Text": "x" } });
+        let response = serde_json::from_value::<Response<InProgress>>(json).unwrap();
+        assert_eq!(
+            response.complete(&graph, at(2)).err(),
+            Some(SurveyError::AnswerUnknownQuestion(qid(99)))
+        );
+    }
+
+    #[test]
+    fn a_non_finite_number_is_refused_on_save() {
+        let graph = one(QuestionKind::Number, &[], None);
+        for bad in [f64::NAN, f64::INFINITY] {
+            assert_eq!(
+                answer_one(&graph, Answer::Number(bad)),
+                Err(SurveyError::AnswerNotFinite(qid(1)))
+            );
+        }
+    }
+
+    #[test]
+    fn a_response_cannot_complete_with_a_required_question_on_its_path_unanswered() {
+        let graph = branching(true);
+        let response = saved(&graph, Answers::from([(qid(1), choice("Oui"))])).unwrap();
+        assert_eq!(
+            response.complete(&graph, at(2)).err(),
             Some(SurveyError::RequiredQuestionUnanswered(qid(3)))
         );
     }
 
     #[test]
     fn a_response_ignores_a_required_question_off_its_path() {
-        let mut response = response();
-        response
-            .save(Answers::from([
-                (qid(1), choice("Oui")),
-                (qid(3), text("ok")),
-            ]))
-            .unwrap();
-        assert!(response.complete(&branching(true), at(2)).is_ok());
+        let graph = branching(true);
+        let response = saved(
+            &graph,
+            Answers::from([(qid(1), choice("Oui")), (qid(3), text("ok"))]),
+        )
+        .unwrap();
+        assert!(response.complete(&graph, at(2)).is_ok());
     }
 
     #[test]
     fn completion_discards_answers_off_the_path() {
-        let mut response = response();
-        response
-            .save(Answers::from([
+        let graph = branching(true);
+        let response = saved(
+            &graph,
+            Answers::from([
                 (qid(1), choice("Oui")),
                 (qid(3), text("ok")),
                 (qid(4), text("stale")),
-            ]))
-            .unwrap();
-        let completed: Response<Completed> = response.complete(&branching(true), at(2)).unwrap();
+            ]),
+        )
+        .unwrap();
+        let completed: Response<Completed> = response.complete(&graph, at(2)).unwrap();
         assert_eq!(
             completed.answers().keys().copied().collect::<Vec<_>>(),
             vec![qid(1), qid(3)]
@@ -1024,51 +1209,93 @@ mod lifecycle {
         assert_eq!(completed.completed_at(), Some(at(2)));
     }
 
-    #[test]
-    fn a_non_finite_number_is_refused_on_save() {
-        let mut response = response();
-        assert_eq!(
-            response.save(Answers::from([(qid(1), Answer::Number(f64::NAN))])),
-            Err(SurveyError::AnswerNotFinite(qid(1)))
-        );
-        assert!(response.answers().is_empty());
+    fn identifying(kind: QuestionKind, second: bool) -> Graph {
+        let mut nodes = vec![node(1, kind, true, !second)];
+        let mut edges = vec![edge(1, 3, Branch::Next)];
+        if second {
+            nodes.push(node(2, kind, true, true));
+            edges = vec![edge(1, 2, Branch::Next), edge(2, 3, Branch::Next)];
+        }
+        nodes.push(end(3));
+        Graph::new(nodes, edges, qid(1)).unwrap()
+    }
+
+    fn identifier_of(graph: &Graph, answers: Answers) -> Option<String> {
+        let response = saved(graph, answers).unwrap();
+        let completed = response.complete(graph, at(2)).unwrap();
+        completed.identifier_value().map(str::to_string)
     }
 
     #[test]
     fn the_identifier_value_is_normalized_on_completion() {
-        let mut response = response();
-        response
-            .save(Answers::from([(qid(1), text("  Jane DOE "))]))
-            .unwrap();
-        let completed = response.complete(&identified(), at(2)).unwrap();
-        assert_eq!(completed.identifier_value(), Some("jane doe"));
+        let graph = identifying(QuestionKind::Text, false);
+        let value = identifier_of(&graph, Answers::from([(qid(1), text("  Jane DOE "))]));
+        assert_eq!(value.as_deref(), Some("jane doe"));
     }
 
     #[test]
     fn a_blank_identifier_counts_as_none() {
-        let mut response = response();
-        response
-            .save(Answers::from([(qid(1), text("   "))]))
-            .unwrap();
-        let completed = response.complete(&identified(), at(2)).unwrap();
-        assert_eq!(completed.identifier_value(), None);
+        let graph = identifying(QuestionKind::Text, false);
+        assert_eq!(
+            identifier_of(&graph, Answers::from([(qid(1), text("   "))])),
+            None
+        );
+    }
+
+    #[test]
+    fn only_the_flagged_question_gives_the_identifier() {
+        let graph = identifying(QuestionKind::Text, true);
+        let value = identifier_of(
+            &graph,
+            Answers::from([(qid(1), text("Not Me")), (qid(2), text(" Bar "))]),
+        );
+        assert_eq!(value.as_deref(), Some("bar"));
+    }
+
+    #[test]
+    fn an_identifier_question_off_the_path_gives_no_value() {
+        let graph = Graph::new(
+            vec![
+                node(1, QuestionKind::SingleChoice, true, false),
+                Node::Condition(ConditionNode {
+                    id: qid(2),
+                    question: qid(1),
+                    option: "Oui".to_string(),
+                    checked: true,
+                }),
+                node(3, QuestionKind::Text, true, true),
+                end(4),
+            ],
+            vec![
+                edge(1, 2, Branch::Next),
+                edge(2, 3, Branch::Then),
+                edge(2, 4, Branch::Else),
+                edge(3, 4, Branch::Next),
+            ],
+            qid(1),
+        )
+        .unwrap();
+        let value = identifier_of(
+            &graph,
+            Answers::from([(qid(1), choice("Non")), (qid(3), text("x"))]),
+        );
+        assert_eq!(value, None);
+    }
+
+    #[test]
+    fn a_phone_identifier_uses_its_normalized_form() {
+        let graph = identifying(QuestionKind::Phone, false);
+        let phone = PhoneNumber::try_from("+33 6 12 34 56 78").unwrap();
+        let value = identifier_of(&graph, Answers::from([(qid(1), Answer::Phone(phone))]));
+        assert_eq!(value.as_deref(), Some("+33612345678"));
     }
 
     #[test]
     fn an_email_identifier_uses_its_normalized_form() {
-        let graph = Graph::new(
-            vec![node(1, QuestionKind::Email, true, true), end(2)],
-            vec![edge(1, 2, Branch::Next)],
-            qid(1),
-        )
-        .unwrap();
-        let mut response = response();
+        let graph = identifying(QuestionKind::Email, false);
         let email = EmailAddress::try_from(" A@B.fr ").unwrap();
-        response
-            .save(Answers::from([(qid(1), Answer::Email(email))]))
-            .unwrap();
-        let completed = response.complete(&graph, at(2)).unwrap();
-        assert_eq!(completed.identifier_value(), Some("a@b.fr"));
+        let value = identifier_of(&graph, Answers::from([(qid(1), Answer::Email(email))]));
+        assert_eq!(value.as_deref(), Some("a@b.fr"));
     }
 
     #[test]
