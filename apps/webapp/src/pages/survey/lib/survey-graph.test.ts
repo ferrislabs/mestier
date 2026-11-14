@@ -29,8 +29,8 @@ interface PathCase {
 const CASES: PathCase[] = JSON.parse(
 	readFileSync(
 		resolve(
-			process.cwd(),
-			'../../libs/core/src/domain/survey/fixtures/paths.json',
+			import.meta.dirname,
+			'../../../../../../libs/core/src/domain/survey/fixtures/paths.json',
 		),
 		'utf8',
 	),
