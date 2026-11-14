@@ -200,6 +200,10 @@ impl PublicSlug {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn path(&self) -> String {
+        format!("/s/{}", self.0)
+    }
 }
 
 impl TryFrom<String> for PublicSlug {

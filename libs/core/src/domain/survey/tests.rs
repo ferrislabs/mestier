@@ -16,6 +16,13 @@ fn a_blank_answer_is_recognised_per_kind() {
 }
 
 #[test]
+fn the_public_path_of_a_slug_is_the_slug_under_s() {
+    let slug = PublicSlug::new("q7Xk2mP9vR4tL8wZ3nB6cA".to_string()).unwrap();
+
+    assert_eq!(slug.path(), "/s/q7Xk2mP9vR4tL8wZ3nB6cA");
+}
+
+#[test]
 fn a_public_slug_accepts_letters_digits_dashes_and_underscores() {
     let slug = PublicSlug::new("Ab3-x_9Zq".to_string()).unwrap();
     assert_eq!(slug.as_str(), "Ab3-x_9Zq");
