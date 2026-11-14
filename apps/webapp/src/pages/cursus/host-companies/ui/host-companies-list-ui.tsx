@@ -20,9 +20,11 @@ import {
 } from '#/pages/cursus/shared/lib/count-summary'
 import {
 	type ArchiveFilter,
+	archiveChoices,
+	archiveFromChoices,
 	FEMININE_ARCHIVE_OPTIONS,
 } from '#/pages/cursus/shared/lib/list-filters'
-import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 
 export interface HostCompanyRowVM {
@@ -100,37 +102,38 @@ export function HostCompaniesListUI({
 				search={search}
 				searchPlaceholder="Rechercher un nom, un SIRET"
 				onSearch={onSearchChange}
-				status={archived}
+				status={archiveChoices(archived)}
 				statusOptions={FEMININE_ARCHIVE_OPTIONS}
-				statusLabel="Filtrer par statut"
-				onStatus={onArchivedChange}
+				statusLabel="Statut"
+				onStatus={(choices) => onArchivedChange(archiveFromChoices(choices))}
 			/>
 			<FormError message={error} />
-			{isLoading || error ? null : rows.length === 0 ? (
-				<ListEmpty
-					title="Aucune entreprise ne correspond."
-					hint={
-						filtered
-							? 'Vérifie l’orthographe ou le statut sélectionné.'
-							: undefined
-					}
-					onReset={filtered ? onResetFilters : undefined}
-				/>
-			) : (
-				<div className="overflow-hidden rounded-lg border bg-card">
-					<Table>
-						<TableHeader>
-							<TableRow className="hover:bg-transparent">
-								<TableHead className="pl-4">Nom de l'entreprise</TableHead>
-								<TableHead>Numéro de SIRET</TableHead>
-								<TableHead>NAF</TableHead>
-								<TableHead>Ville</TableHead>
-								<TableHead>Employés</TableHead>
-								<TableHead className="pr-4">Statut</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{rows.map((row) => (
+			<div className="overflow-hidden rounded-lg border bg-card">
+				<Table>
+					<TableHeader>
+						<TableRow className="hover:bg-transparent">
+							<TableHead className="pl-4">Nom de l'entreprise</TableHead>
+							<TableHead>Numéro de SIRET</TableHead>
+							<TableHead>NAF</TableHead>
+							<TableHead>Ville</TableHead>
+							<TableHead>Employés</TableHead>
+							<TableHead className="pr-4">Statut</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{isLoading || error ? null : rows.length === 0 ? (
+							<ListEmptyRow
+								colSpan={6}
+								title="Aucune entreprise ne correspond."
+								hint={
+									filtered
+										? 'Vérifie l’orthographe ou le statut sélectionné.'
+										: undefined
+								}
+								onReset={filtered ? onResetFilters : undefined}
+							/>
+						) : (
+							rows.map((row) => (
 								<TableRow
 									key={row.id}
 									className={cn(
@@ -157,11 +160,11 @@ export function HostCompaniesListUI({
 										</StatusBadge>
 									</TableCell>
 								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</div>
-			)}
+							))
+						)}
+					</TableBody>
+				</Table>
+			</div>
 
 			{canManage ? (
 				<CreateHostCompanyDialog

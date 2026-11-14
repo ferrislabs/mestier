@@ -5,8 +5,7 @@ use uuid::Uuid;
 
 use crate::{
     Apprentice, ApprenticeId, CompanyTutor, CompanyTutorId, CompanyTutorRecord, OrganizationId,
-    Participant, ParticipantFilter, ParticipantId, ParticipantKind, ParticipantStatus,
-    SearchPattern, UserId,
+    Participant, ParticipantFilter, ParticipantId, ParticipantKind, SearchPattern, UserId,
     domain::cursus_participant::ports::CursusParticipantRepository,
     infrastructure::{
         cursus_participant::postgres::model::{
@@ -182,7 +181,11 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
     ) -> Result<(Vec<Participant>, u64), CoreError> {
         let mut tx = self.tx.lock().await;
         let kind = filter.kind.map(ParticipantKind::as_str);
-        let status = filter.status.map(ParticipantStatus::as_str);
+        let status: Vec<String> = filter
+            .status
+            .iter()
+            .map(|status| status.as_str().to_owned())
+            .collect();
         let host_company_id = filter.host_company_id.map(|id| id.0);
         let pattern = filter.search.as_ref().map(SearchPattern::as_str);
         let rows = sqlx::query_as!(
@@ -196,12 +199,12 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
                            SELECT 1 FROM cursus.apprentice a WHERE a.participant_id = p.id))
                    OR ($2 = 'company_tutor' AND EXISTS (
                            SELECT 1 FROM cursus.company_tutor t WHERE t.participant_id = p.id)))
-              AND ($3::text IS NULL
-                   OR $3 = CASE
+              AND (cardinality($3::text[]) = 0
+                   OR CASE
                        WHEN p.deactivated_at IS NOT NULL THEN 'inactive'
                        WHEN p.user_id IS NULL THEN 'pending'
                        ELSE 'active'
-                   END)
+                   END = ANY($3))
               AND ($4::uuid IS NULL
                    OR EXISTS (
                        SELECT 1 FROM cursus.company_tutor h
@@ -215,7 +218,7 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
             "#,
             organization_id.0,
             kind,
-            status,
+            &status,
             host_company_id,
             pattern,
             limit as i64,
@@ -235,12 +238,12 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
                            SELECT 1 FROM cursus.apprentice a WHERE a.participant_id = p.id))
                    OR ($2 = 'company_tutor' AND EXISTS (
                            SELECT 1 FROM cursus.company_tutor t WHERE t.participant_id = p.id)))
-              AND ($3::text IS NULL
-                   OR $3 = CASE
+              AND (cardinality($3::text[]) = 0
+                   OR CASE
                        WHEN p.deactivated_at IS NOT NULL THEN 'inactive'
                        WHEN p.user_id IS NULL THEN 'pending'
                        ELSE 'active'
-                   END)
+                   END = ANY($3))
               AND ($4::uuid IS NULL
                    OR EXISTS (
                        SELECT 1 FROM cursus.company_tutor h
@@ -252,7 +255,7 @@ impl<'tx> CursusParticipantRepository for PgCursusParticipantRepository<'tx> {
             "#,
             organization_id.0,
             kind,
-            status,
+            &status,
             host_company_id,
             pattern,
         )

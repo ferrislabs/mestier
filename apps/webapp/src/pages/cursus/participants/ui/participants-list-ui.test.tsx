@@ -34,7 +34,7 @@ function renderList(overrides: Partial<ParticipantsListUIProps> = {}) {
 			search=""
 			isLoading={false}
 			error={null}
-			status={undefined}
+			status={[]}
 			hostCompanyId={undefined}
 			hostCompanies={[{ id: 'hc-1', name: 'Menuiserie Roux' }]}
 			canManage
@@ -78,9 +78,15 @@ describe('ParticipantsListUI apprentices', () => {
 	})
 
 	it('counts the active apprentices in the header', () => {
-		renderList({ status: 'active', total: 1 })
+		renderList({ status: ['active'], total: 1 })
 
 		expect(screen.getByText('1 apprenti actif')).toBeTruthy()
+	})
+
+	it('gives no status qualifier when several are selected', () => {
+		renderList({ status: ['active', 'pending'], total: 2 })
+
+		expect(screen.getByText('2 apprentis')).toBeTruthy()
 	})
 
 	it('offers to reset the filters when nothing matches', () => {
@@ -98,7 +104,7 @@ describe('ParticipantsListUI tutors', () => {
 		renderList({ kind: 'company_tutor', total: 7 })
 
 		expect(screen.getByRole('heading', { name: 'Tuteurs' })).toBeTruthy()
-		expect(screen.getByText('7 tuteurs')).toBeTruthy()
+		expect(screen.getByText('7 tuteurs entreprise')).toBeTruthy()
 		expect(screen.getByText('Fonction')).toBeTruthy()
 		expect(screen.getByText('Chef d’atelier')).toBeTruthy()
 		expect(screen.queryByText('paul@example.fr')).toBeNull()

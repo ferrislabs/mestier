@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import { mutationErrorMessage } from '#/lib/api-error'
@@ -25,7 +25,7 @@ import { useDebouncedSearch } from '#/pages/cursus/shared/feature/use-debounced-
 import { searchQuery } from '#/pages/cursus/shared/lib/list-filters'
 
 export interface ParticipantsFilters {
-	status: ParticipantStatus | undefined
+	status: ParticipantStatus[]
 	hostCompanyId: string | undefined
 }
 
@@ -33,6 +33,9 @@ export interface ParticipantsListFeatureProps extends ParticipantsFilters {
 	kind: ParticipantKind
 	onFiltersChange: (filters: ParticipantsFilters) => void
 	onOpenParticipant: (participantId: string) => void
+	header?: ReactNode
+	toolbarExtra?: ReactNode
+	onCreate?: () => void
 }
 
 export function ParticipantsListFeature({
@@ -41,6 +44,9 @@ export function ParticipantsListFeature({
 	hostCompanyId,
 	onFiltersChange,
 	onOpenParticipant,
+	header,
+	toolbarExtra,
+	onCreate,
 }: ParticipantsListFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const canManage = useHasPermission('MANAGE_CURSUS_PARTICIPANTS')
@@ -51,7 +57,7 @@ export function ParticipantsListFeature({
 
 	const list = useParticipants(activeOrganizationId, {
 		kind,
-		status,
+		...(status.length > 0 ? { status: status.join(',') } : {}),
 		...(companyFilter ? { host_company_id: companyFilter } : {}),
 		...searchQuery(search.query),
 		page,
@@ -102,7 +108,7 @@ export function ParticipantsListFeature({
 				onSearchChange={search.setText}
 				onResetFilters={() => {
 					search.reset()
-					changeFilters({ status: undefined, hostCompanyId: undefined })
+					changeFilters({ status: [], hostCompanyId: undefined })
 				}}
 				onStatusChange={(next) =>
 					changeFilters({ status: next, hostCompanyId: companyFilter })
@@ -111,10 +117,12 @@ export function ParticipantsListFeature({
 					changeFilters({ status, hostCompanyId: next })
 				}
 				onPageChange={setPage}
-				onCreate={() => setCreateOpen(true)}
+				onCreate={onCreate ?? (() => setCreateOpen(true))}
 				onOpen={onOpenParticipant}
+				header={header}
+				toolbarExtra={toolbarExtra}
 			/>
-			{canManage ? (
+			{canManage && !onCreate ? (
 				<CreateParticipantDialog
 					key={String(createOpen)}
 					kind={kind}

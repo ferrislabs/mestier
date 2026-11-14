@@ -108,6 +108,9 @@ pub enum ApiError {
     #[error("Unprocessable entity: {0}")]
     UnprocessableEntity(String),
 
+    #[error("{1}")]
+    Rule(&'static str, String),
+
     // 429
     #[error("Too many requests")]
     TooManyRequests,
@@ -145,7 +148,7 @@ impl ApiError {
             Self::NotFound | Self::ResourceNotFound(_, _) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Gone => StatusCode::GONE,
-            Self::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::UnprocessableEntity(_) | Self::Rule(_, _) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal | Self::Database | Self::ExternalService(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -169,6 +172,7 @@ impl ApiError {
             Self::Conflict(_) => "E_CONFLICT",
             Self::Gone => "E_GONE",
             Self::UnprocessableEntity(_) => "E_UNPROCESSABLE_ENTITY",
+            Self::Rule(code, _) => code,
             Self::TooManyRequests => "E_TOO_MANY_REQUESTS",
             Self::Internal => "E_INTERNAL",
             Self::Database => "E_DATABASE",
@@ -183,6 +187,7 @@ impl From<CoreError> for ApiError {
             CoreError::NotFound => Self::NotFound,
             CoreError::Conflict(msg) => Self::Conflict(msg),
             CoreError::Gone => Self::Gone,
+            CoreError::Unprocessable { code, message } => Self::Rule(code, message),
             CoreError::Forbidden { .. } => Self::Forbidden,
             CoreError::Database(msg) => {
                 tracing::error!(error = %msg, "core database error");
@@ -391,6 +396,20 @@ mod tests {
         assert_eq!(json["code"], "E_CONFLICT");
         assert_eq!(json["status"], 409);
         assert!(json["message"].as_str().unwrap().contains("slug taken"));
+    }
+
+    #[tokio::test]
+    async fn from_core_error_unprocessable_keeps_its_code_and_message() {
+        let api: ApiError = CoreError::Unprocessable {
+            code: "E_SOME_RULE",
+            message: "rule broken".into(),
+        }
+        .into();
+        let (status, json) = parse_response(api).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(json["code"], "E_SOME_RULE");
+        assert_eq!(json["status"], 422);
+        assert_eq!(json["message"], "rule broken");
     }
 
     #[tokio::test]

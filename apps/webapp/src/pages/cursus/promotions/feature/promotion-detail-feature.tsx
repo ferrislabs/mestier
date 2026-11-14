@@ -24,12 +24,14 @@ export interface PromotionDetailFeatureProps {
 	promotionId: string
 	onBack: () => void
 	onOpenTriad: (triadId: string) => void
+	onDeclareSchoolTutor?: () => void
 }
 
 export function PromotionDetailFeature({
 	promotionId,
 	onBack,
 	onOpenTriad,
+	onDeclareSchoolTutor,
 }: PromotionDetailFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const canManageCatalog = useHasPermission('MANAGE_CURSUS_CATALOG')
@@ -135,6 +137,7 @@ export function PromotionDetailFeature({
 					fixedPromotionId={promotion.id}
 					onOpenChange={setCreatingTriad}
 					onCreated={onOpenTriad}
+					onDeclareSchoolTutor={onDeclareSchoolTutor}
 				/>
 			) : null}
 		</PageShell>

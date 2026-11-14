@@ -17,11 +17,14 @@ import {
 	type CountNoun,
 	countSummary,
 } from '#/pages/cursus/shared/lib/count-summary'
-import type {
-	ArchiveFilter,
-	FilterOption,
+import {
+	type ArchiveChoice,
+	type ArchiveFilter,
+	archiveChoices,
+	archiveFromChoices,
+	type FilterOption,
 } from '#/pages/cursus/shared/lib/list-filters'
-import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 import { RowActions } from '#/pages/cursus/shared/ui/row-actions'
 
@@ -54,7 +57,7 @@ export interface CatalogTablePageProps<Item extends CatalogItem>
 	addLabel: string
 	noun: CountNoun
 	searchPlaceholder: string
-	archiveOptions: readonly FilterOption<ArchiveFilter>[]
+	archiveOptions: readonly FilterOption<ArchiveChoice>[]
 	emptyTitle: string
 	archivedLabel: string
 	activeLabel: string
@@ -115,39 +118,40 @@ export function CatalogTablePage<Item extends CatalogItem>({
 				search={search}
 				searchPlaceholder={searchPlaceholder}
 				onSearch={onSearchChange}
-				status={archived}
+				status={archiveChoices(archived)}
 				statusOptions={archiveOptions}
-				statusLabel="Filtrer par statut"
-				onStatus={onArchivedChange}
+				statusLabel="Statut"
+				onStatus={(choices) => onArchivedChange(archiveFromChoices(choices))}
 			/>
 			<FormError message={error} />
-			{isLoading ? null : items.length === 0 ? (
-				<ListEmpty
-					title={emptyTitle}
-					hint={
-						filtered
-							? 'Vérifie l’orthographe ou le statut sélectionné.'
-							: undefined
-					}
-					onReset={filtered ? onResetFilters : undefined}
-				/>
-			) : (
-				<div className="overflow-hidden rounded-lg border bg-card">
-					<Table>
-						<TableHeader>
-							<TableRow className="hover:bg-transparent">
-								<TableHead className="pl-4">Nom</TableHead>
-								{columns.map((column) => (
-									<TableHead key={column.header}>{column.header}</TableHead>
-								))}
-								<TableHead>Statut</TableHead>
-								<TableHead className="w-12 pr-4">
-									<span className="sr-only">Actions</span>
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{items.map((item) => {
+			<div className="overflow-hidden rounded-lg border bg-card">
+				<Table>
+					<TableHeader>
+						<TableRow className="hover:bg-transparent">
+							<TableHead className="pl-4">Nom</TableHead>
+							{columns.map((column) => (
+								<TableHead key={column.header}>{column.header}</TableHead>
+							))}
+							<TableHead>Statut</TableHead>
+							<TableHead className="w-12 pr-4">
+								<span className="sr-only">Actions</span>
+							</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{isLoading ? null : items.length === 0 ? (
+							<ListEmptyRow
+								colSpan={columns.length + 3}
+								title={emptyTitle}
+								hint={
+									filtered
+										? 'Vérifie l’orthographe ou le statut sélectionné.'
+										: undefined
+								}
+								onReset={filtered ? onResetFilters : undefined}
+							/>
+						) : (
+							items.map((item) => {
 								const isArchived = Boolean(item.archived_at)
 								return (
 									<TableRow
@@ -190,11 +194,11 @@ export function CatalogTablePage<Item extends CatalogItem>({
 										</TableCell>
 									</TableRow>
 								)
-							})}
-						</TableBody>
-					</Table>
-				</div>
-			)}
+							})
+						)}
+					</TableBody>
+				</Table>
+			</div>
 			{dialog}
 		</PageShell>
 	)

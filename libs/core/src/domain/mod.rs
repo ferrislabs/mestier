@@ -7,6 +7,7 @@ pub(crate) mod cursus_catalog;
 pub(crate) mod cursus_common;
 pub(crate) mod cursus_host_company;
 pub(crate) mod cursus_participant;
+pub(crate) mod cursus_school_tutor;
 pub(crate) mod cursus_triad;
 pub(crate) mod custom_unit;
 pub(crate) mod customer;
@@ -58,6 +59,7 @@ pub use cursus_catalog::*;
 pub use cursus_common::*;
 pub use cursus_host_company::*;
 pub use cursus_participant::*;
+pub use cursus_school_tutor::{NOT_A_SCHOOL_TUTOR, SchoolTutor, SchoolTutorId, SchoolTutorView};
 pub use cursus_triad::{
     Closure, Contract, ContractFileKind, ContractId, ContractTutor, ContractTutorView,
     ContractView, MyTriad, MyTriadDetail, ParticipantScope, Triad, TriadAccess, TriadDetail,

@@ -15,6 +15,7 @@ pub mod domain {
     pub struct CursusCatalog;
     pub struct CursusHostCompany;
     pub struct CursusParticipant;
+    pub struct CursusSchoolTutor;
     pub struct CursusTriad;
     pub struct Customer;
     pub struct CustomerContact;

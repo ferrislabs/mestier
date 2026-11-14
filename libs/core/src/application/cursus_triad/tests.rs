@@ -117,6 +117,25 @@ async fn seed_member(
     MemberId(member_id)
 }
 
+async fn seed_school_tutor(
+    pool: &PgPool,
+    organization_id: OrganizationId,
+    member_id: MemberId,
+    archived: bool,
+) {
+    sqlx::query(
+        "INSERT INTO cursus.school_tutor (id, org_id, member_id, archived_at) \
+         VALUES ($1, $2, $3, CASE WHEN $4 THEN now() END)",
+    )
+    .bind(generate_uuid_v7())
+    .bind(organization_id.0)
+    .bind(member_id.0)
+    .bind(archived)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 async fn seed_tenant(pool: &PgPool) -> Tenant {
     let manager = seed_user(pool, "manager").await;
     let reader = seed_user(pool, "reader").await;
@@ -140,6 +159,7 @@ async fn seed_tenant(pool: &PgPool) -> Tenant {
     )
     .await;
     seed_member(pool, organization_id, reader, Permissions::VIEW_CURSUS).await;
+    seed_school_tutor(pool, organization_id, member_id, false).await;
 
     Tenant {
         organization_id,
@@ -432,6 +452,7 @@ impl World {
                 "DELETE FROM cursus.contract_tutor WHERE org_id = $1",
                 "DELETE FROM cursus.contract WHERE org_id = $1",
                 "DELETE FROM cursus.triad WHERE org_id = $1",
+                "DELETE FROM cursus.school_tutor WHERE org_id = $1",
                 "DELETE FROM cursus.company_tutor WHERE org_id = $1",
                 "DELETE FROM cursus.apprentice WHERE org_id = $1",
                 "DELETE FROM cursus.participant WHERE org_id = $1",
@@ -547,6 +568,84 @@ async fn a_triad_needs_a_promotion_an_apprentice_and_a_pedagogic_tutor_of_the_or
     ));
     assert!(matches!(foreign_member, Err(CoreError::NotFound)));
     assert_eq!(valid.pedagogic_tutor_member_id, Some(world.first.member_id));
+
+    world.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn the_pedagogic_tutor_of_a_triad_must_be_an_active_school_tutor() {
+    let world = World::new().await;
+    let tenant = &world.first;
+    let catalog = world.catalog(tenant).await;
+    let (apprentice_id, _) = world.apprentice(tenant, "lea@example.com").await;
+    let (other_apprentice, _) = world.apprentice(tenant, "tom@example.com").await;
+    let plain = world.person("plain").await;
+    let plain_member = seed_member(
+        &world.pool,
+        tenant.organization_id,
+        plain.user_id,
+        Permissions::VIEW_CURSUS,
+    )
+    .await;
+    let retired = world.person("retired").await;
+    let retired_member = seed_member(
+        &world.pool,
+        tenant.organization_id,
+        retired.user_id,
+        Permissions::VIEW_CURSUS,
+    )
+    .await;
+    seed_school_tutor(&world.pool, tenant.organization_id, retired_member, true).await;
+    let command = |apprentice: ApprenticeId, member: MemberId| CreateTriadCommand {
+        actor: tenant.manager.subject(),
+        organization_id: tenant.organization_id,
+        promotion_id: catalog.promotion.id,
+        apprentice_id: apprentice,
+        pedagogic_tutor_member_id: Some(member),
+    };
+
+    let not_declared = world
+        .usecase
+        .create_triad(command(apprentice_id, plain_member))
+        .await;
+    let archived = world
+        .usecase
+        .create_triad(command(apprentice_id, retired_member))
+        .await;
+    let triad = world
+        .usecase
+        .create_triad(command(other_apprentice, tenant.member_id))
+        .await
+        .unwrap();
+    let update = |member: MemberId| UpdateTriadCommand {
+        actor: tenant.manager.subject(),
+        organization_id: tenant.organization_id,
+        id: triad.id,
+        pedagogic_tutor_member_id: Some(member),
+    };
+    let updated_to_plain = world.usecase.update_triad(update(plain_member)).await;
+    sqlx::query("UPDATE cursus.school_tutor SET archived_at = now() WHERE member_id = $1")
+        .bind(tenant.member_id.0)
+        .execute(&world.pool)
+        .await
+        .unwrap();
+    let kept_archived = world.usecase.update_triad(update(tenant.member_id)).await;
+
+    for error in [
+        not_declared.map(|_| ()),
+        archived.map(|_| ()),
+        updated_to_plain.map(|_| ()),
+    ] {
+        assert!(matches!(
+            error,
+            Err(CoreError::Unprocessable { code, .. }) if code == crate::NOT_A_SCHOOL_TUTOR
+        ));
+    }
+    assert_eq!(
+        kept_archived.unwrap().triad.pedagogic_tutor_member_id,
+        Some(tenant.member_id)
+    );
 
     world.cleanup().await;
 }

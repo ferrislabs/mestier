@@ -8,18 +8,29 @@ import {
 } from '#/pages/cursus/shared/lib/count-summary'
 import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
 import type { SelectOption } from '#/pages/cursus/shared/lib/options'
-import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 import type { TriadSummary } from '#/pages/cursus/triads/feature/use-triads'
 import { TriadsTable } from '#/pages/cursus/triads/ui/triads-table'
 
 export type TriadStatusFilter = 'open' | 'closed' | 'all'
 
-const STATUS_OPTIONS: FilterOption<TriadStatusFilter>[] = [
+type TriadStatusChoice = Exclude<TriadStatusFilter, 'all'>
+
+const STATUS_OPTIONS: FilterOption<TriadStatusChoice>[] = [
 	{ value: 'open', label: 'Ouverts' },
 	{ value: 'closed', label: 'Clos' },
-	{ value: 'all', label: 'Tous' },
 ]
+
+function statusChoices(status: TriadStatusFilter): TriadStatusChoice[] {
+	return status === 'all' ? ['open', 'closed'] : [status]
+}
+
+function statusFromChoices(
+	choices: readonly TriadStatusChoice[],
+): TriadStatusFilter {
+	const [only] = choices
+	return choices.length === 1 && only ? only : 'all'
+}
 
 const STATUS_QUALIFIER: Record<TriadStatusFilter, CountQualifier | undefined> =
 	{
@@ -88,10 +99,10 @@ export function TriadsList({
 				search={search}
 				searchPlaceholder="Rechercher un apprenti, une entreprise, une promotion"
 				onSearch={onSearchChange}
-				status={status}
+				status={statusChoices(status)}
 				statusOptions={STATUS_OPTIONS}
-				statusLabel="Filtrer par statut"
-				onStatus={onStatusChange}
+				statusLabel="Statut"
+				onStatus={(choices) => onStatusChange(statusFromChoices(choices))}
 				select={{
 					value: promotionId ?? ALL_PROMOTIONS,
 					label: 'Filtrer par promotion',
@@ -103,19 +114,22 @@ export function TriadsList({
 						onPromotionChange(next === ALL_PROMOTIONS ? undefined : next),
 				}}
 			/>
-			{isLoading ? null : triads.length === 0 ? (
-				<ListEmpty
-					title="Aucun trinôme ne correspond."
-					hint={
-						filtered
-							? 'Vérifie l’orthographe, le statut ou la promotion sélectionnée.'
-							: undefined
-					}
-					onReset={filtered ? onResetFilters : undefined}
-				/>
-			) : (
-				<TriadsTable triads={triads} showPromotion onOpen={onOpen} />
-			)}
+			<TriadsTable
+				triads={isLoading ? [] : triads}
+				showPromotion
+				onOpen={onOpen}
+				empty={
+					isLoading
+						? undefined
+						: {
+								title: 'Aucun trinôme ne correspond.',
+								hint: filtered
+									? 'Vérifie l’orthographe, le statut ou la promotion sélectionnée.'
+									: undefined,
+								onReset: filtered ? onResetFilters : undefined,
+							}
+				}
+			/>
 		</PageShell>
 	)
 }

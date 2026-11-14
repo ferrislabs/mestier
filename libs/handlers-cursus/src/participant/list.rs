@@ -9,7 +9,7 @@ use handlers::{
 use mestier_core::{
     HostCompanyId, ParticipantFilter, ParticipantKind, ParticipantStatus, SearchPattern,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de::Error};
 use utoipa::IntoParams;
 
 use crate::{
@@ -21,14 +21,42 @@ use crate::{
 pub struct ListParticipantsQuery {
     #[param(inline)]
     pub kind: Option<ParticipantKind>,
-    #[param(inline)]
-    pub status: Option<ParticipantStatus>,
+    /// Comma-separated participant statuses (`pending`, `active`, `inactive`),
+    /// for example `pending,active`. A participant matches when its status is
+    /// any of them. Absent or empty means no filter.
+    #[serde(default, deserialize_with = "comma_separated_statuses")]
+    #[param(value_type = Option<String>, example = "pending,active")]
+    pub status: Vec<ParticipantStatus>,
     pub host_company_id: Option<HostCompanyId>,
     /// A case-insensitive **substring** of the first name, the last name, `first last`, `last first` or the email. Not full-text
     /// search: no stemming, no ranking, no word boundaries. The value is
     /// trimmed, and `%`, `_` and `\` match themselves. Empty after trimming
     /// means no filter, which is what a cleared search box means.
     pub q: Option<String>,
+}
+
+fn comma_separated_statuses<'de, D>(deserializer: D) -> Result<Vec<ParticipantStatus>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<String>::deserialize(deserializer)?;
+    let mut statuses = Vec::new();
+    for part in raw.as_deref().unwrap_or_default().split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let status = match part {
+            "pending" => ParticipantStatus::Pending,
+            "active" => ParticipantStatus::Active,
+            "inactive" => ParticipantStatus::Inactive,
+            other => return Err(D::Error::custom(format!("unknown status `{other}`"))),
+        };
+        if !statuses.contains(&status) {
+            statuses.push(status);
+        }
+    }
+    Ok(statuses)
 }
 
 #[utoipa::path(

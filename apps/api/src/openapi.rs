@@ -454,6 +454,12 @@ impl Modify for SecurityAddon {
         cursus::host_company::get_one::handler,
         cursus::host_company::update::handler,
         cursus::host_company::archive::handler,
+        cursus::school_tutor::list::handler,
+        cursus::school_tutor::create::handler,
+        cursus::school_tutor::get_one::handler,
+        cursus::school_tutor::update::handler,
+        cursus::school_tutor::archive::handler,
+        cursus::school_tutor::restore::handler,
         cursus::participant::list::handler,
         cursus::participant::create::handler,
         cursus::participant::get_one::handler,
@@ -926,6 +932,9 @@ impl Modify for SecurityAddon {
         cursus::response::HostCompanyResponse,
         cursus::host_company::create::CreateHostCompanyRequest,
         cursus::host_company::update::UpdateHostCompanyRequest,
+        cursus::response::SchoolTutorResponse,
+        cursus::school_tutor::create::CreateSchoolTutorRequest,
+        cursus::school_tutor::update::UpdateSchoolTutorRequest,
         cursus::response::ParticipantResponse,
         cursus::response::ParticipantListItemResponse,
         cursus::response::ParticipantDetailResponse,
@@ -1054,6 +1063,36 @@ mod tests {
         for variant in ["pending", "active", "inactive"] {
             assert!(statuses.contains(variant), "{statuses}");
         }
+    }
+
+    #[test]
+    fn every_cursus_school_tutor_route_reaches_the_document() {
+        let document = serde_json::to_value(ApiDoc::openapi()).expect("the document serializes");
+        let org = "/api/v1/organizations/{organization_id}/cursus";
+
+        for (path, methods) in [
+            (format!("{org}/school-tutors"), &["get", "post"][..]),
+            (
+                format!("{org}/school-tutors/{{school_tutor_id}}"),
+                &["get", "patch"][..],
+            ),
+            (
+                format!("{org}/school-tutors/{{school_tutor_id}}/archive"),
+                &["post"][..],
+            ),
+            (
+                format!("{org}/school-tutors/{{school_tutor_id}}/restore"),
+                &["post"][..],
+            ),
+        ] {
+            for method in methods {
+                assert!(
+                    document["paths"][path.as_str()][method].is_object(),
+                    "{method} {path} is missing from the document"
+                );
+            }
+        }
+        assert!(document["components"]["schemas"]["SchoolTutorResponse"].is_object());
     }
 
     #[test]

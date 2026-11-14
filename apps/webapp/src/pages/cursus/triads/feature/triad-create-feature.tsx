@@ -1,10 +1,11 @@
 import { useActiveOrganization } from '#/hooks/use-active-organization'
-import { mutationErrorMessage } from '#/lib/api-error'
 import { usePromotions } from '#/pages/cursus/promotions/feature/use-promotions'
+import { useSchoolTutors } from '#/pages/cursus/school-tutors/feature/use-school-tutors'
 import {
-	useOrganizationMembers,
-	useParticipantRecords,
-} from '#/pages/cursus/shared/feature/cursus-queries'
+	schoolTutorOptions,
+	triadTutorErrors,
+} from '#/pages/cursus/school-tutors/lib/school-tutors'
+import { useParticipantRecords } from '#/pages/cursus/shared/feature/cursus-queries'
 import {
 	apprenticeOptions,
 	type SelectOption,
@@ -18,6 +19,7 @@ interface TriadCreateFeatureProps {
 	fixedPromotionId?: string
 	onOpenChange: (open: boolean) => void
 	onCreated: (triadId: string) => void
+	onDeclareSchoolTutor?: () => void
 }
 
 export function TriadCreateFeature({
@@ -25,6 +27,7 @@ export function TriadCreateFeature({
 	fixedPromotionId,
 	onOpenChange,
 	onCreated,
+	onDeclareSchoolTutor,
 }: TriadCreateFeatureProps) {
 	const { activeOrganizationId } = useActiveOrganization()
 	const apprentices = useParticipantRecords(
@@ -32,7 +35,11 @@ export function TriadCreateFeature({
 		{ kind: 'apprentice' },
 		open,
 	)
-	const members = useOrganizationMembers(activeOrganizationId, open)
+	const schoolTutors = useSchoolTutors(
+		activeOrganizationId,
+		{ archived: 'active', page: 1, per_page: 100 },
+		open,
+	)
 	const promotions = usePromotions(
 		activeOrganizationId,
 		{ archived: 'active', trainingId: undefined },
@@ -40,10 +47,7 @@ export function TriadCreateFeature({
 	)
 	const createTriad = useCreateTriad()
 
-	const memberOptions: SelectOption[] = members.map((member) => ({
-		value: member.id,
-		label: member.display_name,
-	}))
+	const errors = triadTutorErrors(createTriad.error)
 	const promotionOptions: SelectOption[] = (promotions.data?.data ?? []).map(
 		(promotion) => ({ value: promotion.id, label: promotion.label }),
 	)
@@ -54,10 +58,12 @@ export function TriadCreateFeature({
 			fixedPromotionId={fixedPromotionId}
 			promotions={promotionOptions}
 			apprentices={apprenticeOptions(apprentices.items)}
-			members={memberOptions}
-			isLoadingOptions={apprentices.isLoading}
+			schoolTutors={schoolTutorOptions(schoolTutors.data?.data ?? [], null)}
+			isLoadingOptions={apprentices.isLoading || schoolTutors.isLoading}
 			isPending={createTriad.isPending}
-			error={mutationErrorMessage(createTriad.error)}
+			error={errors.general}
+			tutorError={errors.field}
+			onDeclareSchoolTutor={onDeclareSchoolTutor}
 			onOpenChange={(next) => {
 				if (!next) createTriad.reset()
 				onOpenChange(next)

@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell, StatusBadge } from '#/components/ui/surface'
 import {
@@ -19,12 +20,13 @@ import type { HostCompanyOption } from '#/pages/cursus/participants/ui/create-pa
 import { FormError } from '#/pages/cursus/participants/ui/field-input'
 import {
 	APPRENTICE_NOUN,
+	COMPANY_TUTOR_NOUN,
 	type CountNoun,
 	countSummary,
-	TUTOR_NOUN,
 } from '#/pages/cursus/shared/lib/count-summary'
 import type { FilterOption } from '#/pages/cursus/shared/lib/list-filters'
-import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
+import { ListPagination } from '#/pages/cursus/shared/ui/list-pagination'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 
 export interface ParticipantRowVM {
@@ -43,7 +45,7 @@ export interface ParticipantsListUIProps {
 	search: string
 	isLoading: boolean
 	error: string | null
-	status: ParticipantStatus | undefined
+	status: readonly ParticipantStatus[]
 	hostCompanyId: string | undefined
 	hostCompanies: HostCompanyOption[]
 	canManage: boolean
@@ -51,19 +53,18 @@ export interface ParticipantsListUIProps {
 	pageCount: number
 	onSearchChange: (search: string) => void
 	onResetFilters: () => void
-	onStatusChange: (status: ParticipantStatus | undefined) => void
+	onStatusChange: (status: ParticipantStatus[]) => void
 	onHostCompanyChange: (hostCompanyId: string | undefined) => void
 	onPageChange: (page: number) => void
 	onCreate: () => void
 	onOpen: (participantId: string) => void
+	header?: ReactNode
+	toolbarExtra?: ReactNode
 }
-
-type StatusFilter = ParticipantStatus | 'all'
 
 const ALL_COMPANIES = 'all'
 
-const STATUS_OPTIONS: FilterOption<StatusFilter>[] = [
-	{ value: 'all', label: 'Tous' },
+const STATUS_OPTIONS: FilterOption<ParticipantStatus>[] = [
 	{ value: 'pending', label: 'En attente' },
 	{ value: 'active', label: 'Actifs' },
 	{ value: 'inactive', label: 'Inactifs' },
@@ -71,7 +72,7 @@ const STATUS_OPTIONS: FilterOption<StatusFilter>[] = [
 
 const KIND_NOUN: Record<ParticipantKind, CountNoun> = {
 	apprentice: APPRENTICE_NOUN,
-	company_tutor: TUTOR_NOUN,
+	company_tutor: COMPANY_TUTOR_NOUN,
 }
 
 const STATUS_TONE: Record<
@@ -107,38 +108,47 @@ export function ParticipantsListUI({
 	onPageChange,
 	onCreate,
 	onOpen,
+	header,
+	toolbarExtra,
 }: ParticipantsListUIProps) {
 	const copy = KIND_COPY[kind]
 	const isTutor = kind === 'company_tutor'
 	const filtered =
-		search.trim() !== '' || status !== undefined || hostCompanyId !== undefined
+		search.trim() !== '' || status.length > 0 || hostCompanyId !== undefined
 
 	return (
 		<PageShell className="block">
-			<PageHeader
-				className="mb-6"
-				title={copy.title}
-				description={
-					total === undefined
-						? undefined
-						: countSummary(total, KIND_NOUN[kind], status)
-				}
-				actions={
-					canManage ? (
-						<Button type="button" size="sm" onClick={onCreate}>
-							<Plus aria-hidden /> {copy.createLabel}
-						</Button>
-					) : null
-				}
-			/>
+			{header ?? (
+				<PageHeader
+					className="mb-6"
+					title={copy.title}
+					description={
+						total === undefined
+							? undefined
+							: countSummary(
+									total,
+									KIND_NOUN[kind],
+									status.length === 1 ? status[0] : undefined,
+								)
+					}
+					actions={
+						canManage ? (
+							<Button type="button" size="sm" onClick={onCreate}>
+								<Plus aria-hidden /> {copy.createLabel}
+							</Button>
+						) : null
+					}
+				/>
+			)}
 			<ListToolbar
+				extra={toolbarExtra}
 				search={search}
 				searchPlaceholder="Rechercher un nom, un e-mail"
 				onSearch={onSearchChange}
-				status={status ?? 'all'}
+				status={status}
 				statusOptions={STATUS_OPTIONS}
-				statusLabel="Filtrer par statut"
-				onStatus={(next) => onStatusChange(next === 'all' ? undefined : next)}
+				statusLabel="Statut"
+				onStatus={onStatusChange}
 				select={
 					isTutor
 						? {
@@ -160,31 +170,32 @@ export function ParticipantsListUI({
 				}
 			/>
 			<FormError message={error} />
-			{isLoading || error ? null : rows.length === 0 ? (
-				<ListEmpty
-					title={copy.empty}
-					hint={filtered ? copy.emptyHint : undefined}
-					onReset={filtered ? onResetFilters : undefined}
-				/>
-			) : (
-				<div className="overflow-hidden rounded-lg border bg-card">
-					<Table>
-						<TableHeader>
-							<TableRow className="hover:bg-transparent">
-								<TableHead className="pl-4">Nom</TableHead>
-								{isTutor ? (
-									<>
-										<TableHead>Entreprise</TableHead>
-										<TableHead>Fonction</TableHead>
-									</>
-								) : (
-									<TableHead>E-mail</TableHead>
-								)}
-								<TableHead className="pr-4">Statut</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{rows.map((row) => (
+			<div className="overflow-hidden rounded-lg border bg-card">
+				<Table>
+					<TableHeader>
+						<TableRow className="hover:bg-transparent">
+							<TableHead className="pl-4">Nom</TableHead>
+							{isTutor ? (
+								<>
+									<TableHead>Entreprise</TableHead>
+									<TableHead>Fonction</TableHead>
+								</>
+							) : (
+								<TableHead>E-mail</TableHead>
+							)}
+							<TableHead className="pr-4">Statut</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{isLoading || error ? null : rows.length === 0 ? (
+							<ListEmptyRow
+								colSpan={isTutor ? 4 : 3}
+								title={copy.empty}
+								hint={filtered ? copy.emptyHint : undefined}
+								onReset={filtered ? onResetFilters : undefined}
+							/>
+						) : (
+							rows.map((row) => (
 								<TableRow
 									key={row.id}
 									className="relative cursor-pointer focus-within:bg-muted/50"
@@ -216,37 +227,17 @@ export function ParticipantsListUI({
 										</StatusBadge>
 									</TableCell>
 								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</div>
-			)}
+							))
+						)}
+					</TableBody>
+				</Table>
+			</div>
 
-			{pageCount > 1 ? (
-				<div className="mt-3 flex items-center justify-end gap-3 text-sm">
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={page <= 1}
-						onClick={() => onPageChange(page - 1)}
-					>
-						Précédent
-					</Button>
-					<span>
-						Page {page} sur {pageCount}
-					</span>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={page >= pageCount}
-						onClick={() => onPageChange(page + 1)}
-					>
-						Suivant
-					</Button>
-				</div>
-			) : null}
+			<ListPagination
+				page={page}
+				pageCount={pageCount}
+				onPageChange={onPageChange}
+			/>
 		</PageShell>
 	)
 }

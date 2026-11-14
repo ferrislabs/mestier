@@ -18,10 +18,12 @@ import {
 } from '#/pages/cursus/shared/lib/count-summary'
 import {
 	type ArchiveFilter,
+	archiveChoices,
+	archiveFromChoices,
 	FEMININE_ARCHIVE_OPTIONS,
 } from '#/pages/cursus/shared/lib/list-filters'
 import type { SelectOption } from '#/pages/cursus/shared/lib/options'
-import { ListEmpty } from '#/pages/cursus/shared/ui/list-empty'
+import { ListEmptyRow } from '#/pages/cursus/shared/ui/list-empty'
 import { ListToolbar } from '#/pages/cursus/shared/ui/list-toolbar'
 import { RowActions } from '#/pages/cursus/shared/ui/row-actions'
 
@@ -93,10 +95,10 @@ export function PromotionsList({
 				search={search}
 				searchPlaceholder="Rechercher une promotion"
 				onSearch={onSearchChange}
-				status={archived}
+				status={archiveChoices(archived)}
 				statusOptions={FEMININE_ARCHIVE_OPTIONS}
-				statusLabel="Filtrer par statut"
-				onStatus={onArchivedChange}
+				statusLabel="Statut"
+				onStatus={(choices) => onArchivedChange(archiveFromChoices(choices))}
 				select={{
 					value: trainingId ?? ALL_TRAININGS,
 					label: 'Filtrer par formation',
@@ -113,34 +115,35 @@ export function PromotionsList({
 					{archiveError}
 				</p>
 			) : null}
-			{isLoading ? null : promotions.length === 0 ? (
-				<ListEmpty
-					title="Aucune promotion ne correspond."
-					hint={
-						filtered
-							? 'Vérifie l’orthographe, le statut ou la formation sélectionnée.'
-							: canManage
-								? 'Créez une première promotion pour y rattacher des trinômes.'
-								: undefined
-					}
-					onReset={filtered ? onResetFilters : undefined}
-				/>
-			) : (
-				<div className="overflow-hidden rounded-lg border bg-card">
-					<Table>
-						<TableHeader>
-							<TableRow className="hover:bg-transparent">
-								<TableHead className="pl-4">Libellé</TableHead>
-								<TableHead>Formation</TableHead>
-								<TableHead>Années</TableHead>
-								<TableHead>Statut</TableHead>
-								<TableHead className="w-12 pr-4">
-									<span className="sr-only">Actions</span>
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{promotions.map((promotion) => {
+			<div className="overflow-hidden rounded-lg border bg-card">
+				<Table>
+					<TableHeader>
+						<TableRow className="hover:bg-transparent">
+							<TableHead className="pl-4">Libellé</TableHead>
+							<TableHead>Formation</TableHead>
+							<TableHead>Années</TableHead>
+							<TableHead>Statut</TableHead>
+							<TableHead className="w-12 pr-4">
+								<span className="sr-only">Actions</span>
+							</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{isLoading ? null : promotions.length === 0 ? (
+							<ListEmptyRow
+								colSpan={5}
+								title="Aucune promotion ne correspond."
+								hint={
+									filtered
+										? 'Vérifie l’orthographe, le statut ou la formation sélectionnée.'
+										: canManage
+											? 'Créez une première promotion pour y rattacher des trinômes.'
+											: undefined
+								}
+								onReset={filtered ? onResetFilters : undefined}
+							/>
+						) : (
+							promotions.map((promotion) => {
 								const isArchived = Boolean(promotion.archived_at)
 								return (
 									<TableRow
@@ -192,11 +195,11 @@ export function PromotionsList({
 										</TableCell>
 									</TableRow>
 								)
-							})}
-						</TableBody>
-					</Table>
-				</div>
-			)}
+							})
+						)}
+					</TableBody>
+				</Table>
+			</div>
 		</PageShell>
 	)
 }

@@ -16,12 +16,14 @@ function ApprenticesPage() {
 	return (
 		<ParticipantsListFeature
 			kind="apprentice"
-			status={status}
+			status={status ?? []}
 			hostCompanyId={undefined}
 			onFiltersChange={(next) =>
 				void navigate({
 					replace: true,
-					search: () => ({ status: next.status }),
+					search: () => ({
+						status: next.status.length > 0 ? next.status : undefined,
+					}),
 				})
 			}
 			onOpenParticipant={(participantId) =>
