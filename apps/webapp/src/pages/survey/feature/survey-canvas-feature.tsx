@@ -63,7 +63,7 @@ export interface SurveyCanvasProps {
 	selectedId: string | null
 	nodeLabel: (nodeId: string) => string
 	onSelect: (nodeId: string | null) => void
-	onGraphChange: (graph: EditorGraph) => void
+	onGraphChange: (update: (graph: EditorGraph) => EditorGraph) => void
 }
 
 export function SurveyCanvasFeature(props: SurveyCanvasProps) {
@@ -150,36 +150,39 @@ function SurveyCanvas({
 		if (sizesChanged) setMeasured(sized)
 		if (removed.size > 0) {
 			if (selectedId && removed.has(selectedId)) onSelect(null)
-			onGraphChange(removeNodes(graph, removed))
+			onGraphChange((current) => removeNodes(current, removed))
 		}
 	}
 
 	const onEdgesChange = (changes: EdgeChange[]) => {
 		const selection = new Set(selectedEdges)
-		let next = graph
+		const removed: { from: string; handle: ExitHandle }[] = []
 		for (const change of changes) {
 			if (change.type === 'select') {
 				if (change.selected) selection.add(change.id)
 				else selection.delete(change.id)
 			} else if (change.type === 'remove' && !readOnly) {
 				const parsed = parseEdgeId(change.id)
-				if (parsed) next = disconnect(next, parsed.from, parsed.handle)
+				if (parsed) removed.push(parsed)
 				selection.delete(change.id)
 			}
 		}
 		setSelectedEdges(selection)
-		if (next !== graph) onGraphChange(next)
+		if (removed.length > 0) {
+			onGraphChange((current) =>
+				removed.reduce(
+					(next, edge) => disconnect(next, edge.from, edge.handle),
+					current,
+				),
+			)
+		}
 	}
 
 	const onConnect = (connection: Connection) => {
 		if (readOnly || !connection.sourceHandle) return
-		onGraphChange(
-			connect(
-				graph,
-				connection.source,
-				connection.sourceHandle as ExitHandle,
-				connection.target,
-			),
+		const handle = connection.sourceHandle as ExitHandle
+		onGraphChange((current) =>
+			connect(current, connection.source, handle, connection.target),
 		)
 	}
 
@@ -199,7 +202,7 @@ function SurveyCanvas({
 			!(attachment.handle === START_HANDLE && node.type !== 'QUESTION')
 				? attachment
 				: null
-		onGraphChange(addNode(graph, node, after))
+		onGraphChange((current) => addNode(current, node, after))
 		onSelect(id)
 		setPickerOpen(false)
 	}

@@ -19,11 +19,12 @@ import { SurveyCanvasFeature } from '#/pages/survey/feature/survey-canvas-featur
 import {
 	type GraphIssue,
 	issuesByNode,
-	validateGraph,
+	validateSentGraph,
 } from '#/pages/survey/lib/graph-validation'
 import { lifecycleCopy } from '#/pages/survey/lib/lifecycle'
 import { questionKindEntry } from '#/pages/survey/lib/question-kinds'
 import { refusalOf } from '#/pages/survey/lib/reason-messages'
+import { conditionSentence } from '#/pages/survey/lib/survey-flow'
 import {
 	publicSurveyUrl,
 	surveyPath,
@@ -34,6 +35,7 @@ import {
 	connect,
 	fromSchema,
 	precedingChoiceQuestions,
+	removeNodes,
 	replaceNode,
 	START_HANDLE,
 	START_ID,
@@ -148,7 +150,7 @@ export function SurveyEditorWorkspace({
 	}>({ nodeId: null, keys: [] })
 
 	const issues = useMemo(
-		() => (graph.nodes.length === 0 ? [] : validateGraph(graph)),
+		() => (graph.nodes.length === 0 ? [] : validateSentGraph(graph)),
 		[graph],
 	)
 	const nodeIssues = useMemo(() => {
@@ -186,8 +188,8 @@ export function SurveyEditorWorkspace({
 		)
 	}
 
-	const changeGraph = (next: EditorGraph) => {
-		setGraph(next)
+	const changeGraph = (update: (current: EditorGraph) => EditorGraph) => {
+		setGraph(update)
 		setServerIssue(null)
 		setError(null)
 	}
@@ -287,7 +289,7 @@ export function SurveyEditorWorkspace({
 		if (node.type === 'QUESTION' && node.options) {
 			setOptionKeys({ nodeId: node.id, keys: keysFor(node) })
 		}
-		changeGraph(replaceNode(graph, node))
+		changeGraph((current) => replaceNode(current, node))
 	}
 
 	return (
@@ -299,6 +301,7 @@ export function SurveyEditorWorkspace({
 				canManage={canManage}
 				dirty={dirty && !readOnly}
 				saving={updateSurvey.isPending || openSurvey.isPending}
+				duplicating={duplicateSurvey.isPending}
 				canSave={canSave}
 				onBack={() => void goTo(surveysPath())}
 				onSettings={() => setSettingsOpen(true)}
@@ -308,7 +311,7 @@ export function SurveyEditorWorkspace({
 				onDuplicate={() => void duplicate()}
 				onCopyLink={copyLink}
 			/>
-			<ReadOnlyBanner survey={survey} />
+			<ReadOnlyBanner survey={survey} canManage={canManage} />
 			{error || notice.message ? (
 				<div className="grid gap-2 border-b px-4 py-2">
 					<ErrorBanner message={error} />
@@ -333,6 +336,16 @@ export function SurveyEditorWorkspace({
 							node={selected}
 							issues={nodeIssues.get(selected.id) ?? []}
 							choiceQuestions={precedingChoiceQuestions(graph, selected.id)}
+							conditionQuestion={
+								selected.type === 'CONDITION'
+									? (byId.get(selected.question) ?? null)
+									: null
+							}
+							sentence={
+								selected.type === 'CONDITION'
+									? conditionSentence(graph, selected)
+									: ''
+							}
 							optionKeys={keysFor(selected)}
 							otherIdentifier={graph.nodes.some(
 								(node) =>
@@ -349,8 +362,8 @@ export function SurveyEditorWorkspace({
 									nodeId: selected.id,
 									keys: [...keysFor(selected), crypto.randomUUID()],
 								})
-								changeGraph(
-									replaceNode(graph, {
+								changeGraph((current) =>
+									replaceNode(current, {
 										...selected,
 										options: [...(selected.options ?? []), ''],
 									}),
@@ -364,8 +377,8 @@ export function SurveyEditorWorkspace({
 										(_, index) => index !== position,
 									),
 								})
-								changeGraph(
-									replaceNode(graph, {
+								changeGraph((current) =>
+									replaceNode(current, {
 										...selected,
 										options: (selected.options ?? []).filter(
 											(_, index) => index !== position,
@@ -374,18 +387,15 @@ export function SurveyEditorWorkspace({
 								)
 							}}
 							onMakeStart={() =>
-								changeGraph(connect(graph, START_ID, START_HANDLE, selected.id))
+								changeGraph((current) =>
+									connect(current, START_ID, START_HANDLE, selected.id),
+								)
 							}
 							onDelete={() => {
 								setSelectedId(null)
-								changeGraph({
-									start: graph.start === selected.id ? null : graph.start,
-									nodes: graph.nodes.filter((node) => node.id !== selected.id),
-									edges: graph.edges.filter(
-										(edge) =>
-											edge.from !== selected.id && edge.to !== selected.id,
-									),
-								})
+								changeGraph((current) =>
+									removeNodes(current, new Set([selected.id])),
+								)
 							}}
 							onClose={() => setSelectedId(null)}
 						/>

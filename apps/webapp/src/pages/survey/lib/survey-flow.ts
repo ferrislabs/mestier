@@ -50,7 +50,7 @@ export function conditionSentence(
 			node.type === 'QUESTION' && node.id === condition.question,
 	)
 	const option = condition.option.trim() === '' ? '…' : condition.option
-	return `Si « ${questionLabel(source)} » = « ${option} » est ${condition.checked ? 'coché' : 'non coché'}`
+	return `Si « ${questionLabel(source)} » : l’option « ${option} » ${condition.checked ? 'est cochée' : 'n’est pas cochée'}`
 }
 
 export function buildFlowNodes({

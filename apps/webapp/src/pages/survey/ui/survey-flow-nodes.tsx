@@ -50,6 +50,7 @@ function Card({
 	return (
 		<section
 			aria-label={label}
+			data-highlighted={highlighted ? 'true' : undefined}
 			className={cn(
 				'node-tone relative w-[240px] rounded-lg border bg-card px-3 py-2.5 text-left shadow-sm',
 				selected && 'ring-2 ring-ring',

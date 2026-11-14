@@ -21,6 +21,7 @@ export function SurveyEditorHeader({
 	canManage,
 	dirty,
 	saving,
+	duplicating,
 	canSave,
 	onBack,
 	onSettings,
@@ -35,6 +36,7 @@ export function SurveyEditorHeader({
 	canManage: boolean
 	dirty: boolean
 	saving: boolean
+	duplicating: boolean
 	canSave: boolean
 	onBack: () => void
 	onSettings: () => void
@@ -98,7 +100,7 @@ export function SurveyEditorHeader({
 					</>
 				) : null}
 				{canManage && !draft ? (
-					<Button size="sm" onClick={onDuplicate}>
+					<Button size="sm" disabled={duplicating} onClick={onDuplicate}>
 						<CopyPlus aria-hidden />
 						Dupliquer pour corriger
 					</Button>
@@ -108,8 +110,25 @@ export function SurveyEditorHeader({
 	)
 }
 
-export function ReadOnlyBanner({ survey }: { survey: Survey }) {
-	if (survey.status === 'DRAFT') return null
+export function ReadOnlyBanner({
+	survey,
+	canManage,
+}: {
+	survey: Survey
+	canManage: boolean
+}) {
+	if (survey.status === 'DRAFT') {
+		if (canManage) return null
+		return (
+			<output className="flex items-start gap-2 border-b bg-warning-soft px-4 py-2 text-sm text-warning">
+				<Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
+				<span>
+					Lecture seule : vous n’avez pas la permission de modifier ce
+					questionnaire.
+				</span>
+			</output>
+		)
+	}
 	return (
 		<output className="flex items-start gap-2 border-b bg-warning-soft px-4 py-2 text-sm text-warning">
 			<Lock className="mt-0.5 size-4 shrink-0" aria-hidden />

@@ -201,33 +201,51 @@ function QuestionDetails({
 	)
 }
 
+function unlistedLabel(question: GraphNode | null): string {
+	if (!question) return 'Question supprimée'
+	if (question.type !== 'QUESTION') return 'Nœud qui n’est pas une question'
+	return `${questionLabel(question)} (hors des questions précédentes)`
+}
+
 function ConditionDetails({
 	node,
 	choiceQuestions,
+	conditionQuestion,
+	sentence,
 	readOnly,
 	onChange,
 }: {
 	node: ConditionNode
 	choiceQuestions: readonly QuestionNode[]
+	conditionQuestion: GraphNode | null
+	sentence: string
 	readOnly: boolean
 	onChange: (node: GraphNode) => void
 }) {
 	const source = choiceQuestions.find(
 		(question) => question.id === node.question,
 	)
+	const unlisted = node.question !== '' && !source
 	return (
 		<>
+			<p className="rounded-md bg-muted px-3 py-2 text-sm">{sentence}</p>
 			<Field label="Question testée" htmlFor="condition-question">
 				<select
 					id="condition-question"
 					className={NATIVE_SELECT}
 					value={node.question}
 					disabled={readOnly}
+					aria-invalid={unlisted || undefined}
 					onChange={(event) =>
 						onChange({ ...node, question: event.target.value, option: '' })
 					}
 				>
 					<option value="">Choisir une question à choix…</option>
+					{unlisted ? (
+						<option value={node.question} disabled>
+							{unlistedLabel(conditionQuestion)}
+						</option>
+					) : null}
 					{choiceQuestions.map((question) => (
 						<option key={question.id} value={question.id}>
 							{questionLabel(question)}
@@ -259,7 +277,7 @@ function ConditionDetails({
 					))}
 				</select>
 			</Field>
-			<Field label="Est" htmlFor="condition-checked">
+			<Field label="État de l’option" htmlFor="condition-checked">
 				<select
 					id="condition-checked"
 					className={NATIVE_SELECT}
@@ -269,8 +287,8 @@ function ConditionDetails({
 						onChange({ ...node, checked: event.target.value === 'checked' })
 					}
 				>
-					<option value="checked">cochée</option>
-					<option value="unchecked">non cochée</option>
+					<option value="checked">est cochée</option>
+					<option value="unchecked">n’est pas cochée</option>
 				</select>
 			</Field>
 			<p className="text-muted-foreground text-xs">
@@ -321,6 +339,8 @@ export function NodeDetailsPanel({
 	node,
 	issues,
 	choiceQuestions,
+	conditionQuestion,
+	sentence,
 	optionKeys,
 	otherIdentifier,
 	isStart,
@@ -335,6 +355,8 @@ export function NodeDetailsPanel({
 	node: GraphNode
 	issues: readonly string[]
 	choiceQuestions: readonly QuestionNode[]
+	conditionQuestion: GraphNode | null
+	sentence: string
 	optionKeys: readonly string[]
 	otherIdentifier: boolean
 	isStart: boolean
@@ -393,6 +415,8 @@ export function NodeDetailsPanel({
 					<ConditionDetails
 						node={node}
 						choiceQuestions={choiceQuestions}
+						conditionQuestion={conditionQuestion}
+						sentence={sentence}
 						readOnly={readOnly}
 						onChange={onChange}
 					/>
