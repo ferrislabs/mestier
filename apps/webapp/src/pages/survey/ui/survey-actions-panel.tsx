@@ -57,113 +57,144 @@ export function SurveyActionsPanel({
 }) {
 	const blocked = saveBlockedReason !== null
 	return (
-		<div className="grid gap-3 border-b p-4">
+		<div className="grid divide-y border-b">
 			<h1 className="sr-only">{title}</h1>
-			<div className="flex flex-wrap items-center gap-1.5">
-				<SurveyStatusBadge status={survey.status} />
-				<VisibilityBadge visibility={survey.visibility} />
-				{problems}
-			</div>
-			{dirty ? (
-				<p className="text-muted-foreground text-xs">
-					Modifications non enregistrées
-				</p>
-			) : null}
-			{canManage && blocked ? (
-				<p id={SAVE_REASON_ID} className="text-muted-foreground text-xs">
-					{saveBlockedReason}
-				</p>
-			) : null}
-			<label
-				htmlFor="survey-preview-switch"
-				className="flex items-center justify-between gap-2 text-sm"
-			>
-				<span className="flex items-center gap-2">
-					<Eye className="size-4" aria-hidden />
-					Aperçu
-				</span>
-				<Switch
-					id="survey-preview-switch"
-					checked={previewing}
-					onCheckedChange={onPreviewing}
-				/>
-			</label>
-			{canManage ? (
-				<div className="grid gap-2">
-					<Button
-						variant={dirty ? 'default' : 'outline'}
-						disabled={!dirty || saving}
-						aria-disabled={blocked || undefined}
-						aria-describedby={blocked ? SAVE_REASON_ID : undefined}
-						onClick={onSave}
-					>
-						<Save aria-hidden />
-						Enregistrer
-					</Button>
-					{survey.status === 'DRAFT' ? (
-						<Button
-							disabled={saving}
-							aria-disabled={blocked || undefined}
-							aria-describedby={blocked ? SAVE_REASON_ID : undefined}
-							onClick={onOpen}
-						>
-							<DoorOpen aria-hidden />
-							Ouvrir aux réponses
-						</Button>
+			<Section title="État">
+				<dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm">
+					<dt className="text-muted-foreground">Statut</dt>
+					<dd>
+						<SurveyStatusBadge status={survey.status} />
+					</dd>
+					<dt className="text-muted-foreground">Visibilité</dt>
+					<dd>
+						<VisibilityBadge visibility={survey.visibility} />
+					</dd>
+					{problems ? (
+						<>
+							<dt className="text-muted-foreground">Contrôle</dt>
+							<dd>{problems}</dd>
+						</>
 					) : null}
-					{survey.status === 'OPENED' ? (
-						<Button variant="outline" disabled={saving} onClick={onClose}>
-							<DoorClosed aria-hidden />
-							Fermer
-						</Button>
-					) : null}
-				</div>
-			) : null}
-			<div className="grid gap-1">
-				<Button
-					variant="ghost"
-					size="sm"
-					className="justify-start"
-					onClick={onResponses}
+				</dl>
+			</Section>
+			<Section title="Affichage">
+				<label
+					htmlFor="survey-preview-switch"
+					className="flex items-start justify-between gap-3 text-sm"
 				>
-					<Inbox aria-hidden />
-					Réponses
-				</Button>
-				{onCopyLink ? (
+					<span className="grid gap-0.5">
+						<span className="flex items-center gap-2 font-medium">
+							<Eye className="size-4" aria-hidden />
+							Aperçu
+						</span>
+						<span className="text-muted-foreground text-xs">
+							Voir le questionnaire comme le répondant le verra.
+						</span>
+					</span>
+					<Switch
+						id="survey-preview-switch"
+						checked={previewing}
+						onCheckedChange={onPreviewing}
+					/>
+				</label>
+			</Section>
+			{canManage ? (
+				<Section title="Publication">
+					<div className="grid gap-2">
+						<Button
+							variant={dirty ? 'default' : 'outline'}
+							disabled={!dirty || saving}
+							aria-disabled={blocked || undefined}
+							aria-describedby={SAVE_REASON_ID}
+							onClick={onSave}
+						>
+							<Save aria-hidden />
+							Enregistrer
+						</Button>
+						<p id={SAVE_REASON_ID} className="text-muted-foreground text-xs">
+							{blocked
+								? saveBlockedReason
+								: dirty
+									? 'Des modifications ne sont pas enregistrées.'
+									: 'Toutes les modifications sont enregistrées.'}
+						</p>
+						{survey.status === 'DRAFT' ? (
+							<Button
+								disabled={saving}
+								aria-disabled={blocked || undefined}
+								onClick={onOpen}
+							>
+								<DoorOpen aria-hidden />
+								Ouvrir aux réponses
+							</Button>
+						) : null}
+						{survey.status === 'OPENED' ? (
+							<Button variant="outline" disabled={saving} onClick={onClose}>
+								<DoorClosed aria-hidden />
+								Fermer les réponses
+							</Button>
+						) : null}
+					</div>
+				</Section>
+			) : null}
+			<Section title="Autres actions">
+				<div className="grid gap-1">
 					<Button
 						variant="ghost"
 						size="sm"
 						className="justify-start"
-						onClick={onCopyLink}
+						onClick={onResponses}
 					>
-						<Copy aria-hidden />
-						Copier le lien public
+						<Inbox aria-hidden />
+						Voir les réponses
 					</Button>
-				) : null}
-				{canManage ? (
-					<>
+					{onCopyLink ? (
 						<Button
 							variant="ghost"
 							size="sm"
 							className="justify-start"
-							disabled={duplicating}
-							onClick={onDuplicate}
+							onClick={onCopyLink}
 						>
-							<CopyPlus aria-hidden />
-							Dupliquer
+							<Copy aria-hidden />
+							Copier le lien public
 						</Button>
-						<Button
-							variant="ghost"
-							size="sm"
-							className="justify-start text-destructive hover:text-destructive"
-							onClick={onDelete}
-						>
-							<Trash2 aria-hidden />
-							Supprimer
-						</Button>
-					</>
-				) : null}
-			</div>
+					) : null}
+					{canManage ? (
+						<>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="justify-start"
+								disabled={duplicating}
+								onClick={onDuplicate}
+							>
+								<CopyPlus aria-hidden />
+								Dupliquer
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="justify-start text-destructive hover:text-destructive"
+								onClick={onDelete}
+							>
+								<Trash2 aria-hidden />
+								Supprimer
+							</Button>
+						</>
+					) : null}
+				</div>
+			</Section>
 		</div>
+	)
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+	return (
+		<section className="grid gap-3 p-4">
+			<h2 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+				{title}
+			</h2>
+			{children}
+		</section>
 	)
 }
