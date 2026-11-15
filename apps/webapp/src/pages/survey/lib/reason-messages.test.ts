@@ -36,6 +36,12 @@ describe('REASON_MESSAGES', () => {
 		}
 	})
 
+	it('names the 500 character limit of a question description', () => {
+		expect(reasonMessage('graph_question_description_too_long')).toContain(
+			'500',
+		)
+	})
+
 	it('falls back on a generic message for an unknown code', () => {
 		expect(reasonMessage('nope')).toMatch(/refus/i)
 		expect(reasonMessage('graph_cycle')).toBe(REASON_MESSAGES.graph_cycle)

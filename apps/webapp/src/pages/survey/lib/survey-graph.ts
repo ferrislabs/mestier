@@ -24,6 +24,7 @@ export function fromSchema(
 
 function cleanNode(node: GraphNode): GraphNode {
 	if (node.type === 'QUESTION') {
+		const description = node.description?.trim() ?? ''
 		return {
 			type: 'QUESTION',
 			id: node.id,
@@ -36,6 +37,7 @@ function cleanNode(node: GraphNode): GraphNode {
 			max_photos: node.kind === 'PHOTO' ? (node.max_photos ?? null) : null,
 			identifier: Boolean(node.identifier),
 			...(node.block ? { block: node.block } : {}),
+			...(description !== '' ? { description } : {}),
 		}
 	}
 	if (node.type === 'END') {

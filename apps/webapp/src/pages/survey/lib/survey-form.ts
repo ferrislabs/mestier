@@ -27,6 +27,7 @@ export interface FormQuestion {
 	identifier: boolean
 	rule: DisplayRule | null
 	block: string | null
+	description: string
 }
 
 export interface SurveyForm {
@@ -71,6 +72,7 @@ export function newQuestion(id: string, kind: QuestionKind): FormQuestion {
 		identifier: false,
 		rule: null,
 		block: null,
+		description: '',
 	}
 }
 
@@ -332,6 +334,14 @@ export function updateQuestion(
 	patch: Partial<Omit<FormQuestion, 'id' | 'kind' | 'options'>>,
 ): SurveyForm {
 	return mapQuestion(form, id, (item) => ({ ...item, ...patch }))
+}
+
+export function describeQuestion(
+	form: SurveyForm,
+	id: string,
+	description: string,
+): SurveyForm {
+	return mapQuestion(form, id, (item) => ({ ...item, description }))
 }
 
 export function changeKind(

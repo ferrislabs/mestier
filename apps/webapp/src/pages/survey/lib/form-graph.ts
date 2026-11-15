@@ -87,6 +87,7 @@ function questionNode(item: FormQuestion): QuestionNode {
 		max_photos: item.kind === 'PHOTO' ? item.maxPhotos : null,
 		identifier: item.identifier,
 		...(item.block ? { block: item.block } : {}),
+		...(item.description !== '' ? { description: item.description } : {}),
 	}
 }
 
@@ -171,6 +172,7 @@ function formQuestion(
 		identifier: Boolean(node.identifier),
 		rule,
 		block: node.block ?? null,
+		description: node.description ?? '',
 	}
 }
 

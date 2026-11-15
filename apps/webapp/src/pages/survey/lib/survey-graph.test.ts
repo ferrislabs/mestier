@@ -76,4 +76,29 @@ describe('graph serialisation', () => {
 			edges: [{ from: 'q1', to: 'e1', branch: 'NEXT' }],
 		})
 	})
+
+	it('trims a description and drops a blank or null one', () => {
+		const graph = (description: string | null): EditorGraph => ({
+			start: 'q1',
+			nodes: [
+				{
+					type: 'QUESTION',
+					id: 'q1',
+					kind: 'TEXT',
+					label: 'Nom',
+					required: false,
+					description,
+				},
+				{ type: 'END', id: 'e1', message: null },
+			],
+			edges: [{ from: 'q1', to: 'e1', branch: 'NEXT' }],
+		})
+		const described = (description: string | null) =>
+			toSchema(graph(description))?.nodes[0]
+		expect(described('  Une ligne\nPuis une autre  ')).toMatchObject({
+			description: 'Une ligne\nPuis une autre',
+		})
+		expect(described('   ')).not.toHaveProperty('description')
+		expect(described(null)).not.toHaveProperty('description')
+	})
 })

@@ -13,6 +13,14 @@ import type {
 
 export const MAX_PHOTOS_LIMIT = 20
 
+export const MAX_DESCRIPTION_LENGTH = 500
+
+export function descriptionLength(
+	description: string | null | undefined,
+): number {
+	return [...(description ?? '').trim()].length
+}
+
 export interface GraphIssue {
 	code: string
 	nodeId: string | null
@@ -54,6 +62,9 @@ function questionIssues(node: QuestionNode): GraphIssue[] {
 	}
 	if (node.label.trim() === '') {
 		issues.push(issue('graph_question_label_empty', node.id))
+	}
+	if (descriptionLength(node.description) > MAX_DESCRIPTION_LENGTH) {
+		issues.push(issue('graph_question_description_too_long', node.id))
 	}
 	if (options.some((option) => option.trim() === '')) {
 		issues.push(issue('graph_option_empty', node.id))

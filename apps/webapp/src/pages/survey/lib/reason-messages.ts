@@ -24,6 +24,8 @@ export const REASON_MESSAGES = {
 	graph_zero_max_photos: 'Le nombre maximal de photos doit être d’au moins 1.',
 	graph_choice_without_options: 'Une question à choix a besoin d’options.',
 	graph_question_label_empty: 'Donnez un libellé à la question.',
+	graph_question_description_too_long:
+		'La description d’une question ne dépasse pas 500 caractères : raccourcissez-la.',
 	graph_option_empty: 'Une option est vide.',
 	graph_duplicate_option: 'Deux options portent le même libellé.',
 	graph_block_too_small:

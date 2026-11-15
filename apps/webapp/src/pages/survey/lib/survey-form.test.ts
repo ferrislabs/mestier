@@ -5,6 +5,7 @@ import {
 	blockMembers,
 	changeKind,
 	dependentsOf,
+	describeQuestion,
 	dropQuestion,
 	duplicateQuestion,
 	governingRule,
@@ -197,6 +198,47 @@ describe('survey form edition', () => {
 			'PHOTO',
 		)
 		expect(photo.form.questions[0].identifier).toBe(false)
+	})
+
+	it('creates a question without a description', () => {
+		expect(newQuestion('x', 'TEXT').description).toBe('')
+	})
+
+	it('describes a question and keeps what is typed until the graph is built', () => {
+		const next = describeQuestion(base(), 'b', '  Précisez la pièce\n')
+		expect(next.questions[1].description).toBe('  Précisez la pièce\n')
+		expect(next.questions[0].description).toBe('')
+		expect(describeQuestion(next, 'b', '').questions[1].description).toBe('')
+	})
+
+	it('keeps the description across kind changes', () => {
+		const described = describeQuestion(base(), 'a', 'Choisissez')
+		expect(
+			changeKind(described, 'a', 'TEXT').form.questions[0].description,
+		).toBe('Choisissez')
+		expect(
+			changeKind(described, 'a', 'PHOTO').form.questions[0].description,
+		).toBe('Choisissez')
+	})
+
+	it('duplicates a question with its description, inside a block too', () => {
+		const form = describeQuestion(
+			{
+				...base(),
+				questions: [
+					{ ...newQuestion('x', 'TEXT'), block: 'B' },
+					{ ...newQuestion('y', 'TEXT'), block: 'B' },
+				],
+			},
+			'y',
+			'Le jour',
+		)
+		const next = duplicateQuestion(form, 'y', 'y2')
+		expect(next.questions[2]).toMatchObject({
+			id: 'y2',
+			block: 'B',
+			description: 'Le jour',
+		})
 	})
 
 	it('duplicates a question after itself without the identifier', () => {

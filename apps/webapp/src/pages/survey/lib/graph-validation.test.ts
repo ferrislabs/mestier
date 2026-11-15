@@ -252,6 +252,32 @@ describe('validateGraph', () => {
 		).toEqual(['graph_choice_without_options'])
 	})
 
+	it('refuses a description over 500 characters, counted in characters once trimmed', () => {
+		const withDescription = (description: string): EditorGraph => ({
+			start: 'q1',
+			nodes: [question('q1', 'TEXT', { description }), end('e1')],
+			edges: [next('q1', 'e1')],
+		})
+		expect(codes(withDescription('é'.repeat(500)))).toEqual([])
+		expect(codes(withDescription('😀'.repeat(500)))).toEqual([])
+		expect(codes(withDescription(`  ${'x'.repeat(500)}  `))).toEqual([])
+		expect(codes(withDescription('   '))).toEqual([])
+		expect(validateGraph(withDescription('é'.repeat(501)))).toEqual([
+			{
+				code: 'graph_question_description_too_long',
+				nodeId: 'q1',
+				message: REASON_MESSAGES.graph_question_description_too_long,
+			},
+		])
+		expect(
+			codes({
+				start: 'q1',
+				nodes: [question('q1', 'TEXT', { description: null }), end('e1')],
+				edges: [next('q1', 'e1')],
+			}),
+		).toEqual([])
+	})
+
 	it('allows one identifier on a text, e-mail or phone question only', () => {
 		const graph: EditorGraph = {
 			start: 'q1',

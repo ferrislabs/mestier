@@ -188,7 +188,44 @@ const BLOCK_TABLE: [string, SurveyForm][] = [
 	],
 ]
 
+const DESCRIPTION_TABLE: [string, SurveyForm][] = [
+	[
+		'a described question',
+		form([
+			question('a', 'TEXT', { description: 'Tel qu’inscrit sur le contrat' }),
+			question('b', 'NUMBER'),
+		]),
+	],
+	[
+		'a multi-line description on a guarded question',
+		form([
+			CHOICES.a,
+			question('c', 'LONG_TEXT', {
+				description: 'Première ligne\nSeconde ligne',
+				rule: {
+					join: 'ALL',
+					conditions: [{ question: 'a', option: 'Oui', checked: true }],
+				},
+			}),
+		]),
+	],
+	[
+		'described members of a block',
+		form([
+			question('x', 'TEXT', { block: BLOCK, description: 'Le jour' }),
+			question('y', 'PHOTO', { block: BLOCK, maxPhotos: 2 }),
+			question('z', 'TEXT', { block: BLOCK, description: 'La ville' }),
+		]),
+	],
+]
+
 describe('form round trip', () => {
+	it.each(DESCRIPTION_TABLE)('keeps %s through the graph', (_, value) => {
+		const graph = buildGraph(value)
+		expect(validateGraph(normalizeGraph(graph))).toEqual([])
+		expect(parseGraph(graph)).toEqual({ kind: 'form', form: value })
+	})
+
 	it.each(TABLE)('keeps %s through the graph', (_, value) => {
 		expect(roundTrip(value)).toEqual({ kind: 'form', form: value })
 	})
@@ -374,6 +411,47 @@ describe('graph shapes', () => {
 		}
 	})
 
+	it('writes no description key on a graph without descriptions', () => {
+		for (const [, value] of [...TABLE, ...BLOCK_TABLE]) {
+			expect(JSON.stringify(buildGraph(value))).not.toContain('description')
+		}
+	})
+
+	it('writes a description only when it is not empty', () => {
+		const graph = buildGraph(DESCRIPTION_TABLE[0][1])
+		expect(
+			graph.nodes
+				.filter((node) => node.type === 'QUESTION')
+				.map((node) => [node.id, node.description]),
+		).toEqual([
+			['a', 'Tel qu’inscrit sur le contrat'],
+			['b', undefined],
+		])
+	})
+
+	it('reads a null description from the server as empty', () => {
+		const value = DESCRIPTION_TABLE[0][1]
+		const graph = buildGraph(value)
+		const served: EditorGraph = {
+			...graph,
+			nodes: graph.nodes.map((node) =>
+				node.type === 'QUESTION'
+					? { ...node, description: node.description ?? null, block: null }
+					: node,
+			),
+		}
+		expect(parseGraph(served)).toEqual({ kind: 'form', form: value })
+	})
+
+	it('reads a trimmed description from the server as the same form', () => {
+		const value = form([question('a', 'TEXT', { description: '  Précisez  ' })])
+		const served = normalizeGraph(buildGraph(value))
+		expect(parseGraph(served)).toEqual({
+			kind: 'form',
+			form: form([question('a', 'TEXT', { description: 'Précisez' })]),
+		})
+	})
+
 	it('reads a null block from the server as no block', () => {
 		const value = TABLE[3][1]
 		const graph = buildGraph(value)
@@ -539,10 +617,28 @@ function randomForm(random: () => number, seed: number): SurveyForm {
 		}
 		questions.push(item)
 	}
-	return {
+	const result: SurveyForm = {
 		questions,
 		endId: `end-${seed}`,
 		endMessage: random() < 0.5 ? '' : 'Merci',
+	}
+	describeRandomly(result, mulberry32(seed ^ 0x5bd1e995))
+	return result
+}
+
+const DESCRIPTION_POOL = [
+	'Précisez si besoin',
+	'Une ligne\nPuis une autre',
+	'  Avec des espaces autour  ',
+	'é'.repeat(500),
+]
+
+function describeRandomly(value: SurveyForm, random: () => number) {
+	for (const item of value.questions) {
+		if (random() < 0.4) {
+			item.description =
+				DESCRIPTION_POOL[Math.floor(random() * DESCRIPTION_POOL.length)]
+		}
 	}
 }
 
@@ -633,6 +729,7 @@ function canonical(graph: EditorGraph): string {
 describe('random forms', () => {
 	it('round trip, validate and follow the expected path for 200 seeded forms', () => {
 		let withBlocks = 0
+		let withDescriptions = 0
 		for (let index = 0; index < 200; index += 1) {
 			const seed = caseSeed(index)
 			const random = mulberry32(seed)
@@ -644,6 +741,9 @@ describe('random forms', () => {
 			})
 			if (value.questions.length === 0) continue
 			if (value.questions.some((item) => item.block !== null)) withBlocks += 1
+			if (value.questions.some((item) => item.description !== '')) {
+				withDescriptions += 1
+			}
 			expect(
 				validateGraph(normalizeGraph(graph)),
 				`validation, seed ${seed}`,
@@ -657,6 +757,7 @@ describe('random forms', () => {
 			}
 		}
 		expect(withBlocks).toBeGreaterThan(50)
+		expect(withDescriptions).toBeGreaterThan(50)
 	})
 
 	it('reads a randomly rewired graph as advanced or as a form that rebuilds it, for 100 seeded cases', () => {
@@ -693,6 +794,7 @@ interface PathCase {
 	graph: Schemas.SurveyGraphSchema
 	answers: Record<string, unknown>
 	expected_questions: string[]
+	expected_descriptions?: Record<string, string | null>
 }
 
 const CASES: PathCase[] = JSON.parse(
@@ -721,6 +823,25 @@ describe('shared path cases', () => {
 				parsed.form.questions.filter((question) => question.block !== null)
 					.length,
 			).toBeGreaterThanOrEqual(2)
+		}
+	})
+
+	it('reads every shared description case as a form that keeps its trimmed description', () => {
+		const described = CASES.filter((item) => item.expected_descriptions)
+		expect(described).toHaveLength(2)
+		for (const item of described) {
+			const parsed = parseGraph(normalizeGraph(fromSchema(item.graph)))
+			expect(parsed.kind, item.name).toBe('form')
+			if (parsed.kind !== 'form') continue
+			for (const [id, expected] of Object.entries(
+				item.expected_descriptions ?? {},
+			)) {
+				expect(
+					parsed.form.questions.find((question) => question.id === id)
+						?.description,
+					item.name,
+				).toBe(expected ?? '')
+			}
 		}
 	})
 
