@@ -60,7 +60,7 @@ export function SurveyPreviewPanel({
 					</ul>
 				</section>
 			) : (
-				<div className="flex-1 bg-background">{children}</div>
+				<div className="flex flex-1 flex-col bg-background">{children}</div>
 			)}
 		</section>
 	)

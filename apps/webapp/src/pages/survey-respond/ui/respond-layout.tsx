@@ -6,11 +6,13 @@ export type RespondVariant = 'public' | 'member'
 
 export function RespondLayout({
 	variant,
+	embedded = false,
 	title,
 	description,
 	children,
 }: {
 	variant: RespondVariant
+	embedded?: boolean
 	title: string | null
 	description?: string | null
 	children: ReactNode
@@ -19,8 +21,12 @@ export function RespondLayout({
 	return (
 		<div
 			className={cn(
-				'flex w-full flex-col overflow-x-hidden bg-background text-foreground',
-				variant === 'public' ? 'min-h-dvh' : 'min-h-full',
+				'flex w-full flex-col overflow-x-clip bg-background text-foreground',
+				embedded
+					? 'min-h-full flex-1'
+					: variant === 'public'
+						? 'min-h-dvh'
+						: 'min-h-full',
 			)}
 		>
 			{variant === 'public' ? (

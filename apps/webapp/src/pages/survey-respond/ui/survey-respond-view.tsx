@@ -190,6 +190,7 @@ export function SurveyRespondView({
 	return (
 		<RespondLayout
 			variant={variant}
+			embedded={view.preview}
 			title={view.survey?.title ?? null}
 			description={view.survey?.description}
 		>
