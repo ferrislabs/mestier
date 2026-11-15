@@ -432,11 +432,6 @@ describe('SurveyEditorFeature', () => {
 			within(dialog).getByRole('button', { name: /Suivant/ }),
 		)
 		expect(await within(dialog).findByLabelText('Immatriculation')).toBeTruthy()
-		expect(
-			within(dialog)
-				.getByRole('button', { name: 'Téléphone' })
-				.getAttribute('aria-pressed'),
-		).toBe('true')
 		await userEvent.click(
 			within(dialog).getByRole('button', { name: 'Fermer l’aperçu' }),
 		)

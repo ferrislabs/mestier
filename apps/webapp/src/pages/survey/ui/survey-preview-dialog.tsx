@@ -1,4 +1,4 @@
-import { Monitor, RotateCcw, Smartphone, TriangleAlert, X } from 'lucide-react'
+import { RotateCcw, TriangleAlert, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
 import {
@@ -7,9 +7,6 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from '#/components/ui/dialog'
-import { cn } from '#/lib/utils'
-
-export type PreviewDevice = 'phone' | 'desktop'
 
 export interface PreviewProblem {
 	key: string
@@ -19,19 +16,15 @@ export interface PreviewProblem {
 
 export function SurveyPreviewDialog({
 	open,
-	device,
 	problems,
 	children,
 	onOpenChange,
-	onDevice,
 	onRestart,
 }: {
 	open: boolean
-	device: PreviewDevice
 	problems: readonly PreviewProblem[]
 	children: ReactNode
 	onOpenChange: (open: boolean) => void
-	onDevice: (device: PreviewDevice) => void
 	onRestart: () => void
 }) {
 	const blocked = problems.length > 0
@@ -49,31 +42,6 @@ export function SurveyPreviewDialog({
 							modifications non enregistrées. Rien n’est envoyé.
 						</DialogDescription>
 					</div>
-					<fieldset className="m-0 flex rounded-md border p-0.5">
-						<legend className="sr-only">Format d’affichage</legend>
-						<Button
-							type="button"
-							variant={device === 'phone' ? 'secondary' : 'ghost'}
-							size="sm"
-							className="min-h-11 sm:min-h-8"
-							aria-pressed={device === 'phone'}
-							onClick={() => onDevice('phone')}
-						>
-							<Smartphone aria-hidden />
-							Téléphone
-						</Button>
-						<Button
-							type="button"
-							variant={device === 'desktop' ? 'secondary' : 'ghost'}
-							size="sm"
-							className="min-h-11 sm:min-h-8"
-							aria-pressed={device === 'desktop'}
-							onClick={() => onDevice('desktop')}
-						>
-							<Monitor aria-hidden />
-							Bureau
-						</Button>
-					</fieldset>
 					<Button
 						type="button"
 						variant="outline"
@@ -123,14 +91,7 @@ export function SurveyPreviewDialog({
 							</ul>
 						</section>
 					) : (
-						<div
-							className={cn(
-								'mx-auto h-full overflow-y-auto overflow-x-hidden bg-background shadow-sm',
-								device === 'phone'
-									? 'w-full max-w-[390px] rounded-xl border'
-									: 'w-full rounded-lg border',
-							)}
-						>
+						<div className="mx-auto h-full w-full overflow-y-auto overflow-x-hidden rounded-lg border bg-background">
 							{children}
 						</div>
 					)}
