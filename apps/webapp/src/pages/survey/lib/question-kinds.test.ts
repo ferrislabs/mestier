@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-	CONDITION_ENTRY,
-	END_ENTRY,
 	isChoiceKind,
-	nodeChoices,
 	QUESTION_KINDS,
 	questionKindEntry,
 } from '#/pages/survey/lib/question-kinds'
@@ -30,7 +27,7 @@ describe('QUESTION_KINDS', () => {
 	})
 
 	it('gives every kind an icon, a French title and a description', () => {
-		for (const entry of [...QUESTION_KINDS, CONDITION_ENTRY, END_ENTRY]) {
+		for (const entry of QUESTION_KINDS) {
 			expect(entry.icon).toBeTruthy()
 			expect(entry.title.trim()).not.toBe('')
 			expect(entry.description.trim()).not.toBe('')
@@ -38,7 +35,7 @@ describe('QUESTION_KINDS', () => {
 	})
 
 	it('never repeats a title nor an icon', () => {
-		const entries = [...QUESTION_KINDS, CONDITION_ENTRY, END_ENTRY]
+		const entries = QUESTION_KINDS
 		expect(new Set(entries.map((entry) => entry.title)).size).toBe(
 			entries.length,
 		)
@@ -55,14 +52,6 @@ describe('QUESTION_KINDS', () => {
 		expect(ALL_KINDS.filter(isChoiceKind)).toEqual([
 			'SINGLE_CHOICE',
 			'MULTIPLE_CHOICE',
-		])
-	})
-
-	it('offers the ten kinds then the condition and the end in the picker', () => {
-		expect(nodeChoices().map((entry) => entry.choice)).toEqual([
-			...QUESTION_KINDS.map((entry) => entry.kind),
-			'CONDITION',
-			'END',
 		])
 	})
 })

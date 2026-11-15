@@ -28,5 +28,3 @@ export interface EditorGraph {
 	nodes: GraphNode[]
 	edges: GraphEdge[]
 }
-
-export type NodeChoice = QuestionKind | 'CONDITION' | 'END'
