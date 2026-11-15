@@ -13,8 +13,7 @@ export interface SurveySettings {
 	visibility: Visibility
 	allowMultiple: boolean
 	responseCap: string
-	campaignId: string
-	otherCampaignIds: string[]
+	campaignIds: string[]
 	metadata: MetadataEntry[]
 }
 
@@ -31,17 +30,18 @@ export function settingsOf(survey: Survey): SurveySettings {
 		visibility: survey.visibility,
 		allowMultiple: survey.allow_multiple_responses,
 		responseCap: survey.response_cap == null ? '' : String(survey.response_cap),
-		campaignId: survey.campaign_ids[0] ?? '',
-		otherCampaignIds: survey.campaign_ids.slice(1),
+		campaignIds: [...survey.campaign_ids],
 		metadata: entriesOf(survey.metadata),
 	}
 }
 
-function campaignIdsOf(settings: SurveySettings): string[] {
-	const others = settings.otherCampaignIds.filter(
-		(id) => id !== settings.campaignId,
-	)
-	return settings.campaignId === '' ? others : [settings.campaignId, ...others]
+export function toggleCampaign(
+	settings: SurveySettings,
+	campaignId: string,
+	attached: boolean,
+): string[] {
+	const others = settings.campaignIds.filter((id) => id !== campaignId)
+	return attached ? [...others, campaignId] : others
 }
 
 function parsedCap(raw: string): number | null | undefined {
@@ -74,7 +74,7 @@ export function settingsPatch(
 		...(draft ? { visibility: settings.visibility } : {}),
 		allow_multiple_responses: settings.allowMultiple,
 		response_cap: parsedCap(settings.responseCap) ?? null,
-		campaign_ids: campaignIdsOf(settings),
+		campaign_ids: [...new Set(settings.campaignIds)],
 		metadata: recordOf(settings.metadata),
 	}
 }

@@ -1,3 +1,6 @@
+import { Lock } from 'lucide-react'
+import { Button } from '#/components/ui/button'
+import { Checkbox } from '#/components/ui/checkbox'
 import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
 import {
@@ -9,15 +12,23 @@ import {
 } from '#/components/ui/sheet'
 import { Switch } from '#/components/ui/switch'
 import { Textarea } from '#/components/ui/textarea'
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from '#/components/ui/tooltip'
 import { newMetadataEntry } from '#/pages/survey/lib/metadata'
-import type {
-	SettingsErrors,
-	SurveySettings,
+import {
+	type SettingsErrors,
+	type SurveySettings,
+	toggleCampaign,
 } from '#/pages/survey/lib/survey-settings'
 import type { Campaign } from '#/pages/survey/types'
 import { MetadataEditor } from '#/pages/survey/ui/metadata-editor'
-import { NATIVE_SELECT } from '#/pages/survey/ui/node-details-panel'
 import { VisibilityPicker } from '#/pages/survey/ui/visibility-picker'
+
+const VISIBILITY_LOCKED =
+	'La visibilité d’un questionnaire ouvert ne peut pas changer : dupliquez-le.'
 
 function FieldError({ message }: { message: string | undefined }) {
 	return message ? <p className="text-destructive text-xs">{message}</p> : null
@@ -49,7 +60,7 @@ export function SurveySettingsSheet({
 					<SheetTitle>Réglages du questionnaire</SheetTitle>
 					<SheetDescription>
 						{readOnly
-							? 'Le questionnaire n’est plus un brouillon : ses réglages sont figés.'
+							? 'Vous n’avez pas la permission de modifier ces réglages.'
 							: 'Enregistrez le questionnaire pour appliquer vos réglages.'}
 					</SheetDescription>
 				</SheetHeader>
@@ -76,14 +87,40 @@ export function SurveySettingsSheet({
 						/>
 					</Field>
 					<Field label="Visibilité" htmlFor={null}>
-						<VisibilityPicker
-							name="settings-visibility"
-							value={settings.visibility}
-							disabled={readOnly || visibilityLocked}
-							onChange={(visibility) => onChange({ visibility })}
-						/>
-						<p className="text-muted-foreground text-xs">
-							La visibilité ne change plus après l’ouverture.
+						<div className="flex items-start gap-2">
+							<div className="min-w-0 flex-1">
+								<VisibilityPicker
+									name="settings-visibility"
+									value={settings.visibility}
+									disabled={readOnly || visibilityLocked}
+									onChange={(visibility) => onChange({ visibility })}
+								/>
+							</div>
+							{visibilityLocked ? (
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											className="size-11 shrink-0 sm:size-8"
+											aria-label="Pourquoi la visibilité est-elle figée ?"
+											aria-describedby="settings-visibility-locked"
+										>
+											<Lock aria-hidden />
+										</Button>
+									</TooltipTrigger>
+									<TooltipContent>{VISIBILITY_LOCKED}</TooltipContent>
+								</Tooltip>
+							) : null}
+						</div>
+						<p
+							id="settings-visibility-locked"
+							className="text-muted-foreground text-xs"
+						>
+							{visibilityLocked
+								? VISIBILITY_LOCKED
+								: 'La visibilité ne change plus après l’ouverture.'}
 						</p>
 					</Field>
 					<div className="flex items-start justify-between gap-3">
@@ -117,26 +154,48 @@ export function SurveySettingsSheet({
 						/>
 						<FieldError message={errors.responseCap} />
 					</Field>
-					<Field label="Campagne" htmlFor="settings-campaign">
-						<select
-							id="settings-campaign"
-							className={NATIVE_SELECT}
-							value={settings.campaignId}
-							disabled={readOnly}
-							onChange={(event) => onChange({ campaignId: event.target.value })}
-						>
-							<option value="">Aucune : questionnaire indépendant</option>
-							{campaigns.map((campaign) => (
-								<option key={campaign.id} value={campaign.id}>
-									{campaign.name}
-								</option>
-							))}
-						</select>
+					<fieldset className="m-0 grid min-w-0 gap-2 border-0 p-0">
+						<legend className="mb-2 font-medium text-sm">Campagnes</legend>
+						{campaigns.length === 0 ? (
+							<p className="text-muted-foreground text-xs">
+								Aucune campagne : le questionnaire est indépendant.
+							</p>
+						) : (
+							<ul className="grid gap-1">
+								{campaigns.map((campaign) => {
+									const id = `settings-campaign-${campaign.id}`
+									return (
+										<li key={campaign.id} className="flex items-center gap-2">
+											<Checkbox
+												id={id}
+												checked={settings.campaignIds.includes(campaign.id)}
+												disabled={readOnly}
+												onCheckedChange={(checked) =>
+													onChange({
+														campaignIds: toggleCampaign(
+															settings,
+															campaign.id,
+															checked === true,
+														),
+													})
+												}
+											/>
+											<label
+												htmlFor={id}
+												className="min-h-11 content-center text-sm sm:min-h-8"
+											>
+												{campaign.name}
+											</label>
+										</li>
+									)
+								})}
+							</ul>
+						)}
 						<p className="text-muted-foreground text-xs">
-							Une campagne fixe la fenêtre pendant laquelle les réponses sont
-							acceptées.
+							Chaque campagne ouvre une fenêtre pendant laquelle les réponses
+							sont acceptées. Sans campagne, le questionnaire est indépendant.
 						</p>
-					</Field>
+					</fieldset>
 					<Field label="Métadonnées privées" htmlFor={null}>
 						<p className="text-muted-foreground text-xs">
 							Jamais montrées au répondant, elles accompagnent les événements
@@ -154,9 +213,6 @@ export function SurveySettingsSheet({
 							}
 						/>
 					</Field>
-					<p className="text-muted-foreground text-xs">
-						Le message affiché à la fin se règle sur chaque nœud Fin du canevas.
-					</p>
 				</div>
 			</SheetContent>
 		</Sheet>

@@ -1,7 +1,8 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFlowTestEnvironment } from '#/pages/automation/test/flow-test-env'
 import { SurveyEditorFeature } from '#/pages/survey/feature/survey-editor-feature'
+import { conditionNodeId } from '#/pages/survey/lib/form-graph'
 import { REASON_MESSAGES } from '#/pages/survey/lib/reason-messages'
 import {
 	installSurveyApi,
@@ -14,14 +15,15 @@ import type { Survey } from '#/pages/survey/types'
 const toastMock = vi.hoisted(() => ({
 	success: vi.fn(),
 	error: vi.fn(),
+	info: vi.fn(),
 }))
 
 vi.mock('sonner', () => ({ toast: toastMock }))
 
 beforeEach(() => {
-	installFlowTestEnvironment()
 	toastMock.success.mockClear()
 	toastMock.error.mockClear()
+	toastMock.info.mockClear()
 })
 
 const GRAPH: NonNullable<Survey['graph']> = {
@@ -60,8 +62,6 @@ const GRAPH: NonNullable<Survey['graph']> = {
 }
 
 const MANAGER = ['VIEW_SURVEYS', 'MANAGE_SURVEYS']
-const OPEN_PATH = `${PATHS.survey}/open`
-const DUPLICATE_PATH = `${PATHS.survey}/duplicate`
 
 function refusal(status: number, reason: string, questionId?: string) {
 	return Object.assign(new Error('Refused'), {
@@ -73,87 +73,137 @@ function refusal(status: number, reason: string, questionId?: string) {
 	})
 }
 
-interface PatchCall {
-	body: { graph: unknown }
-}
-
 function patchBodies(calls: { method: string; params: unknown }[]) {
 	return calls
 		.filter((call) => call.method === 'patch')
-		.map((call) => (call.params as PatchCall).body)
+		.map(
+			(call) =>
+				(
+					call.params as {
+						body: { graph?: Survey['graph']; visibility?: string }
+					}
+				).body,
+		)
 }
 
-async function openDetails(region: string | RegExp) {
-	fireEvent.doubleClick(await screen.findByRole('region', { name: region }))
-	return screen.findByRole('dialog')
-}
-
-async function closeDetails() {
-	fireEvent.keyDown(document.activeElement ?? document.body, {
-		key: 'Escape',
-		code: 'Escape',
-	})
-	await waitFor(() => expect(screen.queryByRole('dialog')).toBe(null))
-}
-
-async function editLabel(region: string, label: string) {
-	await openDetails(region)
-	fireEvent.change(await screen.findByLabelText('Libellé'), {
-		target: { value: label },
+function card(number: number) {
+	return screen.getByRole('article', {
+		name: new RegExp(`^Question ${number}\\b`),
 	})
 }
 
-function flowNode(region: string) {
-	const node = screen
-		.getByRole('region', { name: region, hidden: true })
-		.closest('.react-flow__node')
-	if (!node) throw new Error(`no flow node for ${region}`)
-	return node as HTMLElement
+function saveButton() {
+	return screen.getByRole('button', {
+		name: 'Enregistrer',
+	}) as HTMLButtonElement
+}
+
+async function pickKind(trigger: HTMLElement, title: string) {
+	await userEvent.click(trigger)
+	await userEvent.click(
+		within(await screen.findByRole('menu')).getByRole('menuitem', {
+			name: new RegExp(`^${title}`),
+		}),
+	)
 }
 
 describe('SurveyEditorFeature', () => {
-	it('draws the question, condition and end nodes of the graph', async () => {
+	it('lists the questions of the graph as cards followed by the end message', async () => {
 		installSurveyApi({
 			permissions: MANAGER,
 			surveys: [survey({ graph: GRAPH })],
 		})
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
+		const first = await screen.findByLabelText('Libellé de la question 1')
+		expect((first as HTMLTextAreaElement).value).toBe('Venez-vous en voiture ?')
 		expect(
-			await screen.findByRole('region', {
-				name: 'Question Choix unique : Venez-vous en voiture ?',
-			}),
+			(screen.getByLabelText('Libellé de la question 2') as HTMLTextAreaElement)
+				.value,
+		).toBe('Immatriculation')
+		expect(within(card(2)).getByText('Sous condition')).toBeTruthy()
+		expect(
+			within(card(2)).getByText('Afficher cette question seulement si'),
 		).toBeTruthy()
 		expect(
-			screen.getByRole('region', {
-				name: 'Condition : Si « Venez-vous en voiture ? » : l’option « Oui » est cochée',
-			}),
+			within(card(2)).getByText(
+				'Seules les questions toujours posées peuvent servir de condition.',
+			),
 		).toBeTruthy()
-		expect(screen.getByRole('region', { name: 'Fin : Merci' })).toBeTruthy()
-		expect(screen.getByText('Parcours complet').getAttribute('title')).toBe(
-			'Le parcours est complet : chaque chemin mène à une fin.',
-		)
-		expect(screen.queryByRole('button', { name: /^Vérification/ })).toBe(null)
-	})
-
-	it('lets a manager edit a draft', async () => {
-		installSurveyApi({
-			permissions: MANAGER,
-			surveys: [survey({ graph: GRAPH })],
-		})
-		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
-
 		expect(
-			await screen.findByRole('button', { name: 'Ajouter un nœud' }),
-		).toBeTruthy()
+			(screen.getByLabelText('Message de fin') as HTMLTextAreaElement).value,
+		).toBe('Merci')
+		expect(screen.getByText('Prêt')).toBeTruthy()
 		expect(
 			screen.getByRole('button', { name: 'Ouvrir aux réponses' }),
 		).toBeTruthy()
-		expect(screen.queryByRole('status')).toBe(null)
 	})
 
-	it('shows an opened survey read-only, with a banner and a way to duplicate it', async () => {
-		installSurveyApi({
+	it('adds a choice question without options, focuses it and blocks the save until it is complete', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		api.mockMutation('patch', PATHS.survey, () => ({
+			data: survey({ graph: GRAPH }),
+		}))
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await pickKind(
+			await screen.findByRole('button', { name: 'Ajouter une question' }),
+			'Choix multiple',
+		)
+		const label = await screen.findByLabelText('Libellé de la question 3')
+		await waitFor(() => expect(document.activeElement).toBe(label))
+		expect(
+			within(card(3)).getByText('Aucune option pour le moment.'),
+		).toBeTruthy()
+		expect(
+			screen.getByRole('button', { name: '2 problèmes à corriger' }),
+		).toBeTruthy()
+		expect(saveButton().disabled).toBe(true)
+
+		fireEvent.change(label, { target: { value: 'Équipements' } })
+		await userEvent.click(
+			within(card(3)).getByRole('button', { name: 'Ajouter une option' }),
+		)
+		const option = await within(card(3)).findByLabelText('Option 1')
+		await waitFor(() => expect(document.activeElement).toBe(option))
+		fireEvent.change(option, { target: { value: 'Casque' } })
+		expect(screen.getByText('Prêt')).toBeTruthy()
+		await userEvent.click(saveButton())
+
+		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
+		const graph = patchBodies(api.calls)[0].graph
+		if (!graph) throw new Error('graph expected')
+		const condition = conditionNodeId('q2', 0)
+		expect(graph.start).toBe('q1')
+		expect(graph.nodes.map((node) => node.type)).toEqual([
+			'QUESTION',
+			'CONDITION',
+			'QUESTION',
+			'QUESTION',
+			'END',
+		])
+		expect(graph.nodes[1]).toMatchObject({ id: condition, option: 'Oui' })
+		expect(graph.nodes[3]).toMatchObject({
+			kind: 'MULTIPLE_CHOICE',
+			label: 'Équipements',
+			options: ['Casque'],
+		})
+		const added = graph.nodes[3].id
+		expect(graph.edges).toEqual(
+			expect.arrayContaining([
+				{ from: condition, to: added, branch: 'ELSE' },
+				{ from: 'q2', to: added, branch: 'NEXT' },
+				{ from: added, to: 'e1', branch: 'NEXT' },
+			]),
+		)
+		expect(toastMock.success).toHaveBeenCalledWith('Questionnaire enregistré.')
+	})
+
+	it('keeps an opened survey editable with a calm banner and a frozen visibility', async () => {
+		const api = installSurveyApi({
 			permissions: MANAGER,
 			surveys: [
 				survey({
@@ -164,333 +214,235 @@ describe('SurveyEditorFeature', () => {
 				}),
 			],
 		})
+		api.mockMutation('patch', PATHS.survey, () => ({ data: survey() }))
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
 		expect(
 			await screen.findByText(
-				/Ce questionnaire est ouvert : sa définition est figée/,
+				/Ce questionnaire est ouvert\. Vos modifications/,
 			),
 		).toBeTruthy()
-		expect(
-			screen.getByRole('button', { name: 'Dupliquer pour corriger' }),
-		).toBeTruthy()
-		expect(screen.queryByRole('button', { name: 'Ajouter un nœud' })).toBe(null)
-		expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBe(null)
+		expect(screen.queryByText(/Dupliquer pour corriger/)).toBe(null)
 		expect(screen.queryByRole('button', { name: 'Ouvrir aux réponses' })).toBe(
 			null,
 		)
+		expect(screen.getByRole('button', { name: 'Fermer' })).toBeTruthy()
+		const label = screen.getByLabelText(
+			'Libellé de la question 2',
+		) as HTMLTextAreaElement
+		expect(label.disabled).toBe(false)
+		fireEvent.change(label, { target: { value: 'Plaque' } })
+		await userEvent.click(saveButton())
+		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
+		expect('visibility' in patchBodies(api.calls)[0]).toBe(false)
 
-		await openDetails('Fin : Merci')
-		const message = await screen.findByLabelText('Message de fin')
-		expect((message as HTMLTextAreaElement).disabled).toBe(true)
-		expect(screen.queryByRole('button', { name: 'Supprimer le nœud' })).toBe(
-			null,
-		)
+		await userEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+		expect(
+			await screen.findAllByText(
+				'La visibilité d’un questionnaire ouvert ne peut pas changer : dupliquez-le.',
+			),
+		).not.toHaveLength(0)
 	})
 
-	it('flags an invalid draft and keeps it from being opened', async () => {
-		const broken = {
-			...GRAPH,
-			edges: GRAPH.edges.filter((edge) => edge.branch !== 'ELSE'),
+	it('refuses to move a condition source below the question that depends on it', async () => {
+		installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await userEvent.click(
+			await screen.findByRole('button', { name: 'Descendre la question 1' }),
+		)
+		expect(toastMock.error).toHaveBeenCalledWith(
+			expect.stringMatching(/^Déplacement refusé/),
+			{ duration: 6000 },
+		)
+		expect(
+			(screen.getByLabelText('Libellé de la question 1') as HTMLTextAreaElement)
+				.value,
+		).toBe('Venez-vous en voiture ?')
+	})
+
+	it('moves a question with the keyboard and announces its new position', async () => {
+		const linear: NonNullable<Survey['graph']> = {
+			start: 'q2',
+			nodes: [
+				GRAPH.nodes[2],
+				{
+					type: 'QUESTION',
+					id: 'q3',
+					kind: 'DATE',
+					label: 'Date',
+					required: false,
+				},
+				GRAPH.nodes[3],
+			],
+			edges: [
+				{ from: 'q2', to: 'q3', branch: 'NEXT' },
+				{ from: 'q3', to: 'e1', branch: 'NEXT' },
+			],
 		}
 		installSurveyApi({
 			permissions: MANAGER,
-			surveys: [survey({ graph: broken })],
+			surveys: [survey({ graph: linear })],
 		})
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
-		fireEvent.click(
-			await screen.findByRole('button', { name: /^Vérification/ }),
-		)
-		expect(
-			await screen.findByText(
-				'Ce nœud n’a pas de suite : reliez chacune de ses sorties.',
-			),
-		).toBeTruthy()
-		fireEvent.keyDown(document.activeElement ?? document.body, {
-			key: 'Escape',
+		const handle = await screen.findByRole('button', {
+			name: /^Réordonner la question 2/,
 		})
+		fireEvent.keyDown(handle, { key: 'ArrowUp' })
+		expect(
+			await screen.findByText('Question déplacée en position 1 sur 2.'),
+		).toBeTruthy()
+		expect(
+			(screen.getByLabelText('Libellé de la question 1') as HTMLTextAreaElement)
+				.value,
+		).toBe('Date')
+	})
+
+	it('asks before deleting a condition source and removes the dependent rule', async () => {
+		installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await userEvent.click(
+			await screen.findByRole('button', { name: 'Supprimer la question 1' }),
+		)
+		const dialog = await screen.findByRole('dialog', {
+			name: 'Supprimer cette question ?',
+		})
+		await userEvent.click(
+			within(dialog).getByRole('button', { name: 'Supprimer la question' }),
+		)
 		await waitFor(() =>
 			expect(
 				(
-					screen.getByRole('button', {
-						name: 'Ouvrir aux réponses',
-					}) as HTMLButtonElement
-				).disabled,
-			).toBe(true),
+					screen.getByLabelText(
+						'Libellé de la question 1',
+					) as HTMLTextAreaElement
+				).value,
+			).toBe('Immatriculation'),
 		)
+		expect(screen.queryByText('Sous condition')).toBe(null)
 	})
 
-	it('adds the first question from the picker and links it to the start', async () => {
-		installSurveyApi({ permissions: MANAGER, surveys: [survey()] })
-		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
-
-		fireEvent.click(
-			await screen.findByRole('button', {
-				name: /Ajoutez votre première question/,
-			}),
-		)
-		const picker = await screen.findByRole('dialog', {
-			name: 'Ajouter un nœud',
-		})
-		fireEvent.click(within(picker).getByRole('button', { name: 'E-mail' }))
-
-		expect(
-			await screen.findByRole('dialog', { name: 'E-mail sans libellé' }),
-		).toBeTruthy()
-		expect(screen.getByLabelText(/^Identifiant du répondant/)).toBeTruthy()
-		await closeDetails()
-		expect(
-			screen.getByRole('region', {
-				name: 'Question E-mail : Question sans libellé',
-			}),
-		).toBeTruthy()
-		expect(
-			screen.getByRole('region', { name: 'Départ du questionnaire' }),
-		).toBeTruthy()
-		await waitFor(() =>
-			expect(
-				document.querySelector('.react-flow__edge[data-id="__start__:START"]'),
-			).not.toBe(null),
-		)
-	})
-
-	it('sends the backend graph contract on save', async () => {
+	it('pins a backend refusal on the card of its question', async () => {
 		const api = installSurveyApi({
 			permissions: MANAGER,
 			surveys: [survey({ graph: GRAPH })],
 		})
-		api.mockMutation('patch', PATHS.survey, () => ({
-			data: survey({ graph: GRAPH }),
-		}))
+		api.mockMutation('patch', PATHS.survey, () => {
+			throw refusal(422, 'graph_question_label_empty', 'q2')
+		})
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
-		await editLabel('Question Texte court : Immatriculation', 'Plaque')
-		await closeDetails()
-		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
-
-		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
-		const graph = patchBodies(api.calls)[0].graph as NonNullable<
-			Survey['graph']
-		>
-		expect(graph.start).toBe('q1')
-		expect(graph.nodes.map((node) => [node.id, node.type])).toEqual([
-			['q1', 'QUESTION'],
-			['c1', 'CONDITION'],
-			['q2', 'QUESTION'],
-			['e1', 'END'],
-		])
-		expect(graph.nodes.some((node) => node.id === '__start__')).toBe(false)
-		expect(graph.edges.map((edge) => edge.branch).sort()).toEqual([
-			'ELSE',
-			'NEXT',
-			'NEXT',
-			'THEN',
-		])
-		expect(graph.nodes[2]).toMatchObject({ label: 'Plaque' })
+		fireEvent.change(await screen.findByLabelText('Libellé de la question 2'), {
+			target: { value: 'Plaque' },
+		})
+		await userEvent.click(saveButton())
+		expect(
+			await within(card(2)).findByText(
+				REASON_MESSAGES.graph_question_label_empty,
+			),
+		).toBeTruthy()
+		expect(toastMock.error).toHaveBeenCalled()
 	})
 
-	it('sends a null graph once the canvas is emptied', async () => {
-		const small: NonNullable<Survey['graph']> = {
-			start: 'q2',
-			nodes: [GRAPH.nodes[2], GRAPH.nodes[3]],
-			edges: [{ from: 'q2', to: 'e1', branch: 'NEXT' }],
+	it('shows an advanced graph as a read-only summary and keeps it untouched', async () => {
+		const advanced: NonNullable<Survey['graph']> = {
+			...GRAPH,
+			nodes: [
+				...GRAPH.nodes,
+				{
+					type: 'QUESTION',
+					id: 'q3',
+					kind: 'DATE',
+					label: 'Date',
+					required: false,
+				},
+			],
+			edges: [
+				{ from: 'q1', to: 'c1', branch: 'NEXT' },
+				{ from: 'c1', to: 'q2', branch: 'THEN' },
+				{ from: 'c1', to: 'e1', branch: 'ELSE' },
+				{ from: 'q2', to: 'q3', branch: 'NEXT' },
+				{ from: 'q3', to: 'e1', branch: 'NEXT' },
+			],
 		}
 		const api = installSurveyApi({
 			permissions: MANAGER,
-			surveys: [survey({ graph: small })],
+			surveys: [survey({ graph: advanced })],
 		})
 		api.mockMutation('patch', PATHS.survey, () => ({ data: survey() }))
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
-		for (const region of [
-			'Question Texte court : Immatriculation',
-			'Fin : Merci',
-		]) {
-			await openDetails(region)
-			fireEvent.click(
-				await screen.findByRole('button', { name: 'Supprimer le nœud' }),
-			)
-			await waitFor(() => expect(screen.queryByRole('dialog')).toBe(null))
-		}
-		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
-
-		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
-		expect(patchBodies(api.calls)[0].graph).toBe(null)
-	})
-
-	it('pins a graph refusal of the server on its node', async () => {
-		const api = installSurveyApi({
-			permissions: MANAGER,
-			surveys: [survey({ graph: GRAPH })],
-		})
-		api.mockMutation('patch', PATHS.survey, () => {
-			throw refusal(422, 'graph_cycle', 'q2')
-		})
-		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
-
-		await editLabel('Question Texte court : Immatriculation', 'Plaque')
-		await closeDetails()
-		fireEvent.click(screen.getByRole('region', { name: 'Fin : Merci' }))
-		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
-
-		const banner = await screen.findAllByText(REASON_MESSAGES.graph_cycle)
-		expect(banner.length).toBeGreaterThan(0)
 		expect(
-			screen.getByLabelText(`À corriger : ${REASON_MESSAGES.graph_cycle}`),
+			await screen.findByText(
+				'Ce questionnaire utilise un parcours avancé qui ne peut pas être modifié ici.',
+			),
 		).toBeTruthy()
-		const node = flowNode('Question Texte court : Plaque')
-		expect(node.classList.contains('selected')).toBe(true)
+		expect(screen.getByText(/Il contient 3 questions\./)).toBeTruthy()
+		expect(screen.queryByRole('button', { name: 'Ajouter une question' })).toBe(
+			null,
+		)
+		fireEvent.change(screen.getByLabelText('Titre du questionnaire'), {
+			target: { value: 'Nouveau titre' },
+		})
+		await userEvent.click(saveButton())
+		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
+		expect('graph' in patchBodies(api.calls)[0]).toBe(false)
+
+		await userEvent.click(screen.getByRole('button', { name: 'Aperçu' }))
 		expect(
-			screen
-				.getByRole('region', {
-					name: 'Question Texte court : Plaque',
-					hidden: true,
-				})
-				.getAttribute('data-highlighted'),
-		).toBe('true')
-		expect(await screen.findByRole('dialog', { name: 'Plaque' })).toBeTruthy()
-		expect(
-			(screen.getByLabelText('Libellé') as HTMLTextAreaElement).value,
-		).toBe('Plaque')
+			await screen.findByLabelText('Venez-vous en voiture ?', { exact: false }),
+		).toBeTruthy()
 	})
 
-	it('explains in French why the server refuses to open', async () => {
-		const api = installSurveyApi({
-			permissions: MANAGER,
-			surveys: [survey({ graph: GRAPH })],
-		})
-		api.mockMutation('post', OPEN_PATH, () => {
-			throw refusal(409, 'survey_closed')
-		})
-		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
-
-		const open = await screen.findByRole('button', {
-			name: 'Ouvrir aux réponses',
-		})
-		await waitFor(() =>
-			expect((open as HTMLButtonElement).disabled).toBe(false),
-		)
-		fireEvent.click(open)
-		const dialog = await screen.findByRole('dialog')
-		fireEvent.click(
-			within(dialog).getByRole('button', { name: 'Ouvrir et figer' }),
-		)
-
-		await waitFor(() =>
-			expect(toastMock.error).toHaveBeenCalledWith(
-				REASON_MESSAGES.survey_closed,
-				{
-					duration: 6000,
-				},
-			),
-		)
-	})
-
-	it('toasts the saved questionnaire', async () => {
-		const api = installSurveyApi({
-			permissions: MANAGER,
-			surveys: [survey({ graph: GRAPH })],
-		})
-		api.mockMutation('patch', PATHS.survey, () => ({
-			data: survey({ graph: GRAPH }),
-		}))
-		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
-
-		await editLabel('Question Texte court : Immatriculation', 'Plaque')
-		await closeDetails()
-		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
-
-		await waitFor(() =>
-			expect(toastMock.success).toHaveBeenCalledWith(
-				'Questionnaire enregistré.',
-			),
-		)
-		expect(screen.queryByText('Questionnaire enregistré.')).toBe(null)
-	})
-
-	it('toasts a failed save with the French message', async () => {
-		const api = installSurveyApi({
-			permissions: MANAGER,
-			surveys: [survey({ graph: GRAPH })],
-		})
-		api.mockMutation('patch', PATHS.survey, () => {
-			throw refusal(409, 'survey_closed')
-		})
-		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
-
-		await editLabel('Question Texte court : Immatriculation', 'Plaque')
-		await closeDetails()
-		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
-
-		await waitFor(() =>
-			expect(toastMock.error).toHaveBeenCalledWith(
-				REASON_MESSAGES.survey_closed,
-				{
-					duration: 6000,
-				},
-			),
-		)
-		expect(toastMock.success).not.toHaveBeenCalled()
-	})
-
-	it('removes a selected node and an unrelated selected edge deleted together', async () => {
+	it('previews the unsaved form and lists the problems instead when it is broken', async () => {
 		installSurveyApi({
 			permissions: MANAGER,
 			surveys: [survey({ graph: GRAPH })],
 		})
-		const { container } = await renderSurveyPage(
-			<SurveyEditorFeature surveyId="survey-1" />,
-		)
-
-		fireEvent.click(
-			await screen.findByRole('region', {
-				name: 'Question Texte court : Immatriculation',
-			}),
-		)
-		const edge = await waitFor(() => {
-			const found = container.querySelector(
-				'.react-flow__edge[data-id="c1:ELSE"]',
-			)
-			if (!found) throw new Error('edge not rendered')
-			return found
-		})
-		fireEvent.click(edge)
-		fireEvent.keyDown(document.body, { key: 'Delete', code: 'Delete' })
-		fireEvent.keyUp(document.body, { key: 'Delete', code: 'Delete' })
-
-		await waitFor(() =>
-			expect(
-				screen.queryByRole('region', {
-					name: 'Question Texte court : Immatriculation',
-				}),
-			).toBe(null),
-		)
-		expect(
-			container.querySelector('.react-flow__edge[data-id="c1:ELSE"]'),
-		).toBe(null)
-	})
-
-	it('keeps a second duplicate from being sent while the first runs', async () => {
-		const api = installSurveyApi({
-			permissions: MANAGER,
-			surveys: [survey({ graph: GRAPH, status: 'CLOSED' })],
-		})
-		api.mockMutation('post', DUPLICATE_PATH, () => new Promise(() => {}))
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
-		const button = await screen.findByRole('button', {
-			name: 'Dupliquer pour corriger',
+		fireEvent.change(await screen.findByLabelText('Libellé de la question 1'), {
+			target: { value: 'Avez-vous une voiture ?' },
 		})
-		fireEvent.click(button)
-		await waitFor(() =>
-			expect((button as HTMLButtonElement).disabled).toBe(true),
+		await userEvent.click(screen.getByRole('button', { name: 'Aperçu' }))
+		const dialog = await screen.findByRole('dialog', { name: 'Aperçu' })
+		await userEvent.click(await within(dialog).findByLabelText('Oui'))
+		await userEvent.click(
+			within(dialog).getByRole('button', { name: /Suivant/ }),
 		)
-		fireEvent.click(button)
-		expect(api.calls.filter((call) => call.method === 'post')).toHaveLength(1)
+		expect(await within(dialog).findByLabelText('Immatriculation')).toBeTruthy()
+		expect(
+			within(dialog)
+				.getByRole('button', { name: 'Téléphone' })
+				.getAttribute('aria-pressed'),
+		).toBe('true')
+		await userEvent.click(
+			within(dialog).getByRole('button', { name: 'Fermer l’aperçu' }),
+		)
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBe(null))
+
+		fireEvent.change(screen.getByLabelText('Libellé de la question 2'), {
+			target: { value: '' },
+		})
+		await userEvent.click(screen.getByRole('button', { name: 'Aperçu' }))
+		const broken = await screen.findByRole('dialog', { name: 'Aperçu' })
+		expect(
+			within(broken).getByText('Corrigez ces problèmes pour voir l’aperçu'),
+		).toBeTruthy()
+		expect(
+			within(broken).getByText(REASON_MESSAGES.graph_question_label_empty),
+		).toBeTruthy()
 	})
 
-	it('tells a reader opening a draft that it is read-only', async () => {
+	it('shows everything read-only to a reader', async () => {
 		installSurveyApi({
 			permissions: ['VIEW_SURVEYS'],
 			surveys: [survey({ graph: GRAPH })],
@@ -498,54 +450,15 @@ describe('SurveyEditorFeature', () => {
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
 		expect(
-			await screen.findByText(
-				'Lecture seule : vous n’avez pas la permission de modifier ce questionnaire.',
-			),
+			await screen.findByText(/Lecture seule : vous n’avez pas la permission/),
 		).toBeTruthy()
-		expect(screen.queryByRole('button', { name: 'Ajouter un nœud' })).toBe(null)
-	})
-
-	it('shows a condition question that is not offered as flagged instead of the placeholder', async () => {
-		const detached: NonNullable<Survey['graph']> = {
-			...GRAPH,
-			nodes: [
-				...GRAPH.nodes,
-				{
-					type: 'QUESTION',
-					id: 'q9',
-					kind: 'SINGLE_CHOICE',
-					label: 'Question ailleurs',
-					required: false,
-					options: ['A', 'B'],
-				},
-			],
-			edges: GRAPH.edges,
-		}
-		installSurveyApi({
-			permissions: MANAGER,
-			surveys: [
-				survey({
-					graph: {
-						...detached,
-						nodes: detached.nodes.map((node) =>
-							node.id === 'c1'
-								? { ...node, question: 'q9', option: 'A' }
-								: node,
-						),
-					},
-				}),
-			],
-		})
-		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
-
-		await openDetails(/^Condition : /)
-		const select = (await screen.findByLabelText(
-			'Question testée',
-		)) as HTMLSelectElement
-		expect(select.value).toBe('q9')
-		expect(select.getAttribute('aria-invalid')).toBe('true')
-		const chosen = select.selectedOptions[0]
-		expect(chosen.disabled).toBe(true)
-		expect(chosen.textContent).toContain('Question ailleurs')
+		expect(
+			(screen.getByLabelText('Libellé de la question 1') as HTMLTextAreaElement)
+				.disabled,
+		).toBe(true)
+		expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBe(null)
+		expect(screen.queryByRole('button', { name: 'Ajouter une question' })).toBe(
+			null,
+		)
 	})
 })

@@ -17,8 +17,8 @@ export function lifecycleCopy(
 			return {
 				title: `Ouvrir « ${title} » ?`,
 				description:
-					'Une fois ouvert, sa définition est figée : les questions, les conditions et la visibilité ne se modifient plus. Pour corriger, vous le dupliquerez en brouillon.',
-				confirmLabel: 'Ouvrir et figer',
+					'Il acceptera des réponses. Vous pourrez encore modifier ses questions : les réponses déjà reçues gardent la version qu’elles ont vue. Sa visibilité, elle, ne changera plus.',
+				confirmLabel: 'Ouvrir aux réponses',
 				destructive: false,
 				done: 'Questionnaire ouvert aux réponses.',
 			}

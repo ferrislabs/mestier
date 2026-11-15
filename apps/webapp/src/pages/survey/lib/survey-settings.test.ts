@@ -1,33 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { settingsOf, settingsPatch } from '#/pages/survey/lib/survey-settings'
+import {
+	settingsOf,
+	settingsPatch,
+	toggleCampaign,
+} from '#/pages/survey/lib/survey-settings'
 import { survey } from '#/pages/survey/test/survey-harness'
 
 describe('survey settings campaigns', () => {
-	it('reads the first campaign into the select and keeps the others', () => {
+	it('keeps every attached campaign in order', () => {
 		const settings = settingsOf(survey({ campaign_ids: ['a', 'b', 'c'] }))
 
-		expect(settings.campaignId).toBe('a')
+		expect(settings.campaignIds).toEqual(['a', 'b', 'c'])
 		expect(settingsPatch(settings, false).campaign_ids).toEqual(['a', 'b', 'c'])
 	})
 
-	it('replaces the first campaign without losing the others', () => {
+	it('attaches and detaches a campaign without touching the others', () => {
 		const settings = settingsOf(survey({ campaign_ids: ['a', 'b'] }))
 
-		expect(
-			settingsPatch({ ...settings, campaignId: 'b' }, false).campaign_ids,
-		).toEqual(['b'])
-		expect(
-			settingsPatch({ ...settings, campaignId: 'c' }, false).campaign_ids,
-		).toEqual(['c', 'b'])
-		expect(
-			settingsPatch({ ...settings, campaignId: '' }, false).campaign_ids,
-		).toEqual(['b'])
+		expect(toggleCampaign(settings, 'c', true)).toEqual(['a', 'b', 'c'])
+		expect(toggleCampaign(settings, 'a', false)).toEqual(['b'])
+		expect(toggleCampaign(settings, 'b', true)).toEqual(['a', 'b'])
 	})
 
-	it('sends an empty list for an independent survey', () => {
+	it('sends an empty list for an independent survey and omits the visibility once opened', () => {
 		const settings = settingsOf(survey())
 
-		expect(settings.campaignId).toBe('')
 		expect(settingsPatch(settings, true).campaign_ids).toEqual([])
+		expect(settingsPatch(settings, true).visibility).toBe('PUBLIC')
+		expect('visibility' in settingsPatch(settings, false)).toBe(false)
 	})
 })
