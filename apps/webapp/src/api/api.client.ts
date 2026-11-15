@@ -14084,6 +14084,40 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type post_ReopenSurvey = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}/reopen";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          allow_multiple_responses: boolean;
+          campaign_ids: Array<Schemas.CampaignId>;
+          closed_at?: (string | null) | undefined;
+          description?: (string | null) | undefined;
+          graph?: (null | Schemas.SurveyGraphSchema) | undefined;
+          graph_version?: (number | null) | undefined;
+          id: Schemas.SurveyId;
+          metadata: Record<string, string>;
+          opened_at?: (string | null) | undefined;
+          organization_id: Schemas.OrganizationId;
+          public_slug?: (string | null) | undefined;
+          response_cap?: (number | null) | undefined;
+          status: Schemas.SurveyStatus;
+          title: string;
+          visibility: Schemas.Visibility;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
   export type get_ListSurveyResponses = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}/responses";
@@ -16273,6 +16307,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/surveys/{survey_id}/close": Endpoints.post_CloseSurvey;
     "/api/v1/organizations/{organization_id}/surveys/{survey_id}/duplicate": Endpoints.post_DuplicateSurvey;
     "/api/v1/organizations/{organization_id}/surveys/{survey_id}/open": Endpoints.post_OpenSurvey;
+    "/api/v1/organizations/{organization_id}/surveys/{survey_id}/reopen": Endpoints.post_ReopenSurvey;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.post_CreateTaskLabel;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.post_CreateTaskRecurrence;
     "/api/v1/organizations/{organization_id}/tasks": Endpoints.post_CreateTask;
