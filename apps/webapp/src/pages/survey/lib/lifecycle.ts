@@ -1,4 +1,4 @@
-export type LifecycleAction = 'open' | 'close' | 'delete'
+export type LifecycleAction = 'open' | 'close' | 'reopen' | 'delete'
 
 export interface LifecycleCopy {
 	title: string
@@ -26,10 +26,18 @@ export function lifecycleCopy(
 			return {
 				title: `Fermer « ${title} » ?`,
 				description:
-					'Il n’acceptera plus aucune réponse. Un questionnaire fermé ne se rouvre pas.',
+					'Il n’acceptera plus aucune réponse. Vous pourrez le rouvrir plus tard.',
 				confirmLabel: 'Fermer le questionnaire',
 				destructive: true,
 				done: 'Questionnaire fermé.',
+			}
+		case 'reopen':
+			return {
+				title: 'Rouvrir ce questionnaire ?',
+				description: 'Les répondants pourront de nouveau répondre.',
+				confirmLabel: 'Rouvrir',
+				destructive: false,
+				done: 'Questionnaire rouvert.',
 			}
 		case 'delete':
 			return {

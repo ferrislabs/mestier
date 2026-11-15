@@ -8,6 +8,7 @@ import {
 	Eye,
 	Inbox,
 	MoreHorizontal,
+	RotateCcw,
 	Save,
 	Settings2,
 	TriangleAlert,
@@ -77,6 +78,7 @@ export function SurveyEditorHeader({
 	onSave,
 	onOpen,
 	onClose,
+	onReopen,
 	onDuplicate,
 	onCopyLink,
 }: {
@@ -98,6 +100,7 @@ export function SurveyEditorHeader({
 	onSave: () => void
 	onOpen: () => void
 	onClose: () => void
+	onReopen: () => void
 	onDuplicate: () => void
 	onCopyLink: (() => void) | null
 }) {
@@ -219,6 +222,18 @@ export function SurveyEditorHeader({
 								>
 									<DoorClosed aria-hidden />
 									Fermer
+								</Button>
+							) : null}
+							{survey.status === 'CLOSED' ? (
+								<Button
+									variant="outline"
+									size="sm"
+									className="min-h-11 sm:min-h-8"
+									disabled={saving}
+									onClick={onReopen}
+								>
+									<RotateCcw aria-hidden />
+									Rouvrir les réponses
 								</Button>
 							) : null}
 						</>

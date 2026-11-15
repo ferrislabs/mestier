@@ -54,6 +54,7 @@ const EVENT_NAMES = [
 	'extra_period.rejected',
 	'extra_period.cancelled',
 	'survey.opened',
+	'survey.reopened',
 	'survey.response_submitted',
 	'survey.response_completed',
 	'survey_campaign.started',
@@ -129,6 +130,7 @@ describe('eventContractSource', () => {
 	it('describes the survey payloads with their campaigns, graph version and merged metadata', () => {
 		for (const name of [
 			'survey.opened',
+			'survey.reopened',
 			'survey.response_submitted',
 			'survey.response_completed',
 		]) {
@@ -141,6 +143,15 @@ describe('eventContractSource', () => {
 			expect(fields.join('\n'), name).not.toContain('campaign_id:')
 			expect(fields, name).toContain('metadata: Record<string, string>')
 		}
+	})
+
+	it('gives a reopened survey the payload of an opened one', () => {
+		expect(payloadContractFields('survey.reopened')).toEqual(
+			payloadContractFields('survey.opened'),
+		)
+		expect(eventContractSource('survey.reopened')).toContain(
+			'export interface SurveyReopenedPayload {',
+		)
 	})
 
 	it('lists the answers of a completed response with their question', () => {

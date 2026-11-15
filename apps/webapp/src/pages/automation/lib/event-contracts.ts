@@ -654,6 +654,10 @@ const PAYLOADS: Record<string, PayloadContract> = {
 		fields: [...SURVEY_IDS, SURVEY_METADATA, 'survey: OpenedSurvey'],
 		uses: ['OpenedSurvey', 'Uuid'],
 	},
+	'survey.reopened': {
+		fields: [...SURVEY_IDS, SURVEY_METADATA, 'survey: OpenedSurvey'],
+		uses: ['OpenedSurvey', 'Uuid'],
+	},
 	'survey.response_submitted': {
 		fields: [
 			...SURVEY_IDS,

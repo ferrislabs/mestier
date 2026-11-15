@@ -12,6 +12,8 @@ const SURVEY_OPEN_PATH =
 	'/api/v1/organizations/{organization_id}/surveys/{survey_id}/open'
 const SURVEY_CLOSE_PATH =
 	'/api/v1/organizations/{organization_id}/surveys/{survey_id}/close'
+const SURVEY_REOPEN_PATH =
+	'/api/v1/organizations/{organization_id}/surveys/{survey_id}/reopen'
 const SURVEY_DUPLICATE_PATH =
 	'/api/v1/organizations/{organization_id}/surveys/{survey_id}/duplicate'
 const SURVEY_RESPONSES_PATH =
@@ -240,6 +242,14 @@ export function useCloseSurvey() {
 	const invalidate = useSurveyInvalidation()
 	return useMutation({
 		...window.tanstackApi.mutation('post', SURVEY_CLOSE_PATH).mutationOptions,
+		onSuccess: invalidate,
+	})
+}
+
+export function useReopenSurvey() {
+	const invalidate = useSurveyInvalidation()
+	return useMutation({
+		...window.tanstackApi.mutation('post', SURVEY_REOPEN_PATH).mutationOptions,
 		onSuccess: invalidate,
 	})
 }

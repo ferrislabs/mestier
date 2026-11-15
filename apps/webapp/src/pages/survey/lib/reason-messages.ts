@@ -91,6 +91,7 @@ export const REASON_MESSAGES = {
 	response_not_found: 'Cette réponse est introuvable.',
 	survey_not_draft: 'Le questionnaire n’est plus un brouillon.',
 	survey_not_opened: 'Le questionnaire n’est pas ouvert.',
+	survey_not_closed: 'Seul un questionnaire fermé peut être rouvert.',
 	survey_has_responses:
 		'Ce questionnaire a déjà des réponses : fermez-le plutôt que de le supprimer.',
 	campaign_has_surveys:

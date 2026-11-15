@@ -1018,3 +1018,112 @@ describe('SurveyEditorFeature descriptions', () => {
 		expect(descriptionField(2).value).toBe('Telle que sur la carte grise')
 	})
 })
+
+const REOPEN_PATH =
+	'/api/v1/organizations/{organization_id}/surveys/{survey_id}/reopen'
+
+function closedSurvey(): Survey {
+	return survey({
+		graph: GRAPH,
+		status: 'CLOSED',
+		public_slug: 'abcd1234',
+		opened_at: '2026-05-02T08:00:00Z',
+		closed_at: '2026-05-20T08:00:00Z',
+	})
+}
+
+function wideScreen(matches: boolean) {
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn(() => ({
+			matches,
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+		})),
+	)
+}
+
+describe('SurveyEditorFeature reopening', () => {
+	it('reopens a closed survey from the narrow header after a confirmation', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [closedSurvey()],
+		})
+		api.mockMutation('post', REOPEN_PATH, () => ({
+			data: { ...closedSurvey(), status: 'OPENED', closed_at: null },
+		}))
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await userEvent.click(
+			await screen.findByRole('button', { name: 'Rouvrir les réponses' }),
+		)
+		const dialog = await screen.findByRole('dialog')
+		expect(within(dialog).getByText('Rouvrir ce questionnaire ?')).toBeTruthy()
+		expect(
+			within(dialog).getByText('Les répondants pourront de nouveau répondre.'),
+		).toBeTruthy()
+		await userEvent.click(
+			within(dialog).getByRole('button', { name: 'Rouvrir' }),
+		)
+
+		await waitFor(() =>
+			expect(
+				api.calls.filter(
+					(call) => call.method === 'post' && call.path === REOPEN_PATH,
+				),
+			).toHaveLength(1),
+		)
+		const post = api.calls.find((call) => call.path === REOPEN_PATH)
+		expect(post?.params).toMatchObject({
+			path: { organization_id: 'org-1', survey_id: 'survey-1' },
+		})
+		await waitFor(() =>
+			expect(toastMock.success).toHaveBeenCalledWith('Questionnaire rouvert.'),
+		)
+	})
+
+	it('offers reopening in the publication section of the wide actions column', async () => {
+		wideScreen(true)
+		try {
+			installSurveyApi({ permissions: MANAGER, surveys: [closedSurvey()] })
+			await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+			const section = (
+				await screen.findByRole('heading', { name: 'Publication' })
+			).closest('section') as HTMLElement
+			expect(
+				within(section).getByRole('button', { name: 'Rouvrir les réponses' }),
+			).toBeTruthy()
+			expect(
+				within(section).queryByRole('button', { name: 'Fermer les réponses' }),
+			).toBe(null)
+		} finally {
+			vi.unstubAllGlobals()
+		}
+	})
+
+	it('offers no reopening on an opened survey nor to a reader', async () => {
+		installSurveyApi({
+			permissions: MANAGER,
+			surveys: [{ ...closedSurvey(), status: 'OPENED', closed_at: null }],
+		})
+		const opened = await renderSurveyPage(
+			<SurveyEditorFeature surveyId="survey-1" />,
+		)
+		expect(await screen.findByRole('button', { name: 'Fermer' })).toBeTruthy()
+		expect(screen.queryByRole('button', { name: 'Rouvrir les réponses' })).toBe(
+			null,
+		)
+		opened.unmount()
+
+		installSurveyApi({
+			permissions: ['VIEW_SURVEYS'],
+			surveys: [closedSurvey()],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+		await screen.findByText(/Lecture seule : vous n’avez pas la permission/)
+		expect(screen.queryByRole('button', { name: 'Rouvrir les réponses' })).toBe(
+			null,
+		)
+	})
+})

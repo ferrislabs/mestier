@@ -5,6 +5,7 @@ import {
 	DoorOpen,
 	Eye,
 	Inbox,
+	RotateCcw,
 	Save,
 	Trash2,
 } from 'lucide-react'
@@ -33,6 +34,7 @@ export function SurveyActionsPanel({
 	onSave,
 	onOpen,
 	onClose,
+	onReopen,
 	onDuplicate,
 	onDelete,
 	onCopyLink,
@@ -51,6 +53,7 @@ export function SurveyActionsPanel({
 	onSave: () => void
 	onOpen: () => void
 	onClose: () => void
+	onReopen: () => void
 	onDuplicate: () => void
 	onDelete: () => void
 	onCopyLink: (() => void) | null
@@ -132,6 +135,12 @@ export function SurveyActionsPanel({
 							<Button variant="outline" disabled={saving} onClick={onClose}>
 								<DoorClosed aria-hidden />
 								Fermer les réponses
+							</Button>
+						) : null}
+						{survey.status === 'CLOSED' ? (
+							<Button variant="outline" disabled={saving} onClick={onReopen}>
+								<RotateCcw aria-hidden />
+								Rouvrir les réponses
 							</Button>
 						) : null}
 					</div>

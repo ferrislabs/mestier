@@ -10,6 +10,7 @@ import {
 	useDeleteSurvey,
 	useDuplicateSurvey,
 	useOpenSurvey,
+	useReopenSurvey,
 	useSurvey,
 	useUpdateSurvey,
 } from '#/hooks/use-surveys'
@@ -135,7 +136,7 @@ const END_MESSAGE_NEEDS_QUESTION =
 
 const UNSAVED_DESCRIPTION = 'Vos modifications non enregistrées seront perdues.'
 
-type Confirmation = 'open' | 'close' | 'delete'
+type Confirmation = 'open' | 'close' | 'reopen' | 'delete'
 
 export function SurveyEditorWorkspace({
 	survey,
@@ -151,6 +152,7 @@ export function SurveyEditorWorkspace({
 	const updateSurvey = useUpdateSurvey()
 	const openSurvey = useOpenSurvey()
 	const closeSurvey = useCloseSurvey()
+	const reopenSurvey = useReopenSurvey()
 	const duplicateSurvey = useDuplicateSurvey()
 	const deleteSurvey = useDeleteSurvey()
 
@@ -296,7 +298,8 @@ export function SurveyEditorWorkspace({
 				toast.success(lifecycleCopy(action, survey.title).done)
 				await goTo(surveysPath())
 				return
-			} else await closeSurvey.mutateAsync({ path })
+			} else if (action === 'reopen') await reopenSurvey.mutateAsync({ path })
+			else await closeSurvey.mutateAsync({ path })
 			toast.success(lifecycleCopy(action, survey.title).done)
 		} catch (failure) {
 			refuse(failure)
@@ -355,7 +358,8 @@ export function SurveyEditorWorkspace({
 						saving={
 							updateSurvey.isPending ||
 							openSurvey.isPending ||
-							closeSurvey.isPending
+							closeSurvey.isPending ||
+							reopenSurvey.isPending
 						}
 						duplicating={duplicateSurvey.isPending}
 						saveBlockedReason={saveBlockedReason}
@@ -378,6 +382,7 @@ export function SurveyEditorWorkspace({
 						onSave={() => void save()}
 						onOpen={requestOpen}
 						onClose={() => setConfirmation('close')}
+						onReopen={() => setConfirmation('reopen')}
 						onDuplicate={() => void duplicate()}
 						onCopyLink={copyLink}
 					/>
@@ -450,6 +455,7 @@ export function SurveyEditorWorkspace({
 								updateSurvey.isPending ||
 								openSurvey.isPending ||
 								closeSurvey.isPending ||
+								reopenSurvey.isPending ||
 								deleteSurvey.isPending
 							}
 							duplicating={duplicateSurvey.isPending}
@@ -468,6 +474,7 @@ export function SurveyEditorWorkspace({
 							onSave={() => void save()}
 							onOpen={requestOpen}
 							onClose={() => setConfirmation('close')}
+							onReopen={() => setConfirmation('reopen')}
 							onDuplicate={() => void duplicate()}
 							onDelete={() => setConfirmation('delete')}
 							onCopyLink={copyLink}
