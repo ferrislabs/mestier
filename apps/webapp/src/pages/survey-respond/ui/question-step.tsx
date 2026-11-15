@@ -82,7 +82,12 @@ export function QuestionStep({
 	const inputId = `answer-${question.id}`
 	const headingId = `question-${question.id}`
 	const errorId = `error-${question.id}`
-	const describedBy = error ? errorId : undefined
+	const descriptionId = `description-${question.id}`
+	const description = question.description?.trim() ?? ''
+	const describedBy =
+		[description ? descriptionId : null, error ? errorId : null]
+			.filter(Boolean)
+			.join(' ') || undefined
 	const kind = question.kind
 	const isField = isFieldKind(kind)
 	const text = typeof draft === 'string' ? draft : ''
@@ -118,6 +123,17 @@ export function QuestionStep({
 						question.label
 					)}
 				</h2>
+				{description ? (
+					<p
+						id={descriptionId}
+						className={cn(
+							'whitespace-pre-line break-words text-muted-foreground',
+							compact ? 'text-xs' : 'text-sm',
+						)}
+					>
+						{description}
+					</p>
+				) : null}
 			</div>
 			{isFieldKind(kind) ? (
 				<AnswerInput

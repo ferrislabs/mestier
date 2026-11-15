@@ -117,4 +117,41 @@ describe('previewSource', () => {
 		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
 		expect(await screen.findByLabelText('Un commentaire')).toBeTruthy()
 	})
+
+	it('previews the descriptions under the questions, smaller on a block screen', async () => {
+		const graph = blockGraph()
+		const described: SurveyGraph = {
+			...graph,
+			nodes: graph.nodes.map((node) =>
+				node.type === 'QUESTION' && node.id === 'q-car'
+					? { ...node, description: 'Même partiellement' }
+					: node.type === 'QUESTION' && node.id === 'q-plate'
+						? { ...node, description: 'Telle que sur\nla carte grise' }
+						: node,
+			),
+		}
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<Preview graph={described} />
+			</QueryClientProvider>,
+		)
+		const first = await screen.findByText('Même partiellement')
+		expect(first.className).toContain('text-sm')
+		expect(
+			screen
+				.getByRole('group', { name: 'Venez-vous en voiture ?' })
+				.getAttribute('aria-describedby'),
+		).toBe(first.id)
+		await userEvent.click(screen.getByLabelText('Oui'))
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+		const plate = await screen.findByText(/Telle que sur/)
+		expect(plate.textContent).toBe('Telle que sur\nla carte grise')
+		expect(plate.className).toContain('text-xs')
+		expect(
+			screen.getByLabelText('Immatriculation').getAttribute('aria-describedby'),
+		).toBe(plate.id)
+		expect(
+			screen.getByLabelText('Marque').getAttribute('aria-describedby'),
+		).toBeNull()
+	})
 })
