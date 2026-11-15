@@ -282,7 +282,7 @@ export function QuestionCard({
 				</div>
 			) : null}
 			{isIdentifierKind(question.kind) ? (
-				<div className="flex items-start justify-between gap-3">
+				<div className="flex items-start justify-between gap-3 rounded-lg border bg-background p-3">
 					<label htmlFor={identifierId} className="text-sm">
 						<span className="block font-medium">Identifiant du répondant</span>
 						<span className="block text-muted-foreground text-xs">
