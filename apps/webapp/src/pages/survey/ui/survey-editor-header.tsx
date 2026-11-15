@@ -101,7 +101,7 @@ export function SurveyEditorHeader({
 	const draft = survey.status === 'DRAFT'
 	const blocked = saveBlockedReason !== null
 	return (
-		<header className="@container shrink-0 border-border border-b bg-background">
+		<header className="@container shrink-0 border-border border-b bg-card">
 			<div className="grid gap-2 px-3 py-2 sm:px-4 @3xl:grid-cols-[minmax(0,1fr)_auto] @3xl:items-center">
 				<div className="flex min-w-0 items-center gap-2">
 					<Button
