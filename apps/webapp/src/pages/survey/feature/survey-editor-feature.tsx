@@ -377,9 +377,13 @@ export function SurveyEditorWorkspace({
 						}
 						onBack={() => void goTo(surveysPath())}
 						previewing={previewing}
-						onPreviewing={setPreviewing}
+						onPreviewing={(value) => {
+							setPreviewing(value)
+							if (value) setViewingResponses(false)
+						}}
 						onSettings={() => setSettingsOpen(true)}
-						onResponses={() => setViewingResponses(true)}
+						viewingResponses={viewingResponses}
+						onResponses={() => setViewingResponses((current) => !current)}
 						onSave={() => void save()}
 						onOpen={requestOpen}
 						onClose={() => setConfirmation('close')}
@@ -398,10 +402,7 @@ export function SurveyEditorWorkspace({
 				</p>
 				<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/30">
 					{viewingResponses ? (
-						<SurveyResponsesFeature
-							surveyId={survey.id}
-							onBack={() => setViewingResponses(false)}
-						/>
+						<SurveyResponsesFeature surveyId={survey.id} />
 					) : previewing ? (
 						<SurveyPreviewFeature
 							title={title}
@@ -475,8 +476,12 @@ export function SurveyEditorWorkspace({
 								) : null
 							}
 							previewing={previewing}
-							onPreviewing={setPreviewing}
-							onResponses={() => setViewingResponses(true)}
+							onPreviewing={(value) => {
+								setPreviewing(value)
+								if (value) setViewingResponses(false)
+							}}
+							viewingResponses={viewingResponses}
+							onResponses={() => setViewingResponses((current) => !current)}
 							onSave={() => void save()}
 							onOpen={requestOpen}
 							onClose={() => setConfirmation('close')}

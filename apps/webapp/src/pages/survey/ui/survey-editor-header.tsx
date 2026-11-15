@@ -74,6 +74,7 @@ export function SurveyEditorHeader({
 	previewing,
 	onPreviewing,
 	onSettings,
+	viewingResponses,
 	onResponses,
 	onSave,
 	onOpen,
@@ -96,6 +97,7 @@ export function SurveyEditorHeader({
 	previewing: boolean
 	onPreviewing: (previewing: boolean) => void
 	onSettings: () => void
+	viewingResponses: boolean
 	onResponses: () => void
 	onSave: () => void
 	onOpen: () => void
@@ -183,7 +185,7 @@ export function SurveyEditorHeader({
 						onClick={onResponses}
 					>
 						<Inbox aria-hidden />
-						Réponses
+						{viewingResponses ? 'Modifier le questionnaire' : 'Réponses'}
 					</Button>
 					{canManage ? (
 						<>

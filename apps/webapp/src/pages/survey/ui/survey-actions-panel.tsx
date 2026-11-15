@@ -30,6 +30,7 @@ export function SurveyActionsPanel({
 	problems,
 	previewing,
 	onPreviewing,
+	viewingResponses,
 	onResponses,
 	onSave,
 	onOpen,
@@ -49,6 +50,7 @@ export function SurveyActionsPanel({
 	problems: ReactNode
 	previewing: boolean
 	onPreviewing: (previewing: boolean) => void
+	viewingResponses: boolean
 	onResponses: () => void
 	onSave: () => void
 	onOpen: () => void
@@ -155,7 +157,9 @@ export function SurveyActionsPanel({
 						onClick={onResponses}
 					>
 						<Inbox aria-hidden />
-						Voir les réponses
+						{viewingResponses
+							? 'Modifier le questionnaire'
+							: 'Voir les réponses'}
 					</Button>
 					{onCopyLink ? (
 						<Button

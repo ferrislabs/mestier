@@ -1,11 +1,5 @@
 import type { ColumnDef, Table } from '@tanstack/react-table'
-import {
-	ArrowLeft,
-	ChevronLeft,
-	ChevronRight,
-	ImageOff,
-	Trash2,
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight, ImageOff, Trash2 } from 'lucide-react'
 import { EmptyState } from '#/components/empty-state'
 import { Button } from '#/components/ui/button'
 import {
@@ -15,7 +9,6 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from '#/components/ui/sheet'
-import { PageHeader, PageShell } from '#/components/ui/surface'
 import { type AnswerView, answerView } from '#/pages/survey/lib/answer-format'
 import { questionKindEntry } from '#/pages/survey/lib/question-kinds'
 import { formatDateTime } from '#/pages/survey/lib/survey-format'
@@ -81,7 +74,6 @@ export function SurveyResponsesList({
 	page,
 	pageCount,
 	total,
-	onBack,
 	onPage,
 	onOpen,
 }: {
@@ -93,31 +85,18 @@ export function SurveyResponsesList({
 	page: number
 	pageCount: number | null
 	total: number | null
-	onBack: () => void
 	onPage: (page: number) => void
 	onOpen: (row: ResponseRow) => void
 }) {
 	return (
-		<PageShell>
-			<PageHeader
-				leading={
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						aria-label="Retour au questionnaire"
-						onClick={onBack}
-					>
-						<ArrowLeft aria-hidden />
-					</Button>
-				}
-				eyebrow={title}
-				title="Réponses"
-				description={
-					total == null
-						? 'Les réponses reçues, en cours et complètes.'
-						: `${total} réponse${total > 1 ? 's' : ''} reçue${total > 1 ? 's' : ''}.`
-				}
-			/>
+		<div className="flex flex-col gap-3 p-3 sm:p-4">
+			<header className="flex flex-wrap items-baseline gap-x-3">
+				<h2 className="font-semibold text-base">Réponses</h2>
+				<p className="text-muted-foreground text-sm">
+					{title}
+					{total == null ? '' : ` · ${total} réponse${total > 1 ? 's' : ''}`}
+				</p>
+			</header>
 			<ErrorBanner message={error} />
 			{isLoading ? (
 				<LoadingCard label="Chargement des réponses…" />
@@ -158,7 +137,7 @@ export function SurveyResponsesList({
 					</nav>
 				</>
 			)}
-		</PageShell>
+		</div>
 	)
 }
 

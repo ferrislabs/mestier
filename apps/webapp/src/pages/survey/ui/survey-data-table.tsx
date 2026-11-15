@@ -46,7 +46,7 @@ export function SurveyDataTable<T>({
 							{row.getVisibleCells().map((cell) => (
 								<TableCell
 									key={cell.id}
-									className="py-2.5 first:pl-4 last:pr-4"
+									className="py-1.5 text-sm first:pl-4 last:pr-4"
 								>
 									{flexRender(cell.column.columnDef.cell, cell.getContext())}
 								</TableCell>

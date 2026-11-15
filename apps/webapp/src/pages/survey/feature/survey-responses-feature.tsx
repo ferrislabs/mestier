@@ -1,4 +1,3 @@
-import { useNavigate } from '@tanstack/react-router'
 import { getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -12,10 +11,8 @@ import {
 	useSurveyGraphVersion,
 	useSurveyResponses,
 } from '#/hooks/use-surveys'
-import { buildOrgPath } from '#/modules/org-path'
 import { answerText } from '#/pages/survey/lib/answer-format'
 import { refusalOf } from '#/pages/survey/lib/reason-messages'
-import { surveyPath } from '#/pages/survey/lib/survey-format'
 import {
 	answeredPath,
 	fromSchema,
@@ -30,16 +27,9 @@ import {
 
 const COLUMNS = responseColumns()
 
-export function SurveyResponsesFeature({
-	surveyId,
-	onBack,
-}: {
-	surveyId: string
-	onBack?: () => void
-}) {
+export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 	const { activeOrganization } = useActiveOrganization()
 	const organizationId = activeOrganization.id
-	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_SURVEYS')
 	const [page, setPage] = useState(1)
 	const [openId, setOpenId] = useState<string | null>(null)
@@ -136,13 +126,6 @@ export function SurveyResponsesFeature({
 				page={page}
 				pageCount={pagination?.last_page ?? null}
 				total={pagination?.total ?? null}
-				onBack={
-					onBack ??
-					(() =>
-						void navigate({
-							to: buildOrgPath(activeOrganization.slug, surveyPath(surveyId)),
-						}))
-				}
 				onPage={setPage}
 				onOpen={(row) => setOpenId(row.response.id)}
 			/>
