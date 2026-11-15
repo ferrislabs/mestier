@@ -215,7 +215,7 @@ export function SurveySettingsPanel(props: {
 	return (
 		<aside
 			aria-label="Réglages du questionnaire"
-			className="w-96 shrink-0 overflow-y-auto border-l bg-background"
+			className="w-96 shrink-0 overflow-y-auto border-l bg-card"
 		>
 			<div className="grid gap-1 p-4 pb-3">
 				<h2 className="font-semibold text-base">Réglages du questionnaire</h2>
