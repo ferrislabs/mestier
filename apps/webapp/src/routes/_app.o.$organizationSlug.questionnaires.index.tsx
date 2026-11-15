@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { SurveysListFeature } from '#/pages/survey/feature/surveys-list-feature'
+import { SurveyNoSelection } from '#/pages/survey/ui/survey-no-selection'
 
 export const Route = createFileRoute(
 	'/_app/o/$organizationSlug/questionnaires/',
 )({
-	component: SurveysListFeature,
+	component: SurveyNoSelection,
 })
