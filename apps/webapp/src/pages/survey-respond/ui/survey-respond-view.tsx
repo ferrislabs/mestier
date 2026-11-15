@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Skeleton } from '#/components/ui/skeleton'
+import { cn } from '#/lib/utils'
 import {
 	blockingCopy,
 	EXPIRED,
@@ -135,7 +136,10 @@ function Body({ view }: { view: RespondentView }) {
 			return (
 				<form
 					noValidate
-					className="flex flex-1 flex-col gap-8"
+					className={cn(
+						'flex flex-1 flex-col',
+						view.screen.length > 1 ? 'gap-2' : 'gap-8',
+					)}
 					onSubmit={(event) => {
 						event.preventDefault()
 						view.next()
@@ -177,6 +181,7 @@ function Body({ view }: { view: RespondentView }) {
 						))}
 					</div>
 					<RespondActionBar
+						compact={view.screen.length > 1}
 						preview={view.preview}
 						isFirst={view.isFirst}
 						isLast={view.isLast}

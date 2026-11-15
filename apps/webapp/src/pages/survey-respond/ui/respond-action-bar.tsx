@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowRight, Check, CloudOff, Loader2 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
+import { cn } from '#/lib/utils'
 import type { SaveState } from '#/pages/survey-respond/lib/respond-types'
 
 const SAVE_LABELS: Record<Exclude<SaveState, 'error'>, string> = {
@@ -52,6 +53,7 @@ export function SaveStatus({
 }
 
 export function RespondActionBar({
+	compact = false,
 	preview,
 	isFirst,
 	isLast,
@@ -63,6 +65,7 @@ export function RespondActionBar({
 	onNext,
 	onRetrySave,
 }: {
+	compact?: boolean
 	preview: boolean
 	isFirst: boolean
 	isLast: boolean
@@ -75,7 +78,13 @@ export function RespondActionBar({
 	onRetrySave: () => void
 }) {
 	return (
-		<div className="sticky bottom-0 z-10 -mx-4 mt-auto border-t bg-background/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6">
+		<div
+			className={cn(
+				compact
+					? 'flex flex-col gap-1'
+					: 'sticky bottom-0 z-10 -mx-4 mt-auto border-t bg-background/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6',
+			)}
+		>
 			<div
 				role="alert"
 				className="text-sm font-medium text-destructive empty:hidden"
@@ -93,22 +102,30 @@ export function RespondActionBar({
 					onRetry={onRetrySave}
 				/>
 			)}
-			<div className="mt-2 flex gap-3">
+			<div className={cn('flex', compact ? 'gap-2' : 'mt-2 gap-3')}>
 				{isFirst ? null : (
 					<Button
 						type="button"
 						variant="outline"
-						className="h-12 min-w-28 rounded-xl text-base"
+						className={cn(
+							compact
+								? 'h-9 min-w-24 rounded-lg text-sm'
+								: 'h-12 min-w-28 rounded-xl text-base',
+						)}
 						disabled={busy}
 						onClick={onBack}
 					>
-						<ArrowLeft className="size-5" aria-hidden />
+						<ArrowLeft className={compact ? 'size-4' : 'size-5'} aria-hidden />
 						Précédent
 					</Button>
 				)}
 				<Button
 					type="button"
-					className="h-12 flex-1 rounded-xl text-base"
+					className={cn(
+						compact
+							? 'h-9 flex-1 rounded-lg text-sm'
+							: 'h-12 flex-1 rounded-xl text-base',
+					)}
 					aria-busy={busy || undefined}
 					disabled={busy}
 					onClick={onNext}
@@ -118,7 +135,7 @@ export function RespondActionBar({
 					) : null}
 					{isLast ? 'Terminer' : 'Suivant'}
 					{busy || isLast ? null : (
-						<ArrowRight className="size-5" aria-hidden />
+						<ArrowRight className={compact ? 'size-4' : 'size-5'} aria-hidden />
 					)}
 				</Button>
 			</div>
