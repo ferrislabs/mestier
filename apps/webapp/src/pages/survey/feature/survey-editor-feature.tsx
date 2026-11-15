@@ -18,6 +18,7 @@ import { UnsavedGuard } from '#/pages/projects/ui/unsaved-guard'
 import { SortableQuestionList } from '#/pages/survey/feature/sortable-question-list'
 import { SurveyPreviewFeature } from '#/pages/survey/feature/survey-preview-feature'
 import { useSurveyFormEditor } from '#/pages/survey/feature/use-survey-form-editor'
+import { useWideScreen } from '#/pages/survey/feature/use-wide-screen'
 import { buildGraph, parseGraph } from '#/pages/survey/lib/form-graph'
 import {
 	type FormProblem,
@@ -62,7 +63,10 @@ import {
 	SurveyFormEditor,
 } from '#/pages/survey/ui/survey-form-editor'
 import type { PreviewProblem } from '#/pages/survey/ui/survey-preview-dialog'
-import { SurveySettingsSheet } from '#/pages/survey/ui/survey-settings-sheet'
+import {
+	SurveySettingsPanel,
+	SurveySettingsSheet,
+} from '#/pages/survey/ui/survey-settings-sheet'
 import { ErrorBanner, LoadingCard } from '#/pages/survey/ui/surveys-list'
 
 export function SurveyEditorFeature({ surveyId }: { surveyId: string }) {
@@ -163,6 +167,7 @@ export function SurveyEditorWorkspace({
 	}))
 	const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
 	const [settingsOpen, setSettingsOpen] = useState(false)
+	const wide = useWideScreen()
 	const [previewOpen, setPreviewOpen] = useState(false)
 
 	const problems = useMemo(
@@ -329,82 +334,96 @@ export function SurveyEditorWorkspace({
 	const lifecycle = confirmation ? lifecycleCopy(confirmation, title) : null
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<UnsavedGuard dirty={dirty} description={UNSAVED_DESCRIPTION} />
-			<SurveyEditorHeader
-				survey={survey}
-				title={settings.title}
-				titleEditable={canManage}
-				canManage={canManage}
-				dirty={dirty}
-				saving={
-					updateSurvey.isPending ||
-					openSurvey.isPending ||
-					closeSurvey.isPending
-				}
-				duplicating={duplicateSurvey.isPending}
-				saveBlockedReason={saveBlockedReason}
-				problems={
-					advanced === null && canManage ? (
-						<ProblemsSummary
-							count={allProblems.length}
-							onFocusFirst={focusFirstProblem}
-						/>
-					) : null
-				}
-				onTitle={(value) =>
-					setSettings((current) => ({ ...current, title: value }))
-				}
-				onBack={() => void goTo(surveysPath())}
-				onPreview={() => setPreviewOpen(true)}
-				onSettings={() => setSettingsOpen(true)}
-				onResponses={() => void goTo(surveyResponsesPath(survey.id))}
-				onSave={() => void save()}
-				onOpen={requestOpen}
-				onClose={() => setConfirmation('close')}
-				onDuplicate={() => void duplicate()}
-				onCopyLink={copyLink}
-			/>
-			{!canManage ? (
-				<ReadOnlyBanner />
-			) : survey.status === 'OPENED' ? (
-				<OpenedBanner />
-			) : null}
-			<p aria-live="polite" className="sr-only">
-				{editor.announcement}
-			</p>
-			<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/30">
-				{advanced !== null ? (
-					<div className="px-3 py-6">
-						<AdvancedGraphNotice questionCount={advanced} />
-					</div>
-				) : (
-					<SurveyFormEditor
-						form={form}
-						readOnly={readOnly}
-						list={
-							<SortableQuestionList
-								form={form}
-								readOnly={readOnly}
-								highlightedId={serverIssue?.questionId ?? null}
-								contextOf={(question) => ({
-									problems: byQuestion.get(question.id) ?? [],
-									sources: ruleSources(form, question.id),
-									isSource: isRuleSource(form, question.id),
-									logicOpen: editor.logicOpen(question),
-								})}
-								onQuestionAction={editor.onQuestionAction}
-								onInsert={editor.insert}
-								onDragEnd={editor.onDragEnd}
+		<div className="flex min-h-0 flex-1">
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+				<UnsavedGuard dirty={dirty} description={UNSAVED_DESCRIPTION} />
+				<SurveyEditorHeader
+					survey={survey}
+					title={settings.title}
+					titleEditable={canManage}
+					canManage={canManage}
+					dirty={dirty}
+					saving={
+						updateSurvey.isPending ||
+						openSurvey.isPending ||
+						closeSurvey.isPending
+					}
+					duplicating={duplicateSurvey.isPending}
+					saveBlockedReason={saveBlockedReason}
+					problems={
+						advanced === null && canManage ? (
+							<ProblemsSummary
+								count={allProblems.length}
+								onFocusFirst={focusFirstProblem}
 							/>
-						}
-						onInsert={editor.insert}
-						onEndMessage={editor.setEndMessage}
-					/>
-				)}
+						) : null
+					}
+					onTitle={(value) =>
+						setSettings((current) => ({ ...current, title: value }))
+					}
+					onBack={() => void goTo(surveysPath())}
+					onPreview={() => setPreviewOpen(true)}
+					onSettings={() => setSettingsOpen(true)}
+					onResponses={() => void goTo(surveyResponsesPath(survey.id))}
+					onSave={() => void save()}
+					onOpen={requestOpen}
+					onClose={() => setConfirmation('close')}
+					onDuplicate={() => void duplicate()}
+					onCopyLink={copyLink}
+				/>
+				{!canManage ? (
+					<ReadOnlyBanner />
+				) : survey.status === 'OPENED' ? (
+					<OpenedBanner />
+				) : null}
+				<p aria-live="polite" className="sr-only">
+					{editor.announcement}
+				</p>
+				<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/30">
+					{advanced !== null ? (
+						<div className="px-3 py-6">
+							<AdvancedGraphNotice questionCount={advanced} />
+						</div>
+					) : (
+						<SurveyFormEditor
+							form={form}
+							readOnly={readOnly}
+							list={
+								<SortableQuestionList
+									form={form}
+									readOnly={readOnly}
+									highlightedId={serverIssue?.questionId ?? null}
+									contextOf={(question) => ({
+										problems: byQuestion.get(question.id) ?? [],
+										sources: ruleSources(form, question.id),
+										isSource: isRuleSource(form, question.id),
+										logicOpen: editor.logicOpen(question),
+									})}
+									onQuestionAction={editor.onQuestionAction}
+									onInsert={editor.insert}
+									onDragEnd={editor.onDragEnd}
+								/>
+							}
+							onInsert={editor.insert}
+							onEndMessage={editor.setEndMessage}
+						/>
+					)}
+				</div>
 			</div>
+			{wide ? (
+				<SurveySettingsPanel
+					settings={settings}
+					errors={errors}
+					campaigns={campaigns}
+					readOnly={!canManage}
+					visibilityLocked={!draft || Boolean(survey.opened_at)}
+					onChange={(patch) =>
+						setSettings((current) => ({ ...current, ...patch }))
+					}
+				/>
+			) : null}
 			<SurveySettingsSheet
-				open={settingsOpen}
+				open={settingsOpen && !wide}
 				settings={settings}
 				errors={errors}
 				campaigns={campaigns}

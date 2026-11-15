@@ -158,7 +158,7 @@ export function SurveyEditorHeader({
 				<Button
 					variant="ghost"
 					size="sm"
-					className="min-h-11 sm:min-h-8"
+					className="min-h-11 sm:min-h-8 lg:hidden"
 					onClick={onSettings}
 				>
 					<Settings2 aria-hidden />
