@@ -1,12 +1,10 @@
-use std::marker::PhantomData;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::aggregate::{Opened, Survey};
+use super::aggregate::{GraphVersion, Opened, Survey};
 use super::error::SurveyError;
 use super::graph::{Answers, Graph};
-use super::validation::{check_finite, retain_known, validate};
+use super::validation::{check_finite, retain_valid, validate};
 use super::value::{Answer, Visibility};
 use super::{ResponseId, SurveyId};
 use crate::{MemberId, OrganizationId};
@@ -18,10 +16,19 @@ pub struct InProgress;
 pub struct Completed;
 
 mod sealed {
-    use super::{ResponseBody, SurveyError};
+    use std::fmt::Debug;
+
+    use super::{GraphVersion, ResponseBody, SurveyError};
 
     pub trait Sealed {
-        fn check(body: &ResponseBody) -> Result<(), SurveyError>;
+        type Version: Debug + Clone + Copy + PartialEq;
+
+        fn check(
+            body: &ResponseBody,
+            version: Option<GraphVersion>,
+        ) -> Result<Self::Version, SurveyError>;
+
+        fn stored(version: Self::Version) -> Option<GraphVersion>;
     }
 }
 
@@ -31,26 +38,43 @@ impl Phase for InProgress {}
 impl Phase for Completed {}
 
 impl sealed::Sealed for InProgress {
-    fn check(body: &ResponseBody) -> Result<(), SurveyError> {
+    type Version = ();
+
+    fn check(body: &ResponseBody, version: Option<GraphVersion>) -> Result<(), SurveyError> {
         if body.completed_at.is_none()
             && body.identifier_value.is_none()
             && !body.unique_respondent
-            && body.graph_version.is_none()
+            && version.is_none()
         {
             check_finite(&body.answers)
         } else {
             Err(SurveyError::ResponseInconsistentState)
         }
     }
+
+    fn stored((): ()) -> Option<GraphVersion> {
+        None
+    }
 }
 
 impl sealed::Sealed for Completed {
-    fn check(body: &ResponseBody) -> Result<(), SurveyError> {
-        if body.completed_at.is_some() && body.graph_version.is_some_and(|version| version > 0) {
-            check_finite(&body.answers)
-        } else {
-            Err(SurveyError::ResponseInconsistentState)
+    type Version = GraphVersion;
+
+    fn check(
+        body: &ResponseBody,
+        version: Option<GraphVersion>,
+    ) -> Result<GraphVersion, SurveyError> {
+        match version {
+            Some(version) if body.completed_at.is_some() => {
+                check_finite(&body.answers)?;
+                Ok(version)
+            }
+            _ => Err(SurveyError::ResponseInconsistentState),
         }
+    }
+
+    fn stored(version: GraphVersion) -> Option<GraphVersion> {
+        Some(version)
     }
 }
 
@@ -93,29 +117,46 @@ pub struct ResponseBody {
     completed_at: Option<DateTime<Utc>>,
     identifier_value: Option<String>,
     unique_respondent: bool,
-    graph_version: Option<u32>,
+}
+
+#[derive(Serialize)]
+struct ResponseView<'a> {
+    #[serde(flatten)]
+    body: &'a ResponseBody,
+    graph_version: Option<GraphVersion>,
+}
+
+#[derive(Deserialize)]
+struct ResponseRow {
+    #[serde(flatten)]
+    body: ResponseBody,
+    graph_version: Option<GraphVersion>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Response<S> {
+pub struct Response<S: Phase> {
     body: ResponseBody,
-    phase: PhantomData<S>,
+    version: S::Version,
 }
 
-impl<S> Serialize for Response<S> {
+impl<S: Phase> Serialize for Response<S> {
     fn serialize<T: Serializer>(&self, serializer: T) -> Result<T::Ok, T::Error> {
-        self.body.serialize(serializer)
+        ResponseView {
+            body: &self.body,
+            graph_version: S::stored(self.version),
+        }
+        .serialize(serializer)
     }
 }
 
 impl<'de, S: Phase> Deserialize<'de> for Response<S> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let body = ResponseBody::deserialize(deserializer)?;
-        S::check(&body).map_err(serde::de::Error::custom)?;
-        Ok(Self {
+        let ResponseRow {
             body,
-            phase: PhantomData,
-        })
+            graph_version,
+        } = ResponseRow::deserialize(deserializer)?;
+        let version = S::check(&body, graph_version).map_err(serde::de::Error::custom)?;
+        Ok(Self { body, version })
     }
 }
 
@@ -136,7 +177,7 @@ fn identifier_of(
     (!value.is_empty()).then_some(value)
 }
 
-impl<S> Response<S> {
+impl<S: Phase> Response<S> {
     pub fn id(&self) -> ResponseId {
         self.body.id
     }
@@ -224,9 +265,8 @@ impl Response<InProgress> {
                 completed_at: None,
                 identifier_value: None,
                 unique_respondent: false,
-                graph_version: None,
             },
-            phase: PhantomData,
+            version: (),
         })
     }
 
@@ -261,7 +301,7 @@ impl Response<InProgress> {
         self.ensure_survey(survey)?;
         let graph = survey.definition();
         let directory = self.photo_directory();
-        retain_known(graph, &mut self.body.answers);
+        retain_valid(graph, &mut self.body.answers, &directory);
         drop_blank(&mut self.body.answers);
         let path = graph.path(&self.body.answers);
         for id in &path.questions {
@@ -277,10 +317,9 @@ impl Response<InProgress> {
         self.body.identifier_value = identifier_of(graph, &path.questions, &self.body.answers);
         self.body.unique_respondent = !survey.allow_multiple_responses();
         self.body.completed_at = Some(at);
-        self.body.graph_version = Some(survey.version());
         Ok(Response {
             body: self.body,
-            phase: PhantomData,
+            version: survey.version(),
         })
     }
 }
@@ -294,7 +333,7 @@ impl Response<Completed> {
         self.body.unique_respondent
     }
 
-    pub fn graph_version(&self) -> u32 {
-        self.body.graph_version.unwrap_or_default()
+    pub fn graph_version(&self) -> GraphVersion {
+        self.version
     }
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT s.id, s.org_id,\n                   COALESCE(\n                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)\n                        FROM survey.survey_campaign sc WHERE sc.survey_id = s.id),\n                       '{}'\n                   ) AS \"campaign_ids!\",\n                   s.title, s.description, s.visibility, s.graph, s.graph_version,\n                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,\n                   s.public_slug, s.opened_at, s.closed_at\n            FROM survey.survey s\n            WHERE s.org_id = $1\n              AND EXISTS (\n                  SELECT 1 FROM survey.survey_campaign link\n                  WHERE link.org_id = s.org_id AND link.survey_id = s.id\n                    AND link.campaign_id = $2\n              )\n            ORDER BY s.created_at DESC, s.id DESC\n            ",
+  "query": "\n            SELECT s.id, s.org_id,\n                   COALESCE(\n                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)\n                        FROM survey.survey_campaign sc\n                        WHERE sc.org_id = s.org_id AND sc.survey_id = s.id),\n                       '{}'\n                   ) AS \"campaign_ids!\",\n                   s.title, s.description, s.visibility, s.graph, s.graph_version,\n                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,\n                   s.public_slug, s.opened_at, s.closed_at\n            FROM survey.survey s\n            WHERE s.org_id = $1\n            ORDER BY s.created_at DESC, s.id DESC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -82,7 +82,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -103,5 +104,5 @@
       true
     ]
   },
-  "hash": "925e739b9d263b7997f81235174af1a77b3782ac8d5ae9e94a8eed120f81ceee"
+  "hash": "add7bcf0565655751a200cbbfaf997c1306469e67e9e3d6d9f3d48586926ccfc"
 }

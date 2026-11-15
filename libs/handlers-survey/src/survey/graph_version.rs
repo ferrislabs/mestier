@@ -5,11 +5,13 @@ use axum::{
     response::{IntoResponse, Response as HttpResponse},
 };
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{SurveyGraph, SurveyGraphVersion, SurveyGraphVersionCommand};
+use mestier_core::{
+    SurveyError, SurveyGraph, SurveyGraphVersion, SurveyGraphVersionCommand, SurveyVersionedGraph,
+};
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use crate::{require_org_membership, survey::SurveyGraphVersionPath};
+use crate::{request::refused, require_org_membership, survey::SurveyGraphVersionPath};
 
 #[derive(Debug, PartialEq, Serialize, ToSchema)]
 pub struct SurveyGraphVersionView<'a> {
@@ -19,10 +21,10 @@ pub struct SurveyGraphVersionView<'a> {
     pub graph: &'a SurveyGraph,
 }
 
-impl<'a> From<&'a SurveyGraphVersion> for SurveyGraphVersionView<'a> {
-    fn from(stored: &'a SurveyGraphVersion) -> Self {
+impl<'a> From<&'a SurveyVersionedGraph> for SurveyGraphVersionView<'a> {
+    fn from(stored: &'a SurveyVersionedGraph) -> Self {
         Self {
-            version: stored.version(),
+            version: stored.version().get(),
             graph: stored.graph(),
         }
     }
@@ -33,7 +35,7 @@ impl<'a> From<&'a SurveyGraphVersion> for SurveyGraphVersionView<'a> {
     path = "/api/v1/organizations/{organization_id}/surveys/{survey_id}/graph-versions/{version}",
     operation_id = "getSurveyGraphVersion",
     tag = super::super::TAG,
-    description = "Reads the graph a completed response was given on: the current graph when the version is the current one, otherwise the version kept when the graph changed after a completed response.",
+    description = "Reads the graph a completed response was given on: the current graph when the version is the current one, otherwise the graph frozen when the first response was completed on that version.",
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
         ("survey_id" = mestier_core::SurveyId, Path, description = "Survey identifier"),
@@ -57,6 +59,8 @@ pub async fn handler(
     Extension(identity): Extension<Identity>,
 ) -> Result<HttpResponse, ApiError> {
     require_org_membership(&state, &identity, organization_id).await?;
+    let version =
+        SurveyGraphVersion::new(version).map_err(|_| refused(SurveyError::GraphVersionNotFound))?;
     let (user_id, actor) = resolve_actor(&state, &identity).await?;
 
     let stored = state

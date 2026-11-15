@@ -6,8 +6,9 @@ use cucumber::{given, then, when};
 use mestier_core::{
     Answer, Answers, CampaignId, CampaignPatch, MemberId, Metadata, OrganizationId, PublicSlug,
     QuestionId, QuestionKind, ResponseId, ResponseLocator, ResponseRecord, ResponseRepository,
-    ResumeToken, SurveyBranch, SurveyEdge, SurveyEndNode, SurveyGraph, SurveyId, SurveyNode,
-    SurveyPatch, SurveyQuestionNode, SurveyRecord, SurveyRepository, SurveyWindow, Visibility,
+    ResumeToken, SurveyBranch, SurveyEdge, SurveyEndNode, SurveyGraph, SurveyGraphVersion,
+    SurveyId, SurveyNode, SurveyPatch, SurveyQuestionNode, SurveyRecord, SurveyRepository,
+    SurveyWindow, Visibility,
 };
 use serde_json::json;
 
@@ -131,6 +132,10 @@ fn keep<T>(world: &mut SurveyWorld, result: Result<T, CoreError>) {
     if let Err(error) = result {
         world.refusal = Some(error);
     }
+}
+
+fn version(number: u32) -> SurveyGraphVersion {
+    SurveyGraphVersion::new(number).expect("the scenario writes a positive graph version")
 }
 
 fn definition(label: &str, identifier: bool) -> (SurveyGraph, QuestionId) {
@@ -562,6 +567,65 @@ async fn the_artisan_replaces(
     keep(world, result);
 }
 
+#[when(
+    expr = "the artisan turns the question {string} of the survey {string} into an optional choice between {string} and {string}"
+)]
+async fn the_artisan_turns_into_a_choice(
+    world: &mut SurveyWorld,
+    label: String,
+    survey: String,
+    first: String,
+    second: String,
+) {
+    let question = question_named(world, &survey, &label);
+    let end = QuestionId(generate_uuid_v7());
+    let graph = SurveyGraph::new(
+        vec![
+            SurveyNode::Question(SurveyQuestionNode {
+                id: question,
+                kind: QuestionKind::SingleChoice,
+                label,
+                required: false,
+                options: vec![first, second],
+                max_photos: None,
+                identifier: false,
+            }),
+            SurveyNode::End(SurveyEndNode {
+                id: end,
+                message: None,
+            }),
+        ],
+        vec![SurveyEdge {
+            from: question,
+            to: end,
+            branch: SurveyBranch::Next,
+        }],
+        question,
+    )
+    .expect("the scenario draws a valid graph");
+    let result = world
+        .surveys()
+        .update(
+            world.organization_id(),
+            survey_named(world, &survey),
+            SurveyPatch {
+                graph: Some(Some(graph)),
+                ..SurveyPatch::default()
+            },
+        )
+        .await;
+    keep(world, result);
+}
+
+#[when(expr = "the response of {string} to the survey {string} is deleted")]
+async fn the_response_is_deleted(world: &mut SurveyWorld, who: String, survey: String) {
+    let id = response_of(world, &who, &survey);
+    let result = repository::responses(&world.store)
+        .delete(world.organization_id(), id)
+        .await;
+    keep(world, result);
+}
+
 #[when(expr = "the artisan makes the survey {string} {word}")]
 async fn the_artisan_makes(world: &mut SurveyWorld, survey: String, kind: String) {
     let result = world
@@ -704,6 +768,14 @@ async fn the_other_company_deletes(world: &mut SurveyWorld, survey: String) {
 #[then(expr = "the survey {string} is {word}")]
 async fn the_survey_is(world: &mut SurveyWorld, survey: String, state: String) {
     assert_eq!(state_of(&stored_survey(world, &survey)), state);
+}
+
+#[then(expr = "the survey {string} stays visible to {word}")]
+async fn the_survey_stays_visible_to(world: &mut SurveyWorld, survey: String, kind: String) {
+    assert_eq!(
+        stored_survey(world, &survey).visibility(),
+        visibility(&kind)
+    );
 }
 
 #[then(expr = "the survey {string} is titled {string}")]
@@ -867,7 +939,10 @@ async fn the_refusal_reason_is(world: &mut SurveyWorld, reason: String) {
 
 #[then(expr = "the survey {string} is at graph version {int}")]
 async fn the_survey_is_at_version(world: &mut SurveyWorld, survey: String, version: u32) {
-    assert_eq!(stored_survey(world, &survey).graph_version(), Some(version));
+    assert_eq!(
+        stored_survey(world, &survey).graph_version(),
+        Some(self::version(version))
+    );
 }
 
 #[then(expr = "the response of {string} to the survey {string} was given on graph version {int}")]
@@ -878,7 +953,7 @@ async fn the_response_was_given_on(
     version: u32,
 ) {
     let record = stored_response(world, response_of(world, &who, &survey));
-    assert_eq!(record.graph_version(), Some(version));
+    assert_eq!(record.graph_version(), Some(self::version(version)));
 }
 
 #[then(expr = "the graph version {int} of the survey {string} asks the question {string}")]
@@ -888,15 +963,19 @@ async fn the_graph_version_asks(
     survey: String,
     label: String,
 ) {
-    let graph = repository::surveys(&world.store)
-        .find_graph_version(
-            world.organization_id(),
-            survey_named(world, &survey),
-            version,
-        )
-        .await
-        .expect("no infrastructure failure here")
-        .expect("the version is stored");
+    let stored = stored_survey(world, &survey);
+    let graph = match stored.graph() {
+        Some(current) if stored.graph_version() == Some(self::version(version)) => current.clone(),
+        _ => repository::surveys(&world.store)
+            .find_graph_version(
+                world.organization_id(),
+                survey_named(world, &survey),
+                self::version(version),
+            )
+            .await
+            .expect("no infrastructure failure here")
+            .expect("the version is stored"),
+    };
     let question = question_named(world, &survey, &label);
     assert_eq!(
         graph.question(&question).map(|node| node.label.as_str()),
@@ -906,8 +985,13 @@ async fn the_graph_version_asks(
 
 #[then(expr = "the campaign {string} holds the surveys {string}")]
 async fn the_campaign_holds(world: &mut SurveyWorld, campaign: String, surveys: String) {
-    let listed = repository::surveys(&world.store)
-        .list_by_campaign(world.organization_id(), campaign_named(world, &campaign))
+    let (listed, _) = repository::surveys(&world.store)
+        .list_by_campaign(
+            world.organization_id(),
+            campaign_named(world, &campaign),
+            100,
+            0,
+        )
         .await
         .expect("no infrastructure failure here");
     let mut titles: Vec<String> = listed

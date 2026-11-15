@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT s.id, s.org_id,\n                   COALESCE(\n                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)\n                        FROM survey.survey_campaign sc WHERE sc.survey_id = s.id),\n                       '{}'\n                   ) AS \"campaign_ids!\",\n                   s.title, s.description, s.visibility, s.graph, s.graph_version,\n                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,\n                   s.public_slug, s.opened_at, s.closed_at\n            FROM survey.survey s\n            WHERE s.org_id = $1 AND s.id = $2\n            FOR UPDATE OF s\n            ",
+  "query": "\n            SELECT s.id, s.org_id,\n                   COALESCE(\n                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)\n                        FROM survey.survey_campaign sc\n                        WHERE sc.org_id = s.org_id AND sc.survey_id = s.id),\n                       '{}'\n                   ) AS \"campaign_ids!\",\n                   s.title, s.description, s.visibility, s.graph, s.graph_version,\n                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,\n                   s.public_slug, s.opened_at, s.closed_at\n            FROM survey.survey s\n            WHERE s.org_id = $1 AND s.id = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -103,5 +103,5 @@
       true
     ]
   },
-  "hash": "a8f2653144143bd35a44ccc0c908770751a662bb4112fddf741b4a84d6156cf4"
+  "hash": "0c63a207560e822dab527e11f092da1cfba97dc1b95809b89e9892b8ce688406"
 }

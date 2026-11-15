@@ -23,7 +23,7 @@ pub struct Closed;
 mod sealed {
     use std::fmt::Debug;
 
-    use super::{Body, GraphVersion, SurveyError};
+    use super::{Body, SurveyError, VersionedGraph};
 
     pub trait Sealed {
         type Definition: Debug + Clone + PartialEq;
@@ -31,15 +31,14 @@ mod sealed {
 
         fn check(body: &Body) -> Result<(), SurveyError>;
 
-        fn definition(graph: Option<GraphVersion>) -> Result<Self::Definition, SurveyError>;
+        fn definition(graph: Option<VersionedGraph>) -> Result<Self::Definition, SurveyError>;
 
-        fn current(definition: &Self::Definition) -> Option<&GraphVersion>;
+        fn current(definition: &Self::Definition) -> Option<&VersionedGraph>;
 
-        fn replace(
+        fn slot(
             definition: &mut Self::Definition,
             graph: Self::Input,
-            keep_previous: bool,
-        ) -> Option<GraphVersion>;
+        ) -> Option<(&mut VersionedGraph, super::Graph)>;
     }
 }
 
@@ -72,42 +71,53 @@ fn check_slug(visibility: Visibility, slug: Option<&PublicSlug>) -> Result<(), S
     }
 }
 
-fn frozen(graph: Option<GraphVersion>) -> Result<GraphVersion, SurveyError> {
+fn frozen(graph: Option<VersionedGraph>) -> Result<VersionedGraph, SurveyError> {
     graph.ok_or(SurveyError::SurveyWithoutGraph)
 }
 
-fn swap(current: &mut GraphVersion, graph: Graph, keep_previous: bool) -> Option<GraphVersion> {
-    if current.graph == graph {
-        return None;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct GraphVersion(NonZeroU32);
+
+impl GraphVersion {
+    pub const FIRST: Self = Self(NonZeroU32::MIN);
+
+    pub fn new(version: u32) -> Result<Self, SurveyError> {
+        NonZeroU32::new(version)
+            .map(Self)
+            .ok_or(SurveyError::GraphVersionInvalid)
     }
-    if keep_previous {
-        let next = GraphVersion {
-            version: current.version.saturating_add(1),
-            graph,
-        };
-        Some(std::mem::replace(current, next))
-    } else {
-        current.graph = graph;
-        None
+
+    pub fn get(self) -> u32 {
+        self.0.get()
+    }
+
+    pub fn next(self) -> Result<Self, SurveyError> {
+        self.0
+            .checked_add(1)
+            .map(Self)
+            .ok_or(SurveyError::GraphVersionExhausted)
+    }
+}
+
+impl std::fmt::Display for GraphVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GraphVersion {
-    version: u32,
+pub struct VersionedGraph {
+    version: GraphVersion,
     graph: Graph,
 }
 
-impl GraphVersion {
-    pub fn new(version: u32, graph: Graph) -> Result<Self, SurveyError> {
-        if version == 0 {
-            Err(SurveyError::GraphVersionInvalid)
-        } else {
-            Ok(Self { version, graph })
-        }
+impl VersionedGraph {
+    pub fn new(version: GraphVersion, graph: Graph) -> Self {
+        Self { version, graph }
     }
 
-    pub fn version(&self) -> u32 {
+    pub fn version(&self) -> GraphVersion {
         self.version
     }
 
@@ -127,7 +137,7 @@ impl Stage for Opened {}
 impl Stage for Closed {}
 
 impl sealed::Sealed for Draft {
-    type Definition = Option<GraphVersion>;
+    type Definition = Option<VersionedGraph>;
     type Input = Option<Graph>;
 
     fn check(body: &Body) -> Result<(), SurveyError> {
@@ -140,35 +150,34 @@ impl sealed::Sealed for Draft {
         }
     }
 
-    fn definition(graph: Option<GraphVersion>) -> Result<Self::Definition, SurveyError> {
+    fn definition(graph: Option<VersionedGraph>) -> Result<Self::Definition, SurveyError> {
         Ok(graph)
     }
 
-    fn current(definition: &Self::Definition) -> Option<&GraphVersion> {
+    fn current(definition: &Self::Definition) -> Option<&VersionedGraph> {
         definition.as_ref()
     }
 
-    fn replace(
+    fn slot(
         definition: &mut Self::Definition,
         graph: Self::Input,
-        keep_previous: bool,
-    ) -> Option<GraphVersion> {
-        match (definition.as_mut(), graph) {
-            (_, None) => {
+    ) -> Option<(&mut VersionedGraph, Graph)> {
+        match (definition, graph) {
+            (definition, None) => {
                 *definition = None;
                 None
             }
-            (None, Some(graph)) => {
-                *definition = Some(GraphVersion { version: 1, graph });
+            (Some(current), Some(graph)) => Some((current, graph)),
+            (definition, Some(graph)) => {
+                *definition = Some(VersionedGraph::new(GraphVersion::FIRST, graph));
                 None
             }
-            (Some(current), Some(graph)) => swap(current, graph, keep_previous),
         }
     }
 }
 
 impl sealed::Sealed for Opened {
-    type Definition = GraphVersion;
+    type Definition = VersionedGraph;
     type Input = Graph;
 
     fn check(body: &Body) -> Result<(), SurveyError> {
@@ -179,25 +188,24 @@ impl sealed::Sealed for Opened {
         }
     }
 
-    fn definition(graph: Option<GraphVersion>) -> Result<Self::Definition, SurveyError> {
+    fn definition(graph: Option<VersionedGraph>) -> Result<Self::Definition, SurveyError> {
         frozen(graph)
     }
 
-    fn current(definition: &Self::Definition) -> Option<&GraphVersion> {
+    fn current(definition: &Self::Definition) -> Option<&VersionedGraph> {
         Some(definition)
     }
 
-    fn replace(
+    fn slot(
         definition: &mut Self::Definition,
         graph: Self::Input,
-        keep_previous: bool,
-    ) -> Option<GraphVersion> {
-        swap(definition, graph, keep_previous)
+    ) -> Option<(&mut VersionedGraph, Graph)> {
+        Some((definition, graph))
     }
 }
 
 impl sealed::Sealed for Closed {
-    type Definition = GraphVersion;
+    type Definition = VersionedGraph;
     type Input = Graph;
 
     fn check(body: &Body) -> Result<(), SurveyError> {
@@ -208,20 +216,19 @@ impl sealed::Sealed for Closed {
         }
     }
 
-    fn definition(graph: Option<GraphVersion>) -> Result<Self::Definition, SurveyError> {
+    fn definition(graph: Option<VersionedGraph>) -> Result<Self::Definition, SurveyError> {
         frozen(graph)
     }
 
-    fn current(definition: &Self::Definition) -> Option<&GraphVersion> {
+    fn current(definition: &Self::Definition) -> Option<&VersionedGraph> {
         Some(definition)
     }
 
-    fn replace(
+    fn slot(
         definition: &mut Self::Definition,
         graph: Self::Input,
-        keep_previous: bool,
-    ) -> Option<GraphVersion> {
-        swap(definition, graph, keep_previous)
+    ) -> Option<(&mut VersionedGraph, Graph)> {
+        Some((definition, graph))
     }
 }
 
@@ -247,7 +254,7 @@ struct SurveyView<'a> {
     #[serde(flatten)]
     body: &'a Body,
     graph: Option<&'a Graph>,
-    graph_version: Option<u32>,
+    graph_version: Option<GraphVersion>,
 }
 
 #[derive(Deserialize)]
@@ -255,16 +262,16 @@ struct SurveyRow {
     #[serde(flatten)]
     body: Body,
     graph: Option<Graph>,
-    graph_version: Option<u32>,
+    graph_version: Option<GraphVersion>,
 }
 
 fn versioned(
     graph: Option<Graph>,
-    version: Option<u32>,
-) -> Result<Option<GraphVersion>, SurveyError> {
+    version: Option<GraphVersion>,
+) -> Result<Option<VersionedGraph>, SurveyError> {
     match (graph, version) {
         (None, None) => Ok(None),
-        (Some(graph), Some(version)) => GraphVersion::new(version, graph).map(Some),
+        (Some(graph), Some(version)) => Ok(Some(VersionedGraph::new(version, graph))),
         _ => Err(SurveyError::SurveyInconsistentState),
     }
 }
@@ -341,11 +348,11 @@ impl<S: Stage> Survey<S> {
     }
 
     pub fn graph(&self) -> Option<&Graph> {
-        S::current(&self.definition).map(GraphVersion::graph)
+        S::current(&self.definition).map(VersionedGraph::graph)
     }
 
-    pub fn graph_version(&self) -> Option<u32> {
-        S::current(&self.definition).map(GraphVersion::version)
+    pub fn graph_version(&self) -> Option<GraphVersion> {
+        S::current(&self.definition).map(VersionedGraph::version)
     }
 
     pub fn opened_at(&self) -> Option<DateTime<Utc>> {
@@ -391,11 +398,19 @@ impl<S: Stage> Survey<S> {
     }
 
     pub fn edit_graph(&mut self, graph: S::Input) {
-        S::replace(&mut self.definition, graph, false);
+        if let Some((current, graph)) = S::slot(&mut self.definition, graph) {
+            current.graph = graph;
+        }
     }
 
-    pub fn revise_graph(&mut self, graph: S::Input) -> Option<GraphVersion> {
-        S::replace(&mut self.definition, graph, true)
+    pub fn revise_graph(&mut self, graph: S::Input) -> Result<Option<VersionedGraph>, SurveyError> {
+        match S::slot(&mut self.definition, graph) {
+            Some((current, graph)) if current.graph != graph => {
+                let next = VersionedGraph::new(current.version.next()?, graph);
+                Ok(Some(std::mem::replace(current, next)))
+            }
+            _ => Ok(None),
+        }
     }
 }
 
@@ -452,7 +467,7 @@ impl Survey<Opened> {
         &self.definition.graph
     }
 
-    pub fn version(&self) -> u32 {
+    pub fn version(&self) -> GraphVersion {
         self.definition.version
     }
 

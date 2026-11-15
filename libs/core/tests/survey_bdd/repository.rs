@@ -8,7 +8,8 @@ use common::CoreError;
 use mestier_core::{
     Campaign, CampaignId, CampaignRepository, Completed, MemberId, OrganizationId, PublicSlug,
     ResponseId, ResponseRecord, ResponseRepository, ResumeToken, SurveyError, SurveyGraph,
-    SurveyId, SurveyRecord, SurveyRepository, SurveyResponse,
+    SurveyGraphVersion, SurveyId, SurveyRecord, SurveyRepository, SurveyResponse, SurveyState,
+    SurveySummary,
 };
 
 #[derive(Debug, Default)]
@@ -17,7 +18,7 @@ pub struct State {
     pub campaigns: HashMap<CampaignId, Campaign>,
     pub responses: HashMap<ResponseId, ResponseRecord>,
     pub photos: HashMap<ResponseId, Vec<String>>,
-    pub versions: HashMap<(SurveyId, u32), SurveyGraph>,
+    pub versions: HashMap<(SurveyId, SurveyGraphVersion), SurveyGraph>,
 }
 
 pub type Store = Arc<Mutex<State>>;
@@ -53,6 +54,36 @@ fn stage_of(record: &SurveyRecord) -> u8 {
         SurveyRecord::Draft(_) => 0,
         SurveyRecord::Opened(_) => 1,
         SurveyRecord::Closed(_) => 2,
+    }
+}
+
+fn with_campaigns(record: &SurveyRecord, campaign_ids: &[CampaignId]) -> SurveyRecord {
+    match record.clone() {
+        SurveyRecord::Draft(mut survey) => {
+            survey.edit_campaigns(campaign_ids.to_vec());
+            SurveyRecord::Draft(survey)
+        }
+        SurveyRecord::Opened(mut survey) => {
+            survey.edit_campaigns(campaign_ids.to_vec());
+            SurveyRecord::Opened(survey)
+        }
+        SurveyRecord::Closed(mut survey) => {
+            survey.edit_campaigns(campaign_ids.to_vec());
+            SurveyRecord::Closed(survey)
+        }
+    }
+}
+
+fn summary_of(record: &SurveyRecord) -> SurveySummary {
+    let (title, state) = match record {
+        SurveyRecord::Draft(survey) => (survey.title(), SurveyState::Draft),
+        SurveyRecord::Opened(survey) => (survey.title(), SurveyState::Opened),
+        SurveyRecord::Closed(survey) => (survey.title(), SurveyState::Closed),
+    };
+    SurveySummary {
+        id: record.id(),
+        title: title.to_owned(),
+        state,
     }
 }
 
@@ -159,8 +190,9 @@ impl SurveyRepository for MemorySurveys {
         if stage_of(stored) > stage_of(survey) {
             return Err(SurveyError::SurveyStateChanged.into());
         }
-        guard.surveys.insert(survey.id(), survey.clone());
-        Ok(survey.clone())
+        let kept = with_campaigns(survey, stored.campaign_ids());
+        guard.surveys.insert(survey.id(), kept.clone());
+        Ok(kept)
     }
 
     async fn list(
@@ -182,14 +214,51 @@ impl SurveyRepository for MemorySurveys {
         &mut self,
         organization_id: OrganizationId,
         campaign_id: CampaignId,
-    ) -> Result<Vec<SurveyRecord>, CoreError> {
-        Ok(state(&self.store)
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<SurveyRecord>, u64), CoreError> {
+        let items = state(&self.store)
             .surveys
             .values()
             .filter(|record| record.organization_id() == organization_id)
             .filter(|record| record.campaign_ids().contains(&campaign_id))
-            .cloned()
-            .collect())
+            .map(|record| (record.id().0, record.clone()))
+            .collect();
+        Ok(page(items, limit, offset))
+    }
+
+    async fn list_summaries_by_campaign(
+        &mut self,
+        organization_id: OrganizationId,
+        campaign_id: CampaignId,
+        limit: u64,
+        offset: u64,
+    ) -> Result<(Vec<SurveySummary>, u64), CoreError> {
+        let items = state(&self.store)
+            .surveys
+            .values()
+            .filter(|record| record.organization_id() == organization_id)
+            .filter(|record| record.campaign_ids().contains(&campaign_id))
+            .map(|record| (record.id().0, summary_of(record)))
+            .collect();
+        Ok(page(items, limit, offset))
+    }
+
+    async fn save_campaigns(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        campaign_ids: &[CampaignId],
+    ) -> Result<(), CoreError> {
+        let mut guard = state(&self.store);
+        let stored = guard
+            .surveys
+            .get(&id)
+            .filter(|stored| stored.organization_id() == organization_id)
+            .ok_or(CoreError::NotFound)?;
+        let kept = with_campaigns(stored, campaign_ids);
+        guard.surveys.insert(id, kept);
+        Ok(())
     }
 
     async fn find_by_public_slug(
@@ -238,24 +307,23 @@ impl SurveyRepository for MemorySurveys {
         self.find(organization_id, id).await
     }
 
-    async fn has_completed_responses(
+    async fn has_graph_version(
         &mut self,
         organization_id: OrganizationId,
         id: SurveyId,
-        version: u32,
+        version: SurveyGraphVersion,
     ) -> Result<bool, CoreError> {
-        Ok(state(&self.store).responses.values().any(|record| {
-            record.organization_id() == organization_id
-                && record.survey_id() == id
-                && record.graph_version() == Some(version)
-        }))
+        Ok(self
+            .find_graph_version(organization_id, id, version)
+            .await?
+            .is_some())
     }
 
     async fn store_graph_version(
         &mut self,
         _organization_id: OrganizationId,
         id: SurveyId,
-        version: u32,
+        version: SurveyGraphVersion,
         graph: &SurveyGraph,
     ) -> Result<(), CoreError> {
         state(&self.store)
@@ -269,7 +337,7 @@ impl SurveyRepository for MemorySurveys {
         &mut self,
         organization_id: OrganizationId,
         id: SurveyId,
-        version: u32,
+        version: SurveyGraphVersion,
     ) -> Result<Option<SurveyGraph>, CoreError> {
         let guard = state(&self.store);
         let owned = guard

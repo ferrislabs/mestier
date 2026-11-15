@@ -1,6 +1,7 @@
 use events::{DomainEvent, EventSubject};
 use serde_json::{Value, json};
 
+use super::response::Phase;
 use super::{
     Answer, Answers, Campaign, CampaignId, Completed, Graph, InProgress, Metadata, Opened,
     Response, Survey, SurveyError,
@@ -19,7 +20,10 @@ fn merged_metadata(
     Ok(Metadata::merged_all(&layers, survey.metadata()))
 }
 
-fn ensure_response<S>(survey: &Survey<Opened>, response: &Response<S>) -> Result<(), SurveyError> {
+fn ensure_response<S: Phase>(
+    survey: &Survey<Opened>,
+    response: &Response<S>,
+) -> Result<(), SurveyError> {
     if response.survey_id() == survey.id() {
         Ok(())
     } else {
@@ -139,6 +143,9 @@ impl<'a> SurveyResponseCompleted<'a> {
         response: &'a Response<Completed>,
     ) -> Result<Self, SurveyError> {
         ensure_response(survey, response)?;
+        if response.graph_version() != survey.version() {
+            return Err(SurveyError::ResponseGraphVersionMismatch);
+        }
         Ok(Self {
             metadata: merged_metadata(survey, campaigns)?,
             survey,

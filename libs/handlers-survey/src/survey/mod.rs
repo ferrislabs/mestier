@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use handlers::AppState;
 use mestier_core::{
     CampaignId, Closed, Draft, Metadata, Opened, OrganizationId, PublicSlug, Survey, SurveyGraph,
-    SurveyId, SurveyRecord, Visibility,
+    SurveyId, SurveyRecord, SurveyState, SurveySummary, Visibility,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -122,7 +122,7 @@ macro_rules! survey_view {
             metadata: $survey.metadata(),
             campaign_ids: $survey.campaign_ids(),
             graph: $survey.graph(),
-            graph_version: $survey.graph_version(),
+            graph_version: $survey.graph_version().map(|version| version.get()),
             public_slug: $public_slug,
             opened_at: $survey.opened_at(),
             closed_at: $survey.closed_at(),
@@ -161,17 +161,16 @@ pub struct SurveySummaryView<'a> {
     pub status: SurveyStatus,
 }
 
-impl<'a> From<&'a SurveyRecord> for SurveySummaryView<'a> {
-    fn from(record: &'a SurveyRecord) -> Self {
-        let (title, status) = match record {
-            SurveyRecord::Draft(survey) => (survey.title(), SurveyStatus::Draft),
-            SurveyRecord::Opened(survey) => (survey.title(), SurveyStatus::Opened),
-            SurveyRecord::Closed(survey) => (survey.title(), SurveyStatus::Closed),
-        };
+impl<'a> From<&'a SurveySummary> for SurveySummaryView<'a> {
+    fn from(summary: &'a SurveySummary) -> Self {
         Self {
-            id: record.id(),
-            title,
-            status,
+            id: summary.id,
+            title: &summary.title,
+            status: match summary.state {
+                SurveyState::Draft => SurveyStatus::Draft,
+                SurveyState::Opened => SurveyStatus::Opened,
+                SurveyState::Closed => SurveyStatus::Closed,
+            },
         }
     }
 }

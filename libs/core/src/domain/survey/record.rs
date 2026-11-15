@@ -1,8 +1,22 @@
 use super::{
-    CampaignId, Closed, Completed, Draft, Graph, InProgress, Opened, Response, ResponseId, Survey,
-    SurveyId, Visibility,
+    CampaignId, Closed, Completed, Draft, Graph, GraphVersion, InProgress, Opened, Response,
+    ResponseId, Survey, SurveyId, Visibility,
 };
 use crate::OrganizationId;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurveyState {
+    Draft,
+    Opened,
+    Closed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SurveySummary {
+    pub id: SurveyId,
+    pub title: String,
+    pub state: SurveyState,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SurveyRecord {
@@ -52,7 +66,7 @@ impl SurveyRecord {
         }
     }
 
-    pub fn graph_version(&self) -> Option<u32> {
+    pub fn graph_version(&self) -> Option<GraphVersion> {
         match self {
             Self::Draft(survey) => survey.graph_version(),
             Self::Opened(survey) => survey.graph_version(),
@@ -107,7 +121,7 @@ impl ResponseRecord {
         }
     }
 
-    pub fn graph_version(&self) -> Option<u32> {
+    pub fn graph_version(&self) -> Option<GraphVersion> {
         match self {
             Self::InProgress(_) => None,
             Self::Completed(response) => Some(response.graph_version()),

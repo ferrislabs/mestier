@@ -1,8 +1,9 @@
 Feature: Surveys, the questionnaires answered by members and by the public
 
   A survey is drafted, then opened; it stays editable but its visibility is
-  frozen, and a graph changed after a response was completed keeps the previous
-  version. A respondent starts a response, saves it as often as needed and
+  frozen, and a graph version is frozen once a response was completed on it: a
+  later change of the graph gets a new version, even if that response was
+  deleted since. A respondent starts a response, saves it as often as needed and
   completes it. A survey may belong to several campaigns: it accepts responses
   while one of their windows is open, and the clock of the campaigns announces
   when a window starts and ends.
@@ -379,6 +380,17 @@ Feature: Surveys, the questionnaires answered by members and by the public
     And the event "survey.response_completed" carries the number 1 at "/graph_version"
     And the survey "Satisfaction" is at graph version 1
 
+  @spec-survey-37
+  Scenario: A stored answer that no longer fits a changed question is dropped at completion
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    And "Claire" has started a response to the survey "Satisfaction"
+    And "Claire" has answered "Dupont" to the question "Nom" of the survey "Satisfaction"
+    When the artisan turns the question "Nom" of the survey "Satisfaction" into an optional choice between "Oui" and "Non"
+    And "Claire" completes the response to the survey "Satisfaction"
+    Then nothing is refused
+    And the survey "Satisfaction" holds 1 completed response
+    And the response of "Claire" to the survey "Satisfaction" holds no answer
+
   @spec-survey-38
   Scenario: Completed responses keep their graph version and the former graph stays readable
     Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
@@ -389,6 +401,24 @@ Feature: Surveys, the questionnaires answered by members and by the public
     And the survey "Satisfaction" is at graph version 2
     And the response of "Claire" to the survey "Satisfaction" was given on graph version 1
     And the graph version 1 of the survey "Satisfaction" asks the question "Nom"
+    And the graph version 2 of the survey "Satisfaction" asks the question "Âge"
+
+  @spec-survey-38
+  Scenario: A deleted test response leaves its graph version frozen
+    Given a member "Testeur" of the company
+    And an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    And "Testeur" has completed a response to the survey "Satisfaction" answering "Essai" to the question "Nom"
+    When the response of "Testeur" to the survey "Satisfaction" is deleted
+    And the artisan replaces the question "Nom" of the survey "Satisfaction" by an optional question "Prénom"
+    And "Claire" completes a response to the survey "Satisfaction" answering "Claire" to the question "Prénom"
+    And the artisan replaces the question "Prénom" of the survey "Satisfaction" by an optional question "Âge"
+    Then nothing is refused
+    And the survey "Satisfaction" holds 1 completed response
+    And the survey "Satisfaction" is at graph version 3
+    And the response of "Claire" to the survey "Satisfaction" was given on graph version 2
+    And the graph version 1 of the survey "Satisfaction" asks the question "Nom"
+    And the graph version 2 of the survey "Satisfaction" asks the question "Prénom"
+    And the graph version 3 of the survey "Satisfaction" asks the question "Âge"
 
   @spec-survey-38
   Scenario: A closed survey can be edited and stays closed
@@ -405,3 +435,4 @@ Feature: Surveys, the questionnaires answered by members and by the public
     When the artisan makes the survey "Satisfaction" PUBLIC
     Then the refusal reason is "survey_visibility_frozen"
     And the survey "Satisfaction" is OPENED
+    And the survey "Satisfaction" stays visible to MEMBERS

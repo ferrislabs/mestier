@@ -100,10 +100,11 @@ pub use survey::{
     Completed, ConditionNode as SurveyConditionNode, Draft, Edge as SurveyEdge,
     EmailAddress as SurveyEmailAddress, EndNode as SurveyEndNode, Graph as SurveyGraph, GraphPath,
     GraphVersion as SurveyGraphVersion, InProgress, Metadata, Node as SurveyNode,
-    NodeRef as SurveyNodeRef, Opened, PhoneNumber as SurveyPhoneNumber, PublicSlug, QuestionId,
-    QuestionKind, QuestionNode as SurveyQuestionNode, RespondentSurvey, Response as SurveyResponse,
-    ResponseId, ResponseRecord, ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord,
-    Visibility, Window as SurveyWindow,
+    NodeRef as SurveyNodeRef, Opened, Phase as SurveyResponsePhase,
+    PhoneNumber as SurveyPhoneNumber, PublicSlug, QuestionId, QuestionKind,
+    QuestionNode as SurveyQuestionNode, RespondentSurvey, Response as SurveyResponse, ResponseId,
+    ResponseRecord, ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord, SurveyState,
+    SurveySummary, VersionedGraph as SurveyVersionedGraph, Visibility, Window as SurveyWindow,
 };
 pub use task::*;
 pub use task_comment::*;

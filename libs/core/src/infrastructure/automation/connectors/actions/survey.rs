@@ -60,14 +60,14 @@ fn survey_fields<S: Stage>(survey: &Survey<S>, status: &str, slug: Option<&Publi
     })
 }
 
-fn completed_response(graph: Option<&Graph>, response: &Response<Completed>) -> Value {
+fn completed_response(graph: &Graph, response: &Response<Completed>) -> Value {
     json!({
         "id": response.id().0,
         "member_id": response.member_id().map(|id| id.0),
         "completed_at": response.completed_at(),
         "identifier_value": response.identifier_value(),
         "graph_version": response.graph_version(),
-        "answers": graph.map_or_else(Vec::new, |graph| answers_payload(graph, response.answers())),
+        "answers": answers_payload(graph, response.answers()),
     })
 }
 
@@ -146,11 +146,16 @@ async fn list_responses(context: &ActionContext<'_>) -> Result<Value, String> {
         })
         .await
         .map_err(failure)?;
-    let responses: Vec<Value> = listed
+    let responses = listed
         .responses
         .iter()
-        .map(|response| completed_response(listed.graph_of(response), response))
-        .collect();
+        .map(|response| {
+            listed
+                .graph_of(response)
+                .map(|graph| completed_response(graph, response))
+                .map_err(|error| format!("response {}: {error}", response.id().0))
+        })
+        .collect::<Result<Vec<Value>, String>>()?;
     Ok(json!({
         "total": listed.total,
         "responses": responses,

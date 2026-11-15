@@ -13,8 +13,17 @@ pub(crate) fn check_finite(answers: &Answers) -> Result<(), SurveyError> {
     Ok(())
 }
 
-pub(crate) fn retain_known(graph: &Graph, answers: &mut Answers) {
-    answers.retain(|id, _| graph.question(id).is_some());
+pub(crate) fn retain_valid(graph: &Graph, answers: &mut Answers, photo_directory: &str) {
+    answers.retain(|id, answer| {
+        graph.question(id).is_some_and(|node| {
+            !matches!(
+                check_answer(node, answer, photo_directory),
+                Err(SurveyError::AnswerKindMismatch(_)
+                    | SurveyError::AnswerUnknownOption(_)
+                    | SurveyError::AnswerTooManyPhotos(_))
+            )
+        })
+    });
 }
 
 pub(crate) fn validate(

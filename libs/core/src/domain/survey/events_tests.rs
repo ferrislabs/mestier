@@ -12,6 +12,7 @@ use super::{
     Metadata, Node, Opened, QuestionId, QuestionKind, QuestionNode, Response, ResponseId, Survey,
     SurveyError, SurveyId, Visibility, Window,
 };
+use crate::domain::survey::GraphVersion;
 use crate::{MemberId, OrganizationId};
 
 fn at(day: u32) -> DateTime<Utc> {
@@ -669,8 +670,11 @@ fn the_completed_event_carries_the_graph_version_of_the_response() {
         qid(1),
     )
     .unwrap();
-    let previous = survey.revise_graph(changed.clone());
-    assert_eq!(previous.map(|stored| stored.version()), Some(1));
+    let previous = survey.revise_graph(changed.clone()).unwrap();
+    assert_eq!(
+        previous.map(|stored| stored.version()),
+        Some(GraphVersion::FIRST)
+    );
     let mut response = Response::start(
         ResponseId(Uuid::from_u128(3)),
         &survey,
@@ -686,7 +690,31 @@ fn the_completed_event_carries_the_graph_version_of_the_response() {
     let payload = SurveyResponseCompleted::new(&survey, &[], &completed)
         .unwrap()
         .payload();
-    assert_eq!(completed.graph_version(), 2);
+    assert_eq!(completed.graph_version().get(), 2);
     assert_eq!(payload["graph_version"], json!(2));
     assert_eq!(survey.definition(), &changed);
+}
+
+#[test]
+fn the_completed_event_refuses_a_response_given_on_another_graph_version() {
+    let mut survey = opened(&[]);
+    let completed = completed();
+    assert!(SurveyResponseCompleted::new(&survey, &[], &completed).is_ok());
+    let changed = Graph::new(
+        vec![
+            question(1, QuestionKind::Text, false),
+            Node::End(EndNode {
+                id: qid(6),
+                message: None,
+            }),
+        ],
+        vec![edge(1, 6, Branch::Next)],
+        qid(1),
+    )
+    .unwrap();
+    survey.revise_graph(changed).unwrap();
+    assert_eq!(
+        SurveyResponseCompleted::new(&survey, &[], &completed).err(),
+        Some(SurveyError::ResponseGraphVersionMismatch)
+    );
 }

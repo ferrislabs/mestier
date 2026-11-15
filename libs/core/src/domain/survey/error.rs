@@ -150,6 +150,10 @@ pub enum SurveyError {
     GraphVersionInvalid,
     #[error("survey: graph version not found")]
     GraphVersionNotFound,
+    #[error("survey: its graph has reached the last version number")]
+    GraphVersionExhausted,
+    #[error("response: was given on a graph version other than the current one")]
+    ResponseGraphVersionMismatch,
 }
 
 impl SurveyError {
@@ -227,6 +231,8 @@ impl SurveyError {
             Self::SurveyVisibilityFrozen => "survey_visibility_frozen",
             Self::GraphVersionInvalid => "graph_version_invalid",
             Self::GraphVersionNotFound => "graph_version_not_found",
+            Self::GraphVersionExhausted => "graph_version_exhausted",
+            Self::ResponseGraphVersionMismatch => "response_graph_version_mismatch",
         }
     }
 
@@ -303,7 +309,9 @@ impl SurveyError {
             | Self::ResponsePhotoCapReached
             | Self::SurveyVisibilityFrozen
             | Self::GraphVersionInvalid
-            | Self::GraphVersionNotFound => None,
+            | Self::GraphVersionNotFound
+            | Self::GraphVersionExhausted
+            | Self::ResponseGraphVersionMismatch => None,
         }
     }
 
@@ -371,7 +379,8 @@ impl From<SurveyError> for CoreError {
             | SurveyError::ResponseResumeTokenForbidden
             | SurveyError::SurveyInconsistentState
             | SurveyError::ResponseInconsistentState
-            | SurveyError::GraphVersionInvalid => Self::Internal(error.to_string()),
+            | SurveyError::GraphVersionInvalid
+            | SurveyError::ResponseGraphVersionMismatch => Self::Internal(error.to_string()),
             SurveyError::SurveyWithoutGraph
             | SurveyError::SurveyClosed
             | SurveyError::CampaignNotStarted
@@ -391,7 +400,8 @@ impl From<SurveyError> for CoreError {
             | SurveyError::RespondentAlreadyAnswered
             | SurveyError::SurveyStateChanged
             | SurveyError::ResponsePhotoCapReached
-            | SurveyError::SurveyVisibilityFrozen => error.refused(RefusalKind::Conflict),
+            | SurveyError::SurveyVisibilityFrozen
+            | SurveyError::GraphVersionExhausted => error.refused(RefusalKind::Conflict),
         }
     }
 }

@@ -4,8 +4,8 @@ use crate::OrganizationId;
 use crate::domain::photo_library::normalize::NormalizedImage;
 use crate::domain::survey::service::{CampaignPatch, SurveyPatch};
 use crate::domain::survey::{
-    Answers, CampaignId, Completed, Graph, GraphVersion, Metadata, Response, ResponseId, SurveyId,
-    SurveyRecord, Visibility, Window,
+    Answers, CampaignId, Completed, Graph, GraphVersion, Metadata, Response, ResponseId,
+    SurveyError, SurveyId, SurveyRecord, VersionedGraph, Visibility, Window,
 };
 
 #[derive(Debug, Clone)]
@@ -39,7 +39,16 @@ pub struct SurveyGraphVersionCommand {
     pub actor: Subject,
     pub organization_id: OrganizationId,
     pub id: SurveyId,
-    pub version: u32,
+    pub version: GraphVersion,
+}
+
+#[derive(Debug, Clone)]
+pub struct ListCampaignSurveysCommand {
+    pub actor: Subject,
+    pub organization_id: OrganizationId,
+    pub id: CampaignId,
+    pub limit: u64,
+    pub offset: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -104,21 +113,22 @@ pub struct CompletedSurveyResponses {
     pub survey: SurveyRecord,
     pub responses: Vec<Response<Completed>>,
     pub total: u64,
-    pub versions: Vec<GraphVersion>,
+    pub versions: Vec<VersionedGraph>,
 }
 
 impl CompletedSurveyResponses {
-    pub fn graph_of(&self, response: &Response<Completed>) -> Option<&Graph> {
+    pub fn graph_of(&self, response: &Response<Completed>) -> Result<&Graph, SurveyError> {
         let version = response.graph_version();
         self.versions
             .iter()
             .find(|stored| stored.version() == version)
-            .map(GraphVersion::graph)
+            .map(VersionedGraph::graph)
             .or_else(|| {
                 (self.survey.graph_version() == Some(version))
                     .then(|| self.survey.graph())
                     .flatten()
             })
+            .ok_or(SurveyError::GraphVersionNotFound)
     }
 }
 

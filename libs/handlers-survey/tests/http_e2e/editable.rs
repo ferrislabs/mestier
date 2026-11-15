@@ -141,6 +141,50 @@ async fn an_opened_survey_is_edited_versioned_and_shared_by_campaigns() {
         .unwrap_or_default();
     titles.sort_unstable();
     assert_eq!(titles, ["Bilan", "Second"], "{held}");
+    assert_eq!(held["pagination"]["total"], 2, "{held}");
+    assert_eq!(held["pagination"]["per_page"], 50, "{held}");
+    assert_eq!(held["data"][0]["status"], "DRAFT", "{held}");
+    let (status, paged) = app
+        .call(
+            Method::GET,
+            &app.org(&format!(
+                "/survey-campaigns/{spring}/surveys?per_page=1&page=2"
+            )),
+            manager,
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{paged}");
+    assert_eq!(paged["data"].as_array().map(Vec::len), Some(1), "{paged}");
+    assert_eq!(paged["pagination"]["total"], 2, "{paged}");
+    assert_eq!(paged["data"][0]["title"], "Bilan", "{paged}");
+    let (status, _) = app
+        .call(
+            Method::GET,
+            &app.org(&format!("/survey-campaigns/{spring}/surveys")),
+            Some(&app.member),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = app
+        .call(
+            Method::GET,
+            &app.other_org(&format!("/survey-campaigns/{spring}/surveys")),
+            Some(&app.other_manager),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .call(
+            Method::GET,
+            &app.org(&format!("/survey-campaigns/{spring}/surveys")),
+            Some(&app.other_manager),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
     let (status, filtered) = app
         .call(
             Method::GET,
@@ -212,6 +256,62 @@ async fn an_opened_survey_is_edited_versioned_and_shared_by_campaigns() {
         )
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .call(
+            Method::GET,
+            &app.org(&format!("/surveys/{survey}/graph-versions/0")),
+            manager,
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .call(
+            Method::GET,
+            &app.org(&format!("/surveys/{survey}/graph-versions/1")),
+            Some(&app.member),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = app
+        .call(
+            Method::GET,
+            &app.other_org(&format!("/surveys/{survey}/graph-versions/1")),
+            Some(&app.other_manager),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = app
+        .call(
+            Method::GET,
+            &app.org(&format!("/surveys/{survey}/graph-versions/1")),
+            Some(&app.other_manager),
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, unknown) = app
+        .call(
+            Method::PATCH,
+            &app.org(&format!("/surveys/{survey}")),
+            manager,
+            Some(json!({"campaign_id": spring})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{unknown}");
+    let (status, unchanged) = app
+        .call(
+            Method::PATCH,
+            &app.org(&format!("/surveys/{survey}")),
+            manager,
+            Some(json!({"campaign_ids": null, "title": "Bilan revu"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{unchanged}");
+    assert_eq!(unchanged["data"]["campaign_ids"], json!([]), "{unchanged}");
 
     let (status, frozen) = app
         .call(

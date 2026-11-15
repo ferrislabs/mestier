@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id, s.title, s.status\n            FROM survey.survey s\n            JOIN survey.survey_campaign link\n              ON link.org_id = s.org_id AND link.survey_id = s.id AND link.campaign_id = $2\n            WHERE s.org_id = $1\n            ORDER BY s.created_at DESC, s.id DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "534e2b9ded74752430664c38cf31de5e28ba11f285474c28e7ea9f65ccd6d43a"
+}

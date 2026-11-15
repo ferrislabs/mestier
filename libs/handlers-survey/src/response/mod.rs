@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use handlers::AppState;
 use mestier_core::{
     Answers, Completed, InProgress, MemberId, OrganizationId, RespondentSurvey, ResponseId,
-    ResponseRecord, SurveyGraph, SurveyId, SurveyResponse, Visibility,
+    ResponseRecord, SurveyGraph, SurveyId, SurveyResponse, SurveyResponsePhase, Visibility,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -69,7 +69,7 @@ pub struct ResponseView<'a> {
 }
 
 impl<'a> ResponseView<'a> {
-    fn of<S>(
+    fn of<S: SurveyResponsePhase>(
         response: &'a SurveyResponse<S>,
         status: ResponseStatus,
         graph_version: Option<u32>,
@@ -96,7 +96,7 @@ impl<'a> From<&'a ResponseRecord> for ResponseView<'a> {
             ResponseRecord::Completed(response) => Self::of(
                 response,
                 ResponseStatus::Completed,
-                Some(response.graph_version()),
+                Some(response.graph_version().get()),
             ),
         }
     }

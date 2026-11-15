@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO survey.survey_campaign (org_id, survey_id, campaign_id, position)\n            SELECT $1, $2, link.campaign_id, (link.ordinal - 1)::integer\n            FROM UNNEST($3::uuid[]) WITH ORDINALITY AS link(campaign_id, ordinal)\n            ON CONFLICT (survey_id, campaign_id) DO UPDATE SET position = EXCLUDED.position\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1c3d264621a6f0908282bebdabcc78edb68f2122bf3d66984db482c05d2cd568"
+}

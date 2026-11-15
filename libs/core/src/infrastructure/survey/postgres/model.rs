@@ -5,7 +5,7 @@ use common::CoreError;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::{Campaign, PublicSlug, ResponseRecord, SurveyError, SurveyRecord};
+use crate::{Campaign, PublicSlug, ResponseRecord, SurveyError, SurveyGraphVersion, SurveyRecord};
 
 pub const UNIQUE_RESPONDENT_CONSTRAINTS: [&str; 2] =
     ["uq_response_unique_member", "uq_response_unique_identifier"];
@@ -251,8 +251,12 @@ pub struct ResponseColumns<'a> {
     pub graph_version: Option<i32>,
 }
 
-pub fn version_column(table: &str, id: Uuid, version: u32) -> Result<i32, CoreError> {
-    i32::try_from(version).map_err(|_| corrupt(table, id, "graph_version"))
+pub fn version_column(
+    table: &str,
+    id: Uuid,
+    version: SurveyGraphVersion,
+) -> Result<i32, CoreError> {
+    i32::try_from(version.get()).map_err(|_| corrupt(table, id, "graph_version"))
 }
 
 impl<'a> TryFrom<&'a ResponseRecord> for ResponseColumns<'a> {

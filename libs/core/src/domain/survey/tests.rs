@@ -159,6 +159,8 @@ fn an_invariant_violation_or_a_corrupted_record_is_internal_for_the_core() {
         SurveyError::ResponseResumeTokenForbidden,
         SurveyError::SurveyInconsistentState,
         SurveyError::ResponseInconsistentState,
+        SurveyError::GraphVersionInvalid,
+        SurveyError::ResponseGraphVersionMismatch,
     ] {
         assert!(
             matches!(common::CoreError::from(error), common::CoreError::Internal(ref message) if *message == error.to_string()),
@@ -239,6 +241,11 @@ fn every_survey_error() -> Vec<SurveyError> {
         SurveyError::RespondentAlreadyAnswered,
         SurveyError::SurveyStateChanged,
         SurveyError::ResponsePhotoCapReached,
+        SurveyError::SurveyVisibilityFrozen,
+        SurveyError::GraphVersionInvalid,
+        SurveyError::GraphVersionNotFound,
+        SurveyError::GraphVersionExhausted,
+        SurveyError::ResponseGraphVersionMismatch,
     ]
 }
 
@@ -1014,7 +1021,7 @@ mod lifecycle {
 
     use events::DomainEvent;
 
-    use super::super::aggregate::{Closed, Draft, Opened, Survey};
+    use super::super::aggregate::{Closed, Draft, GraphVersion, Opened, Survey};
     use super::super::campaign::{Campaign, CampaignStatus, Window};
     use super::super::events::SurveyResponseSubmitted;
     use super::super::metadata::Metadata;
@@ -1565,7 +1572,7 @@ mod lifecycle {
         assert!(survey.allow_multiple_responses());
         assert!(survey.campaign_ids().is_empty());
         assert_eq!(survey.definition(), &linear());
-        assert_eq!(survey.version(), 1);
+        assert_eq!(survey.version(), GraphVersion::FIRST);
         assert_eq!(survey.public_slug(), Some(&slug()));
         assert_eq!(
             survey.edit_title(" ".to_string()),
@@ -1586,14 +1593,53 @@ mod lifecycle {
     #[test]
     fn revising_a_graph_keeps_the_previous_version() {
         let mut survey = opened();
-        assert_eq!(survey.graph_version(), Some(1));
-        let previous = survey.revise_graph(linear()).unwrap();
-        assert_eq!(previous.version(), 1);
+        assert_eq!(survey.graph_version(), Some(GraphVersion::FIRST));
+        let previous = survey.revise_graph(linear()).unwrap().unwrap();
+        assert_eq!(previous.version(), GraphVersion::FIRST);
         assert_eq!(previous.graph(), &branching(true));
-        assert_eq!(survey.version(), 2);
+        assert_eq!(survey.version(), version(2));
         assert_eq!(survey.definition(), &linear());
-        assert_eq!(survey.revise_graph(linear()), None);
-        assert_eq!(survey.version(), 2);
+        assert_eq!(survey.revise_graph(linear()), Ok(None));
+        assert_eq!(survey.version(), version(2));
+    }
+
+    fn version(number: u32) -> GraphVersion {
+        GraphVersion::new(number).unwrap()
+    }
+
+    #[test]
+    fn a_graph_version_is_a_positive_number() {
+        assert_eq!(GraphVersion::new(0), Err(SurveyError::GraphVersionInvalid));
+        assert_eq!(version(1), GraphVersion::FIRST);
+        assert_eq!(version(41).next(), Ok(version(42)));
+        assert_eq!(version(7).get(), 7);
+        assert_eq!(
+            serde_json::to_value(version(3)).unwrap(),
+            serde_json::json!(3)
+        );
+        assert!(serde_json::from_value::<GraphVersion>(serde_json::json!(0)).is_err());
+        assert!(serde_json::from_value::<GraphVersion>(serde_json::json!(-1)).is_err());
+    }
+
+    #[test]
+    fn the_last_graph_version_cannot_be_revised() {
+        assert_eq!(
+            version(u32::MAX).next(),
+            Err(SurveyError::GraphVersionExhausted)
+        );
+        let mut json = serde_json::to_value(opened()).unwrap();
+        json["graph_version"] = serde_json::json!(u32::MAX);
+        let mut survey: Survey<Opened> = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            survey.revise_graph(linear()),
+            Err(SurveyError::GraphVersionExhausted)
+        );
+        assert_eq!(survey.definition(), &branching(true));
+        assert_eq!(survey.version(), version(u32::MAX));
+        assert_eq!(
+            SurveyError::GraphVersionExhausted.code(),
+            "graph_version_exhausted"
+        );
     }
 
     #[test]
@@ -1601,7 +1647,7 @@ mod lifecycle {
         let mut survey = opened();
         survey.edit_graph(linear());
         survey.edit_graph(branching(false));
-        assert_eq!(survey.version(), 1);
+        assert_eq!(survey.version(), GraphVersion::FIRST);
         assert_eq!(survey.definition(), &branching(false));
     }
 
@@ -1610,7 +1656,7 @@ mod lifecycle {
         let mut survey = draft();
         assert_eq!(survey.graph_version(), None);
         survey.edit_graph(Some(linear()));
-        assert_eq!(survey.graph_version(), Some(1));
+        assert_eq!(survey.graph_version(), Some(GraphVersion::FIRST));
         survey.edit_graph(None);
         assert_eq!(survey.graph_version(), None);
         assert_eq!(survey.graph(), None);
@@ -1645,10 +1691,87 @@ mod lifecycle {
             qid(6),
         )
         .unwrap();
-        survey.revise_graph(replaced);
+        survey.revise_graph(replaced).unwrap();
         let completed = response.complete(&survey, at(2)).unwrap();
-        assert_eq!(completed.graph_version(), 2);
+        assert_eq!(completed.graph_version(), version(2));
         assert!(completed.answers().is_empty());
+    }
+
+    #[test]
+    fn a_stored_answer_whose_question_changed_kind_is_dropped_at_completion() {
+        let mut survey = survey_of(linear());
+        let mut response = response_to(&survey);
+        response
+            .save(&survey, Answers::from([(qid(1), text("Dupont"))]))
+            .unwrap();
+        survey.edit_graph(
+            Graph::new(
+                vec![node(1, QuestionKind::SingleChoice, false, false), end(5)],
+                vec![edge(1, 5, Branch::Next)],
+                qid(1),
+            )
+            .unwrap(),
+        );
+        let completed = response.complete(&survey, at(2)).unwrap();
+        assert!(completed.answers().is_empty());
+    }
+
+    #[test]
+    fn a_stored_choice_whose_option_was_removed_is_dropped_at_completion() {
+        let mut survey = survey_of(
+            Graph::new(
+                vec![
+                    node(1, QuestionKind::SingleChoice, false, false),
+                    node(3, QuestionKind::Text, false, false),
+                    end(5),
+                ],
+                vec![edge(1, 3, Branch::Next), edge(3, 5, Branch::Next)],
+                qid(1),
+            )
+            .unwrap(),
+        );
+        let mut response = response_to(&survey);
+        response
+            .save(
+                &survey,
+                Answers::from([(qid(1), choice("Non")), (qid(3), text("Gardé"))]),
+            )
+            .unwrap();
+        let mut narrowed = node(1, QuestionKind::SingleChoice, false, false);
+        if let Node::Question(question) = &mut narrowed {
+            question.options = vec!["Oui".to_string(), "Peut-être".to_string()];
+        }
+        survey.edit_graph(
+            Graph::new(
+                vec![narrowed, node(3, QuestionKind::Text, false, false), end(5)],
+                vec![edge(1, 3, Branch::Next), edge(3, 5, Branch::Next)],
+                qid(1),
+            )
+            .unwrap(),
+        );
+        let completed = response.complete(&survey, at(2)).unwrap();
+        assert_eq!(
+            completed.answers(),
+            &Answers::from([(qid(3), text("Gardé"))])
+        );
+    }
+
+    #[test]
+    fn a_freshly_sent_answer_that_does_not_fit_is_still_refused() {
+        let mut survey = survey_of(linear());
+        let mut response = response_to(&survey);
+        survey.edit_graph(
+            Graph::new(
+                vec![node(1, QuestionKind::SingleChoice, false, false), end(5)],
+                vec![edge(1, 5, Branch::Next)],
+                qid(1),
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            response.save(&survey, Answers::from([(qid(1), text("Dupont"))])),
+            Err(SurveyError::AnswerKindMismatch(qid(1)))
+        );
     }
 
     #[test]

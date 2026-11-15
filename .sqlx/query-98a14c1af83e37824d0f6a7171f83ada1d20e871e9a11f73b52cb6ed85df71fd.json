@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT s.id, s.org_id,\n                   COALESCE(\n                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)\n                        FROM survey.survey_campaign sc WHERE sc.survey_id = s.id),\n                       '{}'\n                   ) AS \"campaign_ids!\",\n                   s.title, s.description, s.visibility, s.graph, s.graph_version,\n                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,\n                   s.public_slug, s.opened_at, s.closed_at\n            FROM survey.survey s\n            WHERE s.org_id = $1\n            ORDER BY s.created_at DESC, s.id DESC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            SELECT s.id, s.org_id,\n                   COALESCE(\n                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)\n                        FROM survey.survey_campaign sc\n                        WHERE sc.org_id = s.org_id AND sc.survey_id = s.id),\n                       '{}'\n                   ) AS \"campaign_ids!\",\n                   s.title, s.description, s.visibility, s.graph, s.graph_version,\n                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,\n                   s.public_slug, s.opened_at, s.closed_at\n            FROM survey.survey s\n            JOIN survey.survey_campaign link\n              ON link.org_id = s.org_id AND link.survey_id = s.id AND link.campaign_id = $2\n            WHERE s.org_id = $1\n            ORDER BY s.created_at DESC, s.id DESC\n            LIMIT $3 OFFSET $4\n            ",
   "describe": {
     "columns": [
       {
@@ -82,6 +82,7 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Uuid",
         "Int8",
         "Int8"
       ]
@@ -104,5 +105,5 @@
       true
     ]
   },
-  "hash": "e7fb89b4657235a3450210905596953d9a5ae06bb794d588da33f7d7cb3256ea"
+  "hash": "98a14c1af83e37824d0f6a7171f83ada1d20e871e9a11f73b52cb6ed85df71fd"
 }

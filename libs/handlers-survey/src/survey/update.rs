@@ -18,6 +18,7 @@ use crate::{
 };
 
 #[derive(Debug, Default, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateSurveyRequest {
     pub title: Option<String>,
     #[serde(default, deserialize_with = "deserialize_present")]
@@ -32,6 +33,7 @@ pub struct UpdateSurveyRequest {
     #[serde(default, deserialize_with = "deserialize_present")]
     #[schema(value_type = Option<crate::schema::SurveyGraphSchema>, nullable)]
     pub graph: Option<Option<serde_json::Value>>,
+    #[schema(nullable)]
     pub campaign_ids: Option<Vec<CampaignId>>,
 }
 
@@ -74,14 +76,14 @@ fn response_cap(cap: u32) -> Result<NonZeroU32, ApiError> {
     path = "/api/v1/organizations/{organization_id}/surveys/{survey_id}",
     operation_id = "updateSurvey",
     tag = super::super::TAG,
-    description = "Updates a survey in any state: an opened or closed survey stays editable and keeps its state. Its visibility is frozen once opened (409 survey_visibility_frozen) and its graph cannot be cleared. A graph changed after a completed response keeps the previous version and increments graph_version. The body shape (graph, metadata, response cap) is checked before the permission, so a caller without survey.manage who sends an invalid body gets 422 rather than 403.",
+    description = "Updates a survey in any state: an opened or closed survey stays editable and keeps its state. Its visibility is frozen once opened (409 survey_visibility_frozen) and its graph cannot be cleared. A graph version is frozen once a response was completed on it: a graph changed on a frozen version gets a new graph_version, otherwise it is replaced in place. Unknown body fields are refused with 422. The body shape (graph, metadata, response cap) is checked before the permission, so a caller without survey.manage who sends an invalid body gets 422 rather than 403.",
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
         ("survey_id" = mestier_core::SurveyId, Path, description = "Survey identifier"),
     ),
     request_body(
         content = UpdateSurveyRequest,
-        description = "Every field is optional; an explicit null clears description, response_cap or graph (a draft only). campaign_ids replaces the campaigns of the survey, in attachment order. The graph is the domain form: QUESTION, CONDITION and END nodes, edges with a NEXT, THEN or ELSE branch, and the start question.",
+        description = "Every field is optional; an explicit null clears description, response_cap or graph (a draft only). campaign_ids absent or null leaves the campaigns unchanged; an array, even empty, replaces the whole set, in attachment order. An unknown field (such as the former campaign_id) is refused with 422. The graph is the domain form: QUESTION, CONDITION and END nodes, edges with a NEXT, THEN or ELSE branch, and the start question.",
         example = json!({
             "title": "Satisfaction des stagiaires",
             "allow_multiple_responses": false,
@@ -110,7 +112,7 @@ fn response_cap(cap: u32) -> Result<NonZeroU32, ApiError> {
         (status = 403, description = "Requires survey.manage"),
         (status = 404, description = "Survey or campaign not found, or surveys not enabled"),
         (status = 409, description = "The visibility of an opened survey cannot change, an opened survey cannot lose its graph, or the survey changed meanwhile"),
-        (status = 422, description = "Blank title, invalid metadata, response cap below 1, or a graph that breaks a structure rule"),
+        (status = 422, description = "Blank title, invalid metadata, response cap below 1, a graph that breaks a structure rule, or an unknown field"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -178,6 +180,26 @@ mod tests {
                 CampaignId(first.parse().unwrap_or_default()),
             ])
         );
+    }
+
+    #[test]
+    fn the_former_single_campaign_field_is_refused() {
+        let refused = serde_json::from_value::<UpdateSurveyRequest>(serde_json::json!({
+            "campaign_id": "0195f0a0-0000-7000-8000-000000000001"
+        }));
+        let Err(error) = refused else {
+            panic!("an unknown field must be refused");
+        };
+        assert!(error.to_string().contains("campaign_id"), "{error}");
+    }
+
+    #[test]
+    fn a_null_campaign_set_is_left_alone() {
+        let (_, campaign_ids) = read(serde_json::json!({"campaign_ids": null}))
+            .patch()
+            .ok()
+            .unwrap_or_default();
+        assert_eq!(campaign_ids, None);
     }
 
     #[test]

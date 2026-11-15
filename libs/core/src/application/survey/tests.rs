@@ -9,12 +9,13 @@ use crate::application::{MestierUseCase, default_authorizer};
 use crate::infrastructure::realtime::EventHub;
 use crate::{
     Answer, Answers, CampaignCommand, CampaignId, CampaignPatch, CampaignStatus,
-    CreateCampaignCommand, CreateSurveyCommand, ListCampaignsCommand, ListSurveyResponsesCommand,
-    ListSurveysCommand, Metadata, PublicSlug, QuestionId, QuestionKind, ResponseId, ResumeToken,
-    SaveMemberResponseCommand, SetSurveyCampaignsCommand, StartMemberResponseCommand, SurveyBranch,
-    SurveyCommand, SurveyEdge, SurveyEndNode, SurveyGraph, SurveyGraphVersionCommand, SurveyId,
-    SurveyNode, SurveyPatch, SurveyQuestionNode, SurveyResponseCommand, SurveyWindow,
-    UpdateCampaignCommand, UpdateSurveyCommand, UserId, Visibility,
+    CreateCampaignCommand, CreateSurveyCommand, ListCampaignSurveysCommand, ListCampaignsCommand,
+    ListSurveyResponsesCommand, ListSurveysCommand, Metadata, PublicSlug, QuestionId, QuestionKind,
+    ResponseId, ResumeToken, SaveMemberResponseCommand, SetSurveyCampaignsCommand,
+    StartMemberResponseCommand, SurveyBranch, SurveyCommand, SurveyEdge, SurveyEndNode,
+    SurveyGraph, SurveyGraphVersionCommand, SurveyId, SurveyNode, SurveyPatch, SurveyQuestionNode,
+    SurveyResponseCommand, SurveyWindow, UpdateCampaignCommand, UpdateSurveyCommand, UserId,
+    Visibility,
 };
 
 pub(super) struct Fixture {
@@ -1055,7 +1056,7 @@ fn graph_version_command(
         actor,
         organization_id: fixture.organization_id,
         id,
-        version,
+        version: crate::SurveyGraphVersion::new(version).unwrap(),
     }
 }
 
@@ -1106,7 +1107,7 @@ async fn an_opened_survey_is_edited_versioned_and_attached_to_campaigns() {
             .await
             .unwrap();
         assert!(matches!(edited, crate::SurveyRecord::Opened(_)));
-        assert_eq!(edited.graph_version(), Some(2));
+        assert_eq!(edited.graph_version().map(|version| version.get()), Some(2));
         assert_eq!(edited.campaign_ids(), &[fixture.campaign_id]);
 
         let former = usecase
@@ -1151,18 +1152,22 @@ async fn an_opened_survey_is_edited_versioned_and_attached_to_campaigns() {
             .await
             .unwrap();
         assert_eq!(listed.responses.len(), 1);
-        assert_eq!(listed.responses[0].graph_version(), 1);
-        assert_eq!(listed.graph_of(&listed.responses[0]), Some(&graph()));
+        assert_eq!(listed.responses[0].graph_version().get(), 1);
+        assert_eq!(listed.graph_of(&listed.responses[0]), Ok(&graph()));
 
-        let held = usecase
-            .list_campaign_surveys(CampaignCommand {
+        let (held, held_total) = usecase
+            .list_campaign_surveys(ListCampaignSurveysCommand {
                 actor: Subject::system(),
                 organization_id: fixture.organization_id,
                 id: fixture.campaign_id,
+                limit: 10,
+                offset: 0,
             })
             .await
             .unwrap();
-        assert_eq!(held.len(), 1);
+        assert_eq!((held.len(), held_total), (1, 1));
+        assert_eq!(held[0].id, survey_id);
+        assert_eq!(held[0].title, "Bilan");
         let (filtered, total) = usecase
             .list_surveys(ListSurveysCommand {
                 actor: Subject::system(),
@@ -1174,7 +1179,17 @@ async fn an_opened_survey_is_edited_versioned_and_attached_to_campaigns() {
             .await
             .unwrap();
         assert_eq!((filtered.len(), total), (1, 1));
-        forbidden(usecase.list_campaign_surveys(campaign_command(&fixture)).await);
+        forbidden(
+            usecase
+                .list_campaign_surveys(ListCampaignSurveysCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    id: fixture.campaign_id,
+                    limit: 10,
+                    offset: 0,
+                })
+                .await,
+        );
 
         let cleared = usecase
             .set_survey_campaigns(SetSurveyCampaignsCommand {
@@ -1215,4 +1230,261 @@ async fn an_opened_survey_is_edited_versioned_and_attached_to_campaigns() {
         fixture
     })
     .await;
+}
+
+fn relabelled(label: &str) -> SurveyGraph {
+    SurveyGraph::new(
+        vec![
+            SurveyNode::Question(SurveyQuestionNode {
+                id: qid(10),
+                kind: QuestionKind::Text,
+                label: label.to_owned(),
+                required: true,
+                options: Vec::new(),
+                max_photos: None,
+                identifier: false,
+            }),
+            SurveyNode::End(SurveyEndNode {
+                id: qid(11),
+                message: None,
+            }),
+        ],
+        vec![SurveyEdge {
+            from: qid(10),
+            to: qid(11),
+            branch: SurveyBranch::Next,
+        }],
+        qid(10),
+    )
+    .unwrap()
+}
+
+async fn respond(
+    usecase: &MestierUseCase,
+    fixture: &Fixture,
+    survey_id: SurveyId,
+    name: &str,
+) -> ResponseId {
+    let started = usecase
+        .start_member_response(StartMemberResponseCommand {
+            actor: fixture.member.clone(),
+            organization_id: fixture.organization_id,
+            survey_id,
+        })
+        .await
+        .unwrap()
+        .into_response();
+    usecase
+        .save_member_response(SaveMemberResponseCommand {
+            actor: fixture.member.clone(),
+            organization_id: fixture.organization_id,
+            id: started.id(),
+            answers: answers(name),
+        })
+        .await
+        .unwrap();
+    usecase
+        .complete_member_response(response_command(
+            fixture,
+            fixture.member.clone(),
+            started.id(),
+        ))
+        .await
+        .unwrap();
+    started.id()
+}
+
+async fn relabel(usecase: &MestierUseCase, fixture: &Fixture, survey_id: SurveyId, label: &str) {
+    usecase
+        .update_survey(UpdateSurveyCommand {
+            actor: Subject::system(),
+            organization_id: fixture.organization_id,
+            id: survey_id,
+            patch: SurveyPatch {
+                graph: Some(Some(relabelled(label))),
+                ..SurveyPatch::default()
+            },
+            campaign_ids: None,
+        })
+        .await
+        .unwrap();
+}
+
+fn responses_command(fixture: &Fixture, survey_id: SurveyId) -> ListSurveyResponsesCommand {
+    ListSurveyResponsesCommand {
+        actor: Subject::system(),
+        organization_id: fixture.organization_id,
+        survey_id,
+        limit: 10,
+        offset: 0,
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_deleted_test_response_leaves_every_graph_version_readable() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Members).await;
+        let (_, storage) = super::photos_tests::storage();
+
+        let tried = respond(&usecase, &fixture, survey_id, "Essai").await;
+        usecase
+            .delete_survey_response(
+                response_command(&fixture, Subject::system(), tried),
+                &storage,
+            )
+            .await
+            .unwrap();
+        relabel(&usecase, &fixture, survey_id, "Prénom").await;
+        let kept = respond(&usecase, &fixture, survey_id, "Claire").await;
+        relabel(&usecase, &fixture, survey_id, "Âge").await;
+
+        for (number, expected) in [
+            (1, graph()),
+            (2, relabelled("Prénom")),
+            (3, relabelled("Âge")),
+        ] {
+            let read = usecase
+                .get_survey_graph_version(graph_version_command(
+                    &fixture,
+                    Subject::system(),
+                    survey_id,
+                    number,
+                ))
+                .await
+                .unwrap();
+            assert_eq!(read.graph(), &expected, "version {number}");
+        }
+        let listed = usecase
+            .list_completed_survey_responses(responses_command(&fixture, survey_id))
+            .await
+            .unwrap();
+        assert_eq!(listed.responses.len(), 1);
+        assert_eq!(listed.responses[0].id(), kept);
+        assert_eq!(listed.responses[0].graph_version().get(), 2);
+        assert_eq!(
+            listed.graph_of(&listed.responses[0]),
+            Ok(&relabelled("Prénom"))
+        );
+        let (records, total) = usecase
+            .list_survey_responses(responses_command(&fixture, survey_id))
+            .await
+            .unwrap();
+        assert_eq!((records.len(), total), (1, 1));
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_completed_response_whose_version_row_is_missing_is_reported() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Members).await;
+        respond(&usecase, &fixture, survey_id, "Claire").await;
+        relabel(&usecase, &fixture, survey_id, "Prénom").await;
+        sqlx::query("DELETE FROM survey.survey_version WHERE survey_id = $1")
+            .bind(survey_id.0)
+            .execute(&dev_pool().await)
+            .await
+            .unwrap();
+
+        let listed = usecase
+            .list_completed_survey_responses(responses_command(&fixture, survey_id))
+            .await
+            .unwrap();
+        assert_eq!(
+            listed.graph_of(&listed.responses[0]),
+            Err(crate::SurveyError::GraphVersionNotFound)
+        );
+        not_found(
+            usecase
+                .list_survey_responses(responses_command(&fixture, survey_id))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+mod versions {
+    use std::sync::{Arc, Mutex};
+
+    use chrono::{TimeZone, Utc};
+    use uuid::Uuid;
+
+    use super::super::{former_graphs, require_graphs};
+    use crate::domain::survey::ports::MockSurveyRepository;
+    use crate::{
+        OrganizationId, Survey, SurveyError, SurveyGraphVersion, SurveyId, SurveyRecord, Visibility,
+    };
+
+    fn version(number: u32) -> SurveyGraphVersion {
+        SurveyGraphVersion::new(number).unwrap()
+    }
+
+    fn at_version_three() -> SurveyRecord {
+        let mut survey = Survey::new(
+            SurveyId(Uuid::from_u128(1)),
+            OrganizationId(Uuid::from_u128(2)),
+            "Satisfaction".to_owned(),
+            Visibility::Members,
+        )
+        .unwrap();
+        survey.edit_graph(Some(super::graph()));
+        let mut opened = survey
+            .open(Utc.with_ymd_and_hms(2026, 3, 1, 0, 0, 0).unwrap(), None)
+            .unwrap();
+        opened.revise_graph(super::relabelled("Prénom")).unwrap();
+        opened.revise_graph(super::relabelled("Âge")).unwrap();
+        opened.into()
+    }
+
+    #[tokio::test]
+    async fn each_former_version_is_read_once_even_when_it_is_missing() {
+        let asked = Arc::new(Mutex::new(Vec::new()));
+        let mut surveys = MockSurveyRepository::new();
+        let log = Arc::clone(&asked);
+        surveys
+            .expect_find_graph_version()
+            .returning(move |_, _, wanted| {
+                log.lock().unwrap().push(wanted);
+                let found = (wanted == version(1)).then(super::graph);
+                Box::pin(async move { Ok(found) })
+            });
+
+        let (found, missing) = former_graphs(
+            &mut surveys,
+            &at_version_three(),
+            vec![version(2), version(1), version(3), version(2), version(1)],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(*asked.lock().unwrap(), vec![version(2), version(1)]);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].version(), version(1));
+        assert_eq!(missing, vec![version(2)]);
+    }
+
+    #[tokio::test]
+    async fn a_listing_with_a_missing_version_row_is_refused() {
+        let mut surveys = MockSurveyRepository::new();
+        surveys
+            .expect_has_graph_version()
+            .times(2)
+            .returning(|_, _, wanted| Box::pin(async move { Ok(wanted == version(1)) }));
+
+        let refused = require_graphs(
+            &mut surveys,
+            &at_version_three(),
+            vec![version(3), version(1), version(1), version(2)],
+        )
+        .await;
+
+        assert_eq!(
+            refused.err().map(|error| error.to_string()),
+            Some(common::CoreError::from(SurveyError::GraphVersionNotFound).to_string())
+        );
+    }
 }
