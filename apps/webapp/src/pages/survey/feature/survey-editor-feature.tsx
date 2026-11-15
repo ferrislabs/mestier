@@ -62,7 +62,7 @@ import {
 	ReadOnlyBanner,
 	SurveyFormEditor,
 } from '#/pages/survey/ui/survey-form-editor'
-import type { PreviewProblem } from '#/pages/survey/ui/survey-preview-dialog'
+import type { PreviewProblem } from '#/pages/survey/ui/survey-preview-panel'
 import {
 	SurveySettingsPanel,
 	SurveySettingsSheet,
@@ -168,7 +168,7 @@ export function SurveyEditorWorkspace({
 	const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
 	const [settingsOpen, setSettingsOpen] = useState(false)
 	const wide = useWideScreen()
-	const [previewOpen, setPreviewOpen] = useState(false)
+	const [previewing, setPreviewing] = useState(false)
 
 	const problems = useMemo(
 		() => (advanced === null ? formProblems(form, !draft) : []),
@@ -362,7 +362,8 @@ export function SurveyEditorWorkspace({
 						setSettings((current) => ({ ...current, title: value }))
 					}
 					onBack={() => void goTo(surveysPath())}
-					onPreview={() => setPreviewOpen(true)}
+					previewing={previewing}
+					onPreviewing={setPreviewing}
 					onSettings={() => setSettingsOpen(true)}
 					onResponses={() => void goTo(surveyResponsesPath(survey.id))}
 					onSave={() => void save()}
@@ -380,7 +381,14 @@ export function SurveyEditorWorkspace({
 					{editor.announcement}
 				</p>
 				<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/30">
-					{advanced !== null ? (
+					{previewing ? (
+						<SurveyPreviewFeature
+							title={title}
+							description={settings.description.trim() || null}
+							graph={graph ?? null}
+							problems={previewProblems}
+						/>
+					) : advanced !== null ? (
 						<div className="px-3 py-6">
 							<AdvancedGraphNotice questionCount={advanced} />
 						</div>
@@ -433,14 +441,6 @@ export function SurveyEditorWorkspace({
 				onChange={(patch) =>
 					setSettings((current) => ({ ...current, ...patch }))
 				}
-			/>
-			<SurveyPreviewFeature
-				open={previewOpen}
-				title={title}
-				description={settings.description.trim() || null}
-				graph={graph ?? null}
-				problems={previewProblems}
-				onOpenChange={setPreviewOpen}
 			/>
 			<ConfirmDialog
 				open={deleting !== undefined}

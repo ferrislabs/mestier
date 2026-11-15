@@ -20,6 +20,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
+import { Switch } from '#/components/ui/switch'
 import type { Survey } from '#/pages/survey/types'
 import {
 	SurveyStatusBadge,
@@ -69,7 +70,8 @@ export function SurveyEditorHeader({
 	problems,
 	onTitle,
 	onBack,
-	onPreview,
+	previewing,
+	onPreviewing,
 	onSettings,
 	onResponses,
 	onSave,
@@ -89,7 +91,8 @@ export function SurveyEditorHeader({
 	problems: ReactNode
 	onTitle: (title: string) => void
 	onBack: () => void
-	onPreview: () => void
+	previewing: boolean
+	onPreviewing: (previewing: boolean) => void
 	onSettings: () => void
 	onResponses: () => void
 	onSave: () => void
@@ -149,15 +152,18 @@ export function SurveyEditorHeader({
 							{saveBlockedReason}
 						</span>
 					) : null}
-					<Button
-						variant="ghost"
-						size="sm"
-						className="min-h-11 sm:min-h-8"
-						onClick={onPreview}
+					<label
+						htmlFor="survey-preview-switch"
+						className="flex min-h-11 items-center gap-2 px-2 text-sm sm:min-h-8"
 					>
-						<Eye aria-hidden />
+						<Eye className="size-4" aria-hidden />
 						Aperçu
-					</Button>
+						<Switch
+							id="survey-preview-switch"
+							checked={previewing}
+							onCheckedChange={onPreviewing}
+						/>
+					</label>
 					<Button
 						variant="ghost"
 						size="sm"

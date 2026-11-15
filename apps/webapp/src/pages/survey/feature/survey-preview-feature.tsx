@@ -3,8 +3,8 @@ import type { Schemas } from '#/api/api.client'
 import { convertHeicToJpeg } from '#/pages/photo-library/lib/files'
 import {
 	type PreviewProblem,
-	SurveyPreviewDialog,
-} from '#/pages/survey/ui/survey-preview-dialog'
+	SurveyPreviewPanel,
+} from '#/pages/survey/ui/survey-preview-panel'
 import { previewSource } from '#/pages/survey-respond/feature/respond-sources'
 import { useSurveyRespondent } from '#/pages/survey-respond/feature/use-survey-respondent'
 import { SurveyRespondView } from '#/pages/survey-respond/ui/survey-respond-view'
@@ -33,19 +33,15 @@ function PreviewRunner({ title, description, graph }: PreviewContent) {
 }
 
 export function SurveyPreviewFeature({
-	open,
 	title,
 	description,
 	graph,
 	problems,
-	onOpenChange,
 }: {
-	open: boolean
 	title: string
 	description: string | null
 	graph: Schemas.SurveyGraphSchema | null
 	problems: readonly PreviewProblem[]
-	onOpenChange: (open: boolean) => void
 }) {
 	const [run, setRun] = useState(0)
 	const shown: readonly PreviewProblem[] =
@@ -59,13 +55,11 @@ export function SurveyPreviewFeature({
 				]
 			: problems
 	return (
-		<SurveyPreviewDialog
-			open={open}
+		<SurveyPreviewPanel
 			problems={shown}
-			onOpenChange={onOpenChange}
 			onRestart={() => setRun((count) => count + 1)}
 		>
-			{open && graph && shown.length === 0 ? (
+			{graph && shown.length === 0 ? (
 				<PreviewRunner
 					key={run}
 					title={title}
@@ -73,6 +67,6 @@ export function SurveyPreviewFeature({
 					graph={graph}
 				/>
 			) : null}
-		</SurveyPreviewDialog>
+		</SurveyPreviewPanel>
 	)
 }

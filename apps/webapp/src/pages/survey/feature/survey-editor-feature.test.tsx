@@ -409,7 +409,7 @@ describe('SurveyEditorFeature', () => {
 		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
 		expect('graph' in patchBodies(api.calls)[0]).toBe(false)
 
-		await userEvent.click(screen.getByRole('button', { name: 'Aperçu' }))
+		await userEvent.click(screen.getByRole('switch', { name: 'Aperçu' }))
 		expect(
 			await screen.findByLabelText('Venez-vous en voiture ?', { exact: false }),
 		).toBeTruthy()
@@ -425,23 +425,25 @@ describe('SurveyEditorFeature', () => {
 		fireEvent.change(await screen.findByLabelText('Libellé de la question 1'), {
 			target: { value: 'Avez-vous une voiture ?' },
 		})
-		await userEvent.click(screen.getByRole('button', { name: 'Aperçu' }))
-		const dialog = await screen.findByRole('dialog', { name: 'Aperçu' })
-		await userEvent.click(await within(dialog).findByLabelText('Oui'))
+		await userEvent.click(screen.getByRole('switch', { name: 'Aperçu' }))
+		const preview = await screen.findByRole('region', { name: 'Aperçu' })
+		await userEvent.click(await within(preview).findByLabelText('Oui'))
 		await userEvent.click(
-			within(dialog).getByRole('button', { name: /Suivant/ }),
+			within(preview).getByRole('button', { name: /Suivant/ }),
 		)
-		expect(await within(dialog).findByLabelText('Immatriculation')).toBeTruthy()
-		await userEvent.click(
-			within(dialog).getByRole('button', { name: 'Fermer l’aperçu' }),
+		expect(
+			await within(preview).findByLabelText('Immatriculation'),
+		).toBeTruthy()
+		await userEvent.click(screen.getByRole('switch', { name: 'Aperçu' }))
+		await waitFor(() =>
+			expect(screen.queryByRole('region', { name: 'Aperçu' })).toBe(null),
 		)
-		await waitFor(() => expect(screen.queryByRole('dialog')).toBe(null))
 
 		fireEvent.change(screen.getByLabelText('Libellé de la question 2'), {
 			target: { value: '' },
 		})
-		await userEvent.click(screen.getByRole('button', { name: 'Aperçu' }))
-		const broken = await screen.findByRole('dialog', { name: 'Aperçu' })
+		await userEvent.click(screen.getByRole('switch', { name: 'Aperçu' }))
+		const broken = await screen.findByRole('region', { name: 'Aperçu' })
 		expect(
 			within(broken).getByText('Corrigez ces problèmes pour voir l’aperçu'),
 		).toBeTruthy()
