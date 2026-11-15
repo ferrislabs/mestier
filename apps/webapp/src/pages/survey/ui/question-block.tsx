@@ -100,7 +100,7 @@ export function QuestionBlock({
 			{inserter}
 			<section
 				aria-labelledby={titleId}
-				className="grid gap-2 rounded-xl border border-l-4 border-l-primary bg-brand-soft/40 p-2 sm:p-3"
+				className="grid gap-2 rounded-xl border bg-brand-soft/40 p-2 sm:p-3"
 			>
 				<div className="flex flex-wrap items-center gap-2">
 					{readOnly ? null : (
