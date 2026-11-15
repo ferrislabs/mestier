@@ -213,6 +213,7 @@ export namespace Schemas {
     recovery_fee_cents: number;
   };
   export type BlankPageCount = number;
+  export type BlockId = string;
   export type ScheduleUnit = "weeks" | "months";
   export type LunchInput = { end: string; start: string };
   export type WorkDayInput = { end: string; lunch?: (null | LunchInput) | undefined; start: string };
@@ -2832,6 +2833,7 @@ export namespace Schemas {
   export type SurveyEdgeSchema = { branch: SurveyBranchSchema; from: QuestionId; to: QuestionId };
   export type SurveyEndNodeSchema = { id: QuestionId; message?: (string | null) | undefined };
   export type SurveyQuestionNodeSchema = {
+    block?: (null | BlockId) | undefined;
     id: QuestionId;
     identifier?: boolean | undefined;
     kind: QuestionKind;
