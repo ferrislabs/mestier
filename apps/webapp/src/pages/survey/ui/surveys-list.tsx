@@ -3,8 +3,12 @@ import { Loader2, Plus } from 'lucide-react'
 import { EmptyState } from '#/components/empty-state'
 import { Button } from '#/components/ui/button'
 import { PageHeader, PageShell } from '#/components/ui/surface'
+import type { Campaign } from '#/pages/survey/types'
+import { NATIVE_SELECT } from '#/pages/survey/ui/native-select'
 import type { SurveyRow } from '#/pages/survey/ui/survey-columns'
 import { SurveyDataTable } from '#/pages/survey/ui/survey-data-table'
+
+export const INDEPENDENT = '__independent__'
 
 export function ErrorBanner({ message }: { message: string | null }) {
 	if (!message) return null
@@ -33,6 +37,9 @@ export function SurveysList({
 	isLoading,
 	error,
 	canManage,
+	campaigns,
+	campaignFilter,
+	onCampaignFilter,
 	onCreate,
 }: {
 	table: Table<SurveyRow>
@@ -40,6 +47,9 @@ export function SurveysList({
 	isLoading: boolean
 	error: string | null
 	canManage: boolean
+	campaigns: readonly Campaign[]
+	campaignFilter: string
+	onCampaignFilter: (campaignId: string) => void
 	onCreate: () => void
 }) {
 	const createButton = canManage ? (
@@ -56,8 +66,34 @@ export function SurveysList({
 				actions={createButton}
 			/>
 			<ErrorBanner message={error} />
+			{campaigns.length > 0 ? (
+				<div className="flex flex-wrap items-center gap-2">
+					<label htmlFor="surveys-campaign-filter" className="text-sm">
+						Campagne
+					</label>
+					<select
+						id="surveys-campaign-filter"
+						className={`${NATIVE_SELECT} w-auto min-w-48`}
+						value={campaignFilter}
+						onChange={(event) => onCampaignFilter(event.target.value)}
+					>
+						<option value="">Toutes les campagnes</option>
+						<option value={INDEPENDENT}>Sans campagne</option>
+						{campaigns.map((campaign) => (
+							<option key={campaign.id} value={campaign.id}>
+								{campaign.name}
+							</option>
+						))}
+					</select>
+				</div>
+			) : null}
 			{isLoading ? (
 				<LoadingCard label="Chargement des questionnaires…" />
+			) : isEmpty && campaignFilter !== '' ? (
+				<EmptyState
+					title="Aucun questionnaire pour cette campagne"
+					hint="Rattachez un questionnaire à la campagne depuis ses réglages."
+				/>
 			) : isEmpty ? (
 				<EmptyState
 					title="Aucun questionnaire pour le moment"

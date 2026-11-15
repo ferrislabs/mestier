@@ -35,7 +35,7 @@ import {
 	type SurveyRow,
 	surveyColumns,
 } from '#/pages/survey/ui/survey-columns'
-import { SurveysList } from '#/pages/survey/ui/surveys-list'
+import { INDEPENDENT, SurveysList } from '#/pages/survey/ui/surveys-list'
 
 interface Pending {
 	action: LifecycleAction
@@ -49,6 +49,7 @@ export function SurveysListFeature() {
 	const canManage = useHasPermission('MANAGE_SURVEYS')
 	const [creating, setCreating] = useState(false)
 	const [pending, setPending] = useState<Pending | null>(null)
+	const [campaignFilter, setCampaignFilter] = useState('')
 
 	const surveys = useSurveys(organizationId)
 	const campaigns = useCampaigns(organizationId)
@@ -65,15 +66,22 @@ export function SurveysListFeature() {
 				campaign.name,
 			]),
 		)
-		return (surveys.data?.data ?? []).map((survey) => ({
-			survey,
-			campaignName:
-				survey.campaign_ids
-					.map((id) => names.get(id))
-					.filter((name) => name !== undefined)
-					.join(', ') || null,
-		}))
-	}, [surveys.data, campaigns.data])
+		return (surveys.data?.data ?? [])
+			.filter((survey) =>
+				campaignFilter === ''
+					? true
+					: campaignFilter === INDEPENDENT
+						? survey.campaign_ids.length === 0
+						: survey.campaign_ids.includes(campaignFilter),
+			)
+			.map((survey) => ({
+				survey,
+				campaignNames: survey.campaign_ids.flatMap((id) => {
+					const name = names.get(id)
+					return name === undefined ? [] : [name]
+				}),
+			}))
+	}, [surveys.data, campaigns.data, campaignFilter])
 
 	const goTo = (path: string) =>
 		navigate({ to: buildOrgPath(activeOrganization.slug, path) })
@@ -175,6 +183,9 @@ export function SurveysListFeature() {
 				isLoading={surveys.isLoading}
 				error={surveys.error ? mutationErrorMessage(surveys.error) : null}
 				canManage={canManage}
+				campaigns={campaigns.data?.data ?? []}
+				campaignFilter={campaignFilter}
+				onCampaignFilter={setCampaignFilter}
 				onCreate={() => {
 					createSurvey.reset()
 					setCreating(true)

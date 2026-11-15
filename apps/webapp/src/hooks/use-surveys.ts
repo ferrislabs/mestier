@@ -17,6 +17,10 @@ const CAMPAIGNS_PATH =
 	'/api/v1/organizations/{organization_id}/survey-campaigns'
 const CAMPAIGN_PATH =
 	'/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}'
+const CAMPAIGN_SURVEYS_PATH =
+	'/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}/surveys'
+const SURVEY_GRAPH_VERSION_PATH =
+	'/api/v1/organizations/{organization_id}/surveys/{survey_id}/graph-versions/{version}'
 
 const SURVEY_KEYS = new Set<string>([
 	SURVEYS_PATH,
@@ -25,6 +29,7 @@ const SURVEY_KEYS = new Set<string>([
 	SURVEY_RESPONSE_PATH,
 	CAMPAIGNS_PATH,
 	CAMPAIGN_PATH,
+	CAMPAIGN_SURVEYS_PATH,
 ])
 
 export const SURVEY_LIST_PAGE_SIZE = 100
@@ -80,6 +85,33 @@ export function useCampaign(organizationId: string, campaignId: string) {
 			path: { organization_id: organizationId, campaign_id: campaignId },
 		}).queryOptions,
 		enabled: Boolean(organizationId) && Boolean(campaignId),
+	})
+}
+
+export function useCampaignSurveys(organizationId: string, campaignId: string) {
+	return useQuery({
+		...window.tanstackApi.get(CAMPAIGN_SURVEYS_PATH, {
+			path: { organization_id: organizationId, campaign_id: campaignId },
+		}).queryOptions,
+		enabled: Boolean(organizationId) && Boolean(campaignId),
+	})
+}
+
+export function useSurveyGraphVersion(
+	organizationId: string,
+	surveyId: string,
+	version: number | null,
+) {
+	return useQuery({
+		...window.tanstackApi.get(SURVEY_GRAPH_VERSION_PATH, {
+			path: {
+				organization_id: organizationId,
+				survey_id: surveyId,
+				version: version ?? 0,
+			},
+		}).queryOptions,
+		enabled: Boolean(organizationId) && Boolean(surveyId) && version !== null,
+		staleTime: Number.POSITIVE_INFINITY,
 	})
 }
 

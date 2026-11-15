@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { SurveysListFeature } from '#/pages/survey/feature/surveys-list-feature'
@@ -66,6 +66,41 @@ describe('SurveysListFeature', () => {
 		const closed = await rowOf('Ancien questionnaire')
 		expect(within(closed).getByText('Fermé')).toBeTruthy()
 		expect(within(closed).getByText('Membres')).toBeTruthy()
+	})
+
+	it('shows every campaign as a chip and filters the list by campaign', async () => {
+		installSurveyApi({
+			permissions: ['VIEW_SURVEYS'],
+			surveys: [
+				...SURVEYS,
+				survey({
+					id: 's-shared',
+					title: 'Questionnaire partagé',
+					campaign_ids: ['campaign-1', 'campaign-2'],
+				}),
+			],
+			campaigns: [
+				campaign(),
+				campaign({ id: 'campaign-2', name: 'Session de juin' }),
+			],
+		})
+		await renderSurveyPage(<SurveysListFeature />)
+
+		const shared = await rowOf('Questionnaire partagé')
+		await waitFor(() =>
+			expect(within(shared).getByText('Session de juin')).toBeTruthy(),
+		)
+		expect(within(shared).getByText('Session de mai')).toBeTruthy()
+
+		fireEvent.change(screen.getByLabelText('Campagne'), {
+			target: { value: 'campaign-2' },
+		})
+		await waitFor(() =>
+			expect(screen.queryByRole('button', { name: 'QCM ouvert' })).toBe(null),
+		)
+		expect(
+			screen.getByRole('button', { name: 'Questionnaire partagé' }),
+		).toBeTruthy()
 	})
 
 	it('offers the manage actions to a manager', async () => {
