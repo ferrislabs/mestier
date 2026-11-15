@@ -8,7 +8,8 @@ use mestier_core::{
     QuestionId, QuestionKind, ResponseId, ResponseLocator, ResponseRecord, ResponseRepository,
     ResumeToken, SurveyBlockId, SurveyBranch, SurveyConditionNode, SurveyEdge, SurveyEndNode,
     SurveyError, SurveyGraph, SurveyGraphVersion, SurveyId, SurveyNode, SurveyPatch,
-    SurveyQuestionNode, SurveyRecord, SurveyRepository, SurveyWindow, Visibility,
+    SurveyQuestionDescription, SurveyQuestionNode, SurveyRecord, SurveyRepository, SurveyWindow,
+    Visibility,
 };
 use serde_json::json;
 
@@ -156,6 +157,7 @@ fn drawn(label: &str, identifier: bool, required: bool) -> (SurveyGraph, Questio
                 max_photos: None,
                 identifier,
                 block: None,
+                description: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: end,
@@ -591,6 +593,7 @@ async fn the_artisan_turns_into_a_choice(
                 max_photos: None,
                 identifier: false,
                 block: None,
+                description: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: end,
@@ -1209,6 +1212,7 @@ impl Drawing {
             max_photos: None,
             identifier: false,
             block,
+            description: None,
         }));
         self.named.push((label.to_owned(), id));
         id
@@ -1230,6 +1234,18 @@ impl Drawing {
         self.nodes
             .push(SurveyNode::End(SurveyEndNode { id, message: None }));
         id
+    }
+
+    fn describe(&mut self, question: QuestionId, text: &str) -> Result<(), SurveyError> {
+        let description = SurveyQuestionDescription::new(question, text)?;
+        for node in &mut self.nodes {
+            if let SurveyNode::Question(node) = node
+                && node.id == question
+            {
+                node.description = description.clone();
+            }
+        }
+        Ok(())
     }
 
     fn edge(&mut self, from: QuestionId, to: QuestionId, branch: SurveyBranch) {
@@ -1374,6 +1390,90 @@ async fn the_artisan_gives_a_block_with_a_condition(
     let drawn = drawing.build(world);
     let result = give_graph(world, &survey, drawn).await;
     keep(world, result);
+}
+
+async fn give_described_questions(
+    world: &mut SurveyWorld,
+    survey: &str,
+    labels: &str,
+    texts: [&str; 2],
+) {
+    let (first, second) = two_labels(labels);
+    let mut drawing = Drawing::new(survey);
+    let first = drawing.question(&first, false, None);
+    let second = drawing.question(&second, false, None);
+    let end = drawing.end();
+    drawing.chain(&[first, second, end]);
+    let described = drawing
+        .describe(first, texts[0])
+        .and_then(|()| drawing.describe(second, texts[1]));
+    let drawn = drawing.build(world);
+    let result = give_graph(world, survey, described.and(drawn)).await;
+    keep(world, result);
+}
+
+#[when(
+    expr = "the artisan gives the survey {string} the questions {string} described as {string} and {string}"
+)]
+async fn the_artisan_gives_described_questions(
+    world: &mut SurveyWorld,
+    survey: String,
+    labels: String,
+    first: String,
+    second: String,
+) {
+    give_described_questions(world, &survey, &labels, [&first, &second]).await;
+}
+
+#[when(
+    expr = "the artisan gives the survey {string} the questions {string} described with {int} characters and {string}"
+)]
+async fn the_artisan_gives_a_long_description(
+    world: &mut SurveyWorld,
+    survey: String,
+    labels: String,
+    length: usize,
+    second: String,
+) {
+    let first = "é".repeat(length);
+    give_described_questions(world, &survey, &labels, [&first, &second]).await;
+}
+
+fn description_named(world: &SurveyWorld, survey: &str, label: &str) -> Option<String> {
+    let question = question_named(world, survey, label);
+    stored_survey(world, survey)
+        .graph()
+        .and_then(|graph| graph.question(&question))
+        .and_then(|node| node.description.as_ref())
+        .map(|description| description.as_str().to_owned())
+}
+
+#[then(expr = "the question {string} of the survey {string} is described as {string}")]
+async fn the_question_is_described_as(
+    world: &mut SurveyWorld,
+    label: String,
+    survey: String,
+    text: String,
+) {
+    assert_eq!(description_named(world, &survey, &label), Some(text));
+}
+
+#[then(expr = "the question {string} of the survey {string} has a description of {int} characters")]
+async fn the_question_has_a_description_of(
+    world: &mut SurveyWorld,
+    label: String,
+    survey: String,
+    length: usize,
+) {
+    assert_eq!(
+        description_named(world, &survey, &label).map(|text| text.chars().count()),
+        Some(length)
+    );
+}
+
+#[then(expr = "the question {string} of the survey {string} has no description")]
+async fn the_question_has_no_description(world: &mut SurveyWorld, label: String, survey: String) {
+    assert_eq!(description_named(world, &survey, &label), None);
 }
 
 #[when(expr = "{string} answers the survey {string} with {string}")]

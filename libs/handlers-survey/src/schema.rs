@@ -34,6 +34,9 @@ pub struct SurveyQuestionNodeSchema {
     pub identifier: bool,
     #[serde(default)]
     pub block: Option<SurveyBlockId>,
+    #[serde(default)]
+    #[schema(nullable, max_length = 500)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -110,6 +113,7 @@ mod tests {
                     max_photos: None,
                     identifier: false,
                     block: None,
+                    description: None,
                 }),
                 SurveyNode::Condition(SurveyConditionNode {
                     id: qid(2),
@@ -126,6 +130,7 @@ mod tests {
                     max_photos: Some(3),
                     identifier: false,
                     block: None,
+                    description: None,
                 }),
                 SurveyNode::End(SurveyEndNode {
                     id: qid(4),
@@ -204,6 +209,39 @@ mod tests {
         assert!(matches!(
             unblocked,
             SurveyNodeSchema::Question(SurveyQuestionNodeSchema { block: None, .. })
+        ));
+    }
+
+    #[test]
+    fn the_description_of_a_question_reads_as_the_documented_description() {
+        let json = serde_json::json!({
+            "type": "QUESTION",
+            "id": qid(1),
+            "kind": "TEXT",
+            "label": "Nom",
+            "required": true,
+            "description": "Tel qu'inscrit sur le contrat"
+        });
+        let domain: SurveyNode = serde_json::from_value(json.clone()).unwrap();
+        let documented: SurveyNodeSchema =
+            serde_json::from_value(serde_json::to_value(domain).unwrap()).unwrap();
+        let SurveyNodeSchema::Question(question) = documented else {
+            panic!("a question node reads as a question: {json}");
+        };
+        assert_eq!(
+            question.description.as_deref(),
+            Some("Tel qu'inscrit sur le contrat")
+        );
+        let plain: SurveyNodeSchema = serde_json::from_value(serde_json::json!({
+            "type": "QUESTION", "id": qid(2), "kind": "TEXT", "label": "Nom", "required": true
+        }))
+        .unwrap();
+        assert!(matches!(
+            plain,
+            SurveyNodeSchema::Question(SurveyQuestionNodeSchema {
+                description: None,
+                ..
+            })
         ));
     }
 

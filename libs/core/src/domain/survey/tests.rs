@@ -120,6 +120,7 @@ fn a_respondent_input_error_is_a_validation_error_for_the_core() {
         SurveyError::GraphBlockTooSmall(question),
         SurveyError::GraphBlockNotContiguous(question),
         SurveyError::GraphBlockMemberHasCondition(question),
+        SurveyError::GraphQuestionDescriptionTooLong(question),
         SurveyError::RequiredQuestionUnanswered(question),
         SurveyError::AnswerUnknownQuestion(question),
         SurveyError::AnswerKindMismatch(question),
@@ -203,6 +204,7 @@ fn every_survey_error() -> Vec<SurveyError> {
         SurveyError::GraphBlockTooSmall(q),
         SurveyError::GraphBlockNotContiguous(q),
         SurveyError::GraphBlockMemberHasCondition(q),
+        SurveyError::GraphQuestionDescriptionTooLong(q),
         SurveyError::WindowInverted,
         SurveyError::MetadataEmptyKey,
         SurveyError::MetadataEmptyValue,
@@ -283,6 +285,15 @@ fn the_block_errors_have_their_documented_codes() {
             "graph_block_not_contiguous",
             "graph_block_member_has_condition",
         ]
+    );
+}
+
+#[test]
+fn the_description_error_has_its_documented_code() {
+    let q = super::QuestionId(uuid::Uuid::from_u128(7));
+    assert_eq!(
+        SurveyError::GraphQuestionDescriptionTooLong(q).code(),
+        "graph_question_description_too_long"
     );
 }
 
@@ -403,8 +414,8 @@ mod graph {
     use uuid::Uuid;
 
     use super::super::{
-        Answer, Answers, BlockId, Branch, ConditionNode, Edge, EndNode, Graph, GraphPath, Node,
-        QuestionId, QuestionKind, QuestionNode, SurveyError,
+        Answer, Answers, BlockId, Branch, ConditionNode, Edge, EndNode, Graph, GraphDraft,
+        GraphPath, Node, QuestionDescription, QuestionId, QuestionKind, QuestionNode, SurveyError,
     };
 
     fn id(n: u128) -> QuestionId {
@@ -421,6 +432,7 @@ mod graph {
             max_photos: None,
             identifier: false,
             block: None,
+            description: None,
         })
     }
 
@@ -840,6 +852,7 @@ mod graph {
             max_photos,
             identifier,
             block: None,
+            description: None,
         })
     }
 
@@ -977,6 +990,7 @@ mod graph {
             max_photos: None,
             identifier: false,
             block: None,
+            description: None,
         })
     }
 
@@ -1018,14 +1032,27 @@ mod graph {
         answers: Answers,
         expected_questions: Vec<QuestionId>,
         expected_end: QuestionId,
+        #[serde(default)]
+        expected_descriptions: std::collections::BTreeMap<QuestionId, Option<String>>,
     }
 
     #[test]
     fn the_shared_path_cases_hold() {
         let cases: Vec<PathCase> =
             serde_json::from_str(include_str!("fixtures/paths.json")).unwrap();
-        assert!(cases.len() >= 16);
+        assert!(cases.len() >= 18);
         for case in cases {
+            for (question, expected) in &case.expected_descriptions {
+                assert_eq!(
+                    case.graph
+                        .question(question)
+                        .and_then(|node| node.description.as_ref())
+                        .map(QuestionDescription::as_str),
+                    expected.as_deref(),
+                    "{}",
+                    case.name
+                );
+            }
             assert_eq!(
                 case.graph.path(&case.answers),
                 GraphPath {
@@ -1299,6 +1326,117 @@ mod graph {
         );
         assert_eq!(serde_json::from_value::<Graph>(json).unwrap(), graph);
     }
+
+    fn described_json(description: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "nodes": [
+                {"type": "QUESTION", "id": id(1), "kind": "TEXT", "label": "A", "required": true, "description": description},
+                {"type": "END", "id": id(2)}
+            ],
+            "edges": [{"from": id(1), "to": id(2), "branch": "NEXT"}],
+            "start": id(1)
+        })
+    }
+
+    fn built(description: serde_json::Value) -> Result<Graph, SurveyError> {
+        serde_json::from_value::<GraphDraft>(described_json(description))
+            .unwrap()
+            .build()
+    }
+
+    fn description_of(graph: &Graph) -> Option<String> {
+        graph
+            .question(&id(1))
+            .and_then(|question| question.description.as_ref())
+            .map(|description| description.as_str().to_owned())
+    }
+
+    #[test]
+    fn a_description_is_trimmed() {
+        let description = QuestionDescription::new(id(1), "  Précisez la pièce \n").unwrap();
+        assert_eq!(
+            description.as_ref().map(QuestionDescription::as_str),
+            Some("Précisez la pièce")
+        );
+    }
+
+    #[test]
+    fn a_blank_description_is_none() {
+        assert_eq!(QuestionDescription::new(id(1), " \n\t "), Ok(None));
+        assert_eq!(QuestionDescription::new(id(1), ""), Ok(None));
+    }
+
+    #[test]
+    fn a_description_of_five_hundred_characters_is_accepted() {
+        let text = "é".repeat(500);
+        assert_eq!(
+            QuestionDescription::new(id(1), &format!(" {text} "))
+                .unwrap()
+                .map(|description| description.as_str().chars().count()),
+            Some(500)
+        );
+    }
+
+    #[test]
+    fn a_description_over_five_hundred_characters_is_refused() {
+        assert_eq!(
+            QuestionDescription::new(id(3), &"é".repeat(501)),
+            Err(SurveyError::GraphQuestionDescriptionTooLong(id(3)))
+        );
+    }
+
+    #[test]
+    fn a_graph_draft_keeps_a_trimmed_description() {
+        let graph = built(serde_json::json!("  Une ligne\nPuis une autre  ")).unwrap();
+        assert_eq!(
+            description_of(&graph).as_deref(),
+            Some("Une ligne\nPuis une autre")
+        );
+    }
+
+    #[test]
+    fn a_graph_draft_reads_a_whitespace_description_as_none() {
+        let graph = built(serde_json::json!("   ")).unwrap();
+        assert_eq!(description_of(&graph), None);
+    }
+
+    #[test]
+    fn a_graph_draft_with_a_long_description_names_its_question() {
+        assert_eq!(
+            built(serde_json::json!("x".repeat(501))),
+            Err(SurveyError::GraphQuestionDescriptionTooLong(id(1)))
+        );
+    }
+
+    #[test]
+    fn a_stored_graph_with_a_long_description_cannot_be_read() {
+        assert!(
+            serde_json::from_value::<Graph>(described_json(serde_json::json!("x".repeat(501))))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_question_without_a_description_reads_and_writes_a_null_description() {
+        let json = r#"{"type": "QUESTION", "id": "00000000-0000-0000-0000-000000000001", "kind": "TEXT", "label": "A", "required": true}"#;
+        let node: Node = serde_json::from_str(json).unwrap();
+        assert!(matches!(&node, Node::Question(question) if question.description.is_none()));
+        assert_eq!(
+            serde_json::to_value(&node).unwrap()["description"],
+            serde_json::Value::Null
+        );
+    }
+
+    #[test]
+    fn a_description_survives_a_serde_round_trip() {
+        let graph = built(serde_json::json!("Précisez")).unwrap();
+        let json = serde_json::to_value(&graph).unwrap();
+        assert_eq!(
+            json["nodes"][0]["description"],
+            serde_json::json!("Précisez")
+        );
+        assert_eq!(serde_json::from_value::<Graph>(json).unwrap(), graph);
+    }
 }
 
 mod lifecycle {
@@ -1347,6 +1485,7 @@ mod lifecycle {
             max_photos: None,
             identifier,
             block: None,
+            description: None,
         })
     }
 
@@ -2274,6 +2413,7 @@ mod lifecycle {
                     max_photos,
                     identifier: false,
                     block: None,
+                    description: None,
                 }),
                 end(2),
             ],
@@ -2914,6 +3054,7 @@ mod exports {
                     max_photos: None,
                     identifier: false,
                     block: None,
+                    description: None,
                 }),
                 SurveyNode::Condition(SurveyConditionNode {
                     id: qid(2),

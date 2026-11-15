@@ -3,24 +3,62 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize, Serializer};
 
 use super::error::SurveyError;
-use super::value::{Answer, BlockId, QuestionId, QuestionKind};
+use super::value::{Answer, BlockId, QuestionDescription, QuestionId, QuestionKind};
 
 pub type Answers = BTreeMap<QuestionId, Answer>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "QuestionNodeDraft")]
 pub struct QuestionNode {
     pub id: QuestionId,
     pub kind: QuestionKind,
     pub label: String,
     pub required: bool,
-    #[serde(default)]
     pub options: Vec<String>,
-    #[serde(default)]
     pub max_photos: Option<u8>,
-    #[serde(default)]
     pub identifier: bool,
-    #[serde(default)]
     pub block: Option<BlockId>,
+    pub description: Option<QuestionDescription>,
+}
+
+#[derive(Deserialize)]
+struct QuestionNodeDraft {
+    id: QuestionId,
+    kind: QuestionKind,
+    label: String,
+    required: bool,
+    #[serde(default)]
+    options: Vec<String>,
+    #[serde(default)]
+    max_photos: Option<u8>,
+    #[serde(default)]
+    identifier: bool,
+    #[serde(default)]
+    block: Option<BlockId>,
+    #[serde(default)]
+    description: Option<String>,
+}
+
+impl TryFrom<QuestionNodeDraft> for QuestionNode {
+    type Error = SurveyError;
+
+    fn try_from(draft: QuestionNodeDraft) -> Result<Self, Self::Error> {
+        let description = match &draft.description {
+            Some(text) => QuestionDescription::new(draft.id, text)?,
+            None => None,
+        };
+        Ok(Self {
+            id: draft.id,
+            kind: draft.kind,
+            label: draft.label,
+            required: draft.required,
+            options: draft.options,
+            max_photos: draft.max_photos,
+            identifier: draft.identifier,
+            block: draft.block,
+            description,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,17 +183,48 @@ pub struct Graph {
 }
 
 #[derive(Deserialize)]
-struct GraphDraft {
-    nodes: Vec<Node>,
+#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
+enum NodeDraft {
+    Question(QuestionNodeDraft),
+    Condition(ConditionNode),
+    End(EndNode),
+}
+
+impl TryFrom<NodeDraft> for Node {
+    type Error = SurveyError;
+
+    fn try_from(draft: NodeDraft) -> Result<Self, Self::Error> {
+        Ok(match draft {
+            NodeDraft::Question(question) => Self::Question(question.try_into()?),
+            NodeDraft::Condition(condition) => Self::Condition(condition),
+            NodeDraft::End(end) => Self::End(end),
+        })
+    }
+}
+
+#[derive(Deserialize)]
+pub struct GraphDraft {
+    nodes: Vec<NodeDraft>,
     edges: Vec<Edge>,
     start: QuestionId,
+}
+
+impl GraphDraft {
+    pub fn build(self) -> Result<Graph, SurveyError> {
+        let nodes = self
+            .nodes
+            .into_iter()
+            .map(Node::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        Graph::new(nodes, self.edges, self.start)
+    }
 }
 
 impl TryFrom<GraphDraft> for Graph {
     type Error = SurveyError;
 
     fn try_from(draft: GraphDraft) -> Result<Self, Self::Error> {
-        Self::new(draft.nodes, draft.edges, draft.start)
+        draft.build()
     }
 }
 

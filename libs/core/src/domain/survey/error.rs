@@ -60,6 +60,8 @@ pub enum SurveyError {
     GraphBlockNotContiguous(QuestionId),
     #[error("graph: question {0} is guarded by a condition inside its block")]
     GraphBlockMemberHasCondition(QuestionId),
+    #[error("graph: question {0} has a description longer than 500 characters")]
+    GraphQuestionDescriptionTooLong(QuestionId),
     #[error("window: the start is not before the end")]
     WindowInverted,
     #[error("metadata: a key is empty")]
@@ -193,6 +195,7 @@ impl SurveyError {
             Self::GraphBlockTooSmall(_) => "graph_block_too_small",
             Self::GraphBlockNotContiguous(_) => "graph_block_not_contiguous",
             Self::GraphBlockMemberHasCondition(_) => "graph_block_member_has_condition",
+            Self::GraphQuestionDescriptionTooLong(_) => "graph_question_description_too_long",
             Self::WindowInverted => "window_inverted",
             Self::MetadataEmptyKey => "metadata_empty_key",
             Self::MetadataEmptyValue => "metadata_empty_value",
@@ -269,6 +272,7 @@ impl SurveyError {
             | Self::GraphBlockTooSmall(id)
             | Self::GraphBlockNotContiguous(id)
             | Self::GraphBlockMemberHasCondition(id)
+            | Self::GraphQuestionDescriptionTooLong(id)
             | Self::RequiredQuestionUnanswered(id)
             | Self::AnswerNotFinite(id)
             | Self::AnswerUnknownQuestion(id)
@@ -372,6 +376,7 @@ impl From<SurveyError> for CoreError {
             | SurveyError::GraphBlockTooSmall(_)
             | SurveyError::GraphBlockNotContiguous(_)
             | SurveyError::GraphBlockMemberHasCondition(_)
+            | SurveyError::GraphQuestionDescriptionTooLong(_)
             | SurveyError::WindowInverted
             | SurveyError::MetadataEmptyKey
             | SurveyError::MetadataEmptyValue

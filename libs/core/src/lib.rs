@@ -124,9 +124,10 @@ pub use domain::{
     SupplierContact, SupplierContactInput, SupplierError, SupplierField, SupplierOutcome,
     SupplierProfile, SupplierProfileInput, Survey, SurveyBlockId, SurveyBranch,
     SurveyConditionNode, SurveyEdge, SurveyEmailAddress, SurveyEndNode, SurveyError, SurveyGraph,
-    SurveyGraphVersion, SurveyId, SurveyNode, SurveyNodeRef, SurveyPhoneNumber, SurveyQuestionNode,
-    SurveyRecord, SurveyResponse, SurveyResponsePhase, SurveyState, SurveySummary,
-    SurveyVersionedGraph, SurveyWindow, VatSummary, Visibility, build_ledger,
+    SurveyGraphDraft, SurveyGraphVersion, SurveyId, SurveyNode, SurveyNodeRef, SurveyPhoneNumber,
+    SurveyQuestionDescription, SurveyQuestionNode, SurveyRecord, SurveyResponse,
+    SurveyResponsePhase, SurveyState, SurveySummary, SurveyVersionedGraph, SurveyWindow,
+    VatSummary, Visibility, build_ledger,
 };
 
 /// The profitability calculation, and the port it reads through. Exposed so the

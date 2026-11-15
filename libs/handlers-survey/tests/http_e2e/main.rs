@@ -1,5 +1,6 @@
 mod blocks;
 mod campaign;
+mod descriptions;
 mod editable;
 mod features;
 mod harness;

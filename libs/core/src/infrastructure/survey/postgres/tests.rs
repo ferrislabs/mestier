@@ -41,6 +41,7 @@ fn graph(identifier: bool) -> SurveyGraph {
                 max_photos: None,
                 identifier,
                 block: None,
+                description: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(11),
@@ -903,6 +904,7 @@ fn labelled(label: &str) -> SurveyGraph {
                 max_photos: None,
                 identifier: false,
                 block: None,
+                description: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(11),

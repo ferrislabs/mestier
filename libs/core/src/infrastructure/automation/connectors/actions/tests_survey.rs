@@ -32,6 +32,7 @@ fn question(id: u128, kind: QuestionKind, label: &str, options: &[&str]) -> Node
         max_photos: None,
         identifier: false,
         block: None,
+        description: None,
     })
 }
 

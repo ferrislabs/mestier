@@ -461,6 +461,30 @@ Feature: Surveys, the questionnaires answered by members and by the public
     And the refusal names the question "Pays" of the survey "Satisfaction"
     And the graph version 1 of the survey "Satisfaction" asks the question "Nom"
 
+  @spec-survey-30
+  Scenario: A question description over 500 characters is refused
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    When the artisan gives the survey "Satisfaction" the questions "Ville, Pays" described with 501 characters and ""
+    Then the refusal reason is "graph_question_description_too_long"
+    And the refusal names the question "Ville" of the survey "Satisfaction"
+    And the graph version 1 of the survey "Satisfaction" asks the question "Nom"
+
+  @spec-survey-30
+  Scenario: A question description is trimmed and a blank one is dropped
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    When the artisan gives the survey "Satisfaction" the questions "Ville, Pays" described as "  Tel qu'inscrit sur le contrat  " and "   "
+    Then nothing is refused
+    And the question "Ville" of the survey "Satisfaction" is described as "Tel qu'inscrit sur le contrat"
+    And the question "Pays" of the survey "Satisfaction" has no description
+
+  @spec-survey-30
+  Scenario: A description of exactly 500 characters is kept
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    When the artisan gives the survey "Satisfaction" the questions "Ville, Pays" described with 500 characters and ""
+    Then nothing is refused
+    And the question "Ville" of the survey "Satisfaction" has a description of 500 characters
+    And the question "Pays" of the survey "Satisfaction" has no description
+
   @spec-survey-27
   Scenario: A block skipped by its rule needs none of its required answers
     Given an opened MEMBERS survey "Bilan" asking the block "Date, Lieu" only when "Oui" is chosen at the question "Suivi"

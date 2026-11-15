@@ -1484,5 +1484,105 @@
       "00000000-0000-0000-0000-000000000005"
     ],
     "expected_end": "00000000-0000-0000-0000-000000000006"
+  },
+  {
+    "name": "question with a description",
+    "graph": {
+      "nodes": [
+        {
+          "type": "QUESTION",
+          "id": "00000000-0000-0000-0000-000000000001",
+          "kind": "TEXT",
+          "label": "Question 1",
+          "required": true,
+          "options": [],
+          "max_photos": null,
+          "identifier": false,
+          "description": "Indiquez le nom inscrit sur le contrat\nsans abreviation"
+        },
+        {
+          "type": "QUESTION",
+          "id": "00000000-0000-0000-0000-000000000002",
+          "kind": "TEXT",
+          "label": "Question 2",
+          "required": true,
+          "options": [],
+          "max_photos": null,
+          "identifier": false,
+          "description": null
+        },
+        {
+          "type": "END",
+          "id": "00000000-0000-0000-0000-000000000003",
+          "message": null
+        }
+      ],
+      "edges": [
+        {
+          "from": "00000000-0000-0000-0000-000000000001",
+          "to": "00000000-0000-0000-0000-000000000002",
+          "branch": "NEXT"
+        },
+        {
+          "from": "00000000-0000-0000-0000-000000000002",
+          "to": "00000000-0000-0000-0000-000000000003",
+          "branch": "NEXT"
+        }
+      ],
+      "start": "00000000-0000-0000-0000-000000000001"
+    },
+    "answers": {
+      "00000000-0000-0000-0000-000000000001": {
+        "Text": "Jean"
+      }
+    },
+    "expected_questions": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "expected_end": "00000000-0000-0000-0000-000000000003",
+    "expected_descriptions": {
+      "00000000-0000-0000-0000-000000000001": "Indiquez le nom inscrit sur le contrat\nsans abreviation",
+      "00000000-0000-0000-0000-000000000002": null
+    }
+  },
+  {
+    "name": "whitespace description normalised to none",
+    "graph": {
+      "nodes": [
+        {
+          "type": "QUESTION",
+          "id": "00000000-0000-0000-0000-000000000001",
+          "kind": "TEXT",
+          "label": "Question 1",
+          "required": true,
+          "options": [],
+          "max_photos": null,
+          "identifier": false,
+          "description": " \n\t "
+        },
+        {
+          "type": "END",
+          "id": "00000000-0000-0000-0000-000000000002",
+          "message": null
+        }
+      ],
+      "edges": [
+        {
+          "from": "00000000-0000-0000-0000-000000000001",
+          "to": "00000000-0000-0000-0000-000000000002",
+          "branch": "NEXT"
+        }
+      ],
+      "start": "00000000-0000-0000-0000-000000000001"
+    },
+    "answers": {},
+    "expected_questions": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "expected_end": "00000000-0000-0000-0000-000000000002",
+    "expected_descriptions": {
+      "00000000-0000-0000-0000-000000000001": null
+    }
   }
 ]

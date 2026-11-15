@@ -61,6 +61,29 @@ impl Display for BlockId {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct QuestionDescription(String);
+
+impl QuestionDescription {
+    pub const MAX_CHARS: usize = 500;
+
+    pub fn new(question: QuestionId, text: &str) -> Result<Option<Self>, SurveyError> {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return Ok(None);
+        }
+        if trimmed.chars().count() > Self::MAX_CHARS {
+            return Err(SurveyError::GraphQuestionDescriptionTooLong(question));
+        }
+        Ok(Some(Self(trimmed.to_owned())))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum QuestionKind {

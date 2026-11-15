@@ -83,7 +83,7 @@ fn response_cap(cap: u32) -> Result<NonZeroU32, ApiError> {
     ),
     request_body(
         content = UpdateSurveyRequest,
-        description = "Every field is optional; an explicit null clears description, response_cap or graph (a draft only). campaign_ids absent or null leaves the campaigns unchanged; an array, even empty, replaces the whole set, in attachment order. An unknown field (such as the former campaign_id) is refused with 422. The graph is the domain form: QUESTION, CONDITION and END nodes, edges with a NEXT, THEN or ELSE branch, and the start question. A QUESTION node may carry a block (uuid, null or absent outside a block): the questions sharing a block are shown on one screen, so they form a chain of NEXT edges entered only through its first question, a block has at least two questions, and no condition sits inside it or depends on a question of the block it guards (422 graph_block_too_small, graph_block_not_contiguous, graph_block_member_has_condition, with the question_id).",
+        description = "Every field is optional; an explicit null clears description, response_cap or graph (a draft only). campaign_ids absent or null leaves the campaigns unchanged; an array, even empty, replaces the whole set, in attachment order. An unknown field (such as the former campaign_id) is refused with 422. The graph is the domain form: QUESTION, CONDITION and END nodes, edges with a NEXT, THEN or ELSE branch, and the start question. A QUESTION node may carry a block (uuid, null or absent outside a block): the questions sharing a block are shown on one screen, so they form a chain of NEXT edges entered only through its first question, a block has at least two questions, and no condition sits inside it or depends on a question of the block it guards (422 graph_block_too_small, graph_block_not_contiguous, graph_block_member_has_condition, with the question_id). A QUESTION node may carry a description (free text, null or absent when none) shown under its label: it is trimmed, a blank one is stored as null, and it holds at most 500 characters (422 graph_question_description_too_long, with the question_id).",
         example = json!({
             "title": "Satisfaction des stagiaires",
             "allow_multiple_responses": false,
@@ -91,7 +91,7 @@ fn response_cap(cap: u32) -> Result<NonZeroU32, ApiError> {
             "metadata": {"promotion": "2026"},
             "graph": {
                 "nodes": [
-                    {"type": "QUESTION", "id": "0195f0a0-0000-7000-8000-000000000001", "kind": "SINGLE_CHOICE", "label": "Le stage vous a-t-il plu ?", "required": true, "options": ["Oui", "Non"], "block": null},
+                    {"type": "QUESTION", "id": "0195f0a0-0000-7000-8000-000000000001", "kind": "SINGLE_CHOICE", "label": "Le stage vous a-t-il plu ?", "required": true, "options": ["Oui", "Non"], "block": null, "description": "Pensez à l'accueil, aux missions et à l'encadrement."},
                     {"type": "CONDITION", "id": "0195f0a0-0000-7000-8000-000000000002", "question": "0195f0a0-0000-7000-8000-000000000001", "option": "Non", "checked": true},
                     {"type": "QUESTION", "id": "0195f0a0-0000-7000-8000-000000000003", "kind": "LONG_TEXT", "label": "Pourquoi ?", "required": false, "block": "0195f0a0-0000-7000-8000-0000000000b1"},
                     {"type": "QUESTION", "id": "0195f0a0-0000-7000-8000-000000000005", "kind": "LONG_TEXT", "label": "Que faudrait-il changer ?", "required": false, "block": "0195f0a0-0000-7000-8000-0000000000b1"},
@@ -236,6 +236,27 @@ mod tests {
                 ..
             }))
         ));
+    }
+
+    #[test]
+    fn a_description_over_five_hundred_characters_is_refused_with_its_question() {
+        let question = "0195f0a0-0000-7000-8000-000000000001";
+        let end = "0195f0a0-0000-7000-8000-000000000003";
+        let refused = read(serde_json::json!({"graph": {
+            "nodes": [
+                {"type": "QUESTION", "id": question, "kind": "TEXT", "label": "A", "required": false, "description": "x".repeat(501)},
+                {"type": "END", "id": end}
+            ],
+            "edges": [{"from": question, "to": end, "branch": "NEXT"}],
+            "start": question
+        }}))
+        .patch();
+        let Err(ApiError::Refused(refusal)) = refused else {
+            panic!("a description over 500 characters must be refused");
+        };
+        assert_eq!(refusal.reason, "graph_question_description_too_long");
+        assert_eq!(refusal.kind, common::RefusalKind::Validation);
+        assert_eq!(refusal.question_id, question.parse().ok());
     }
 
     #[test]

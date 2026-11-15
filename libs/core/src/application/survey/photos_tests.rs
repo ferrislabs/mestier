@@ -118,6 +118,7 @@ fn photo_graph() -> SurveyGraph {
                 max_photos: None,
                 identifier: false,
                 block: None,
+                description: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(21),

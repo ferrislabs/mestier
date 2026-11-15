@@ -48,6 +48,7 @@ fn graph() -> SurveyGraph {
                 max_photos: None,
                 identifier: false,
                 block: None,
+                description: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(11),
@@ -1032,6 +1033,7 @@ fn second_graph() -> SurveyGraph {
                 max_photos: None,
                 identifier: false,
                 block: None,
+                description: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(21),
@@ -1246,6 +1248,7 @@ fn relabelled(label: &str) -> SurveyGraph {
                 max_photos: None,
                 identifier: false,
                 block: None,
+                description: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(11),

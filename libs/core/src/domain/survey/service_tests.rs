@@ -67,6 +67,7 @@ fn graph(identifier: bool) -> Graph {
                 max_photos: None,
                 identifier,
                 block: None,
+                description: None,
             }),
             Node::End(EndNode {
                 id: qid(11),
@@ -1209,6 +1210,7 @@ fn other_graph() -> Graph {
                 max_photos: None,
                 identifier: false,
                 block: None,
+                description: None,
             }),
             Node::End(EndNode {
                 id: qid(21),

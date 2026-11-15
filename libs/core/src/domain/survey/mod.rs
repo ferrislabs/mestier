@@ -31,14 +31,16 @@ pub use aggregate::{Closed, Draft, GraphVersion, Opened, Survey, VersionedGraph}
 pub use campaign::{Campaign, CampaignStatus, Window};
 pub use error::SurveyError;
 pub use graph::{
-    Answers, Branch, ConditionNode, Edge, EndNode, Graph, GraphPath, Node, NodeRef, QuestionNode,
+    Answers, Branch, ConditionNode, Edge, EndNode, Graph, GraphDraft, GraphPath, Node, NodeRef,
+    QuestionNode,
 };
 pub use metadata::Metadata;
 pub use record::{ResponseRecord, SurveyRecord, SurveyState, SurveySummary};
 pub use respondent::RespondentSurvey;
 pub use response::{Completed, InProgress, Phase, Response, ResumeToken};
 pub use value::{
-    Answer, BlockId, EmailAddress, PhoneNumber, PublicSlug, QuestionId, QuestionKind, Visibility,
+    Answer, BlockId, EmailAddress, PhoneNumber, PublicSlug, QuestionDescription, QuestionId,
+    QuestionKind, Visibility,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
