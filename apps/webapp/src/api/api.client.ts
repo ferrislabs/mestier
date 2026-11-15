@@ -13765,6 +13765,7 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}/surveys";
     requestFormat: "json";
     parameters: {
+      query: Partial<{ page: number; per_page: number }>;
       path: { organization_id: string; campaign_id: string };
     };
     responses: {

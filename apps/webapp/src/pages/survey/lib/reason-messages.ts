@@ -98,6 +98,10 @@ export const REASON_MESSAGES = {
 		'La visibilité d’un questionnaire ouvert ne change plus : dupliquez-le pour en changer.',
 	graph_version_invalid: 'Cette version du questionnaire n’est pas valide.',
 	graph_version_not_found: 'Cette version du questionnaire est introuvable.',
+	graph_version_exhausted:
+		'Ce questionnaire a atteint son dernier numéro de version : dupliquez-le pour continuer à le modifier.',
+	response_graph_version_mismatch:
+		'La réponse ne correspond pas à la version actuelle du questionnaire. Rechargez la page puis réessayez.',
 } as const satisfies Record<string, string>
 
 export type BackendReason = keyof typeof REASON_MESSAGES
