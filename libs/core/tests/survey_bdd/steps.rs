@@ -529,6 +529,33 @@ async fn the_artisan_opens(world: &mut SurveyWorld, survey: String) {
     keep(world, result);
 }
 
+#[when(expr = "the artisan reopens the survey {string}")]
+async fn the_artisan_reopens(world: &mut SurveyWorld, survey: String) {
+    let result = world
+        .surveys()
+        .reopen(world.organization_id(), survey_named(world, &survey))
+        .await;
+    keep(world, result);
+}
+
+#[when(expr = "two artisans reopen the survey {string} at the same time")]
+async fn two_artisans_reopen(world: &mut SurveyWorld, survey: String) {
+    let organization_id = world.organization_id();
+    let id = survey_named(world, &survey);
+    let mut first = world.surveys();
+    let mut second = world.surveys();
+    let (first, second) = tokio::join!(
+        first.reopen(organization_id, id),
+        second.reopen(organization_id, id)
+    );
+    assert!(
+        first.is_ok() != second.is_ok(),
+        "exactly one reopening succeeds: {first:?} {second:?}"
+    );
+    keep(world, first);
+    keep(world, second);
+}
+
 #[when(expr = "the artisan retitles the survey {string} to {string}")]
 async fn the_artisan_retitles(world: &mut SurveyWorld, survey: String, title: String) {
     let result = world
@@ -781,6 +808,21 @@ async fn the_survey_stays_visible_to(world: &mut SurveyWorld, survey: String, ki
         stored_survey(world, &survey).visibility(),
         visibility(&kind)
     );
+}
+
+#[then(expr = "the survey {string} keeps the public slug it was opened with")]
+async fn keeps_the_public_slug(world: &mut SurveyWorld, survey: String) {
+    let id = survey_named(world, &survey);
+    let expected = PublicSlug::new(format!("slug-{}", id.0.simple())).expect("a valid slug");
+    match stored_survey(world, &survey) {
+        SurveyRecord::Opened(opened) => assert_eq!(opened.public_slug(), Some(&expected)),
+        other => panic!("expected an opened survey, got {other:?}"),
+    }
+    let found = repository::surveys(&world.store)
+        .find_by_public_slug(&expected)
+        .await
+        .expect("the slug is looked up");
+    assert_eq!(found.map(|record| record.id()), Some(id));
 }
 
 #[then(expr = "the survey {string} is titled {string}")]

@@ -537,4 +537,12 @@ impl Survey<Closed> {
     pub fn accepts(&self, _campaigns: &[Campaign], _now: DateTime<Utc>) -> Result<(), SurveyError> {
         Err(SurveyError::SurveyClosed)
     }
+
+    pub fn reopen(mut self) -> Survey<Opened> {
+        self.body.closed_at = None;
+        Survey {
+            body: self.body,
+            definition: self.definition,
+        }
+    }
 }

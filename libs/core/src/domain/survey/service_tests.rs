@@ -201,6 +201,10 @@ fn surveys_holding(record: SurveyRecord) -> MockSurveyRepository {
     surveys
         .expect_store_graph_version()
         .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+    surveys.expect_reopen().returning(|survey, _| {
+        let saved = SurveyRecord::from(survey.clone());
+        Box::pin(async move { Ok(saved) })
+    });
     surveys
 }
 
@@ -219,6 +223,18 @@ fn surveys_stored(stored: &Arc<Mutex<SurveyRecord>>) -> MockSurveyRepository {
         *write.lock().unwrap() = survey.clone();
         let saved = survey.clone();
         Box::pin(async move { Ok(saved) })
+    });
+    let reopen = Arc::clone(stored);
+    surveys.expect_reopen().returning(move |survey, closed_at| {
+        let mut stored = reopen.lock().unwrap();
+        let result = match &*stored {
+            SurveyRecord::Closed(current) if current.closed_at() == Some(closed_at) => {
+                *stored = SurveyRecord::from(survey.clone());
+                Ok(stored.clone())
+            }
+            _ => Err(SurveyError::SurveyStateChanged.into()),
+        };
+        Box::pin(async move { result })
     });
     surveys
         .expect_has_graph_version()
@@ -398,7 +414,72 @@ async fn every_survey_transition_loads_the_survey_locked() {
         .unwrap();
     service.open(org(), survey_id(), at(1), None).await.unwrap();
     service.close(org(), survey_id(), at(2)).await.unwrap();
+    service.reopen(org(), survey_id()).await.unwrap();
+    service.close(org(), survey_id(), at(3)).await.unwrap();
     service.delete(org(), survey_id()).await.unwrap();
+}
+
+#[tokio::test]
+async fn reopening_a_closed_survey_emits_survey_reopened_with_campaign_metadata() {
+    let shape = Shape {
+        campaign: Some(campaign_id()),
+        ..Shape::default()
+    };
+    let opened = opened(&shape);
+    let closed = opened.clone().close(at(3)).unwrap();
+    let emitter = RecordingEmitter::new();
+    let mut service: Surveys<'_> = SurveyService::new(
+        surveys_holding(closed.into()),
+        campaigns_holding(Some(campaign(Window::new(None, None).unwrap(), at(1)))),
+        &emitter,
+    );
+
+    let survey = service.reopen(org(), survey_id()).await.unwrap();
+
+    assert_eq!(survey, opened);
+    assert_eq!(survey.closed_at(), None);
+    assert_eq!(emitter.names(), vec!["survey.reopened"]);
+    let event = emitter.only("survey.reopened");
+    assert_eq!(event.payload["campaign_ids"], json!([campaign_id().0]));
+    assert_eq!(
+        event.payload["metadata"],
+        json!({"season": "spring", "theme": "survey"})
+    );
+}
+
+#[tokio::test]
+async fn reopening_an_opened_or_a_draft_survey_is_refused() {
+    for record in [
+        SurveyRecord::from(opened(&Shape::default())),
+        SurveyRecord::from(draft(&Shape::default())),
+    ] {
+        let emitter = RecordingEmitter::new();
+        let mut service: Surveys<'_> =
+            SurveyService::new(surveys_holding(record), campaigns_holding(None), &emitter);
+
+        refused(
+            service.reopen(org(), survey_id()).await,
+            SurveyError::SurveyNotClosed,
+        );
+        assert!(emitter.names().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn reopening_twice_emits_survey_reopened_once() {
+    let closed = opened(&Shape::default()).close(at(3)).unwrap();
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(closed)));
+    let emitter = RecordingEmitter::new();
+    let mut first: Surveys<'_> =
+        SurveyService::new(surveys_stored(&stored), campaigns_holding(None), &emitter);
+    let mut second: Surveys<'_> =
+        SurveyService::new(surveys_stored(&stored), campaigns_holding(None), &emitter);
+
+    first.reopen(org(), survey_id()).await.unwrap();
+    let again = second.reopen(org(), survey_id()).await;
+
+    refused(again, SurveyError::SurveyNotClosed);
+    assert_eq!(emitter.names(), vec!["survey.reopened"]);
 }
 
 #[tokio::test]

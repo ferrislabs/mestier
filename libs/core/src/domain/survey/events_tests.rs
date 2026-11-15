@@ -4,8 +4,8 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::events::{
-    SurveyCampaignEnded, SurveyCampaignStarted, SurveyOpened, SurveyResponseCompleted,
-    SurveyResponseSubmitted, descriptors, emitted_events,
+    SurveyCampaignEnded, SurveyCampaignStarted, SurveyOpened, SurveyReopened,
+    SurveyResponseCompleted, SurveyResponseSubmitted, descriptors, emitted_events,
 };
 use super::{
     Answer, Answers, Branch, Campaign, CampaignId, ConditionNode, Draft, Edge, EndNode, Graph,
@@ -211,6 +211,53 @@ fn survey_opened_payload_is_locked() {
                 "opened_at": "2026-03-01T12:00:00Z",
             },
         })
+    );
+}
+
+#[test]
+fn survey_reopened_payload_is_locked() {
+    let survey = opened(&[]).close(at(2)).unwrap().reopen();
+    let event = SurveyReopened::new(&survey, &[]).unwrap();
+    assert_eq!(event.name(), "survey.reopened");
+    assert_eq!(event.version(), 1);
+    assert_eq!(event.subject().kind, "survey");
+    assert_eq!(event.subject().id, Some(Uuid::from_u128(1)));
+    assert_eq!(
+        event.payload(),
+        json!({
+            "survey_id": Uuid::from_u128(1),
+            "campaign_ids": [],
+            "graph_version": 1,
+            "metadata": { "theme": "survey" },
+            "survey": {
+                "id": Uuid::from_u128(1),
+                "organization_id": Uuid::from_u128(900),
+                "title": "Satisfaction",
+                "description": "Après chantier",
+                "visibility": "MEMBERS",
+                "allow_multiple_responses": false,
+                "response_cap": null,
+                "opened_at": "2026-03-01T12:00:00Z",
+            },
+        })
+    );
+}
+
+#[test]
+fn survey_reopened_carries_the_campaign_ids_and_merged_metadata_and_checks_the_campaigns() {
+    let campaign = campaign();
+    let survey = opened(&[campaign.id()]).close(at(2)).unwrap().reopen();
+    let payload = SurveyReopened::new(&survey, std::slice::from_ref(&campaign))
+        .unwrap()
+        .payload();
+    assert_eq!(payload["campaign_ids"], json!([Uuid::from_u128(2)]));
+    assert_eq!(
+        payload["metadata"],
+        json!({ "season": "spring", "theme": "survey" })
+    );
+    assert_eq!(
+        SurveyReopened::new(&survey, &[]).err(),
+        Some(SurveyError::SurveyCampaignMismatch)
     );
 }
 
@@ -489,7 +536,7 @@ fn every_emitted_event_has_a_descriptor() {
         .collect();
     emitted.sort_unstable();
     described.sort_unstable();
-    assert_eq!(emitted.len(), 5);
+    assert_eq!(emitted.len(), 6);
     assert_eq!(emitted, described);
 }
 
@@ -505,6 +552,8 @@ fn real_payloads() -> Vec<(&'static str, u16, Value)> {
         .unwrap();
     let completed = completed();
     let opened_event = SurveyOpened::new(&survey, std::slice::from_ref(&campaign)).unwrap();
+    let reopened = survey.clone().close(at(2)).unwrap().reopen();
+    let reopened_event = SurveyReopened::new(&reopened, std::slice::from_ref(&campaign)).unwrap();
     let submitted =
         SurveyResponseSubmitted::new(&survey, std::slice::from_ref(&campaign), &in_progress)
             .unwrap();
@@ -520,6 +569,11 @@ fn real_payloads() -> Vec<(&'static str, u16, Value)> {
             opened_event.version(),
             opened_event.payload(),
         ),
+        (
+            reopened_event.name(),
+            reopened_event.version(),
+            reopened_event.payload(),
+        ),
         (submitted.name(), submitted.version(), submitted.payload()),
         (
             completed_event.name(),
@@ -534,7 +588,7 @@ fn real_payloads() -> Vec<(&'static str, u16, Value)> {
 #[test]
 fn every_event_version_matches_its_descriptor_and_its_emitted_line() {
     let real = real_payloads();
-    assert_eq!(real.len(), 5);
+    assert_eq!(real.len(), 6);
     let emitted = emitted_events();
     let descriptors = descriptors();
     for (name, version, _) in real {

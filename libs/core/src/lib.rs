@@ -238,8 +238,8 @@ pub use domain::{
     },
     support::thread_service::NewAttachment,
     survey::events::{
-        SurveyCampaignEnded, SurveyCampaignStarted, SurveyOpened, SurveyResponseCompleted,
-        SurveyResponseSubmitted,
+        SurveyCampaignEnded, SurveyCampaignStarted, SurveyOpened, SurveyReopened,
+        SurveyResponseCompleted, SurveyResponseSubmitted,
     },
     survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository},
     survey::service::{

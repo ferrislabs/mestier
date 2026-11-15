@@ -138,6 +138,8 @@ pub enum SurveyError {
     SurveyNotDraft,
     #[error("survey: is not opened")]
     SurveyNotOpened,
+    #[error("survey: is not closed")]
+    SurveyNotClosed,
     #[error("survey: has responses and cannot be deleted")]
     SurveyHasResponses,
     #[error("campaign: has surveys and cannot be deleted")]
@@ -233,6 +235,7 @@ impl SurveyError {
             Self::ResponseNotFound => "response_not_found",
             Self::SurveyNotDraft => "survey_not_draft",
             Self::SurveyNotOpened => "survey_not_opened",
+            Self::SurveyNotClosed => "survey_not_closed",
             Self::SurveyHasResponses => "survey_has_responses",
             Self::CampaignHasSurveys => "campaign_has_surveys",
             Self::ResponseAlreadyCompleted => "response_already_completed",
@@ -316,6 +319,7 @@ impl SurveyError {
             | Self::ResponseNotFound
             | Self::SurveyNotDraft
             | Self::SurveyNotOpened
+            | Self::SurveyNotClosed
             | Self::SurveyHasResponses
             | Self::CampaignHasSurveys
             | Self::ResponseAlreadyCompleted
@@ -413,6 +417,7 @@ impl From<SurveyError> for CoreError {
             | SurveyError::ResponseSurveyMismatch
             | SurveyError::SurveyNotDraft
             | SurveyError::SurveyNotOpened
+            | SurveyError::SurveyNotClosed
             | SurveyError::SurveyHasResponses
             | SurveyError::CampaignHasSurveys
             | SurveyError::ResponseAlreadyCompleted

@@ -256,6 +256,23 @@ impl MestierUseCase {
     }
 
     #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
+    pub async fn reopen_survey(&self, command: SurveyCommand) -> Result<Survey<Opened>, CoreError> {
+        guard_manage(
+            command.actor,
+            command.organization_id,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
+            authz,
+        )
+        .await?;
+
+        let mut service =
+            SurveyService::new(survey_repository, survey_campaign_repository, emitter);
+        service.reopen(command.organization_id, command.id).await
+    }
+
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn duplicate_survey(
         &self,
         command: SurveyCommand,

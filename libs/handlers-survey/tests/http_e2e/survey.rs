@@ -366,3 +366,71 @@ async fn invalid_survey_input_is_unprocessable_and_a_state_conflict_is_a_conflic
 
     app.cleanup().await;
 }
+
+#[tokio::test]
+#[ignore = "requires live postgres and redis"]
+async fn a_manager_reopens_a_closed_survey_once_and_keeps_its_public_slug() {
+    let app = harness::start().await;
+    let manager = Some(app.manager.as_str());
+    let id = app
+        .opened_survey_as(|s| app.org(s), &app.manager, "PUBLIC")
+        .await;
+    let reopen = app.org(&format!("/surveys/{id}/reopen"));
+
+    let (status, answer) = app.call(Method::POST, &reopen, manager, None).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{answer}");
+    assert_eq!(answer["details"]["reason"], "survey_not_closed", "{answer}");
+
+    let (status, closed) = app
+        .call(
+            Method::POST,
+            &app.org(&format!("/surveys/{id}/close")),
+            manager,
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{closed}");
+
+    for token in [None, Some(app.member.as_str()), Some(app.viewer.as_str())] {
+        let (status, answer) = app.call(Method::POST, &reopen, token, None).await;
+        let expected = if token.is_none() {
+            StatusCode::UNAUTHORIZED
+        } else {
+            StatusCode::FORBIDDEN
+        };
+        assert_eq!(status, expected, "{answer}");
+    }
+
+    let (status, reopened) = app.call(Method::POST, &reopen, manager, None).await;
+    assert_eq!(status, StatusCode::OK, "{reopened}");
+    assert_eq!(reopened["data"]["status"], "OPENED", "{reopened}");
+    assert_eq!(reopened["data"]["closed_at"], json!(null), "{reopened}");
+    assert_eq!(
+        reopened["data"]["opened_at"], closed["data"]["opened_at"],
+        "{reopened}"
+    );
+    assert!(reopened["data"]["public_slug"].is_string(), "{reopened}");
+    assert_eq!(
+        reopened["data"]["public_slug"], closed["data"]["public_slug"],
+        "{reopened}"
+    );
+
+    let (status, answer) = app.call(Method::POST, &reopen, manager, None).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{answer}");
+    assert_eq!(answer["details"]["reason"], "survey_not_closed", "{answer}");
+
+    let foreign = app
+        .draft_survey(|s| app.other_org(s), &app.other_manager, "MEMBERS")
+        .await;
+    let (status, answer) = app
+        .call(
+            Method::POST,
+            &app.org(&format!("/surveys/{foreign}/reopen")),
+            manager,
+            None,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{answer}");
+
+    app.cleanup().await;
+}

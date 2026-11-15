@@ -85,6 +85,7 @@ fn a_state_conflict_stays_a_conflict_for_the_core() {
         SurveyError::CampaignHasSurveys,
         SurveyError::SurveyWithoutGraph,
         SurveyError::SurveyClosed,
+        SurveyError::SurveyNotClosed,
     ] {
         let refusal = refusal_of(error);
         assert_eq!(
@@ -152,6 +153,7 @@ fn a_required_question_refusal_names_its_question() {
     );
     assert_eq!(SurveyError::SurveyClosed.code(), "survey_closed");
     assert_eq!(SurveyError::SurveyClosed.question_id(), None);
+    assert_eq!(SurveyError::SurveyNotClosed.code(), "survey_not_closed");
 }
 
 #[test]
@@ -242,6 +244,7 @@ fn every_survey_error() -> Vec<SurveyError> {
         SurveyError::ResponseNotFound,
         SurveyError::SurveyNotDraft,
         SurveyError::SurveyNotOpened,
+        SurveyError::SurveyNotClosed,
         SurveyError::SurveyHasResponses,
         SurveyError::CampaignHasSurveys,
         SurveyError::ResponseAlreadyCompleted,
@@ -2273,6 +2276,21 @@ mod lifecycle {
             opened().close(before).err(),
             Some(SurveyError::SurveyClosedBeforeOpened)
         );
+    }
+
+    #[test]
+    fn a_reopened_survey_accepts_again_and_keeps_its_slug_graph_and_opening() {
+        let opened = opened();
+        let closed = opened.clone().close(at(2)).unwrap();
+        let reopened: Survey<Opened> = closed.reopen();
+        assert_eq!(reopened.closed_at(), None);
+        assert_eq!(reopened.opened_at(), opened.opened_at());
+        assert_eq!(reopened.public_slug(), Some(&slug()));
+        assert_eq!(reopened.visibility(), opened.visibility());
+        assert_eq!(reopened.graph(), opened.graph());
+        assert_eq!(reopened.version(), opened.version());
+        assert_eq!(reopened.accepts(&[], at(3)), Ok(()));
+        assert_eq!(reopened, opened);
     }
 
     #[test]

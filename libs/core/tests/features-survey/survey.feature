@@ -513,3 +513,52 @@ Feature: Surveys, the questionnaires answered by members and by the public
     Then nothing is refused
     And the survey "Bilan" holds 1 completed response
     And the response of "Claire" to the survey "Bilan" holds the answer "Lyon" to the question "Lieu"
+
+  Scenario: A reopened survey accepts responses again
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    And the survey "Satisfaction" is closed
+    When the artisan reopens the survey "Satisfaction"
+    Then nothing is refused
+    And the survey "Satisfaction" is OPENED
+    When "Claire" completes a response to the survey "Satisfaction" answering "Dupont" to the question "Nom"
+    Then nothing is refused
+    And the survey "Satisfaction" holds 1 completed response
+
+  Scenario: Reopening an opened survey is refused
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    When the artisan reopens the survey "Satisfaction"
+    Then the refusal reason is "survey_not_closed"
+    And the survey "Satisfaction" is OPENED
+    And the company is notified of no "survey.reopened" event
+
+  Scenario: Reopening a draft survey is refused
+    Given a draft MEMBERS survey "Satisfaction" with a required question "Nom"
+    When the artisan reopens the survey "Satisfaction"
+    Then the refusal reason is "survey_not_closed"
+    And the survey "Satisfaction" is DRAFT
+    And the company is notified of no "survey.reopened" event
+
+  Scenario: Reopening a survey emits survey.reopened once
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    And the survey "Satisfaction" is closed
+    When the artisan reopens the survey "Satisfaction"
+    Then the company is notified of the event "survey.reopened"
+    And the company is notified of the event "survey.opened"
+    And the event "survey.reopened" carries "/survey/title" equal to "Satisfaction"
+    And the event "survey.reopened" carries the number 1 at "/graph_version"
+    And the event "survey.reopened" carries an empty "/campaign_ids"
+
+  Scenario: Reopening a public survey keeps its public slug
+    Given an opened PUBLIC survey "Satisfaction" with a required question "Nom"
+    And the survey "Satisfaction" is closed
+    When the artisan reopens the survey "Satisfaction"
+    Then the survey "Satisfaction" is OPENED
+    And the survey "Satisfaction" keeps the public slug it was opened with
+
+  Scenario: Two simultaneous reopenings emit survey.reopened once
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    And the survey "Satisfaction" is closed
+    When two artisans reopen the survey "Satisfaction" at the same time
+    Then the refusal reason is "survey_not_closed"
+    And the survey "Satisfaction" is OPENED
+    And the company is notified of the event "survey.reopened"

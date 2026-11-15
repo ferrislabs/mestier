@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 pub fn emitted_events() -> Vec<(&'static str, u16)> {
     vec![
         ("survey.opened", 1),
+        ("survey.reopened", 1),
         ("survey.response_submitted", 1),
         ("survey.response_completed", 1),
         ("survey_campaign.started", 1),
@@ -26,6 +27,25 @@ fn campaign_example() -> Value {
     })
 }
 
+fn survey_example() -> Value {
+    json!({
+        "survey_id": "018f3b2a-0000-7000-8000-000000000030",
+        "campaign_ids": ["018f3b2a-0000-7000-8000-000000000040"],
+        "graph_version": 1,
+        "metadata": { "saison": "printemps", "chantier": "Rénovation Dupont" },
+        "survey": {
+            "id": "018f3b2a-0000-7000-8000-000000000030",
+            "organization_id": "018f3b2a-0000-7000-8000-000000000002",
+            "title": "Satisfaction après chantier",
+            "description": "Quelques questions sur votre chantier",
+            "visibility": "MEMBERS",
+            "allow_multiple_responses": false,
+            "response_cap": 100,
+            "opened_at": "2026-03-01T08:00:00Z",
+        },
+    })
+}
+
 pub fn descriptors() -> Vec<EventDescriptor> {
     vec![
         EventDescriptor {
@@ -33,22 +53,14 @@ pub fn descriptors() -> Vec<EventDescriptor> {
             version: 1,
             label: "Questionnaire ouvert",
             subject_kind: "survey",
-            payload_example: json!({
-                "survey_id": "018f3b2a-0000-7000-8000-000000000030",
-                "campaign_ids": ["018f3b2a-0000-7000-8000-000000000040"],
-                "graph_version": 1,
-                "metadata": { "saison": "printemps", "chantier": "Rénovation Dupont" },
-                "survey": {
-                    "id": "018f3b2a-0000-7000-8000-000000000030",
-                    "organization_id": "018f3b2a-0000-7000-8000-000000000002",
-                    "title": "Satisfaction après chantier",
-                    "description": "Quelques questions sur votre chantier",
-                    "visibility": "MEMBERS",
-                    "allow_multiple_responses": false,
-                    "response_cap": 100,
-                    "opened_at": "2026-03-01T08:00:00Z",
-                },
-            }),
+            payload_example: survey_example(),
+        },
+        EventDescriptor {
+            name: "survey.reopened",
+            version: 1,
+            label: "Questionnaire rouvert",
+            subject_kind: "survey",
+            payload_example: survey_example(),
         },
         EventDescriptor {
             name: "survey.response_submitted",

@@ -5,7 +5,7 @@ use events::EventEmitter;
 use super::{SurveyPatch, campaigns_of};
 use crate::OrganizationId;
 use crate::domain::survey::aggregate::Stage;
-use crate::domain::survey::events::SurveyOpened;
+use crate::domain::survey::events::{SurveyOpened, SurveyReopened};
 use crate::domain::survey::ports::{CampaignRepository, SurveyRepository};
 use crate::domain::survey::{
     CampaignId, Closed, Draft, Opened, PublicSlug, Survey, SurveyError, SurveyId, SurveyRecord,
@@ -42,6 +42,22 @@ fn closed_of(record: SurveyRecord) -> Result<Survey<Closed>, SurveyError> {
     match record {
         SurveyRecord::Closed(survey) => Ok(survey),
         SurveyRecord::Draft(_) | SurveyRecord::Opened(_) => {
+            Err(SurveyError::SurveyInconsistentState)
+        }
+    }
+}
+
+fn closing_of(record: SurveyRecord) -> Result<Survey<Closed>, SurveyError> {
+    match record {
+        SurveyRecord::Closed(survey) => Ok(survey),
+        SurveyRecord::Draft(_) | SurveyRecord::Opened(_) => Err(SurveyError::SurveyNotClosed),
+    }
+}
+
+fn reopened_of(record: SurveyRecord) -> Result<Survey<Opened>, SurveyError> {
+    match record {
+        SurveyRecord::Opened(survey) => Ok(survey),
+        SurveyRecord::Draft(_) | SurveyRecord::Closed(_) => {
             Err(SurveyError::SurveyInconsistentState)
         }
     }
@@ -305,6 +321,26 @@ where
         let closed = survey.close(now)?;
         let saved = self.surveys.update(&closed.into()).await?;
         Ok(closed_of(saved)?)
+    }
+
+    pub async fn reopen(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+    ) -> Result<Survey<Opened>, CoreError> {
+        let survey = closing_of(self.find_locked(organization_id, id).await?)?;
+        let closed_at = survey
+            .closed_at()
+            .ok_or(SurveyError::SurveyInconsistentState)?;
+        let campaigns =
+            campaigns_of(&mut self.campaigns, organization_id, survey.campaign_ids()).await?;
+        let reopened = survey.reopen();
+        let saved = reopened_of(self.surveys.reopen(&reopened, closed_at).await?)?;
+        self.emitter.emit(
+            saved.organization_id(),
+            &SurveyReopened::new(&saved, &campaigns)?,
+        )?;
+        Ok(saved)
     }
 
     pub async fn delete(

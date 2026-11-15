@@ -17,6 +17,7 @@ pub mod get_one;
 pub mod graph_version;
 pub mod list;
 pub mod open;
+pub mod reopen;
 pub mod update;
 
 pub fn router(_state: &AppState) -> Router<AppState> {
@@ -28,6 +29,7 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_delete(delete::handler)
         .typed_post(open::handler)
         .typed_post(close::handler)
+        .typed_post(reopen::handler)
         .typed_post(duplicate::handler)
         .typed_get(graph_version::handler)
 }
@@ -55,6 +57,13 @@ pub struct OpenSurveyPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/surveys/{survey_id}/close")]
 pub struct CloseSurveyPath {
+    pub organization_id: OrganizationId,
+    pub survey_id: SurveyId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/surveys/{survey_id}/reopen")]
+pub struct ReopenSurveyPath {
     pub organization_id: OrganizationId,
     pub survey_id: SurveyId,
 }

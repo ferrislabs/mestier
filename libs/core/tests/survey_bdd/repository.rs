@@ -6,10 +6,10 @@ use std::{
 use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_core::{
-    Campaign, CampaignId, CampaignRepository, Completed, MemberId, OrganizationId, PublicSlug,
-    ResponseId, ResponseRecord, ResponseRepository, ResumeToken, SurveyError, SurveyGraph,
-    SurveyGraphVersion, SurveyId, SurveyRecord, SurveyRepository, SurveyResponse, SurveyState,
-    SurveySummary,
+    Campaign, CampaignId, CampaignRepository, Completed, MemberId, Opened, OrganizationId,
+    PublicSlug, ResponseId, ResponseRecord, ResponseRepository, ResumeToken, Survey, SurveyError,
+    SurveyGraph, SurveyGraphVersion, SurveyId, SurveyRecord, SurveyRepository, SurveyResponse,
+    SurveyState, SurveySummary,
 };
 
 #[derive(Debug, Default)]
@@ -191,6 +191,26 @@ impl SurveyRepository for MemorySurveys {
             return Err(SurveyError::SurveyStateChanged.into());
         }
         let kept = with_campaigns(survey, stored.campaign_ids());
+        guard.surveys.insert(survey.id(), kept.clone());
+        Ok(kept)
+    }
+
+    async fn reopen(
+        &mut self,
+        survey: &Survey<Opened>,
+        closed_at: DateTime<Utc>,
+    ) -> Result<SurveyRecord, CoreError> {
+        let mut guard = state(&self.store);
+        let stored = guard
+            .surveys
+            .get(&survey.id())
+            .filter(|stored| stored.organization_id() == survey.organization_id())
+            .ok_or(CoreError::NotFound)?;
+        match stored {
+            SurveyRecord::Closed(current) if current.closed_at() == Some(closed_at) => {}
+            _ => return Err(SurveyError::SurveyStateChanged.into()),
+        }
+        let kept = with_campaigns(&SurveyRecord::from(survey.clone()), stored.campaign_ids());
         guard.surveys.insert(survey.id(), kept.clone());
         Ok(kept)
     }

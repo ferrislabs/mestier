@@ -341,6 +341,69 @@ async fn close_survey_refuses_a_member_without_survey_manage() {
 
 #[tokio::test]
 #[ignore = "requires live postgres"]
+async fn reopen_survey_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .reopen_survey(survey_command(
+                    &fixture,
+                    fixture.member.clone(),
+                    fixture.survey_id,
+                ))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+async fn survey_events(pool: &PgPool, fixture: &Fixture, id: SurveyId) -> Vec<String> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT name FROM automation.event WHERE org_id = $1 AND payload->>'survey_id' = $2 AND name LIKE 'survey.%opened' ORDER BY id",
+    )
+    .bind(fixture.organization_id.0)
+    .bind(id.0.to_string())
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_closed_survey_is_reopened_once_and_persists_survey_reopened() {
+    with_fixture(true, async |usecase, fixture| {
+        let pool = dev_pool().await;
+        let id = opened(&usecase, &fixture, Visibility::Public).await;
+        let closed = usecase
+            .close_survey(survey_command(&fixture, Subject::system(), id))
+            .await
+            .unwrap();
+        let reopened = usecase
+            .reopen_survey(survey_command(&fixture, Subject::system(), id))
+            .await
+            .unwrap();
+        let again = usecase
+            .reopen_survey(survey_command(&fixture, Subject::system(), id))
+            .await;
+
+        assert_eq!(reopened.closed_at(), None);
+        assert_eq!(reopened.opened_at(), closed.opened_at());
+        assert_eq!(reopened.public_slug(), closed.public_slug());
+        assert!(
+            matches!(&again, Err(CoreError::Refused(refusal)) if refusal.reason == "survey_not_closed"),
+            "{again:?}"
+        );
+        assert_eq!(
+            survey_events(&pool, &fixture, id).await,
+            vec!["survey.opened", "survey.reopened"]
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
 async fn duplicate_survey_refuses_a_member_without_survey_manage() {
     with_fixture(true, async |usecase, fixture| {
         forbidden(

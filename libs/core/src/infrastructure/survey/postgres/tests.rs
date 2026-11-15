@@ -192,7 +192,8 @@ pub(crate) async fn survey_contract<S: SurveyRepository>(
     assert_eq!(surveys.find(org, stored.id()).await?, Some(stored.clone()));
 
     let stale_opened = stored.clone();
-    let closed = SurveyRecord::from(members.close(now + Duration::hours(1))?);
+    let closed_survey = members.close(now + Duration::hours(1))?;
+    let closed = SurveyRecord::from(closed_survey.clone());
     assert_eq!(surveys.update(&closed).await?, closed);
     assert_eq!(surveys.find(org, closed.id()).await?, Some(closed.clone()));
     state_changed(surveys.update(&stale_opened).await);
@@ -225,7 +226,46 @@ pub(crate) async fn survey_contract<S: SurveyRepository>(
         surveys.delete(tenants.other, public.id()).await,
         Err(CoreError::NotFound)
     ));
+    assert_eq!(surveys.find(org, public.id()).await?, Some(public.clone()));
+
+    let closed_at = closed_survey
+        .closed_at()
+        .ok_or(SurveyError::SurveyInconsistentState)?;
+    let reopened = closed_survey.reopen();
+    state_changed(
+        surveys
+            .reopen(&reopened, closed_at + Duration::seconds(1))
+            .await,
+    );
+    assert_eq!(surveys.find(org, closed.id()).await?, Some(closed.clone()));
+    let stored = SurveyRecord::from(reopened.clone());
+    assert_eq!(surveys.reopen(&reopened, closed_at).await?, stored);
+    assert_eq!(surveys.find(org, stored.id()).await?, Some(stored.clone()));
+    state_changed(surveys.reopen(&reopened, closed_at).await);
+    state_changed(surveys.update(&stale_draft).await);
+    assert_eq!(surveys.find(org, stored.id()).await?, Some(stored.clone()));
+
+    let stale_reopened = stored.clone();
+    let closed_again = SurveyRecord::from(reopened.close(now + Duration::hours(2))?);
+    assert_eq!(surveys.update(&closed_again).await?, closed_again);
+    state_changed(surveys.update(&stale_reopened).await);
+    state_changed(surveys.update(&stale_opened).await);
+    state_changed(surveys.update(&stale_draft).await);
+    assert_eq!(
+        surveys.find(org, closed_again.id()).await?,
+        Some(closed_again)
+    );
+
+    let SurveyRecord::Opened(never_closed) = &public else {
+        panic!("the public survey is opened");
+    };
+    state_changed(surveys.reopen(never_closed, now).await);
     assert_eq!(surveys.find(org, public.id()).await?, Some(public));
+    let missing = opened(org, Visibility::Members, false, now);
+    assert!(matches!(
+        surveys.reopen(&missing, now).await,
+        Err(CoreError::NotFound)
+    ));
     Ok(())
 }
 

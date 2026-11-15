@@ -31,6 +31,25 @@ fn ensure_response<S: Phase>(
     }
 }
 
+fn survey_payload(survey: &Survey<Opened>, metadata: &Metadata) -> Value {
+    json!({
+        "survey_id": survey.id().0,
+        "campaign_ids": campaign_ids(survey.campaign_ids()),
+        "graph_version": survey.version(),
+        "metadata": metadata_payload(metadata),
+        "survey": {
+            "id": survey.id().0,
+            "organization_id": survey.organization_id().0,
+            "title": survey.title(),
+            "description": survey.description(),
+            "visibility": survey.visibility().as_str(),
+            "allow_multiple_responses": survey.allow_multiple_responses(),
+            "response_cap": survey.response_cap().map(|cap| cap.get()),
+            "opened_at": survey.opened_at(),
+        },
+    })
+}
+
 pub struct SurveyOpened<'a> {
     survey: &'a Survey<Opened>,
     metadata: Metadata,
@@ -59,23 +78,39 @@ impl DomainEvent for SurveyOpened<'_> {
     }
 
     fn payload(&self) -> Value {
-        let survey = self.survey;
-        json!({
-            "survey_id": survey.id().0,
-            "campaign_ids": campaign_ids(survey.campaign_ids()),
-            "graph_version": survey.version(),
-            "metadata": metadata_payload(&self.metadata),
-            "survey": {
-                "id": survey.id().0,
-                "organization_id": survey.organization_id().0,
-                "title": survey.title(),
-                "description": survey.description(),
-                "visibility": survey.visibility().as_str(),
-                "allow_multiple_responses": survey.allow_multiple_responses(),
-                "response_cap": survey.response_cap().map(|cap| cap.get()),
-                "opened_at": survey.opened_at(),
-            },
+        survey_payload(self.survey, &self.metadata)
+    }
+}
+
+pub struct SurveyReopened<'a> {
+    survey: &'a Survey<Opened>,
+    metadata: Metadata,
+}
+
+impl<'a> SurveyReopened<'a> {
+    pub fn new(survey: &'a Survey<Opened>, campaigns: &[Campaign]) -> Result<Self, SurveyError> {
+        Ok(Self {
+            metadata: merged_metadata(survey, campaigns)?,
+            survey,
         })
+    }
+}
+
+impl DomainEvent for SurveyReopened<'_> {
+    fn name(&self) -> &'static str {
+        "survey.reopened"
+    }
+
+    fn version(&self) -> u16 {
+        1
+    }
+
+    fn subject(&self) -> EventSubject {
+        EventSubject::new("survey", self.survey.id().0)
+    }
+
+    fn payload(&self) -> Value {
+        survey_payload(self.survey, &self.metadata)
     }
 }
 
