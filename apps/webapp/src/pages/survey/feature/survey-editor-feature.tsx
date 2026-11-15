@@ -19,6 +19,7 @@ import { buildOrgPath } from '#/modules/org-path'
 import { UnsavedGuard } from '#/pages/projects/ui/unsaved-guard'
 import { SortableQuestionList } from '#/pages/survey/feature/sortable-question-list'
 import { SurveyPreviewFeature } from '#/pages/survey/feature/survey-preview-feature'
+import { SurveyResponsesFeature } from '#/pages/survey/feature/survey-responses-feature'
 import { useSurveyFormEditor } from '#/pages/survey/feature/use-survey-form-editor'
 import { useWideScreen } from '#/pages/survey/feature/use-wide-screen'
 import { buildGraph, parseGraph } from '#/pages/survey/lib/form-graph'
@@ -40,7 +41,6 @@ import {
 import {
 	publicSurveyUrl,
 	surveyPath,
-	surveyResponsesPath,
 	surveysPath,
 } from '#/pages/survey/lib/survey-format'
 import { fromSchema, toSchema } from '#/pages/survey/lib/survey-graph'
@@ -174,6 +174,7 @@ export function SurveyEditorWorkspace({
 	const [settingsOpen, setSettingsOpen] = useState(false)
 	const wide = useWideScreen()
 	const [previewing, setPreviewing] = useState(false)
+	const [viewingResponses, setViewingResponses] = useState(false)
 
 	const problems = useMemo(
 		() => (advanced === null ? formProblems(form, !draft) : []),
@@ -378,7 +379,7 @@ export function SurveyEditorWorkspace({
 						previewing={previewing}
 						onPreviewing={setPreviewing}
 						onSettings={() => setSettingsOpen(true)}
-						onResponses={() => void goTo(surveyResponsesPath(survey.id))}
+						onResponses={() => setViewingResponses(true)}
 						onSave={() => void save()}
 						onOpen={requestOpen}
 						onClose={() => setConfirmation('close')}
@@ -396,7 +397,12 @@ export function SurveyEditorWorkspace({
 					{editor.announcement}
 				</p>
 				<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/30">
-					{previewing ? (
+					{viewingResponses ? (
+						<SurveyResponsesFeature
+							surveyId={survey.id}
+							onBack={() => setViewingResponses(false)}
+						/>
+					) : previewing ? (
 						<SurveyPreviewFeature
 							title={title}
 							description={settings.description.trim() || null}
@@ -470,7 +476,7 @@ export function SurveyEditorWorkspace({
 							}
 							previewing={previewing}
 							onPreviewing={setPreviewing}
-							onResponses={() => void goTo(surveyResponsesPath(survey.id))}
+							onResponses={() => setViewingResponses(true)}
 							onSave={() => void save()}
 							onOpen={requestOpen}
 							onClose={() => setConfirmation('close')}

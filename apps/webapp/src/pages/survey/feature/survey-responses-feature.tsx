@@ -30,7 +30,13 @@ import {
 
 const COLUMNS = responseColumns()
 
-export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
+export function SurveyResponsesFeature({
+	surveyId,
+	onBack,
+}: {
+	surveyId: string
+	onBack?: () => void
+}) {
 	const { activeOrganization } = useActiveOrganization()
 	const organizationId = activeOrganization.id
 	const navigate = useNavigate()
@@ -130,10 +136,12 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 				page={page}
 				pageCount={pagination?.last_page ?? null}
 				total={pagination?.total ?? null}
-				onBack={() =>
-					void navigate({
-						to: buildOrgPath(activeOrganization.slug, surveyPath(surveyId)),
-					})
+				onBack={
+					onBack ??
+					(() =>
+						void navigate({
+							to: buildOrgPath(activeOrganization.slug, surveyPath(surveyId)),
+						}))
 				}
 				onPage={setPage}
 				onOpen={(row) => setOpenId(row.response.id)}
