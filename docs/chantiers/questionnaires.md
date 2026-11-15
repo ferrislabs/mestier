@@ -576,6 +576,14 @@ Un **bloc** affiche N questions en même temps sur un seul écran du répondant.
 - Éditeur : champ « Description (facultative) » sous le libellé de chaque carte de question ; dupliquer une question copie sa description ; `buildGraph` / `parseGraph` la portent, les graphes sans description restent identiques octet pour octet (le serveur renvoie `null` : traité comme absent).
 - Répondant et aperçu : la description s'affiche sous le titre de la question, en texte secondaire, avec la même mise en forme dans les écrans de bloc compacts (retours à la ligne conservés).
 
+## Décisions C5 (rouvrir un questionnaire fermé)
+
+- Un questionnaire fermé peut être rouvert : `Survey<Closed>::reopen()` donne un `Survey<Opened>` (`closed_at` redevient `null`, `opened_at`, le lien public, la visibilité et le graphe sont inchangés ; le plafond de réponses et les règles de campagne s'appliquent comme avant). Ouvrir un brouillon reste `open`, rouvrir un questionnaire déjà ouvert ou encore brouillon est refusé (409, `survey_not_closed`).
+- Verrou et garde identiques aux autres transitions (`find_for_update`, l'état ne régresse pas : la garde de l'adaptateur autorise `CLOSED -> OPENED` uniquement par `reopen`, jamais par une écriture d'un état périmé).
+- Événement nouveau `survey.reopened`, même charge utile que `survey.opened` (`survey_id`, `campaign_ids`, métadonnées fusionnées, `graph_version`), pour que les automatisations d'ouverture (e-mails) ne se redéclenchent pas à tort. Catalogue, descripteurs, exemples, `docs/events.md` et `apps/webapp/src/pages/automation/lib/event-contracts.ts` à jour.
+- HTTP : `POST /surveys/{id}/reopen` (permission de gestion, 200 avec le questionnaire), OpenAPI et client régénérés. Pas d'action de connecteur dans ce lot.
+- Interface : « Rouvrir les réponses » dans la colonne d'actions et la barre étroite d'un questionnaire fermé, avec confirmation (« Les répondants pourront de nouveau répondre. ») et notification.
+
 ## Verify (exit)
 
 ```bash
@@ -599,3 +607,4 @@ Amended: 2026-11-15 C1 : un questionnaire ouvert ou fermé reste modifiable (vis
 Amended: 2026-11-15 vague de correction C1 : une version est figée si et seulement si sa ligne existe (écrite à la complétion, jamais défigée par une suppression) ; verrou nu puis relecture et `save_campaigns` dédié pour l'ensemble de campagnes ; réponses enregistrées périmées écartées à la complétion ; `GraphVersion(NonZeroU32)` ; versions manquantes signalées ; `deny_unknown_fields` sur la modification ; listes de campagne paginées en SQL.
 Amended: 2026-11-15 C3 : blocs de questions affichées ensemble (`block` sur le nœud question, règle portée par le bloc, regroupement côté répondant).
 Amended: 2026-11-15 C4 : description facultative sur chaque question (`description` sur le nœud question).
+Amended: 2026-11-15 C5 : un questionnaire fermé peut être rouvert (`survey.reopened`), la règle « pas de réouverture » de S0 est levée.
