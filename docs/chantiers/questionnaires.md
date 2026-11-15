@@ -570,6 +570,12 @@ Un **bloc** affiche N questions en même temps sur un seul écran du répondant.
 - Éditeur : un bloc est un conteneur de cartes de question (liseré, intitulé « Bloc de N questions »), ajouté par « Ajouter un bloc » (deux questions vides au départ) ; chaque carte offre « Regrouper avec la précédente » et « Sortir du bloc » ; la logique d'affichage se règle sur le bloc, pas sur ses membres.
 - Aucun changement de modèle de réponse ni d'événement. `buildGraph` / `parseGraph` portent `block` ; les graphes sans bloc restent identiques octet pour octet.
 
+## Décisions C4 (description de question)
+
+- Le nœud question porte `description: Option<String>` (texte libre, `null` = absente). Normalisée à l'écriture : espaces de tête et de fin retirés, vide devient `null`, 500 caractères au plus (au-delà : `graph_question_description_too_long`, 422, `details.reason`, `question_id`). Aucun autre invariant, aucun changement de réponse ni d'événement ; un graphe stocké sans le champ reste valide.
+- Éditeur : champ « Description (facultative) » sous le libellé de chaque carte de question ; dupliquer une question copie sa description ; `buildGraph` / `parseGraph` la portent, les graphes sans description restent identiques octet pour octet (le serveur renvoie `null` : traité comme absent).
+- Répondant et aperçu : la description s'affiche sous le titre de la question, en texte secondaire, avec la même mise en forme dans les écrans de bloc compacts (retours à la ligne conservés).
+
 ## Verify (exit)
 
 ```bash
@@ -592,3 +598,4 @@ Amended: 2026-11-14 décisions de S6 consignées.
 Amended: 2026-11-15 C1 : un questionnaire ouvert ou fermé reste modifiable (visibilité et lien figés), son graphe est versionné et une réponse complète porte sa version ; un questionnaire appartient à plusieurs campagnes, les événements portent `campaign_ids` et `graph_version` au lieu de `campaign_id`.
 Amended: 2026-11-15 vague de correction C1 : une version est figée si et seulement si sa ligne existe (écrite à la complétion, jamais défigée par une suppression) ; verrou nu puis relecture et `save_campaigns` dédié pour l'ensemble de campagnes ; réponses enregistrées périmées écartées à la complétion ; `GraphVersion(NonZeroU32)` ; versions manquantes signalées ; `deny_unknown_fields` sur la modification ; listes de campagne paginées en SQL.
 Amended: 2026-11-15 C3 : blocs de questions affichées ensemble (`block` sur le nœud question, règle portée par le bloc, regroupement côté répondant).
+Amended: 2026-11-15 C4 : description facultative sur chaque question (`description` sur le nœud question).
