@@ -54,15 +54,6 @@ fn closing_of(record: SurveyRecord) -> Result<Survey<Closed>, SurveyError> {
     }
 }
 
-fn reopened_of(record: SurveyRecord) -> Result<Survey<Opened>, SurveyError> {
-    match record {
-        SurveyRecord::Opened(survey) => Ok(survey),
-        SurveyRecord::Draft(_) | SurveyRecord::Closed(_) => {
-            Err(SurveyError::SurveyInconsistentState)
-        }
-    }
-}
-
 fn copy_of<St: Stage>(survey: &Survey<St>, id: SurveyId) -> Result<Survey<Draft>, SurveyError> {
     let mut copy = Survey::new(
         id,
@@ -329,13 +320,10 @@ where
         id: SurveyId,
     ) -> Result<Survey<Opened>, CoreError> {
         let survey = closing_of(self.find_locked(organization_id, id).await?)?;
-        let closed_at = survey
-            .closed_at()
-            .ok_or(SurveyError::SurveyInconsistentState)?;
         let campaigns =
             campaigns_of(&mut self.campaigns, organization_id, survey.campaign_ids()).await?;
         let reopened = survey.reopen();
-        let saved = reopened_of(self.surveys.reopen(&reopened, closed_at).await?)?;
+        let saved = opened_of(self.surveys.update(&reopened.into()).await?)?;
         self.emitter.emit(
             saved.organization_id(),
             &SurveyReopened::new(&saved, &campaigns)?,

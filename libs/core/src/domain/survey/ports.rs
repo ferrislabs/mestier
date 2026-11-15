@@ -3,8 +3,8 @@ use common::CoreError;
 
 use super::record::{ResponseRecord, SurveyRecord, SurveySummary};
 use super::{
-    Campaign, CampaignId, Completed, Graph, GraphVersion, Opened, PublicSlug, Response, ResponseId,
-    ResumeToken, Survey, SurveyId,
+    Campaign, CampaignId, Completed, Graph, GraphVersion, PublicSlug, Response, ResponseId,
+    ResumeToken, SurveyId,
 };
 use crate::{MemberId, OrganizationId};
 
@@ -24,12 +24,6 @@ pub trait SurveyRepository: Send {
     fn update(
         &mut self,
         survey: &SurveyRecord,
-    ) -> impl Future<Output = Result<SurveyRecord, CoreError>> + Send;
-
-    fn reopen(
-        &mut self,
-        survey: &Survey<Opened>,
-        closed_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<SurveyRecord, CoreError>> + Send;
 
     fn list(

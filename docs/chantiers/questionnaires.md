@@ -579,7 +579,7 @@ Un **bloc** affiche N questions en même temps sur un seul écran du répondant.
 ## Décisions C5 (rouvrir un questionnaire fermé)
 
 - Un questionnaire fermé peut être rouvert : `Survey<Closed>::reopen()` donne un `Survey<Opened>` (`closed_at` redevient `null`, `opened_at`, le lien public, la visibilité et le graphe sont inchangés ; le plafond de réponses et les règles de campagne s'appliquent comme avant). Ouvrir un brouillon reste `open`, rouvrir un questionnaire déjà ouvert ou encore brouillon est refusé (409, `survey_not_closed`).
-- Verrou et garde identiques aux autres transitions (`find_for_update`, l'état ne régresse pas : la garde de l'adaptateur autorise `CLOSED -> OPENED` uniquement par `reopen`, jamais par une écriture d'un état périmé).
+- Pas de garde anti-régression dans l'adaptateur : le verrou de ligne (`find_for_update`) protège toutes les transitions, rouvrir est un passage verrouillé de `CLOSED` à `OPENED` (`closed_at` à `null`).
 - Événement nouveau `survey.reopened`, même charge utile que `survey.opened` (`survey_id`, `campaign_ids`, métadonnées fusionnées, `graph_version`), pour que les automatisations d'ouverture (e-mails) ne se redéclenchent pas à tort. Catalogue, descripteurs, exemples, `docs/events.md` et `apps/webapp/src/pages/automation/lib/event-contracts.ts` à jour.
 - HTTP : `POST /surveys/{id}/reopen` (permission de gestion, 200 avec le questionnaire), OpenAPI et client régénérés. Pas d'action de connecteur dans ce lot.
 - Interface : « Rouvrir les réponses » dans la colonne d'actions et la barre étroite d'un questionnaire fermé, avec confirmation (« Les répondants pourront de nouveau répondre. ») et notification.

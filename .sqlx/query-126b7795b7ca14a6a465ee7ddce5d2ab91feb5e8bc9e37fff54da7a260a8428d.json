@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE survey.survey\n                SET title = $3, description = $4, visibility = $5, graph = $6,\n                    graph_version = $7, allow_multiple_responses = $8, response_cap = $9,\n                    metadata = $10, status = $11, public_slug = $12, opened_at = $13,\n                    closed_at = $14, updated_at = now()\n                WHERE org_id = $1 AND id = $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Int4",
+        "Bool",
+        "Int4",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "126b7795b7ca14a6a465ee7ddce5d2ab91feb5e8bc9e37fff54da7a260a8428d"
+}

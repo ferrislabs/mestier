@@ -1,11 +1,10 @@
-use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    CampaignId, OrganizationId, PublicSlug, SurveyError, SurveyGraph as Graph, SurveyGraphVersion,
-    SurveyId, SurveyRecord, SurveyState, SurveySummary,
-    domain::survey::{Opened, Survey, ports::SurveyRepository},
+    CampaignId, OrganizationId, PublicSlug, SurveyGraph as Graph, SurveyGraphVersion, SurveyId,
+    SurveyRecord, SurveyState, SurveySummary,
+    domain::survey::ports::SurveyRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
         survey::postgres::model::{SurveyColumns, SurveyRow, version_column},
@@ -166,8 +165,6 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
                     metadata = $10, status = $11, public_slug = $12, opened_at = $13,
                     closed_at = $14, updated_at = now()
                 WHERE org_id = $1 AND id = $2
-                  AND CASE status WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END
-                      <= CASE $11::text WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END
                 "#,
                 columns.org_id,
                 columns.id,
@@ -189,76 +186,10 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
             .map_err(map_sqlx_error)?;
 
             if updated.rows_affected() == 0 {
-                let exists = sqlx::query_scalar!(
-                    r#"
-                    SELECT EXISTS (
-                        SELECT 1 FROM survey.survey WHERE org_id = $1 AND id = $2
-                    ) AS "exists!"
-                    "#,
-                    columns.org_id,
-                    columns.id,
-                )
-                .fetch_one(&mut ***tx)
-                .await
-                .map_err(map_sqlx_error)?;
-
-                return if exists {
-                    Err(SurveyError::SurveyStateChanged.into())
-                } else {
-                    Err(CoreError::NotFound)
-                };
+                return Err(CoreError::NotFound);
             }
         }
         self.reloaded(&columns).await
-    }
-
-    async fn reopen(
-        &mut self,
-        survey: &Survey<Opened>,
-        closed_at: DateTime<Utc>,
-    ) -> Result<SurveyRecord, CoreError> {
-        let organization_id = survey.organization_id();
-        let id = survey.id();
-        {
-            let mut tx = self.tx.lock().await;
-            let updated = sqlx::query!(
-                r#"
-                UPDATE survey.survey
-                SET status = 'OPENED', closed_at = NULL, updated_at = now()
-                WHERE org_id = $1 AND id = $2 AND status = 'CLOSED' AND closed_at = $3
-                "#,
-                organization_id.0,
-                id.0,
-                closed_at,
-            )
-            .execute(&mut ***tx)
-            .await
-            .map_err(map_sqlx_error)?;
-
-            if updated.rows_affected() == 0 {
-                let exists = sqlx::query_scalar!(
-                    r#"
-                    SELECT EXISTS (
-                        SELECT 1 FROM survey.survey WHERE org_id = $1 AND id = $2
-                    ) AS "exists!"
-                    "#,
-                    organization_id.0,
-                    id.0,
-                )
-                .fetch_one(&mut ***tx)
-                .await
-                .map_err(map_sqlx_error)?;
-
-                return if exists {
-                    Err(SurveyError::SurveyStateChanged.into())
-                } else {
-                    Err(CoreError::NotFound)
-                };
-            }
-        }
-        self.find(organization_id, id)
-            .await?
-            .ok_or(CoreError::NotFound)
     }
 
     async fn list(

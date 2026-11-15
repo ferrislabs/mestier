@@ -201,10 +201,6 @@ fn surveys_holding(record: SurveyRecord) -> MockSurveyRepository {
     surveys
         .expect_store_graph_version()
         .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
-    surveys.expect_reopen().returning(|survey, _| {
-        let saved = SurveyRecord::from(survey.clone());
-        Box::pin(async move { Ok(saved) })
-    });
     surveys
 }
 
@@ -223,18 +219,6 @@ fn surveys_stored(stored: &Arc<Mutex<SurveyRecord>>) -> MockSurveyRepository {
         *write.lock().unwrap() = survey.clone();
         let saved = survey.clone();
         Box::pin(async move { Ok(saved) })
-    });
-    let reopen = Arc::clone(stored);
-    surveys.expect_reopen().returning(move |survey, closed_at| {
-        let mut stored = reopen.lock().unwrap();
-        let result = match &*stored {
-            SurveyRecord::Closed(current) if current.closed_at() == Some(closed_at) => {
-                *stored = SurveyRecord::from(survey.clone());
-                Ok(stored.clone())
-            }
-            _ => Err(SurveyError::SurveyStateChanged.into()),
-        };
-        Box::pin(async move { result })
     });
     surveys
         .expect_has_graph_version()
