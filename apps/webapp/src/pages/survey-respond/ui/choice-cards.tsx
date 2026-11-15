@@ -9,6 +9,7 @@ export function ChoiceCards({
 	invalid,
 	describedBy,
 	labelledBy,
+	compact = false,
 	onChange,
 }: {
 	name: string
@@ -18,13 +19,17 @@ export function ChoiceCards({
 	invalid: boolean
 	describedBy: string | undefined
 	labelledBy: string
+	compact?: boolean
 	onChange: (selected: string[]) => void
 }) {
 	return (
 		<fieldset
 			aria-labelledby={labelledBy}
 			aria-describedby={describedBy}
-			className="m-0 grid min-w-0 gap-3 border-0 p-0"
+			className={cn(
+				'm-0 grid min-w-0 border-0 p-0',
+				compact ? 'gap-2 sm:grid-cols-2' : 'gap-3',
+			)}
 		>
 			{options.map((option, position) => {
 				const checked = selected.includes(option)
@@ -34,7 +39,10 @@ export function ChoiceCards({
 						key={option}
 						htmlFor={id}
 						className={cn(
-							'group flex min-h-14 cursor-pointer items-center gap-4 rounded-xl border bg-card px-4 py-3 text-base transition-colors',
+							'group flex cursor-pointer items-center border bg-card transition-colors',
+							compact
+								? 'min-h-11 gap-3 rounded-lg px-3 py-2 text-sm'
+								: 'min-h-14 gap-4 rounded-xl px-4 py-3 text-base',
 							'hover:border-primary/50 has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50',
 							checked && 'border-primary bg-primary/5',
 							invalid && !checked && 'border-destructive/60',

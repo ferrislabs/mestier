@@ -141,11 +141,21 @@ function Body({ view }: { view: RespondentView }) {
 						view.next()
 					}}
 				>
-					<div className="flex flex-col gap-4">
+					<div
+						className={
+							view.screen.length > 1
+								? 'flex flex-col gap-2'
+								: 'flex flex-col gap-4'
+						}
+					>
 						{view.screen.map((item, position) => (
 							<div
 								key={item.question.id}
-								className="rounded-xl border bg-card p-4 shadow-xs sm:p-6"
+								className={
+									view.screen.length > 1
+										? 'rounded-xl border bg-card p-3 shadow-xs sm:p-4'
+										: 'rounded-xl border bg-card p-4 shadow-xs sm:p-6'
+								}
 							>
 								<QuestionStep
 									question={item.question}
@@ -153,6 +163,7 @@ function Body({ view }: { view: RespondentView }) {
 									photos={item.photos}
 									photoNotice={item.photoNotice}
 									progress={position === 0 ? view.progress : null}
+									compact={view.screen.length > 1}
 									error={item.error}
 									headingRef={position === 0 ? view.headingRef : undefined}
 									onChange={(draft) => view.setDraft(item.question.id, draft)}

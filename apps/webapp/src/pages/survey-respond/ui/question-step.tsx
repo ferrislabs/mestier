@@ -1,4 +1,5 @@
 import type { RefObject } from 'react'
+import { cn } from '#/lib/utils'
 import { questionKindEntry } from '#/pages/survey/lib/question-kinds'
 import type { QuestionNode } from '#/pages/survey/types'
 import { type Draft, maxPhotos } from '#/pages/survey-respond/lib/answer-draft'
@@ -55,6 +56,7 @@ export function QuestionStep({
 	photos,
 	photoNotice,
 	progress,
+	compact = false,
 	error,
 	headingRef,
 	onChange,
@@ -67,6 +69,7 @@ export function QuestionStep({
 	photos: readonly PhotoItem[]
 	photoNotice: string | null
 	progress: StepProgress | null
+	compact?: boolean
 	error: string | null
 	headingRef?: RefObject<HTMLHeadingElement | null>
 	onChange: (draft: Draft) => void
@@ -86,9 +89,14 @@ export function QuestionStep({
 	const list = Array.isArray(draft) ? draft : []
 
 	return (
-		<section className="flex flex-col gap-6 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300">
+		<section
+			className={cn(
+				'flex flex-col motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300',
+				compact ? 'gap-3' : 'gap-6',
+			)}
+		>
 			{progress ? <StepProgressIndicator progress={progress} /> : null}
-			<div className="flex flex-col gap-3">
+			<div className={cn('flex flex-col', compact ? 'gap-2' : 'gap-3')}>
 				<span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
 					<Icon className="size-3.5" aria-hidden />
 					{entry.title}
@@ -99,7 +107,10 @@ export function QuestionStep({
 					ref={headingRef}
 					id={headingId}
 					tabIndex={-1}
-					className="text-2xl font-semibold leading-snug tracking-tight text-balance break-words outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded-md sm:text-[1.75rem]"
+					className={cn(
+						'text-balance break-words rounded-md font-semibold leading-snug tracking-tight outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+						compact ? 'text-lg' : 'text-2xl sm:text-[1.75rem]',
+					)}
 				>
 					{isField ? (
 						<label htmlFor={inputId}>{question.label}</label>
@@ -132,6 +143,7 @@ export function QuestionStep({
 					invalid={error !== null}
 					describedBy={describedBy}
 					labelledBy={headingId}
+					compact={compact}
 					onChange={(selected) =>
 						onChange(
 							question.kind === 'SINGLE_CHOICE'
