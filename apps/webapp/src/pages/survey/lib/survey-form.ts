@@ -126,12 +126,25 @@ export function changeKind(
 	const changed = mapQuestion(form, id, (item) => ({
 		...item,
 		kind,
-		options: isChoiceKind(kind) && isChoiceKind(item.kind) ? item.options : [],
-		maxPhotos: kind === 'PHOTO' ? item.maxPhotos : null,
 		identifier: isIdentifierKind(kind) ? item.identifier : false,
 	}))
 	if (isChoiceKind(kind)) return { form: changed, removed: 0 }
 	return pruneConditions(changed, (condition) => condition.question === id)
+}
+
+export function kindChangeDrops(
+	form: SurveyForm,
+	id: string,
+	kind: QuestionKind,
+): number {
+	if (isChoiceKind(kind)) return 0
+	return form.questions.reduce(
+		(count, item) =>
+			count +
+			(item.rule?.conditions.filter((condition) => condition.question === id)
+				.length ?? 0),
+		0,
+	)
 }
 
 export function addOption(form: SurveyForm, id: string): SurveyForm {
@@ -147,7 +160,11 @@ export function renameOption(
 	position: number,
 	value: string,
 ): SurveyForm {
-	const previous = form.questions[indexOf(form, id)]?.options[position]
+	const current = form.questions[indexOf(form, id)]?.options ?? []
+	const previous = current[position]
+	const duplicated =
+		previous !== undefined &&
+		current.filter((option) => option === previous).length > 1
 	return {
 		...form,
 		questions: form.questions.map((item) => {
@@ -161,6 +178,7 @@ export function renameOption(
 						conditions: item.rule.conditions.map((condition) =>
 							condition.question === id &&
 							previous !== undefined &&
+							!duplicated &&
 							condition.option === previous
 								? { ...condition, option: value }
 								: condition,
@@ -264,7 +282,13 @@ export function removeCondition(
 		const conditions = item.rule.conditions.filter((_, at) => at !== position)
 		return {
 			...item,
-			rule: conditions.length === 0 ? null : { ...item.rule, conditions },
+			rule:
+				conditions.length === 0
+					? null
+					: {
+							join: conditions.length === 1 ? 'ALL' : item.rule.join,
+							conditions,
+						},
 		}
 	})
 }
@@ -283,7 +307,7 @@ export function clearRule(form: SurveyForm, id: string): SurveyForm {
 	return mapQuestion(form, id, (item) => ({ ...item, rule: null }))
 }
 
-function orderIsValid(questions: readonly FormQuestion[]): boolean {
+export function orderIsValid(questions: readonly FormQuestion[]): boolean {
 	const positions = new Map(questions.map((item, at) => [item.id, at]))
 	return questions.every((item, at) =>
 		(item.rule?.conditions ?? []).every((condition) => {
@@ -317,6 +341,18 @@ export function moveQuestion(
 		}
 	}
 	return { kind: 'moved', form: { ...form, questions }, position: to }
+}
+
+export function dropQuestion(
+	form: SurveyForm,
+	activeId: string,
+	overId: string | null,
+): MoveResult | null {
+	if (overId === null || overId === activeId) return null
+	const from = indexOf(form, activeId)
+	const to = indexOf(form, overId)
+	if (from < 0 || to < 0) return null
+	return moveQuestion(form, activeId, to - from)
 }
 
 export function removeQuestion(form: SurveyForm, id: string): SurveyForm {

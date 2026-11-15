@@ -7,11 +7,24 @@ import {
 import { survey } from '#/pages/survey/test/survey-harness'
 
 describe('survey settings campaigns', () => {
-	it('keeps every attached campaign in order', () => {
-		const settings = settingsOf(survey({ campaign_ids: ['a', 'b', 'c'] }))
+	it('sends the full campaign list only when the set changed', () => {
+		const saved = settingsOf(survey({ campaign_ids: ['a', 'b', 'c'] }))
 
-		expect(settings.campaignIds).toEqual(['a', 'b', 'c'])
-		expect(settingsPatch(settings, false).campaign_ids).toEqual(['a', 'b', 'c'])
+		expect(settingsPatch(saved, saved, false)).toEqual({})
+		expect(
+			'campaign_ids' in
+				settingsPatch({ ...saved, campaignIds: ['c', 'b', 'a'] }, saved, false),
+		).toBe(false)
+		expect(
+			settingsPatch({ ...saved, campaignIds: ['a', 'b'] }, saved, false),
+		).toEqual({ campaign_ids: ['a', 'b'] })
+		expect(
+			settingsPatch(
+				{ ...saved, campaignIds: ['a', 'b', 'c', 'd'] },
+				saved,
+				false,
+			),
+		).toEqual({ campaign_ids: ['a', 'b', 'c', 'd'] })
 	})
 
 	it('attaches and detaches a campaign without touching the others', () => {
@@ -22,11 +35,28 @@ describe('survey settings campaigns', () => {
 		expect(toggleCampaign(settings, 'b', true)).toEqual(['a', 'b'])
 	})
 
-	it('sends an empty list for an independent survey and omits the visibility once opened', () => {
-		const settings = settingsOf(survey())
+	it('sends an empty list when the last campaign is detached', () => {
+		const saved = settingsOf(survey({ campaign_ids: ['a'] }))
 
-		expect(settingsPatch(settings, true).campaign_ids).toEqual([])
-		expect(settingsPatch(settings, true).visibility).toBe('PUBLIC')
-		expect('visibility' in settingsPatch(settings, false)).toBe(false)
+		expect(settingsPatch({ ...saved, campaignIds: [] }, saved, true)).toEqual({
+			campaign_ids: [],
+		})
+	})
+
+	it('sends only the changed fields and omits the visibility once opened', () => {
+		const saved = settingsOf(survey({ description: 'Avant' }))
+
+		expect(
+			settingsPatch({ ...saved, title: 'Nouveau titre' }, saved, true),
+		).toEqual({ title: 'Nouveau titre' })
+		expect(settingsPatch({ ...saved, description: '  ' }, saved, true)).toEqual(
+			{ description: null },
+		)
+		expect(
+			settingsPatch({ ...saved, visibility: 'MEMBERS' }, saved, true),
+		).toEqual({ visibility: 'MEMBERS' })
+		expect(
+			settingsPatch({ ...saved, visibility: 'MEMBERS' }, saved, false),
+		).toEqual({})
 	})
 })

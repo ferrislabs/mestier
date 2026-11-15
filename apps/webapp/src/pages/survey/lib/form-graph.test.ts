@@ -426,22 +426,93 @@ function expectedVisits(
 		.map((item) => item.id)
 }
 
+function caseSeed(index: number): number {
+	return (20261115 + Math.imul(index, 2654435761)) >>> 0
+}
+
+const BRANCH_ORDER = ['NEXT', 'THEN', 'ELSE'] as const
+
+function canonical(graph: EditorGraph): string {
+	const normalized = normalizeGraph(graph)
+	const names = new Map<string, string>()
+	const visit = (id: string | null | undefined) => {
+		if (!id || names.has(id)) return
+		const node = normalized.nodes.find((item) => item.id === id)
+		if (!node) return
+		names.set(id, node.type === 'CONDITION' ? `c${names.size}` : id)
+		for (const branch of BRANCH_ORDER) {
+			visit(
+				normalized.edges.find(
+					(edge) => edge.from === id && edge.branch === branch,
+				)?.to,
+			)
+		}
+	}
+	visit(normalized.start)
+	const rename = (id: string) => names.get(id) ?? `unreachable:${id}`
+	return JSON.stringify({
+		start: normalized.start ? rename(normalized.start) : null,
+		nodes: normalized.nodes
+			.map((node) => ({ ...node, id: rename(node.id) }))
+			.sort((a, b) => a.id.localeCompare(b.id)),
+		edges: normalized.edges
+			.map((edge) => `${rename(edge.from)}:${edge.branch}:${rename(edge.to)}`)
+			.sort(),
+	})
+}
+
 describe('random forms', () => {
 	it('round trip, validate and follow the expected path for 200 seeded forms', () => {
-		const random = mulberry32(20261115)
-		for (let seed = 0; seed < 200; seed += 1) {
+		for (let index = 0; index < 200; index += 1) {
+			const seed = caseSeed(index)
+			const random = mulberry32(seed)
 			const value = randomForm(random, seed)
 			const graph = buildGraph(value)
-			expect(parseGraph(graph)).toEqual({ kind: 'form', form: value })
+			expect(parseGraph(graph), `round trip, seed ${seed}`).toEqual({
+				kind: 'form',
+				form: value,
+			})
 			if (value.questions.length === 0) continue
-			expect(validateGraph(normalizeGraph(graph))).toEqual([])
+			expect(
+				validateGraph(normalizeGraph(graph)),
+				`validation, seed ${seed}`,
+			).toEqual([])
 			for (let draw = 0; draw < 5; draw += 1) {
 				const answers = randomAnswers(random, value)
-				expect(answeredPath(graph, answers).map((node) => node.id)).toEqual(
-					expectedVisits(value, answers),
-				)
+				expect(
+					answeredPath(graph, answers).map((node) => node.id),
+					`path ${draw}, seed ${seed}`,
+				).toEqual(expectedVisits(value, answers))
 			}
 		}
+	})
+
+	it('reads a randomly rewired graph as advanced or as a form that rebuilds it, for 100 seeded cases', () => {
+		let mutated = 0
+		for (let index = 0; index < 100; index += 1) {
+			const seed = caseSeed(1000 + index)
+			const random = mulberry32(seed)
+			let value = randomForm(random, seed)
+			while (value.questions.length === 0) value = randomForm(random, seed)
+			const graph = buildGraph(value)
+			const edge = Math.floor(random() * graph.edges.length)
+			const target =
+				graph.nodes[Math.floor(random() * graph.nodes.length)]?.id ?? ''
+			const rewired: EditorGraph = {
+				...graph,
+				edges: graph.edges.map((item, at) =>
+					at === edge ? { ...item, to: target } : item,
+				),
+			}
+			if (graph.edges[edge]?.to !== target) mutated += 1
+			const parsed = parseGraph(rewired)
+			if (parsed.kind === 'advanced') continue
+			expect(
+				canonical(buildGraph(parsed.form)),
+				`rewired edge ${edge} to ${target}, seed ${seed}`,
+			).toBe(canonical(rewired))
+		}
+		expect(mutated).toBeGreaterThan(50)
 	})
 })
 

@@ -3,10 +3,13 @@ import {
 	addCondition,
 	changeKind,
 	dependentsOf,
+	dropQuestion,
 	duplicateQuestion,
 	insertQuestion,
+	kindChangeDrops,
 	moveQuestion,
 	newQuestion,
+	removeCondition,
 	removeOption,
 	removeQuestion,
 	renameOption,
@@ -99,6 +102,42 @@ describe('survey form edition', () => {
 		expect(next.questions[2].rule?.conditions[0].option).toBe('Oui !')
 	})
 
+	it('reads a rule back as all once a single condition remains', () => {
+		const form: SurveyForm = {
+			...base(),
+			questions: base().questions.map((item) =>
+				item.id === 'c'
+					? {
+							...item,
+							rule: {
+								join: 'ANY',
+								conditions: [
+									{ question: 'a', option: 'Oui', checked: true },
+									{ question: 'a', option: 'Non', checked: true },
+								],
+							},
+						}
+					: item,
+			),
+		}
+		expect(removeCondition(form, 'c', 1).questions[2].rule).toEqual({
+			join: 'ALL',
+			conditions: [{ question: 'a', option: 'Oui', checked: true }],
+		})
+	})
+
+	it('drops a question onto another through the move rules', () => {
+		expect(dropQuestion(base(), 'b', 'b')).toBeNull()
+		expect(dropQuestion(base(), 'b', null)).toBeNull()
+		const moved = dropQuestion(base(), 'b', 'a')
+		expect(moved?.kind).toBe('moved')
+		if (moved?.kind !== 'moved') throw new Error('moved expected')
+		expect(moved.form.questions.map((item) => item.id)).toEqual(['b', 'a', 'c'])
+		expect(moved.position).toBe(0)
+		expect(dropQuestion(base(), 'c', 'a')?.kind).toBe('refused')
+		expect(dropQuestion(base(), 'a', 'c')?.kind).toBe('refused')
+	})
+
 	it('drops the conditions of a removed option', () => {
 		const result = removeOption(base(), 'a', 0)
 		expect(result.removed).toBe(1)
@@ -106,14 +145,42 @@ describe('survey form edition', () => {
 		expect(result.form.questions[2].rule).toBeNull()
 	})
 
-	it('keeps options between choice kinds and clears them otherwise', () => {
+	it('does not move conditions between duplicate option texts', () => {
+		const form: SurveyForm = {
+			...base(),
+			questions: base().questions.map((item) =>
+				item.id === 'a' ? { ...item, options: ['Oui', 'Oui', 'Non'] } : item,
+			),
+		}
+		const next = renameOption(form, 'a', 1, 'Peut-être')
+		expect(next.questions[0].options).toEqual(['Oui', 'Peut-être', 'Non'])
+		expect(next.questions[2].rule?.conditions[0].option).toBe('Oui')
+	})
+
+	it('keeps the typed options across kind changes and prunes only dependent conditions', () => {
 		const multiple = changeKind(base(), 'a', 'MULTIPLE_CHOICE')
 		expect(multiple.removed).toBe(0)
 		expect(multiple.form.questions[0].options).toEqual(['Oui', 'Non'])
+		expect(kindChangeDrops(base(), 'a', 'TEXT')).toBe(1)
+		expect(kindChangeDrops(base(), 'a', 'MULTIPLE_CHOICE')).toBe(0)
+		expect(kindChangeDrops(base(), 'b', 'DATE')).toBe(0)
 		const text = changeKind(base(), 'a', 'TEXT')
 		expect(text.removed).toBe(1)
-		expect(text.form.questions[0].options).toEqual([])
+		expect(text.form.questions[0].options).toEqual(['Oui', 'Non'])
 		expect(text.form.questions[2].rule).toBeNull()
+		const back = changeKind(text.form, 'a', 'SINGLE_CHOICE')
+		expect(back.form.questions[0].options).toEqual(['Oui', 'Non'])
+		const dated = changeKind(
+			{
+				...base(),
+				questions: [{ ...newQuestion('p', 'PHOTO'), maxPhotos: 3 }],
+			},
+			'p',
+			'DATE',
+		)
+		expect(
+			changeKind(dated.form, 'p', 'PHOTO').form.questions[0].maxPhotos,
+		).toBe(3)
 		const photo = changeKind(
 			{
 				...base(),
