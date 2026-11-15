@@ -211,7 +211,7 @@ export function QuestionCard({
 										type="button"
 										variant="outline"
 										size="sm"
-										className="min-h-11 py-0.5 pr-2.5 pl-0.5 sm:min-h-8"
+										className="min-h-11 py-0 pr-2.5 pl-1 has-[>svg]:pr-2.5 has-[>svg]:pl-1 sm:h-8 sm:min-h-8"
 										aria-label={`Type de la question ${number} : ${entry.title}`}
 									>
 										<KindIconTile icon={entry.icon} hue={entry.hue} size="sm" />
