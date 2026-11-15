@@ -28,7 +28,7 @@ export function ChoiceCards({
 			aria-describedby={describedBy}
 			className={cn(
 				'm-0 grid min-w-0 border-0 p-0',
-				compact ? 'gap-1.5 sm:grid-cols-2' : 'gap-3',
+				compact ? 'gap-1.5 sm:grid-cols-2' : 'gap-2',
 			)}
 		>
 			{options.map((option, position) => {
@@ -42,7 +42,7 @@ export function ChoiceCards({
 							'group flex cursor-pointer items-center border bg-card transition-colors',
 							compact
 								? 'min-h-9 gap-2 rounded-md px-2.5 py-1 text-sm'
-								: 'min-h-14 gap-4 rounded-xl px-4 py-3 text-base',
+								: 'min-h-10 gap-3 rounded-md px-3 py-2 text-sm',
 							'hover:border-primary/50 has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50',
 							checked && 'border-primary bg-primary/5',
 							invalid && !checked && 'border-destructive/60',
@@ -71,7 +71,7 @@ export function ChoiceCards({
 							aria-hidden
 							className={cn(
 								'flex shrink-0 items-center justify-center border-2 transition-colors',
-								compact ? 'size-4' : 'size-6',
+								compact ? 'size-4' : 'size-5',
 								multiple ? 'rounded-md' : 'rounded-full',
 								checked
 									? 'border-primary bg-primary text-primary-foreground'
@@ -80,7 +80,7 @@ export function ChoiceCards({
 						>
 							{checked ? (
 								<Check
-									className={compact ? 'size-3' : 'size-4'}
+									className={compact ? 'size-3' : 'size-3.5'}
 									strokeWidth={3}
 								/>
 							) : null}

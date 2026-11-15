@@ -97,7 +97,7 @@ export function QuestionStep({
 		<section
 			className={cn(
 				'flex flex-col motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300',
-				compact ? 'gap-3' : 'gap-6',
+				compact ? 'gap-2.5' : 'gap-4',
 			)}
 		>
 			{progress ? <StepProgressIndicator progress={progress} /> : null}
@@ -114,7 +114,7 @@ export function QuestionStep({
 					tabIndex={-1}
 					className={cn(
 						'text-balance break-words rounded-md font-semibold leading-snug tracking-tight outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-						compact ? 'text-lg' : 'text-2xl sm:text-[1.75rem]',
+						compact ? 'text-base' : 'text-xl',
 					)}
 				>
 					{isField ? (

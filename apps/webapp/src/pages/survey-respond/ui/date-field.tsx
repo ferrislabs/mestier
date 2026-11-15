@@ -50,7 +50,7 @@ export function DateField({
 						aria-invalid={invalid || undefined}
 						aria-describedby={describedBy}
 						className={cn(
-							'h-12 min-w-0 flex-1 justify-start rounded-lg bg-card px-4 text-base font-normal shadow-none',
+							'h-10 min-w-0 flex-1 justify-start rounded-md bg-card px-3 text-sm font-normal shadow-none',
 							!day && 'text-muted-foreground',
 						)}
 					>
@@ -79,7 +79,7 @@ export function DateField({
 					aria-label="Heure"
 					value={time}
 					aria-invalid={invalid || undefined}
-					className="h-12 w-32 rounded-lg bg-card px-4 text-base shadow-none md:text-base [&::-webkit-calendar-picker-indicator]:hidden"
+					className="h-10 w-28 rounded-md bg-card px-3 text-sm shadow-none md:text-sm [&::-webkit-calendar-picker-indicator]:hidden"
 					onChange={(event) =>
 						onChange(compose(day ?? new Date(), event.target.value))
 					}

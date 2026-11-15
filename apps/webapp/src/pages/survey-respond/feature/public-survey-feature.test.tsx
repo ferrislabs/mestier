@@ -462,8 +462,10 @@ describe('PublicSurveyFeature', () => {
 		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
 		expect(await screen.findByText(/Connexion impossible/)).toBeTruthy()
 		await userEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
-		expect(await screen.findByText('Réponses enregistrées')).toBeTruthy()
-		expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(2)
+		await waitFor(() =>
+			expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(2),
+		)
+		expect(screen.queryByText(/Connexion impossible/)).toBe(null)
 	})
 })
 

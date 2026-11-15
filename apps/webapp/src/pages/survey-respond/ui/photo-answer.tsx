@@ -11,7 +11,7 @@ const STATUS_LABELS: Record<PhotoItem['status'], string> = {
 }
 
 const PICKER_CLASS =
-	'flex min-h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed bg-card px-4 text-base font-medium transition-colors hover:border-primary/60 hover:bg-primary/5 has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50'
+	'flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed bg-card px-3 text-sm font-medium transition-colors hover:border-primary/60 hover:bg-primary/5 has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50'
 
 function filesOf(event: ChangeEvent<HTMLInputElement>): File[] {
 	const files = Array.from(event.target.files ?? [])

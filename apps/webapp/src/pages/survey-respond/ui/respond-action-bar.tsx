@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, CloudOff, Loader2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CloudOff, Loader2 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
 import type { SaveState } from '#/pages/survey-respond/lib/respond-types'
@@ -6,7 +6,7 @@ import type { SaveState } from '#/pages/survey-respond/lib/respond-types'
 const SAVE_LABELS: Record<Exclude<SaveState, 'error'>, string> = {
 	idle: '',
 	saving: 'Enregistrement…',
-	saved: 'Réponses enregistrées',
+	saved: '',
 }
 
 export function SaveStatus({
@@ -21,13 +21,10 @@ export function SaveStatus({
 	return (
 		<div
 			aria-live="polite"
-			className="flex min-h-6 items-center gap-2 text-xs text-muted-foreground"
+			className="flex items-center gap-2 text-xs text-muted-foreground empty:hidden has-[span:empty]:hidden"
 		>
 			{state === 'saving' ? (
 				<Loader2 className="size-3.5 motion-safe:animate-spin" aria-hidden />
-			) : null}
-			{state === 'saved' ? (
-				<Check className="size-3.5 text-success" aria-hidden />
 			) : null}
 			{state === 'error' ? (
 				<>

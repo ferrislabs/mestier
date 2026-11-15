@@ -35,7 +35,7 @@ const FIELD_PROPS: Record<
 }
 
 const FIELD_CLASS =
-	'h-12 rounded-lg bg-card px-4 text-base shadow-none md:text-base'
+	'h-10 rounded-md bg-card px-3 text-sm shadow-none md:text-sm'
 
 export function AnswerInput({
 	id,
@@ -61,11 +61,11 @@ export function AnswerInput({
 			<Textarea
 				id={id}
 				value={value}
-				rows={5}
+				rows={3}
 				required={required}
 				aria-invalid={invalid || undefined}
 				aria-describedby={describedBy}
-				className="min-h-36 rounded-lg px-4 py-3 text-base shadow-none md:text-base"
+				className="min-h-24 rounded-md px-3 py-2 text-sm shadow-none md:text-sm"
 				onChange={(event) => onChange(event.target.value)}
 			/>
 		)
