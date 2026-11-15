@@ -7,6 +7,7 @@ import { useHasPermission } from '#/hooks/use-permissions'
 import {
 	useCampaigns,
 	useCloseSurvey,
+	useDeleteSurvey,
 	useDuplicateSurvey,
 	useOpenSurvey,
 	useSurvey,
@@ -51,6 +52,7 @@ import {
 } from '#/pages/survey/lib/survey-settings'
 import type { Campaign, Survey } from '#/pages/survey/types'
 import { questionLabelId } from '#/pages/survey/ui/question-card'
+import { SurveyActionsPanel } from '#/pages/survey/ui/survey-actions-panel'
 import {
 	ProblemsSummary,
 	SurveyEditorHeader,
@@ -133,7 +135,7 @@ const END_MESSAGE_NEEDS_QUESTION =
 
 const UNSAVED_DESCRIPTION = 'Vos modifications non enregistrées seront perdues.'
 
-type Confirmation = 'open' | 'close'
+type Confirmation = 'open' | 'close' | 'delete'
 
 export function SurveyEditorWorkspace({
 	survey,
@@ -150,6 +152,7 @@ export function SurveyEditorWorkspace({
 	const openSurvey = useOpenSurvey()
 	const closeSurvey = useCloseSurvey()
 	const duplicateSurvey = useDuplicateSurvey()
+	const deleteSurvey = useDeleteSurvey()
 
 	const [initial] = useState(() => initialState(survey))
 	const advanced = initial.advanced
@@ -288,7 +291,12 @@ export function SurveyEditorWorkspace({
 		if (action === 'open' && dirty && !(await save())) return
 		try {
 			if (action === 'open') await openSurvey.mutateAsync({ path })
-			else await closeSurvey.mutateAsync({ path })
+			else if (action === 'delete') {
+				await deleteSurvey.mutateAsync({ path })
+				toast.success(lifecycleCopy(action, survey.title).done)
+				await goTo(surveysPath())
+				return
+			} else await closeSurvey.mutateAsync({ path })
 			toast.success(lifecycleCopy(action, survey.title).done)
 		} catch (failure) {
 			refuse(failure)
@@ -337,41 +345,43 @@ export function SurveyEditorWorkspace({
 		<div className="flex min-h-0 flex-1">
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 				<UnsavedGuard dirty={dirty} description={UNSAVED_DESCRIPTION} />
-				<SurveyEditorHeader
-					survey={survey}
-					title={settings.title}
-					titleEditable={canManage}
-					canManage={canManage}
-					dirty={dirty}
-					saving={
-						updateSurvey.isPending ||
-						openSurvey.isPending ||
-						closeSurvey.isPending
-					}
-					duplicating={duplicateSurvey.isPending}
-					saveBlockedReason={saveBlockedReason}
-					problems={
-						advanced === null && canManage ? (
-							<ProblemsSummary
-								count={allProblems.length}
-								onFocusFirst={focusFirstProblem}
-							/>
-						) : null
-					}
-					onTitle={(value) =>
-						setSettings((current) => ({ ...current, title: value }))
-					}
-					onBack={() => void goTo(surveysPath())}
-					previewing={previewing}
-					onPreviewing={setPreviewing}
-					onSettings={() => setSettingsOpen(true)}
-					onResponses={() => void goTo(surveyResponsesPath(survey.id))}
-					onSave={() => void save()}
-					onOpen={requestOpen}
-					onClose={() => setConfirmation('close')}
-					onDuplicate={() => void duplicate()}
-					onCopyLink={copyLink}
-				/>
+				{wide ? null : (
+					<SurveyEditorHeader
+						survey={survey}
+						title={settings.title}
+						titleEditable={canManage}
+						canManage={canManage}
+						dirty={dirty}
+						saving={
+							updateSurvey.isPending ||
+							openSurvey.isPending ||
+							closeSurvey.isPending
+						}
+						duplicating={duplicateSurvey.isPending}
+						saveBlockedReason={saveBlockedReason}
+						problems={
+							advanced === null && canManage ? (
+								<ProblemsSummary
+									count={allProblems.length}
+									onFocusFirst={focusFirstProblem}
+								/>
+							) : null
+						}
+						onTitle={(value) =>
+							setSettings((current) => ({ ...current, title: value }))
+						}
+						onBack={() => void goTo(surveysPath())}
+						previewing={previewing}
+						onPreviewing={setPreviewing}
+						onSettings={() => setSettingsOpen(true)}
+						onResponses={() => void goTo(surveyResponsesPath(survey.id))}
+						onSave={() => void save()}
+						onOpen={requestOpen}
+						onClose={() => setConfirmation('close')}
+						onDuplicate={() => void duplicate()}
+						onCopyLink={copyLink}
+					/>
+				)}
 				{!canManage ? (
 					<ReadOnlyBanner />
 				) : survey.status === 'OPENED' ? (
@@ -430,6 +440,39 @@ export function SurveyEditorWorkspace({
 			</div>
 			{wide ? (
 				<SurveySettingsPanel
+					top={
+						<SurveyActionsPanel
+							survey={survey}
+							title={settings.title}
+							canManage={canManage}
+							dirty={dirty}
+							saving={
+								updateSurvey.isPending ||
+								openSurvey.isPending ||
+								closeSurvey.isPending ||
+								deleteSurvey.isPending
+							}
+							duplicating={duplicateSurvey.isPending}
+							saveBlockedReason={saveBlockedReason}
+							problems={
+								advanced === null && canManage ? (
+									<ProblemsSummary
+										count={allProblems.length}
+										onFocusFirst={focusFirstProblem}
+									/>
+								) : null
+							}
+							previewing={previewing}
+							onPreviewing={setPreviewing}
+							onResponses={() => void goTo(surveyResponsesPath(survey.id))}
+							onSave={() => void save()}
+							onOpen={requestOpen}
+							onClose={() => setConfirmation('close')}
+							onDuplicate={() => void duplicate()}
+							onDelete={() => setConfirmation('delete')}
+							onCopyLink={copyLink}
+						/>
+					}
 					settings={settings}
 					errors={errors}
 					campaigns={campaigns}

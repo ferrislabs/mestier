@@ -1,4 +1,5 @@
 import { Lock } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Field } from '#/components/ui/field'
@@ -204,7 +205,11 @@ const readOnlyHint = (readOnly: boolean) =>
 		? 'Vous n’avez pas la permission de modifier ces réglages.'
 		: 'Enregistrez le questionnaire pour appliquer vos réglages.'
 
-export function SurveySettingsPanel(props: {
+export function SurveySettingsPanel({
+	top,
+	...props
+}: {
+	top?: ReactNode
 	settings: SurveySettings
 	errors: SettingsErrors
 	campaigns: readonly Campaign[]
@@ -217,6 +222,7 @@ export function SurveySettingsPanel(props: {
 			aria-label="Réglages du questionnaire"
 			className="w-96 shrink-0 overflow-y-auto border-l bg-card"
 		>
+			{top}
 			<div className="grid gap-1 p-4 pb-3">
 				<h2 className="font-semibold text-base">Réglages du questionnaire</h2>
 				<p className="text-muted-foreground text-sm">
