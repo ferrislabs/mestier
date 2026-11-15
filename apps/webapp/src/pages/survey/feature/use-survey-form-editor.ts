@@ -8,6 +8,7 @@ import {
 	changeKind,
 	clearRule,
 	dependentsOf,
+	describeQuestion,
 	dropQuestion,
 	duplicateQuestion,
 	type FormQuestion,
@@ -187,6 +188,9 @@ export function useSurveyFormEditor(
 		switch (action.type) {
 			case 'label':
 				changeForm(updateQuestion(form, id, { label: action.value }))
+				return
+			case 'description':
+				changeForm(describeQuestion(form, id, action.value))
 				return
 			case 'required':
 				changeForm(updateQuestion(form, id, { required: action.value }))

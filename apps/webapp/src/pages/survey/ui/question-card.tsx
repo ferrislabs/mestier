@@ -20,7 +20,11 @@ import { Switch } from '#/components/ui/switch'
 import { Textarea } from '#/components/ui/textarea'
 import { cn } from '#/lib/utils'
 import { KindIconTile } from '#/pages/automation/ui/kind-icon-tile'
-import { MAX_PHOTOS_LIMIT } from '#/pages/survey/lib/graph-validation'
+import {
+	descriptionLength,
+	MAX_DESCRIPTION_LENGTH,
+	MAX_PHOTOS_LIMIT,
+} from '#/pages/survey/lib/graph-validation'
 import {
 	isChoiceKind,
 	isIdentifierKind,
@@ -38,6 +42,7 @@ import { QuestionOptions } from '#/pages/survey/ui/question-options'
 
 export type QuestionAction =
 	| { type: 'label'; value: string }
+	| { type: 'description'; value: string }
 	| { type: 'kind'; kind: QuestionKind }
 	| { type: 'required'; value: boolean }
 	| { type: 'add-option' }
@@ -125,6 +130,10 @@ export function QuestionCard({
 	const requiredId = `question-${id}-required`
 	const identifierId = `question-${id}-identifier`
 	const photosId = `question-${id}-photos`
+	const descriptionId = `question-${id}-description`
+	const counterId = `question-${id}-description-counter`
+	const length = descriptionLength(question.description)
+	const tooLong = length > MAX_DESCRIPTION_LENGTH
 	const takenByOther =
 		identifierOwner !== undefined && identifierOwner.id !== id
 	const ruleCount = question.rule?.conditions.length ?? 0
@@ -250,6 +259,37 @@ export function QuestionCard({
 							onAction({ type: 'label', value: event.target.value })
 						}
 					/>
+					<div className="grid gap-1">
+						<label
+							htmlFor={descriptionId}
+							className="text-muted-foreground text-xs"
+						>
+							Description (facultative)
+							<span className="sr-only"> de la question {number}</span>
+						</label>
+						<Textarea
+							id={descriptionId}
+							value={question.description}
+							rows={1}
+							placeholder="Précisez la question si besoin"
+							disabled={readOnly}
+							aria-invalid={tooLong || undefined}
+							aria-describedby={counterId}
+							className="min-h-9 resize-none text-sm md:text-sm"
+							onChange={(event) =>
+								onAction({ type: 'description', value: event.target.value })
+							}
+						/>
+						<p
+							id={counterId}
+							className={cn(
+								'text-right text-muted-foreground text-xs tabular-nums',
+								tooLong && 'font-medium text-destructive',
+							)}
+						>
+							{length}/{MAX_DESCRIPTION_LENGTH}
+						</p>
+					</div>
 				</div>
 			</div>
 			{isChoiceKind(question.kind) ? (

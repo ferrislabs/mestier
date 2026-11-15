@@ -162,3 +162,31 @@ describe('useSurveyFormEditor blocks', () => {
 		expect(result.current.form.questions[2].rule).toBeNull()
 	})
 })
+
+describe('useSurveyFormEditor descriptions', () => {
+	it('describes a question, keeps it on duplicate and on a kind change', () => {
+		const onEdit = vi.fn()
+		const { result } = renderHook(() => useSurveyFormEditor(FORM, onEdit))
+		act(() =>
+			result.current.onQuestionAction('b', {
+				type: 'description',
+				value: 'Précisez la pièce',
+			}),
+		)
+		expect(result.current.form.questions[1].description).toBe(
+			'Précisez la pièce',
+		)
+		expect(onEdit).toHaveBeenCalledTimes(1)
+		act(() => result.current.onQuestionAction('b', { type: 'duplicate' }))
+		expect(result.current.form.questions[2].description).toBe(
+			'Précisez la pièce',
+		)
+		act(() =>
+			result.current.onQuestionAction('b', { type: 'kind', kind: 'NUMBER' }),
+		)
+		expect(result.current.form.questions[1]).toMatchObject({
+			kind: 'NUMBER',
+			description: 'Précisez la pièce',
+		})
+	})
+})

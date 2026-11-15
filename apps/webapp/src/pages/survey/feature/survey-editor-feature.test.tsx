@@ -680,6 +680,7 @@ describe('dragAnnouncements', () => {
 				identifier: false,
 				rule: null,
 				block: null,
+				description: '',
 			},
 			{
 				id: 'b',
@@ -691,6 +692,7 @@ describe('dragAnnouncements', () => {
 				identifier: false,
 				rule: null,
 				block: null,
+				description: '',
 			},
 			{
 				id: 'c',
@@ -705,6 +707,7 @@ describe('dragAnnouncements', () => {
 					conditions: [{ question: 'a', option: 'Oui', checked: true }],
 				},
 				block: null,
+				description: '',
 			},
 		],
 	}
@@ -914,5 +917,104 @@ describe('SurveyEditorFeature blocks', () => {
 			expect.stringMatching(/^Déplacement refusé/),
 			{ duration: 6000 },
 		)
+	})
+})
+
+const DESCRIBED_GRAPH: NonNullable<Survey['graph']> = {
+	...BLOCK_GRAPH,
+	nodes: BLOCK_GRAPH.nodes.map((node) =>
+		node.type === 'QUESTION'
+			? {
+					...node,
+					description: node.id === 'q2' ? 'Telle que sur la carte grise' : null,
+				}
+			: node,
+	),
+}
+
+function descriptionField(number: number) {
+	return screen.getByLabelText(
+		`Description (facultative) de la question ${number}`,
+	) as HTMLTextAreaElement
+}
+
+describe('SurveyEditorFeature descriptions', () => {
+	it('edits a description under the label, inside a block too, with a counter, and saves it trimmed', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: DESCRIBED_GRAPH })],
+		})
+		api.mockMutation('patch', PATHS.survey, () => ({
+			data: survey({ graph: DESCRIBED_GRAPH }),
+		}))
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await screen.findByLabelText('Libellé de la question 1')
+		const inBlock = descriptionField(2)
+		expect(within(blockRegion(2)).getByDisplayValue(inBlock.value)).toBe(
+			inBlock,
+		)
+		expect(inBlock.value).toBe('Telle que sur la carte grise')
+		expect(within(card(2)).getByText('28/500')).toBeTruthy()
+		const first = descriptionField(1)
+		expect(first.value).toBe('')
+		expect(first.placeholder).toBe('Précisez la question si besoin')
+		expect(first.tagName).toBe('TEXTAREA')
+		const label = screen.getByLabelText('Libellé de la question 1')
+		expect(
+			label.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy()
+
+		fireEvent.change(descriptionField(4), {
+			target: { value: '  Tout ce qui peut nous aider\n' },
+		})
+		expect(within(card(4)).getByText('27/500')).toBeTruthy()
+		await userEvent.click(saveButton())
+		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
+		const graph = patchBodies(api.calls)[0].graph
+		if (!graph) throw new Error('graph expected')
+		expect(
+			graph.nodes
+				.filter((node) => node.type === 'QUESTION')
+				.map((node) => ('description' in node ? node.description : undefined)),
+		).toEqual([
+			undefined,
+			'Telle que sur la carte grise',
+			undefined,
+			'Tout ce qui peut nous aider',
+		])
+	})
+
+	it('flags a description over 500 characters on its card and blocks the save', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await screen.findByLabelText('Libellé de la question 1')
+		fireEvent.change(descriptionField(2), {
+			target: { value: 'é'.repeat(501) },
+		})
+		expect(within(card(2)).getByText('501/500')).toBeTruthy()
+		expect(
+			within(card(2)).getByText(
+				REASON_MESSAGES.graph_question_description_too_long,
+			),
+		).toBeTruthy()
+		await userEvent.click(saveButton())
+		expect(patchBodies(api.calls)).toHaveLength(0)
+	})
+
+	it('shows the description read-only to a reader', async () => {
+		installSurveyApi({
+			permissions: ['VIEW_SURVEYS'],
+			surveys: [survey({ graph: DESCRIBED_GRAPH })],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await screen.findByText(/Lecture seule : vous n’avez pas la permission/)
+		expect(descriptionField(2).disabled).toBe(true)
+		expect(descriptionField(2).value).toBe('Telle que sur la carte grise')
 	})
 })
