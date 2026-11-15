@@ -113,4 +113,24 @@ describe('form problems', () => {
 		expect(questionOfNode(value, 'a')).toBe('a')
 		expect(questionOfNode(value, 'end')).toBeNull()
 	})
+
+	it('refuses a source that sits in a block shown under condition', () => {
+		const rule = {
+			join: 'ALL' as const,
+			conditions: [{ question: 'a', option: 'Oui', checked: true }],
+		}
+		const value = form([
+			question('a', 'SINGLE_CHOICE', { options: ['Oui'] }),
+			question('b', 'TEXT', { block: 'B', rule }),
+			question('c', 'SINGLE_CHOICE', { options: ['X'], block: 'B' }),
+			question('d', 'TEXT', {
+				rule: {
+					join: 'ALL',
+					conditions: [{ question: 'c', option: 'X', checked: true }],
+				},
+			}),
+		])
+		expect(messagesFor(value, 'd')).toEqual([FORM_MESSAGES.conditionSource])
+		expect(messagesFor(value, 'b')).toEqual([])
+	})
 })

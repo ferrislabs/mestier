@@ -35,6 +35,7 @@ function cleanNode(node: GraphNode): GraphNode {
 				: [],
 			max_photos: node.kind === 'PHOTO' ? (node.max_photos ?? null) : null,
 			identifier: Boolean(node.identifier),
+			...(node.block ? { block: node.block } : {}),
 		}
 	}
 	if (node.type === 'END') {

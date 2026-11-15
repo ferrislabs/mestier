@@ -26,6 +26,12 @@ export const REASON_MESSAGES = {
 	graph_question_label_empty: 'Donnez un libellé à la question.',
 	graph_option_empty: 'Une option est vide.',
 	graph_duplicate_option: 'Deux options portent le même libellé.',
+	graph_block_too_small:
+		'Un bloc regroupe au moins deux questions : ajoutez-en une ou sortez celle-ci du bloc.',
+	graph_block_not_contiguous:
+		'Les questions d’un bloc doivent se suivre, sans autre question ni condition entre elles.',
+	graph_block_member_has_condition:
+		'Une condition ne peut ni séparer les questions d’un bloc, ni dépendre d’une question du bloc qu’elle affiche : réglez la logique sur le bloc entier.',
 	condition_unknown_question: 'Choisissez la question testée par la condition.',
 	condition_on_non_choice:
 		'Une condition ne teste qu’une question à choix unique ou multiple.',

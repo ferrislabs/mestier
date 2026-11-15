@@ -1,9 +1,10 @@
 import { isChoiceKind } from '#/pages/survey/lib/question-kinds'
-import type {
-	DisplayRule,
-	FormQuestion,
-	RuleJoin,
-	SurveyForm,
+import {
+	blockEnd,
+	type DisplayRule,
+	type FormQuestion,
+	type RuleJoin,
+	type SurveyForm,
 } from '#/pages/survey/lib/survey-form'
 import { normalizeGraph } from '#/pages/survey/lib/survey-graph'
 import type {
@@ -85,7 +86,26 @@ function questionNode(item: FormQuestion): QuestionNode {
 		options: isChoiceKind(item.kind) ? item.options : [],
 		max_photos: item.kind === 'PHOTO' ? item.maxPhotos : null,
 		identifier: item.identifier,
+		...(item.block ? { block: item.block } : {}),
 	}
+}
+
+export function blocksWellFormed(questions: readonly FormQuestion[]): boolean {
+	const closed = new Set<string>()
+	let position = 0
+	while (position < questions.length) {
+		const block = questions[position].block
+		const last = blockEnd(questions, position)
+		if (block !== null) {
+			if (closed.has(block) || last === position) return false
+			if (questions.slice(position + 1, last + 1).some((item) => item.rule)) {
+				return false
+			}
+			closed.add(block)
+		}
+		position = last + 1
+	}
+	return true
 }
 
 function entryOf(form: SurveyForm, position: number): string {
@@ -109,6 +129,7 @@ export function buildGraph(form: SurveyForm): EditorGraph {
 	const edges: GraphEdge[] = []
 	form.questions.forEach((item, position) => {
 		const after = entryOf(form, position + 1)
+		const skip = entryOf(form, blockEnd(form.questions, position) + 1)
 		const conditions = item.rule?.conditions ?? []
 		conditions.forEach((condition, at) => {
 			const id = conditionNodeId(item.id, at)
@@ -123,10 +144,10 @@ export function buildGraph(form: SurveyForm): EditorGraph {
 				at + 1 < conditions.length ? conditionNodeId(item.id, at + 1) : null
 			if (item.rule?.join === 'ANY') {
 				edges.push({ from: id, to: item.id, branch: 'THEN' })
-				edges.push({ from: id, to: following ?? after, branch: 'ELSE' })
+				edges.push({ from: id, to: following ?? skip, branch: 'ELSE' })
 			} else {
 				edges.push({ from: id, to: following ?? item.id, branch: 'THEN' })
-				edges.push({ from: id, to: after, branch: 'ELSE' })
+				edges.push({ from: id, to: skip, branch: 'ELSE' })
 			}
 		})
 		nodes.push(questionNode(item))
@@ -149,6 +170,7 @@ function formQuestion(
 		maxPhotos: node.kind === 'PHOTO' ? (node.max_photos ?? null) : null,
 		identifier: Boolean(node.identifier),
 		rule,
+		block: node.block ?? null,
 	}
 }
 
@@ -183,7 +205,7 @@ function renamed(graph: EditorGraph, names: Map<string, string>): EditorGraph {
 interface Chain {
 	join: RuleJoin
 	conditions: ConditionNode[]
-	target: QuestionNode
+	members: QuestionNode[]
 	after: string
 }
 
@@ -229,34 +251,37 @@ export function parseGraph(graph: EditorGraph): ParsedGraph {
 		return { conditions, stop: cursor }
 	}
 
+	const membersFrom = (first: QuestionNode) => {
+		const members = [first]
+		let cursor = next(first.id, 'NEXT')
+		while (first.block && cursor && members.length < limit) {
+			const node = byId.get(cursor)
+			if (node?.type !== 'QUESTION' || node.block !== first.block) break
+			members.push(node)
+			cursor = next(node.id, 'NEXT')
+		}
+		return { members, after: cursor }
+	}
+
 	const chainAt = (start: string): Chain | null => {
 		const all = follow(start, 'THEN')
 		const allTarget = all.stop ? byId.get(all.stop) : undefined
 		if (allTarget?.type === 'QUESTION') {
-			const after = next(allTarget.id, 'NEXT')
+			const { members, after } = membersFrom(allTarget)
 			if (
 				after &&
 				all.conditions.every((node) => next(node.id, 'ELSE') === after)
 			) {
-				return {
-					join: 'ALL',
-					conditions: all.conditions,
-					target: allTarget,
-					after,
-				}
+				return { join: 'ALL', conditions: all.conditions, members, after }
 			}
 		}
 		const thenId = next(start, 'THEN')
 		const anyTarget = thenId ? byId.get(thenId) : undefined
 		if (anyTarget?.type !== 'QUESTION') return null
 		const any = follow(start, 'ELSE', anyTarget.id)
-		if (!any.stop || next(anyTarget.id, 'NEXT') !== any.stop) return null
-		return {
-			join: 'ANY',
-			conditions: any.conditions,
-			target: anyTarget,
-			after: any.stop,
-		}
+		const { members, after } = membersFrom(anyTarget)
+		if (!any.stop || after !== any.stop) return null
+		return { join: 'ANY', conditions: any.conditions, members, after }
 	}
 
 	const questions: FormQuestion[] = []
@@ -277,15 +302,18 @@ export function parseGraph(graph: EditorGraph): ParsedGraph {
 			continue
 		}
 		const chain = chainAt(node.id)
-		if (!chain || seen.has(chain.target.id)) return advanced('shape')
+		if (!chain || chain.members.some((member) => seen.has(member.id))) {
+			return advanced('shape')
+		}
+		const [target, ...rest] = chain.members
 		for (const [position, condition] of chain.conditions.entries()) {
 			if (seen.has(condition.id)) return advanced('cycle')
 			seen.add(condition.id)
-			names.set(condition.id, conditionNodeId(chain.target.id, position))
+			names.set(condition.id, conditionNodeId(target.id, position))
 		}
-		seen.add(chain.target.id)
+		for (const member of chain.members) seen.add(member.id)
 		questions.push(
-			formQuestion(chain.target, {
+			formQuestion(target, {
 				join: chain.join,
 				conditions: chain.conditions.map((condition) => ({
 					question: condition.question,
@@ -293,9 +321,11 @@ export function parseGraph(graph: EditorGraph): ParsedGraph {
 					checked: condition.checked,
 				})),
 			}),
+			...rest.map((member) => formQuestion(member, null)),
 		)
 		cursor = chain.after
 	}
+	if (!blocksWellFormed(questions)) return advanced('shape')
 	const form: SurveyForm = {
 		questions,
 		endId: end.id,

@@ -679,6 +679,7 @@ describe('dragAnnouncements', () => {
 				maxPhotos: null,
 				identifier: false,
 				rule: null,
+				block: null,
 			},
 			{
 				id: 'b',
@@ -689,6 +690,7 @@ describe('dragAnnouncements', () => {
 				maxPhotos: null,
 				identifier: false,
 				rule: null,
+				block: null,
 			},
 			{
 				id: 'c',
@@ -702,6 +704,7 @@ describe('dragAnnouncements', () => {
 					join: 'ALL' as const,
 					conditions: [{ question: 'a', option: 'Oui', checked: true }],
 				},
+				block: null,
 			},
 		],
 	}

@@ -217,6 +217,122 @@ function conditionIssues(graph: EditorGraph, start: string): GraphIssue[] {
 	return issues
 }
 
+function blockOf(node: GraphNode | undefined): string | null {
+	return node?.type === 'QUESTION' ? (node.block ?? null) : null
+}
+
+function questionsThroughConditions(
+	byId: ReadonlyMap<string, GraphNode>,
+	condition: string,
+	neighbours: (id: string) => string[],
+): Set<string> {
+	const questions = new Set<string>()
+	const seen = new Set([condition])
+	const stack = neighbours(condition)
+	while (stack.length > 0) {
+		const id = stack.pop() as string
+		if (seen.has(id)) continue
+		seen.add(id)
+		const node = byId.get(id)
+		if (node?.type === 'QUESTION') questions.add(id)
+		else if (node?.type === 'CONDITION') stack.push(...neighbours(id))
+	}
+	return questions
+}
+
+function blockConditionIssues(
+	graph: EditorGraph,
+	byId: ReadonlyMap<string, GraphNode>,
+	predecessors: ReadonlyMap<string, string[]>,
+): GraphIssue[] {
+	const issues: GraphIssue[] = []
+	const flagged = new Set<string>()
+	for (const node of graph.nodes) {
+		if (node.type !== 'CONDITION') continue
+		const source = blockOf(byId.get(node.question))
+		const feeders = new Set(
+			[
+				...questionsThroughConditions(
+					byId,
+					node.id,
+					(id) => predecessors.get(id) ?? [],
+				),
+			].map((id) => blockOf(byId.get(id))),
+		)
+		const guarded = questionsThroughConditions(byId, node.id, (id) =>
+			successorsOf(graph, id),
+		)
+		for (const member of guarded) {
+			const block = blockOf(byId.get(member))
+			if (block === null || flagged.has(member)) continue
+			if (source === block || feeders.has(block)) {
+				flagged.add(member)
+				issues.push(issue('graph_block_member_has_condition', member))
+			}
+		}
+	}
+	return issues
+}
+
+function blockChainIssue(
+	graph: EditorGraph,
+	byId: ReadonlyMap<string, GraphNode>,
+	predecessors: ReadonlyMap<string, string[]>,
+	block: string,
+	members: readonly string[],
+): GraphIssue | null {
+	const inside = (id: string) => blockOf(byId.get(id)) === block
+	const heads = members.filter(
+		(member) => !(predecessors.get(member) ?? []).some(inside),
+	)
+	if (heads.length !== 1) {
+		return issue('graph_block_not_contiguous', heads[1] ?? members[0])
+	}
+	const chained = new Set([heads[0]])
+	let current = heads[0]
+	while (true) {
+		const following = graph.edges.find(
+			(edge) => edge.from === current && edge.branch === 'NEXT',
+		)?.to
+		if (following === undefined || !inside(following) || chained.has(following))
+			break
+		const incoming = predecessors.get(following) ?? []
+		if (incoming.length !== 1 || incoming[0] !== current) {
+			return issue('graph_block_not_contiguous', following)
+		}
+		chained.add(following)
+		current = following
+	}
+	const stray = members.find((member) => !chained.has(member))
+	return stray === undefined ? null : issue('graph_block_not_contiguous', stray)
+}
+
+function blockIssues(graph: EditorGraph): GraphIssue[] {
+	const blocks = new Map<string, string[]>()
+	for (const node of graph.nodes) {
+		const block = blockOf(node)
+		if (block === null) continue
+		blocks.set(block, [...(blocks.get(block) ?? []), node.id])
+	}
+	if (blocks.size === 0) return []
+	const small = [...blocks.values()].filter((members) => members.length < 2)
+	if (small.length > 0) {
+		return small.map((members) => issue('graph_block_too_small', members[0]))
+	}
+	const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+	const predecessors = new Map<string, string[]>()
+	for (const edge of graph.edges) {
+		if (!byId.has(edge.from) || !byId.has(edge.to)) continue
+		predecessors.set(edge.to, [...(predecessors.get(edge.to) ?? []), edge.from])
+	}
+	const conditions = blockConditionIssues(graph, byId, predecessors)
+	if (conditions.length > 0) return conditions
+	return [...blocks.entries()].flatMap(([block, members]) => {
+		const found = blockChainIssue(graph, byId, predecessors, block, members)
+		return found ? [found] : []
+	})
+}
+
 export function validateGraph(graph: EditorGraph): GraphIssue[] {
 	if (graph.nodes.length === 0) return [issue('graph_empty', null)]
 	const issues: GraphIssue[] = []
@@ -252,6 +368,7 @@ export function validateGraph(graph: EditorGraph): GraphIssue[] {
 	} else {
 		issues.push(...conditionIssues(graph, ''))
 	}
+	issues.push(...blockIssues(graph))
 	return issues
 }
 

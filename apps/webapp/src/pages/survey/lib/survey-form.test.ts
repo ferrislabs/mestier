@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
 	addCondition,
+	addToBlock,
+	blockMembers,
 	changeKind,
 	dependentsOf,
 	dropQuestion,
 	duplicateQuestion,
+	governingRule,
+	groupWithPrevious,
+	insertBlock,
 	insertQuestion,
 	kindChangeDrops,
+	moveBlock,
 	moveQuestion,
 	newQuestion,
 	removeCondition,
@@ -15,6 +21,7 @@ import {
 	renameOption,
 	ruleSources,
 	type SurveyForm,
+	ungroupQuestion,
 } from '#/pages/survey/lib/survey-form'
 
 function base(): SurveyForm {
@@ -211,5 +218,192 @@ describe('survey form edition', () => {
 		expect(next.questions[4].identifier).toBe(false)
 		const rule = duplicateQuestion(base(), 'c', 'c2')
 		expect(rule.questions[3].rule).toEqual(base().questions[2].rule)
+	})
+})
+
+const RULE = {
+	join: 'ALL' as const,
+	conditions: [{ question: 'a', option: 'Oui', checked: true }],
+}
+
+function blocky(): SurveyForm {
+	return {
+		endId: 'end',
+		endMessage: '',
+		questions: [
+			{ ...newQuestion('a', 'SINGLE_CHOICE'), options: ['Oui', 'Non'] },
+			{ ...newQuestion('b', 'TEXT'), block: 'B', rule: RULE },
+			{ ...newQuestion('c', 'TEXT'), block: 'B' },
+			{ ...newQuestion('d', 'TEXT'), block: 'B' },
+			{ ...newQuestion('e', 'SINGLE_CHOICE'), options: ['X'] },
+			newQuestion('f', 'TEXT'),
+		],
+	}
+}
+
+function ids(form: SurveyForm): string[] {
+	return form.questions.map((item) =>
+		item.block ? `${item.id}:${item.block}` : item.id,
+	)
+}
+
+describe('survey form blocks', () => {
+	it('creates a question outside any block', () => {
+		expect(newQuestion('x', 'TEXT').block).toBeNull()
+	})
+
+	it('inserts a block of two empty questions', () => {
+		const next = insertBlock(base(), ['x', 'y'], 'N', 1)
+		expect(ids(next)).toEqual(['a', 'x:N', 'y:N', 'b', 'c'])
+		expect(next.questions[1].label).toBe('')
+		expect(next.questions[1].kind).toBe('TEXT')
+	})
+
+	it('adds a question at the end of a block', () => {
+		const next = addToBlock(blocky(), 'B', newQuestion('x', 'DATE'))
+		expect(ids(next)).toEqual(['a', 'b:B', 'c:B', 'd:B', 'x:B', 'e', 'f'])
+		expect(next.questions[4].rule).toBeNull()
+	})
+
+	it('reads the rule of a member from the first member of its block', () => {
+		expect(governingRule(blocky(), 'd')).toEqual(RULE)
+		expect(governingRule(blocky(), 'e')).toBeNull()
+		expect(blockMembers(blocky(), 'c').map((item) => item.id)).toEqual([
+			'b',
+			'c',
+			'd',
+		])
+		expect(blockMembers(blocky(), 'e')).toEqual([])
+	})
+
+	it('offers as sources only always-asked choice questions before the block', () => {
+		const form = addToBlock(blocky(), 'B', {
+			...newQuestion('x', 'SINGLE_CHOICE'),
+			options: ['Z'],
+		})
+		expect(ruleSources(form, 'b').map((item) => item.id)).toEqual(['a'])
+		expect(ruleSources(form, 'f').map((item) => item.id)).toEqual(['a', 'e'])
+	})
+
+	it('groups a question with a lone previous question into a new block', () => {
+		const result = groupWithPrevious(blocky(), 'f', 'N')
+		expect(result.kind).toBe('grouped')
+		if (result.kind !== 'grouped') return
+		expect(ids(result.form)).toEqual(['a', 'b:B', 'c:B', 'd:B', 'e:N', 'f:N'])
+		expect(result.size).toBe(2)
+	})
+
+	it('groups a question into the block of the previous question', () => {
+		const result = groupWithPrevious(blocky(), 'e', 'N')
+		expect(result.kind).toBe('grouped')
+		if (result.kind !== 'grouped') return
+		expect(ids(result.form)).toEqual(['a', 'b:B', 'c:B', 'd:B', 'e:B', 'f'])
+		expect(result.size).toBe(4)
+	})
+
+	it('refuses to group the first question, a question with its own rule, or a source into a conditional block', () => {
+		expect(groupWithPrevious(blocky(), 'a', 'N').kind).toBe('refused')
+		const ruled = { ...base() }
+		expect(groupWithPrevious(ruled, 'c', 'N').kind).toBe('refused')
+		const sourced: SurveyForm = {
+			...blocky(),
+			questions: blocky().questions.map((item) =>
+				item.id === 'f'
+					? {
+							...item,
+							rule: {
+								join: 'ALL',
+								conditions: [{ question: 'e', option: 'X', checked: true }],
+							},
+						}
+					: item,
+			),
+		}
+		expect(groupWithPrevious(sourced, 'e', 'N').kind).toBe('refused')
+	})
+
+	it('takes a middle member out after its block', () => {
+		const result = ungroupQuestion(blocky(), 'c')
+		expect(ids(result.form)).toEqual(['a', 'b:B', 'd:B', 'c', 'e', 'f'])
+		expect(result.form.questions[3].rule).toEqual(RULE)
+		expect(result.dissolved).toBe(false)
+	})
+
+	it('takes the first member out before its block and keeps the rule on the block', () => {
+		const result = ungroupQuestion(blocky(), 'b')
+		expect(ids(result.form)).toEqual(['a', 'b', 'c:B', 'd:B', 'e', 'f'])
+		expect(result.form.questions[1].rule).toEqual(RULE)
+		expect(result.form.questions[2].rule).toEqual(RULE)
+		expect(result.form.questions[3].rule).toBeNull()
+	})
+
+	it('dissolves a block that falls to one member', () => {
+		const once = ungroupQuestion(blocky(), 'd').form
+		const twice = ungroupQuestion(once, 'c')
+		expect(twice.dissolved).toBe(true)
+		expect(ids(twice.form)).toEqual(['a', 'b', 'c', 'd', 'e', 'f'])
+		expect(twice.form.questions[1].rule).toEqual(RULE)
+	})
+
+	it('dissolves a block when deleting members and moves the rule to the new first member', () => {
+		const first = removeQuestion(blocky(), 'b')
+		expect(ids(first)).toEqual(['a', 'c:B', 'd:B', 'e', 'f'])
+		expect(first.questions[1].rule).toEqual(RULE)
+		const second = removeQuestion(first, 'd')
+		expect(ids(second)).toEqual(['a', 'c', 'e', 'f'])
+		expect(second.questions[1].rule).toEqual(RULE)
+	})
+
+	it('duplicates a member inside its block without a rule', () => {
+		const next = duplicateQuestion(blocky(), 'b', 'b2')
+		expect(ids(next)).toEqual(['a', 'b:B', 'b2:B', 'c:B', 'd:B', 'e', 'f'])
+		expect(next.questions[2].rule).toBeNull()
+	})
+
+	it('moves a member only inside its block and keeps the rule first', () => {
+		const down = moveQuestion(blocky(), 'b', 1)
+		expect(down.kind).toBe('moved')
+		if (down.kind !== 'moved') return
+		expect(ids(down.form)).toEqual(['a', 'c:B', 'b:B', 'd:B', 'e', 'f'])
+		expect(down.form.questions[1].rule).toEqual(RULE)
+		expect(down.form.questions[2].rule).toBeNull()
+		expect(moveQuestion(blocky(), 'b', -1).kind).toBe('refused')
+		expect(moveQuestion(blocky(), 'd', 1).kind).toBe('refused')
+	})
+
+	it('moves a lone question over a whole block', () => {
+		const result = moveQuestion(blocky(), 'e', -1)
+		expect(result.kind).toBe('moved')
+		if (result.kind !== 'moved') return
+		expect(ids(result.form)).toEqual(['a', 'e', 'b:B', 'c:B', 'd:B', 'f'])
+		expect(result.position).toBe(1)
+	})
+
+	it('moves a block as a unit and refuses to lift it above its source', () => {
+		const down = moveBlock(blocky(), 'B', 1)
+		expect(down.kind).toBe('moved')
+		if (down.kind !== 'moved') return
+		expect(ids(down.form)).toEqual(['a', 'e', 'b:B', 'c:B', 'd:B', 'f'])
+		expect(down.position).toBe(2)
+		expect(moveBlock(blocky(), 'B', -1).kind).toBe('refused')
+	})
+
+	it('drops a block onto a question, a question onto a block, and keeps members inside', () => {
+		const block = dropQuestion(blocky(), 'B', 'f')
+		expect(block?.kind).toBe('moved')
+		if (block?.kind === 'moved') {
+			expect(ids(block.form)).toEqual(['a', 'e', 'f', 'b:B', 'c:B', 'd:B'])
+		}
+		const lone = dropQuestion(blocky(), 'f', 'c')
+		expect(lone?.kind).toBe('moved')
+		if (lone?.kind === 'moved') {
+			expect(ids(lone.form)).toEqual(['a', 'f', 'b:B', 'c:B', 'd:B', 'e'])
+		}
+		const inside = dropQuestion(blocky(), 'd', 'c')
+		expect(inside?.kind).toBe('moved')
+		if (inside?.kind === 'moved') {
+			expect(ids(inside.form)).toEqual(['a', 'b:B', 'd:B', 'c:B', 'e', 'f'])
+		}
+		expect(dropQuestion(blocky(), 'c', 'f')?.kind).toBe('refused')
 	})
 })

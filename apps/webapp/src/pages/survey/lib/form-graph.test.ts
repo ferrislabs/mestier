@@ -130,9 +130,73 @@ const TABLE: [string, SurveyForm][] = [
 	],
 ]
 
+const BLOCK = 'b0000000-0000-4000-8000-000000000001'
+const OTHER_BLOCK = 'b0000000-0000-4000-8000-000000000002'
+
+const BLOCK_TABLE: [string, SurveyForm][] = [
+	[
+		'an unconditional block',
+		form([
+			question('x', 'TEXT', { block: BLOCK }),
+			question('y', 'NUMBER', { block: BLOCK }),
+			question('z', 'DATE', { block: BLOCK }),
+		]),
+	],
+	[
+		'a block guarded by an ALL rule',
+		form([
+			CHOICES.a,
+			CHOICES.b,
+			question('c', 'TEXT', { rule: ALL_TWO, block: BLOCK }),
+			question('d', 'TEXT', { block: BLOCK }),
+			question('e', 'TEXT'),
+		]),
+	],
+	[
+		'a block guarded by an ANY rule at the end',
+		form([
+			CHOICES.a,
+			CHOICES.b,
+			question('c', 'TEXT', {
+				rule: { ...ALL_TWO, join: 'ANY' },
+				block: BLOCK,
+			}),
+			question('d', 'PHOTO', { maxPhotos: 2, block: BLOCK }),
+		]),
+	],
+	[
+		'two adjacent blocks',
+		form([
+			question('c', 'TEXT', { block: BLOCK }),
+			question('d', 'TEXT', { block: BLOCK }),
+			question('e', 'TEXT', { block: OTHER_BLOCK }),
+			question('f', 'TEXT', { block: OTHER_BLOCK }),
+		]),
+	],
+	[
+		'a rule whose source is a member of an earlier block',
+		form([
+			{ ...CHOICES.a, block: BLOCK },
+			question('c', 'TEXT', { block: BLOCK }),
+			question('d', 'TEXT', {
+				rule: {
+					join: 'ALL',
+					conditions: [{ question: 'a', option: 'Oui', checked: true }],
+				},
+			}),
+		]),
+	],
+]
+
 describe('form round trip', () => {
 	it.each(TABLE)('keeps %s through the graph', (_, value) => {
 		expect(roundTrip(value)).toEqual({ kind: 'form', form: value })
+	})
+
+	it.each(BLOCK_TABLE)('keeps %s through the graph', (_, value) => {
+		const graph = buildGraph(value)
+		expect(validateGraph(normalizeGraph(graph))).toEqual([])
+		expect(parseGraph(graph)).toEqual({ kind: 'form', form: value })
 	})
 
 	it('builds an identical graph for an unchanged form', () => {
@@ -304,6 +368,86 @@ describe('graph shapes', () => {
 		})
 	})
 
+	it('writes no block key on a graph without blocks', () => {
+		for (const [, value] of TABLE) {
+			expect(JSON.stringify(buildGraph(value))).not.toContain('block')
+		}
+	})
+
+	it('reads a null block from the server as no block', () => {
+		const value = TABLE[3][1]
+		const graph = buildGraph(value)
+		const served: EditorGraph = {
+			...graph,
+			nodes: graph.nodes.map((node) =>
+				node.type === 'QUESTION' ? { ...node, block: null } : node,
+			),
+		}
+		expect(parseGraph(served)).toEqual({ kind: 'form', form: value })
+	})
+
+	it('chains the members by Next and sends the Else past the last member', () => {
+		const graph = buildGraph(BLOCK_TABLE[1][1])
+		const first = conditionNodeId('c', 0)
+		const second = conditionNodeId('c', 1)
+		expect(graph.edges).toEqual(
+			expect.arrayContaining([
+				{ from: 'b', to: first, branch: 'NEXT' },
+				{ from: first, to: second, branch: 'THEN' },
+				{ from: first, to: 'e', branch: 'ELSE' },
+				{ from: second, to: 'c', branch: 'THEN' },
+				{ from: second, to: 'e', branch: 'ELSE' },
+				{ from: 'c', to: 'd', branch: 'NEXT' },
+				{ from: 'd', to: 'e', branch: 'NEXT' },
+			]),
+		)
+		expect(
+			graph.nodes
+				.filter((node) => node.type === 'QUESTION')
+				.map((node) => [node.id, node.block ?? null]),
+		).toEqual([
+			['a', null],
+			['b', null],
+			['c', BLOCK],
+			['d', BLOCK],
+			['e', null],
+		])
+	})
+
+	it('refuses a condition guarding a single member of a block', () => {
+		const graph = buildGraph(
+			form([
+				CHOICES.a,
+				question('c', 'TEXT', { block: BLOCK }),
+				question('d', 'TEXT', { block: BLOCK }),
+			]),
+		)
+		const condition = conditionNodeId('d', 0)
+		const rewired: EditorGraph = {
+			...graph,
+			nodes: [
+				...graph.nodes,
+				{
+					type: 'CONDITION',
+					id: condition,
+					question: 'a',
+					option: 'Oui',
+					checked: true,
+				},
+			],
+			edges: [
+				...graph.edges.filter((edge) => edge.from !== 'c'),
+				{ from: 'c', to: condition, branch: 'NEXT' },
+				{ from: condition, to: 'd', branch: 'THEN' },
+				{ from: condition, to: END, branch: 'ELSE' },
+			],
+		}
+		expect(parseGraph(rewired)).toMatchObject({
+			kind: 'advanced',
+			reason: 'shape',
+		})
+	})
+
 	it('refuses a graph with two ends', () => {
 		const graph = buildGraph(form([question('a', 'TEXT')]))
 		graph.nodes.push({ type: 'END', id: 'other', message: null })
@@ -327,12 +471,25 @@ function mulberry32(seed: number) {
 
 const OPTION_POOL = ['A', 'B', 'C', 'D']
 
+function governing(
+	questions: readonly FormQuestion[],
+	index: number,
+): FormQuestion | undefined {
+	let first = index
+	const block = questions[index]?.block ?? null
+	while (block !== null && first > 0 && questions[first - 1]?.block === block) {
+		first -= 1
+	}
+	return questions[first]
+}
+
 function randomForm(random: () => number, seed: number): SurveyForm {
 	const pick = <T>(items: readonly T[]): T =>
 		items[Math.floor(random() * items.length)]
-	const count = Math.floor(random() * 7)
+	const count = Math.floor(random() * 9)
 	const questions: FormQuestion[] = []
 	let identifierTaken = false
+	let blocks = 0
 	for (let index = 0; index < count; index += 1) {
 		const kind = pick(QUESTION_KINDS).kind
 		const id = `q-${seed}-${index}`
@@ -351,8 +508,19 @@ function randomForm(random: () => number, seed: number): SurveyForm {
 			item.identifier = true
 			identifierTaken = true
 		}
+		const previous = questions[index - 1]
+		if (previous && random() < 0.35) {
+			if (previous.block === null) {
+				blocks += 1
+				previous.block = `block-${seed}-${blocks}`
+			}
+			item.block = previous.block
+			questions.push(item)
+			continue
+		}
 		const sources = questions.filter(
-			(candidate) => candidate.options.length > 0 && candidate.rule === null,
+			(candidate, at) =>
+				candidate.options.length > 0 && governing(questions, at)?.rule === null,
 		)
 		if (sources.length > 0 && random() < 0.5) {
 			const size = 1 + Math.floor(random() * 3)
@@ -412,8 +580,9 @@ function expectedVisits(
 	answers: Record<string, unknown>,
 ): string[] {
 	return value.questions
-		.filter((item) => {
-			if (!item.rule) return true
+		.filter((_, index) => {
+			const item = governing(value.questions, index)
+			if (!item?.rule) return true
 			const results = item.rule.conditions.map(
 				(condition) =>
 					holds(answers[condition.question], condition.option) ===
@@ -463,6 +632,7 @@ function canonical(graph: EditorGraph): string {
 
 describe('random forms', () => {
 	it('round trip, validate and follow the expected path for 200 seeded forms', () => {
+		let withBlocks = 0
 		for (let index = 0; index < 200; index += 1) {
 			const seed = caseSeed(index)
 			const random = mulberry32(seed)
@@ -473,6 +643,7 @@ describe('random forms', () => {
 				form: value,
 			})
 			if (value.questions.length === 0) continue
+			if (value.questions.some((item) => item.block !== null)) withBlocks += 1
 			expect(
 				validateGraph(normalizeGraph(graph)),
 				`validation, seed ${seed}`,
@@ -485,6 +656,7 @@ describe('random forms', () => {
 				).toEqual(expectedVisits(value, answers))
 			}
 		}
+		expect(withBlocks).toBeGreaterThan(50)
 	})
 
 	it('reads a randomly rewired graph as advanced or as a form that rebuilds it, for 100 seeded cases', () => {
@@ -534,6 +706,24 @@ const CASES: PathCase[] = JSON.parse(
 )
 
 describe('shared path cases', () => {
+	it('reads every shared block case as a form that keeps its blocks', () => {
+		const blocks = CASES.filter((item) =>
+			item.graph.nodes.some(
+				(node) => node.type === 'QUESTION' && node.block != null,
+			),
+		)
+		expect(blocks).toHaveLength(3)
+		for (const item of blocks) {
+			const parsed = parseGraph(fromSchema(item.graph))
+			expect(parsed.kind, item.name).toBe('form')
+			if (parsed.kind !== 'form') continue
+			expect(
+				parsed.form.questions.filter((question) => question.block !== null)
+					.length,
+			).toBeGreaterThanOrEqual(2)
+		}
+	})
+
 	it.each(
 		CASES.map((item) => [item.name, item] as const),
 	)('%s passes the validator and keeps its path when representable', (_, item) => {

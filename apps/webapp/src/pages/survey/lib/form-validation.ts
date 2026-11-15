@@ -5,7 +5,11 @@ import {
 } from '#/pages/survey/lib/graph-validation'
 import { isChoiceKind } from '#/pages/survey/lib/question-kinds'
 import { REASON_MESSAGES } from '#/pages/survey/lib/reason-messages'
-import type { FormQuestion, SurveyForm } from '#/pages/survey/lib/survey-form'
+import {
+	alwaysAsked,
+	type FormQuestion,
+	type SurveyForm,
+} from '#/pages/survey/lib/survey-form'
 import { normalizeGraph } from '#/pages/survey/lib/survey-graph'
 
 export interface FormProblem {
@@ -63,8 +67,9 @@ function questionProblems(
 				messages.push(FORM_MESSAGES.conditionIncomplete)
 				continue
 			}
-			const source = earlier.find((other) => other.id === condition.question)
-			if (!source || !isChoiceKind(source.kind) || source.rule !== null) {
+			const at = earlier.findIndex((other) => other.id === condition.question)
+			const source = earlier[at]
+			if (!source || !isChoiceKind(source.kind) || !alwaysAsked(earlier, at)) {
 				messages.push(FORM_MESSAGES.conditionSource)
 				continue
 			}

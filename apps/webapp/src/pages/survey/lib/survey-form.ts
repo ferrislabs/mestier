@@ -26,6 +26,7 @@ export interface FormQuestion {
 	maxPhotos: number | null
 	identifier: boolean
 	rule: DisplayRule | null
+	block: string | null
 }
 
 export interface SurveyForm {
@@ -37,6 +38,18 @@ export interface SurveyForm {
 export type MoveResult =
 	| { kind: 'moved'; form: SurveyForm; position: number }
 	| { kind: 'refused'; message: string }
+
+export type GroupResult =
+	| { kind: 'grouped'; form: SurveyForm; size: number }
+	| { kind: 'refused'; message: string }
+
+export interface UngroupResult {
+	form: SurveyForm
+	dissolved: boolean
+}
+
+export const MEMBER_STAYS_MESSAGE =
+	'Cette question reste dans son bloc : utilisez « Sortir du bloc » pour l’en retirer.'
 
 export interface PruneResult {
 	form: SurveyForm
@@ -57,11 +70,105 @@ export function newQuestion(id: string, kind: QuestionKind): FormQuestion {
 		maxPhotos: null,
 		identifier: false,
 		rule: null,
+		block: null,
 	}
 }
 
 function indexOf(form: SurveyForm, id: string): number {
 	return form.questions.findIndex((item) => item.id === id)
+}
+
+export function blockEnd(
+	questions: readonly FormQuestion[],
+	position: number,
+): number {
+	const block = questions[position]?.block ?? null
+	let last = position
+	while (block !== null && questions[last + 1]?.block === block) last += 1
+	return last
+}
+
+export function blockStart(
+	questions: readonly FormQuestion[],
+	position: number,
+): number {
+	const block = questions[position]?.block ?? null
+	let first = position
+	while (block !== null && first > 0 && questions[first - 1]?.block === block) {
+		first -= 1
+	}
+	return first
+}
+
+function unitsOf(questions: readonly FormQuestion[]): [number, number][] {
+	const units: [number, number][] = []
+	let position = 0
+	while (position < questions.length) {
+		const last = blockEnd(questions, position)
+		units.push([position, last])
+		position = last + 1
+	}
+	return units
+}
+
+function unitIndex(
+	questions: readonly FormQuestion[],
+	position: number,
+): number {
+	return unitsOf(questions).findIndex(
+		([first, last]) => first <= position && position <= last,
+	)
+}
+
+function blockPosition(form: SurveyForm, block: string): number {
+	return form.questions.findIndex((item) => item.block === block)
+}
+
+function copyRule(rule: DisplayRule | null): DisplayRule | null {
+	return rule
+		? {
+				...rule,
+				conditions: rule.conditions.map((condition) => ({ ...condition })),
+			}
+		: null
+}
+
+function ruleFirst(
+	members: readonly FormQuestion[],
+	rule: DisplayRule | null,
+): FormQuestion[] {
+	return members.map((item, at) => ({ ...item, rule: at === 0 ? rule : null }))
+}
+
+function settleBlock(
+	questions: readonly FormQuestion[],
+	block: string | null,
+): FormQuestion[] {
+	if (block === null) return [...questions]
+	const count = questions.filter((item) => item.block === block).length
+	return count >= 2
+		? [...questions]
+		: questions.map((item) =>
+				item.block === block ? { ...item, block: null } : item,
+			)
+}
+
+export function blockMembers(form: SurveyForm, id: string): FormQuestion[] {
+	const position = indexOf(form, id)
+	if (position < 0 || form.questions[position].block === null) return []
+	return form.questions.slice(
+		blockStart(form.questions, position),
+		blockEnd(form.questions, position) + 1,
+	)
+}
+
+export function governingRule(
+	form: SurveyForm,
+	id: string,
+): DisplayRule | null {
+	const position = indexOf(form, id)
+	if (position < 0) return null
+	return form.questions[blockStart(form.questions, position)].rule
 }
 
 function mapQuestion(
@@ -102,12 +209,121 @@ export function insertQuestion(
 	position: number,
 ): SurveyForm {
 	const questions = [...form.questions]
+	const at = Math.max(0, Math.min(position, questions.length))
+	const before = questions[at - 1]?.block ?? null
+	const joined =
+		before !== null && questions[at]?.block === before
+			? { ...question, block: before, rule: null }
+			: question
+	questions.splice(at, 0, joined)
+	return { ...form, questions }
+}
+
+export function insertBlock(
+	form: SurveyForm,
+	ids: readonly [string, string],
+	block: string,
+	position: number,
+): SurveyForm {
+	const questions = [...form.questions]
+	let at = Math.max(0, Math.min(position, questions.length))
+	if (at > 0 && questions[at - 1]?.block !== null) {
+		at = blockEnd(questions, at - 1) + 1
+	}
 	questions.splice(
-		Math.max(0, Math.min(position, questions.length)),
+		at,
 		0,
-		question,
+		...ids.map((id) => ({ ...newQuestion(id, 'TEXT'), block })),
 	)
 	return { ...form, questions }
+}
+
+export function addToBlock(
+	form: SurveyForm,
+	block: string,
+	question: FormQuestion,
+): SurveyForm {
+	const first = blockPosition(form, block)
+	if (first < 0) return form
+	const questions = [...form.questions]
+	questions.splice(blockEnd(questions, first) + 1, 0, {
+		...question,
+		block,
+		rule: null,
+	})
+	return { ...form, questions }
+}
+
+export function groupWithPrevious(
+	form: SurveyForm,
+	id: string,
+	newBlock: string,
+): GroupResult {
+	const position = indexOf(form, id)
+	const item = form.questions[position]
+	const previous = form.questions[position - 1]
+	if (!item || !previous) {
+		return {
+			kind: 'refused',
+			message: 'La première question n’a pas de question précédente.',
+		}
+	}
+	if (item.block !== null) {
+		return { kind: 'refused', message: 'Cette question est déjà dans un bloc.' }
+	}
+	if (item.rule) {
+		return {
+			kind: 'refused',
+			message:
+				'Retirez d’abord la logique de cette question : dans un bloc, elle se règle sur le bloc entier.',
+		}
+	}
+	if (governingRule(form, previous.id) && isRuleSource(form, id)) {
+		return {
+			kind: 'refused',
+			message:
+				'Cette question sert de condition : elle ne peut pas rejoindre un bloc affiché sous condition.',
+		}
+	}
+	const block = previous.block ?? newBlock
+	const questions = form.questions.map((other, at) =>
+		at === position || at === position - 1 ? { ...other, block } : other,
+	)
+	return {
+		kind: 'grouped',
+		form: { ...form, questions },
+		size: questions.filter((other) => other.block === block).length,
+	}
+}
+
+export function ungroupQuestion(form: SurveyForm, id: string): UngroupResult {
+	const position = indexOf(form, id)
+	const item = form.questions[position]
+	if (!item || item.block === null) return { form, dissolved: false }
+	const first = blockStart(form.questions, position)
+	const last = blockEnd(form.questions, position)
+	const rule = form.questions[first].rule
+	const rest = ruleFirst(
+		form.questions.slice(first, last + 1).filter((other) => other.id !== id),
+		rule,
+	)
+	const dissolved = rest.length < 2
+	const kept = dissolved
+		? rest.map((other) => ({ ...other, block: null }))
+		: rest
+	const leaving: FormQuestion = { ...item, block: null, rule: copyRule(rule) }
+	const middle = position === first ? [leaving, ...kept] : [...kept, leaving]
+	return {
+		form: {
+			...form,
+			questions: [
+				...form.questions.slice(0, first),
+				...middle,
+				...form.questions.slice(last + 1),
+			],
+		},
+		dissolved,
+	}
 }
 
 export function updateQuestion(
@@ -224,11 +440,22 @@ export function isRuleSource(form: SurveyForm, id: string): boolean {
 	return dependentsOf(form, id).length > 0
 }
 
+export function alwaysAsked(
+	questions: readonly FormQuestion[],
+	position: number,
+): boolean {
+	return questions[blockStart(questions, position)]?.rule === null
+}
+
 export function ruleSources(form: SurveyForm, id: string): FormQuestion[] {
 	const position = indexOf(form, id)
+	if (position < 0) return []
+	const first = blockStart(form.questions, position)
 	return form.questions
-		.slice(0, Math.max(position, 0))
-		.filter((item) => isChoiceKind(item.kind) && item.rule === null)
+		.slice(0, first)
+		.filter(
+			(item, at) => isChoiceKind(item.kind) && alwaysAsked(form.questions, at),
+		)
 }
 
 export function addCondition(form: SurveyForm, id: string): SurveyForm {
@@ -317,30 +544,91 @@ export function orderIsValid(questions: readonly FormQuestion[]): boolean {
 	)
 }
 
+const ORDER_REFUSED =
+	'Déplacement refusé : une question qui sert de condition doit rester avant les questions qui en dépendent.'
+
+function moveUnit(
+	form: SurveyForm,
+	from: number,
+	delta: number,
+	edge: string,
+): MoveResult {
+	const units = unitsOf(form.questions)
+	const to = from + delta
+	if (from < 0 || to < 0 || to >= units.length) {
+		return { kind: 'refused', message: edge }
+	}
+	const order = [...units]
+	const [moved] = order.splice(from, 1)
+	order.splice(to, 0, moved)
+	const questions = order.flatMap(([first, last]) =>
+		form.questions.slice(first, last + 1),
+	)
+	if (!orderIsValid(questions)) {
+		return { kind: 'refused', message: ORDER_REFUSED }
+	}
+	const position = order
+		.slice(0, to)
+		.reduce((sum, [first, last]) => sum + last - first + 1, 0)
+	return { kind: 'moved', form: { ...form, questions }, position }
+}
+
+const QUESTION_EDGE = 'Cette question ne peut pas aller plus loin.'
+const BLOCK_EDGE = 'Ce bloc ne peut pas aller plus loin.'
+
+function moveMember(form: SurveyForm, from: number, to: number): MoveResult {
+	const first = blockStart(form.questions, from)
+	const last = blockEnd(form.questions, from)
+	if (to < first || to > last) {
+		return { kind: 'refused', message: MEMBER_STAYS_MESSAGE }
+	}
+	const members = form.questions.slice(first, last + 1)
+	const rule = members[0].rule
+	const [moved] = members.splice(from - first, 1)
+	members.splice(to - first, 0, moved)
+	return {
+		kind: 'moved',
+		form: {
+			...form,
+			questions: [
+				...form.questions.slice(0, first),
+				...ruleFirst(members, rule),
+				...form.questions.slice(last + 1),
+			],
+		},
+		position: to,
+	}
+}
+
 export function moveQuestion(
 	form: SurveyForm,
 	id: string,
 	delta: number,
 ): MoveResult {
 	const from = indexOf(form, id)
-	const to = from + delta
-	if (from < 0 || to < 0 || to >= form.questions.length) {
-		return {
-			kind: 'refused',
-			message: 'Cette question ne peut pas aller plus loin.',
-		}
+	if (from < 0) return { kind: 'refused', message: QUESTION_EDGE }
+	if (form.questions[from].block !== null) {
+		return moveMember(form, from, from + delta)
 	}
-	const questions = [...form.questions]
-	const [moved] = questions.splice(from, 1)
-	questions.splice(to, 0, moved)
-	if (!orderIsValid(questions)) {
-		return {
-			kind: 'refused',
-			message:
-				'Déplacement refusé : une question qui sert de condition doit rester avant les questions qui en dépendent.',
-		}
-	}
-	return { kind: 'moved', form: { ...form, questions }, position: to }
+	return moveUnit(form, unitIndex(form.questions, from), delta, QUESTION_EDGE)
+}
+
+export function moveBlock(
+	form: SurveyForm,
+	block: string,
+	delta: number,
+): MoveResult {
+	const first = blockPosition(form, block)
+	if (first < 0) return { kind: 'refused', message: BLOCK_EDGE }
+	return moveUnit(form, unitIndex(form.questions, first), delta, BLOCK_EDGE)
+}
+
+function unitOfTarget(form: SurveyForm, id: string): number {
+	const position = indexOf(form, id)
+	return unitIndex(
+		form.questions,
+		position >= 0 ? position : blockPosition(form, id),
+	)
 }
 
 export function dropQuestion(
@@ -350,14 +638,46 @@ export function dropQuestion(
 ): MoveResult | null {
 	if (overId === null || overId === activeId) return null
 	const from = indexOf(form, activeId)
-	const to = indexOf(form, overId)
-	if (from < 0 || to < 0) return null
-	return moveQuestion(form, activeId, to - from)
+	const active = form.questions[from]
+	if (active && active.block !== null) {
+		const to = indexOf(form, overId)
+		if (overId === active.block) return null
+		if (to < 0 || form.questions[to].block !== active.block) {
+			return { kind: 'refused', message: MEMBER_STAYS_MESSAGE }
+		}
+		return moveMember(form, from, to)
+	}
+	const source = unitOfTarget(form, activeId)
+	const target = unitOfTarget(form, overId)
+	if (source < 0 || target < 0 || source === target) return null
+	return moveUnit(
+		form,
+		source,
+		target - source,
+		active ? QUESTION_EDGE : BLOCK_EDGE,
+	)
 }
 
 export function removeQuestion(form: SurveyForm, id: string): SurveyForm {
+	const position = indexOf(form, id)
+	const item = form.questions[position]
+	if (!item) return form
+	const handed = form.questions.map((other, at) =>
+		at === position + 1 &&
+		item.block !== null &&
+		other.block === item.block &&
+		blockStart(form.questions, position) === position
+			? { ...other, rule: item.rule }
+			: other,
+	)
 	return pruneConditions(
-		{ ...form, questions: form.questions.filter((item) => item.id !== id) },
+		{
+			...form,
+			questions: settleBlock(
+				handed.filter((other) => other.id !== id),
+				item.block,
+			),
+		},
 		(condition) => condition.question === id,
 	).form
 }
@@ -375,14 +695,7 @@ export function duplicateQuestion(
 		id: newId,
 		options: [...original.options],
 		identifier: false,
-		rule: original.rule
-			? {
-					...original.rule,
-					conditions: original.rule.conditions.map((condition) => ({
-						...condition,
-					})),
-				}
-			: null,
+		rule: original.block === null ? copyRule(original.rule) : null,
 	}
 	return insertQuestion(form, copy, position + 1)
 }

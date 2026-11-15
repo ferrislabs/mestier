@@ -3,6 +3,7 @@ import {
 	validateGraph,
 	validateSentGraph,
 } from '#/pages/survey/lib/graph-validation'
+import { REASON_MESSAGES } from '#/pages/survey/lib/reason-messages'
 import { toSchema } from '#/pages/survey/lib/survey-graph'
 import type {
 	ConditionNode,
@@ -349,5 +350,163 @@ describe('validateSentGraph', () => {
 		const sent = toSchema(untrimmed)
 		const sentCondition = sent?.nodes.find((node) => node.id === 'c1')
 		expect(sentCondition).toMatchObject({ type: 'CONDITION', option: 'Oui' })
+	})
+})
+
+describe('validateGraph blocks', () => {
+	const B = 'block-1'
+	const member = (id: string, kind: QuestionKind = 'TEXT') =>
+		question(id, kind, { block: B })
+
+	function blockGraph(): EditorGraph {
+		return {
+			start: 'q1',
+			nodes: [
+				question('q1', 'SINGLE_CHOICE'),
+				condition('c1', 'q1'),
+				member('q2'),
+				member('q3'),
+				question('q4'),
+				end('e1'),
+			],
+			edges: [
+				next('q1', 'c1'),
+				{ from: 'c1', to: 'q2', branch: 'THEN' },
+				{ from: 'c1', to: 'q4', branch: 'ELSE' },
+				next('q2', 'q3'),
+				next('q3', 'q4'),
+				next('q4', 'e1'),
+			],
+		}
+	}
+
+	it('accepts a block guarded by a rule and treats a null block as absent', () => {
+		expect(codes(blockGraph())).toEqual([])
+		const graph = linear()
+		expect(
+			codes({
+				...graph,
+				nodes: graph.nodes.map((node) =>
+					node.type === 'QUESTION' ? { ...node, block: null } : node,
+				),
+			}),
+		).toEqual([])
+	})
+
+	it('refuses a block of one question', () => {
+		expect(
+			validateGraph({
+				start: 'q1',
+				nodes: [member('q1'), question('q2'), end('e1')],
+				edges: [next('q1', 'q2'), next('q2', 'e1')],
+			}),
+		).toContainEqual(
+			expect.objectContaining({ code: 'graph_block_too_small', nodeId: 'q1' }),
+		)
+	})
+
+	it('refuses a block split by another question', () => {
+		expect(
+			validateGraph({
+				start: 'q1',
+				nodes: [member('q1'), question('q2'), member('q3'), end('e1')],
+				edges: [next('q1', 'q2'), next('q2', 'q3'), next('q3', 'e1')],
+			}),
+		).toContainEqual(
+			expect.objectContaining({
+				code: 'graph_block_not_contiguous',
+				nodeId: 'q3',
+			}),
+		)
+	})
+
+	it('refuses a member entered from outside the block', () => {
+		const graph = blockGraph()
+		expect(
+			validateGraph({
+				...graph,
+				edges: graph.edges.map((edge) =>
+					edge.from === 'c1' && edge.branch === 'ELSE'
+						? { ...edge, to: 'q3' }
+						: edge,
+				),
+			}),
+		).toContainEqual(
+			expect.objectContaining({
+				code: 'graph_block_not_contiguous',
+				nodeId: 'q3',
+			}),
+		)
+	})
+
+	it('refuses a condition between two members', () => {
+		const issues = validateGraph({
+			start: 'q1',
+			nodes: [
+				member('q1', 'SINGLE_CHOICE'),
+				condition('c1', 'q1'),
+				member('q2'),
+				end('e1'),
+			],
+			edges: [
+				next('q1', 'c1'),
+				{ from: 'c1', to: 'q2', branch: 'THEN' },
+				{ from: 'c1', to: 'e1', branch: 'ELSE' },
+				next('q2', 'e1'),
+			],
+		})
+		expect(issues).toContainEqual(
+			expect.objectContaining({
+				code: 'graph_block_member_has_condition',
+				nodeId: 'q2',
+			}),
+		)
+		expect(issues.map((item) => item.code)).not.toContain(
+			'graph_block_not_contiguous',
+		)
+	})
+
+	it('refuses a condition whose source is a member of the block it guards', () => {
+		const graph = blockGraph()
+		expect(
+			validateGraph({
+				...graph,
+				nodes: graph.nodes.map((node) =>
+					node.id === 'q1' ? member('q1', 'SINGLE_CHOICE') : node,
+				),
+			}).map((item) => item.code),
+		).toContain('graph_block_member_has_condition')
+	})
+
+	it('accepts a condition whose source is a member of an earlier block', () => {
+		expect(
+			codes({
+				start: 'q1',
+				nodes: [
+					member('q1', 'SINGLE_CHOICE'),
+					member('q2'),
+					condition('c1', 'q1'),
+					question('q3'),
+					end('e1'),
+				],
+				edges: [
+					next('q1', 'q2'),
+					next('q2', 'c1'),
+					{ from: 'c1', to: 'q3', branch: 'THEN' },
+					{ from: 'c1', to: 'e1', branch: 'ELSE' },
+					next('q3', 'e1'),
+				],
+			}),
+		).toEqual([])
+	})
+
+	it('gives the block issues their French message', () => {
+		const issue = validateGraph({
+			start: 'q1',
+			nodes: [member('q1'), end('e1')],
+			edges: [next('q1', 'e1')],
+		})[0]
+		expect(issue?.code).toBe('graph_block_too_small')
+		expect(issue?.message).toBe(REASON_MESSAGES.graph_block_too_small)
 	})
 })
