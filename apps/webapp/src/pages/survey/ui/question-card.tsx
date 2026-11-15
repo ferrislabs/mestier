@@ -123,7 +123,7 @@ export function QuestionCard({
 							type="button"
 							variant="ghost"
 							size="icon"
-							className="size-11 cursor-grab sm:size-8"
+							className="size-11 sm:size-8"
 							aria-label={`Réordonner la question ${number} : flèches haut et bas`}
 							aria-keyshortcuts="ArrowUp ArrowDown"
 							onKeyDown={(event) => {
