@@ -1,3 +1,4 @@
+import { Button } from '#/components/ui/button'
 import { SectionCard, SectionHeader } from '#/components/ui/surface'
 import type { SurveyStatus } from '#/pages/survey/types'
 import { SurveyStatusBadge } from '#/pages/survey/ui/survey-badges'
@@ -11,13 +12,21 @@ export interface CampaignSurvey {
 
 export function CampaignSurveys({
 	surveys,
+	total,
+	hasMore,
 	isLoading,
+	isLoadingMore,
 	error,
+	onLoadMore,
 	onOpen,
 }: {
 	surveys: readonly CampaignSurvey[]
+	total: number | null
+	hasMore: boolean
 	isLoading: boolean
+	isLoadingMore: boolean
 	error: string | null
+	onLoadMore: () => void
 	onOpen: (surveyId: string) => void
 }) {
 	return (
@@ -52,6 +61,25 @@ export function CampaignSurveys({
 						))}
 					</ul>
 				)}
+				{!isLoading && surveys.length > 0 && total !== null ? (
+					<div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground text-sm">
+						<span>
+							{surveys.length} sur {total}
+						</span>
+						{hasMore ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								className="min-h-11 sm:min-h-8"
+								disabled={isLoadingMore}
+								onClick={onLoadMore}
+							>
+								Voir plus
+							</Button>
+						) : null}
+					</div>
+				) : null}
 			</div>
 		</SectionCard>
 	)

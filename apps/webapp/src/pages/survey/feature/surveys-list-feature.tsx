@@ -6,6 +6,7 @@ import { ConfirmDialog } from '#/components/confirm-dialog'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import {
+	useCampaignSurveyList,
 	useCampaigns,
 	useCloseSurvey,
 	useCreateSurvey,
@@ -51,7 +52,17 @@ export function SurveysListFeature() {
 	const [pending, setPending] = useState<Pending | null>(null)
 	const [campaignFilter, setCampaignFilter] = useState('')
 
+	const [listPages, setListPages] = useState(1)
+	const byCampaign =
+		campaignFilter !== '' && campaignFilter !== INDEPENDENT
+			? campaignFilter
+			: null
 	const surveys = useSurveys(organizationId)
+	const campaignSurveys = useCampaignSurveyList(
+		organizationId,
+		byCampaign,
+		listPages,
+	)
 	const campaigns = useCampaigns(organizationId)
 	const createSurvey = useCreateSurvey()
 	const duplicateSurvey = useDuplicateSurvey()
@@ -66,13 +77,14 @@ export function SurveysListFeature() {
 				campaign.name,
 			]),
 		)
-		return (surveys.data?.data ?? [])
+		const source = byCampaign
+			? campaignSurveys.items
+			: (surveys.data?.data ?? [])
+		return source
 			.filter((survey) =>
-				campaignFilter === ''
-					? true
-					: campaignFilter === INDEPENDENT
-						? survey.campaign_ids.length === 0
-						: survey.campaign_ids.includes(campaignFilter),
+				campaignFilter === INDEPENDENT
+					? survey.campaign_ids.length === 0
+					: true,
 			)
 			.map((survey) => ({
 				survey,
@@ -81,7 +93,13 @@ export function SurveysListFeature() {
 					return name === undefined ? [] : [name]
 				}),
 			}))
-	}, [surveys.data, campaigns.data, campaignFilter])
+	}, [
+		surveys.data,
+		campaigns.data,
+		campaignFilter,
+		byCampaign,
+		campaignSurveys.items,
+	])
 
 	const goTo = (path: string) =>
 		navigate({ to: buildOrgPath(activeOrganization.slug, path) })
@@ -180,12 +198,34 @@ export function SurveysListFeature() {
 			<SurveysList
 				table={table}
 				isEmpty={rows.length === 0}
-				isLoading={surveys.isLoading}
-				error={surveys.error ? mutationErrorMessage(surveys.error) : null}
+				isLoading={byCampaign ? campaignSurveys.isLoading : surveys.isLoading}
+				error={
+					byCampaign
+						? campaignSurveys.error
+							? mutationErrorMessage(campaignSurveys.error)
+							: null
+						: surveys.error
+							? mutationErrorMessage(surveys.error)
+							: null
+				}
 				canManage={canManage}
 				campaigns={campaigns.data?.data ?? []}
 				campaignFilter={campaignFilter}
-				onCampaignFilter={setCampaignFilter}
+				onCampaignFilter={(value) => {
+					setListPages(1)
+					setCampaignFilter(value)
+				}}
+				more={
+					byCampaign && campaignSurveys.total !== null
+						? {
+								shown: campaignSurveys.items.length,
+								total: campaignSurveys.total,
+								hasMore: campaignSurveys.hasMore,
+								loading: campaignSurveys.isFetchingMore,
+								onLoadMore: () => setListPages((count) => count + 1),
+							}
+						: null
+				}
 				onCreate={() => {
 					createSurvey.reset()
 					setCreating(true)

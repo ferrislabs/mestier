@@ -31,6 +31,14 @@ export function LoadingCard({ label }: { label: string }) {
 	)
 }
 
+export interface LoadMore {
+	shown: number
+	total: number
+	hasMore: boolean
+	loading: boolean
+	onLoadMore: () => void
+}
+
 export function SurveysList({
 	table,
 	isEmpty,
@@ -40,6 +48,7 @@ export function SurveysList({
 	campaigns,
 	campaignFilter,
 	onCampaignFilter,
+	more,
 	onCreate,
 }: {
 	table: Table<SurveyRow>
@@ -50,6 +59,7 @@ export function SurveysList({
 	campaigns: readonly Campaign[]
 	campaignFilter: string
 	onCampaignFilter: (campaignId: string) => void
+	more: LoadMore | null
 	onCreate: () => void
 }) {
 	const createButton = canManage ? (
@@ -104,6 +114,24 @@ export function SurveysList({
 			) : (
 				<SurveyDataTable table={table} label="Questionnaires" />
 			)}
+			{!isLoading && !isEmpty && more ? (
+				<div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground text-sm">
+					<span>
+						{more.shown} sur {more.total}
+					</span>
+					{more.hasMore ? (
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							disabled={more.loading}
+							onClick={more.onLoadMore}
+						>
+							Voir plus
+						</Button>
+					) : null}
+				</div>
+			) : null}
 		</PageShell>
 	)
 }

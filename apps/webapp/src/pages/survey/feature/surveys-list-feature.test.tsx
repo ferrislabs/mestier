@@ -68,21 +68,42 @@ describe('SurveysListFeature', () => {
 		expect(within(closed).getByText('Membres')).toBeTruthy()
 	})
 
-	it('shows every campaign as a chip and filters the list by campaign', async () => {
-		installSurveyApi({
+	it('shows every campaign as a chip and filters the list by campaign on the server', async () => {
+		const all = [
+			...SURVEYS,
+			survey({
+				id: 's-shared',
+				title: 'Questionnaire partagé',
+				campaign_ids: ['campaign-1', 'campaign-2'],
+			}),
+		]
+		const api = installSurveyApi({
 			permissions: ['VIEW_SURVEYS'],
-			surveys: [
-				...SURVEYS,
-				survey({
-					id: 's-shared',
-					title: 'Questionnaire partagé',
-					campaign_ids: ['campaign-1', 'campaign-2'],
-				}),
-			],
+			surveys: all,
 			campaigns: [
 				campaign(),
 				campaign({ id: 'campaign-2', name: 'Session de juin' }),
 			],
+		})
+		api.mockGet(PATHS.surveys, (params) => {
+			const campaignId = (params as { query: { campaign_id?: string } }).query
+				.campaign_id
+			const data = campaignId
+				? all.filter((item) => item.campaign_ids.includes(campaignId))
+				: all
+			return {
+				data,
+				pagination: campaignId
+					? {
+							current_page: 1,
+							first_page: 1,
+							is_empty: false,
+							per_page: 100,
+							total: data.length,
+							next_page: null,
+						}
+					: null,
+			}
 		})
 		await renderSurveyPage(<SurveysListFeature />)
 
@@ -99,8 +120,26 @@ describe('SurveysListFeature', () => {
 			expect(screen.queryByRole('button', { name: 'QCM ouvert' })).toBe(null),
 		)
 		expect(
-			screen.getByRole('button', { name: 'Questionnaire partagé' }),
+			await screen.findByRole('button', { name: 'Questionnaire partagé' }),
 		).toBeTruthy()
+		expect(screen.queryByRole('button', { name: 'QCM ouvert' })).toBe(null)
+		expect(screen.getByText('1 sur 1')).toBeTruthy()
+		expect(
+			api.calls.some(
+				(call) =>
+					call.path === PATHS.surveys &&
+					(call.params as { query: { campaign_id?: string } }).query
+						.campaign_id === 'campaign-2',
+			),
+		).toBe(true)
+
+		fireEvent.change(screen.getByLabelText('Campagne'), {
+			target: { value: '__independent__' },
+		})
+		expect(
+			await screen.findByRole('button', { name: 'Brouillon de test' }),
+		).toBeTruthy()
+		expect(screen.queryByRole('button', { name: 'QCM ouvert' })).toBe(null)
 	})
 
 	it('offers the manage actions to a manager', async () => {

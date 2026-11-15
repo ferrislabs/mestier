@@ -32,7 +32,8 @@ export function CampaignEditFeature({ campaignId }: { campaignId: string }) {
 	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_SURVEYS')
 	const campaign = useCampaign(organizationId, campaignId)
-	const surveys = useCampaignSurveys(organizationId, campaignId)
+	const [surveyPages, setSurveyPages] = useState(1)
+	const surveys = useCampaignSurveys(organizationId, campaignId, surveyPages)
 	const updateCampaign = useUpdateCampaign()
 	const deleteCampaign = useDeleteCampaign()
 	const [confirmDelete, setConfirmDelete] = useState(false)
@@ -119,9 +120,13 @@ export function CampaignEditFeature({ campaignId }: { campaignId: string }) {
 			)}
 			{data ? (
 				<CampaignSurveys
-					surveys={surveys.data?.data ?? []}
+					surveys={surveys.items}
+					total={surveys.total}
+					hasMore={surveys.hasMore}
 					isLoading={surveys.isLoading}
+					isLoadingMore={surveys.isFetchingMore}
 					error={surveys.error ? refusalOf(surveys.error).message : null}
+					onLoadMore={() => setSurveyPages((count) => count + 1)}
 					onOpen={(surveyId) =>
 						void navigate({
 							to: buildOrgPath(activeOrganization.slug, surveyPath(surveyId)),
