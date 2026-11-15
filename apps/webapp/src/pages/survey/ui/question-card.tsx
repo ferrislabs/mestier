@@ -233,7 +233,7 @@ export function QuestionCard({
 						disabled={readOnly}
 						aria-invalid={problems.length > 0 || undefined}
 						aria-describedby={problems.length > 0 ? problemsId : undefined}
-						className="min-h-11 resize-none border-0 border-b bg-transparent px-0 text-lg font-medium shadow-none focus-visible:ring-0 md:text-lg dark:bg-transparent"
+						className="min-h-11 resize-none rounded-none border-0 border-b bg-transparent px-0 text-lg font-medium shadow-none focus-visible:ring-0 md:text-lg dark:bg-transparent"
 						onChange={(event) =>
 							onAction({ type: 'label', value: event.target.value })
 						}
