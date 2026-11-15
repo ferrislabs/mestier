@@ -27,7 +27,7 @@ export function RespondMessage({
 }) {
 	if (tone === 'success') {
 		return (
-			<section className="mx-auto my-6 flex w-full max-w-md flex-1 flex-col items-center gap-5 self-start rounded-2xl border bg-card px-6 py-10 text-center shadow-xs motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-300">
+			<section className="mx-auto my-6 flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border bg-card px-6 py-10 text-center shadow-xs motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-300">
 				<span className="flex size-16 items-center justify-center rounded-full bg-success-soft text-success ring-8 ring-success-soft/50">
 					<Icon className="size-8" aria-hidden />
 				</span>
