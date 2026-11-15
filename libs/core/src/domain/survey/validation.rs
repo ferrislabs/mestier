@@ -13,11 +13,8 @@ pub(crate) fn check_finite(answers: &Answers) -> Result<(), SurveyError> {
     Ok(())
 }
 
-pub(crate) fn ensure_known(graph: &Graph, answers: &Answers) -> Result<(), SurveyError> {
-    match answers.keys().find(|id| graph.question(id).is_none()) {
-        Some(id) => Err(SurveyError::AnswerUnknownQuestion(*id)),
-        None => Ok(()),
-    }
+pub(crate) fn retain_known(graph: &Graph, answers: &mut Answers) {
+    answers.retain(|id, _| graph.question(id).is_some());
 }
 
 pub(crate) fn validate(

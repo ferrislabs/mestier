@@ -64,10 +64,16 @@ pub struct ResponseView<'a> {
     pub answers: &'a Answers,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+    #[schema(minimum = 1)]
+    pub graph_version: Option<u32>,
 }
 
 impl<'a> ResponseView<'a> {
-    fn of<S>(response: &'a SurveyResponse<S>, status: ResponseStatus) -> Self {
+    fn of<S>(
+        response: &'a SurveyResponse<S>,
+        status: ResponseStatus,
+        graph_version: Option<u32>,
+    ) -> Self {
         Self {
             id: response.id(),
             survey_id: response.survey_id(),
@@ -76,6 +82,7 @@ impl<'a> ResponseView<'a> {
             answers: response.answers(),
             started_at: response.started_at(),
             completed_at: response.completed_at(),
+            graph_version,
         }
     }
 }
@@ -83,8 +90,14 @@ impl<'a> ResponseView<'a> {
 impl<'a> From<&'a ResponseRecord> for ResponseView<'a> {
     fn from(record: &'a ResponseRecord) -> Self {
         match record {
-            ResponseRecord::InProgress(response) => Self::of(response, ResponseStatus::InProgress),
-            ResponseRecord::Completed(response) => Self::of(response, ResponseStatus::Completed),
+            ResponseRecord::InProgress(response) => {
+                Self::of(response, ResponseStatus::InProgress, None)
+            }
+            ResponseRecord::Completed(response) => Self::of(
+                response,
+                ResponseStatus::Completed,
+                Some(response.graph_version()),
+            ),
         }
     }
 }

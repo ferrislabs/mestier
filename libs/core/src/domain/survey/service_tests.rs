@@ -121,7 +121,7 @@ fn draft(shape: &Shape) -> Survey<Draft> {
     )
     .unwrap();
     survey.edit_graph(Some(graph(shape.identifier)));
-    survey.edit_campaign(shape.campaign);
+    survey.edit_campaigns(shape.campaign.into_iter().collect());
     survey.edit_allow_multiple_responses(shape.allow_multiple);
     survey.edit_response_cap(shape.cap.and_then(NonZeroU32::new));
     survey.edit_metadata(metadata(&[("theme", "survey")]));
@@ -197,6 +197,9 @@ fn surveys_holding(record: SurveyRecord) -> MockSurveyRepository {
         Box::pin(async move { Ok(saved) })
     });
     surveys
+        .expect_store_graph_version()
+        .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+    surveys
 }
 
 fn surveys_stored(stored: &Arc<Mutex<SurveyRecord>>) -> MockSurveyRepository {
@@ -215,6 +218,9 @@ fn surveys_stored(stored: &Arc<Mutex<SurveyRecord>>) -> MockSurveyRepository {
         let saved = survey.clone();
         Box::pin(async move { Ok(saved) })
     });
+    surveys
+        .expect_has_completed_responses()
+        .returning(|_, _, _| Box::pin(async { Ok(false) }));
     surveys
 }
 
@@ -285,7 +291,7 @@ async fn opening_a_survey_emits_survey_opened_with_campaign_metadata() {
     assert_eq!(survey.opened_at(), Some(at(1)));
     assert_eq!(emitter.names(), vec!["survey.opened"]);
     let event = emitter.only("survey.opened");
-    assert_eq!(event.payload["campaign_id"], json!(campaign_id().0));
+    assert_eq!(event.payload["campaign_ids"], json!([campaign_id().0]));
     assert_eq!(
         event.payload["metadata"],
         json!({"season": "spring", "theme": "survey"})
@@ -293,7 +299,7 @@ async fn opening_a_survey_emits_survey_opened_with_campaign_metadata() {
 }
 
 #[tokio::test]
-async fn a_draft_update_after_opening_is_refused_under_the_lock() {
+async fn an_edit_after_opening_applies_to_the_opened_survey_under_the_lock() {
     let stored = Arc::new(Mutex::new(SurveyRecord::from(draft(&Shape::default()))));
     let emitter = RecordingEmitter::new();
     let mut opening: Surveys<'_> =
@@ -302,19 +308,22 @@ async fn a_draft_update_after_opening_is_refused_under_the_lock() {
         SurveyService::new(surveys_stored(&stored), campaigns_holding(None), &emitter);
 
     opening.open(org(), survey_id(), at(1), None).await.unwrap();
-    let stale = editing
-        .update_draft(
+    editing
+        .update(
             org(),
             survey_id(),
             SurveyPatch {
-                title: Some("Trop tard".to_string()),
+                title: Some("Après ouverture".to_string()),
                 ..SurveyPatch::default()
             },
         )
-        .await;
+        .await
+        .unwrap();
 
-    refused(stale, SurveyError::SurveyNotDraft);
-    assert!(matches!(*stored.lock().unwrap(), SurveyRecord::Opened(_)));
+    match &*stored.lock().unwrap() {
+        SurveyRecord::Opened(survey) => assert_eq!(survey.title(), "Après ouverture"),
+        other => panic!("expected an opened survey, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -351,11 +360,11 @@ async fn every_survey_transition_loads_the_survey_locked() {
     let mut service: Surveys<'_> = SurveyService::new(surveys, campaigns_holding(None), &emitter);
 
     service
-        .update_draft(org(), survey_id(), SurveyPatch::default())
+        .update(org(), survey_id(), SurveyPatch::default())
         .await
         .unwrap();
     service
-        .attach_campaign(org(), survey_id(), None)
+        .set_campaigns(org(), survey_id(), Vec::new())
         .await
         .unwrap();
     service
@@ -649,6 +658,9 @@ fn surveys_locked(record: SurveyRecord) -> MockSurveyRepository {
             Box::pin(async move { Ok(Some(found)) })
         });
     surveys
+        .expect_store_graph_version()
+        .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+    surveys
 }
 
 fn counting_responses(record: ResponseRecord, count: &Arc<Mutex<u64>>) -> MockResponseRepository {
@@ -851,7 +863,7 @@ async fn duplicate_creates_a_draft_without_slug_or_dates() {
     assert_eq!(copy.id(), new_id);
     assert_eq!(copy.title(), "Satisfaction");
     assert_eq!(copy.visibility(), Visibility::Public);
-    assert_eq!(copy.campaign_id(), Some(campaign_id()));
+    assert_eq!(copy.campaign_ids(), &[campaign_id()]);
     assert!(copy.allow_multiple_responses());
     assert_eq!(copy.response_cap(), NonZeroU32::new(5));
     assert_eq!(copy.metadata(), &metadata(&[("theme", "survey")]));
@@ -1159,4 +1171,273 @@ async fn starting_tells_a_created_response_from_a_resumed_one() {
     assert!(!created.is_resumed());
     assert!(again.is_resumed());
     assert_eq!(again.into_response(), existing);
+}
+
+fn other_graph() -> Graph {
+    Graph::new(
+        vec![
+            Node::Question(QuestionNode {
+                id: qid(20),
+                kind: QuestionKind::Number,
+                label: "Âge".to_string(),
+                required: false,
+                options: Vec::new(),
+                max_photos: None,
+                identifier: false,
+            }),
+            Node::End(EndNode {
+                id: qid(21),
+                message: None,
+            }),
+        ],
+        vec![Edge {
+            from: qid(20),
+            to: qid(21),
+            branch: super::Branch::Next,
+        }],
+        qid(20),
+    )
+    .unwrap()
+}
+
+fn graph_patch(graph: Option<Graph>) -> SurveyPatch {
+    SurveyPatch {
+        graph: Some(graph),
+        ..SurveyPatch::default()
+    }
+}
+
+fn versioning_surveys(
+    stored: &Arc<Mutex<SurveyRecord>>,
+    completed_on_current: bool,
+    archived: &Arc<Mutex<Vec<(u32, Graph)>>>,
+) -> MockSurveyRepository {
+    let mut surveys = MockSurveyRepository::new();
+    let read = Arc::clone(stored);
+    surveys.expect_find_for_update().returning(move |_, _| {
+        let found = read.lock().unwrap().clone();
+        Box::pin(async move { Ok(Some(found)) })
+    });
+    let write = Arc::clone(stored);
+    surveys.expect_update().returning(move |survey| {
+        *write.lock().unwrap() = survey.clone();
+        let saved = survey.clone();
+        Box::pin(async move { Ok(saved) })
+    });
+    surveys
+        .expect_has_completed_responses()
+        .withf(|organization_id, id, _| *organization_id == org() && *id == survey_id())
+        .returning(move |_, _, _| Box::pin(async move { Ok(completed_on_current) }));
+    let archive = Arc::clone(archived);
+    surveys
+        .expect_store_graph_version()
+        .returning(move |_, _, version, graph| {
+            archive.lock().unwrap().push((version, graph.clone()));
+            Box::pin(async { Ok(()) })
+        });
+    surveys
+}
+
+#[tokio::test]
+async fn editing_the_graph_of_a_survey_with_completed_responses_keeps_the_previous_version() {
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(opened(&Shape::default()))));
+    let archived = Arc::new(Mutex::new(Vec::new()));
+    let emitter = RecordingEmitter::new();
+    let mut service: Surveys<'_> = SurveyService::new(
+        versioning_surveys(&stored, true, &archived),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    let edited = service
+        .update(org(), survey_id(), graph_patch(Some(other_graph())))
+        .await
+        .unwrap();
+
+    assert_eq!(edited.graph_version(), Some(2));
+    assert_eq!(edited.graph(), Some(&other_graph()));
+    assert_eq!(*archived.lock().unwrap(), vec![(1, graph(false))]);
+    assert!(emitter.names().is_empty());
+}
+
+#[tokio::test]
+async fn editing_the_graph_without_completed_responses_overwrites_it_in_place() {
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(opened(&Shape::default()))));
+    let archived = Arc::new(Mutex::new(Vec::new()));
+    let emitter = RecordingEmitter::new();
+    let mut service: Surveys<'_> = SurveyService::new(
+        versioning_surveys(&stored, false, &archived),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    service
+        .update(org(), survey_id(), graph_patch(Some(other_graph())))
+        .await
+        .unwrap();
+    let edited = service
+        .update(org(), survey_id(), graph_patch(Some(graph(true))))
+        .await
+        .unwrap();
+
+    assert_eq!(edited.graph_version(), Some(1));
+    assert_eq!(edited.graph(), Some(&graph(true)));
+    assert!(archived.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_closed_survey_is_edited_and_stays_closed() {
+    let closed = opened(&Shape::default()).close(at(3)).unwrap();
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(closed)));
+    let archived = Arc::new(Mutex::new(Vec::new()));
+    let emitter = RecordingEmitter::new();
+    let mut service: Surveys<'_> = SurveyService::new(
+        versioning_surveys(&stored, true, &archived),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    let edited = service
+        .update(
+            org(),
+            survey_id(),
+            SurveyPatch {
+                title: Some("Bilan".to_string()),
+                graph: Some(Some(other_graph())),
+                ..SurveyPatch::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    let SurveyRecord::Closed(edited) = edited else {
+        panic!("the survey stays closed");
+    };
+    assert_eq!(edited.title(), "Bilan");
+    assert_eq!(edited.graph_version(), Some(2));
+}
+
+#[tokio::test]
+async fn the_visibility_of_an_opened_survey_cannot_change() {
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(opened(&Shape::default()))));
+    let archived = Arc::new(Mutex::new(Vec::new()));
+    let emitter = RecordingEmitter::new();
+    let mut service: Surveys<'_> = SurveyService::new(
+        versioning_surveys(&stored, false, &archived),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    let changed = service
+        .update(
+            org(),
+            survey_id(),
+            SurveyPatch {
+                visibility: Some(Visibility::Public),
+                ..SurveyPatch::default()
+            },
+        )
+        .await;
+    refused(changed, SurveyError::SurveyVisibilityFrozen);
+    assert_eq!(
+        SurveyError::SurveyVisibilityFrozen.code(),
+        "survey_visibility_frozen"
+    );
+
+    service
+        .update(
+            org(),
+            survey_id(),
+            SurveyPatch {
+                visibility: Some(Visibility::Members),
+                ..SurveyPatch::default()
+            },
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn an_opened_survey_cannot_lose_its_graph() {
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(opened(&Shape::default()))));
+    let archived = Arc::new(Mutex::new(Vec::new()));
+    let emitter = RecordingEmitter::new();
+    let mut service: Surveys<'_> = SurveyService::new(
+        versioning_surveys(&stored, false, &archived),
+        campaigns_holding(None),
+        &emitter,
+    );
+
+    let cleared = service.update(org(), survey_id(), graph_patch(None)).await;
+
+    refused(cleared, SurveyError::SurveyWithoutGraph);
+}
+
+#[tokio::test]
+async fn setting_the_campaigns_of_an_opened_survey_checks_each_one() {
+    let stored = Arc::new(Mutex::new(SurveyRecord::from(opened(&Shape::default()))));
+    let emitter = RecordingEmitter::new();
+    let mut campaigns = MockCampaignRepository::new();
+    campaigns.expect_find().returning(|_, id| {
+        let found =
+            (id == campaign_id()).then(|| campaign(Window::new(None, None).unwrap(), at(1)));
+        Box::pin(async move { Ok(found) })
+    });
+    let mut service: Surveys<'_> = SurveyService::new(surveys_stored(&stored), campaigns, &emitter);
+
+    let unknown = service
+        .set_campaigns(
+            org(),
+            survey_id(),
+            vec![campaign_id(), CampaignId(Uuid::from_u128(99))],
+        )
+        .await;
+    refused(unknown, SurveyError::CampaignNotFound);
+
+    let set = service
+        .set_campaigns(org(), survey_id(), vec![campaign_id(), campaign_id()])
+        .await
+        .unwrap();
+    assert!(matches!(set, SurveyRecord::Opened(_)));
+    assert_eq!(set.campaign_ids(), &[campaign_id()]);
+}
+
+#[tokio::test]
+async fn completing_records_the_graph_version_of_the_survey() {
+    let survey = opened(&Shape::default());
+    let emitter = RecordingEmitter::new();
+    let mut responses = responses_holding(in_progress(&survey, 50, "Jane").into());
+    with_completed_count(&mut responses, 0);
+    responses
+        .expect_find_completed_by_member()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+    let mut surveys = MockSurveyRepository::new();
+    let found = survey.clone();
+    surveys.expect_find_for_update().returning(move |_, _| {
+        let found = found.clone().into();
+        Box::pin(async move { Ok(Some(found)) })
+    });
+    surveys
+        .expect_store_graph_version()
+        .withf(|organization_id, id, version, stored| {
+            *organization_id == org()
+                && *id == survey_id()
+                && *version == 1
+                && *stored == graph(false)
+        })
+        .times(1)
+        .returning(|_, _, _, _| Box::pin(async { Ok(()) }));
+    let mut service: Responses<'_> =
+        ResponseService::new(responses, surveys, campaigns_holding(None), &emitter);
+
+    let done = service
+        .complete(org(), &member_locator(), at(3))
+        .await
+        .unwrap();
+
+    assert_eq!(done.graph_version(), 1);
+    assert_eq!(
+        emitter.only("survey.response_completed").payload["graph_version"],
+        json!(1)
+    );
 }

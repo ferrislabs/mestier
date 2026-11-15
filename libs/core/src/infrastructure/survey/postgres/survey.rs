@@ -2,11 +2,12 @@ use common::CoreError;
 use mestier_macros::repository;
 
 use crate::{
-    CampaignId, OrganizationId, PublicSlug, SurveyError, SurveyId, SurveyRecord,
+    CampaignId, OrganizationId, PublicSlug, SurveyError, SurveyGraph as Graph, SurveyId,
+    SurveyRecord,
     domain::survey::ports::SurveyRepository,
     infrastructure::{
         postgres::{SharedTx, error::map_sqlx_error},
-        survey::postgres::model::{SurveyColumns, SurveyRow},
+        survey::postgres::model::{SurveyColumns, SurveyRow, version_column},
     },
 };
 
@@ -18,6 +19,41 @@ pub struct PgSurveyRepository<'tx> {
 impl<'tx> PgSurveyRepository<'tx> {
     pub fn new(tx: &SharedTx<'tx>) -> Self {
         Self { tx: tx.clone() }
+    }
+
+    async fn stored(&mut self, columns: &SurveyColumns<'_>) -> Result<SurveyRecord, CoreError> {
+        {
+            let mut tx = self.tx.lock().await;
+            sqlx::query!(
+                r#"
+                DELETE FROM survey.survey_campaign
+                WHERE org_id = $1 AND survey_id = $2 AND NOT (campaign_id = ANY($3::uuid[]))
+                "#,
+                columns.org_id,
+                columns.id,
+                &columns.campaign_ids,
+            )
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+            sqlx::query!(
+                r#"
+                INSERT INTO survey.survey_campaign (org_id, survey_id, campaign_id, position)
+                SELECT $1, $2, link.campaign_id, (link.ordinal - 1)::integer
+                FROM UNNEST($3::uuid[]) WITH ORDINALITY AS link(campaign_id, ordinal)
+                ON CONFLICT (survey_id, campaign_id) DO UPDATE SET position = EXCLUDED.position
+                "#,
+                columns.org_id,
+                columns.id,
+                &columns.campaign_ids,
+            )
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        self.find(OrganizationId(columns.org_id), SurveyId(columns.id))
+            .await?
+            .ok_or(CoreError::NotFound)
     }
 }
 
@@ -35,11 +71,17 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
         let row = sqlx::query_as!(
             SurveyRow,
             r#"
-            SELECT id, org_id, campaign_id, title, description, visibility, graph,
-                   allow_multiple_responses, response_cap, metadata, status, public_slug,
-                   opened_at, closed_at
-            FROM survey.survey
-            WHERE org_id = $1 AND id = $2
+            SELECT s.id, s.org_id,
+                   COALESCE(
+                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)
+                        FROM survey.survey_campaign sc WHERE sc.survey_id = s.id),
+                       '{}'
+                   ) AS "campaign_ids!",
+                   s.title, s.description, s.visibility, s.graph, s.graph_version,
+                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,
+                   s.public_slug, s.opened_at, s.closed_at
+            FROM survey.survey s
+            WHERE s.org_id = $1 AND s.id = $2
             "#,
             organization_id.0,
             id.0,
@@ -53,99 +95,95 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
 
     async fn insert(&mut self, survey: &SurveyRecord) -> Result<SurveyRecord, CoreError> {
         let columns = SurveyColumns::try_from(survey)?;
-        let mut tx = self.tx.lock().await;
-        let row = sqlx::query_as!(
-            SurveyRow,
-            r#"
-            INSERT INTO survey.survey (
-                id, org_id, campaign_id, title, description, visibility, graph,
-                allow_multiple_responses, response_cap, metadata, status, public_slug,
-                opened_at, closed_at, created_at, updated_at
+        {
+            let mut tx = self.tx.lock().await;
+            sqlx::query!(
+                r#"
+                INSERT INTO survey.survey (
+                    id, org_id, title, description, visibility, graph, graph_version,
+                    allow_multiple_responses, response_cap, metadata, status, public_slug,
+                    opened_at, closed_at, created_at, updated_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now(), now())
+                "#,
+                columns.id,
+                columns.org_id,
+                columns.title,
+                columns.description,
+                columns.visibility,
+                columns.graph,
+                columns.graph_version,
+                columns.allow_multiple_responses,
+                columns.response_cap,
+                columns.metadata,
+                columns.status,
+                columns.public_slug,
+                columns.opened_at,
+                columns.closed_at,
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now(), now())
-            RETURNING id, org_id, campaign_id, title, description, visibility, graph,
-                      allow_multiple_responses, response_cap, metadata, status, public_slug,
-                      opened_at, closed_at
-            "#,
-            columns.id,
-            columns.org_id,
-            columns.campaign_id,
-            columns.title,
-            columns.description,
-            columns.visibility,
-            columns.graph,
-            columns.allow_multiple_responses,
-            columns.response_cap,
-            columns.metadata,
-            columns.status,
-            columns.public_slug,
-            columns.opened_at,
-            columns.closed_at,
-        )
-        .fetch_one(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        SurveyRecord::try_from(row)
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        }
+        self.stored(&columns).await
     }
 
     async fn update(&mut self, survey: &SurveyRecord) -> Result<SurveyRecord, CoreError> {
         let columns = SurveyColumns::try_from(survey)?;
-        let mut tx = self.tx.lock().await;
-        let row = sqlx::query_as!(
-            SurveyRow,
-            r#"
-            UPDATE survey.survey
-            SET campaign_id = $3, title = $4, description = $5, visibility = $6, graph = $7,
-                allow_multiple_responses = $8, response_cap = $9, metadata = $10, status = $11,
-                public_slug = $12, opened_at = $13, closed_at = $14, updated_at = now()
-            WHERE org_id = $1 AND id = $2
-              AND CASE status WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END
-                  <= CASE $11::text WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END
-            RETURNING id, org_id, campaign_id, title, description, visibility, graph,
-                      allow_multiple_responses, response_cap, metadata, status, public_slug,
-                      opened_at, closed_at
-            "#,
-            columns.org_id,
-            columns.id,
-            columns.campaign_id,
-            columns.title,
-            columns.description,
-            columns.visibility,
-            columns.graph,
-            columns.allow_multiple_responses,
-            columns.response_cap,
-            columns.metadata,
-            columns.status,
-            columns.public_slug,
-            columns.opened_at,
-            columns.closed_at,
-        )
-        .fetch_optional(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
+        {
+            let mut tx = self.tx.lock().await;
+            let updated = sqlx::query!(
+                r#"
+                UPDATE survey.survey
+                SET title = $3, description = $4, visibility = $5, graph = $6,
+                    graph_version = $7, allow_multiple_responses = $8, response_cap = $9,
+                    metadata = $10, status = $11, public_slug = $12, opened_at = $13,
+                    closed_at = $14, updated_at = now()
+                WHERE org_id = $1 AND id = $2
+                  AND CASE status WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END
+                      <= CASE $11::text WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END
+                "#,
+                columns.org_id,
+                columns.id,
+                columns.title,
+                columns.description,
+                columns.visibility,
+                columns.graph,
+                columns.graph_version,
+                columns.allow_multiple_responses,
+                columns.response_cap,
+                columns.metadata,
+                columns.status,
+                columns.public_slug,
+                columns.opened_at,
+                columns.closed_at,
+            )
+            .execute(&mut ***tx)
+            .await
+            .map_err(map_sqlx_error)?;
 
-        if let Some(row) = row {
-            return SurveyRecord::try_from(row);
-        }
-        let exists = sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1 FROM survey.survey WHERE org_id = $1 AND id = $2
-            ) AS "exists!"
-            "#,
-            columns.org_id,
-            columns.id,
-        )
-        .fetch_one(&mut ***tx)
-        .await
-        .map_err(map_sqlx_error)?;
+            if updated.rows_affected() == 0 {
+                let exists = sqlx::query_scalar!(
+                    r#"
+                    SELECT EXISTS (
+                        SELECT 1 FROM survey.survey WHERE org_id = $1 AND id = $2
+                    ) AS "exists!"
+                    "#,
+                    columns.org_id,
+                    columns.id,
+                )
+                .fetch_one(&mut ***tx)
+                .await
+                .map_err(map_sqlx_error)?;
 
-        if exists {
-            Err(SurveyError::SurveyStateChanged.into())
-        } else {
-            Err(CoreError::NotFound)
+                return if exists {
+                    Err(SurveyError::SurveyStateChanged.into())
+                } else {
+                    Err(CoreError::NotFound)
+                };
+            }
         }
+        self.stored(&columns).await
     }
 
     async fn list(
@@ -165,12 +203,18 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
         let rows = sqlx::query_as!(
             SurveyRow,
             r#"
-            SELECT id, org_id, campaign_id, title, description, visibility, graph,
-                   allow_multiple_responses, response_cap, metadata, status, public_slug,
-                   opened_at, closed_at
-            FROM survey.survey
-            WHERE org_id = $1
-            ORDER BY created_at DESC, id DESC
+            SELECT s.id, s.org_id,
+                   COALESCE(
+                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)
+                        FROM survey.survey_campaign sc WHERE sc.survey_id = s.id),
+                       '{}'
+                   ) AS "campaign_ids!",
+                   s.title, s.description, s.visibility, s.graph, s.graph_version,
+                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,
+                   s.public_slug, s.opened_at, s.closed_at
+            FROM survey.survey s
+            WHERE s.org_id = $1
+            ORDER BY s.created_at DESC, s.id DESC
             LIMIT $2 OFFSET $3
             "#,
             organization_id.0,
@@ -193,12 +237,23 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
         let rows = sqlx::query_as!(
             SurveyRow,
             r#"
-            SELECT id, org_id, campaign_id, title, description, visibility, graph,
-                   allow_multiple_responses, response_cap, metadata, status, public_slug,
-                   opened_at, closed_at
-            FROM survey.survey
-            WHERE org_id = $1 AND campaign_id = $2
-            ORDER BY created_at DESC, id DESC
+            SELECT s.id, s.org_id,
+                   COALESCE(
+                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)
+                        FROM survey.survey_campaign sc WHERE sc.survey_id = s.id),
+                       '{}'
+                   ) AS "campaign_ids!",
+                   s.title, s.description, s.visibility, s.graph, s.graph_version,
+                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,
+                   s.public_slug, s.opened_at, s.closed_at
+            FROM survey.survey s
+            WHERE s.org_id = $1
+              AND EXISTS (
+                  SELECT 1 FROM survey.survey_campaign link
+                  WHERE link.org_id = s.org_id AND link.survey_id = s.id
+                    AND link.campaign_id = $2
+              )
+            ORDER BY s.created_at DESC, s.id DESC
             "#,
             organization_id.0,
             campaign_id.0,
@@ -218,11 +273,17 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
         let row = sqlx::query_as!(
             SurveyRow,
             r#"
-            SELECT id, org_id, campaign_id, title, description, visibility, graph,
-                   allow_multiple_responses, response_cap, metadata, status, public_slug,
-                   opened_at, closed_at
-            FROM survey.survey
-            WHERE public_slug = $1
+            SELECT s.id, s.org_id,
+                   COALESCE(
+                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)
+                        FROM survey.survey_campaign sc WHERE sc.survey_id = s.id),
+                       '{}'
+                   ) AS "campaign_ids!",
+                   s.title, s.description, s.visibility, s.graph, s.graph_version,
+                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,
+                   s.public_slug, s.opened_at, s.closed_at
+            FROM survey.survey s
+            WHERE s.public_slug = $1
             "#,
             slug.as_str(),
         )
@@ -275,6 +336,88 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
         .map_err(map_sqlx_error)
     }
 
+    async fn has_completed_responses(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: u32,
+    ) -> Result<bool, CoreError> {
+        let version = version_column("survey", id.0, version)?;
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM survey.response
+                WHERE org_id = $1 AND survey_id = $2 AND status = 'COMPLETED'
+                  AND graph_version = $3
+            ) AS "exists!"
+            "#,
+            organization_id.0,
+            id.0,
+            version,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
+    }
+
+    async fn store_graph_version(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: u32,
+        graph: &Graph,
+    ) -> Result<(), CoreError> {
+        let version = version_column("survey", id.0, version)?;
+        let graph = serde_json::to_value(graph)
+            .map_err(|error| CoreError::Internal(format!("survey.survey {}: {error}", id.0)))?;
+        let mut tx = self.tx.lock().await;
+        sqlx::query!(
+            r#"
+            INSERT INTO survey.survey_version (org_id, survey_id, version, graph)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (survey_id, version) DO NOTHING
+            "#,
+            organization_id.0,
+            id.0,
+            version,
+            graph,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    async fn find_graph_version(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: u32,
+    ) -> Result<Option<Graph>, CoreError> {
+        let version = version_column("survey", id.0, version)?;
+        let mut tx = self.tx.lock().await;
+        let graph = sqlx::query_scalar!(
+            r#"
+            SELECT graph FROM survey.survey_version
+            WHERE org_id = $1 AND survey_id = $2 AND version = $3
+            "#,
+            organization_id.0,
+            id.0,
+            version,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        graph
+            .map(|value| {
+                serde_json::from_value(value).map_err(|error| {
+                    CoreError::Internal(format!("survey.survey_version {}: {error}", id.0))
+                })
+            })
+            .transpose()
+    }
+
     async fn find_for_update(
         &mut self,
         organization_id: OrganizationId,
@@ -284,12 +427,18 @@ impl<'tx> SurveyRepository for PgSurveyRepository<'tx> {
         let row = sqlx::query_as!(
             SurveyRow,
             r#"
-            SELECT id, org_id, campaign_id, title, description, visibility, graph,
-                   allow_multiple_responses, response_cap, metadata, status, public_slug,
-                   opened_at, closed_at
-            FROM survey.survey
-            WHERE org_id = $1 AND id = $2
-            FOR UPDATE
+            SELECT s.id, s.org_id,
+                   COALESCE(
+                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)
+                        FROM survey.survey_campaign sc WHERE sc.survey_id = s.id),
+                       '{}'
+                   ) AS "campaign_ids!",
+                   s.title, s.description, s.visibility, s.graph, s.graph_version,
+                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,
+                   s.public_slug, s.opened_at, s.closed_at
+            FROM survey.survey s
+            WHERE s.org_id = $1 AND s.id = $2
+            FOR UPDATE OF s
             "#,
             organization_id.0,
             id.0,

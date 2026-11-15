@@ -7,8 +7,8 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_core::{
     Campaign, CampaignId, CampaignRepository, Completed, MemberId, OrganizationId, PublicSlug,
-    ResponseId, ResponseRecord, ResponseRepository, ResumeToken, SurveyError, SurveyId,
-    SurveyRecord, SurveyRepository, SurveyResponse,
+    ResponseId, ResponseRecord, ResponseRepository, ResumeToken, SurveyError, SurveyGraph,
+    SurveyId, SurveyRecord, SurveyRepository, SurveyResponse,
 };
 
 #[derive(Debug, Default)]
@@ -17,6 +17,7 @@ pub struct State {
     pub campaigns: HashMap<CampaignId, Campaign>,
     pub responses: HashMap<ResponseId, ResponseRecord>,
     pub photos: HashMap<ResponseId, Vec<String>>,
+    pub versions: HashMap<(SurveyId, u32), SurveyGraph>,
 }
 
 pub type Store = Arc<Mutex<State>>;
@@ -37,14 +38,6 @@ fn page<T>(mut items: Vec<(uuid::Uuid, T)>, limit: u64, offset: u64) -> (Vec<T>,
         .map(|(_, item)| item)
         .collect();
     (kept, total)
-}
-
-fn campaign_of(record: &SurveyRecord) -> Option<CampaignId> {
-    match record {
-        SurveyRecord::Draft(survey) => survey.campaign_id(),
-        SurveyRecord::Opened(survey) => survey.campaign_id(),
-        SurveyRecord::Closed(survey) => survey.campaign_id(),
-    }
 }
 
 fn slug_of(record: &SurveyRecord) -> Option<&PublicSlug> {
@@ -194,7 +187,7 @@ impl SurveyRepository for MemorySurveys {
             .surveys
             .values()
             .filter(|record| record.organization_id() == organization_id)
-            .filter(|record| campaign_of(record) == Some(campaign_id))
+            .filter(|record| record.campaign_ids().contains(&campaign_id))
             .cloned()
             .collect())
     }
@@ -243,6 +236,49 @@ impl SurveyRepository for MemorySurveys {
         id: SurveyId,
     ) -> Result<Option<SurveyRecord>, CoreError> {
         self.find(organization_id, id).await
+    }
+
+    async fn has_completed_responses(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: u32,
+    ) -> Result<bool, CoreError> {
+        Ok(state(&self.store).responses.values().any(|record| {
+            record.organization_id() == organization_id
+                && record.survey_id() == id
+                && record.graph_version() == Some(version)
+        }))
+    }
+
+    async fn store_graph_version(
+        &mut self,
+        _organization_id: OrganizationId,
+        id: SurveyId,
+        version: u32,
+        graph: &SurveyGraph,
+    ) -> Result<(), CoreError> {
+        state(&self.store)
+            .versions
+            .entry((id, version))
+            .or_insert_with(|| graph.clone());
+        Ok(())
+    }
+
+    async fn find_graph_version(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: u32,
+    ) -> Result<Option<SurveyGraph>, CoreError> {
+        let guard = state(&self.store);
+        let owned = guard
+            .surveys
+            .get(&id)
+            .is_some_and(|record| record.organization_id() == organization_id);
+        Ok(owned
+            .then(|| guard.versions.get(&(id, version)).cloned())
+            .flatten())
     }
 }
 

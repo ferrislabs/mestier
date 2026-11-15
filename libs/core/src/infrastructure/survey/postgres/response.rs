@@ -44,7 +44,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE org_id = $1 AND id = $2
             "#,
@@ -66,11 +66,12 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             r#"
             INSERT INTO survey.response (
                 id, org_id, survey_id, member_id, answers, status, resume_token,
-                identifier_value, unique_respondent, completed_at, created_at, updated_at
+                identifier_value, unique_respondent, completed_at, created_at, graph_version,
+                updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
             RETURNING id, org_id, survey_id, member_id, answers, status, resume_token,
-                      identifier_value, unique_respondent, completed_at, created_at
+                      identifier_value, unique_respondent, completed_at, created_at, graph_version
             "#,
             columns.id,
             columns.org_id,
@@ -83,6 +84,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             columns.unique_respondent,
             columns.completed_at,
             columns.created_at,
+            columns.graph_version,
         )
         .fetch_one(&mut ***tx)
         .await
@@ -99,10 +101,10 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             r#"
             UPDATE survey.response
             SET answers = $3, status = $4, identifier_value = $5, unique_respondent = $6,
-                completed_at = $7, updated_at = now()
+                completed_at = $7, graph_version = $8, updated_at = now()
             WHERE org_id = $1 AND id = $2 AND status = 'IN_PROGRESS'
             RETURNING id, org_id, survey_id, member_id, answers, status, resume_token,
-                      identifier_value, unique_respondent, completed_at, created_at
+                      identifier_value, unique_respondent, completed_at, created_at, graph_version
             "#,
             columns.org_id,
             columns.id,
@@ -111,6 +113,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             columns.identifier_value,
             columns.unique_respondent,
             columns.completed_at,
+            columns.graph_version,
         )
         .fetch_optional(&mut ***tx)
         .await
@@ -157,7 +160,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE org_id = $1
             ORDER BY created_at DESC, id DESC
@@ -199,7 +202,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE org_id = $1 AND survey_id = $2
             ORDER BY created_at DESC, id DESC
@@ -242,7 +245,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE org_id = $1 AND survey_id = $2 AND status = 'COMPLETED'
             ORDER BY completed_at DESC, id DESC
@@ -278,7 +281,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE org_id = $1 AND survey_id = $2 AND resume_token = $3
             "#,
@@ -326,7 +329,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE org_id = $1 AND survey_id = $2 AND member_id = $3 AND status = 'COMPLETED'
             ORDER BY completed_at DESC, id DESC
@@ -354,7 +357,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE org_id = $1 AND survey_id = $2 AND identifier_value = $3
               AND status = 'COMPLETED'
@@ -383,7 +386,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE org_id = $1 AND survey_id = $2 AND member_id = $3 AND status = 'IN_PROGRESS'
             ORDER BY created_at DESC, id DESC
@@ -519,7 +522,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE status = 'IN_PROGRESS' AND updated_at < $1
             ORDER BY updated_at, id
@@ -546,7 +549,7 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
             ResponseRow,
             r#"
             SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
-                   identifier_value, unique_respondent, completed_at, created_at
+                   identifier_value, unique_respondent, completed_at, created_at, graph_version
             FROM survey.response
             WHERE org_id = $1 AND id = $2 AND status = 'IN_PROGRESS' AND updated_at < $3
             FOR UPDATE

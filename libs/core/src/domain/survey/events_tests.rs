@@ -91,7 +91,7 @@ fn metadata(entries: &[(&str, &str)]) -> Metadata {
     .unwrap()
 }
 
-fn draft(campaign: Option<CampaignId>) -> Survey<Draft> {
+fn draft(campaigns: &[CampaignId]) -> Survey<Draft> {
     let mut survey = Survey::new(
         SurveyId(Uuid::from_u128(1)),
         org(),
@@ -100,14 +100,14 @@ fn draft(campaign: Option<CampaignId>) -> Survey<Draft> {
     )
     .unwrap();
     survey.edit_graph(Some(graph()));
-    survey.edit_campaign(campaign);
+    survey.edit_campaigns(campaigns.to_vec());
     survey.edit_metadata(metadata(&[("theme", "survey")]));
     survey.edit_description(Some("Après chantier".to_string()));
     survey
 }
 
-fn opened(campaign: Option<CampaignId>) -> Survey<Opened> {
-    draft(campaign).open(at(1), None).unwrap()
+fn opened(campaigns: &[CampaignId]) -> Survey<Opened> {
+    draft(campaigns).open(at(1), None).unwrap()
 }
 
 fn conflicting_campaign() -> Campaign {
@@ -149,7 +149,7 @@ fn campaign() -> Campaign {
 fn response() -> Response<super::InProgress> {
     Response::start(
         ResponseId(Uuid::from_u128(3)),
-        &opened(None),
+        &opened(&[]),
         Some(MemberId(Uuid::from_u128(4))),
         None,
         at(2),
@@ -162,7 +162,7 @@ fn answers(entries: Vec<(u128, Answer)>) -> Answers {
 }
 
 fn completed() -> super::Response<super::Completed> {
-    let graph = opened(None);
+    let graph = opened(&[]);
     let mut response = response();
     response
         .save(
@@ -184,8 +184,8 @@ fn keys(value: &Value) -> Vec<String> {
 
 #[test]
 fn survey_opened_payload_is_locked() {
-    let survey = opened(None);
-    let event = SurveyOpened::new(&survey, None).unwrap();
+    let survey = opened(&[]);
+    let event = SurveyOpened::new(&survey, &[]).unwrap();
     assert_eq!(event.name(), "survey.opened");
     assert_eq!(event.version(), 1);
     assert_eq!(event.subject().kind, "survey");
@@ -194,7 +194,8 @@ fn survey_opened_payload_is_locked() {
         event.payload(),
         json!({
             "survey_id": Uuid::from_u128(1),
-            "campaign_id": null,
+            "campaign_ids": [],
+            "graph_version": 1,
             "metadata": { "theme": "survey" },
             "survey": {
                 "id": Uuid::from_u128(1),
@@ -213,11 +214,11 @@ fn survey_opened_payload_is_locked() {
 #[test]
 fn survey_opened_payload_carries_the_campaign_id_and_merged_metadata() {
     let campaign = campaign();
-    let survey = opened(Some(campaign.id()));
-    let payload = SurveyOpened::new(&survey, Some(&campaign))
+    let survey = opened(&[campaign.id()]);
+    let payload = SurveyOpened::new(&survey, std::slice::from_ref(&campaign))
         .unwrap()
         .payload();
-    assert_eq!(payload["campaign_id"], json!(Uuid::from_u128(2)));
+    assert_eq!(payload["campaign_ids"], json!([Uuid::from_u128(2)]));
     assert_eq!(
         payload["metadata"],
         json!({ "season": "spring", "theme": "survey" })
@@ -227,8 +228,8 @@ fn survey_opened_payload_carries_the_campaign_id_and_merged_metadata() {
 #[test]
 fn survey_opened_lets_the_survey_win_a_conflicting_key() {
     let campaign = conflicting_campaign();
-    let survey = opened(Some(campaign.id()));
-    let payload = SurveyOpened::new(&survey, Some(&campaign))
+    let survey = opened(&[campaign.id()]);
+    let payload = SurveyOpened::new(&survey, std::slice::from_ref(&campaign))
         .unwrap()
         .payload();
     assert_eq!(
@@ -239,25 +240,25 @@ fn survey_opened_lets_the_survey_win_a_conflicting_key() {
 
 #[test]
 fn survey_opened_refuses_a_campaign_that_is_not_the_survey_one() {
-    let standalone = opened(None);
-    let in_campaign = opened(Some(CampaignId(Uuid::from_u128(2))));
+    let standalone = opened(&[]);
+    let in_campaign = opened(&[CampaignId(Uuid::from_u128(2))]);
     assert_eq!(
-        SurveyOpened::new(&standalone, Some(&campaign())).err(),
+        SurveyOpened::new(&standalone, &[campaign()]).err(),
         Some(SurveyError::SurveyCampaignMismatch)
     );
     assert_eq!(
-        SurveyOpened::new(&in_campaign, None).err(),
+        SurveyOpened::new(&in_campaign, &[]).err(),
         Some(SurveyError::SurveyCampaignMismatch)
     );
     assert_eq!(
-        SurveyOpened::new(&in_campaign, Some(&foreign_campaign())).err(),
+        SurveyOpened::new(&in_campaign, &[foreign_campaign()]).err(),
         Some(SurveyError::SurveyCampaignMismatch)
     );
 }
 
 #[test]
 fn response_submitted_payload_is_locked() {
-    let survey = opened(None);
+    let survey = opened(&[]);
     let mut response = response();
     response
         .save(
@@ -265,7 +266,7 @@ fn response_submitted_payload_is_locked() {
             answers(vec![(1, Answer::Choice("Oui".to_string()))]),
         )
         .unwrap();
-    let event = SurveyResponseSubmitted::new(&survey, None, &response).unwrap();
+    let event = SurveyResponseSubmitted::new(&survey, &[], &response).unwrap();
     assert_eq!(event.name(), "survey.response_submitted");
     assert_eq!(event.subject().kind, "survey_response");
     assert_eq!(event.subject().id, Some(Uuid::from_u128(3)));
@@ -273,7 +274,8 @@ fn response_submitted_payload_is_locked() {
         event.payload(),
         json!({
             "survey_id": Uuid::from_u128(1),
-            "campaign_id": null,
+            "campaign_ids": [],
+            "graph_version": 1,
             "metadata": { "theme": "survey" },
             "response": {
                 "id": Uuid::from_u128(3),
@@ -288,12 +290,12 @@ fn response_submitted_payload_is_locked() {
 #[test]
 fn response_submitted_lets_the_survey_win_a_conflicting_key() {
     let campaign = conflicting_campaign();
-    let survey = opened(Some(campaign.id()));
+    let survey = opened(&[campaign.id()]);
     let response = response();
-    let payload = SurveyResponseSubmitted::new(&survey, Some(&campaign), &response)
+    let payload = SurveyResponseSubmitted::new(&survey, std::slice::from_ref(&campaign), &response)
         .unwrap()
         .payload();
-    assert_eq!(payload["campaign_id"], json!(Uuid::from_u128(2)));
+    assert_eq!(payload["campaign_ids"], json!([Uuid::from_u128(2)]));
     assert_eq!(
         payload["metadata"],
         json!({ "season": "spring", "theme": "survey" })
@@ -302,17 +304,17 @@ fn response_submitted_lets_the_survey_win_a_conflicting_key() {
 
 #[test]
 fn response_submitted_refuses_a_campaign_that_is_not_the_survey_one() {
-    let survey = opened(None);
+    let survey = opened(&[]);
     let response = response();
     assert_eq!(
-        SurveyResponseSubmitted::new(&survey, Some(&campaign()), &response).err(),
+        SurveyResponseSubmitted::new(&survey, &[campaign()], &response).err(),
         Some(SurveyError::SurveyCampaignMismatch)
     );
 }
 
 #[test]
 fn response_completed_payload_lists_only_the_path_in_order_with_labels() {
-    let survey = opened(None);
+    let survey = opened(&[]);
     let mut response = response();
     response
         .save(
@@ -325,13 +327,14 @@ fn response_completed_payload_lists_only_the_path_in_order_with_labels() {
         )
         .unwrap();
     let completed = response.complete(&survey, at(3)).unwrap();
-    let event = SurveyResponseCompleted::new(&survey, None, &completed).unwrap();
+    let event = SurveyResponseCompleted::new(&survey, &[], &completed).unwrap();
     assert_eq!(event.name(), "survey.response_completed");
     assert_eq!(
         event.payload(),
         json!({
             "survey_id": Uuid::from_u128(1),
-            "campaign_id": null,
+            "campaign_ids": [],
+            "graph_version": 1,
             "survey": { "id": Uuid::from_u128(1), "title": "Satisfaction" },
             "response": {
                 "id": Uuid::from_u128(3),
@@ -352,12 +355,13 @@ fn response_completed_payload_lists_only_the_path_in_order_with_labels() {
 #[test]
 fn response_completed_payload_carries_merged_metadata() {
     let campaign = campaign();
-    let survey = opened(Some(campaign.id()));
+    let survey = opened(&[campaign.id()]);
     let completed = completed();
-    let payload = SurveyResponseCompleted::new(&survey, Some(&campaign), &completed)
-        .unwrap()
-        .payload();
-    assert_eq!(payload["campaign_id"], json!(Uuid::from_u128(2)));
+    let payload =
+        SurveyResponseCompleted::new(&survey, std::slice::from_ref(&campaign), &completed)
+            .unwrap()
+            .payload();
+    assert_eq!(payload["campaign_ids"], json!([Uuid::from_u128(2)]));
     assert_eq!(
         payload["metadata"],
         json!({ "season": "spring", "theme": "survey" })
@@ -367,11 +371,12 @@ fn response_completed_payload_carries_merged_metadata() {
 #[test]
 fn response_completed_lets_the_survey_win_a_conflicting_key() {
     let campaign = conflicting_campaign();
-    let survey = opened(Some(campaign.id()));
+    let survey = opened(&[campaign.id()]);
     let completed = completed();
-    let payload = SurveyResponseCompleted::new(&survey, Some(&campaign), &completed)
-        .unwrap()
-        .payload();
+    let payload =
+        SurveyResponseCompleted::new(&survey, std::slice::from_ref(&campaign), &completed)
+            .unwrap()
+            .payload();
     assert_eq!(
         payload["metadata"],
         json!({ "season": "spring", "theme": "survey" })
@@ -380,10 +385,10 @@ fn response_completed_lets_the_survey_win_a_conflicting_key() {
 
 #[test]
 fn response_completed_refuses_a_campaign_that_is_not_the_survey_one() {
-    let survey = opened(Some(CampaignId(Uuid::from_u128(2))));
+    let survey = opened(&[CampaignId(Uuid::from_u128(2))]);
     let completed = completed();
     assert_eq!(
-        SurveyResponseCompleted::new(&survey, None, &completed).err(),
+        SurveyResponseCompleted::new(&survey, &[], &completed).err(),
         Some(SurveyError::SurveyCampaignMismatch)
     );
 }
@@ -402,11 +407,11 @@ fn response_events_refuse_a_response_of_another_survey() {
     let response = response();
     let completed = completed();
     assert_eq!(
-        SurveyResponseSubmitted::new(&other, None, &response).err(),
+        SurveyResponseSubmitted::new(&other, &[], &response).err(),
         Some(SurveyError::ResponseSurveyMismatch)
     );
     assert_eq!(
-        SurveyResponseCompleted::new(&other, None, &completed).err(),
+        SurveyResponseCompleted::new(&other, &[], &completed).err(),
         Some(SurveyError::ResponseSurveyMismatch)
     );
 }
@@ -487,7 +492,7 @@ fn every_emitted_event_has_a_descriptor() {
 
 fn real_payloads() -> Vec<(&'static str, u16, Value)> {
     let campaign = campaign();
-    let survey = opened(Some(campaign.id()));
+    let survey = opened(&[campaign.id()]);
     let mut in_progress = response();
     in_progress
         .save(
@@ -496,10 +501,12 @@ fn real_payloads() -> Vec<(&'static str, u16, Value)> {
         )
         .unwrap();
     let completed = completed();
-    let opened_event = SurveyOpened::new(&survey, Some(&campaign)).unwrap();
-    let submitted = SurveyResponseSubmitted::new(&survey, Some(&campaign), &in_progress).unwrap();
+    let opened_event = SurveyOpened::new(&survey, std::slice::from_ref(&campaign)).unwrap();
+    let submitted =
+        SurveyResponseSubmitted::new(&survey, std::slice::from_ref(&campaign), &in_progress)
+            .unwrap();
     let completed_event =
-        SurveyResponseCompleted::new(&survey, Some(&campaign), &completed).unwrap();
+        SurveyResponseCompleted::new(&survey, std::slice::from_ref(&campaign), &completed).unwrap();
     let started = SurveyCampaignStarted {
         campaign: campaign.clone(),
     };
@@ -589,4 +596,97 @@ fn the_completed_example_is_a_members_mode_response() {
         .payload_example;
     assert_eq!(opened["survey"]["visibility"], json!("MEMBERS"));
     assert!(opened["survey"].get("metadata").is_none());
+}
+
+fn campaign_numbered(n: u128, entries: &[(&str, &str)]) -> Campaign {
+    Campaign::new(
+        CampaignId(Uuid::from_u128(n)),
+        org(),
+        format!("Campagne {n}"),
+        Window::new(None, None).unwrap(),
+        metadata(entries),
+        at(1),
+    )
+    .unwrap()
+}
+
+#[test]
+fn survey_events_carry_every_campaign_id_in_attachment_order() {
+    let first = campaign_numbered(20, &[("zone", "nord")]);
+    let second = campaign_numbered(10, &[("zone", "sud")]);
+    let survey = opened(&[first.id(), second.id()]);
+    let payload = SurveyOpened::new(&survey, &[second.clone(), first.clone()])
+        .unwrap()
+        .payload();
+    assert_eq!(
+        payload["campaign_ids"],
+        json!([Uuid::from_u128(20), Uuid::from_u128(10)])
+    );
+    assert_eq!(payload["graph_version"], json!(1));
+}
+
+#[test]
+fn metadata_is_merged_across_campaigns_in_order_then_the_survey_wins() {
+    let first = campaign_numbered(20, &[("zone", "nord"), ("season", "spring")]);
+    let second = campaign_numbered(10, &[("zone", "sud"), ("theme", "campaign")]);
+    let survey = opened(&[first.id(), second.id()]);
+    let payload = SurveyOpened::new(&survey, &[second, first])
+        .unwrap()
+        .payload();
+    assert_eq!(
+        payload["metadata"],
+        json!({ "zone": "sud", "season": "spring", "theme": "survey" })
+    );
+}
+
+#[test]
+fn survey_events_refuse_a_missing_or_extra_campaign() {
+    let first = campaign_numbered(20, &[]);
+    let second = campaign_numbered(10, &[]);
+    let survey = opened(&[first.id(), second.id()]);
+    assert_eq!(
+        SurveyOpened::new(&survey, std::slice::from_ref(&first)).err(),
+        Some(SurveyError::SurveyCampaignMismatch)
+    );
+    assert_eq!(
+        SurveyOpened::new(&survey, &[first, second, foreign_campaign()]).err(),
+        Some(SurveyError::SurveyCampaignMismatch)
+    );
+}
+
+#[test]
+fn the_completed_event_carries_the_graph_version_of_the_response() {
+    let mut survey = opened(&[]);
+    let changed = Graph::new(
+        vec![
+            question(1, QuestionKind::Text, false),
+            Node::End(EndNode {
+                id: qid(6),
+                message: None,
+            }),
+        ],
+        vec![edge(1, 6, Branch::Next)],
+        qid(1),
+    )
+    .unwrap();
+    let previous = survey.revise_graph(changed.clone());
+    assert_eq!(previous.map(|stored| stored.version()), Some(1));
+    let mut response = Response::start(
+        ResponseId(Uuid::from_u128(3)),
+        &survey,
+        Some(MemberId(Uuid::from_u128(4))),
+        None,
+        at(2),
+    )
+    .unwrap();
+    response
+        .save(&survey, answers(vec![(1, Answer::Text("ok".to_string()))]))
+        .unwrap();
+    let completed = response.complete(&survey, at(3)).unwrap();
+    let payload = SurveyResponseCompleted::new(&survey, &[], &completed)
+        .unwrap()
+        .payload();
+    assert_eq!(completed.graph_version(), 2);
+    assert_eq!(payload["graph_version"], json!(2));
+    assert_eq!(survey.definition(), &changed);
 }

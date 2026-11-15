@@ -3,7 +3,7 @@ use common::CoreError;
 
 use super::record::{ResponseRecord, SurveyRecord};
 use super::{
-    Campaign, CampaignId, Completed, PublicSlug, Response, ResponseId, ResumeToken, SurveyId,
+    Campaign, CampaignId, Completed, Graph, PublicSlug, Response, ResponseId, ResumeToken, SurveyId,
 };
 use crate::{MemberId, OrganizationId};
 
@@ -60,6 +60,28 @@ pub trait SurveyRepository: Send {
         organization_id: OrganizationId,
         id: SurveyId,
     ) -> impl Future<Output = Result<Option<SurveyRecord>, CoreError>> + Send;
+
+    fn has_completed_responses(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: u32,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
+
+    fn store_graph_version(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: u32,
+        graph: &Graph,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn find_graph_version(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: u32,
+    ) -> impl Future<Output = Result<Option<Graph>, CoreError>> + Send;
 }
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]

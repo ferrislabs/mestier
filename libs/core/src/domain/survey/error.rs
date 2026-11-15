@@ -144,6 +144,12 @@ pub enum SurveyError {
     SurveyStateChanged,
     #[error("response: has reached its photo upload cap")]
     ResponsePhotoCapReached,
+    #[error("survey: its visibility cannot change once it was opened")]
+    SurveyVisibilityFrozen,
+    #[error("survey: a graph version is a positive number")]
+    GraphVersionInvalid,
+    #[error("survey: graph version not found")]
+    GraphVersionNotFound,
 }
 
 impl SurveyError {
@@ -218,6 +224,9 @@ impl SurveyError {
             Self::RespondentAlreadyAnswered => "respondent_already_answered",
             Self::SurveyStateChanged => "survey_state_changed",
             Self::ResponsePhotoCapReached => "response_photo_cap_reached",
+            Self::SurveyVisibilityFrozen => "survey_visibility_frozen",
+            Self::GraphVersionInvalid => "graph_version_invalid",
+            Self::GraphVersionNotFound => "graph_version_not_found",
         }
     }
 
@@ -291,7 +300,10 @@ impl SurveyError {
             | Self::ResponseCapReached
             | Self::RespondentAlreadyAnswered
             | Self::SurveyStateChanged
-            | Self::ResponsePhotoCapReached => None,
+            | Self::ResponsePhotoCapReached
+            | Self::SurveyVisibilityFrozen
+            | Self::GraphVersionInvalid
+            | Self::GraphVersionNotFound => None,
         }
     }
 
@@ -310,7 +322,8 @@ impl From<SurveyError> for CoreError {
         match error {
             SurveyError::SurveyNotFound
             | SurveyError::CampaignNotFound
-            | SurveyError::ResponseNotFound => Self::NotFound,
+            | SurveyError::ResponseNotFound
+            | SurveyError::GraphVersionNotFound => Self::NotFound,
             SurveyError::EmailInvalid
             | SurveyError::PhoneInvalid
             | SurveyError::GraphEmpty
@@ -357,7 +370,8 @@ impl From<SurveyError> for CoreError {
             | SurveyError::ResponseResumeTokenRequired
             | SurveyError::ResponseResumeTokenForbidden
             | SurveyError::SurveyInconsistentState
-            | SurveyError::ResponseInconsistentState => Self::Internal(error.to_string()),
+            | SurveyError::ResponseInconsistentState
+            | SurveyError::GraphVersionInvalid => Self::Internal(error.to_string()),
             SurveyError::SurveyWithoutGraph
             | SurveyError::SurveyClosed
             | SurveyError::CampaignNotStarted
@@ -376,7 +390,8 @@ impl From<SurveyError> for CoreError {
             | SurveyError::ResponseCapReached
             | SurveyError::RespondentAlreadyAnswered
             | SurveyError::SurveyStateChanged
-            | SurveyError::ResponsePhotoCapReached => error.refused(RefusalKind::Conflict),
+            | SurveyError::ResponsePhotoCapReached
+            | SurveyError::SurveyVisibilityFrozen => error.refused(RefusalKind::Conflict),
         }
     }
 }

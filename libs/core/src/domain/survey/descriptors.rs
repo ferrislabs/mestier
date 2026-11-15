@@ -35,7 +35,8 @@ pub fn descriptors() -> Vec<EventDescriptor> {
             subject_kind: "survey",
             payload_example: json!({
                 "survey_id": "018f3b2a-0000-7000-8000-000000000030",
-                "campaign_id": "018f3b2a-0000-7000-8000-000000000040",
+                "campaign_ids": ["018f3b2a-0000-7000-8000-000000000040"],
+                "graph_version": 1,
                 "metadata": { "saison": "printemps", "chantier": "Rénovation Dupont" },
                 "survey": {
                     "id": "018f3b2a-0000-7000-8000-000000000030",
@@ -56,7 +57,8 @@ pub fn descriptors() -> Vec<EventDescriptor> {
             subject_kind: "survey_response",
             payload_example: json!({
                 "survey_id": "018f3b2a-0000-7000-8000-000000000030",
-                "campaign_id": "018f3b2a-0000-7000-8000-000000000040",
+                "campaign_ids": ["018f3b2a-0000-7000-8000-000000000040"],
+                "graph_version": 1,
                 "metadata": { "saison": "printemps", "chantier": "Rénovation Dupont" },
                 "response": {
                     "id": "018f3b2a-0000-7000-8000-000000000050",
@@ -73,7 +75,8 @@ pub fn descriptors() -> Vec<EventDescriptor> {
             subject_kind: "survey_response",
             payload_example: json!({
                 "survey_id": "018f3b2a-0000-7000-8000-000000000030",
-                "campaign_id": "018f3b2a-0000-7000-8000-000000000040",
+                "campaign_ids": ["018f3b2a-0000-7000-8000-000000000040"],
+                "graph_version": 1,
                 "survey": {
                     "id": "018f3b2a-0000-7000-8000-000000000030",
                     "title": "Satisfaction après chantier",

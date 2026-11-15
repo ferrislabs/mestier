@@ -11,10 +11,10 @@ use crate::{
     Answer, Answers, CampaignCommand, CampaignId, CampaignPatch, CampaignStatus,
     CreateCampaignCommand, CreateSurveyCommand, ListCampaignsCommand, ListSurveyResponsesCommand,
     ListSurveysCommand, Metadata, PublicSlug, QuestionId, QuestionKind, ResponseId, ResumeToken,
-    SaveMemberResponseCommand, StartMemberResponseCommand, SurveyBranch, SurveyCommand, SurveyEdge,
-    SurveyEndNode, SurveyGraph, SurveyId, SurveyNode, SurveyPatch, SurveyQuestionNode,
-    SurveyResponseCommand, SurveyWindow, UpdateCampaignCommand, UpdateSurveyCommand, UserId,
-    Visibility,
+    SaveMemberResponseCommand, SetSurveyCampaignsCommand, StartMemberResponseCommand, SurveyBranch,
+    SurveyCommand, SurveyEdge, SurveyEndNode, SurveyGraph, SurveyGraphVersionCommand, SurveyId,
+    SurveyNode, SurveyPatch, SurveyQuestionNode, SurveyResponseCommand, SurveyWindow,
+    UpdateCampaignCommand, UpdateSurveyCommand, UserId, Visibility,
 };
 
 pub(super) struct Fixture {
@@ -165,6 +165,7 @@ async fn draft(usecase: &MestierUseCase, fixture: &Fixture, visibility: Visibili
             organization_id: fixture.organization_id,
             title: "Satisfaction".to_owned(),
             visibility,
+            campaign_ids: Vec::new(),
         })
         .await
         .unwrap();
@@ -177,7 +178,7 @@ async fn draft(usecase: &MestierUseCase, fixture: &Fixture, visibility: Visibili
                 graph: Some(Some(graph())),
                 ..SurveyPatch::default()
             },
-            campaign_id: None,
+            campaign_ids: None,
         })
         .await
         .unwrap();
@@ -270,6 +271,7 @@ async fn create_survey_refuses_a_member_without_survey_manage() {
                     organization_id: fixture.organization_id,
                     title: "Refus".to_owned(),
                     visibility: Visibility::Members,
+                    campaign_ids: Vec::new(),
                 })
                 .await,
         );
@@ -289,7 +291,7 @@ async fn update_survey_refuses_a_member_without_survey_manage() {
                     organization_id: fixture.organization_id,
                     id: fixture.survey_id,
                     patch: SurveyPatch::default(),
-                    campaign_id: None,
+                    campaign_ids: None,
                 })
                 .await,
         );
@@ -379,6 +381,7 @@ async fn list_surveys_refuses_a_member_without_survey_view() {
                 .list_surveys(ListSurveysCommand {
                     actor: fixture.member.clone(),
                     organization_id: fixture.organization_id,
+                    campaign_id: None,
                     limit: 10,
                     offset: 0,
                 })
@@ -567,6 +570,7 @@ async fn survey_use_cases_answer_not_found_when_the_flag_is_off() {
                     organization_id: fixture.organization_id,
                     title: "Sans flag".to_owned(),
                     visibility: Visibility::Members,
+                    campaign_ids: Vec::new(),
                 })
                 .await,
         );
@@ -575,6 +579,7 @@ async fn survey_use_cases_answer_not_found_when_the_flag_is_off() {
                 .list_surveys(ListSurveysCommand {
                     actor: Subject::system(),
                     organization_id: fixture.organization_id,
+                    campaign_id: None,
                     limit: 10,
                     offset: 0,
                 })
@@ -1011,4 +1016,203 @@ async fn the_public_use_cases_do_not_find_an_opened_members_survey() {
     )
     .await;
     assert!(matches!(refused, Err(CoreError::NotFound)), "{refused:?}");
+}
+
+fn second_graph() -> SurveyGraph {
+    SurveyGraph::new(
+        vec![
+            SurveyNode::Question(SurveyQuestionNode {
+                id: qid(20),
+                kind: QuestionKind::Text,
+                label: "Prénom".to_owned(),
+                required: false,
+                options: Vec::new(),
+                max_photos: None,
+                identifier: false,
+            }),
+            SurveyNode::End(SurveyEndNode {
+                id: qid(21),
+                message: None,
+            }),
+        ],
+        vec![SurveyEdge {
+            from: qid(20),
+            to: qid(21),
+            branch: SurveyBranch::Next,
+        }],
+        qid(20),
+    )
+    .unwrap()
+}
+
+fn graph_version_command(
+    fixture: &Fixture,
+    actor: Subject,
+    id: SurveyId,
+    version: u32,
+) -> SurveyGraphVersionCommand {
+    SurveyGraphVersionCommand {
+        actor,
+        organization_id: fixture.organization_id,
+        id,
+        version,
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn an_opened_survey_is_edited_versioned_and_attached_to_campaigns() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Members).await;
+        let started = usecase
+            .start_member_response(StartMemberResponseCommand {
+                actor: fixture.member.clone(),
+                organization_id: fixture.organization_id,
+                survey_id,
+            })
+            .await
+            .unwrap()
+            .into_response();
+        usecase
+            .save_member_response(SaveMemberResponseCommand {
+                actor: fixture.member.clone(),
+                organization_id: fixture.organization_id,
+                id: started.id(),
+                answers: answers("Claire"),
+            })
+            .await
+            .unwrap();
+        usecase
+            .complete_member_response(response_command(
+                &fixture,
+                fixture.member.clone(),
+                started.id(),
+            ))
+            .await
+            .unwrap();
+
+        let edited = usecase
+            .update_survey(UpdateSurveyCommand {
+                actor: Subject::system(),
+                organization_id: fixture.organization_id,
+                id: survey_id,
+                patch: SurveyPatch {
+                    title: Some("Bilan".to_owned()),
+                    graph: Some(Some(second_graph())),
+                    ..SurveyPatch::default()
+                },
+                campaign_ids: Some(vec![fixture.campaign_id]),
+            })
+            .await
+            .unwrap();
+        assert!(matches!(edited, crate::SurveyRecord::Opened(_)));
+        assert_eq!(edited.graph_version(), Some(2));
+        assert_eq!(edited.campaign_ids(), &[fixture.campaign_id]);
+
+        let former = usecase
+            .get_survey_graph_version(graph_version_command(&fixture, Subject::system(), survey_id, 1))
+            .await
+            .unwrap();
+        assert_eq!(former.graph(), &graph());
+        let current = usecase
+            .get_survey_graph_version(graph_version_command(&fixture, Subject::system(), survey_id, 2))
+            .await
+            .unwrap();
+        assert_eq!(current.graph(), &second_graph());
+        not_found(
+            usecase
+                .get_survey_graph_version(graph_version_command(
+                    &fixture,
+                    Subject::system(),
+                    survey_id,
+                    3,
+                ))
+                .await,
+        );
+        forbidden(
+            usecase
+                .get_survey_graph_version(graph_version_command(
+                    &fixture,
+                    fixture.member.clone(),
+                    survey_id,
+                    1,
+                ))
+                .await,
+        );
+
+        let listed = usecase
+            .list_completed_survey_responses(ListSurveyResponsesCommand {
+                actor: Subject::system(),
+                organization_id: fixture.organization_id,
+                survey_id,
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(listed.responses.len(), 1);
+        assert_eq!(listed.responses[0].graph_version(), 1);
+        assert_eq!(listed.graph_of(&listed.responses[0]), Some(&graph()));
+
+        let held = usecase
+            .list_campaign_surveys(CampaignCommand {
+                actor: Subject::system(),
+                organization_id: fixture.organization_id,
+                id: fixture.campaign_id,
+            })
+            .await
+            .unwrap();
+        assert_eq!(held.len(), 1);
+        let (filtered, total) = usecase
+            .list_surveys(ListSurveysCommand {
+                actor: Subject::system(),
+                organization_id: fixture.organization_id,
+                campaign_id: Some(fixture.campaign_id),
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!((filtered.len(), total), (1, 1));
+        forbidden(usecase.list_campaign_surveys(campaign_command(&fixture)).await);
+
+        let cleared = usecase
+            .set_survey_campaigns(SetSurveyCampaignsCommand {
+                actor: Subject::system(),
+                organization_id: fixture.organization_id,
+                id: survey_id,
+                campaign_ids: Vec::new(),
+            })
+            .await
+            .unwrap();
+        assert!(cleared.campaign_ids().is_empty());
+        forbidden(
+            usecase
+                .set_survey_campaigns(SetSurveyCampaignsCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    id: survey_id,
+                    campaign_ids: Vec::new(),
+                })
+                .await,
+        );
+        let frozen = usecase
+            .update_survey(UpdateSurveyCommand {
+                actor: Subject::system(),
+                organization_id: fixture.organization_id,
+                id: survey_id,
+                patch: SurveyPatch {
+                    visibility: Some(Visibility::Public),
+                    ..SurveyPatch::default()
+                },
+                campaign_ids: None,
+            })
+            .await;
+        assert!(
+            matches!(frozen, Err(CoreError::Refused(ref refusal)) if refusal.reason == "survey_visibility_frozen"),
+            "{frozen:?}"
+        );
+        fixture
+    })
+    .await;
 }

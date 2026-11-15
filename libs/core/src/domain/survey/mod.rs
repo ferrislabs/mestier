@@ -27,7 +27,7 @@ mod service_tests;
 #[cfg(test)]
 mod tests;
 
-pub use aggregate::{Closed, Draft, Opened, Survey};
+pub use aggregate::{Closed, Draft, GraphVersion, Opened, Survey};
 pub use campaign::{Campaign, CampaignStatus, Window};
 pub use error::SurveyError;
 pub use graph::{

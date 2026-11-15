@@ -99,11 +99,11 @@ pub use survey::{
     Answer, Answers, Branch as SurveyBranch, Campaign, CampaignId, CampaignStatus, Closed,
     Completed, ConditionNode as SurveyConditionNode, Draft, Edge as SurveyEdge,
     EmailAddress as SurveyEmailAddress, EndNode as SurveyEndNode, Graph as SurveyGraph, GraphPath,
-    InProgress, Metadata, Node as SurveyNode, NodeRef as SurveyNodeRef, Opened,
-    PhoneNumber as SurveyPhoneNumber, PublicSlug, QuestionId, QuestionKind,
-    QuestionNode as SurveyQuestionNode, RespondentSurvey, Response as SurveyResponse, ResponseId,
-    ResponseRecord, ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord, Visibility,
-    Window as SurveyWindow,
+    GraphVersion as SurveyGraphVersion, InProgress, Metadata, Node as SurveyNode,
+    NodeRef as SurveyNodeRef, Opened, PhoneNumber as SurveyPhoneNumber, PublicSlug, QuestionId,
+    QuestionKind, QuestionNode as SurveyQuestionNode, RespondentSurvey, Response as SurveyResponse,
+    ResponseId, ResponseRecord, ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord,
+    Visibility, Window as SurveyWindow,
 };
 pub use task::*;
 pub use task_comment::*;

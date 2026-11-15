@@ -10,9 +10,9 @@ pub use application::supplier_invoice::{ImportSupplierInvoiceOutcome, TotalsMism
 pub use application::survey::commands::{
     CampaignCommand, CompletedSurveyResponses, CreateCampaignCommand, CreateSurveyCommand,
     ListCampaignsCommand, ListSurveyResponsesCommand, ListSurveysCommand,
-    OpenSurveyInCampaignCommand, SaveMemberResponseCommand, StartMemberResponseCommand,
-    SurveyCommand, SurveyResponseCommand, UpdateCampaignCommand, UpdateSurveyCommand,
-    UploadMemberResponsePhotoCommand,
+    OpenSurveyInCampaignCommand, SaveMemberResponseCommand, SetSurveyCampaignsCommand,
+    StartMemberResponseCommand, SurveyCommand, SurveyGraphVersionCommand, SurveyResponseCommand,
+    UpdateCampaignCommand, UpdateSurveyCommand, UploadMemberResponsePhotoCommand,
 };
 pub use application::*;
 pub use domain::automation::collection::{
@@ -122,8 +122,8 @@ pub use domain::{
     ResponseId, ResponseRecord, ResumeToken, SupplierAddress, SupplierAddressInput,
     SupplierContact, SupplierContactInput, SupplierError, SupplierField, SupplierOutcome,
     SupplierProfile, SupplierProfileInput, Survey, SurveyBranch, SurveyConditionNode, SurveyEdge,
-    SurveyEmailAddress, SurveyEndNode, SurveyError, SurveyGraph, SurveyId, SurveyNode,
-    SurveyNodeRef, SurveyPhoneNumber, SurveyQuestionNode, SurveyRecord, SurveyResponse,
+    SurveyEmailAddress, SurveyEndNode, SurveyError, SurveyGraph, SurveyGraphVersion, SurveyId,
+    SurveyNode, SurveyNodeRef, SurveyPhoneNumber, SurveyQuestionNode, SurveyRecord, SurveyResponse,
     SurveyWindow, VatSummary, Visibility, build_ledger,
 };
 

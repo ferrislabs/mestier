@@ -1,6 +1,6 @@
 use super::{
-    Closed, Completed, Draft, InProgress, Opened, Response, ResponseId, Survey, SurveyId,
-    Visibility,
+    CampaignId, Closed, Completed, Draft, Graph, InProgress, Opened, Response, ResponseId, Survey,
+    SurveyId, Visibility,
 };
 use crate::OrganizationId;
 
@@ -33,6 +33,30 @@ impl SurveyRecord {
             Self::Draft(survey) => survey.visibility(),
             Self::Opened(survey) => survey.visibility(),
             Self::Closed(survey) => survey.visibility(),
+        }
+    }
+
+    pub fn campaign_ids(&self) -> &[CampaignId] {
+        match self {
+            Self::Draft(survey) => survey.campaign_ids(),
+            Self::Opened(survey) => survey.campaign_ids(),
+            Self::Closed(survey) => survey.campaign_ids(),
+        }
+    }
+
+    pub fn graph(&self) -> Option<&Graph> {
+        match self {
+            Self::Draft(survey) => survey.graph(),
+            Self::Opened(survey) => survey.graph(),
+            Self::Closed(survey) => survey.graph(),
+        }
+    }
+
+    pub fn graph_version(&self) -> Option<u32> {
+        match self {
+            Self::Draft(survey) => survey.graph_version(),
+            Self::Opened(survey) => survey.graph_version(),
+            Self::Closed(survey) => survey.graph_version(),
         }
     }
 }
@@ -80,6 +104,13 @@ impl ResponseRecord {
         match self {
             Self::InProgress(response) => response.organization_id(),
             Self::Completed(response) => response.organization_id(),
+        }
+    }
+
+    pub fn graph_version(&self) -> Option<u32> {
+        match self {
+            Self::InProgress(_) => None,
+            Self::Completed(response) => Some(response.graph_version()),
         }
     }
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use super::aggregate::{Opened, Survey};
 use super::error::SurveyError;
 use super::graph::{Answers, Graph};
-use super::validation::{check_finite, ensure_known, validate};
+use super::validation::{check_finite, retain_known, validate};
 use super::value::{Answer, Visibility};
 use super::{ResponseId, SurveyId};
 use crate::{MemberId, OrganizationId};
@@ -32,7 +32,10 @@ impl Phase for Completed {}
 
 impl sealed::Sealed for InProgress {
     fn check(body: &ResponseBody) -> Result<(), SurveyError> {
-        if body.completed_at.is_none() && body.identifier_value.is_none() && !body.unique_respondent
+        if body.completed_at.is_none()
+            && body.identifier_value.is_none()
+            && !body.unique_respondent
+            && body.graph_version.is_none()
         {
             check_finite(&body.answers)
         } else {
@@ -43,7 +46,7 @@ impl sealed::Sealed for InProgress {
 
 impl sealed::Sealed for Completed {
     fn check(body: &ResponseBody) -> Result<(), SurveyError> {
-        if body.completed_at.is_some() {
+        if body.completed_at.is_some() && body.graph_version.is_some_and(|version| version > 0) {
             check_finite(&body.answers)
         } else {
             Err(SurveyError::ResponseInconsistentState)
@@ -90,6 +93,7 @@ pub struct ResponseBody {
     completed_at: Option<DateTime<Utc>>,
     identifier_value: Option<String>,
     unique_respondent: bool,
+    graph_version: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -220,6 +224,7 @@ impl Response<InProgress> {
                 completed_at: None,
                 identifier_value: None,
                 unique_respondent: false,
+                graph_version: None,
             },
             phase: PhantomData,
         })
@@ -255,7 +260,8 @@ impl Response<InProgress> {
     ) -> Result<Response<Completed>, SurveyError> {
         self.ensure_survey(survey)?;
         let graph = survey.definition();
-        ensure_known(graph, &self.body.answers)?;
+        let directory = self.photo_directory();
+        retain_known(graph, &mut self.body.answers);
         drop_blank(&mut self.body.answers);
         let path = graph.path(&self.body.answers);
         for id in &path.questions {
@@ -267,10 +273,11 @@ impl Response<InProgress> {
         self.body
             .answers
             .retain(|id, _| path.questions.contains(id));
-        validate(graph, &self.body.answers, &self.photo_directory())?;
+        validate(graph, &self.body.answers, &directory)?;
         self.body.identifier_value = identifier_of(graph, &path.questions, &self.body.answers);
         self.body.unique_respondent = !survey.allow_multiple_responses();
         self.body.completed_at = Some(at);
+        self.body.graph_version = Some(survey.version());
         Ok(Response {
             body: self.body,
             phase: PhantomData,
@@ -285,5 +292,9 @@ impl Response<Completed> {
 
     pub fn unique_respondent(&self) -> bool {
         self.body.unique_respondent
+    }
+
+    pub fn graph_version(&self) -> u32 {
+        self.body.graph_version.unwrap_or_default()
     }
 }

@@ -1,30 +1,33 @@
 Feature: Surveys, the questionnaires answered by members and by the public
 
-  A survey is drafted, then opened, which freezes its graph of questions. A
-  respondent starts a response, saves it as often as needed and completes it.
-  A survey may belong to a campaign whose window decides when it accepts
-  responses, and the clock of the campaigns announces when a window starts and
-  ends.
+  A survey is drafted, then opened; it stays editable but its visibility is
+  frozen, and a graph changed after a response was completed keeps the previous
+  version. A respondent starts a response, saves it as often as needed and
+  completes it. A survey may belong to several campaigns: it accepts responses
+  while one of their windows is open, and the clock of the campaigns announces
+  when a window starts and ends.
 
   Background:
     Given a company registered on Mestier
     And a member "Claire" of the company
 
   @spec-survey-4
-  Scenario: Opening a survey freezes its definition and emits survey.opened
+  Scenario: Opening a survey emits survey.opened with its graph version
     Given a draft MEMBERS survey "Satisfaction" with a required question "Nom"
     When the artisan opens the survey "Satisfaction"
     Then the survey "Satisfaction" is OPENED
     And the survey "Satisfaction" has a frozen definition of 2 nodes
     And the company is notified of the event "survey.opened"
     And the event "survey.opened" carries "/survey/title" equal to "Satisfaction"
+    And the event "survey.opened" carries the number 1 at "/graph_version"
 
   @spec-survey-4
-  Scenario: An opened survey refuses edits to its definition
+  Scenario: An opened survey can be retitled and stays opened
     Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
     When the artisan retitles the survey "Satisfaction" to "Autre titre"
-    Then the refusal is "survey: is not a draft"
-    And the survey "Satisfaction" is titled "Satisfaction"
+    Then nothing is refused
+    And the survey "Satisfaction" is titled "Autre titre"
+    And the survey "Satisfaction" is OPENED
 
   @spec-survey-5
   Scenario: Saving an in-progress response emits survey.response_submitted
@@ -80,6 +83,7 @@ Feature: Surveys, the questionnaires answered by members and by the public
     And the survey "Satisfaction" is opened
     When "Claire" starts a response to the survey "Satisfaction"
     Then the refusal is "survey: its campaign has not started"
+    And the refusal reason is "campaign_not_started"
     And the survey "Satisfaction" holds 0 responses
 
   @spec-survey-10
@@ -92,6 +96,7 @@ Feature: Surveys, the questionnaires answered by members and by the public
     And the clock reads "2026-03-31T00:00:00Z"
     When "Claire" starts a response to the survey "Satisfaction"
     Then the refusal is "survey: its campaign has ended"
+    And the refusal reason is "campaign_ended"
     And the survey "Satisfaction" holds 0 responses
 
   @spec-survey-10
@@ -267,15 +272,15 @@ Feature: Surveys, the questionnaires answered by members and by the public
     And the event "survey.response_completed" carries "/metadata/theme" equal to "survey"
 
   @spec-survey-25
-  Scenario: Every event of a standalone survey carries its id and a null campaign
+  Scenario: Every event of a standalone survey carries its id and no campaign
     Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
     When "Claire" completes a response to the survey "Satisfaction" answering "Dupont" to the question "Nom"
     Then the company is notified of 3 survey events
     And every survey event carries the id of the survey "Satisfaction" at "/survey_id"
-    And every survey event carries a null "/campaign_id"
+    And every survey event carries an empty "/campaign_ids"
 
   @spec-survey-25
-  Scenario: Every event of a campaign survey carries its id and the id of its campaign
+  Scenario: Every event of a campaign survey carries its id and the ids of its campaigns
     Given a campaign "Printemps" from "2026-03-01T00:00:00Z" to "2026-03-31T00:00:00Z"
     And a draft MEMBERS survey "Satisfaction" with a required question "Nom"
     And the survey "Satisfaction" belongs to the campaign "Printemps"
@@ -283,7 +288,7 @@ Feature: Surveys, the questionnaires answered by members and by the public
     When "Claire" completes a response to the survey "Satisfaction" answering "Dupont" to the question "Nom"
     Then the company is notified of 3 survey events
     And every survey event carries the id of the survey "Satisfaction" at "/survey_id"
-    And every survey event carries the id of the campaign "Printemps" at "/campaign_id"
+    And every survey event carries the campaigns "Printemps" at "/campaign_ids"
 
   @spec-survey-26
   Scenario: Every event of a campaign carries its id
@@ -292,3 +297,111 @@ Feature: Surveys, the questionnaires answered by members and by the public
     When the clock ticks at "2026-04-15T12:00:00Z" on the campaign "Printemps"
     Then the company is notified of 2 campaign events
     And every campaign event carries the id of the campaign "Printemps" at "/campaign_id"
+
+  @spec-survey-34
+  Scenario: A survey in two campaigns accepts a response while either window is open
+    Given the clock reads "2026-03-10T12:00:00Z"
+    And a campaign "Hiver" from "2026-01-01T00:00:00Z" to "2026-02-01T00:00:00Z"
+    And a campaign "Printemps" from "2026-03-01T00:00:00Z" to "2026-03-31T00:00:00Z"
+    And a draft MEMBERS survey "Satisfaction" with a required question "Nom"
+    And the survey "Satisfaction" belongs to the campaign "Hiver"
+    And the survey "Satisfaction" belongs to the campaign "Printemps"
+    And the survey "Satisfaction" is opened
+    When "Claire" starts a response to the survey "Satisfaction"
+    Then nothing is refused
+    And the company sees 1 response of the survey "Satisfaction"
+
+  @spec-survey-34
+  Scenario: A survey whose two campaigns have ended refuses a response
+    Given the clock reads "2026-03-10T12:00:00Z"
+    And a campaign "Hiver" from "2026-01-01T00:00:00Z" to "2026-02-01T00:00:00Z"
+    And a campaign "Printemps" from "2026-03-01T00:00:00Z" to "2026-03-31T00:00:00Z"
+    And a draft MEMBERS survey "Satisfaction" with a required question "Nom"
+    And the survey "Satisfaction" belongs to the campaign "Hiver"
+    And the survey "Satisfaction" belongs to the campaign "Printemps"
+    And the survey "Satisfaction" is opened
+    And the clock reads "2026-04-01T00:00:00Z"
+    When "Claire" starts a response to the survey "Satisfaction"
+    Then the refusal reason is "campaign_ended"
+    And the survey "Satisfaction" holds 0 responses
+
+  @spec-survey-34
+  Scenario: A survey with an ended campaign and a campaign to come refuses as not started
+    Given the clock reads "2026-03-10T12:00:00Z"
+    And a campaign "Printemps" from "2026-03-01T00:00:00Z" to "2026-03-31T00:00:00Z"
+    And a campaign "Été" from "2026-06-01T00:00:00Z" to "2026-06-30T00:00:00Z"
+    And a draft MEMBERS survey "Satisfaction" with a required question "Nom"
+    And the survey "Satisfaction" belongs to the campaign "Printemps"
+    And the survey "Satisfaction" belongs to the campaign "Été"
+    And the survey "Satisfaction" is opened
+    And the clock reads "2026-04-01T00:00:00Z"
+    When "Claire" starts a response to the survey "Satisfaction"
+    Then the refusal reason is "campaign_not_started"
+    And the survey "Satisfaction" holds 0 responses
+
+  @spec-survey-35
+  Scenario: The metadata of two campaigns are merged in order, then the survey wins
+    Given a campaign "Printemps" from "2026-03-01T00:00:00Z" to "2026-03-31T00:00:00Z"
+    And the campaign "Printemps" carries the metadata "season" equal to "spring"
+    And the campaign "Printemps" carries the metadata "zone" equal to "nord"
+    And a campaign "Chantiers" from "2026-03-01T00:00:00Z" to "2026-03-31T00:00:00Z"
+    And the campaign "Chantiers" carries the metadata "zone" equal to "sud"
+    And the campaign "Chantiers" carries the metadata "theme" equal to "campaign"
+    And a draft MEMBERS survey "Satisfaction" with a required question "Nom"
+    And the survey "Satisfaction" belongs to the campaign "Printemps"
+    And the survey "Satisfaction" belongs to the campaign "Chantiers"
+    And the survey "Satisfaction" carries the metadata "theme" equal to "survey"
+    When the artisan opens the survey "Satisfaction"
+    Then the event "survey.opened" carries "/metadata/season" equal to "spring"
+    And the event "survey.opened" carries "/metadata/zone" equal to "sud"
+    And the event "survey.opened" carries "/metadata/theme" equal to "survey"
+    And every survey event carries the campaigns "Printemps, Chantiers" at "/campaign_ids"
+
+  @spec-survey-36
+  Scenario: A campaign contains two surveys
+    Given a campaign "Printemps" from "2026-03-01T00:00:00Z" to "2026-03-31T00:00:00Z"
+    And a draft MEMBERS survey "Satisfaction" with a required question "Nom"
+    And a draft PUBLIC survey "Bilan" with a required question "Prénom"
+    And the survey "Satisfaction" belongs to the campaign "Printemps"
+    And the survey "Bilan" belongs to the campaign "Printemps"
+    Then the campaign "Printemps" holds the surveys "Bilan, Satisfaction"
+
+  @spec-survey-37
+  Scenario: Editing an opened survey drops a stale in-progress answer at completion
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    And "Claire" has started a response to the survey "Satisfaction"
+    And "Claire" has answered "Dupont" to the question "Nom" of the survey "Satisfaction"
+    When the artisan replaces the question "Nom" of the survey "Satisfaction" by an optional question "Prénom"
+    And "Claire" completes the response to the survey "Satisfaction"
+    Then nothing is refused
+    And the survey "Satisfaction" holds 1 completed response
+    And the event "survey.response_completed" carries "/answers/0/label" equal to "Prénom"
+    And the event "survey.response_completed" carries the number 1 at "/graph_version"
+    And the survey "Satisfaction" is at graph version 1
+
+  @spec-survey-38
+  Scenario: Completed responses keep their graph version and the former graph stays readable
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    And "Claire" has completed a response to the survey "Satisfaction" answering "Dupont" to the question "Nom"
+    When the artisan replaces the question "Nom" of the survey "Satisfaction" by an optional question "Prénom"
+    And the artisan replaces the question "Prénom" of the survey "Satisfaction" by an optional question "Âge"
+    Then nothing is refused
+    And the survey "Satisfaction" is at graph version 2
+    And the response of "Claire" to the survey "Satisfaction" was given on graph version 1
+    And the graph version 1 of the survey "Satisfaction" asks the question "Nom"
+
+  @spec-survey-38
+  Scenario: A closed survey can be edited and stays closed
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    And the survey "Satisfaction" is closed
+    When the artisan retitles the survey "Satisfaction" to "Bilan"
+    Then nothing is refused
+    And the survey "Satisfaction" is titled "Bilan"
+    And the survey "Satisfaction" is CLOSED
+
+  @spec-survey-39
+  Scenario: The visibility of an opened survey cannot change
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    When the artisan makes the survey "Satisfaction" PUBLIC
+    Then the refusal reason is "survey_visibility_frozen"
+    And the survey "Satisfaction" is OPENED

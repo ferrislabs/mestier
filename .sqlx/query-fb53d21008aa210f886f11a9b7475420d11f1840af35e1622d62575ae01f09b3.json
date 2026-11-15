@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO survey.response (\n                id, org_id, survey_id, member_id, answers, status, resume_token,\n                identifier_value, unique_respondent, completed_at, created_at, updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())\n            RETURNING id, org_id, survey_id, member_id, answers, status, resume_token,\n                      identifier_value, unique_respondent, completed_at, created_at\n            ",
+  "query": "\n            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,\n                   identifier_value, unique_respondent, completed_at, created_at, graph_version\n            FROM survey.response\n            WHERE org_id = $1\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -57,21 +57,18 @@
         "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "graph_version",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Jsonb",
-        "Text",
-        "Text",
-        "Text",
-        "Bool",
-        "Timestamptz",
-        "Timestamptz"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -85,8 +82,9 @@
       true,
       false,
       true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "e66fccc0bac0becde2e9dd0159b91db4dcfd85f01fa91c4777ff9e1abb4ac8ee"
+  "hash": "fb53d21008aa210f886f11a9b7475420d11f1840af35e1622d62575ae01f09b3"
 }

@@ -92,7 +92,7 @@ fn draft(
     .unwrap();
     survey.edit_description(Some("Votre avis".to_string()));
     survey.edit_graph(Some(graph(identifier)));
-    survey.edit_campaign(campaign);
+    survey.edit_campaigns(campaign.into_iter().collect());
     survey.edit_response_cap(NonZeroU32::new(30));
     survey.edit_metadata(metadata(&[("theme", "survey")]));
     survey
@@ -786,6 +786,147 @@ async fn survey_postgres_keeps_a_response_when_its_member_is_deleted() {
                 .await?,
             None
         );
+        Ok(())
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn survey_postgres_keeps_the_campaigns_of_a_survey_in_attachment_order() {
+    run(async |tx| {
+        let tenants = seed_tenants(&tx).await;
+        let org = tenants.organization;
+        let now = now_storable();
+        let mut campaigns = PgCampaignRepository::new(&tx);
+        let mut surveys = PgSurveyRepository::new(&tx);
+        let first = campaign(org, None, None, now);
+        let second = campaign(org, None, None, now);
+        campaigns.insert(&first).await?;
+        campaigns.insert(&second).await?;
+
+        let mut survey = draft(org, Visibility::Members, None, false);
+        survey.edit_campaigns(vec![second.id(), first.id()]);
+        let stored = surveys.insert(&SurveyRecord::from(survey.clone())).await?;
+        assert_eq!(stored.campaign_ids(), &[second.id(), first.id()]);
+
+        survey.edit_campaigns(vec![first.id()]);
+        let stored = surveys.update(&SurveyRecord::from(survey.clone())).await?;
+        assert_eq!(stored.campaign_ids(), &[first.id()]);
+        assert!(surveys.list_by_campaign(org, second.id()).await?.is_empty());
+
+        survey.edit_campaigns(vec![first.id(), second.id()]);
+        let opened = survey.open(now, None)?;
+        let stored = surveys.update(&SurveyRecord::from(opened)).await?;
+        assert_eq!(stored.campaign_ids(), &[first.id(), second.id()]);
+        assert_eq!(
+            surveys.find_for_update(org, stored.id()).await?,
+            Some(stored.clone())
+        );
+        let other = surveys
+            .insert(&SurveyRecord::from(draft(
+                org,
+                Visibility::Public,
+                Some(second.id()),
+                false,
+            )))
+            .await?;
+        let mut held: Vec<SurveyId> = surveys
+            .list_by_campaign(org, second.id())
+            .await?
+            .iter()
+            .map(SurveyRecord::id)
+            .collect();
+        held.sort_by_key(|id| id.0);
+        let mut expected = vec![stored.id(), other.id()];
+        expected.sort_by_key(|id| id.0);
+        assert_eq!(held, expected);
+        assert!(
+            surveys
+                .list_by_campaign(tenants.other, second.id())
+                .await?
+                .is_empty()
+        );
+        assert!(campaigns.delete(org, second.id()).await.is_err());
+        Ok(())
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn survey_postgres_stores_graph_versions_and_finds_completed_responses_per_version() {
+    run(async |tx| {
+        let tenants = seed_tenants(&tx).await;
+        let org = tenants.organization;
+        let now = now_storable();
+        let mut surveys = PgSurveyRepository::new(&tx);
+        let mut responses = PgResponseRepository::new(&tx);
+
+        let mut members = opened(org, Visibility::Members, false, now);
+        surveys.insert(&SurveyRecord::from(members.clone())).await?;
+        assert!(
+            !surveys
+                .has_completed_responses(org, members.id(), 1)
+                .await?
+        );
+        assert_eq!(
+            surveys.find_graph_version(org, members.id(), 1).await?,
+            None
+        );
+
+        let mut started = SurveyResponse::start(
+            ResponseId(generate_uuid_v7()),
+            &members,
+            Some(tenants.member),
+            None,
+            now,
+        )?;
+        started.save(&members, answers("Claire"))?;
+        responses
+            .insert(&ResponseRecord::from(started.clone()))
+            .await?;
+        let completed = started.complete(&members, now)?;
+        let saved = responses.update(&ResponseRecord::from(completed)).await?;
+        assert_eq!(saved.graph_version(), Some(1));
+        assert!(
+            surveys
+                .has_completed_responses(org, members.id(), 1)
+                .await?
+        );
+        assert!(
+            !surveys
+                .has_completed_responses(org, members.id(), 2)
+                .await?
+        );
+        assert!(
+            !surveys
+                .has_completed_responses(tenants.other, members.id(), 1)
+                .await?
+        );
+
+        surveys
+            .store_graph_version(org, members.id(), 1, members.definition())
+            .await?;
+        surveys
+            .store_graph_version(org, members.id(), 1, &graph(true))
+            .await?;
+        assert_eq!(
+            surveys.find_graph_version(org, members.id(), 1).await?,
+            Some(graph(false))
+        );
+        assert_eq!(
+            surveys
+                .find_graph_version(tenants.other, members.id(), 1)
+                .await?,
+            None
+        );
+
+        let previous = members.revise_graph(graph(true));
+        assert_eq!(previous.map(|stored| stored.version()), Some(1));
+        let stored = surveys.update(&SurveyRecord::from(members.clone())).await?;
+        assert_eq!(stored.graph_version(), Some(2));
+        assert_eq!(stored.graph(), Some(&graph(true)));
         Ok(())
     })
     .await;

@@ -53,7 +53,7 @@ fn survey_fields<S: Stage>(survey: &Survey<S>, status: &str, slug: Option<&Publi
         "title": survey.title(),
         "status": status,
         "visibility": survey.visibility().as_str(),
-        "campaign_id": survey.campaign_id().map(|id| id.0),
+        "campaign_ids": survey.campaign_ids().iter().map(|id| id.0).collect::<Vec<_>>(),
         "public_slug": slug.map(PublicSlug::as_str),
         "opened_at": survey.opened_at(),
         "closed_at": survey.closed_at(),
@@ -66,6 +66,7 @@ fn completed_response(graph: Option<&Graph>, response: &Response<Completed>) -> 
         "member_id": response.member_id().map(|id| id.0),
         "completed_at": response.completed_at(),
         "identifier_value": response.identifier_value(),
+        "graph_version": response.graph_version(),
         "answers": graph.map_or_else(Vec::new, |graph| answers_payload(graph, response.answers())),
     })
 }
@@ -145,16 +146,10 @@ async fn list_responses(context: &ActionContext<'_>) -> Result<Value, String> {
         })
         .await
         .map_err(failure)?;
-    let graph = match &listed.survey {
-        SurveyRecord::Draft(survey) => survey.graph(),
-        SurveyRecord::Opened(survey) => survey.graph(),
-        SurveyRecord::Closed(survey) => survey.graph(),
-    };
-
     let responses: Vec<Value> = listed
         .responses
         .iter()
-        .map(|response| completed_response(graph, response))
+        .map(|response| completed_response(listed.graph_of(response), response))
         .collect();
     Ok(json!({
         "total": listed.total,

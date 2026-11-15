@@ -1118,7 +1118,7 @@ mod lifecycle {
     fn opened_in_campaign() -> Survey<Opened> {
         let mut survey = draft();
         survey.edit_graph(Some(branching(true)));
-        survey.edit_campaign(Some(CampaignId(Uuid::from_u128(2))));
+        survey.edit_campaigns(vec![CampaignId(Uuid::from_u128(2))]);
         survey.open(at(1), Some(slug())).unwrap()
     }
 
@@ -1395,16 +1395,16 @@ mod lifecycle {
     #[test]
     fn a_survey_in_a_running_campaign_accepts_a_response() {
         assert_eq!(
-            opened_in_campaign().accepts(Some(&campaign(Some(1), Some(9))), at(3)),
+            opened_in_campaign().accepts(&[campaign(Some(1), Some(9))], at(3)),
             Ok(())
         );
-        assert_eq!(opened().accepts(None, at(3)), Ok(()));
+        assert_eq!(opened().accepts(&[], at(3)), Ok(()));
     }
 
     #[test]
     fn a_survey_before_its_campaign_window_refuses() {
         assert_eq!(
-            opened_in_campaign().accepts(Some(&campaign(Some(4), None)), at(3)),
+            opened_in_campaign().accepts(&[campaign(Some(4), None)], at(3)),
             Err(SurveyError::CampaignNotStarted)
         );
     }
@@ -1412,7 +1412,7 @@ mod lifecycle {
     #[test]
     fn a_survey_after_its_campaign_window_refuses() {
         assert_eq!(
-            opened_in_campaign().accepts(Some(&campaign(None, Some(3))), at(3)),
+            opened_in_campaign().accepts(&[campaign(None, Some(3))], at(3)),
             Err(SurveyError::CampaignEnded)
         );
     }
@@ -1420,7 +1420,7 @@ mod lifecycle {
     #[test]
     fn a_survey_in_a_campaign_refuses_without_its_campaign() {
         assert_eq!(
-            opened_in_campaign().accepts(None, at(3)),
+            opened_in_campaign().accepts(&[], at(3)),
             Err(SurveyError::SurveyCampaignMismatch)
         );
     }
@@ -1437,11 +1437,11 @@ mod lifecycle {
         )
         .unwrap();
         assert_eq!(
-            opened_in_campaign().accepts(Some(&other), at(3)),
+            opened_in_campaign().accepts(std::slice::from_ref(&other), at(3)),
             Err(SurveyError::SurveyCampaignMismatch)
         );
         assert_eq!(
-            opened().accepts(Some(&campaign(None, None)), at(3)),
+            opened().accepts(&[campaign(None, None)], at(3)),
             Err(SurveyError::SurveyCampaignMismatch)
         );
     }
@@ -1458,8 +1458,207 @@ mod lifecycle {
         )
         .unwrap();
         assert_eq!(
-            opened_in_campaign().accepts(Some(&foreign), at(3)),
+            opened_in_campaign().accepts(std::slice::from_ref(&foreign), at(3)),
             Err(SurveyError::SurveyCampaignOrganizationMismatch)
+        );
+    }
+
+    fn numbered_campaign(n: u128, starts: Option<u32>, ends: Option<u32>) -> Campaign {
+        Campaign::new(
+            CampaignId(Uuid::from_u128(n)),
+            org(),
+            format!("Campagne {n}"),
+            Window::new(starts.map(at), ends.map(at)).unwrap(),
+            Metadata::default(),
+            at(1),
+        )
+        .unwrap()
+    }
+
+    fn opened_in(campaigns: &[u128]) -> Survey<Opened> {
+        let mut survey = draft();
+        survey.edit_graph(Some(branching(true)));
+        survey.edit_campaigns(
+            campaigns
+                .iter()
+                .map(|n| CampaignId(Uuid::from_u128(*n)))
+                .collect(),
+        );
+        survey.open(at(1), Some(slug())).unwrap()
+    }
+
+    fn linear() -> Graph {
+        Graph::new(
+            vec![node(1, QuestionKind::Text, false, false), end(5)],
+            vec![edge(1, 5, Branch::Next)],
+            qid(1),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_survey_in_two_campaigns_accepts_while_either_runs() {
+        let survey = opened_in(&[20, 30]);
+        let running = numbered_campaign(20, Some(1), Some(9));
+        let ended = numbered_campaign(30, None, Some(2));
+        assert_eq!(
+            survey.accepts(&[ended.clone(), running.clone()], at(3)),
+            Ok(())
+        );
+        let later = numbered_campaign(20, Some(5), None);
+        assert_eq!(
+            survey.accepts(&[later, ended.clone()], at(3)),
+            Err(SurveyError::CampaignNotStarted)
+        );
+        let also_ended = numbered_campaign(20, None, Some(3));
+        assert_eq!(
+            survey.accepts(&[also_ended, ended], at(3)),
+            Err(SurveyError::CampaignEnded)
+        );
+    }
+
+    #[test]
+    fn a_survey_in_two_campaigns_needs_exactly_its_campaigns() {
+        let survey = opened_in(&[20, 30]);
+        assert_eq!(
+            survey.accepts(&[numbered_campaign(20, None, None)], at(3)),
+            Err(SurveyError::SurveyCampaignMismatch)
+        );
+        assert_eq!(
+            survey.accepts(
+                &[
+                    numbered_campaign(20, None, None),
+                    numbered_campaign(30, None, None),
+                    numbered_campaign(40, None, None),
+                ],
+                at(3)
+            ),
+            Err(SurveyError::SurveyCampaignMismatch)
+        );
+    }
+
+    #[test]
+    fn editing_campaigns_dedupes_and_keeps_the_first_order() {
+        let mut survey = draft();
+        let id = |n: u128| CampaignId(Uuid::from_u128(n));
+        survey.edit_campaigns(vec![id(3), id(1), id(3), id(2), id(1)]);
+        assert_eq!(survey.campaign_ids(), &[id(3), id(1), id(2)]);
+    }
+
+    #[test]
+    fn a_survey_with_a_repeated_campaign_cannot_be_deserialized() {
+        let mut json = serde_json::to_value(opened_in(&[20])).unwrap();
+        json["campaign_ids"] = serde_json::json!([Uuid::from_u128(20), Uuid::from_u128(20)]);
+        assert!(serde_json::from_value::<Survey<Opened>>(json).is_err());
+    }
+
+    #[test]
+    fn an_opened_survey_stays_editable_and_opened() {
+        let mut survey = opened_in(&[20]);
+        survey.edit_title("Nouveau titre".to_string()).unwrap();
+        survey.edit_description(Some("Après ouverture".to_string()));
+        survey.edit_allow_multiple_responses(true);
+        survey.edit_response_cap(std::num::NonZeroU32::new(3));
+        survey.edit_campaigns(Vec::new());
+        survey.edit_graph(linear());
+        assert_eq!(survey.title(), "Nouveau titre");
+        assert!(survey.allow_multiple_responses());
+        assert!(survey.campaign_ids().is_empty());
+        assert_eq!(survey.definition(), &linear());
+        assert_eq!(survey.version(), 1);
+        assert_eq!(survey.public_slug(), Some(&slug()));
+        assert_eq!(
+            survey.edit_title(" ".to_string()),
+            Err(SurveyError::SurveyTitleEmpty)
+        );
+    }
+
+    #[test]
+    fn a_closed_survey_stays_editable_and_closed() {
+        let mut closed = opened().close(at(2)).unwrap();
+        closed.edit_title("Clos".to_string()).unwrap();
+        closed.edit_graph(linear());
+        assert_eq!(closed.title(), "Clos");
+        assert_eq!(closed.graph(), Some(&linear()));
+        assert_eq!(closed.accepts(&[], at(3)), Err(SurveyError::SurveyClosed));
+    }
+
+    #[test]
+    fn revising_a_graph_keeps_the_previous_version() {
+        let mut survey = opened();
+        assert_eq!(survey.graph_version(), Some(1));
+        let previous = survey.revise_graph(linear()).unwrap();
+        assert_eq!(previous.version(), 1);
+        assert_eq!(previous.graph(), &branching(true));
+        assert_eq!(survey.version(), 2);
+        assert_eq!(survey.definition(), &linear());
+        assert_eq!(survey.revise_graph(linear()), None);
+        assert_eq!(survey.version(), 2);
+    }
+
+    #[test]
+    fn editing_a_graph_in_place_keeps_its_version() {
+        let mut survey = opened();
+        survey.edit_graph(linear());
+        survey.edit_graph(branching(false));
+        assert_eq!(survey.version(), 1);
+        assert_eq!(survey.definition(), &branching(false));
+    }
+
+    #[test]
+    fn a_draft_graph_starts_at_version_one_and_clears_with_its_graph() {
+        let mut survey = draft();
+        assert_eq!(survey.graph_version(), None);
+        survey.edit_graph(Some(linear()));
+        assert_eq!(survey.graph_version(), Some(1));
+        survey.edit_graph(None);
+        assert_eq!(survey.graph_version(), None);
+        assert_eq!(survey.graph(), None);
+    }
+
+    #[test]
+    fn a_survey_whose_graph_and_version_disagree_cannot_be_deserialized() {
+        let mut json = serde_json::to_value(opened()).unwrap();
+        assert_eq!(json["graph_version"], serde_json::json!(1));
+        json["graph_version"] = serde_json::Value::Null;
+        assert!(serde_json::from_value::<Survey<Opened>>(json.clone()).is_err());
+        json["graph_version"] = serde_json::json!(0);
+        assert!(serde_json::from_value::<Survey<Opened>>(json).is_err());
+        let mut draft_json = serde_json::to_value(draft()).unwrap();
+        draft_json["graph_version"] = serde_json::json!(1);
+        assert!(serde_json::from_value::<Survey<Draft>>(draft_json).is_err());
+    }
+
+    #[test]
+    fn a_completed_response_records_the_graph_version_and_drops_stale_answers() {
+        let mut survey = opened();
+        let mut response = response_to(&survey);
+        response
+            .save(
+                &survey,
+                Answers::from([(qid(1), choice("Oui")), (qid(3), text("Dupont"))]),
+            )
+            .unwrap();
+        let replaced = Graph::new(
+            vec![node(6, QuestionKind::Text, false, false), end(5)],
+            vec![edge(6, 5, Branch::Next)],
+            qid(6),
+        )
+        .unwrap();
+        survey.revise_graph(replaced);
+        let completed = response.complete(&survey, at(2)).unwrap();
+        assert_eq!(completed.graph_version(), 2);
+        assert!(completed.answers().is_empty());
+    }
+
+    #[test]
+    fn saving_after_an_edit_refuses_an_answer_to_a_removed_question() {
+        let mut survey = opened();
+        let mut response = response_to(&survey);
+        survey.edit_graph(linear());
+        assert_eq!(
+            response.save(&survey, Answers::from([(qid(3), text("Dupont"))])),
+            Err(SurveyError::AnswerUnknownQuestion(qid(3)))
         );
     }
 
@@ -1512,7 +1711,7 @@ mod lifecycle {
     #[test]
     fn a_closed_survey_refuses() {
         let closed: Survey<Closed> = opened().close(at(2)).unwrap();
-        assert_eq!(closed.accepts(None, at(3)), Err(SurveyError::SurveyClosed));
+        assert_eq!(closed.accepts(&[], at(3)), Err(SurveyError::SurveyClosed));
         assert_eq!(closed.closed_at(), Some(at(2)));
     }
 
@@ -1770,7 +1969,7 @@ mod lifecycle {
     }
 
     #[test]
-    fn an_answer_to_an_unknown_question_is_refused_on_save_and_on_complete() {
+    fn an_answer_to_an_unknown_question_is_refused_on_save_and_dropped_on_complete() {
         let graph = survey_of(branching(true));
         assert_eq!(
             saved(&graph, Answers::from([(qid(99), text("x"))])).err(),
@@ -1781,11 +1980,16 @@ mod lifecycle {
             Some(SurveyError::AnswerUnknownQuestion(qid(2)))
         );
         let mut json = serde_json::to_value(response()).unwrap();
-        json["answers"] = serde_json::json!({ qid(99).to_string(): { "Text": "x" } });
+        json["answers"] = serde_json::json!({
+            qid(1).to_string(): { "Choice": "Oui" },
+            qid(3).to_string(): { "Text": "y" },
+            qid(99).to_string(): { "Text": "x" },
+        });
         let response = serde_json::from_value::<Response<InProgress>>(json).unwrap();
+        let completed = response.complete(&graph, at(2)).unwrap();
         assert_eq!(
-            response.complete(&graph, at(2)).err(),
-            Some(SurveyError::AnswerUnknownQuestion(qid(99)))
+            completed.answers(),
+            &Answers::from([(qid(1), choice("Oui")), (qid(3), text("y"))])
         );
     }
 
@@ -1949,7 +2153,7 @@ mod lifecycle {
             response.answers().keys().copied().collect::<Vec<_>>(),
             vec![qid(1), qid(3)]
         );
-        let event = SurveyResponseSubmitted::new(&survey, None, &response).unwrap();
+        let event = SurveyResponseSubmitted::new(&survey, &[], &response).unwrap();
         assert_eq!(event.payload()["answered_questions"], serde_json::json!(2));
     }
 
