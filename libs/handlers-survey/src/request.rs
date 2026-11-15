@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 
 use common::CoreError;
 use handlers::ApiError;
-use mestier_core::{Answers, Metadata, SurveyError, SurveyGraph};
+use mestier_core::{
+    Answers, Metadata, QuestionId, SurveyEdge, SurveyError, SurveyGraph, SurveyNode,
+};
 use serde::{Deserialize, Deserializer};
 
 pub(crate) fn deserialize_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
@@ -21,8 +23,17 @@ pub(crate) fn metadata(entries: Option<BTreeMap<String, String>>) -> Result<Meta
     Metadata::new(entries.unwrap_or_default()).map_err(refused)
 }
 
+#[derive(Deserialize)]
+struct GraphBody {
+    nodes: Vec<SurveyNode>,
+    edges: Vec<SurveyEdge>,
+    start: QuestionId,
+}
+
 pub(crate) fn graph(value: serde_json::Value) -> Result<SurveyGraph, ApiError> {
-    serde_json::from_value(value).map_err(|error| ApiError::UnprocessableEntity(error.to_string()))
+    let body: GraphBody = serde_json::from_value(value)
+        .map_err(|error| ApiError::UnprocessableEntity(error.to_string()))?;
+    SurveyGraph::new(body.nodes, body.edges, body.start).map_err(refused)
 }
 
 pub(crate) fn answers(value: serde_json::Value) -> Result<Answers, ApiError> {
@@ -49,6 +60,33 @@ mod tests {
         };
         assert!(error.to_string().contains("graph: has no node"), "{error}");
         assert_eq!(status(error), 422);
+    }
+
+    #[tokio::test]
+    async fn a_graph_refusal_names_its_reason_and_question() {
+        let lone = "00000000-0000-0000-0000-000000000001";
+        let refused = graph(serde_json::json!({
+            "nodes": [
+                {"type": "QUESTION", "id": lone, "kind": "TEXT", "label": "A", "required": true, "block": "00000000-0000-0000-0000-000000000064"},
+                {"type": "END", "id": "00000000-0000-0000-0000-000000000002"}
+            ],
+            "edges": [{"from": lone, "to": "00000000-0000-0000-0000-000000000002", "branch": "NEXT"}],
+            "start": lone
+        }));
+        let Err(error) = refused else {
+            panic!("a block of one question must be refused");
+        };
+        let response = error.into_response();
+        assert_eq!(response.status().as_u16(), 422);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap_or_default();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+        assert_eq!(
+            body["details"],
+            serde_json::json!({"reason": "graph_block_too_small", "question_id": lone}),
+            "{body}"
+        );
     }
 
     #[test]

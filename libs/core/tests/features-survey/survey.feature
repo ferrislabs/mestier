@@ -436,3 +436,56 @@ Feature: Surveys, the questionnaires answered by members and by the public
     Then the refusal reason is "survey_visibility_frozen"
     And the survey "Satisfaction" is OPENED
     And the survey "Satisfaction" stays visible to MEMBERS
+
+  @spec-survey-30
+  Scenario: A block holding a single question is refused
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    When the artisan gives the survey "Satisfaction" a block holding only the question "Ville"
+    Then the refusal reason is "graph_block_too_small"
+    And the refusal names the question "Ville" of the survey "Satisfaction"
+    And the graph version 1 of the survey "Satisfaction" asks the question "Nom"
+
+  @spec-survey-30
+  Scenario: A block split by a question outside it is refused
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    When the artisan gives the survey "Satisfaction" a block "Ville, Pays" split by the question "Âge"
+    Then the refusal reason is "graph_block_not_contiguous"
+    And the refusal names the question "Pays" of the survey "Satisfaction"
+    And the graph version 1 of the survey "Satisfaction" asks the question "Nom"
+
+  @spec-survey-30
+  Scenario: A condition inside a block is refused
+    Given an opened MEMBERS survey "Satisfaction" with a required question "Nom"
+    When the artisan gives the survey "Satisfaction" a block "Ville, Pays" with a condition on the choice "Avis" between them
+    Then the refusal reason is "graph_block_member_has_condition"
+    And the refusal names the question "Pays" of the survey "Satisfaction"
+    And the graph version 1 of the survey "Satisfaction" asks the question "Nom"
+
+  @spec-survey-27
+  Scenario: A block skipped by its rule needs none of its required answers
+    Given an opened MEMBERS survey "Bilan" asking the block "Date, Lieu" only when "Oui" is chosen at the question "Suivi"
+    And "Claire" has started a response to the survey "Bilan"
+    When "Claire" answers the survey "Bilan" with "Suivi=Non"
+    And "Claire" completes the response to the survey "Bilan"
+    Then nothing is refused
+    And the survey "Bilan" holds 1 completed response
+
+  @spec-survey-27
+  Scenario: A block shown by its rule needs each of its required answers
+    Given an opened MEMBERS survey "Bilan" asking the block "Date, Lieu" only when "Oui" is chosen at the question "Suivi"
+    And "Claire" has started a response to the survey "Bilan"
+    When "Claire" answers the survey "Bilan" with "Suivi=Oui; Date=Lundi"
+    And "Claire" completes the response to the survey "Bilan"
+    Then the refusal reason is "required_question_unanswered"
+    And the refusal names the question "Lieu" of the survey "Bilan"
+    And the survey "Bilan" holds 0 completed responses
+
+  @spec-survey-27
+  Scenario: A block shown by its rule completes once every member is answered
+    Given an opened MEMBERS survey "Bilan" asking the block "Date, Lieu" only when "Oui" is chosen at the question "Suivi"
+    And "Claire" has started a response to the survey "Bilan"
+    When "Claire" answers the survey "Bilan" with "Suivi=Oui; Date=Lundi; Lieu=Lyon"
+    And "Claire" completes the response to the survey "Bilan"
+    Then nothing is refused
+    And the survey "Bilan" holds 1 completed response
+    And the response of "Claire" to the survey "Bilan" holds the answer "Lyon" to the question "Lieu"

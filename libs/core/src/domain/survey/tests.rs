@@ -117,6 +117,9 @@ fn a_respondent_input_error_is_a_validation_error_for_the_core() {
         SurveyError::GraphQuestionLabelEmpty(question),
         SurveyError::GraphOptionEmpty(question),
         SurveyError::ConditionQuestionNotAsked(question),
+        SurveyError::GraphBlockTooSmall(question),
+        SurveyError::GraphBlockNotContiguous(question),
+        SurveyError::GraphBlockMemberHasCondition(question),
         SurveyError::RequiredQuestionUnanswered(question),
         SurveyError::AnswerUnknownQuestion(question),
         SurveyError::AnswerKindMismatch(question),
@@ -197,6 +200,9 @@ fn every_survey_error() -> Vec<SurveyError> {
         SurveyError::ConditionOnNonChoice(q),
         SurveyError::ConditionUnknownOption(q),
         SurveyError::ConditionQuestionNotAsked(q),
+        SurveyError::GraphBlockTooSmall(q),
+        SurveyError::GraphBlockNotContiguous(q),
+        SurveyError::GraphBlockMemberHasCondition(q),
         SurveyError::WindowInverted,
         SurveyError::MetadataEmptyKey,
         SurveyError::MetadataEmptyValue,
@@ -261,6 +267,23 @@ fn every_survey_error_has_a_unique_snake_case_code() {
             "{code}"
         );
     }
+}
+
+#[test]
+fn the_block_errors_have_their_documented_codes() {
+    let q = super::QuestionId(uuid::Uuid::from_u128(7));
+    assert_eq!(
+        [
+            SurveyError::GraphBlockTooSmall(q).code(),
+            SurveyError::GraphBlockNotContiguous(q).code(),
+            SurveyError::GraphBlockMemberHasCondition(q).code(),
+        ],
+        [
+            "graph_block_too_small",
+            "graph_block_not_contiguous",
+            "graph_block_member_has_condition",
+        ]
+    );
 }
 
 #[test]
@@ -380,8 +403,8 @@ mod graph {
     use uuid::Uuid;
 
     use super::super::{
-        Answer, Answers, Branch, ConditionNode, Edge, EndNode, Graph, GraphPath, Node, QuestionId,
-        QuestionKind, QuestionNode, SurveyError,
+        Answer, Answers, BlockId, Branch, ConditionNode, Edge, EndNode, Graph, GraphPath, Node,
+        QuestionId, QuestionKind, QuestionNode, SurveyError,
     };
 
     fn id(n: u128) -> QuestionId {
@@ -397,6 +420,7 @@ mod graph {
             options: options.iter().map(|option| option.to_string()).collect(),
             max_photos: None,
             identifier: false,
+            block: None,
         })
     }
 
@@ -815,6 +839,7 @@ mod graph {
             options: vec![],
             max_photos,
             identifier,
+            block: None,
         })
     }
 
@@ -951,6 +976,7 @@ mod graph {
             options: options.iter().map(|option| option.to_string()).collect(),
             max_photos: None,
             identifier: false,
+            block: None,
         })
     }
 
@@ -998,7 +1024,7 @@ mod graph {
     fn the_shared_path_cases_hold() {
         let cases: Vec<PathCase> =
             serde_json::from_str(include_str!("fixtures/paths.json")).unwrap();
-        assert!(cases.len() >= 7);
+        assert!(cases.len() >= 16);
         for case in cases {
             assert_eq!(
                 case.graph.path(&case.answers),
@@ -1010,6 +1036,268 @@ mod graph {
                 case.name
             );
         }
+    }
+
+    fn grouped(node: Node, block: u128) -> Node {
+        match node {
+            Node::Question(question) => Node::Question(QuestionNode {
+                block: Some(BlockId(Uuid::from_u128(block))),
+                ..question
+            }),
+            other => other,
+        }
+    }
+
+    fn rule_over_block() -> Graph {
+        Graph::new(
+            vec![
+                choice(1),
+                condition(2, 1, "Oui", true),
+                grouped(text(3), 100),
+                grouped(text(4), 100),
+                text(5),
+                end(6),
+            ],
+            vec![
+                next(1, 2),
+                then(2, 3),
+                otherwise(2, 5),
+                next(3, 4),
+                next(4, 5),
+                next(5, 6),
+            ],
+            id(1),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_block_of_three_questions_is_asked_whole() {
+        let graph = Graph::new(
+            vec![
+                grouped(text(1), 100),
+                grouped(text(2), 100),
+                grouped(text(3), 100),
+                end(4),
+            ],
+            vec![next(1, 2), next(2, 3), next(3, 4)],
+            id(1),
+        )
+        .unwrap();
+        assert_eq!(
+            graph.path(&Answers::new()),
+            GraphPath {
+                questions: vec![id(1), id(2), id(3)],
+                end: id(4),
+            }
+        );
+    }
+
+    #[test]
+    fn a_block_with_a_single_question_is_refused() {
+        assert_eq!(
+            Graph::new(
+                vec![grouped(text(1), 100), text(2), end(3)],
+                vec![next(1, 2), next(2, 3)],
+                id(1),
+            ),
+            Err(SurveyError::GraphBlockTooSmall(id(1)))
+        );
+    }
+
+    #[test]
+    fn a_block_split_by_another_question_is_refused() {
+        assert_eq!(
+            Graph::new(
+                vec![
+                    grouped(text(1), 100),
+                    text(2),
+                    grouped(text(3), 100),
+                    end(4)
+                ],
+                vec![next(1, 2), next(2, 3), next(3, 4)],
+                id(1),
+            ),
+            Err(SurveyError::GraphBlockNotContiguous(id(3)))
+        );
+    }
+
+    #[test]
+    fn a_block_in_two_runs_is_refused() {
+        assert_eq!(
+            Graph::new(
+                vec![
+                    grouped(text(1), 100),
+                    grouped(text(2), 100),
+                    text(3),
+                    grouped(text(4), 100),
+                    end(5),
+                ],
+                vec![next(1, 2), next(2, 3), next(3, 4), next(4, 5)],
+                id(1),
+            ),
+            Err(SurveyError::GraphBlockNotContiguous(id(4)))
+        );
+    }
+
+    #[test]
+    fn a_block_member_entered_from_outside_the_block_is_refused() {
+        assert_eq!(
+            Graph::new(
+                vec![
+                    choice(1),
+                    condition(2, 1, "Oui", true),
+                    grouped(text(3), 100),
+                    grouped(text(4), 100),
+                    end(5),
+                ],
+                vec![
+                    next(1, 2),
+                    then(2, 3),
+                    otherwise(2, 4),
+                    next(3, 4),
+                    next(4, 5),
+                ],
+                id(1),
+            ),
+            Err(SurveyError::GraphBlockNotContiguous(id(4)))
+        );
+    }
+
+    #[test]
+    fn a_condition_between_two_members_is_refused() {
+        assert_eq!(
+            Graph::new(
+                vec![
+                    choice(1),
+                    grouped(text(2), 100),
+                    condition(3, 1, "Oui", true),
+                    grouped(text(4), 100),
+                    end(5),
+                ],
+                vec![
+                    next(1, 2),
+                    next(2, 3),
+                    then(3, 4),
+                    otherwise(3, 5),
+                    next(4, 5),
+                ],
+                id(1),
+            ),
+            Err(SurveyError::GraphBlockMemberHasCondition(id(4)))
+        );
+    }
+
+    #[test]
+    fn a_condition_on_a_member_guarding_its_own_block_is_refused() {
+        assert_eq!(
+            Graph::new(
+                vec![
+                    grouped(choice(1), 100),
+                    text(2),
+                    condition(3, 1, "Oui", true),
+                    grouped(text(4), 100),
+                    end(5),
+                ],
+                vec![
+                    next(1, 2),
+                    next(2, 3),
+                    then(3, 4),
+                    otherwise(3, 5),
+                    next(4, 5),
+                ],
+                id(1),
+            ),
+            Err(SurveyError::GraphBlockMemberHasCondition(id(4)))
+        );
+    }
+
+    #[test]
+    fn a_rule_before_a_block_skips_the_whole_block() {
+        let graph = rule_over_block();
+        assert_eq!(
+            graph.path(&answered(1, Answer::Choice("Non".to_string()))),
+            GraphPath {
+                questions: vec![id(1), id(5)],
+                end: id(6),
+            }
+        );
+        assert_eq!(
+            graph.path(&answered(1, Answer::Choice("Oui".to_string()))),
+            GraphPath {
+                questions: vec![id(1), id(3), id(4), id(5)],
+                end: id(6),
+            }
+        );
+    }
+
+    #[test]
+    fn a_condition_on_a_member_of_a_previous_block_is_accepted() {
+        let graph = Graph::new(
+            vec![
+                grouped(choice(1), 100),
+                grouped(text(2), 100),
+                condition(3, 1, "Oui", true),
+                text(4),
+                end(5),
+            ],
+            vec![
+                next(1, 2),
+                next(2, 3),
+                then(3, 4),
+                otherwise(3, 5),
+                next(4, 5),
+            ],
+            id(1),
+        )
+        .unwrap();
+        assert_eq!(
+            graph.path(&answered(1, Answer::Choice("Oui".to_string()))),
+            GraphPath {
+                questions: vec![id(1), id(2), id(4)],
+                end: id(5),
+            }
+        );
+    }
+
+    #[test]
+    fn two_blocks_may_follow_each_other() {
+        assert!(
+            Graph::new(
+                vec![
+                    grouped(text(1), 100),
+                    grouped(text(2), 100),
+                    grouped(text(3), 200),
+                    grouped(text(4), 200),
+                    end(5),
+                ],
+                vec![next(1, 2), next(2, 3), next(3, 4), next(4, 5)],
+                id(1),
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_question_without_a_block_reads_and_writes_a_null_block() {
+        let json = r#"{"type": "QUESTION", "id": "00000000-0000-0000-0000-000000000001", "kind": "TEXT", "label": "A", "required": true}"#;
+        let node: Node = serde_json::from_str(json).unwrap();
+        assert!(matches!(&node, Node::Question(question) if question.block.is_none()));
+        assert_eq!(
+            serde_json::to_value(&node).unwrap()["block"],
+            serde_json::Value::Null
+        );
+    }
+
+    #[test]
+    fn a_block_survives_a_serde_round_trip() {
+        let graph = rule_over_block();
+        let json = serde_json::to_value(&graph).unwrap();
+        assert_eq!(
+            json["nodes"][2]["block"],
+            serde_json::json!("00000000-0000-0000-0000-000000000064")
+        );
+        assert_eq!(serde_json::from_value::<Graph>(json).unwrap(), graph);
     }
 }
 
@@ -1027,8 +1315,8 @@ mod lifecycle {
     use super::super::metadata::Metadata;
     use super::super::response::{Completed, InProgress, Response, ResumeToken};
     use super::super::{
-        Answer, Answers, Branch, CampaignId, ConditionNode, Edge, EmailAddress, EndNode, Graph,
-        Node, PhoneNumber, PublicSlug, QuestionId, QuestionKind, QuestionNode, ResponseId,
+        Answer, Answers, BlockId, Branch, CampaignId, ConditionNode, Edge, EmailAddress, EndNode,
+        Graph, Node, PhoneNumber, PublicSlug, QuestionId, QuestionKind, QuestionNode, ResponseId,
         SurveyError, SurveyId, Visibility,
     };
     use crate::{MemberId, OrganizationId};
@@ -1058,6 +1346,7 @@ mod lifecycle {
             },
             max_photos: None,
             identifier,
+            block: None,
         })
     }
 
@@ -1873,6 +2162,106 @@ mod lifecycle {
         Ok(response)
     }
 
+    fn blocked() -> Survey<Opened> {
+        let member = |n: u128| match node(n, QuestionKind::Text, true, false) {
+            Node::Question(question) => Node::Question(QuestionNode {
+                block: Some(BlockId(Uuid::from_u128(100))),
+                ..question
+            }),
+            other => other,
+        };
+        survey_of(
+            Graph::new(
+                vec![
+                    node(1, QuestionKind::SingleChoice, true, false),
+                    Node::Condition(ConditionNode {
+                        id: qid(2),
+                        question: qid(1),
+                        option: "Oui".to_string(),
+                        checked: true,
+                    }),
+                    member(3),
+                    member(4),
+                    node(5, QuestionKind::Text, true, false),
+                    end(6),
+                ],
+                vec![
+                    edge(1, 2, Branch::Next),
+                    edge(2, 3, Branch::Then),
+                    edge(2, 5, Branch::Else),
+                    edge(3, 4, Branch::Next),
+                    edge(4, 5, Branch::Next),
+                    edge(5, 6, Branch::Next),
+                ],
+                qid(1),
+            )
+            .unwrap(),
+        )
+    }
+
+    #[test]
+    fn a_skipped_block_needs_none_of_its_required_answers() {
+        let survey = blocked();
+        let response = saved(
+            &survey,
+            Answers::from([
+                (qid(1), choice("Non")),
+                (qid(3), text("stale")),
+                (qid(5), text("ok")),
+            ]),
+        )
+        .unwrap();
+        let completed = response.complete(&survey, at(2)).unwrap();
+        assert_eq!(
+            completed.answers().keys().copied().collect::<Vec<_>>(),
+            vec![qid(1), qid(5)]
+        );
+    }
+
+    #[test]
+    fn a_shown_block_needs_each_of_its_required_answers() {
+        let survey = blocked();
+        let response = saved(
+            &survey,
+            Answers::from([
+                (qid(1), choice("Oui")),
+                (qid(3), text("ici")),
+                (qid(5), text("ok")),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(
+            response.complete(&survey, at(2)).err(),
+            Some(SurveyError::RequiredQuestionUnanswered(qid(4)))
+        );
+    }
+
+    #[test]
+    fn the_answers_of_a_block_save_and_complete_one_by_one() {
+        let survey = blocked();
+        let mut response = saved(
+            &survey,
+            Answers::from([(qid(1), choice("Oui")), (qid(3), text("ici"))]),
+        )
+        .unwrap();
+        response
+            .save(
+                &survey,
+                Answers::from([
+                    (qid(1), choice("Oui")),
+                    (qid(3), text("ici")),
+                    (qid(4), text("demain")),
+                    (qid(5), text("ok")),
+                ]),
+            )
+            .unwrap();
+        let completed = response.complete(&survey, at(2)).unwrap();
+        assert_eq!(
+            completed.answers().keys().copied().collect::<Vec<_>>(),
+            vec![qid(1), qid(3), qid(4), qid(5)]
+        );
+    }
+
     fn one(kind: QuestionKind, options: &[&str], max_photos: Option<u8>) -> Graph {
         Graph::new(
             vec![
@@ -1884,6 +2273,7 @@ mod lifecycle {
                     options: options.iter().map(|o| o.to_string()).collect(),
                     max_photos,
                     identifier: false,
+                    block: None,
                 }),
                 end(2),
             ],
@@ -2523,6 +2913,7 @@ mod exports {
                     options: vec!["A".to_string()],
                     max_photos: None,
                     identifier: false,
+                    block: None,
                 }),
                 SurveyNode::Condition(SurveyConditionNode {
                     id: qid(2),

@@ -38,7 +38,7 @@ pub use record::{ResponseRecord, SurveyRecord, SurveyState, SurveySummary};
 pub use respondent::RespondentSurvey;
 pub use response::{Completed, InProgress, Phase, Response, ResumeToken};
 pub use value::{
-    Answer, EmailAddress, PhoneNumber, PublicSlug, QuestionId, QuestionKind, Visibility,
+    Answer, BlockId, EmailAddress, PhoneNumber, PublicSlug, QuestionId, QuestionKind, Visibility,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]

@@ -1155,6 +1155,37 @@ mod tests {
     }
 
     #[test]
+    fn a_survey_question_node_documents_its_nullable_block() {
+        let json = serde_json::to_value(ApiDoc::openapi()).expect("the document serializes");
+        let schemas = &json["components"]["schemas"];
+        let block = &schemas["SurveyQuestionNodeSchema"]["properties"]["block"];
+        let rendered = block.to_string();
+        assert!(rendered.contains("null"), "{rendered}");
+        assert!(rendered.contains("BlockId"), "{rendered}");
+        assert_eq!(
+            schemas["BlockId"]["format"], "uuid",
+            "{}",
+            schemas["BlockId"]
+        );
+        let required = schemas["SurveyQuestionNodeSchema"]["required"].to_string();
+        assert!(!required.contains("block"), "{required}");
+        let update =
+            &json["paths"]["/api/v1/organizations/{organization_id}/surveys/{survey_id}"]["patch"];
+        let described = update["requestBody"]["description"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            described.contains("graph_block_not_contiguous"),
+            "{described}"
+        );
+        let example = update["requestBody"]["content"]["application/json"]["example"].to_string();
+        assert!(
+            example.contains("\"block\":\"0195f0a0-0000-7000-8000-0000000000b1\""),
+            "{example}"
+        );
+    }
+
+    #[test]
     fn the_survey_update_documents_the_campaign_set_and_the_campaign_listing_pages() {
         let json = serde_json::to_value(ApiDoc::openapi()).expect("the document serializes");
         let update =

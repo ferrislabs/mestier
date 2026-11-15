@@ -83,7 +83,7 @@ fn response_cap(cap: u32) -> Result<NonZeroU32, ApiError> {
     ),
     request_body(
         content = UpdateSurveyRequest,
-        description = "Every field is optional; an explicit null clears description, response_cap or graph (a draft only). campaign_ids absent or null leaves the campaigns unchanged; an array, even empty, replaces the whole set, in attachment order. An unknown field (such as the former campaign_id) is refused with 422. The graph is the domain form: QUESTION, CONDITION and END nodes, edges with a NEXT, THEN or ELSE branch, and the start question.",
+        description = "Every field is optional; an explicit null clears description, response_cap or graph (a draft only). campaign_ids absent or null leaves the campaigns unchanged; an array, even empty, replaces the whole set, in attachment order. An unknown field (such as the former campaign_id) is refused with 422. The graph is the domain form: QUESTION, CONDITION and END nodes, edges with a NEXT, THEN or ELSE branch, and the start question. A QUESTION node may carry a block (uuid, null or absent outside a block): the questions sharing a block are shown on one screen, so they form a chain of NEXT edges entered only through its first question, a block has at least two questions, and no condition sits inside it or depends on a question of the block it guards (422 graph_block_too_small, graph_block_not_contiguous, graph_block_member_has_condition, with the question_id).",
         example = json!({
             "title": "Satisfaction des stagiaires",
             "allow_multiple_responses": false,
@@ -91,16 +91,18 @@ fn response_cap(cap: u32) -> Result<NonZeroU32, ApiError> {
             "metadata": {"promotion": "2026"},
             "graph": {
                 "nodes": [
-                    {"type": "QUESTION", "id": "0195f0a0-0000-7000-8000-000000000001", "kind": "SINGLE_CHOICE", "label": "Le stage vous a-t-il plu ?", "required": true, "options": ["Oui", "Non"]},
+                    {"type": "QUESTION", "id": "0195f0a0-0000-7000-8000-000000000001", "kind": "SINGLE_CHOICE", "label": "Le stage vous a-t-il plu ?", "required": true, "options": ["Oui", "Non"], "block": null},
                     {"type": "CONDITION", "id": "0195f0a0-0000-7000-8000-000000000002", "question": "0195f0a0-0000-7000-8000-000000000001", "option": "Non", "checked": true},
-                    {"type": "QUESTION", "id": "0195f0a0-0000-7000-8000-000000000003", "kind": "LONG_TEXT", "label": "Pourquoi ?", "required": false},
+                    {"type": "QUESTION", "id": "0195f0a0-0000-7000-8000-000000000003", "kind": "LONG_TEXT", "label": "Pourquoi ?", "required": false, "block": "0195f0a0-0000-7000-8000-0000000000b1"},
+                    {"type": "QUESTION", "id": "0195f0a0-0000-7000-8000-000000000005", "kind": "LONG_TEXT", "label": "Que faudrait-il changer ?", "required": false, "block": "0195f0a0-0000-7000-8000-0000000000b1"},
                     {"type": "END", "id": "0195f0a0-0000-7000-8000-000000000004", "message": "Merci !"}
                 ],
                 "edges": [
                     {"from": "0195f0a0-0000-7000-8000-000000000001", "to": "0195f0a0-0000-7000-8000-000000000002", "branch": "NEXT"},
                     {"from": "0195f0a0-0000-7000-8000-000000000002", "to": "0195f0a0-0000-7000-8000-000000000003", "branch": "THEN"},
                     {"from": "0195f0a0-0000-7000-8000-000000000002", "to": "0195f0a0-0000-7000-8000-000000000004", "branch": "ELSE"},
-                    {"from": "0195f0a0-0000-7000-8000-000000000003", "to": "0195f0a0-0000-7000-8000-000000000004", "branch": "NEXT"}
+                    {"from": "0195f0a0-0000-7000-8000-000000000003", "to": "0195f0a0-0000-7000-8000-000000000005", "branch": "NEXT"},
+                    {"from": "0195f0a0-0000-7000-8000-000000000005", "to": "0195f0a0-0000-7000-8000-000000000004", "branch": "NEXT"}
                 ],
                 "start": "0195f0a0-0000-7000-8000-000000000001"
             }
@@ -226,6 +228,53 @@ mod tests {
             "start": question
         }}))
         .patch();
-        assert!(matches!(refused, Err(ApiError::UnprocessableEntity(_))));
+        assert!(matches!(
+            refused,
+            Err(ApiError::Refused(common::Refusal {
+                kind: common::RefusalKind::Validation,
+                reason: "graph_cycle",
+                ..
+            }))
+        ));
+    }
+
+    #[test]
+    fn a_block_of_one_question_is_unprocessable_and_a_block_of_two_is_read() {
+        let question = "0195f0a0-0000-7000-8000-000000000001";
+        let other = "0195f0a0-0000-7000-8000-000000000002";
+        let end = "0195f0a0-0000-7000-8000-000000000003";
+        let block = "0195f0a0-0000-7000-8000-0000000000b1";
+        let graph = |second: serde_json::Value| {
+            serde_json::json!({"graph": {
+                "nodes": [
+                    {"type": "QUESTION", "id": question, "kind": "TEXT", "label": "A", "required": false, "block": block},
+                    {"type": "QUESTION", "id": other, "kind": "TEXT", "label": "B", "required": false, "block": second},
+                    {"type": "END", "id": end}
+                ],
+                "edges": [
+                    {"from": question, "to": other, "branch": "NEXT"},
+                    {"from": other, "to": end, "branch": "NEXT"}
+                ],
+                "start": question
+            }})
+        };
+        let refused = read(graph(serde_json::Value::Null)).patch();
+        let Err(ApiError::Refused(refusal)) = refused else {
+            panic!("a block of one question must be refused");
+        };
+        assert_eq!(refusal.reason, "graph_block_too_small");
+        assert_eq!(refusal.kind, common::RefusalKind::Validation);
+        assert_eq!(refusal.question_id, question.parse().ok());
+        let accepted = read(graph(serde_json::json!(block))).patch();
+        assert!(matches!(
+            accepted,
+            Ok((
+                SurveyPatch {
+                    graph: Some(Some(_)),
+                    ..
+                },
+                _
+            ))
+        ));
     }
 }

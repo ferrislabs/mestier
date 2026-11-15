@@ -47,6 +47,7 @@ fn graph() -> SurveyGraph {
                 options: Vec::new(),
                 max_photos: None,
                 identifier: false,
+                block: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(11),
@@ -1030,6 +1031,7 @@ fn second_graph() -> SurveyGraph {
                 options: Vec::new(),
                 max_photos: None,
                 identifier: false,
+                block: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(21),
@@ -1243,6 +1245,7 @@ fn relabelled(label: &str) -> SurveyGraph {
                 options: Vec::new(),
                 max_photos: None,
                 identifier: false,
+                block: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(11),

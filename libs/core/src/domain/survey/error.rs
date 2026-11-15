@@ -54,6 +54,12 @@ pub enum SurveyError {
     ConditionUnknownOption(QuestionId),
     #[error("graph: condition {0} refers to a question not asked on every path to it")]
     ConditionQuestionNotAsked(QuestionId),
+    #[error("graph: question {0} is the only question of its block")]
+    GraphBlockTooSmall(QuestionId),
+    #[error("graph: question {0} does not follow the previous question of its block")]
+    GraphBlockNotContiguous(QuestionId),
+    #[error("graph: question {0} is guarded by a condition inside its block")]
+    GraphBlockMemberHasCondition(QuestionId),
     #[error("window: the start is not before the end")]
     WindowInverted,
     #[error("metadata: a key is empty")]
@@ -184,6 +190,9 @@ impl SurveyError {
             Self::ConditionOnNonChoice(_) => "condition_on_non_choice",
             Self::ConditionUnknownOption(_) => "condition_unknown_option",
             Self::ConditionQuestionNotAsked(_) => "condition_question_not_asked",
+            Self::GraphBlockTooSmall(_) => "graph_block_too_small",
+            Self::GraphBlockNotContiguous(_) => "graph_block_not_contiguous",
+            Self::GraphBlockMemberHasCondition(_) => "graph_block_member_has_condition",
             Self::WindowInverted => "window_inverted",
             Self::MetadataEmptyKey => "metadata_empty_key",
             Self::MetadataEmptyValue => "metadata_empty_value",
@@ -257,6 +266,9 @@ impl SurveyError {
             | Self::ConditionOnNonChoice(id)
             | Self::ConditionUnknownOption(id)
             | Self::ConditionQuestionNotAsked(id)
+            | Self::GraphBlockTooSmall(id)
+            | Self::GraphBlockNotContiguous(id)
+            | Self::GraphBlockMemberHasCondition(id)
             | Self::RequiredQuestionUnanswered(id)
             | Self::AnswerNotFinite(id)
             | Self::AnswerUnknownQuestion(id)
@@ -357,6 +369,9 @@ impl From<SurveyError> for CoreError {
             | SurveyError::ConditionOnNonChoice(_)
             | SurveyError::ConditionUnknownOption(_)
             | SurveyError::ConditionQuestionNotAsked(_)
+            | SurveyError::GraphBlockTooSmall(_)
+            | SurveyError::GraphBlockNotContiguous(_)
+            | SurveyError::GraphBlockMemberHasCondition(_)
             | SurveyError::WindowInverted
             | SurveyError::MetadataEmptyKey
             | SurveyError::MetadataEmptyValue

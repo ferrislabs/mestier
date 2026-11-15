@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use mestier_core::{QuestionId, QuestionKind};
+use mestier_core::{QuestionId, QuestionKind, SurveyBlockId};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -32,6 +32,8 @@ pub struct SurveyQuestionNodeSchema {
     pub max_photos: Option<u8>,
     #[serde(default)]
     pub identifier: bool,
+    #[serde(default)]
+    pub block: Option<SurveyBlockId>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -85,8 +87,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use mestier_core::{
-        Answer, Answers, SurveyBranch, SurveyConditionNode, SurveyEdge, SurveyEndNode, SurveyGraph,
-        SurveyNode, SurveyQuestionNode,
+        Answer, Answers, SurveyBlockId, SurveyBranch, SurveyConditionNode, SurveyEdge,
+        SurveyEndNode, SurveyGraph, SurveyNode, SurveyQuestionNode,
     };
     use uuid::Uuid;
 
@@ -107,6 +109,7 @@ mod tests {
                     options: vec!["Oui".to_owned(), "Non".to_owned()],
                     max_photos: None,
                     identifier: false,
+                    block: None,
                 }),
                 SurveyNode::Condition(SurveyConditionNode {
                     id: qid(2),
@@ -122,6 +125,7 @@ mod tests {
                     options: Vec::new(),
                     max_photos: Some(3),
                     identifier: false,
+                    block: None,
                 }),
                 SurveyNode::End(SurveyEndNode {
                     id: qid(4),
@@ -174,6 +178,33 @@ mod tests {
                 SurveyBranchSchema::Next,
             ]
         );
+    }
+
+    #[test]
+    fn the_block_of_a_question_reads_as_the_documented_block() {
+        let json = serde_json::json!({
+            "type": "QUESTION",
+            "id": qid(1),
+            "kind": "TEXT",
+            "label": "Nom",
+            "required": true,
+            "block": "00000000-0000-0000-0000-000000000064"
+        });
+        let domain: SurveyNode = serde_json::from_value(json.clone()).unwrap();
+        let documented: SurveyNodeSchema =
+            serde_json::from_value(serde_json::to_value(domain).unwrap()).unwrap();
+        let SurveyNodeSchema::Question(question) = documented else {
+            panic!("a question node reads as a question: {json}");
+        };
+        assert_eq!(question.block, Some(SurveyBlockId(Uuid::from_u128(100))));
+        let unblocked: SurveyNodeSchema = serde_json::from_value(serde_json::json!({
+            "type": "QUESTION", "id": qid(2), "kind": "TEXT", "label": "Nom", "required": true
+        }))
+        .unwrap();
+        assert!(matches!(
+            unblocked,
+            SurveyNodeSchema::Question(SurveyQuestionNodeSchema { block: None, .. })
+        ));
     }
 
     #[test]

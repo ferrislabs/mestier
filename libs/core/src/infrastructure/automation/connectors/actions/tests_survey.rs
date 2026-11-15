@@ -31,6 +31,7 @@ fn question(id: u128, kind: QuestionKind, label: &str, options: &[&str]) -> Node
         options: options.iter().map(|option| (*option).to_owned()).collect(),
         max_photos: None,
         identifier: false,
+        block: None,
     })
 }
 

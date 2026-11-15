@@ -6,9 +6,9 @@ use cucumber::{given, then, when};
 use mestier_core::{
     Answer, Answers, CampaignId, CampaignPatch, MemberId, Metadata, OrganizationId, PublicSlug,
     QuestionId, QuestionKind, ResponseId, ResponseLocator, ResponseRecord, ResponseRepository,
-    ResumeToken, SurveyBranch, SurveyEdge, SurveyEndNode, SurveyGraph, SurveyGraphVersion,
-    SurveyId, SurveyNode, SurveyPatch, SurveyQuestionNode, SurveyRecord, SurveyRepository,
-    SurveyWindow, Visibility,
+    ResumeToken, SurveyBlockId, SurveyBranch, SurveyConditionNode, SurveyEdge, SurveyEndNode,
+    SurveyError, SurveyGraph, SurveyGraphVersion, SurveyId, SurveyNode, SurveyPatch,
+    SurveyQuestionNode, SurveyRecord, SurveyRepository, SurveyWindow, Visibility,
 };
 use serde_json::json;
 
@@ -155,6 +155,7 @@ fn drawn(label: &str, identifier: bool, required: bool) -> (SurveyGraph, Questio
                 options: Vec::new(),
                 max_photos: None,
                 identifier,
+                block: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: end,
@@ -589,6 +590,7 @@ async fn the_artisan_turns_into_a_choice(
                 options: vec![first, second],
                 max_photos: None,
                 identifier: false,
+                block: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: end,
@@ -1169,4 +1171,251 @@ async fn the_company_sees(world: &mut SurveyWorld, count: usize, survey: String)
         .await
         .expect("no infrastructure failure here");
     assert_eq!(listed.len(), count);
+}
+
+struct Drawing {
+    survey: String,
+    nodes: Vec<SurveyNode>,
+    edges: Vec<SurveyEdge>,
+    named: Vec<(String, QuestionId)>,
+}
+
+impl Drawing {
+    fn new(survey: &str) -> Self {
+        Self {
+            survey: survey.to_owned(),
+            nodes: Vec::new(),
+            edges: Vec::new(),
+            named: Vec::new(),
+        }
+    }
+
+    fn question(&mut self, label: &str, choice: bool, block: Option<SurveyBlockId>) -> QuestionId {
+        let id = QuestionId(generate_uuid_v7());
+        self.nodes.push(SurveyNode::Question(SurveyQuestionNode {
+            id,
+            kind: if choice {
+                QuestionKind::SingleChoice
+            } else {
+                QuestionKind::Text
+            },
+            label: label.to_owned(),
+            required: true,
+            options: if choice {
+                vec!["Oui".to_owned(), "Non".to_owned()]
+            } else {
+                Vec::new()
+            },
+            max_photos: None,
+            identifier: false,
+            block,
+        }));
+        self.named.push((label.to_owned(), id));
+        id
+    }
+
+    fn condition(&mut self, question: QuestionId, option: &str) -> QuestionId {
+        let id = QuestionId(generate_uuid_v7());
+        self.nodes.push(SurveyNode::Condition(SurveyConditionNode {
+            id,
+            question,
+            option: option.to_owned(),
+            checked: true,
+        }));
+        id
+    }
+
+    fn end(&mut self) -> QuestionId {
+        let id = QuestionId(generate_uuid_v7());
+        self.nodes
+            .push(SurveyNode::End(SurveyEndNode { id, message: None }));
+        id
+    }
+
+    fn edge(&mut self, from: QuestionId, to: QuestionId, branch: SurveyBranch) {
+        self.edges.push(SurveyEdge { from, to, branch });
+    }
+
+    fn chain(&mut self, ids: &[QuestionId]) {
+        for pair in ids.windows(2) {
+            self.edge(pair[0], pair[1], SurveyBranch::Next);
+        }
+    }
+
+    fn build(self, world: &mut SurveyWorld) -> Result<SurveyGraph, SurveyError> {
+        let start = self
+            .named
+            .first()
+            .map(|(_, id)| *id)
+            .expect("the scenario draws at least one question");
+        for (label, id) in self.named {
+            world.questions.insert((self.survey.clone(), label), id);
+        }
+        SurveyGraph::new(self.nodes, self.edges, start)
+    }
+}
+
+fn two_labels(labels: &str) -> (String, String) {
+    match expected_names(labels).as_slice() {
+        [first, second] => (first.clone(), second.clone()),
+        other => panic!("the scenario names a block of two questions, not {other:?}"),
+    }
+}
+
+fn new_block() -> Option<SurveyBlockId> {
+    Some(SurveyBlockId(generate_uuid_v7()))
+}
+
+async fn give_graph(
+    world: &mut SurveyWorld,
+    survey: &str,
+    drawn: Result<SurveyGraph, SurveyError>,
+) -> Result<(), CoreError> {
+    let graph = drawn?;
+    world
+        .surveys()
+        .update(
+            world.organization_id(),
+            survey_named(world, survey),
+            SurveyPatch {
+                graph: Some(Some(graph)),
+                ..SurveyPatch::default()
+            },
+        )
+        .await
+        .map(|_| ())
+}
+
+#[given(
+    expr = "an opened {word} survey {string} asking the block {string} only when {string} is chosen at the question {string}"
+)]
+async fn an_opened_survey_with_a_block(
+    world: &mut SurveyWorld,
+    kind: String,
+    title: String,
+    labels: String,
+    option: String,
+    choice: String,
+) {
+    draft_survey(world, &kind, &title, &choice, false).await;
+    let (first, second) = two_labels(&labels);
+    let block = new_block();
+    let mut drawing = Drawing::new(&title);
+    let choice = drawing.question(&choice, true, None);
+    let first = drawing.question(&first, false, block);
+    let second = drawing.question(&second, false, block);
+    let rule = drawing.condition(choice, &option);
+    let end = drawing.end();
+    drawing.chain(&[choice, rule]);
+    drawing.edge(rule, first, SurveyBranch::Then);
+    drawing.edge(rule, end, SurveyBranch::Else);
+    drawing.chain(&[first, second, end]);
+    let drawn = drawing.build(world);
+    give_graph(world, &title, drawn)
+        .await
+        .expect("the scenario draws a valid block");
+    open_survey(world, &title).await.expect("the survey opens");
+}
+
+#[when(expr = "the artisan gives the survey {string} a block holding only the question {string}")]
+async fn the_artisan_gives_a_lone_block(world: &mut SurveyWorld, survey: String, label: String) {
+    let mut drawing = Drawing::new(&survey);
+    let lone = drawing.question(&label, false, new_block());
+    let end = drawing.end();
+    drawing.chain(&[lone, end]);
+    let drawn = drawing.build(world);
+    let result = give_graph(world, &survey, drawn).await;
+    keep(world, result);
+}
+
+#[when(
+    expr = "the artisan gives the survey {string} a block {string} split by the question {string}"
+)]
+async fn the_artisan_gives_a_split_block(
+    world: &mut SurveyWorld,
+    survey: String,
+    labels: String,
+    between: String,
+) {
+    let (first, second) = two_labels(&labels);
+    let block = new_block();
+    let mut drawing = Drawing::new(&survey);
+    let first = drawing.question(&first, false, block);
+    let between = drawing.question(&between, false, None);
+    let second = drawing.question(&second, false, block);
+    let end = drawing.end();
+    drawing.chain(&[first, between, second, end]);
+    let drawn = drawing.build(world);
+    let result = give_graph(world, &survey, drawn).await;
+    keep(world, result);
+}
+
+#[when(
+    expr = "the artisan gives the survey {string} a block {string} with a condition on the choice {string} between them"
+)]
+async fn the_artisan_gives_a_block_with_a_condition(
+    world: &mut SurveyWorld,
+    survey: String,
+    labels: String,
+    choice: String,
+) {
+    let (first, second) = two_labels(&labels);
+    let block = new_block();
+    let mut drawing = Drawing::new(&survey);
+    let choice = drawing.question(&choice, true, None);
+    let first = drawing.question(&first, false, block);
+    let second = drawing.question(&second, false, block);
+    let rule = drawing.condition(choice, "Oui");
+    let end = drawing.end();
+    drawing.chain(&[choice, first, rule]);
+    drawing.edge(rule, second, SurveyBranch::Then);
+    drawing.edge(rule, end, SurveyBranch::Else);
+    drawing.chain(&[second, end]);
+    let drawn = drawing.build(world);
+    let result = give_graph(world, &survey, drawn).await;
+    keep(world, result);
+}
+
+#[when(expr = "{string} answers the survey {string} with {string}")]
+async fn answers_several(world: &mut SurveyWorld, who: String, survey: String, pairs: String) {
+    let graph = stored_survey(world, &survey)
+        .graph()
+        .cloned()
+        .expect("the survey has a graph");
+    let answers: Answers = pairs
+        .split(';')
+        .map(str::trim)
+        .filter(|pair| !pair.is_empty())
+        .map(|pair| {
+            let (label, value) = pair
+                .split_once('=')
+                .unwrap_or_else(|| panic!("the scenario writes `label=value`, not `{pair}`"));
+            let question = question_named(world, &survey, label.trim());
+            let answer = match graph.question(&question).map(|node| node.kind) {
+                Some(QuestionKind::SingleChoice) => Answer::Choice(value.trim().to_owned()),
+                _ => Answer::Text(value.trim().to_owned()),
+            };
+            (question, answer)
+        })
+        .collect();
+    let result = world
+        .responses()
+        .save(
+            world.organization_id(),
+            &locator(world, &who, &survey),
+            answers,
+            world.now(),
+        )
+        .await
+        .map(|_| ());
+    keep(world, result);
+}
+
+#[then(expr = "the refusal names the question {string} of the survey {string}")]
+async fn the_refusal_names(world: &mut SurveyWorld, label: String, survey: String) {
+    let question = question_named(world, &survey, &label);
+    match world.refusal.as_ref().expect("the action was refused") {
+        CoreError::Refused(refusal) => assert_eq!(refusal.question_id, Some(question.0)),
+        other => panic!("expected a refusal naming a question, got {other:?}"),
+    }
 }

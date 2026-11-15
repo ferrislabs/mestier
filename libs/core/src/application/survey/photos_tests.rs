@@ -117,6 +117,7 @@ fn photo_graph() -> SurveyGraph {
                 options: Vec::new(),
                 max_photos: None,
                 identifier: false,
+                block: None,
             }),
             SurveyNode::End(SurveyEndNode {
                 id: qid(21),

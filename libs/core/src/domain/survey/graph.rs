@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize, Serializer};
 
 use super::error::SurveyError;
-use super::value::{Answer, QuestionId, QuestionKind};
+use super::value::{Answer, BlockId, QuestionId, QuestionKind};
 
 pub type Answers = BTreeMap<QuestionId, Answer>;
 
@@ -19,6 +19,8 @@ pub struct QuestionNode {
     pub max_photos: Option<u8>,
     #[serde(default)]
     pub identifier: bool,
+    #[serde(default)]
+    pub block: Option<BlockId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,6 +222,7 @@ impl Graph {
             .collect::<Result<Vec<_>, _>>()?;
         let order = Self::topological_order(&vertices, start)?;
         Self::check_conditions(&vertices, &index, &order, start)?;
+        Self::check_blocks(&vertices, &index)?;
         Ok(Self { vertices, start })
     }
 
@@ -453,6 +456,146 @@ impl Graph {
             }
         }
         Ok(())
+    }
+
+    fn block_of(vertices: &[Vertex], position: usize) -> Option<BlockId> {
+        match &vertices[position] {
+            Vertex::Question { node, .. } => node.block,
+            Vertex::Condition { .. } | Vertex::End(_) => None,
+        }
+    }
+
+    fn check_blocks(
+        vertices: &[Vertex],
+        index: &BTreeMap<QuestionId, usize>,
+    ) -> Result<(), SurveyError> {
+        let mut blocks: BTreeMap<BlockId, Vec<usize>> = BTreeMap::new();
+        for position in 0..vertices.len() {
+            if let Some(block) = Self::block_of(vertices, position) {
+                blocks.entry(block).or_default().push(position);
+            }
+        }
+        if blocks.is_empty() {
+            return Ok(());
+        }
+        if let Some(&[single]) = blocks
+            .values()
+            .map(Vec::as_slice)
+            .find(|members| members.len() < 2)
+        {
+            return Err(SurveyError::GraphBlockTooSmall(vertices[single].id()));
+        }
+        let mut predecessors = vec![Vec::new(); vertices.len()];
+        for (position, vertex) in vertices.iter().enumerate() {
+            for successor in vertex.successors() {
+                predecessors[successor].push(position);
+            }
+        }
+        Self::check_block_conditions(vertices, index, &predecessors)?;
+        for (block, members) in &blocks {
+            Self::check_block_chain(vertices, *block, members, &predecessors)?;
+        }
+        Ok(())
+    }
+
+    fn check_block_conditions(
+        vertices: &[Vertex],
+        index: &BTreeMap<QuestionId, usize>,
+        predecessors: &[Vec<usize>],
+    ) -> Result<(), SurveyError> {
+        for (position, vertex) in vertices.iter().enumerate() {
+            let Vertex::Condition { node, .. } = vertex else {
+                continue;
+            };
+            let source = index
+                .get(&node.question)
+                .and_then(|&source| Self::block_of(vertices, source));
+            let feeders: BTreeSet<BlockId> =
+                Self::questions_through_conditions(vertices, position, |at| {
+                    predecessors[at].iter().copied()
+                })
+                .into_iter()
+                .filter_map(|feeder| Self::block_of(vertices, feeder))
+                .collect();
+            let guarded = Self::questions_through_conditions(vertices, position, |at| {
+                vertices[at].successors()
+            });
+            for member in guarded {
+                let Some(block) = Self::block_of(vertices, member) else {
+                    continue;
+                };
+                if source == Some(block) || feeders.contains(&block) {
+                    return Err(SurveyError::GraphBlockMemberHasCondition(
+                        vertices[member].id(),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn questions_through_conditions<N, J>(
+        vertices: &[Vertex],
+        condition: usize,
+        neighbours: N,
+    ) -> BTreeSet<usize>
+    where
+        N: Fn(usize) -> J,
+        J: IntoIterator<Item = usize>,
+    {
+        let mut questions = BTreeSet::new();
+        let mut seen = BTreeSet::from([condition]);
+        let mut stack: Vec<usize> = neighbours(condition).into_iter().collect();
+        while let Some(position) = stack.pop() {
+            if !seen.insert(position) {
+                continue;
+            }
+            match &vertices[position] {
+                Vertex::Question { .. } => {
+                    questions.insert(position);
+                }
+                Vertex::Condition { .. } => stack.extend(neighbours(position)),
+                Vertex::End(_) => {}
+            }
+        }
+        questions
+    }
+
+    fn check_block_chain(
+        vertices: &[Vertex],
+        block: BlockId,
+        members: &[usize],
+        predecessors: &[Vec<usize>],
+    ) -> Result<(), SurveyError> {
+        let inside = |position: usize| Self::block_of(vertices, position) == Some(block);
+        let not_contiguous =
+            |position: usize| SurveyError::GraphBlockNotContiguous(vertices[position].id());
+        let mut heads = members
+            .iter()
+            .copied()
+            .filter(|&member| !predecessors[member].iter().any(|&from| inside(from)));
+        let Some(head) = heads.next() else {
+            return Err(not_contiguous(members[0]));
+        };
+        if let Some(other) = heads.next() {
+            return Err(not_contiguous(other));
+        }
+        let mut chained = BTreeSet::from([head]);
+        let mut current = head;
+        while let Vertex::Question { next, .. } = &vertices[current] {
+            if !inside(*next) {
+                break;
+            }
+            if predecessors[*next].as_slice() != [current] {
+                return Err(not_contiguous(*next));
+            }
+            chained.insert(*next);
+            current = *next;
+        }
+        match members.iter().find(|member| !chained.contains(member)) {
+            Some(&member) => Err(not_contiguous(member)),
+            None => Ok(()),
+        }
     }
 
     fn check_condition(

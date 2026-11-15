@@ -40,6 +40,7 @@ fn question(n: u128, kind: QuestionKind, required: bool) -> Node {
         },
         max_photos: None,
         identifier: false,
+        block: None,
     })
 }
 

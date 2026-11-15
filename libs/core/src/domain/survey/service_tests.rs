@@ -66,6 +66,7 @@ fn graph(identifier: bool) -> Graph {
                 options: Vec::new(),
                 max_photos: None,
                 identifier,
+                block: None,
             }),
             Node::End(EndNode {
                 id: qid(11),
@@ -1207,6 +1208,7 @@ fn other_graph() -> Graph {
                 options: Vec::new(),
                 max_photos: None,
                 identifier: false,
+                block: None,
             }),
             Node::End(EndNode {
                 id: qid(21),
