@@ -138,7 +138,7 @@ function Body({ view }: { view: RespondentView }) {
 					noValidate
 					className={cn(
 						'flex flex-1 flex-col',
-						view.screen.length > 1 ? 'gap-2' : 'gap-8',
+						view.screen.length > 1 ? 'gap-2' : 'gap-3',
 					)}
 					onSubmit={(event) => {
 						event.preventDefault()
@@ -181,7 +181,7 @@ function Body({ view }: { view: RespondentView }) {
 						))}
 					</div>
 					<RespondActionBar
-						compact={view.screen.length > 1}
+						compact
 						preview={view.preview}
 						isFirst={view.isFirst}
 						isLast={view.isLast}
