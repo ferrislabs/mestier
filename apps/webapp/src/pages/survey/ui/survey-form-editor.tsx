@@ -1,10 +1,11 @@
-import { Flag, Info, Lock, Plus, Route } from 'lucide-react'
+import { Flag, Info, Layers, Lock, Plus, Route } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
 import { Textarea } from '#/components/ui/textarea'
 import type { FormQuestion, SurveyForm } from '#/pages/survey/lib/survey-form'
 import type { QuestionKind } from '#/pages/survey/types'
 import {
+	type CardPlacement,
 	type QuestionAction,
 	QuestionCard,
 	type QuestionDrag,
@@ -12,6 +13,7 @@ import {
 import { QuestionKindMenu } from '#/pages/survey/ui/question-kind-menu'
 
 export const ADD_QUESTION_ID = 'survey-add-question'
+export const ADD_BLOCK_ID = 'survey-add-block'
 export const END_MESSAGE_ID = 'survey-end-message'
 
 export interface QuestionContext {
@@ -21,7 +23,7 @@ export interface QuestionContext {
 	logicOpen: boolean
 }
 
-function Inserter({
+export function Inserter({
 	position,
 	onInsert,
 }: {
@@ -106,7 +108,8 @@ export function AdvancedGraphNotice({
 export function QuestionListItem({
 	question,
 	index,
-	total,
+	placement,
+	withInserter = true,
 	context,
 	positions,
 	identifierOwner,
@@ -120,7 +123,8 @@ export function QuestionListItem({
 }: {
 	question: FormQuestion
 	index: number
-	total: number
+	placement: CardPlacement
+	withInserter?: boolean
 	context: QuestionContext
 	positions: ReadonlyMap<string, number>
 	identifierOwner: FormQuestion | undefined
@@ -138,7 +142,7 @@ export function QuestionListItem({
 			style={style}
 			className={drag?.dragging ? 'relative z-10 grid gap-1' : 'grid gap-1'}
 		>
-			{readOnly ? (
+			{!withInserter ? null : readOnly ? (
 				<div className="h-3" />
 			) : (
 				<Inserter position={index} onInsert={onInsert} />
@@ -146,7 +150,7 @@ export function QuestionListItem({
 			<QuestionCard
 				question={question}
 				number={index + 1}
-				total={total}
+				placement={placement}
 				problems={context.problems}
 				highlighted={highlighted}
 				readOnly={readOnly}
@@ -167,12 +171,14 @@ export function SurveyFormEditor({
 	readOnly,
 	list,
 	onInsert,
+	onAddBlock,
 	onEndMessage,
 }: {
 	form: SurveyForm
 	readOnly: boolean
 	list: ReactNode
 	onInsert: (position: number, kind: QuestionKind) => void
+	onAddBlock: () => void
 	onEndMessage: (message: string) => void
 }) {
 	const total = form.questions.length
@@ -183,13 +189,14 @@ export function SurveyFormEditor({
 					<p className="font-medium">Aucune question pour le moment.</p>
 					<p className="mt-1 text-[13px] text-muted-foreground">
 						Ajoutez une première question : elles s’enchaînent les unes sous les
-						autres, dans l’ordre où le répondant les verra.
+						autres, dans l’ordre où le répondant les verra. Un bloc affiche
+						plusieurs questions ensemble sur le même écran.
 					</p>
 				</div>
 			) : null}
 			{list}
 			{readOnly ? null : (
-				<div className="flex justify-center py-4">
+				<div className="flex flex-wrap justify-center gap-2 py-4">
 					<QuestionKindMenu
 						label="Ajouter une question"
 						current={null}
@@ -207,6 +214,17 @@ export function SurveyFormEditor({
 							Ajouter une question
 						</Button>
 					</QuestionKindMenu>
+					<Button
+						id={ADD_BLOCK_ID}
+						type="button"
+						size="lg"
+						variant="outline"
+						className="min-h-11"
+						onClick={onAddBlock}
+					>
+						<Layers aria-hidden />
+						Ajouter un bloc
+					</Button>
 				</div>
 			)}
 			<section className="mt-2 grid gap-2 rounded-xl border bg-card p-4 shadow-xs sm:p-5">

@@ -4,14 +4,19 @@ import { toast } from 'sonner'
 import {
 	addCondition,
 	addOption,
+	addToBlock,
 	changeKind,
 	clearRule,
 	dependentsOf,
 	dropQuestion,
 	duplicateQuestion,
 	type FormQuestion,
+	groupWithPrevious,
+	insertBlock,
 	insertQuestion,
 	kindChangeDrops,
+	type MoveResult,
+	moveBlock,
 	moveQuestion,
 	newQuestion,
 	removeCondition,
@@ -20,10 +25,12 @@ import {
 	renameOption,
 	type SurveyForm,
 	setRuleJoin,
+	ungroupQuestion,
 	updateCondition,
 	updateQuestion,
 } from '#/pages/survey/lib/survey-form'
 import type { QuestionKind } from '#/pages/survey/types'
+import { blockHandleId } from '#/pages/survey/ui/question-block'
 import {
 	type QuestionAction,
 	questionHandleId,
@@ -36,6 +43,16 @@ export function prunedNotice(removed: number): string {
 	return removed === 1
 		? 'Une condition qui en dépendait a été retirée.'
 		: `${removed} conditions qui en dépendaient ont été retirées.`
+}
+
+export type BlockAction =
+	| { type: 'move'; delta: number }
+	| { type: 'add'; kind: QuestionKind }
+
+function blockCount(form: SurveyForm, block: string | null): number {
+	return block === null
+		? 0
+		: form.questions.filter((item) => item.block === block).length
 }
 
 export interface PendingKind {
@@ -82,6 +99,57 @@ export function useSurveyFormEditor(
 		onEdit()
 	}
 
+	const refuse = (message: string) => {
+		announce(message)
+		toast.error(message, { duration: 6000 })
+	}
+
+	const applyMove = (
+		result: MoveResult,
+		describe: (position: number, total: number) => string,
+		focusTarget: string,
+	) => {
+		if (result.kind === 'refused') {
+			refuse(result.message)
+			return
+		}
+		changeForm(result.form)
+		announce(describe(result.position + 1, result.form.questions.length))
+		requestFocus(focusTarget)
+	}
+
+	const insertNewBlock = () => {
+		const ids: [string, string] = [crypto.randomUUID(), crypto.randomUUID()]
+		changeForm(
+			insertBlock(form, ids, crypto.randomUUID(), form.questions.length),
+		)
+		announce('Bloc de 2 questions ajouté à la fin du questionnaire.')
+		requestFocus(questionLabelId(ids[0]))
+	}
+
+	const onBlockAction = (block: string, action: BlockAction) => {
+		switch (action.type) {
+			case 'move':
+				applyMove(
+					moveBlock(form, block, action.delta),
+					(position, total) =>
+						`Bloc déplacé : il commence en position ${position} sur ${total}.`,
+					blockHandleId(block),
+				)
+				return
+			case 'add': {
+				const question = newQuestion(crypto.randomUUID(), action.kind)
+				const next = addToBlock(form, block, question)
+				changeForm(next)
+				announce(
+					`Question ajoutée au bloc, qui compte maintenant ${blockCount(next, block)} questions.`,
+				)
+				requestFocus(questionLabelId(question.id))
+				return
+			}
+		}
+	}
+
 	const insert = (position: number, kind: QuestionKind) => {
 		const question = newQuestion(crypto.randomUUID(), kind)
 		changeForm(insertQuestion(form, question, position))
@@ -91,9 +159,14 @@ export function useSurveyFormEditor(
 
 	const remove = (id: string) => {
 		const position = form.questions.findIndex((item) => item.id === id)
+		const block = form.questions[position]?.block ?? null
 		const next = removeQuestion(form, id)
 		changeForm(next)
-		announce('Question supprimée.')
+		announce(
+			block !== null && blockCount(next, block) === 0
+				? 'Question supprimée. Bloc dissous : il ne restait qu’une question.'
+				: 'Question supprimée.',
+		)
 		const neighbour =
 			next.questions[Math.max(position - 1, 0)] ?? next.questions[0]
 		requestFocus(neighbour ? questionLabelId(neighbour.id) : ADD_QUESTION_ID)
@@ -143,18 +216,36 @@ export function useSurveyFormEditor(
 				if (result.removed > 0) toast.info(prunedNotice(result.removed))
 				return
 			}
-			case 'move': {
-				const result = moveQuestion(form, id, action.delta)
+			case 'move':
+				applyMove(
+					moveQuestion(form, id, action.delta),
+					(position, total) =>
+						`Question déplacée en position ${position} sur ${total}.`,
+					questionHandleId(id),
+				)
+				return
+			case 'group': {
+				const result = groupWithPrevious(form, id, crypto.randomUUID())
 				if (result.kind === 'refused') {
-					announce(result.message)
-					toast.error(result.message, { duration: 6000 })
+					refuse(result.message)
 					return
 				}
 				changeForm(result.form)
 				announce(
-					`Question déplacée en position ${result.position + 1} sur ${result.form.questions.length}.`,
+					`Question regroupée avec la précédente : bloc de ${result.size} questions.`,
 				)
-				requestFocus(questionHandleId(id))
+				requestFocus(questionLabelId(id))
+				return
+			}
+			case 'ungroup': {
+				const result = ungroupQuestion(form, id)
+				changeForm(result.form)
+				announce(
+					result.dissolved
+						? 'Question sortie du bloc. Bloc dissous : il ne restait qu’une question.'
+						: 'Question sortie du bloc.',
+				)
+				requestFocus(questionLabelId(id))
 				return
 			}
 			case 'duplicate': {
@@ -203,7 +294,11 @@ export function useSurveyFormEditor(
 			return
 		}
 		changeForm(result.form)
-		requestFocus(questionHandleId(id))
+		requestFocus(
+			form.questions.some((item) => item.id === id)
+				? questionHandleId(id)
+				: blockHandleId(id),
+		)
 	}
 
 	const confirmDelete = () => {
@@ -224,7 +319,9 @@ export function useSurveyFormEditor(
 		requestFocus,
 		logicOpen,
 		insert,
+		insertBlock: insertNewBlock,
 		onQuestionAction,
+		onBlockAction,
 		onDragEnd,
 		setEndMessage: (endMessage: string) => changeForm({ ...form, endMessage }),
 		deleting: pendingDelete

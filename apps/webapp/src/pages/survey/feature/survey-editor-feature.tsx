@@ -407,12 +407,22 @@ export function SurveyEditorWorkspace({
 										isSource: isRuleSource(form, question.id),
 										logicOpen: editor.logicOpen(question),
 									})}
+									blockContextOf={(members) => ({
+										problems: [],
+										sources: ruleSources(form, members[0].id),
+										isSource: members.some((member) =>
+											isRuleSource(form, member.id),
+										),
+										logicOpen: editor.logicOpen(members[0]),
+									})}
 									onQuestionAction={editor.onQuestionAction}
+									onBlockAction={editor.onBlockAction}
 									onInsert={editor.insert}
 									onDragEnd={editor.onDragEnd}
 								/>
 							}
 							onInsert={editor.insert}
+							onAddBlock={editor.insertBlock}
 							onEndMessage={editor.setEndMessage}
 						/>
 					)}

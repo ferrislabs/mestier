@@ -720,3 +720,199 @@ describe('dragAnnouncements', () => {
 		).toMatch(/^Déplacement refusé/)
 	})
 })
+
+const BLOCK_ID = 'b0000000-0000-4000-8000-000000000001'
+
+const BLOCK_GRAPH: NonNullable<Survey['graph']> = {
+	start: 'q1',
+	nodes: [
+		{
+			type: 'QUESTION',
+			id: 'q1',
+			kind: 'SINGLE_CHOICE',
+			label: 'Venez-vous en voiture ?',
+			required: true,
+			options: ['Oui', 'Non'],
+			block: null,
+		},
+		{
+			type: 'CONDITION',
+			id: 'c1',
+			question: 'q1',
+			option: 'Oui',
+			checked: true,
+		},
+		{
+			type: 'QUESTION',
+			id: 'q2',
+			kind: 'TEXT',
+			label: 'Marque',
+			required: true,
+			block: BLOCK_ID,
+		},
+		{
+			type: 'QUESTION',
+			id: 'q3',
+			kind: 'TEXT',
+			label: 'Immatriculation',
+			required: false,
+			block: BLOCK_ID,
+		},
+		{
+			type: 'QUESTION',
+			id: 'q4',
+			kind: 'TEXT',
+			label: 'Remarques',
+			required: false,
+			block: null,
+		},
+		{ type: 'END', id: 'e1', message: 'Merci' },
+	],
+	edges: [
+		{ from: 'q1', to: 'c1', branch: 'NEXT' },
+		{ from: 'c1', to: 'q2', branch: 'THEN' },
+		{ from: 'c1', to: 'q4', branch: 'ELSE' },
+		{ from: 'q2', to: 'q3', branch: 'NEXT' },
+		{ from: 'q3', to: 'q4', branch: 'NEXT' },
+		{ from: 'q4', to: 'e1', branch: 'NEXT' },
+	],
+}
+
+function blockRegion(size: number) {
+	return screen.getByRole('region', { name: `Bloc de ${size} questions` })
+}
+
+describe('SurveyEditorFeature blocks', () => {
+	it('shows a block as one container with its rule on the header and saves it unchanged', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: BLOCK_GRAPH })],
+		})
+		api.mockMutation('patch', PATHS.survey, () => ({
+			data: survey({ graph: BLOCK_GRAPH }),
+		}))
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await screen.findByLabelText('Libellé de la question 1')
+		const region = blockRegion(2)
+		expect(within(region).getAllByRole('article')).toHaveLength(2)
+		expect(
+			within(region).getByText('Afficher ce bloc seulement si'),
+		).toBeTruthy()
+		expect(
+			within(card(2)).queryByRole('button', { name: /^Logique/ }),
+		).toBeNull()
+		expect(within(card(3)).queryByText('Sous condition')).toBeNull()
+		expect(
+			within(card(2)).getByRole('button', {
+				name: 'Sortir la question 2 du bloc',
+			}),
+		).toBeTruthy()
+		expect(
+			within(card(4)).getByRole('button', {
+				name: 'Regrouper la question 4 avec la précédente',
+			}),
+		).toBeTruthy()
+
+		fireEvent.change(screen.getByLabelText('Libellé de la question 4'), {
+			target: { value: 'Commentaires' },
+		})
+		await userEvent.click(saveButton())
+		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
+		const graph = patchBodies(api.calls)[0].graph
+		if (!graph) throw new Error('graph expected')
+		expect(
+			graph.nodes
+				.filter((node) => node.type === 'QUESTION')
+				.map((node) => ('block' in node ? node.block : undefined)),
+		).toEqual([undefined, BLOCK_ID, BLOCK_ID, undefined])
+		expect(graph.edges).toEqual(
+			expect.arrayContaining([
+				{ from: conditionNodeId('q2', 0), to: 'q4', branch: 'ELSE' },
+				{ from: 'q2', to: 'q3', branch: 'NEXT' },
+			]),
+		)
+	})
+
+	it('adds a block, groups a question into it, takes one out and dissolves it', async () => {
+		installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await userEvent.click(
+			await screen.findByRole('button', { name: 'Ajouter un bloc' }),
+		)
+		const label = await screen.findByLabelText('Libellé de la question 3')
+		await waitFor(() => expect(document.activeElement).toBe(label))
+		expect(within(blockRegion(2)).getAllByRole('article')).toHaveLength(2)
+
+		await pickKind(
+			within(blockRegion(2)).getByRole('button', {
+				name: 'Ajouter une question au bloc',
+			}),
+			'Nombre',
+		)
+		expect(within(blockRegion(3)).getAllByRole('article')).toHaveLength(3)
+
+		await userEvent.click(
+			within(card(5)).getByRole('button', {
+				name: 'Sortir la question 5 du bloc',
+			}),
+		)
+		await userEvent.click(
+			within(card(4)).getByRole('button', {
+				name: 'Sortir la question 4 du bloc',
+			}),
+		)
+		expect(screen.queryByRole('region', { name: /^Bloc de/ })).toBeNull()
+		expect(screen.getByText(/Bloc dissous/)).toBeTruthy()
+
+		await userEvent.click(
+			within(card(4)).getByRole('button', {
+				name: 'Regrouper la question 4 avec la précédente',
+			}),
+		)
+		expect(within(blockRegion(2)).getAllByRole('article')).toHaveLength(2)
+	})
+
+	it('moves a block as a unit with its header buttons', async () => {
+		installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: BLOCK_GRAPH })],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await screen.findByLabelText('Libellé de la question 1')
+		await userEvent.click(
+			screen.getByRole('button', {
+				name: 'Descendre le bloc des questions 2 à 3',
+			}),
+		)
+		expect(
+			(screen.getByLabelText('Libellé de la question 2') as HTMLTextAreaElement)
+				.value,
+		).toBe('Remarques')
+		expect(
+			screen.getByRole('button', {
+				name: 'Monter le bloc des questions 3 à 4',
+			}),
+		).toBeTruthy()
+		expect(screen.getByText(/Bloc déplacé/)).toBeTruthy()
+		await userEvent.click(
+			screen.getByRole('button', {
+				name: 'Monter le bloc des questions 3 à 4',
+			}),
+		)
+		await userEvent.click(
+			screen.getByRole('button', {
+				name: 'Monter le bloc des questions 2 à 3',
+			}),
+		)
+		expect(toastMock.error).toHaveBeenCalledWith(
+			expect.stringMatching(/^Déplacement refusé/),
+			{ duration: 6000 },
+		)
+	})
+})

@@ -9,8 +9,10 @@ import {
 	CopyPlus,
 	GitBranch,
 	GripVertical,
+	Group,
 	Trash2,
 	TriangleAlert,
+	Ungroup,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -56,6 +58,8 @@ export type QuestionAction =
 	| { type: 'remove-condition'; position: number }
 	| { type: 'join'; join: RuleJoin }
 	| { type: 'clear-rule' }
+	| { type: 'group' }
+	| { type: 'ungroup' }
 
 export interface QuestionDrag {
 	attributes: DraggableAttributes
@@ -77,10 +81,16 @@ export function questionHandleId(id: string): string {
 
 export const DEFAULT_MAX_PHOTOS = 5
 
+export interface CardPlacement {
+	inBlock: boolean
+	canGroup: boolean
+	canMoveUp: boolean
+	canMoveDown: boolean
+}
+
 export function QuestionCard({
 	question,
 	number,
-	total,
 	problems,
 	highlighted,
 	readOnly,
@@ -89,12 +99,12 @@ export function QuestionCard({
 	isSource,
 	identifierOwner,
 	logicOpen,
+	placement,
 	drag,
 	onAction,
 }: {
 	question: FormQuestion
 	number: number
-	total: number
 	problems: readonly string[]
 	highlighted: boolean
 	readOnly: boolean
@@ -103,6 +113,7 @@ export function QuestionCard({
 	isSource: boolean
 	identifierOwner: FormQuestion | undefined
 	logicOpen: boolean
+	placement: CardPlacement
 	drag?: QuestionDrag
 	onAction: (action: QuestionAction) => void
 }) {
@@ -117,6 +128,7 @@ export function QuestionCard({
 	const takenByOther =
 		identifierOwner !== undefined && identifierOwner.id !== id
 	const ruleCount = question.rule?.conditions.length ?? 0
+	const showLogic = !placement.inBlock
 	return (
 		<article
 			id={questionCardId(id)}
@@ -162,7 +174,7 @@ export function QuestionCard({
 							size="icon"
 							className="size-11 sm:size-7"
 							aria-label={`Monter la question ${number}`}
-							disabled={number === 1}
+							disabled={!placement.canMoveUp}
 							onClick={() => onAction({ type: 'move', delta: -1 })}
 						>
 							<ArrowUp aria-hidden />
@@ -173,7 +185,7 @@ export function QuestionCard({
 							size="icon"
 							className="size-11 sm:size-7"
 							aria-label={`Descendre la question ${number}`}
-							disabled={number === total}
+							disabled={!placement.canMoveDown}
 							onClick={() => onAction({ type: 'move', delta: 1 })}
 						>
 							<ArrowDown aria-hidden />
@@ -188,7 +200,7 @@ export function QuestionCard({
 						>
 							Question {number}
 						</span>
-						{question.rule ? (
+						{question.rule && showLogic ? (
 							<span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-muted-foreground text-xs">
 								<GitBranch className="size-3" aria-hidden />
 								Sous condition
@@ -312,7 +324,7 @@ export function QuestionCard({
 					))}
 				</ul>
 			) : null}
-			{logicOpen ? (
+			{logicOpen && showLogic ? (
 				<section
 					id={logicId}
 					aria-label={`Logique de la question ${number}`}
@@ -338,27 +350,54 @@ export function QuestionCard({
 				</section>
 			) : null}
 			<div className="flex flex-wrap items-center gap-1 border-t pt-3">
-				<Button
-					type="button"
-					variant="ghost"
-					size="sm"
-					className="min-h-11 sm:min-h-8"
-					aria-expanded={logicOpen}
-					aria-controls={logicOpen ? logicId : undefined}
-					onClick={() => onAction({ type: 'toggle-logic' })}
-				>
-					<GitBranch aria-hidden />
-					Logique
-					{ruleCount > 0 ? (
-						<span className="rounded-full bg-muted px-1.5 text-[11px] tabular-nums">
-							{ruleCount}
-						</span>
-					) : null}
-					<ChevronDown
-						aria-hidden
-						className={cn('transition-transform', logicOpen && 'rotate-180')}
-					/>
-				</Button>
+				{showLogic ? (
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="min-h-11 sm:min-h-8"
+						aria-expanded={logicOpen}
+						aria-controls={logicOpen ? logicId : undefined}
+						onClick={() => onAction({ type: 'toggle-logic' })}
+					>
+						<GitBranch aria-hidden />
+						Logique
+						{ruleCount > 0 ? (
+							<span className="rounded-full bg-muted px-1.5 text-[11px] tabular-nums">
+								{ruleCount}
+							</span>
+						) : null}
+						<ChevronDown
+							aria-hidden
+							className={cn('transition-transform', logicOpen && 'rotate-180')}
+						/>
+					</Button>
+				) : null}
+				{readOnly ? null : placement.inBlock ? (
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="min-h-11 sm:min-h-8"
+						aria-label={`Sortir la question ${number} du bloc`}
+						onClick={() => onAction({ type: 'ungroup' })}
+					>
+						<Ungroup aria-hidden />
+						Sortir du bloc
+					</Button>
+				) : placement.canGroup ? (
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="min-h-11 sm:min-h-8"
+						aria-label={`Regrouper la question ${number} avec la précédente`}
+						onClick={() => onAction({ type: 'group' })}
+					>
+						<Group aria-hidden />
+						Regrouper avec la précédente
+					</Button>
+				) : null}
 				<div className="ml-auto flex flex-wrap items-center gap-1">
 					<div className="flex items-center gap-2 pr-2">
 						<label htmlFor={requiredId} className="text-sm">

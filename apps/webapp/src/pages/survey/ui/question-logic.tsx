@@ -25,8 +25,32 @@ function optionEntries(
 	)
 }
 
+export type LogicSubject = 'question' | 'block'
+
+const COPY = {
+	question: {
+		always: 'Cette question est toujours posée.',
+		sourceLocked:
+			'Elle sert de condition à d’autres questions : elle doit rester toujours posée.',
+		noSource:
+			'Ajoutez avant elle une question à choix toujours posée pour l’afficher sous condition.',
+		lead: 'Afficher cette question seulement si',
+		clear: 'Toujours poser cette question',
+	},
+	block: {
+		always: 'Ce bloc est toujours affiché.',
+		sourceLocked:
+			'Une de ses questions sert de condition à d’autres questions : le bloc doit rester toujours affiché.',
+		noSource:
+			'Ajoutez avant le bloc une question à choix toujours posée pour l’afficher sous condition.',
+		lead: 'Afficher ce bloc seulement si',
+		clear: 'Toujours afficher ce bloc',
+	},
+} as const
+
 export function QuestionLogic({
 	questionId,
+	subject = 'question',
 	rule,
 	sources,
 	positions,
@@ -39,6 +63,7 @@ export function QuestionLogic({
 	onClear,
 }: {
 	questionId: string
+	subject?: LogicSubject
 	rule: DisplayRule | null
 	sources: readonly FormQuestion[]
 	positions: ReadonlyMap<string, number>
@@ -50,21 +75,16 @@ export function QuestionLogic({
 	onJoin: (join: RuleJoin) => void
 	onClear: () => void
 }) {
+	const copy = COPY[subject]
 	if (!rule) {
 		return (
 			<div className="grid gap-2 text-sm">
-				<p className="text-muted-foreground">
-					Cette question est toujours posée.
-				</p>
+				<p className="text-muted-foreground">{copy.always}</p>
 				{isSource ? (
-					<p className="text-muted-foreground text-xs">
-						Elle sert de condition à d’autres questions : elle doit rester
-						toujours posée.
-					</p>
+					<p className="text-muted-foreground text-xs">{copy.sourceLocked}</p>
 				) : sources.length === 0 ? (
 					<p className="text-muted-foreground text-xs">
-						Ajoutez avant elle une question à choix toujours posée pour
-						l’afficher sous condition. {SOURCE_HINT}
+						{copy.noSource} {SOURCE_HINT}
 					</p>
 				) : readOnly ? null : (
 					<div>
@@ -88,7 +108,7 @@ export function QuestionLogic({
 	return (
 		<div className="grid gap-3 text-sm">
 			<div className="flex flex-wrap items-center gap-2">
-				<span>Afficher cette question seulement si</span>
+				<span>{copy.lead}</span>
 				{rule.conditions.length < 2 ? (
 					<span>la condition suivante est remplie :</span>
 				) : (
@@ -219,7 +239,7 @@ export function QuestionLogic({
 						onClick={onClear}
 					>
 						<Trash2 aria-hidden />
-						Toujours poser cette question
+						{copy.clear}
 					</Button>
 				</div>
 			)}
