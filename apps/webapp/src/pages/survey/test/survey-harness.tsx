@@ -43,7 +43,7 @@ export function survey(patch: Partial<Survey> = {}): Survey {
 		status: 'DRAFT',
 		allow_multiple_responses: false,
 		response_cap: null,
-		campaign_id: null,
+		campaign_ids: [],
 		metadata: {},
 		graph: null,
 		public_slug: null,

@@ -50,11 +50,8 @@ export function CampaignsListFeature() {
 	const rows = useMemo<CampaignRow[]>(() => {
 		const counts = new Map<string, number>()
 		for (const survey of surveys.data?.data ?? []) {
-			if (survey.campaign_id) {
-				counts.set(
-					survey.campaign_id,
-					(counts.get(survey.campaign_id) ?? 0) + 1,
-				)
+			for (const campaignId of survey.campaign_ids) {
+				counts.set(campaignId, (counts.get(campaignId) ?? 0) + 1)
 			}
 		}
 		return (campaigns.data?.data ?? []).map((campaign) => ({

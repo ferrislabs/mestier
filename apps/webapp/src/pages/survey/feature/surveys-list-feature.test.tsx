@@ -27,7 +27,7 @@ const SURVEYS = [
 		title: 'QCM ouvert',
 		status: 'OPENED',
 		public_slug: 'abcd1234',
-		campaign_id: 'campaign-1',
+		campaign_ids: ['campaign-1'],
 		opened_at: '2026-05-02T08:00:00Z',
 	}),
 	survey({
