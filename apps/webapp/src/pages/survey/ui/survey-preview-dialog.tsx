@@ -125,10 +125,10 @@ export function SurveyPreviewDialog({
 					) : (
 						<div
 							className={cn(
-								'mx-auto overflow-hidden bg-background',
+								'mx-auto h-full overflow-y-auto overflow-x-hidden bg-background shadow-sm',
 								device === 'phone'
-									? 'w-full max-w-[390px] rounded-[2rem] border-8 border-foreground/80 shadow-lg'
-									: 'w-full rounded-xl border',
+									? 'w-full max-w-[390px] rounded-xl border'
+									: 'w-full rounded-lg border',
 							)}
 						>
 							{children}

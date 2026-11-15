@@ -30,7 +30,7 @@ function PreviewRunner({ title, description, graph }: PreviewContent) {
 		queryKey,
 		convertHeic: convertHeicToJpeg,
 	})
-	return <SurveyRespondView variant="member" view={view} />
+	return <SurveyRespondView variant="public" view={view} />
 }
 
 export function SurveyPreviewFeature({
