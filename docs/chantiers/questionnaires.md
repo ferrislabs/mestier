@@ -559,6 +559,17 @@ Questions ouvertes :
 | Existe-t-il déjà un port d'horloge dans le domaine ? | S0 |
 | *Tranché en S1 :* l'horloge de campagne tourne au tick du worker d'automatisation existant (`infrastructure/automation/worker.rs`), une transaction par campagne, relecture `FOR UPDATE` avant `advance`. | S1 |
 
+## Décisions C3 (blocs de questions)
+
+Un **bloc** affiche N questions en même temps sur un seul écran du répondant.
+
+- Le nœud question porte `block: Option<BlockId>` (UUID, `null` hors bloc ; absent = `null`). Les questions d'un même bloc se suivent : pour chaque identifiant de bloc, ses nœuds forment une chaîne `q1 -NEXT-> q2 -NEXT-> … -NEXT-> qn`, sans condition entre deux membres, et `q1` est le seul membre qui reçoit des arêtes entrantes de l'extérieur du bloc. Un bloc a donc au moins deux membres (un seul est refusé) et s'affiche en entier ou pas du tout.
+- Une règle d'affichage porte sur le bloc entier : les conditions précèdent `q1`, et la branche `ELSE` saute au nœud qui suit `qn`. Les membres `q2…qn` n'ont pas de règle propre. Une condition ne peut pas avoir pour source un membre d'un bloc qui suit ou contient la question dépendante, et la source reste « posée à chaque parcours » comme avant.
+- Le répondant : tous les champs du bloc sont affichés ensemble, « Suivant » valide l'écran (chaque question obligatoire du bloc doit être répondue), l'enregistrement et la complétion restent par réponse, sans changement d'API de réponse. Le parcours calculé par `answeredPath` ne change pas ; seul le regroupement des questions consécutives de même `block` est nouveau, côté client.
+- Erreurs de graphe : `graph_block_not_contiguous`, `graph_block_too_small`, `graph_block_member_has_condition` (422, `details.reason`, `question_id`).
+- Éditeur : un bloc est un conteneur de cartes de question (liseré, intitulé « Bloc de N questions »), ajouté par « Ajouter un bloc » (deux questions vides au départ) ; chaque carte offre « Regrouper avec la précédente » et « Sortir du bloc » ; la logique d'affichage se règle sur le bloc, pas sur ses membres.
+- Aucun changement de modèle de réponse ni d'événement. `buildGraph` / `parseGraph` portent `block` ; les graphes sans bloc restent identiques octet pour octet.
+
 ## Verify (exit)
 
 ```bash
@@ -580,3 +591,4 @@ Amended: 2026-11-14 décisions de S3 et S5 consignées.
 Amended: 2026-11-14 décisions de S6 consignées.
 Amended: 2026-11-15 C1 : un questionnaire ouvert ou fermé reste modifiable (visibilité et lien figés), son graphe est versionné et une réponse complète porte sa version ; un questionnaire appartient à plusieurs campagnes, les événements portent `campaign_ids` et `graph_version` au lieu de `campaign_id`.
 Amended: 2026-11-15 vague de correction C1 : une version est figée si et seulement si sa ligne existe (écrite à la complétion, jamais défigée par une suppression) ; verrou nu puis relecture et `save_campaigns` dédié pour l'ensemble de campagnes ; réponses enregistrées périmées écartées à la complétion ; `GraphVersion(NonZeroU32)` ; versions manquantes signalées ; `deny_unknown_fields` sur la modification ; listes de campagne paginées en SQL.
+Amended: 2026-11-15 C3 : blocs de questions affichées ensemble (`block` sur le nœud question, règle portée par le bloc, regroupement côté répondant).
