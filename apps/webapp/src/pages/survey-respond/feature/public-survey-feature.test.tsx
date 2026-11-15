@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PublicSurveyFeature } from '#/pages/survey-respond/feature/public-survey-feature'
 import { resumeKey } from '#/pages/survey-respond/lib/resume-store'
 import {
+	blockGraph,
 	question,
 	respondentSurvey,
 } from '#/pages/survey-respond/test/respond-fixtures'
@@ -463,5 +464,128 @@ describe('PublicSurveyFeature', () => {
 		await userEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
 		expect(await screen.findByText('Réponses enregistrées')).toBeTruthy()
 		expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(2)
+	})
+})
+
+function blockRoutes(
+	extra: Record<string, (call: RecordedCall) => ReturnType<typeof data>> = {},
+) {
+	return happyRoutes({
+		[`GET ${BASE}`]: () => data(respondentSurvey(blockGraph())),
+		...extra,
+	})
+}
+
+async function reachBlock() {
+	await screen.findByRole('heading', { name: 'Venez-vous en voiture ?' })
+	await userEvent.click(screen.getByRole('radio', { name: 'Oui' }))
+	await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+	return screen.findByRole('heading', { name: 'Marque' })
+}
+
+describe('PublicSurveyFeature blocks', () => {
+	it('shows every question of a block on one screen and saves them together', async () => {
+		const { calls } = installServer(blockRoutes())
+		renderWithQuery(<PublicSurveyFeature slug="lien-bilan" />)
+
+		const first = await reachBlock()
+		expect(document.activeElement).toBe(first)
+		expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(3)
+		expect(screen.getByText('Questions 2 à 4 sur 5')).toBeTruthy()
+		await waitFor(() =>
+			expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(1),
+		)
+
+		await userEvent.type(
+			screen.getByRole('textbox', { name: 'E-mail du conducteur' }),
+			'pas-un-email',
+		)
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+		expect(screen.getByText('Cette question est obligatoire.')).toBeTruthy()
+		expect(
+			screen.getByText(
+				'Saisissez une adresse e-mail valide, par exemple nom@exemple.fr.',
+			),
+		).toBeTruthy()
+		const brand = screen.getByRole('textbox', { name: 'Marque' })
+		expect(brand.getAttribute('aria-invalid')).toBe('true')
+		await waitFor(() => expect(document.activeElement).toBe(brand))
+		expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(1)
+
+		await userEvent.type(brand, 'Renault')
+		await userEvent.clear(
+			screen.getByRole('textbox', { name: 'E-mail du conducteur' }),
+		)
+		await userEvent.type(
+			screen.getByRole('textbox', { name: 'E-mail du conducteur' }),
+			'jean@exemple.fr',
+		)
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+		expect(
+			await screen.findByRole('heading', { name: 'Un commentaire' }),
+		).toBeTruthy()
+		expect(screen.getByText('Question 5 sur 5')).toBeTruthy()
+		await waitFor(() =>
+			expect(calls.filter((call) => call.method === 'PUT')).toHaveLength(2),
+		)
+		expect(calls.filter((call) => call.method === 'PUT')[1]?.body).toEqual({
+			answers: {
+				'q-car': { Choice: 'Oui' },
+				'q-brand': { Text: 'Renault' },
+				'q-driver': { Email: 'jean@exemple.fr' },
+			},
+		})
+
+		await userEvent.click(screen.getByRole('button', { name: /Précédent/ }))
+		expect(
+			(
+				(await screen.findByRole('textbox', {
+					name: 'Marque',
+				})) as HTMLInputElement
+			).value,
+		).toBe('Renault')
+		expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(3)
+		await userEvent.click(screen.getByRole('button', { name: /Précédent/ }))
+		expect(
+			await screen.findByRole('heading', { name: 'Venez-vous en voiture ?' }),
+		).toBeTruthy()
+	})
+
+	it('skips a block whose rule does not hold', async () => {
+		installServer(blockRoutes())
+		renderWithQuery(<PublicSurveyFeature slug="lien-bilan" />)
+		await screen.findByRole('heading', { name: 'Venez-vous en voiture ?' })
+		await userEvent.click(screen.getByRole('radio', { name: 'Non' }))
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+		expect(
+			await screen.findByRole('heading', { name: 'Un commentaire' }),
+		).toBeTruthy()
+		expect(screen.getByText('Question 2 sur 2')).toBeTruthy()
+		expect(screen.queryByRole('heading', { name: 'Marque' })).toBeNull()
+	})
+
+	it('resumes on the screen of the first unanswered required question', async () => {
+		window.localStorage.setItem(resumeKey('lien-bilan'), TOKEN)
+		installServer(
+			blockRoutes({
+				[`GET ${BASE}/responses/${TOKEN}`]: () =>
+					data(
+						response({
+							'q-car': { Choice: 'Oui' },
+							'q-plate': { Text: 'AB-123-CD' },
+						}),
+					),
+			}),
+		)
+		renderWithQuery(<PublicSurveyFeature slug="lien-bilan" />)
+		expect(await screen.findByRole('heading', { name: 'Marque' })).toBeTruthy()
+		expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(3)
+		expect(
+			(
+				screen.getByRole('textbox', {
+					name: 'Immatriculation',
+				}) as HTMLInputElement
+			).value,
+		).toBe('AB-123-CD')
 	})
 })

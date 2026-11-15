@@ -26,22 +26,27 @@ export type RespondPhase =
 
 export interface StepProgress {
 	position: number
+	last?: number
 	total: number | null
+}
+
+export interface ScreenItem {
+	question: QuestionNode
+	draft: Draft | undefined
+	photos: readonly PhotoItem[]
+	photoNotice: string | null
+	error: string | null
 }
 
 export interface RespondentView {
 	phase: RespondPhase
 	preview: boolean
 	survey: { title: string; description?: string | null } | null
-	current: QuestionNode | null
-	draft: Draft | undefined
-	photos: readonly PhotoItem[]
-	photoNotice: string | null
+	screen: readonly ScreenItem[]
 	progress: StepProgress | null
 	isFirst: boolean
 	isLast: boolean
 	busy: boolean
-	stepError: string | null
 	actionError: string | null
 	saveState: SaveState
 	saveMessage: string | null

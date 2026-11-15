@@ -56,6 +56,53 @@ export function branchingGraph(): Schemas.SurveyGraphSchema {
 	}
 }
 
+export const VEHICLE_BLOCK = 'b0000000-0000-4000-8000-0000000000aa'
+
+export function blockGraph(): Schemas.SurveyGraphSchema {
+	return {
+		start: 'q-car',
+		nodes: [
+			question('q-car', 'SINGLE_CHOICE', {
+				label: 'Venez-vous en voiture ?',
+				required: true,
+				options: ['Oui', 'Non'],
+				block: null,
+			}),
+			{
+				type: 'CONDITION',
+				id: 'c-car',
+				question: 'q-car',
+				option: 'Oui',
+				checked: true,
+			},
+			question('q-brand', 'TEXT', {
+				label: 'Marque',
+				required: true,
+				block: VEHICLE_BLOCK,
+			}),
+			question('q-plate', 'TEXT', {
+				label: 'Immatriculation',
+				block: VEHICLE_BLOCK,
+			}),
+			question('q-driver', 'EMAIL', {
+				label: 'E-mail du conducteur',
+				block: VEHICLE_BLOCK,
+			}),
+			question('q-note', 'TEXT', { label: 'Un commentaire', block: null }),
+			{ type: 'END', id: 'end', message: 'Merci !' },
+		],
+		edges: [
+			{ from: 'q-car', to: 'c-car', branch: 'NEXT' },
+			{ from: 'c-car', to: 'q-brand', branch: 'THEN' },
+			{ from: 'c-car', to: 'q-note', branch: 'ELSE' },
+			{ from: 'q-brand', to: 'q-plate', branch: 'NEXT' },
+			{ from: 'q-plate', to: 'q-driver', branch: 'NEXT' },
+			{ from: 'q-driver', to: 'q-note', branch: 'NEXT' },
+			{ from: 'q-note', to: 'end', branch: 'NEXT' },
+		],
+	}
+}
+
 export function photoGraph(
 	maxPhotos: number | null = 2,
 ): Schemas.SurveyGraphSchema {

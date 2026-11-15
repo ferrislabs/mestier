@@ -81,4 +81,16 @@ describe('QuestionStep', () => {
 		expect(progressLabel({ position: 3, total: null })).toBe('Question 3')
 		expect(progressLabel({ position: 3, total: 5 })).toBe('Question 3 sur 5')
 	})
+
+	it('names the range of a screen holding a block', () => {
+		expect(progressLabel({ position: 3, last: 5, total: 12 })).toBe(
+			'Questions 3 à 5 sur 12',
+		)
+		expect(progressLabel({ position: 3, last: 5, total: null })).toBe(
+			'Questions 3 à 5',
+		)
+		expect(progressLabel({ position: 3, last: 3, total: 4 })).toBe(
+			'Question 3 sur 4',
+		)
+	})
 })

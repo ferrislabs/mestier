@@ -7,6 +7,7 @@ import type { Schemas } from '#/api/api.client'
 import { previewSource } from '#/pages/survey-respond/feature/respond-sources'
 import { useSurveyRespondent } from '#/pages/survey-respond/feature/use-survey-respondent'
 import {
+	blockGraph,
 	branchingGraph,
 	photoGraph,
 } from '#/pages/survey-respond/test/respond-fixtures'
@@ -32,6 +33,7 @@ function Preview({ graph = branchingGraph() }: { graph?: SurveyGraph }) {
 type SurveyGraph = Schemas.SurveyGraphSchema
 
 const PHOTO_GRAPH = photoGraph(2)
+const BLOCK_GRAPH = blockGraph()
 
 describe('previewSource', () => {
 	it('runs the respondent flow in memory, branches live and restarts', async () => {
@@ -97,5 +99,22 @@ describe('previewSource', () => {
 		expect(revoked).toEqual(['blob:preview-1'])
 		URL.createObjectURL = createObjectURL
 		URL.revokeObjectURL = revokeObjectURL
+	})
+
+	it('previews a block as one screen', async () => {
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<Preview graph={BLOCK_GRAPH} />
+			</QueryClientProvider>,
+		)
+		await userEvent.click(await screen.findByLabelText('Oui'))
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+		expect(await screen.findByLabelText('Marque')).toBeTruthy()
+		expect(screen.getByLabelText('Immatriculation')).toBeTruthy()
+		expect(screen.getByLabelText('E-mail du conducteur')).toBeTruthy()
+		expect(screen.getByText('Questions 2 à 4 sur 5')).toBeTruthy()
+		await userEvent.type(screen.getByLabelText('Marque'), 'Renault')
+		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
+		expect(await screen.findByLabelText('Un commentaire')).toBeTruthy()
 	})
 })

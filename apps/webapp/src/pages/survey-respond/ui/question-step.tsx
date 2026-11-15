@@ -14,9 +14,12 @@ import { ChoiceCards } from '#/pages/survey-respond/ui/choice-cards'
 import { PhotoAnswer } from '#/pages/survey-respond/ui/photo-answer'
 
 export function progressLabel(progress: StepProgress): string {
-	return progress.total === null
-		? `Question ${progress.position}`
-		: `Question ${progress.position} sur ${progress.total}`
+	const last = progress.last ?? progress.position
+	const range =
+		last > progress.position
+			? `Questions ${progress.position} à ${last}`
+			: `Question ${progress.position}`
+	return progress.total === null ? range : `${range} sur ${progress.total}`
 }
 
 function StepProgressIndicator({ progress }: { progress: StepProgress }) {
@@ -31,13 +34,13 @@ function StepProgressIndicator({ progress }: { progress: StepProgress }) {
 					aria-label="Avancement"
 					aria-valuemin={0}
 					aria-valuemax={progress.total}
-					aria-valuenow={progress.position}
+					aria-valuenow={progress.last ?? progress.position}
 					className="h-1.5 w-full overflow-hidden rounded-full bg-primary/15"
 				>
 					<div
 						className="h-full rounded-full bg-primary motion-safe:transition-[width] motion-safe:duration-300"
 						style={{
-							width: `${(progress.position / progress.total) * 100}%`,
+							width: `${((progress.last ?? progress.position) / progress.total) * 100}%`,
 						}}
 					/>
 				</div>
@@ -65,7 +68,7 @@ export function QuestionStep({
 	photoNotice: string | null
 	progress: StepProgress | null
 	error: string | null
-	headingRef: RefObject<HTMLHeadingElement | null>
+	headingRef?: RefObject<HTMLHeadingElement | null>
 	onChange: (draft: Draft) => void
 	onSubmit: () => void
 	onAddPhotos: (files: File[]) => void

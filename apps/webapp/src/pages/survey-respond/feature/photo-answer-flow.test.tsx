@@ -5,6 +5,7 @@ import { PublicSurveyFeature } from '#/pages/survey-respond/feature/public-surve
 import { resumeKey } from '#/pages/survey-respond/lib/resume-store'
 import {
 	photoGraph,
+	question,
 	respondentSurvey,
 } from '#/pages/survey-respond/test/respond-fixtures'
 import {
@@ -25,13 +26,38 @@ vi.mock('heic-to', () => ({ heicTo }))
 const BASE = '/api/v1/public/surveys/lien-photo'
 const TOKEN = 'photo-token-123456'
 
+const PHOTO_BLOCK = 'b0000000-0000-4000-8000-0000000000bb'
+
+const PHOTO_BLOCK_GRAPH = {
+	start: 'q-photo',
+	nodes: [
+		question('q-photo', 'PHOTO', {
+			label: 'Photographiez votre ouvrage',
+			required: true,
+			max_photos: 2,
+			block: PHOTO_BLOCK,
+		}),
+		question('q-caption', 'TEXT', {
+			label: 'Légende',
+			required: true,
+			block: PHOTO_BLOCK,
+		}),
+		{ type: 'END' as const, id: 'end', message: null },
+	],
+	edges: [
+		{ from: 'q-photo', to: 'q-caption', branch: 'NEXT' as const },
+		{ from: 'q-caption', to: 'end', branch: 'NEXT' as const },
+	],
+}
+
 function routes(
 	upload: (
 		call: RecordedCall,
 	) => ReturnType<typeof data> | Promise<ReturnType<typeof data>>,
+	graph: ReturnType<typeof photoGraph> = photoGraph(2),
 ) {
 	return {
-		[`GET ${BASE}`]: () => data(respondentSurvey(photoGraph(2))),
+		[`GET ${BASE}`]: () => data(respondentSurvey(graph)),
 		[`POST ${BASE}/responses`]: () =>
 			data(
 				{ id: 'r1', answers: {}, status: 'IN_PROGRESS', resume_token: TOKEN },
@@ -236,5 +262,33 @@ describe('photo answers', () => {
 		})
 		renderWithQuery(<PublicSurveyFeature slug="lien-photo" />)
 		expect(await screen.findByText('Photo envoyée précédemment')).toBeTruthy()
+	})
+
+	it('uploads the photos of a block member and saves them with the other answers of the screen', async () => {
+		const { calls } = installServer(
+			routes(() => data({ key: 'k-block' }, 201), PHOTO_BLOCK_GRAPH),
+		)
+		renderWithQuery(<PublicSurveyFeature slug="lien-photo" />)
+		await userEvent.click(
+			await screen.findByRole('button', { name: 'Terminer' }),
+		)
+		expect(screen.getByText('Ajoutez au moins une photo.')).toBeTruthy()
+		expect(screen.getByText('Cette question est obligatoire.')).toBeTruthy()
+		await userEvent.upload(await picker(), jpeg('mur.jpg'))
+		await screen.findByText('Envoyée')
+		await userEvent.type(
+			screen.getByRole('textbox', { name: 'Légende' }),
+			'Mur porteur',
+		)
+		await userEvent.click(screen.getByRole('button', { name: 'Terminer' }))
+		await waitFor(() =>
+			expect(calls.at(-1)?.url).toBe(`${BASE}/responses/${TOKEN}/complete`),
+		)
+		expect(calls.filter((call) => call.method === 'PUT').at(-1)?.body).toEqual({
+			answers: {
+				'q-photo': { Photos: ['k-block'] },
+				'q-caption': { Text: 'Mur porteur' },
+			},
+		})
 	})
 })

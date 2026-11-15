@@ -26,12 +26,14 @@ import {
 import {
 	knownLength,
 	respondPath,
+	screensOf,
 } from '#/pages/survey-respond/lib/respond-path'
 import type {
 	PhotoItem,
 	RespondentView,
 	RespondPhase,
 	SaveState,
+	ScreenItem,
 	StepProgress,
 } from '#/pages/survey-respond/lib/respond-types'
 
@@ -86,6 +88,23 @@ function uploadSignal(controller: AbortController): {
 
 let photoSequence = 0
 
+function screenOf(
+	screens: readonly QuestionNode[][],
+	questionId: string,
+): number {
+	return screens.findIndex((screen) =>
+		screen.some((node) => node.id === questionId),
+	)
+}
+
+function focusField(questionId: string) {
+	const field =
+		document.getElementById(`answer-${questionId}`) ??
+		document.querySelector<HTMLElement>(`[name="answer-${questionId}"]`) ??
+		document.getElementById(`question-${questionId}`)
+	field?.focus()
+}
+
 function nextPhotoId(): string {
 	photoSequence += 1
 	return `photo-${photoSequence}`
@@ -132,7 +151,11 @@ export function useSurveyRespondent(
 	const [photos, setPhotoState] = useState<Record<string, PhotoItem[]>>({})
 	const [photoNotice, setPhotoNotice] = useState<Record<string, string>>({})
 	const [index, setIndex] = useState(0)
-	const [stepError, setStepError] = useState<string | null>(null)
+	const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
+	const [invalidFocus, setInvalidFocus] = useState<{
+		id: string
+		key: number
+	} | null>(null)
 	const [actionError, setActionError] = useState<string | null>(null)
 	const [busy, setBusy] = useState(false)
 	const [saveState, setSaveState] = useState<SaveState>('idle')
@@ -176,6 +199,8 @@ export function useSurveyRespondent(
 		[graph, questions, effectiveDrafts],
 	)
 
+	const screens = useMemo(() => screensOf(path.questions), [path.questions])
+
 	const restored = fresh ? null : (restoreQuery.data ?? null)
 
 	useEffect(() => {
@@ -207,13 +232,14 @@ export function useSurveyRespondent(
 		setDrafts(restoredDrafts)
 		updatePhotos(() => restoredPhotos)
 		const resumedPath = respondPath(graph, buildAnswers(questions, merged))
-		const firstOpen = resumedPath.questions.findIndex((node) =>
-			isBlank(node, merged[node.id]),
+		const resumedScreens = screensOf(resumedPath.questions)
+		const firstOpen = resumedPath.questions.find(
+			(node) => node.required && isBlank(node, merged[node.id]),
 		)
 		setIndex(
-			firstOpen === -1
-				? Math.max(resumedPath.questions.length - 1, 0)
-				: firstOpen,
+			firstOpen
+				? screenOf(resumedScreens, firstOpen.id)
+				: Math.max(resumedScreens.length - 1, 0),
 		)
 	}, [
 		initialized,
@@ -249,6 +275,10 @@ export function useSurveyRespondent(
 		if (stepChange === 0 && override === null) return
 		headingRef.current?.focus()
 	}, [stepChange, override])
+
+	useEffect(() => {
+		if (invalidFocus) focusField(invalidFocus.id)
+	}, [invalidFocus])
 
 	useEffect(() => {
 		const urls = objectUrls.current
@@ -302,14 +332,18 @@ export function useSurveyRespondent(
 		initialized,
 	])
 
-	const position = Math.min(index, Math.max(path.questions.length - 1, 0))
-	const current = path.questions[position] ?? null
-	const isLast = position === path.questions.length - 1
+	const position = Math.min(index, Math.max(screens.length - 1, 0))
+	const screen = screens[position] ?? []
+	const isLast = position === screens.length - 1
+	const firstNumber =
+		screens.slice(0, position).reduce((sum, item) => sum + item.length, 0) + 1
+	const lastQuestion = screen.at(-1)
 	const progress: StepProgress | null =
-		current && graph
+		lastQuestion && graph
 			? {
-					position: position + 1,
-					total: knownLength(graph, current.id, path.questions.length),
+					position: firstNumber,
+					last: firstNumber + screen.length - 1,
+					total: knownLength(graph, lastQuestion.id, path.questions.length),
 				}
 			: null
 
@@ -398,7 +432,7 @@ export function useSurveyRespondent(
 
 	const goTo = useCallback((target: number) => {
 		setIndex(target)
-		setStepError(null)
+		setStepErrors({})
 		setActionError(null)
 		setStepChange((count) => count + 1)
 	}, [])
@@ -414,20 +448,52 @@ export function useSurveyRespondent(
 		[photos, path.questions],
 	)
 
-	const setDraft = useCallback((questionId: string, draft: Draft) => {
-		setDrafts((previous) => ({ ...previous, [questionId]: draft }))
-		setStepError(null)
+	const clearError = useCallback((questionId: string) => {
+		setStepErrors((previous) => {
+			if (!(questionId in previous)) return previous
+			const { [questionId]: _, ...rest } = previous
+			return rest
+		})
 	}, [])
 
+	const setDraft = useCallback(
+		(questionId: string, draft: Draft) => {
+			setDrafts((previous) => ({ ...previous, [questionId]: draft }))
+			clearError(questionId)
+		},
+		[clearError],
+	)
+
+	const showError = useCallback(
+		(questionId: string, message: string) => {
+			const target = screenOf(screens, questionId)
+			if (target >= 0) goTo(target)
+			setStepErrors({ [questionId]: message })
+			return target >= 0
+		},
+		[screens, goTo],
+	)
+
 	const next = useCallback(async () => {
-		if (!current || busy) return
-		const problem = validateDraft(
-			current,
-			effectiveDrafts[current.id],
-			pendingFor(current.id),
-		)
-		if (problem) {
-			setStepError(problem)
+		if (screen.length === 0 || busy) return
+		const problems: Record<string, string> = {}
+		for (const node of screen) {
+			const problem = validateDraft(
+				node,
+				effectiveDrafts[node.id],
+				pendingFor(node.id),
+			)
+			if (problem) problems[node.id] = problem
+		}
+		const invalid = screen.find((node) => node.id in problems)
+		if (invalid) {
+			setStepErrors(problems)
+			if (screen.length > 1) {
+				setInvalidFocus((previous) => ({
+					id: invalid.id,
+					key: (previous?.key ?? 0) + 1,
+				}))
+			}
 			return
 		}
 		if (isLast && pendingAnywhere()) {
@@ -469,23 +535,14 @@ export function useSurveyRespondent(
 					graph
 				) {
 					const identifier = identifierQuestion(graph)
-					const found = identifier
-						? path.questions.findIndex((node) => node.id === identifier.id)
-						: -1
-					if (found >= 0) {
-						goTo(found)
-						setStepError(IDENTIFIER_TAKEN)
-						return
-					}
+					if (identifier && showError(identifier.id, IDENTIFIER_TAKEN)) return
 				}
 				if (fail(failure)) return
 				if (failure.kind === 'invalid') {
-					const found = failure.questionId
-						? path.questions.findIndex((node) => node.id === failure.questionId)
-						: -1
-					if (found >= 0) {
-						goTo(found)
-						setStepError(failure.message)
+					if (
+						failure.questionId &&
+						showError(failure.questionId, failure.message)
+					) {
 						return
 					}
 					setActionError(failure.message)
@@ -497,7 +554,7 @@ export function useSurveyRespondent(
 			setBusy(false)
 		}
 	}, [
-		current,
+		screen,
 		busy,
 		effectiveDrafts,
 		pendingFor,
@@ -508,6 +565,7 @@ export function useSurveyRespondent(
 		isLast,
 		persist,
 		goTo,
+		showError,
 		position,
 		source,
 		fail,
@@ -555,7 +613,7 @@ export function useSurveyRespondent(
 					: rest
 			})
 			if (accepted.length === 0) return
-			setStepError(null)
+			clearError(questionId)
 			const items = accepted.map((file) => {
 				const controller = new AbortController()
 				const item: PhotoItem = {
@@ -626,6 +684,7 @@ export function useSurveyRespondent(
 			convertHeic,
 			source,
 			fail,
+			clearError,
 		],
 	)
 
@@ -666,7 +725,7 @@ export function useSurveyRespondent(
 		updatePhotos(() => ({}))
 		setPhotoNotice({})
 		setIndex(0)
-		setStepError(null)
+		setStepErrors({})
 		setActionError(null)
 		setSaveState('idle')
 		setFresh(true)
@@ -684,15 +743,19 @@ export function useSurveyRespondent(
 		phase,
 		preview,
 		survey,
-		current,
-		draft: current ? effectiveDrafts[current.id] : undefined,
-		photos: current ? (photos[current.id] ?? []) : [],
-		photoNotice: current ? (photoNotice[current.id] ?? null) : null,
+		screen: screen.map(
+			(node): ScreenItem => ({
+				question: node,
+				draft: effectiveDrafts[node.id],
+				photos: photos[node.id] ?? [],
+				photoNotice: photoNotice[node.id] ?? null,
+				error: stepErrors[node.id] ?? null,
+			}),
+		),
 		progress,
 		isFirst: position === 0,
 		isLast,
 		busy,
-		stepError,
 		actionError,
 		saveState,
 		saveMessage,

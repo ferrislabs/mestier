@@ -75,3 +75,19 @@ export function knownLength(
 	}
 	return pathLength
 }
+
+export function screensOf(
+	questions: readonly QuestionNode[],
+): QuestionNode[][] {
+	const screens: QuestionNode[][] = []
+	for (const node of questions) {
+		const previous = screens.at(-1)
+		const block = node.block ?? null
+		if (previous && block !== null && previous[0].block === block) {
+			previous.push(node)
+		} else {
+			screens.push([node])
+		}
+	}
+	return screens
+}

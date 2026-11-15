@@ -122,7 +122,7 @@ function Body({ view }: { view: RespondentView }) {
 				/>
 			)
 		case 'answering':
-			if (!view.current) {
+			if (view.screen.length === 0) {
 				return (
 					<RespondMessage
 						icon={CircleSlash}
@@ -141,27 +141,29 @@ function Body({ view }: { view: RespondentView }) {
 						view.next()
 					}}
 				>
-					<div className="rounded-xl border bg-card p-4 shadow-xs sm:p-6">
-						<QuestionStep
-							key={view.current.id}
-							question={view.current}
-							draft={view.draft}
-							photos={view.photos}
-							photoNotice={view.photoNotice}
-							progress={view.progress}
-							error={view.stepError}
-							headingRef={view.headingRef}
-							onChange={(draft) => {
-								if (view.current) view.setDraft(view.current.id, draft)
-							}}
-							onSubmit={view.next}
-							onAddPhotos={(files) => {
-								if (view.current) view.addPhotos(view.current.id, files)
-							}}
-							onRemovePhoto={(id) => {
-								if (view.current) view.removePhoto(view.current.id, id)
-							}}
-						/>
+					<div className="flex flex-col gap-4">
+						{view.screen.map((item, position) => (
+							<div
+								key={item.question.id}
+								className="rounded-xl border bg-card p-4 shadow-xs sm:p-6"
+							>
+								<QuestionStep
+									question={item.question}
+									draft={item.draft}
+									photos={item.photos}
+									photoNotice={item.photoNotice}
+									progress={position === 0 ? view.progress : null}
+									error={item.error}
+									headingRef={position === 0 ? view.headingRef : undefined}
+									onChange={(draft) => view.setDraft(item.question.id, draft)}
+									onSubmit={view.next}
+									onAddPhotos={(files) =>
+										view.addPhotos(item.question.id, files)
+									}
+									onRemovePhoto={(id) => view.removePhoto(item.question.id, id)}
+								/>
+							</div>
+						))}
 					</div>
 					<RespondActionBar
 						preview={view.preview}
