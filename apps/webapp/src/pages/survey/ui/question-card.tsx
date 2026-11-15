@@ -1,3 +1,7 @@
+import type {
+	DraggableAttributes,
+	DraggableSyntheticListeners,
+} from '@dnd-kit/core'
 import {
 	ArrowDown,
 	ArrowUp,
@@ -53,6 +57,12 @@ export type QuestionAction =
 	| { type: 'join'; join: RuleJoin }
 	| { type: 'clear-rule' }
 
+export interface QuestionDrag {
+	attributes: DraggableAttributes
+	listeners: DraggableSyntheticListeners
+	dragging: boolean
+}
+
 export function questionCardId(id: string): string {
 	return `question-card-${id}`
 }
@@ -79,6 +89,7 @@ export function QuestionCard({
 	isSource,
 	identifierOwner,
 	logicOpen,
+	drag,
 	onAction,
 }: {
 	question: FormQuestion
@@ -92,6 +103,7 @@ export function QuestionCard({
 	isSource: boolean
 	identifierOwner: FormQuestion | undefined
 	logicOpen: boolean
+	drag?: QuestionDrag
 	onAction: (action: QuestionAction) => void
 }) {
 	const entry = questionKindEntry(question.kind)
@@ -119,22 +131,27 @@ export function QuestionCard({
 				{readOnly ? null : (
 					<div className="flex shrink-0 flex-col items-center gap-0.5">
 						<Button
+							{...drag?.attributes}
 							id={questionHandleId(id)}
 							type="button"
 							variant="ghost"
 							size="icon"
-							className="size-11 sm:size-8"
-							aria-label={`Réordonner la question ${number} : flèches haut et bas`}
-							aria-keyshortcuts="ArrowUp ArrowDown"
+							className="size-11 touch-none sm:size-8"
+							aria-label={`Réordonner la question ${number} : flèches haut et bas, ou Espace pour la saisir`}
+							aria-keyshortcuts="ArrowUp ArrowDown Space"
+							onPointerDown={(event) => drag?.listeners?.onPointerDown?.(event)}
 							onKeyDown={(event) => {
-								if (event.key === 'ArrowUp') {
+								if (!drag?.dragging && event.key === 'ArrowUp') {
 									event.preventDefault()
 									onAction({ type: 'move', delta: -1 })
+									return
 								}
-								if (event.key === 'ArrowDown') {
+								if (!drag?.dragging && event.key === 'ArrowDown') {
 									event.preventDefault()
 									onAction({ type: 'move', delta: 1 })
+									return
 								}
+								drag?.listeners?.onKeyDown?.(event)
 							}}
 						>
 							<GripVertical aria-hidden />

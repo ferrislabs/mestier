@@ -3,7 +3,13 @@ import { useEffect } from 'react'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import { useBeforeUnload } from '#/pages/projects/lib/use-before-unload'
 
-export function UnsavedGuard({ dirty }: { dirty: boolean }) {
+export function UnsavedGuard({
+	dirty,
+	description = 'Tes modifications non enregistrées seront perdues.',
+}: {
+	dirty: boolean
+	description?: string
+}) {
 	useBeforeUnload(dirty)
 	const blocker = useBlocker({
 		shouldBlockFn: () => dirty,
@@ -18,7 +24,7 @@ export function UnsavedGuard({ dirty }: { dirty: boolean }) {
 				if (!open) blocker.reset?.()
 			}}
 			title="Quitter sans enregistrer ?"
-			description="Tes modifications non enregistrées seront perdues."
+			description={description}
 			confirmLabel="Quitter sans enregistrer"
 			destructive
 			onConfirm={() => blocker.proceed?.()}

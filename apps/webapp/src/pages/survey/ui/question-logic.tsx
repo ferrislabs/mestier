@@ -16,6 +16,15 @@ function sourceLabel(item: FormQuestion, position: number): string {
 	return `${position}. ${label === '' ? 'Question sans libellé' : label}`
 }
 
+function optionEntries(
+	source: FormQuestion | undefined,
+): { key: string; option: string }[] {
+	if (!source) return []
+	return source.options.flatMap((option, at) =>
+		option.trim() === '' ? [] : [{ key: `${source.id}-${at}`, option }],
+	)
+}
+
 export function QuestionLogic({
 	questionId,
 	rule,
@@ -80,20 +89,26 @@ export function QuestionLogic({
 		<div className="grid gap-3 text-sm">
 			<div className="flex flex-wrap items-center gap-2">
 				<span>Afficher cette question seulement si</span>
-				<label htmlFor={joinId} className="sr-only">
-					Conditions à remplir
-				</label>
-				<select
-					id={joinId}
-					className={`${NATIVE_SELECT} w-auto min-h-11 sm:min-h-9`}
-					value={rule.join}
-					disabled={readOnly}
-					onChange={(event) => onJoin(event.target.value as RuleJoin)}
-				>
-					<option value="ALL">toutes</option>
-					<option value="ANY">au moins une</option>
-				</select>
-				<span>les conditions sont remplies :</span>
+				{rule.conditions.length < 2 ? (
+					<span>la condition suivante est remplie :</span>
+				) : (
+					<>
+						<label htmlFor={joinId} className="sr-only">
+							Conditions à remplir
+						</label>
+						<select
+							id={joinId}
+							className={`${NATIVE_SELECT} w-auto min-h-11 sm:min-h-9`}
+							value={rule.join}
+							disabled={readOnly}
+							onChange={(event) => onJoin(event.target.value as RuleJoin)}
+						>
+							<option value="ALL">toutes</option>
+							<option value="ANY">au moins une</option>
+						</select>
+						<span>les conditions sont remplies :</span>
+					</>
+				)}
 			</div>
 			<ol className="grid gap-2">
 				{rule.conditions.map((condition, position) => {
@@ -144,13 +159,11 @@ export function QuestionLogic({
 								<option value="" disabled>
 									Choisir une option
 								</option>
-								{(source?.options ?? [])
-									.filter((option) => option.trim() !== '')
-									.map((option) => (
-										<option key={option} value={option}>
-											l’option « {option} »
-										</option>
-									))}
+								{optionEntries(source).map((entry) => (
+									<option key={entry.key} value={entry.option}>
+										l’option « {entry.option} »
+									</option>
+								))}
 							</select>
 							<label htmlFor={`${base}-checked`} className="sr-only">
 								État de l’option, condition {position + 1}

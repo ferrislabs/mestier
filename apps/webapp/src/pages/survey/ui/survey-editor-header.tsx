@@ -26,6 +26,8 @@ import {
 	VisibilityBadge,
 } from '#/pages/survey/ui/survey-badges'
 
+export const SAVE_REASON_ID = 'survey-save-blocked-reason'
+
 export function ProblemsSummary({
 	count,
 	onFocusFirst,
@@ -97,6 +99,7 @@ export function SurveyEditorHeader({
 	onCopyLink: (() => void) | null
 }) {
 	const draft = survey.status === 'DRAFT'
+	const blocked = saveBlockedReason !== null
 	return (
 		<header className="grid shrink-0 gap-2 border-border border-b bg-card px-3 py-2 sm:px-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
 			<div className="flex min-w-0 items-center gap-2">
@@ -135,6 +138,14 @@ export function SurveyEditorHeader({
 			</div>
 			<div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
 				{problems}
+				{canManage && blocked ? (
+					<span
+						id={SAVE_REASON_ID}
+						className="max-w-64 text-muted-foreground text-xs"
+					>
+						{saveBlockedReason}
+					</span>
+				) : null}
 				<Button
 					variant="ghost"
 					size="sm"
@@ -167,9 +178,10 @@ export function SurveyEditorHeader({
 						<Button
 							variant={dirty ? 'default' : 'outline'}
 							size="sm"
-							className="min-h-11 sm:min-h-8"
-							disabled={!dirty || saving || saveBlockedReason !== null}
-							title={saveBlockedReason ?? undefined}
+							className="min-h-11 aria-disabled:opacity-50 sm:min-h-8"
+							disabled={!dirty || saving}
+							aria-disabled={blocked || undefined}
+							aria-describedby={blocked ? SAVE_REASON_ID : undefined}
 							onClick={onSave}
 						>
 							<Save aria-hidden />
@@ -178,9 +190,10 @@ export function SurveyEditorHeader({
 						{draft ? (
 							<Button
 								size="sm"
-								className="min-h-11 sm:min-h-8"
-								disabled={saving || saveBlockedReason !== null}
-								title={saveBlockedReason ?? undefined}
+								className="min-h-11 aria-disabled:opacity-50 sm:min-h-8"
+								disabled={saving}
+								aria-disabled={blocked || undefined}
+								aria-describedby={blocked ? SAVE_REASON_ID : undefined}
 								onClick={onOpen}
 							>
 								<DoorOpen aria-hidden />

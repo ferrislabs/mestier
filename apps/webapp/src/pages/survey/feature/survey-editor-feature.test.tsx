@@ -1,10 +1,12 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { dragAnnouncements } from '#/pages/survey/feature/sortable-question-list'
 import { SurveyEditorFeature } from '#/pages/survey/feature/survey-editor-feature'
 import { conditionNodeId } from '#/pages/survey/lib/form-graph'
 import { REASON_MESSAGES } from '#/pages/survey/lib/reason-messages'
 import {
+	campaign,
 	installSurveyApi,
 	PATHS,
 	renderSurveyPage,
@@ -161,7 +163,17 @@ describe('SurveyEditorFeature', () => {
 		expect(
 			screen.getByRole('button', { name: '2 problèmes à corriger' }),
 		).toBeTruthy()
-		expect(saveButton().disabled).toBe(true)
+		const reason = screen.getByText(
+			'Corrigez les problèmes signalés avant d’enregistrer.',
+		)
+		expect(saveButton().disabled).toBe(false)
+		expect(saveButton().getAttribute('aria-disabled')).toBe('true')
+		expect(saveButton().getAttribute('aria-describedby')).toBe(reason.id)
+		saveButton().focus()
+		expect(document.activeElement).toBe(saveButton())
+		await userEvent.click(saveButton())
+		expect(patchBodies(api.calls)).toHaveLength(0)
+		await waitFor(() => expect(document.activeElement).toBe(label))
 
 		fireEvent.change(label, { target: { value: 'Équipements' } })
 		await userEvent.click(
@@ -174,6 +186,7 @@ describe('SurveyEditorFeature', () => {
 		await userEvent.click(saveButton())
 
 		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
+		expect(Object.keys(patchBodies(api.calls)[0])).toEqual(['graph'])
 		const graph = patchBodies(api.calls)[0].graph
 		if (!graph) throw new Error('graph expected')
 		const condition = conditionNodeId('q2', 0)
@@ -460,5 +473,250 @@ describe('SurveyEditorFeature', () => {
 		expect(screen.queryByRole('button', { name: 'Ajouter une question' })).toBe(
 			null,
 		)
+	})
+
+	it('sends only the renamed title on a settings-only save', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH, campaign_ids: ['campaign-1'] })],
+			campaigns: [campaign()],
+		})
+		api.mockMutation('patch', PATHS.survey, () => ({ data: survey() }))
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		fireEvent.change(await screen.findByLabelText('Titre du questionnaire'), {
+			target: { value: 'Bilan de juin' },
+		})
+		await userEvent.click(saveButton())
+		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
+		expect(patchBodies(api.calls)[0]).toEqual({ title: 'Bilan de juin' })
+	})
+
+	it('sends the full campaign list once the campaigns changed, and only then', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH, campaign_ids: ['campaign-1'] })],
+			campaigns: [
+				campaign(),
+				campaign({ id: 'campaign-2', name: 'Session de juin' }),
+			],
+		})
+		api.mockMutation('patch', PATHS.survey, () => ({ data: survey() }))
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await userEvent.click(
+			await screen.findByRole('button', { name: 'Réglages' }),
+		)
+		await userEvent.click(await screen.findByLabelText('Session de juin'))
+		await userEvent.keyboard('{Escape}')
+		await userEvent.click(saveButton())
+		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
+		expect(patchBodies(api.calls)[0]).toEqual({
+			campaign_ids: ['campaign-1', 'campaign-2'],
+		})
+
+		fireEvent.change(screen.getByLabelText('Libellé de la question 2'), {
+			target: { value: 'Plaque' },
+		})
+		await userEvent.click(saveButton())
+		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(2))
+		expect(Object.keys(patchBodies(api.calls)[1])).toEqual(['graph'])
+	})
+
+	it('keeps the typed options across kind changes and asks before dropping dependent conditions', async () => {
+		installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await pickKind(
+			await screen.findByRole('button', {
+				name: 'Type de la question 2 : Texte court',
+			}),
+			'Choix unique',
+		)
+		expect(screen.queryByRole('dialog')).toBe(null)
+		await userEvent.click(
+			within(card(2)).getByRole('button', { name: 'Ajouter une option' }),
+		)
+		fireEvent.change(await within(card(2)).findByLabelText('Option 1'), {
+			target: { value: 'AB-123-CD' },
+		})
+		await pickKind(
+			screen.getByRole('button', {
+				name: 'Type de la question 2 : Choix unique',
+			}),
+			'Texte court',
+		)
+		expect(screen.queryByRole('dialog')).toBe(null)
+		await pickKind(
+			screen.getByRole('button', {
+				name: 'Type de la question 2 : Texte court',
+			}),
+			'Choix unique',
+		)
+		expect(
+			(within(card(2)).getByLabelText('Option 1') as HTMLInputElement).value,
+		).toBe('AB-123-CD')
+
+		await pickKind(
+			screen.getByRole('button', {
+				name: 'Type de la question 1 : Choix unique',
+			}),
+			'Texte court',
+		)
+		const dialog = await screen.findByRole('dialog', {
+			name: 'Changer le type de cette question ?',
+		})
+		expect(screen.getByText('Sous condition')).toBeTruthy()
+		await userEvent.click(
+			within(dialog).getByRole('button', { name: 'Changer le type' }),
+		)
+		await waitFor(() => expect(screen.queryByText('Sous condition')).toBe(null))
+		expect(toastMock.info).toHaveBeenCalledWith(
+			'Une condition qui en dépendait a été retirée.',
+		)
+		await pickKind(
+			screen.getByRole('button', {
+				name: 'Type de la question 1 : Texte court',
+			}),
+			'Choix unique',
+		)
+		expect(
+			(within(card(1)).getByLabelText('Option 2') as HTMLInputElement).value,
+		).toBe('Non')
+	})
+
+	it('shows the all-or-any choice only once a rule has two conditions', async () => {
+		installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await screen.findByLabelText('Libellé de la question 2')
+		expect(within(card(2)).queryByLabelText('Conditions à remplir')).toBe(null)
+		expect(
+			within(card(2)).getByText('la condition suivante est remplie :'),
+		).toBeTruthy()
+		await userEvent.click(
+			within(card(2)).getByRole('button', { name: 'Ajouter une condition' }),
+		)
+		expect(within(card(2)).getByLabelText('Conditions à remplir')).toBeTruthy()
+	})
+
+	it('blocks saving the end message of an empty draft with a visible reason', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey()],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		fireEvent.change(await screen.findByLabelText('Message de fin'), {
+			target: { value: 'Merci beaucoup' },
+		})
+		expect(
+			screen.getByText(
+				'Ajoutez une question pour enregistrer le message de fin',
+			),
+		).toBeTruthy()
+		expect(screen.getByText('Modifications non enregistrées')).toBeTruthy()
+		expect(saveButton().disabled).toBe(false)
+		expect(saveButton().getAttribute('aria-disabled')).toBe('true')
+		await userEvent.click(saveButton())
+		expect(patchBodies(api.calls)).toHaveLength(0)
+		await waitFor(() =>
+			expect(document.activeElement).toBe(
+				screen.getByRole('button', { name: 'Ajouter une question' }),
+			),
+		)
+	})
+
+	it('picks a question up with the keyboard sensor and announces it in French', async () => {
+		installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		const handle = await screen.findByRole('button', {
+			name: /^Réordonner la question 2/,
+		})
+		expect(handle.getAttribute('aria-roledescription')).toBe('sortable')
+		handle.focus()
+		expect(
+			document.getElementById(handle.getAttribute('aria-describedby') ?? '')
+				?.textContent,
+		).toMatch(/^Pour déplacer une question, appuyez sur Espace/)
+		fireEvent.keyDown(handle, { code: 'Space', key: ' ' })
+		const live = () =>
+			document.querySelector('[id^="DndLiveRegion"]')?.textContent ?? ''
+		await waitFor(() =>
+			expect(live()).toMatch(/^Question 2 (saisie|au-dessus de la position)/),
+		)
+		fireEvent.keyDown(handle, { code: 'Escape', key: 'Escape' })
+		await waitFor(() =>
+			expect(live()).toBe(
+				'Déplacement annulé : la question 2 reste en position 2.',
+			),
+		)
+		expect(
+			(screen.getByLabelText('Libellé de la question 1') as HTMLTextAreaElement)
+				.value,
+		).toBe('Venez-vous en voiture ?')
+	})
+})
+
+describe('dragAnnouncements', () => {
+	const form = {
+		endId: 'e1',
+		endMessage: '',
+		questions: [
+			{
+				id: 'a',
+				kind: 'SINGLE_CHOICE' as const,
+				label: 'A',
+				required: false,
+				options: ['Oui'],
+				maxPhotos: null,
+				identifier: false,
+				rule: null,
+			},
+			{
+				id: 'b',
+				kind: 'TEXT' as const,
+				label: 'B',
+				required: false,
+				options: [],
+				maxPhotos: null,
+				identifier: false,
+				rule: null,
+			},
+			{
+				id: 'c',
+				kind: 'TEXT' as const,
+				label: 'C',
+				required: false,
+				options: [],
+				maxPhotos: null,
+				identifier: false,
+				rule: {
+					join: 'ALL' as const,
+					conditions: [{ question: 'a', option: 'Oui', checked: true }],
+				},
+			},
+		],
+	}
+	const node = (id: string) => ({ id }) as never
+
+	it('announces a drop in French and the refusal of a dependant above its source', () => {
+		const announcements = dragAnnouncements(form)
+		expect(
+			announcements.onDragEnd({ active: node('c'), over: node('b') }),
+		).toBe('Question 3 déplacée en position 2')
+		expect(
+			announcements.onDragEnd({ active: node('c'), over: node('a') }),
+		).toMatch(/^Déplacement refusé/)
 	})
 })

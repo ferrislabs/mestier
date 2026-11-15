@@ -1,4 +1,5 @@
 import { Flag, Info, Lock, Plus, Route } from 'lucide-react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
 import { Textarea } from '#/components/ui/textarea'
 import type { FormQuestion, SurveyForm } from '#/pages/survey/lib/survey-form'
@@ -6,6 +7,7 @@ import type { QuestionKind } from '#/pages/survey/types'
 import {
 	type QuestionAction,
 	QuestionCard,
+	type QuestionDrag,
 } from '#/pages/survey/ui/question-card'
 import { QuestionKindMenu } from '#/pages/survey/ui/question-kind-menu'
 
@@ -101,27 +103,78 @@ export function AdvancedGraphNotice({
 	)
 }
 
+export function QuestionListItem({
+	question,
+	index,
+	total,
+	context,
+	positions,
+	identifierOwner,
+	highlighted,
+	readOnly,
+	drag,
+	itemRef,
+	style,
+	onQuestionAction,
+	onInsert,
+}: {
+	question: FormQuestion
+	index: number
+	total: number
+	context: QuestionContext
+	positions: ReadonlyMap<string, number>
+	identifierOwner: FormQuestion | undefined
+	highlighted: boolean
+	readOnly: boolean
+	drag?: QuestionDrag
+	itemRef?: (node: HTMLLIElement | null) => void
+	style?: CSSProperties
+	onQuestionAction: (id: string, action: QuestionAction) => void
+	onInsert: (position: number, kind: QuestionKind) => void
+}) {
+	return (
+		<li
+			ref={itemRef}
+			style={style}
+			className={drag?.dragging ? 'relative z-10 grid gap-1' : 'grid gap-1'}
+		>
+			{readOnly ? (
+				<div className="h-3" />
+			) : (
+				<Inserter position={index} onInsert={onInsert} />
+			)}
+			<QuestionCard
+				question={question}
+				number={index + 1}
+				total={total}
+				problems={context.problems}
+				highlighted={highlighted}
+				readOnly={readOnly}
+				sources={context.sources}
+				positions={positions}
+				isSource={context.isSource}
+				identifierOwner={identifierOwner}
+				logicOpen={context.logicOpen}
+				drag={drag}
+				onAction={(action) => onQuestionAction(question.id, action)}
+			/>
+		</li>
+	)
+}
+
 export function SurveyFormEditor({
 	form,
 	readOnly,
-	highlightedId,
-	contextOf,
-	onQuestionAction,
+	list,
 	onInsert,
 	onEndMessage,
 }: {
 	form: SurveyForm
 	readOnly: boolean
-	highlightedId: string | null
-	contextOf: (question: FormQuestion) => QuestionContext
-	onQuestionAction: (id: string, action: QuestionAction) => void
+	list: ReactNode
 	onInsert: (position: number, kind: QuestionKind) => void
 	onEndMessage: (message: string) => void
 }) {
-	const positions = new Map(
-		form.questions.map((item, index) => [item.id, index + 1]),
-	)
-	const identifierOwner = form.questions.find((item) => item.identifier)
 	const total = form.questions.length
 	return (
 		<div className="mx-auto grid w-full max-w-[720px] gap-1 px-3 py-6 sm:px-4">
@@ -134,34 +187,7 @@ export function SurveyFormEditor({
 					</p>
 				</div>
 			) : null}
-			<ol aria-label="Questions" className="grid gap-1">
-				{form.questions.map((question, index) => {
-					const context = contextOf(question)
-					return (
-						<li key={question.id} className="grid gap-1">
-							{readOnly ? (
-								<div className="h-3" />
-							) : (
-								<Inserter position={index} onInsert={onInsert} />
-							)}
-							<QuestionCard
-								question={question}
-								number={index + 1}
-								total={total}
-								problems={context.problems}
-								highlighted={highlightedId === question.id}
-								readOnly={readOnly}
-								sources={context.sources}
-								positions={positions}
-								isSource={context.isSource}
-								identifierOwner={identifierOwner}
-								logicOpen={context.logicOpen}
-								onAction={(action) => onQuestionAction(question.id, action)}
-							/>
-						</li>
-					)
-				})}
-			</ol>
+			{list}
 			{readOnly ? null : (
 				<div className="flex justify-center py-4">
 					<QuestionKindMenu
