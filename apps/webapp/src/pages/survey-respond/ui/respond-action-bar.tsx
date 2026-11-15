@@ -52,6 +52,7 @@ export function SaveStatus({
 }
 
 export function RespondActionBar({
+	preview,
 	isFirst,
 	isLast,
 	busy,
@@ -62,6 +63,7 @@ export function RespondActionBar({
 	onNext,
 	onRetrySave,
 }: {
+	preview: boolean
 	isFirst: boolean
 	isLast: boolean
 	busy: boolean
@@ -80,11 +82,17 @@ export function RespondActionBar({
 			>
 				{error ?? ''}
 			</div>
-			<SaveStatus
-				state={saveState}
-				message={saveMessage}
-				onRetry={onRetrySave}
-			/>
+			{preview ? (
+				<p className="flex min-h-6 items-center text-xs text-muted-foreground">
+					Aperçu : rien n’est enregistré
+				</p>
+			) : (
+				<SaveStatus
+					state={saveState}
+					message={saveMessage}
+					onRetry={onRetrySave}
+				/>
+			)}
 			<div className="mt-2 flex gap-3">
 				{isFirst ? null : (
 					<Button

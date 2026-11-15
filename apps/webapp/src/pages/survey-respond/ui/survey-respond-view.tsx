@@ -162,6 +162,7 @@ function Body({ view }: { view: RespondentView }) {
 						}}
 					/>
 					<RespondActionBar
+						preview={view.preview}
 						isFirst={view.isFirst}
 						isLast={view.isLast}
 						busy={view.busy}

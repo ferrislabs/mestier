@@ -660,6 +660,8 @@ export function useSurveyRespondent(
 		latestAnswers.current = null
 		for (const controller of uploads.current.values()) controller.abort()
 		uploads.current.clear()
+		for (const url of objectUrls.current) URL.revokeObjectURL(url)
+		objectUrls.current.clear()
 		setDrafts({})
 		updatePhotos(() => ({}))
 		setPhotoNotice({})

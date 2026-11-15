@@ -202,6 +202,7 @@ export function ResponseDetailSheet({
 	row,
 	path,
 	pathLoading,
+	missingVersion,
 	currentVersion,
 	canManage,
 	onClose,
@@ -210,6 +211,7 @@ export function ResponseDetailSheet({
 	row: ResponseRow | null
 	path: readonly QuestionNode[]
 	pathLoading: boolean
+	missingVersion: number | null
 	currentVersion: number | null
 	canManage: boolean
 	onClose: () => void
@@ -245,6 +247,12 @@ export function ResponseDetailSheet({
 									? `, aujourd’hui en version ${currentVersion}.`
 									: '.'}
 							</p>
+						) : null}
+						{missingVersion !== null ? (
+							<output className="mx-4 block rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning">
+								Version {missingVersion} introuvable : affichage sur la version
+								actuelle.
+							</output>
 						) : null}
 						{pathLoading ? (
 							<p className="px-4 text-muted-foreground text-sm">

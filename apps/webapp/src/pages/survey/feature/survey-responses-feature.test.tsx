@@ -124,4 +124,59 @@ describe('SurveyResponsesFeature', () => {
 		expect(await screen.findByText('Votre commune')).toBeTruthy()
 		expect(screen.getByText(/aujourd’hui en version 2\./)).toBeTruthy()
 	})
+
+	it('reads a response on the current version when its own version is missing', async () => {
+		const api = installSurveyApi({
+			permissions: ['VIEW_SURVEYS'],
+			surveys: [
+				survey({
+					graph: {
+						start: 'q1',
+						nodes: [
+							{
+								type: 'QUESTION',
+								id: 'q1',
+								kind: 'TEXT',
+								label: 'Votre ville',
+								required: false,
+							},
+							{ type: 'END', id: 'e1', message: null },
+						],
+						edges: [{ from: 'q1', to: 'e1', branch: 'NEXT' }],
+					},
+					graph_version: 3,
+				}),
+			],
+		})
+		api.mockGet(MEMBERS_PATH, () => ({ data: [], pagination: null }))
+		api.mockGet(RESPONSES_PATH, () => ({
+			data: [
+				{
+					...response('r1'),
+					graph_version: 2,
+					answers: { q1: { Text: 'Lyon' } },
+				},
+			],
+			pagination: null,
+		}))
+		api.mockGet(`${PATHS.survey}/graph-versions/{version}`, () => {
+			throw Object.assign(new Error('Not found'), {
+				status: 404,
+				data: {
+					code: 'E_NOT_FOUND',
+					details: { reason: 'graph_version_not_found' },
+				},
+			})
+		})
+		await renderSurveyPage(<SurveyResponsesFeature surveyId="survey-1" />)
+
+		const rows = await screen.findAllByRole('row')
+		fireEvent.click(rows[1])
+		expect(
+			await screen.findByText(
+				'Version 2 introuvable : affichage sur la version actuelle.',
+			),
+		).toBeTruthy()
+		expect(screen.getByText('Votre ville')).toBeTruthy()
+	})
 })

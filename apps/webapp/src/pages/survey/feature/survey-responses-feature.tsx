@@ -146,6 +146,11 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 						: []
 				}
 				pathLoading={opened?.olderVersion != null && versionQuery.isLoading}
+				missingVersion={
+					opened?.olderVersion != null && versionQuery.isError
+						? opened.olderVersion
+						: null
+				}
 				currentVersion={currentVersion}
 				canManage={canManage}
 				onClose={() => setOpenId(null)}
