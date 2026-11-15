@@ -379,7 +379,7 @@ export function SurveyEditorWorkspace({
 				<p aria-live="polite" className="sr-only">
 					{editor.announcement}
 				</p>
-				<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/30">
+				<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background">
 					{advanced !== null ? (
 						<div className="px-3 py-6">
 							<AdvancedGraphNotice questionCount={advanced} />
