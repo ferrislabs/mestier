@@ -18,7 +18,7 @@ export interface RespondentResponse {
 }
 
 export interface RespondSource {
-	mode: 'public' | 'member'
+	mode: 'public' | 'member' | 'preview'
 	loadSurvey: () => Promise<RespondentSurvey>
 	restore: () => Promise<RespondentResponse | null>
 	start: () => Promise<RespondentResponse>
@@ -194,6 +194,39 @@ export function memberSource(
 				...photoBody(photo),
 			})
 			return view.key
+		},
+		forget: () => undefined,
+	}
+}
+
+export interface PreviewSurvey {
+	title: string
+	description: string | null
+	graph: RespondentSurvey['graph']
+}
+
+export function previewSource(survey: PreviewSurvey): RespondSource {
+	let photos = 0
+	return {
+		mode: 'preview',
+		loadSurvey: async () => ({
+			id: 'preview',
+			title: survey.title,
+			description: survey.description,
+			graph: survey.graph,
+			visibility: 'PUBLIC',
+		}),
+		restore: async () => null,
+		start: async () => ({
+			handle: 'preview',
+			answers: {},
+			status: 'IN_PROGRESS',
+		}),
+		save: async () => undefined,
+		complete: async () => undefined,
+		uploadPhoto: async () => {
+			photos += 1
+			return `preview-photo-${photos}`
 		},
 		forget: () => undefined,
 	}

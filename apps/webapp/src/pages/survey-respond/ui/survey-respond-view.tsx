@@ -105,9 +105,20 @@ function Body({ view }: { view: RespondentView }) {
 				<RespondMessage
 					icon={CircleCheck}
 					tone="success"
-					title="Réponse envoyée"
+					title={view.preview ? 'Fin de l’aperçu' : 'Réponse envoyée'}
 					message={phase.message}
 					headingRef={view.headingRef}
+					action={
+						view.preview ? (
+							<Button
+								type="button"
+								className={ACTION_CLASS}
+								onClick={view.restart}
+							>
+								Recommencer
+							</Button>
+						) : undefined
+					}
 				/>
 			)
 		case 'answering':
