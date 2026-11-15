@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { format } from 'date-fns'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
 	ActiveOrganizationProvider,
@@ -57,6 +58,8 @@ afterEach(() => {
 	clearAuth()
 })
 
+const chosenDay = new Date(new Date().getFullYear(), new Date().getMonth(), 15)
+
 describe('MemberSurveyFeature', () => {
 	it('checks no survey permission itself and lets a member resume, answer and complete through the member routes', async () => {
 		installFakePermissionsApi([])
@@ -88,17 +91,18 @@ describe('MemberSurveyFeature', () => {
 			).value,
 		).toBe('Léa')
 		await userEvent.click(screen.getByRole('button', { name: /Suivant/ }))
-		await userEvent.type(
-			await screen.findByLabelText('Date du chantier'),
-			'2026-11-20',
-		)
+		await userEvent.click(await screen.findByLabelText('Date du chantier'))
+		await userEvent.click(await screen.findByRole('button', { name: /\b15\b/ }))
 		await userEvent.click(screen.getByRole('button', { name: 'Terminer' }))
 		expect(await screen.findByText('Merci, c’est noté.')).toBeTruthy()
 
 		await waitFor(() => expect(calls.at(-1)?.url).toBe(`${RESPONSE}/complete`))
 		const lastSave = calls.filter((call) => call.method === 'PUT').at(-1)
 		expect(lastSave?.body).toEqual({
-			answers: { 'q-name': { Text: 'Léa' }, 'q-date': { Date: '2026-11-20' } },
+			answers: {
+				'q-name': { Text: 'Léa' },
+				'q-date': { Date: format(chosenDay, 'yyyy-MM-dd') },
+			},
 		})
 		for (const call of calls) {
 			expect(call.headers.get('Authorization')).toBe('Bearer member-token')
