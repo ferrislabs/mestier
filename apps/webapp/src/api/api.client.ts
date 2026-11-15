@@ -2834,6 +2834,7 @@ export namespace Schemas {
   export type SurveyEndNodeSchema = { id: QuestionId; message?: (string | null) | undefined };
   export type SurveyQuestionNodeSchema = {
     block?: (null | BlockId) | undefined;
+    description?: (string | null) | undefined;
     id: QuestionId;
     identifier?: boolean | undefined;
     kind: QuestionKind;
