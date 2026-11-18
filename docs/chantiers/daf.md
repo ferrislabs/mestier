@@ -1,6 +1,6 @@
 # DAF : Demandes d'Agrément de Fourniture
 
-État : **spec écrite le 2026-11-18, découpage à valider**.
+État : **W0 à W4 intégrés le 2026-11-18 sur `feat/daf`, PR à ouvrir, recette navigateur à faire**.
 
 ## Goal
 
@@ -306,10 +306,10 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 | Lot | État |
 |---|---|
 | W0 | intégré |
-| W1 | à faire |
-| W2 | à faire |
-| W3 | à faire |
-| W4 | à faire |
+| W1 | intégré |
+| W2 | intégré |
+| W3 | intégré |
+| W4 | intégré |
 
 ## Decision log
 
@@ -318,3 +318,5 @@ cd apps/webapp && pnpm check && pnpm test && pnpm build
 - 2026-11-18 : MOA et MOE de la DAF en `Option` qui hérite du dossier, pas copiées à la création. Raison : corriger le nom de la MOE dans le dossier doit corriger toutes les DAF non encore personnalisées.
 
 Amended: 2026-11-18 W0 écrit aussi `DafDocument::single/dossier/file_keys` (`document.rs`, pur, testé). Les chemins sont dans `daf/mod.rs`, les DTO dans `daf/request.rs` et `daf/response.rs`. Migration `20261127000001_create_daf`. `CreateDafCommand.designation` est optionnelle quand un produit est donné.
+- 2026-11-18 : le DAF ne s'imprime pas avec le glyphe « ▸ » (absent des polices embarquées) : petits triangles dessinés. Bandeaux de section gris, couleur primaire sur le texte. Une fiche qui déborde continue sans bandeau sur la page suivante.
+- 2026-11-18 : les PDF d'une DAF et du dossier, le service et les outils MCP sont testés ; @spec-daf-10 est couvert en vitest, pas encore vérifié dans un vrai navigateur.

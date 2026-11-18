@@ -32,6 +32,7 @@ interface DoePhotoLibraryPickerDialogProps {
 	hasNext: boolean
 	error: string | null
 	failures: readonly PickerFailure[]
+	destination?: string
 	onSearchChange: (search: string) => void
 	onToggle: (photo: LibraryPhoto) => void
 	onPrevious: () => void
@@ -52,6 +53,7 @@ export function DoePhotoLibraryPickerDialog({
 	hasNext,
 	error,
 	failures,
+	destination = 'ce DOE',
 	onSearchChange,
 	onToggle,
 	onPrevious,
@@ -67,8 +69,7 @@ export function DoePhotoLibraryPickerDialog({
 				<DialogHeader className="border-b px-6 py-4 pr-12">
 					<DialogTitle>Choisir dans la photothèque</DialogTitle>
 					<DialogDescription>
-						Les photos sélectionnées sont copiées dans ce DOE. La photothèque
-						n’est pas modifiée.
+						{`Les photos sélectionnées sont copiées dans ${destination}. La photothèque n’est pas modifiée.`}
 					</DialogDescription>
 				</DialogHeader>
 				<div className="grid gap-2 px-6 py-4">
