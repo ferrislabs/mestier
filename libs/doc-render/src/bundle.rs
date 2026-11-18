@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use typst::foundations::Bytes;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Use {
+pub(crate) enum Use {
     Picture,
     Page,
 }
@@ -19,16 +19,26 @@ pub struct Prepared {
 /// Bounds the layout work of a single export; a real DOE inserts a few dozen.
 const MAX_INSERTED_PAGES: usize = 600;
 
-struct Collector<'a> {
+pub(crate) struct Collector<'a> {
     bundle: &'a FileBundle,
     inserted_pages: usize,
     order: Vec<String>,
-    entries: HashMap<String, Value>,
-    blobs: Vec<(String, Bytes)>,
+    pub(crate) entries: HashMap<String, Value>,
+    pub(crate) blobs: Vec<(String, Bytes)>,
 }
 
-impl Collector<'_> {
-    fn add(&mut self, key: &str, usage: Use) -> Result<(), DoeRenderError> {
+impl<'a> Collector<'a> {
+    pub(crate) fn new(bundle: &'a FileBundle) -> Self {
+        Self {
+            bundle,
+            inserted_pages: 0,
+            order: Vec::new(),
+            entries: HashMap::new(),
+            blobs: Vec::new(),
+        }
+    }
+
+    pub(crate) fn add(&mut self, key: &str, usage: Use) -> Result<(), DoeRenderError> {
         if self.entries.contains_key(key) {
             return Ok(());
         }
