@@ -76,6 +76,9 @@ impl Permissions {
     pub const VIEW_KNOWLEDGE: Self = Permissions(1 << 23); // 8388608
     pub const MANAGE_KNOWLEDGE: Self = Permissions(1 << 24); // 16777216
 
+    pub const VIEW_SURVEYS: Self = Permissions(1 << 25);
+    pub const MANAGE_SURVEYS: Self = Permissions(1 << 26);
+
     pub const ALL: Self = Permissions(i64::MAX);
 
     pub const fn contains(self, other: Permissions) -> bool {
@@ -120,6 +123,8 @@ impl Permissions {
         ("MANAGE_SUPPORT", Permissions::MANAGE_SUPPORT),
         ("VIEW_KNOWLEDGE", Permissions::VIEW_KNOWLEDGE),
         ("MANAGE_KNOWLEDGE", Permissions::MANAGE_KNOWLEDGE),
+        ("VIEW_SURVEYS", Permissions::VIEW_SURVEYS),
+        ("MANAGE_SURVEYS", Permissions::MANAGE_SURVEYS),
     ];
 
     /// The names of every bit `self` carries — #307's "the caller's
@@ -233,6 +238,8 @@ pub fn default_admin_business_permissions() -> Permissions {
         | Permissions::MANAGE_SUPPORT
         | Permissions::VIEW_KNOWLEDGE
         | Permissions::MANAGE_KNOWLEDGE
+        | Permissions::VIEW_SURVEYS
+        | Permissions::MANAGE_SURVEYS
 }
 
 /// #304: the business bits a fresh organization's default `member` role
@@ -550,5 +557,37 @@ mod tests {
 
         assert!(!member.contains(Permissions::VIEW_SUPPORT));
         assert!(!member.contains(Permissions::MANAGE_SUPPORT));
+    }
+
+    #[test]
+    fn survey_permission_bits_are_distinct_named_and_in_all() {
+        assert_eq!(Permissions::VIEW_SURVEYS.bits(), 33_554_432);
+        assert_eq!(Permissions::MANAGE_SURVEYS.bits(), 67_108_864);
+        for (name, bit) in NAMED_BITS {
+            if *name != "VIEW_SURVEYS" {
+                assert!(!bit.contains(Permissions::VIEW_SURVEYS), "{name} overlaps");
+            }
+            if *name != "MANAGE_SURVEYS" {
+                assert!(
+                    !bit.contains(Permissions::MANAGE_SURVEYS),
+                    "{name} overlaps"
+                );
+            }
+        }
+        assert!(Permissions::ALL.contains(Permissions::VIEW_SURVEYS));
+        assert!(Permissions::ALL.contains(Permissions::MANAGE_SURVEYS));
+        let names = (Permissions::VIEW_SURVEYS | Permissions::MANAGE_SURVEYS).granted_names();
+        assert_eq!(names, vec!["VIEW_SURVEYS", "MANAGE_SURVEYS"]);
+    }
+
+    #[test]
+    fn admin_reads_and_manages_surveys_by_default_and_member_does_not() {
+        let admin = default_admin_business_permissions();
+        let member = default_member_business_permissions();
+
+        assert!(admin.contains(Permissions::VIEW_SURVEYS));
+        assert!(admin.contains(Permissions::MANAGE_SURVEYS));
+        assert!(!member.contains(Permissions::VIEW_SURVEYS));
+        assert!(!member.contains(Permissions::MANAGE_SURVEYS));
     }
 }

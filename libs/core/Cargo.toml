@@ -136,3 +136,7 @@ harness = false
 [[test]]
 name = "deal_bdd"
 harness = false
+
+[[test]]
+name = "survey_bdd"
+harness = false

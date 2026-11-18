@@ -1,49 +1,20 @@
-use authz::{Authorizer, Resource, Subject};
 use common::CoreError;
 use mestier_macros::transactional;
 
 use crate::{
-    LeaveAccount, LeaveAccountOutcome, OrganizationId,
+    LeaveAccount, LeaveAccountOutcome,
     application::{MestierUseCase, policy},
-    domain::{
-        leave_account::{
-            LeaveAccountService,
-            commands::{
-                ArchiveLeaveAccountCommand, CreateLeaveAccountCommand, ListLeaveAccountsCommand,
-                UpdateLeaveAccountCommand,
-            },
+    domain::leave_account::{
+        LeaveAccountService,
+        commands::{
+            ArchiveLeaveAccountCommand, CreateLeaveAccountCommand, ListLeaveAccountsCommand,
+            UpdateLeaveAccountCommand,
         },
-        member::ports::MemberRepository,
-        role::ports::RoleRepository,
     },
 };
 
 #[cfg(test)]
 mod tests;
-
-pub(crate) async fn require_permission<M, R, A>(
-    actor: Subject,
-    organization_id: OrganizationId,
-    action: &str,
-    members: &mut M,
-    roles: &mut R,
-    authz: &A,
-) -> Result<Subject, CoreError>
-where
-    M: MemberRepository,
-    R: RoleRepository,
-    A: Authorizer,
-{
-    let actor = policy::enrich_for_organization(actor, organization_id, members, roles).await?;
-    policy::require(
-        authz,
-        &actor,
-        action,
-        Resource::new("organization", organization_id.0.to_string()),
-    )
-    .await?;
-    Ok(actor)
-}
 
 impl MestierUseCase {
     #[transactional(leave_account, absence_type)]
@@ -63,7 +34,7 @@ impl MestierUseCase {
     ) -> Result<LeaveAccountOutcome<LeaveAccount>, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
-        require_permission(
+        policy::require_permission(
             command.actor,
             command.organization_id,
             "reference.manage",
@@ -87,7 +58,7 @@ impl MestierUseCase {
     ) -> Result<LeaveAccountOutcome<LeaveAccount>, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
-        require_permission(
+        policy::require_permission(
             command.actor,
             command.organization_id,
             "reference.manage",
@@ -111,7 +82,7 @@ impl MestierUseCase {
     ) -> Result<LeaveAccount, CoreError> {
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;
-        require_permission(
+        policy::require_permission(
             command.actor,
             command.organization_id,
             "reference.manage",

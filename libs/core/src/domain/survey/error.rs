@@ -116,10 +116,37 @@ pub enum SurveyError {
     ResponseResumeTokenRequired,
     #[error("response: a members survey cannot use a resume token")]
     ResponseResumeTokenForbidden,
+    #[error("survey: not found")]
+    SurveyNotFound,
+    #[error("campaign: not found")]
+    CampaignNotFound,
+    #[error("response: not found")]
+    ResponseNotFound,
+    #[error("survey: is not a draft")]
+    SurveyNotDraft,
+    #[error("survey: is not opened")]
+    SurveyNotOpened,
+    #[error("survey: has responses and cannot be deleted")]
+    SurveyHasResponses,
+    #[error("campaign: has surveys and cannot be deleted")]
+    CampaignHasSurveys,
+    #[error("response: is already complete")]
+    ResponseAlreadyCompleted,
+    #[error("response: the survey has reached its response cap")]
+    ResponseCapReached,
+    #[error("response: the respondent has already answered this survey")]
+    RespondentAlreadyAnswered,
+    #[error("survey: its state changed since it was read")]
+    SurveyStateChanged,
 }
 
 impl From<SurveyError> for CoreError {
     fn from(error: SurveyError) -> Self {
-        Self::Conflict(error.to_string())
+        match error {
+            SurveyError::SurveyNotFound
+            | SurveyError::CampaignNotFound
+            | SurveyError::ResponseNotFound => Self::NotFound,
+            _ => Self::Conflict(error.to_string()),
+        }
     }
 }

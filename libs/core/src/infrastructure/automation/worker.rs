@@ -153,6 +153,12 @@ async fn pass(
         Err(error) => error!(%error, "scheduling recurrence horizon extension runs failed"),
     }
 
+    match usecase.advance_survey_campaigns(Utc::now()).await {
+        Ok(advanced) if advanced > 0 => info!(advanced, "advanced survey campaigns"),
+        Ok(_) => {}
+        Err(error) => error!(%error, "advancing survey campaigns failed"),
+    }
+
     match usecase.fire_due_schedules(Utc::now(), schedule.batch).await {
         Ok(ScheduleOutcome {
             fired,

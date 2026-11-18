@@ -4,7 +4,7 @@ use mestier_macros::transactional;
 
 use crate::{
     ExtraPeriod, ExtraPeriodOutcome,
-    application::{MestierUseCase, leave_account::require_permission, policy},
+    application::{MestierUseCase, policy, policy::require_permission},
     domain::extra_period::{
         ExtraPeriodService,
         commands::{

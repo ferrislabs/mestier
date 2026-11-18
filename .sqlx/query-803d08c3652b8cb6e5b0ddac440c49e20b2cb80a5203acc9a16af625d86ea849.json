@@ -1,0 +1,113 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE survey.survey\n            SET campaign_id = $3, title = $4, description = $5, visibility = $6, graph = $7,\n                allow_multiple_responses = $8, response_cap = $9, metadata = $10, status = $11,\n                public_slug = $12, opened_at = $13, closed_at = $14, updated_at = now()\n            WHERE org_id = $1 AND id = $2\n              AND CASE status WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END\n                  <= CASE $11::text WHEN 'DRAFT' THEN 0 WHEN 'OPENED' THEN 1 ELSE 2 END\n            RETURNING id, org_id, campaign_id, title, description, visibility, graph,\n                      allow_multiple_responses, response_cap, metadata, status, public_slug,\n                      opened_at, closed_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "campaign_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "visibility",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "graph",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "allow_multiple_responses",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "response_cap",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "public_slug",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "opened_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "closed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Bool",
+        "Int4",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "803d08c3652b8cb6e5b0ddac440c49e20b2cb80a5203acc9a16af625d86ea849"
+}

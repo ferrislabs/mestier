@@ -1,0 +1,905 @@
+use authz::Subject;
+use common::{CoreError, OrganizationId, generate_uuid_v7};
+use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::application::policy::user_subject;
+use crate::application::test_support::{dev_pool, now_storable, purge};
+use crate::application::{MestierUseCase, default_authorizer};
+use crate::infrastructure::realtime::EventHub;
+use crate::{
+    Answer, Answers, CampaignCommand, CampaignId, CampaignPatch, CampaignStatus,
+    CreateCampaignCommand, CreateSurveyCommand, ListCampaignsCommand, ListSurveyResponsesCommand,
+    ListSurveysCommand, Metadata, PublicSlug, QuestionId, QuestionKind, ResponseId, ResumeToken,
+    SaveMemberResponseCommand, StartMemberResponseCommand, SurveyBranch, SurveyCommand, SurveyEdge,
+    SurveyEndNode, SurveyGraph, SurveyId, SurveyNode, SurveyPatch, SurveyQuestionNode,
+    SurveyResponseCommand, SurveyWindow, UpdateCampaignCommand, UpdateSurveyCommand, UserId,
+    Visibility,
+};
+
+struct Fixture {
+    organization_id: OrganizationId,
+    users: Vec<Uuid>,
+    organizations: Vec<Uuid>,
+    member: Subject,
+    outsider: Subject,
+    survey_id: SurveyId,
+    campaign_id: CampaignId,
+}
+
+fn make_usecase(pool: PgPool) -> MestierUseCase {
+    MestierUseCase::new(pool, default_authorizer(), EventHub::new())
+}
+
+fn qid(n: u128) -> QuestionId {
+    QuestionId(Uuid::from_u128(n))
+}
+
+fn graph() -> SurveyGraph {
+    SurveyGraph::new(
+        vec![
+            SurveyNode::Question(SurveyQuestionNode {
+                id: qid(10),
+                kind: QuestionKind::Text,
+                label: "Nom".to_owned(),
+                required: true,
+                options: Vec::new(),
+                max_photos: None,
+                identifier: false,
+            }),
+            SurveyNode::End(SurveyEndNode {
+                id: qid(11),
+                message: Some("Merci".to_owned()),
+            }),
+        ],
+        vec![SurveyEdge {
+            from: qid(10),
+            to: qid(11),
+            branch: SurveyBranch::Next,
+        }],
+        qid(10),
+    )
+    .unwrap()
+}
+
+fn answers(name: &str) -> Answers {
+    Answers::from([(qid(10), Answer::Text(name.to_owned()))])
+}
+
+async fn seed_user(pool: &PgPool) -> Uuid {
+    let id = generate_uuid_v7();
+    sqlx::query(
+        "INSERT INTO users (id, email, username, display_name, sub) VALUES ($1, $2, $3, 'Survey', $4)",
+    )
+    .bind(id)
+    .bind(format!("survey-{id}@example.com"))
+    .bind(format!("survey-{id}"))
+    .bind(format!("sub-survey-{id}"))
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
+
+async fn seed_organization(pool: &PgPool, owner: Uuid, flag: bool) -> Uuid {
+    let id = generate_uuid_v7();
+    sqlx::query(
+        "INSERT INTO organizations (id, name, slug, owner_id) VALUES ($1, 'Survey Org', $2, $3)",
+    )
+    .bind(id)
+    .bind(format!("survey-org-{id}"))
+    .bind(owner)
+    .execute(pool)
+    .await
+    .unwrap();
+    if flag {
+        set_flag(pool, id, true).await;
+    }
+    id
+}
+
+async fn set_flag(pool: &PgPool, organization: Uuid, enabled: bool) {
+    let statement = if enabled {
+        "INSERT INTO organization_feature_flags (org_id, flag) VALUES ($1, 'surveys')"
+    } else {
+        "DELETE FROM organization_feature_flags WHERE org_id = $1 AND flag = 'surveys'"
+    };
+    sqlx::query(statement)
+        .bind(organization)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn seed_member(pool: &PgPool, organization: Uuid, user: Uuid) {
+    sqlx::query(
+        "INSERT INTO organization_members (id, organization_id, user_id, last_name) VALUES ($1, $2, $3, 'Claire')",
+    )
+    .bind(generate_uuid_v7())
+    .bind(organization)
+    .bind(user)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn seed(pool: &PgPool, usecase: &MestierUseCase, flag: bool) -> Fixture {
+    let owner = seed_user(pool).await;
+    let member = seed_user(pool).await;
+    let outsider = seed_user(pool).await;
+    let organization = seed_organization(pool, owner, flag).await;
+    let other = seed_organization(pool, owner, true).await;
+    seed_member(pool, organization, member).await;
+    seed_member(pool, other, outsider).await;
+    let organization_id = OrganizationId(organization);
+    let mut fixture = Fixture {
+        organization_id,
+        users: vec![owner, member, outsider],
+        organizations: vec![organization, other],
+        member: user_subject(UserId(member), Vec::new()),
+        outsider: user_subject(UserId(outsider), Vec::new()),
+        survey_id: SurveyId(generate_uuid_v7()),
+        campaign_id: CampaignId(generate_uuid_v7()),
+    };
+    if flag {
+        fixture.survey_id = draft(usecase, &fixture, Visibility::Members).await;
+        fixture.campaign_id = usecase
+            .create_campaign(CreateCampaignCommand {
+                actor: Subject::system(),
+                organization_id,
+                name: "Printemps".to_owned(),
+                window: SurveyWindow::new(None, None).unwrap(),
+                metadata: Metadata::default(),
+            })
+            .await
+            .unwrap()
+            .id();
+    }
+    fixture
+}
+
+async fn draft(usecase: &MestierUseCase, fixture: &Fixture, visibility: Visibility) -> SurveyId {
+    let created = usecase
+        .create_survey(CreateSurveyCommand {
+            actor: Subject::system(),
+            organization_id: fixture.organization_id,
+            title: "Satisfaction".to_owned(),
+            visibility,
+        })
+        .await
+        .unwrap();
+    usecase
+        .update_survey(UpdateSurveyCommand {
+            actor: Subject::system(),
+            organization_id: fixture.organization_id,
+            id: created.id(),
+            patch: SurveyPatch {
+                graph: Some(Some(graph())),
+                ..SurveyPatch::default()
+            },
+            campaign_id: None,
+        })
+        .await
+        .unwrap();
+    created.id()
+}
+
+async fn opened(usecase: &MestierUseCase, fixture: &Fixture, visibility: Visibility) -> SurveyId {
+    let id = draft(usecase, fixture, visibility).await;
+    usecase
+        .open_survey(survey_command(fixture, Subject::system(), id))
+        .await
+        .unwrap();
+    id
+}
+
+fn survey_command(fixture: &Fixture, actor: Subject, id: SurveyId) -> SurveyCommand {
+    SurveyCommand {
+        actor,
+        organization_id: fixture.organization_id,
+        id,
+    }
+}
+
+fn campaign_command(fixture: &Fixture) -> CampaignCommand {
+    CampaignCommand {
+        actor: fixture.member.clone(),
+        organization_id: fixture.organization_id,
+        id: fixture.campaign_id,
+    }
+}
+
+fn response_command(fixture: &Fixture, actor: Subject, id: ResponseId) -> SurveyResponseCommand {
+    SurveyResponseCommand {
+        actor,
+        organization_id: fixture.organization_id,
+        id,
+    }
+}
+
+async fn cleanup(pool: &PgPool, fixture: &Fixture) {
+    for organization in &fixture.organizations {
+        for statement in [
+            "DELETE FROM survey.response WHERE org_id = $1",
+            "DELETE FROM survey.survey WHERE org_id = $1",
+            "DELETE FROM survey.campaign WHERE org_id = $1",
+            "DELETE FROM organization_members WHERE organization_id = $1",
+            "DELETE FROM organizations WHERE id = $1",
+        ] {
+            purge(pool, statement, *organization).await;
+        }
+    }
+    for user in &fixture.users {
+        purge(pool, "DELETE FROM users WHERE id = $1", *user).await;
+    }
+}
+
+fn forbidden<T: std::fmt::Debug>(result: Result<T, CoreError>) {
+    assert!(
+        matches!(result, Err(CoreError::Forbidden { .. })),
+        "expected a refusal, got {result:?}"
+    );
+}
+
+fn not_found<T: std::fmt::Debug>(result: Result<T, CoreError>) {
+    assert!(
+        matches!(result, Err(CoreError::NotFound)),
+        "expected not found, got {result:?}"
+    );
+}
+
+async fn with_fixture<F>(flag: bool, check: F)
+where
+    F: AsyncFnOnce(MestierUseCase, Fixture) -> Fixture,
+{
+    let pool = dev_pool().await;
+    let usecase = make_usecase(pool.clone());
+    let fixture = seed(&pool, &usecase, flag).await;
+    let fixture = check(usecase, fixture).await;
+    cleanup(&pool, &fixture).await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn create_survey_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .create_survey(CreateSurveyCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    title: "Refus".to_owned(),
+                    visibility: Visibility::Members,
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn update_survey_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .update_survey(UpdateSurveyCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    id: fixture.survey_id,
+                    patch: SurveyPatch::default(),
+                    campaign_id: None,
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn open_survey_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .open_survey(survey_command(
+                    &fixture,
+                    fixture.member.clone(),
+                    fixture.survey_id,
+                ))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn close_survey_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .close_survey(survey_command(
+                    &fixture,
+                    fixture.member.clone(),
+                    fixture.survey_id,
+                ))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn duplicate_survey_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .duplicate_survey(survey_command(
+                    &fixture,
+                    fixture.member.clone(),
+                    fixture.survey_id,
+                ))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn delete_survey_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .delete_survey(survey_command(
+                    &fixture,
+                    fixture.member.clone(),
+                    fixture.survey_id,
+                ))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn list_surveys_refuses_a_member_without_survey_view() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .list_surveys(ListSurveysCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    limit: 10,
+                    offset: 0,
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn get_survey_refuses_a_member_without_survey_view() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .get_survey(survey_command(
+                    &fixture,
+                    fixture.member.clone(),
+                    fixture.survey_id,
+                ))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn create_campaign_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .create_campaign(CreateCampaignCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    name: "Refus".to_owned(),
+                    window: SurveyWindow::new(None, None).unwrap(),
+                    metadata: Metadata::default(),
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn update_campaign_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .update_campaign(UpdateCampaignCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    id: fixture.campaign_id,
+                    patch: CampaignPatch::default(),
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn delete_campaign_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(usecase.delete_campaign(campaign_command(&fixture)).await);
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn list_campaigns_refuses_a_member_without_survey_view() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .list_campaigns(ListCampaignsCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    limit: 10,
+                    offset: 0,
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn list_survey_responses_refuses_a_member_without_survey_view() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(
+            usecase
+                .list_survey_responses(ListSurveyResponsesCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    survey_id: fixture.survey_id,
+                    limit: 10,
+                    offset: 0,
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn get_survey_response_refuses_a_member_without_survey_view() {
+    with_fixture(true, async |usecase, fixture| {
+        let id = ResponseId(generate_uuid_v7());
+        forbidden(
+            usecase
+                .get_survey_response(response_command(&fixture, fixture.member.clone(), id))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn delete_survey_response_refuses_a_member_without_survey_manage() {
+    with_fixture(true, async |usecase, fixture| {
+        let id = ResponseId(generate_uuid_v7());
+        forbidden(
+            usecase
+                .delete_survey_response(response_command(&fixture, fixture.member.clone(), id))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn survey_use_cases_answer_not_found_when_the_flag_is_off() {
+    with_fixture(false, async |usecase, fixture| {
+        not_found(
+            usecase
+                .create_survey(CreateSurveyCommand {
+                    actor: Subject::system(),
+                    organization_id: fixture.organization_id,
+                    title: "Sans flag".to_owned(),
+                    visibility: Visibility::Members,
+                })
+                .await,
+        );
+        not_found(
+            usecase
+                .list_surveys(ListSurveysCommand {
+                    actor: Subject::system(),
+                    organization_id: fixture.organization_id,
+                    limit: 10,
+                    offset: 0,
+                })
+                .await,
+        );
+        not_found(
+            usecase
+                .start_member_response(StartMemberResponseCommand {
+                    actor: fixture.member.clone(),
+                    organization_id: fixture.organization_id,
+                    survey_id: fixture.survey_id,
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_member_of_another_organization_cannot_answer_a_members_survey() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Members).await;
+
+        forbidden(
+            usecase
+                .start_member_response(StartMemberResponseCommand {
+                    actor: fixture.outsider.clone(),
+                    organization_id: fixture.organization_id,
+                    survey_id,
+                })
+                .await,
+        );
+        forbidden(
+            usecase
+                .start_member_response(StartMemberResponseCommand {
+                    actor: Subject::system(),
+                    organization_id: fixture.organization_id,
+                    survey_id,
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_member_answers_a_members_survey_once_without_any_survey_permission() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Members).await;
+        let start = || StartMemberResponseCommand {
+            actor: fixture.member.clone(),
+            organization_id: fixture.organization_id,
+            survey_id,
+        };
+
+        let started = usecase.start_member_response(start()).await.unwrap();
+        let resumed = usecase.start_member_response(start()).await.unwrap();
+        usecase
+            .save_member_response(SaveMemberResponseCommand {
+                actor: fixture.member.clone(),
+                organization_id: fixture.organization_id,
+                id: started.id(),
+                answers: answers("Claire"),
+            })
+            .await
+            .unwrap();
+        let completed = usecase
+            .complete_member_response(response_command(
+                &fixture,
+                fixture.member.clone(),
+                started.id(),
+            ))
+            .await
+            .unwrap();
+        let again = usecase.start_member_response(start()).await;
+
+        assert_eq!(resumed.id(), started.id());
+        assert_eq!(completed.answers(), &answers("Claire"));
+        assert!(matches!(again, Err(CoreError::Conflict(_))), "{again:?}");
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_public_survey_is_answered_without_an_account() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Public).await;
+        let survey = usecase
+            .get_survey(survey_command(&fixture, Subject::system(), survey_id))
+            .await
+            .unwrap();
+        let slug = match survey {
+            crate::SurveyRecord::Opened(survey) => survey.public_slug().cloned().unwrap(),
+            other => panic!("expected an opened survey, got {other:?}"),
+        };
+
+        let read = usecase.open_public_survey(&slug).await.unwrap();
+        let started = usecase.start_public_response(&slug).await.unwrap();
+        let token = started.resume_token().cloned().unwrap();
+        let resumed = usecase
+            .resume_public_response(&slug, token.clone())
+            .await
+            .unwrap();
+        let another = usecase.start_public_response(&slug).await.unwrap();
+        let forged = ResumeToken::new("x".repeat(43)).unwrap();
+        let unknown = usecase.resume_public_response(&slug, forged).await;
+        usecase
+            .save_public_response(&slug, token.clone(), answers("Claire"))
+            .await
+            .unwrap();
+        let completed = usecase
+            .complete_public_response(&slug, token)
+            .await
+            .unwrap();
+        let (responses, total) = usecase
+            .list_survey_responses(ListSurveyResponsesCommand {
+                actor: Subject::system(),
+                organization_id: fixture.organization_id,
+                survey_id,
+                limit: 10,
+                offset: 0,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(read.id(), survey_id);
+        assert!(slug.as_str().len() >= 16);
+        assert!(token_is_long(started.resume_token()));
+        assert_eq!(resumed.id(), started.id());
+        assert_ne!(another.id(), started.id());
+        assert_ne!(another.resume_token(), started.resume_token());
+        not_found(unknown);
+        assert_eq!(completed.member_id(), None);
+        assert_eq!(total, 2);
+        assert!(
+            responses
+                .iter()
+                .any(|response| response.id() == started.id())
+        );
+        fixture
+    })
+    .await;
+}
+
+fn token_is_long(token: Option<&ResumeToken>) -> bool {
+    token.is_some_and(|token| token.as_str().len() >= 32)
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_public_survey_of_an_organization_without_the_flag_answers_like_an_unknown_slug() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Public).await;
+        let slug = match usecase
+            .get_survey(survey_command(&fixture, Subject::system(), survey_id))
+            .await
+            .unwrap()
+        {
+            crate::SurveyRecord::Opened(survey) => survey.public_slug().cloned().unwrap(),
+            other => panic!("expected an opened survey, got {other:?}"),
+        };
+        let pool = dev_pool().await;
+        set_flag(&pool, fixture.organization_id.0, false).await;
+        let unknown = PublicSlug::new("inconnu-0000000000".to_owned()).unwrap();
+
+        let disabled = usecase
+            .open_public_survey(&slug)
+            .await
+            .map(|survey| survey.id());
+        let missing = usecase
+            .open_public_survey(&unknown)
+            .await
+            .map(|survey| survey.id());
+        let start = usecase.start_public_response(&slug).await.map(|r| r.id());
+
+        assert_eq!(format!("{disabled:?}"), format!("{missing:?}"));
+        not_found(disabled);
+        not_found(start);
+        fixture
+    })
+    .await;
+}
+
+async fn scheduled_campaign(
+    usecase: &MestierUseCase,
+    fixture: &Fixture,
+    starts_at: Option<chrono::DateTime<chrono::Utc>>,
+    ends_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> CampaignId {
+    usecase
+        .create_campaign(CreateCampaignCommand {
+            actor: Subject::system(),
+            organization_id: fixture.organization_id,
+            name: "Horloge".to_owned(),
+            window: SurveyWindow::new(starts_at, ends_at).unwrap(),
+            metadata: Metadata::default(),
+        })
+        .await
+        .unwrap()
+        .id()
+}
+
+async fn campaign_events(pool: &PgPool, fixture: &Fixture, id: CampaignId) -> Vec<String> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT name FROM automation.event WHERE org_id = $1 AND payload->>'campaign_id' = $2 ORDER BY id",
+    )
+    .bind(fixture.organization_id.0)
+    .bind(id.0.to_string())
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+async fn campaign_status(
+    usecase: &MestierUseCase,
+    fixture: &Fixture,
+    id: CampaignId,
+) -> CampaignStatus {
+    let (campaigns, _) = usecase
+        .list_campaigns(ListCampaignsCommand {
+            actor: Subject::system(),
+            organization_id: fixture.organization_id,
+            limit: 100,
+            offset: 0,
+        })
+        .await
+        .unwrap();
+    campaigns
+        .into_iter()
+        .find(|campaign| campaign.id() == id)
+        .map(|campaign| campaign.status())
+        .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn the_survey_campaign_clock_emits_each_step_once() {
+    with_fixture(true, async |usecase, fixture| {
+        let pool = dev_pool().await;
+        let now = now_storable();
+        let hours = chrono::Duration::hours;
+        let opening = scheduled_campaign(
+            &usecase,
+            &fixture,
+            Some(now + hours(1)),
+            Some(now + hours(3)),
+        )
+        .await;
+        let skipped = scheduled_campaign(
+            &usecase,
+            &fixture,
+            Some(now + hours(1)),
+            Some(now + hours(2)),
+        )
+        .await;
+        let windowless = fixture.campaign_id;
+        let windowless_before = campaign_events(&pool, &fixture, windowless).await;
+
+        let quiet = campaign_events(&pool, &fixture, opening).await;
+        usecase
+            .advance_survey_campaigns(now + hours(2) + hours(1) / 2)
+            .await
+            .unwrap();
+        usecase
+            .advance_survey_campaigns(now + hours(2) + hours(1) / 2)
+            .await
+            .unwrap();
+        let opened = campaign_events(&pool, &fixture, opening).await;
+        let both = campaign_events(&pool, &fixture, skipped).await;
+        let running = campaign_status(&usecase, &fixture, opening).await;
+        usecase
+            .advance_survey_campaigns(now + hours(4))
+            .await
+            .unwrap();
+        let ended = campaign_events(&pool, &fixture, opening).await;
+        let windowless_after = campaign_events(&pool, &fixture, windowless).await;
+
+        assert!(quiet.is_empty());
+        assert_eq!(opened, vec!["survey_campaign.started"]);
+        assert_eq!(running, CampaignStatus::Running);
+        assert_eq!(
+            both,
+            vec!["survey_campaign.started", "survey_campaign.ended"]
+        );
+        assert_eq!(
+            ended,
+            vec!["survey_campaign.started", "survey_campaign.ended"]
+        );
+        assert_eq!(
+            campaign_status(&usecase, &fixture, skipped).await,
+            CampaignStatus::Ended
+        );
+        assert_eq!(windowless_after, windowless_before);
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_member_reads_an_opened_members_survey_without_any_survey_permission() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Members).await;
+
+        let view = usecase
+            .open_member_survey(survey_command(&fixture, fixture.member.clone(), survey_id))
+            .await
+            .unwrap();
+
+        assert_eq!(view.id(), survey_id);
+        assert_eq!(view.visibility(), Visibility::Members);
+        assert_eq!(view.public_slug(), None);
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_member_survey_read_is_refused_outside_an_opened_members_survey() {
+    with_fixture(true, async |usecase, fixture| {
+        let members = opened(&usecase, &fixture, Visibility::Members).await;
+        let public = opened(&usecase, &fixture, Visibility::Public).await;
+        let read = |actor: Subject, id: SurveyId| {
+            usecase.open_member_survey(survey_command(&fixture, actor, id))
+        };
+
+        forbidden(read(fixture.outsider.clone(), members).await);
+        not_found(read(fixture.member.clone(), public).await);
+        not_found(read(fixture.member.clone(), fixture.survey_id).await);
+        not_found(read(fixture.member.clone(), SurveyId(generate_uuid_v7())).await);
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn a_member_survey_read_answers_not_found_when_the_flag_is_off() {
+    with_fixture(true, async |usecase, fixture| {
+        let survey_id = opened(&usecase, &fixture, Visibility::Members).await;
+        let pool = dev_pool().await;
+        set_flag(&pool, fixture.organization_id.0, false).await;
+
+        not_found(
+            usecase
+                .open_member_survey(survey_command(&fixture, fixture.member.clone(), survey_id))
+                .await,
+        );
+        fixture
+    })
+    .await;
+}

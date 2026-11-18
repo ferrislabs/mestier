@@ -3,7 +3,7 @@ use mestier_macros::transactional;
 
 use crate::{
     Surcharge, SurchargeOutcome,
-    application::{MestierUseCase, leave_account::require_permission},
+    application::{MestierUseCase, policy::require_permission},
     domain::surcharge::{
         SurchargeService,
         commands::{

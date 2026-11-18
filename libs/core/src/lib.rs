@@ -7,6 +7,12 @@ pub mod infrastructure;
 pub use application::automation::oauth::StartOauthCommand;
 pub use application::automation::trigger::WebhookAuthentication;
 pub use application::supplier_invoice::{ImportSupplierInvoiceOutcome, TotalsMismatch};
+pub use application::survey::commands::{
+    CampaignCommand, CreateCampaignCommand, CreateSurveyCommand, ListCampaignsCommand,
+    ListSurveyResponsesCommand, ListSurveysCommand, SaveMemberResponseCommand,
+    StartMemberResponseCommand, SurveyCommand, SurveyResponseCommand, UpdateCampaignCommand,
+    UpdateSurveyCommand,
+};
 pub use application::*;
 pub use domain::automation::collection::{
     ApiKeyLocation, Collection, CollectionDetail, CollectionDraft, CollectionDraftInput,
@@ -111,10 +117,10 @@ pub use domain::{
     ExpenseId, ExpenseOutcome, ExpenseService, ExpenseStatus, GraphPath, InProgress, Ledger,
     LedgerEntry, LedgerError, LedgerKind, LedgerMonth, LedgerMonthError, LedgerOutcome,
     LedgerService, LedgerStatus, LedgerSummary, Metadata, MonthTrend, Opened, Payables, PublicSlug,
-    QuestionId, QuestionKind, Receipt, ReceiptId, ReceiptRow, ReceiptService, ResponseId,
-    ResponseRecord, ResumeToken, SupplierAddress, SupplierAddressInput, SupplierContact,
-    SupplierContactInput, SupplierError, SupplierField, SupplierOutcome, SupplierProfile,
-    SupplierProfileInput, Survey, SurveyBranch, SurveyConditionNode, SurveyEdge,
+    QuestionId, QuestionKind, Receipt, ReceiptId, ReceiptRow, ReceiptService, RespondentSurvey,
+    ResponseId, ResponseRecord, ResumeToken, SupplierAddress, SupplierAddressInput,
+    SupplierContact, SupplierContactInput, SupplierError, SupplierField, SupplierOutcome,
+    SupplierProfile, SupplierProfileInput, Survey, SurveyBranch, SurveyConditionNode, SurveyEdge,
     SurveyEmailAddress, SurveyEndNode, SurveyError, SurveyGraph, SurveyId, SurveyNode,
     SurveyNodeRef, SurveyPhoneNumber, SurveyQuestionNode, SurveyRecord, SurveyResponse,
     SurveyWindow, VatSummary, Visibility, build_ledger,
@@ -232,6 +238,10 @@ pub use domain::{
         SurveyResponseSubmitted,
     },
     survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository},
+    survey::service::{
+        CampaignPatch, CampaignService, ResponseLocator, ResponseService, SurveyPatch,
+        SurveyService,
+    },
     validate_api_key_name,
 };
 

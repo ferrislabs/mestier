@@ -3,7 +3,7 @@ use mestier_macros::transactional;
 
 use crate::{
     DayOverride, DayOverrideOutcome, FeedMember, HrPlanningFeed,
-    application::{MestierUseCase, leave_account::require_permission},
+    application::{MestierUseCase, policy::require_permission},
     domain::{
         absence_type::AbsenceTypeService,
         day_override::{

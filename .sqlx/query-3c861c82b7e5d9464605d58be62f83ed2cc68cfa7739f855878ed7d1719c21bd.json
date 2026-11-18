@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,\n                   identifier_value, unique_respondent, completed_at, created_at\n            FROM survey.response\n            WHERE org_id = $1 AND survey_id = $2\n            ORDER BY created_at DESC, id DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "survey_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "answers",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "resume_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "identifier_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "unique_respondent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "3c861c82b7e5d9464605d58be62f83ed2cc68cfa7739f855878ed7d1719c21bd"
+}

@@ -453,6 +453,17 @@ survey_campaign.ended        sujet survey_campaign {campaign_id, campaign: {id, 
 8. **Éditeur (S5).** `Graph::new` refuse un libellé de question vide : un brouillon ne s'enregistre pas tant qu'une question n'a pas de libellé.
 9. **Événements (S4).** `event-contracts.ts` doit décrire les payloads actuels ; `docs/events.md` passe de 46 à 51 événements.
 
+Décisions S1 (branche `feat/surveys-s1`) :
+
+- **Horloge** : tick du worker d'automatisation, une transaction par campagne verrouillée. Une campagne créée dans ou après sa fenêtre émet `started` (et `ended`) à la création. L'horloge ignore le flag `surveys`.
+- **Réponse en deux temps** : `start_*` crée la réponse (aucun événement), `save_*` enregistre (émet `survey.response_submitted`), `complete_*` termine. Le jeton de reprise public est toujours généré côté serveur ; `resume_public_response(slug, token)` ne fait que retrouver la réponse.
+- **Vue du répondant** : `open_public_survey` et `open_member_survey` renvoient `RespondentSurvey` (id, titre, description, visibilité, graphe, slug) : jamais d'`organization_id`, de métadonnées, de réglages ni de campagne. S2 et S3 ne renvoient que ce type.
+- **Verrous** : toute transition de questionnaire (modifier un brouillon, rattacher, ouvrir, fermer, supprimer, dupliquer) et toute complétion chargent le questionnaire `FOR UPDATE` ; la base refuse qu'un état recule. Le plafond de réponses est donc exact.
+- **Unicité** : une violation d'un des deux index uniques devient `RespondentAlreadyAnswered`.
+- **Erreurs** : `CoreError` n'a pas de variante de validation, donc toute erreur de questionnaire autre que « introuvable » arrive en `Conflict`. S2 décide s'il faut en ajouter une pour distinguer 400/422 de 409.
+- **Permissions** : `survey.manage` et `survey.view` (lecture : l'une ou l'autre) pour les administrateurs ; répondre en mode membres ne demande que d'être membre de l'organisation.
+- **Reste à traiter** : deux réponses en cours simultanées pour un même membre (index à ajouter), `list_due` ne résout pas la famine d'une campagne qui échoue en boucle (index partiel seulement), `advance_due` supprimé.
+
 ## Risks / open questions
 
 Choix de l'assistant après relecture (à corriger) :
@@ -475,7 +486,7 @@ Questions ouvertes :
 | Quels fichiers de réponses abandonnés purger, et après combien de temps ? | S3 |
 | Où vit le lien public (domaine, préfixe de route) et comment il est servi derrière la passerelle ? | S3 |
 | Existe-t-il déjà un port d'horloge dans le domaine ? | S0 |
-| L'horloge de campagne : tâche de fond dans le binaire `apps/api`, ou déclencheur `Schedule` d'un workflow ? Le premier est plus fiable, le second réutilise l'existant. | S1 |
+| *Tranché en S1 :* l'horloge de campagne tourne au tick du worker d'automatisation existant (`infrastructure/automation/worker.rs`), une transaction par campagne, relecture `FOR UPDATE` avant `advance`. | S1 |
 
 ## Verify (exit)
 
@@ -492,3 +503,4 @@ Amended: 2026-11-14 les événements portent survey_id et campaign_id (null si q
 Amended: 2026-11-14 questions conditionnelles (affichage selon les cases cochées) et sélecteur de type en cartes ajoutés au lot ; `Condition` rejoint les contrats figés en S0.
 Amended: 2026-11-14 la définition du questionnaire devient un graphe sans cycle (nœuds question, condition, fin) édité dans un canevas `@xyflow/react` propre au module ; remplace l'affichage conditionnel `visible_when`. Les branches peuvent se rejoindre (choix de l'assistant, à confirmer).
 Amended: 2026-11-14 contrats figés régénérés après la relecture finale de S0 (réponse liée au questionnaire ouvert, campagne à statut persisté, métadonnées fusionnées dans les événements, clés étrangères avec org_id, index d unicité par répondant).
+Amended: 2026-11-14 décisions de S1 consignées (horloge, deux temps, vue du répondant, verrous, erreurs).

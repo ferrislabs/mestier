@@ -57,6 +57,26 @@ fn a_survey_error_is_a_conflict_for_the_core() {
 }
 
 #[test]
+fn a_state_change_and_a_respondent_input_error_stay_conflicts_for_the_core() {
+    for error in [
+        SurveyError::SurveyStateChanged,
+        SurveyError::RespondentAlreadyAnswered,
+        SurveyError::SurveyTitleEmpty,
+    ] {
+        let expected = common::CoreError::Conflict(error.to_string()).to_string();
+        assert_eq!(common::CoreError::from(error).to_string(), expected);
+    }
+}
+
+#[test]
+fn a_missing_survey_is_not_found_for_the_core() {
+    assert!(matches!(
+        common::CoreError::from(SurveyError::SurveyNotFound),
+        common::CoreError::NotFound
+    ));
+}
+
+#[test]
 fn an_email_is_trimmed_and_lowercased() {
     let email = EmailAddress::try_from("  Jane.Doe@Example.COM ").unwrap();
     assert_eq!(email.as_str(), "jane.doe@example.com");
