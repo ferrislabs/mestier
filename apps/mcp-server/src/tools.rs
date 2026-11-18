@@ -519,7 +519,8 @@ impl MestierTools {
                 + Self::reference_router()
                 + Self::photo_router()
                 + Self::knowledge_router()
-                + Self::tables_router(),
+                + Self::tables_router()
+                + Self::daf_router(),
         }
     }
 

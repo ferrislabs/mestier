@@ -110,6 +110,13 @@ Politique Cerbos v1 : tout outil `read` autorisé avec le scope `mestier.read` ;
 | `update_doe_header` | write | doe | `PUT /does/{id}` (titre, lieu, lot, date, rédacteur, indice) |
 | `update_doe_party` | write | doe | `PUT /does/{id}` (intervenant par rôle : nom, adresse, téléphone, e-mail ; ajout si absent, logo conservé) |
 | `export_doe_pdf` | read | doe | `GET /does/{id}/pdf`, renvoyé en ressource intégrée `application/pdf` (plafond 10 Mo, sinon erreur explicite) |
+| `list_dafs` | read | doe | `GET /projects/{id}/dafs` : dossier DAF et sommaire (voir [daf.md](daf.md)) |
+| `get_daf` | read | doe | `GET /dafs/{id}` |
+| `create_daf` | write | doe | `POST /projects/{id}/dafs` (désignation et/ou produit du catalogue) |
+| `update_daf` | write | doe | `GET` puis `PUT /dafs/{id}` (seuls les champs donnés changent, `""` efface) |
+| `update_daf_dossier` | write | doe | `GET /projects/{id}/dafs` puis `PUT /projects/{id}/daf-dossier` |
+| `place_daf_photo` | write | doe | `POST /dafs/{id}/photo/place` (photo de la photothèque, copiée) |
+| `export_daf_pdf` | read | doe | `GET /dafs/{id}/pdf` ou `GET /projects/{id}/dafs/pdf`, comme `export_doe_pdf` |
 | `search_photo_library` | read | doe | `GET /photo-library/photos` puis `GET /photo-library/photos/{id}/thumbnail` : texte JSON `{photos, page, total}` suivi d'une image JPEG par photo, dans l'ordre (`limit` 8 par défaut, 12 au plus avec miniatures, 50 sans ; `include_thumbnails=false` ne renvoie aucune image) |
 | `tag_library_photos` | write | doe | `GET` puis `PATCH /photo-library/photos/{id}` par élément (50 au plus) : légende, étiquettes ajoutées ou retirées (20 au plus) ; un échec n'arrête pas les autres, `{results:[{photo_id, status, error?}]}` |
 | `place_doe_files` | write | doe | `POST /does/{id}/photos/place` (50 placements au plus ; `target` : `section`, `supply`, `cover`) : copie les photos de la photothèque dans le DOE, `{doe, results}` ; aucun outil ne supprime ni ne téléverse dans la photothèque |
