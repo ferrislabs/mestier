@@ -47,6 +47,15 @@ describe('SETTINGS_SECTIONS', () => {
 		expect(group?.sections.map((section) => section.id)).toEqual(['support'])
 	})
 
+	it('enregistre la section Fonctionnalités dans le groupe Général', () => {
+		const section = SETTINGS_SECTIONS.find(
+			(entry) => entry.id === 'fonctionnalites',
+		)
+
+		expect(section?.label).toBe('Fonctionnalités')
+		expect(section?.moduleId).toBeUndefined()
+	})
+
 	it('groupe les modèles de projet, de DOE et la mise en page au même endroit', () => {
 		expect(SETTINGS_SECTIONS.map((section) => section.id)).toContain('modeles')
 		expect(SETTINGS_SECTIONS.map((section) => section.id)).not.toContain(

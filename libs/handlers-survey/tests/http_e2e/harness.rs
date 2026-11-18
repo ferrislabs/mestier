@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::issuer;
 
+const MANAGE_ORG: i64 = 1;
 const VIEW_SURVEYS: i64 = 1 << 25;
 const MANAGE_SURVEYS: i64 = 1 << 26;
 
@@ -28,10 +29,19 @@ pub struct App {
     pub other_manager: String,
     pub other_member: String,
     pub flag_off_manager: String,
+    pub flag_off_admin: String,
     users: Vec<Uuid>,
 }
 
 pub async fn start() -> App {
+    boot(false).await
+}
+
+pub async fn start_with_organizations() -> App {
+    boot(true).await
+}
+
+async fn boot(with_organizations: bool) -> App {
     let issuer_url = issuer::spawn();
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set to run the survey end-to-end tests");
@@ -49,6 +59,7 @@ pub async fn start() -> App {
     let other_manager_id = seed_user(&pool, &mut users).await;
     let other_member_id = seed_user(&pool, &mut users).await;
     let flag_off_manager_id = seed_user(&pool, &mut users).await;
+    let flag_off_admin_id = seed_user(&pool, &mut users).await;
 
     let organization_id = seed_organization(&pool, manager_id, true).await;
     seed_seat(
@@ -79,6 +90,13 @@ pub async fn start() -> App {
         Some(MANAGE_SURVEYS | VIEW_SURVEYS),
     )
     .await;
+    seed_seat(
+        &pool,
+        flag_off_organization_id,
+        flag_off_admin_id,
+        Some(MANAGE_ORG),
+    )
+    .await;
 
     let args = Arc::new(Args::parse_from(args_for(
         &database_url,
@@ -88,7 +106,12 @@ pub async fn start() -> App {
     let state = handlers::state(args)
         .await
         .expect("build AppState for the test");
-    let router = handlers_survey::router(&state).with_state(state);
+    let router = if with_organizations {
+        handlers_survey::router(&state).merge(handlers_organization::router(&state))
+    } else {
+        handlers_survey::router(&state)
+    }
+    .with_state(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind the test api");
@@ -114,6 +137,7 @@ pub async fn start() -> App {
         other_manager: issuer::mint(&sub_of(other_manager_id)),
         other_member: issuer::mint(&sub_of(other_member_id)),
         flag_off_manager: issuer::mint(&sub_of(flag_off_manager_id)),
+        flag_off_admin: issuer::mint(&sub_of(flag_off_admin_id)),
         users,
     }
 }

@@ -4,10 +4,12 @@ import {
 	FileText,
 	LifeBuoy,
 	ShieldCheck,
+	ToggleRight,
 	Workflow,
 } from 'lucide-react'
 import { AutomationSection } from '#/pages/settings/sections/automation-section'
 import { DeveloperSection } from '#/pages/settings/sections/developer-section'
+import { FeaturesSection } from '#/pages/settings/sections/features-section'
 import { ModelsSection } from '#/pages/settings/sections/models-section'
 import { OrganizationSection } from '#/pages/settings/sections/organization-section'
 import { RolesSection } from '#/pages/settings/sections/roles-section'
@@ -20,6 +22,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 		label: 'Organisation',
 		icon: Building2,
 		Component: OrganizationSection,
+	},
+	{
+		id: 'fonctionnalites',
+		label: 'Fonctionnalités',
+		icon: ToggleRight,
+		Component: FeaturesSection,
 	},
 	{
 		id: 'roles',

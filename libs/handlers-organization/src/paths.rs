@@ -46,3 +46,10 @@ pub struct OrganizationNumberingSeriesPath {
 pub struct OrganizationFeaturesPath {
     pub organization_id: OrganizationId,
 }
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/features/{flag}")]
+pub struct OrganizationFeaturePath {
+    pub organization_id: OrganizationId,
+    pub flag: String,
+}

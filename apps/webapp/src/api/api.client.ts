@@ -2151,7 +2151,11 @@ export namespace Schemas {
   };
   export type NumberSeriesKind = "QUOTE" | "INVOICE" | "CREDIT_NOTE";
   export type OpenDirectChannelRequest = { user_id: UserId };
-  export type OrganizationFeaturesResponse = { features: Array<string> };
+  export type SelfServiceFeatureResponse = { description: string; enabled: boolean; key: string; label: string };
+  export type OrganizationFeaturesResponse = {
+    features: Array<string>;
+    self_service: Array<SelfServiceFeatureResponse>;
+  };
   export type str = string;
   export type VatStatusResponse = { type: "subject"; vat_number: string } | { basis: string; type: "not_subject" };
   export type OrganizationResponse = {
@@ -2707,6 +2711,7 @@ export namespace Schemas {
     id?: (null | SelectOptionId) | undefined;
     label: string;
   };
+  export type SelfServiceFeatureToggleResponse = { changed: boolean; enabled: boolean; key: string };
   export type SeriesNumberingResponse = {
     kind: NumberSeriesKind;
     last_assigned_number: number;
@@ -2746,6 +2751,7 @@ export namespace Schemas {
   export type SetNextNumberRequest = { next_number: number };
   export type SetNotificationLevelRequest = { level: NotificationLevel };
   export type SetPresenceRequest = { status: PresenceStatus };
+  export type SetSelfServiceFeatureRequest = { enabled: boolean };
   export type StartOauthRequest = { redirect_uri: string; return_to: string };
   export type StartOauthResponse = { authorization_url: string };
   export type StartRunRequest = Partial<{ trigger_payload: unknown }>;
@@ -8945,9 +8951,31 @@ export namespace Endpoints {
       path: { organization_id: string };
     };
     responses: {
-      200: { data: { features: Array<string> }; pagination?: (null | Schemas.PaginationMetadata) | undefined };
+      200: {
+        data: { features: Array<string>; self_service: Array<Schemas.SelfServiceFeatureResponse> };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
       401: unknown;
       403: unknown;
+    };
+  };
+  export type put_SetOrganizationSelfServiceFeature = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/features/{flag}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; flag: string };
+
+      body: Schemas.SetSelfServiceFeatureRequest;
+    };
+    responses: {
+      200: {
+        data: { changed: boolean; enabled: boolean; key: string };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
     };
   };
   export type get_ListMyAssignmentReports = {
@@ -11114,6 +11142,7 @@ export namespace Endpoints {
       409: unknown;
       413: unknown;
       422: unknown;
+      503: unknown;
     };
   };
   export type get_OpenMemberSurvey = {
@@ -13759,7 +13788,7 @@ export namespace Endpoints {
     parameters: {
       path: { organization_id: string; response_id: string };
     };
-    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown; 500: unknown };
   };
   export type get_ListSurveys = {
     method: "GET";
@@ -14901,6 +14930,7 @@ export namespace Endpoints {
       413: unknown;
       422: unknown;
       429: unknown;
+      503: unknown;
     };
   };
   export type get_GetQuote = {
@@ -16234,6 +16264,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
+    "/api/v1/organizations/{organization_id}/features/{flag}": Endpoints.put_SetOrganizationSelfServiceFeature;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}/content": Endpoints.put_SaveKnowledgeDocumentContent;
     "/api/v1/organizations/{organization_id}/knowledge/tables/{table_id}/columns/order": Endpoints.put_ReorderTableColumns;
     "/api/v1/organizations/{organization_id}/leave-accounts/{account_id}": Endpoints.put_UpdateLeaveAccount;
