@@ -6,6 +6,7 @@ import {
 	CalendarDays,
 	CalendarOff,
 	CalendarRange,
+	ClipboardList,
 	Clock,
 	FileMinus,
 	FileText,
@@ -24,6 +25,7 @@ import {
 	Library,
 	LibraryBig,
 	LifeBuoy,
+	Megaphone,
 	MessagesSquare,
 	Package,
 	PlugZap,
@@ -55,6 +57,7 @@ import { ChatSidebarFeature } from '#/pages/chat/feature/chat-sidebar-feature'
 import { CrmSidebarFeature } from '#/pages/crm-nav/feature/crm-sidebar-feature'
 import { ProjetSidebarFeature } from '#/pages/projet/feature/projet-sidebar-feature'
 import { RhSidebarFeature } from '#/pages/rh-nav/feature/rh-sidebar-feature'
+import { campaignsPath, surveysPath } from '#/pages/survey/lib/survey-format'
 
 export const MODULES: AppModule[] = [
 	{
@@ -487,6 +490,34 @@ export const MODULES: AppModule[] = [
 				to: identificationsPath(),
 				icon: KeyRound,
 				requiredPermission: 'VIEW_AUTOMATION',
+			},
+		],
+	},
+	{
+		id: 'questionnaires',
+		label: 'Questionnaires',
+		icon: ClipboardList,
+		hue: 280,
+		description: 'Questionnaires, campagnes et réponses reçues',
+		basePath: surveysPath(),
+		status: 'available',
+		hasOverview: true,
+		requiredPermission: 'VIEW_SURVEYS',
+		requiredFeature: 'surveys',
+		sections: [
+			{
+				id: 'surveys',
+				label: 'Questionnaires',
+				to: surveysPath(),
+				icon: ClipboardList,
+				requiredPermission: 'VIEW_SURVEYS',
+			},
+			{
+				id: 'campaigns',
+				label: 'Campagnes',
+				to: campaignsPath(),
+				icon: Megaphone,
+				requiredPermission: 'VIEW_SURVEYS',
 			},
 		],
 	},

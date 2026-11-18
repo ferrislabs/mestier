@@ -26,6 +26,7 @@ import { Route as AppOOrganizationSlugDiscussionsRouteImport } from './routes/_a
 import { Route as AppAdminOrganisationsOrganizationIdRouteImport } from './routes/_app.admin.organisations.$organizationId'
 import { Route as AppOOrganizationSlugSupportIndexRouteImport } from './routes/_app.o.$organizationSlug.support.index'
 import { Route as AppOOrganizationSlugRhIndexRouteImport } from './routes/_app.o.$organizationSlug.rh.index'
+import { Route as AppOOrganizationSlugQuestionnairesIndexRouteImport } from './routes/_app.o.$organizationSlug.questionnaires.index'
 import { Route as AppOOrganizationSlugPurchaseIndexRouteImport } from './routes/_app.o.$organizationSlug.purchase.index'
 import { Route as AppOOrganizationSlugProjetIndexRouteImport } from './routes/_app.o.$organizationSlug.projet.index'
 import { Route as AppOOrganizationSlugPlanningIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.index'
@@ -68,6 +69,8 @@ import { Route as AppOOrganizationSlugAutomatisationCredentialsRouteImport } fro
 import { Route as AppOOrganizationSlugRhMembresIndexRouteImport } from './routes/_app.o.$organizationSlug.rh.membres.index'
 import { Route as AppOOrganizationSlugRhExtraIndexRouteImport } from './routes/_app.o.$organizationSlug.rh.extra.index'
 import { Route as AppOOrganizationSlugRhAbsencesIndexRouteImport } from './routes/_app.o.$organizationSlug.rh.absences.index'
+import { Route as AppOOrganizationSlugQuestionnairesCampagnesIndexRouteImport } from './routes/_app.o.$organizationSlug.questionnaires.campagnes.index'
+import { Route as AppOOrganizationSlugQuestionnairesSurveyIdIndexRouteImport } from './routes/_app.o.$organizationSlug.questionnaires.$surveyId.index'
 import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesIndexRouteImport } from './routes/_app.o.$organizationSlug.purchase.supplier-invoices.index'
 import { Route as AppOOrganizationSlugPlanningProjectsIndexRouteImport } from './routes/_app.o.$organizationSlug.planning.projects.index'
 import { Route as AppOOrganizationSlugPlanificationProjectsIndexRouteImport } from './routes/_app.o.$organizationSlug.planification.projects.index'
@@ -85,6 +88,8 @@ import { Route as AppOOrganizationSlugAutomatisationWorkflowIdIndexRouteImport }
 import { Route as AppOOrganizationSlugSupportTicketsTicketIdRouteImport } from './routes/_app.o.$organizationSlug.support.tickets.$ticketId'
 import { Route as AppOOrganizationSlugRhExtraNouvelleRouteImport } from './routes/_app.o.$organizationSlug.rh.extra.nouvelle'
 import { Route as AppOOrganizationSlugRhAbsencesNouvelleRouteImport } from './routes/_app.o.$organizationSlug.rh.absences.nouvelle'
+import { Route as AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRouteImport } from './routes/_app.o.$organizationSlug.questionnaires.campagnes.$campaignId'
+import { Route as AppOOrganizationSlugQuestionnairesSurveyIdReponsesRouteImport } from './routes/_app.o.$organizationSlug.questionnaires.$surveyId.reponses'
 import { Route as AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRouteImport } from './routes/_app.o.$organizationSlug.purchase.supplier-invoices.$supplierInvoiceId'
 import { Route as AppOOrganizationSlugProjetDoeModelsModelIdRouteImport } from './routes/_app.o.$organizationSlug.projet.doe-models_.$modelId'
 import { Route as AppOOrganizationSlugProjetProjectIdSettingsRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId_.settings'
@@ -205,6 +210,12 @@ const AppOOrganizationSlugRhIndexRoute =
   AppOOrganizationSlugRhIndexRouteImport.update({
     id: '/rh/',
     path: '/rh/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugQuestionnairesIndexRoute =
+  AppOOrganizationSlugQuestionnairesIndexRouteImport.update({
+    id: '/questionnaires/',
+    path: '/questionnaires/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugPurchaseIndexRoute =
@@ -459,6 +470,18 @@ const AppOOrganizationSlugRhAbsencesIndexRoute =
     path: '/rh/absences/',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugQuestionnairesCampagnesIndexRoute =
+  AppOOrganizationSlugQuestionnairesCampagnesIndexRouteImport.update({
+    id: '/questionnaires/campagnes/',
+    path: '/questionnaires/campagnes/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugQuestionnairesSurveyIdIndexRoute =
+  AppOOrganizationSlugQuestionnairesSurveyIdIndexRouteImport.update({
+    id: '/questionnaires/$surveyId/',
+    path: '/questionnaires/$surveyId/',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute =
   AppOOrganizationSlugPurchaseSupplierInvoicesIndexRouteImport.update({
     id: '/purchase/supplier-invoices/',
@@ -559,6 +582,18 @@ const AppOOrganizationSlugRhAbsencesNouvelleRoute =
   AppOOrganizationSlugRhAbsencesNouvelleRouteImport.update({
     id: '/rh/absences/nouvelle',
     path: '/rh/absences/nouvelle',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRoute =
+  AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRouteImport.update({
+    id: '/questionnaires/campagnes/$campaignId',
+    path: '/questionnaires/campagnes/$campaignId',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugQuestionnairesSurveyIdReponsesRoute =
+  AppOOrganizationSlugQuestionnairesSurveyIdReponsesRouteImport.update({
+    id: '/questionnaires/$surveyId/reponses',
+    path: '/questionnaires/$surveyId/reponses',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute =
@@ -790,6 +825,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
   '/o/$organizationSlug/projet/': typeof AppOOrganizationSlugProjetIndexRoute
   '/o/$organizationSlug/purchase/': typeof AppOOrganizationSlugPurchaseIndexRoute
+  '/o/$organizationSlug/questionnaires/': typeof AppOOrganizationSlugQuestionnairesIndexRoute
   '/o/$organizationSlug/rh/': typeof AppOOrganizationSlugRhIndexRoute
   '/o/$organizationSlug/support/': typeof AppOOrganizationSlugSupportIndexRoute
   '/o/$organizationSlug/automatisation/collections/$collectionId': typeof AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute
@@ -814,6 +850,8 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/projet/$projectId/settings': typeof AppOOrganizationSlugProjetProjectIdSettingsRoute
   '/o/$organizationSlug/projet/doe-models/$modelId': typeof AppOOrganizationSlugProjetDoeModelsModelIdRoute
   '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
+  '/o/$organizationSlug/questionnaires/$surveyId/reponses': typeof AppOOrganizationSlugQuestionnairesSurveyIdReponsesRoute
+  '/o/$organizationSlug/questionnaires/campagnes/$campaignId': typeof AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRoute
   '/o/$organizationSlug/rh/absences/nouvelle': typeof AppOOrganizationSlugRhAbsencesNouvelleRoute
   '/o/$organizationSlug/rh/extra/nouvelle': typeof AppOOrganizationSlugRhExtraNouvelleRoute
   '/o/$organizationSlug/support/tickets/$ticketId': typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
@@ -831,6 +869,8 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/planification/projects/': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   '/o/$organizationSlug/planning/projects/': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
   '/o/$organizationSlug/purchase/supplier-invoices/': typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
+  '/o/$organizationSlug/questionnaires/$surveyId/': typeof AppOOrganizationSlugQuestionnairesSurveyIdIndexRoute
+  '/o/$organizationSlug/questionnaires/campagnes/': typeof AppOOrganizationSlugQuestionnairesCampagnesIndexRoute
   '/o/$organizationSlug/rh/absences/': typeof AppOOrganizationSlugRhAbsencesIndexRoute
   '/o/$organizationSlug/rh/extra/': typeof AppOOrganizationSlugRhExtraIndexRoute
   '/o/$organizationSlug/rh/membres/': typeof AppOOrganizationSlugRhMembresIndexRoute
@@ -892,6 +932,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/planning': typeof AppOOrganizationSlugPlanningIndexRoute
   '/o/$organizationSlug/projet': typeof AppOOrganizationSlugProjetIndexRoute
   '/o/$organizationSlug/purchase': typeof AppOOrganizationSlugPurchaseIndexRoute
+  '/o/$organizationSlug/questionnaires': typeof AppOOrganizationSlugQuestionnairesIndexRoute
   '/o/$organizationSlug/rh': typeof AppOOrganizationSlugRhIndexRoute
   '/o/$organizationSlug/support': typeof AppOOrganizationSlugSupportIndexRoute
   '/o/$organizationSlug/automatisation/collections/$collectionId': typeof AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute
@@ -916,6 +957,8 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/projet/$projectId/settings': typeof AppOOrganizationSlugProjetProjectIdSettingsRoute
   '/o/$organizationSlug/projet/doe-models/$modelId': typeof AppOOrganizationSlugProjetDoeModelsModelIdRoute
   '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
+  '/o/$organizationSlug/questionnaires/$surveyId/reponses': typeof AppOOrganizationSlugQuestionnairesSurveyIdReponsesRoute
+  '/o/$organizationSlug/questionnaires/campagnes/$campaignId': typeof AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRoute
   '/o/$organizationSlug/rh/absences/nouvelle': typeof AppOOrganizationSlugRhAbsencesNouvelleRoute
   '/o/$organizationSlug/rh/extra/nouvelle': typeof AppOOrganizationSlugRhExtraNouvelleRoute
   '/o/$organizationSlug/support/tickets/$ticketId': typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
@@ -933,6 +976,8 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/planification/projects': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   '/o/$organizationSlug/planning/projects': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
   '/o/$organizationSlug/purchase/supplier-invoices': typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
+  '/o/$organizationSlug/questionnaires/$surveyId': typeof AppOOrganizationSlugQuestionnairesSurveyIdIndexRoute
+  '/o/$organizationSlug/questionnaires/campagnes': typeof AppOOrganizationSlugQuestionnairesCampagnesIndexRoute
   '/o/$organizationSlug/rh/absences': typeof AppOOrganizationSlugRhAbsencesIndexRoute
   '/o/$organizationSlug/rh/extra': typeof AppOOrganizationSlugRhExtraIndexRoute
   '/o/$organizationSlug/rh/membres': typeof AppOOrganizationSlugRhMembresIndexRoute
@@ -999,6 +1044,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/planning/': typeof AppOOrganizationSlugPlanningIndexRoute
   '/_app/o/$organizationSlug/projet/': typeof AppOOrganizationSlugProjetIndexRoute
   '/_app/o/$organizationSlug/purchase/': typeof AppOOrganizationSlugPurchaseIndexRoute
+  '/_app/o/$organizationSlug/questionnaires/': typeof AppOOrganizationSlugQuestionnairesIndexRoute
   '/_app/o/$organizationSlug/rh/': typeof AppOOrganizationSlugRhIndexRoute
   '/_app/o/$organizationSlug/support/': typeof AppOOrganizationSlugSupportIndexRoute
   '/_app/o/$organizationSlug/automatisation/collections/$collectionId': typeof AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute
@@ -1023,6 +1069,8 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/projet/$projectId_/settings': typeof AppOOrganizationSlugProjetProjectIdSettingsRoute
   '/_app/o/$organizationSlug/projet/doe-models_/$modelId': typeof AppOOrganizationSlugProjetDoeModelsModelIdRoute
   '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
+  '/_app/o/$organizationSlug/questionnaires/$surveyId/reponses': typeof AppOOrganizationSlugQuestionnairesSurveyIdReponsesRoute
+  '/_app/o/$organizationSlug/questionnaires/campagnes/$campaignId': typeof AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRoute
   '/_app/o/$organizationSlug/rh/absences/nouvelle': typeof AppOOrganizationSlugRhAbsencesNouvelleRoute
   '/_app/o/$organizationSlug/rh/extra/nouvelle': typeof AppOOrganizationSlugRhExtraNouvelleRoute
   '/_app/o/$organizationSlug/support/tickets/$ticketId': typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
@@ -1040,6 +1088,8 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/planification/projects/': typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   '/_app/o/$organizationSlug/planning/projects/': typeof AppOOrganizationSlugPlanningProjectsIndexRoute
   '/_app/o/$organizationSlug/purchase/supplier-invoices/': typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
+  '/_app/o/$organizationSlug/questionnaires/$surveyId/': typeof AppOOrganizationSlugQuestionnairesSurveyIdIndexRoute
+  '/_app/o/$organizationSlug/questionnaires/campagnes/': typeof AppOOrganizationSlugQuestionnairesCampagnesIndexRoute
   '/_app/o/$organizationSlug/rh/absences/': typeof AppOOrganizationSlugRhAbsencesIndexRoute
   '/_app/o/$organizationSlug/rh/extra/': typeof AppOOrganizationSlugRhExtraIndexRoute
   '/_app/o/$organizationSlug/rh/membres/': typeof AppOOrganizationSlugRhMembresIndexRoute
@@ -1106,6 +1156,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planning/'
     | '/o/$organizationSlug/projet/'
     | '/o/$organizationSlug/purchase/'
+    | '/o/$organizationSlug/questionnaires/'
     | '/o/$organizationSlug/rh/'
     | '/o/$organizationSlug/support/'
     | '/o/$organizationSlug/automatisation/collections/$collectionId'
@@ -1130,6 +1181,8 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/projet/$projectId/settings'
     | '/o/$organizationSlug/projet/doe-models/$modelId'
     | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
+    | '/o/$organizationSlug/questionnaires/$surveyId/reponses'
+    | '/o/$organizationSlug/questionnaires/campagnes/$campaignId'
     | '/o/$organizationSlug/rh/absences/nouvelle'
     | '/o/$organizationSlug/rh/extra/nouvelle'
     | '/o/$organizationSlug/support/tickets/$ticketId'
@@ -1147,6 +1200,8 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planification/projects/'
     | '/o/$organizationSlug/planning/projects/'
     | '/o/$organizationSlug/purchase/supplier-invoices/'
+    | '/o/$organizationSlug/questionnaires/$surveyId/'
+    | '/o/$organizationSlug/questionnaires/campagnes/'
     | '/o/$organizationSlug/rh/absences/'
     | '/o/$organizationSlug/rh/extra/'
     | '/o/$organizationSlug/rh/membres/'
@@ -1208,6 +1263,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planning'
     | '/o/$organizationSlug/projet'
     | '/o/$organizationSlug/purchase'
+    | '/o/$organizationSlug/questionnaires'
     | '/o/$organizationSlug/rh'
     | '/o/$organizationSlug/support'
     | '/o/$organizationSlug/automatisation/collections/$collectionId'
@@ -1232,6 +1288,8 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/projet/$projectId/settings'
     | '/o/$organizationSlug/projet/doe-models/$modelId'
     | '/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
+    | '/o/$organizationSlug/questionnaires/$surveyId/reponses'
+    | '/o/$organizationSlug/questionnaires/campagnes/$campaignId'
     | '/o/$organizationSlug/rh/absences/nouvelle'
     | '/o/$organizationSlug/rh/extra/nouvelle'
     | '/o/$organizationSlug/support/tickets/$ticketId'
@@ -1249,6 +1307,8 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/planification/projects'
     | '/o/$organizationSlug/planning/projects'
     | '/o/$organizationSlug/purchase/supplier-invoices'
+    | '/o/$organizationSlug/questionnaires/$surveyId'
+    | '/o/$organizationSlug/questionnaires/campagnes'
     | '/o/$organizationSlug/rh/absences'
     | '/o/$organizationSlug/rh/extra'
     | '/o/$organizationSlug/rh/membres'
@@ -1314,6 +1374,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/planning/'
     | '/_app/o/$organizationSlug/projet/'
     | '/_app/o/$organizationSlug/purchase/'
+    | '/_app/o/$organizationSlug/questionnaires/'
     | '/_app/o/$organizationSlug/rh/'
     | '/_app/o/$organizationSlug/support/'
     | '/_app/o/$organizationSlug/automatisation/collections/$collectionId'
@@ -1338,6 +1399,8 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/projet/$projectId_/settings'
     | '/_app/o/$organizationSlug/projet/doe-models_/$modelId'
     | '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId'
+    | '/_app/o/$organizationSlug/questionnaires/$surveyId/reponses'
+    | '/_app/o/$organizationSlug/questionnaires/campagnes/$campaignId'
     | '/_app/o/$organizationSlug/rh/absences/nouvelle'
     | '/_app/o/$organizationSlug/rh/extra/nouvelle'
     | '/_app/o/$organizationSlug/support/tickets/$ticketId'
@@ -1355,6 +1418,8 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/planification/projects/'
     | '/_app/o/$organizationSlug/planning/projects/'
     | '/_app/o/$organizationSlug/purchase/supplier-invoices/'
+    | '/_app/o/$organizationSlug/questionnaires/$surveyId/'
+    | '/_app/o/$organizationSlug/questionnaires/campagnes/'
     | '/_app/o/$organizationSlug/rh/absences/'
     | '/_app/o/$organizationSlug/rh/extra/'
     | '/_app/o/$organizationSlug/rh/membres/'
@@ -1490,6 +1555,13 @@ declare module '@tanstack/react-router' {
       path: '/rh'
       fullPath: '/o/$organizationSlug/rh/'
       preLoaderRoute: typeof AppOOrganizationSlugRhIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/questionnaires/': {
+      id: '/_app/o/$organizationSlug/questionnaires/'
+      path: '/questionnaires'
+      fullPath: '/o/$organizationSlug/questionnaires/'
+      preLoaderRoute: typeof AppOOrganizationSlugQuestionnairesIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/purchase/': {
@@ -1786,6 +1858,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugRhAbsencesIndexRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/questionnaires/campagnes/': {
+      id: '/_app/o/$organizationSlug/questionnaires/campagnes/'
+      path: '/questionnaires/campagnes'
+      fullPath: '/o/$organizationSlug/questionnaires/campagnes/'
+      preLoaderRoute: typeof AppOOrganizationSlugQuestionnairesCampagnesIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/questionnaires/$surveyId/': {
+      id: '/_app/o/$organizationSlug/questionnaires/$surveyId/'
+      path: '/questionnaires/$surveyId'
+      fullPath: '/o/$organizationSlug/questionnaires/$surveyId/'
+      preLoaderRoute: typeof AppOOrganizationSlugQuestionnairesSurveyIdIndexRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/purchase/supplier-invoices/': {
       id: '/_app/o/$organizationSlug/purchase/supplier-invoices/'
       path: '/purchase/supplier-invoices'
@@ -1903,6 +1989,20 @@ declare module '@tanstack/react-router' {
       path: '/rh/absences/nouvelle'
       fullPath: '/o/$organizationSlug/rh/absences/nouvelle'
       preLoaderRoute: typeof AppOOrganizationSlugRhAbsencesNouvelleRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/questionnaires/campagnes/$campaignId': {
+      id: '/_app/o/$organizationSlug/questionnaires/campagnes/$campaignId'
+      path: '/questionnaires/campagnes/$campaignId'
+      fullPath: '/o/$organizationSlug/questionnaires/campagnes/$campaignId'
+      preLoaderRoute: typeof AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/questionnaires/$surveyId/reponses': {
+      id: '/_app/o/$organizationSlug/questionnaires/$surveyId/reponses'
+      path: '/questionnaires/$surveyId/reponses'
+      fullPath: '/o/$organizationSlug/questionnaires/$surveyId/reponses'
+      preLoaderRoute: typeof AppOOrganizationSlugQuestionnairesSurveyIdReponsesRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/purchase/supplier-invoices/$supplierInvoiceId': {
@@ -2202,6 +2302,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugPlanningIndexRoute: typeof AppOOrganizationSlugPlanningIndexRoute
   AppOOrganizationSlugProjetIndexRoute: typeof AppOOrganizationSlugProjetIndexRoute
   AppOOrganizationSlugPurchaseIndexRoute: typeof AppOOrganizationSlugPurchaseIndexRoute
+  AppOOrganizationSlugQuestionnairesIndexRoute: typeof AppOOrganizationSlugQuestionnairesIndexRoute
   AppOOrganizationSlugRhIndexRoute: typeof AppOOrganizationSlugRhIndexRoute
   AppOOrganizationSlugSupportIndexRoute: typeof AppOOrganizationSlugSupportIndexRoute
   AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute: typeof AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute
@@ -2226,6 +2327,8 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugProjetProjectIdSettingsRoute: typeof AppOOrganizationSlugProjetProjectIdSettingsRoute
   AppOOrganizationSlugProjetDoeModelsModelIdRoute: typeof AppOOrganizationSlugProjetDoeModelsModelIdRoute
   AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute
+  AppOOrganizationSlugQuestionnairesSurveyIdReponsesRoute: typeof AppOOrganizationSlugQuestionnairesSurveyIdReponsesRoute
+  AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRoute: typeof AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRoute
   AppOOrganizationSlugRhAbsencesNouvelleRoute: typeof AppOOrganizationSlugRhAbsencesNouvelleRoute
   AppOOrganizationSlugRhExtraNouvelleRoute: typeof AppOOrganizationSlugRhExtraNouvelleRoute
   AppOOrganizationSlugSupportTicketsTicketIdRoute: typeof AppOOrganizationSlugSupportTicketsTicketIdRoute
@@ -2243,6 +2346,8 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugPlanificationProjectsIndexRoute: typeof AppOOrganizationSlugPlanificationProjectsIndexRoute
   AppOOrganizationSlugPlanningProjectsIndexRoute: typeof AppOOrganizationSlugPlanningProjectsIndexRoute
   AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute: typeof AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute
+  AppOOrganizationSlugQuestionnairesSurveyIdIndexRoute: typeof AppOOrganizationSlugQuestionnairesSurveyIdIndexRoute
+  AppOOrganizationSlugQuestionnairesCampagnesIndexRoute: typeof AppOOrganizationSlugQuestionnairesCampagnesIndexRoute
   AppOOrganizationSlugRhAbsencesIndexRoute: typeof AppOOrganizationSlugRhAbsencesIndexRoute
   AppOOrganizationSlugRhExtraIndexRoute: typeof AppOOrganizationSlugRhExtraIndexRoute
   AppOOrganizationSlugRhMembresIndexRoute: typeof AppOOrganizationSlugRhMembresIndexRoute
@@ -2315,6 +2420,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugProjetIndexRoute: AppOOrganizationSlugProjetIndexRoute,
   AppOOrganizationSlugPurchaseIndexRoute:
     AppOOrganizationSlugPurchaseIndexRoute,
+  AppOOrganizationSlugQuestionnairesIndexRoute:
+    AppOOrganizationSlugQuestionnairesIndexRoute,
   AppOOrganizationSlugRhIndexRoute: AppOOrganizationSlugRhIndexRoute,
   AppOOrganizationSlugSupportIndexRoute: AppOOrganizationSlugSupportIndexRoute,
   AppOOrganizationSlugAutomatisationCollectionsCollectionIdRoute:
@@ -2361,6 +2468,10 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugProjetDoeModelsModelIdRoute,
   AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute:
     AppOOrganizationSlugPurchaseSupplierInvoicesSupplierInvoiceIdRoute,
+  AppOOrganizationSlugQuestionnairesSurveyIdReponsesRoute:
+    AppOOrganizationSlugQuestionnairesSurveyIdReponsesRoute,
+  AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRoute:
+    AppOOrganizationSlugQuestionnairesCampagnesCampaignIdRoute,
   AppOOrganizationSlugRhAbsencesNouvelleRoute:
     AppOOrganizationSlugRhAbsencesNouvelleRoute,
   AppOOrganizationSlugRhExtraNouvelleRoute:
@@ -2395,6 +2506,10 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugPlanningProjectsIndexRoute,
   AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute:
     AppOOrganizationSlugPurchaseSupplierInvoicesIndexRoute,
+  AppOOrganizationSlugQuestionnairesSurveyIdIndexRoute:
+    AppOOrganizationSlugQuestionnairesSurveyIdIndexRoute,
+  AppOOrganizationSlugQuestionnairesCampagnesIndexRoute:
+    AppOOrganizationSlugQuestionnairesCampagnesIndexRoute,
   AppOOrganizationSlugRhAbsencesIndexRoute:
     AppOOrganizationSlugRhAbsencesIndexRoute,
   AppOOrganizationSlugRhExtraIndexRoute: AppOOrganizationSlugRhExtraIndexRoute,

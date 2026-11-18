@@ -30,6 +30,8 @@ const ALL_PERMISSION_NAMES: PermissionName[] = [
 	'MANAGE_SUPPORT',
 	'VIEW_KNOWLEDGE',
 	'MANAGE_KNOWLEDGE',
+	'VIEW_SURVEYS',
+	'MANAGE_SURVEYS',
 ]
 
 describe('PERMISSION_CATALOG', () => {
@@ -97,6 +99,7 @@ describe('permissionsByArea', () => {
 			'chat',
 			'support',
 			'knowledge',
+			'surveys',
 			'administration',
 		])
 	})
