@@ -6,8 +6,9 @@ use cucumber::{given, then, when};
 use mestier_core::{
     Answer, Answers, CampaignId, CampaignPatch, MemberId, Metadata, OrganizationId, PublicSlug,
     QuestionId, QuestionKind, ResponseId, ResponseLocator, ResponseRecord, ResponseRepository,
-    ResumeToken, SurveyBranch, SurveyEdge, SurveyEndNode, SurveyGraph, SurveyId, SurveyNode,
-    SurveyPatch, SurveyQuestionNode, SurveyRecord, SurveyWindow, Visibility,
+    ResumeToken, SurveyBranch, SurveyEdge, SurveyEndNode, SurveyGraph, SurveyGraphVersion,
+    SurveyId, SurveyNode, SurveyPatch, SurveyQuestionNode, SurveyRecord, SurveyRepository,
+    SurveyWindow, Visibility,
 };
 use serde_json::json;
 
@@ -133,7 +134,15 @@ fn keep<T>(world: &mut SurveyWorld, result: Result<T, CoreError>) {
     }
 }
 
+fn version(number: u32) -> SurveyGraphVersion {
+    SurveyGraphVersion::new(number).expect("the scenario writes a positive graph version")
+}
+
 fn definition(label: &str, identifier: bool) -> (SurveyGraph, QuestionId) {
+    drawn(label, identifier, true)
+}
+
+fn drawn(label: &str, identifier: bool, required: bool) -> (SurveyGraph, QuestionId) {
     let question = QuestionId(generate_uuid_v7());
     let end = QuestionId(generate_uuid_v7());
     let graph = SurveyGraph::new(
@@ -142,7 +151,7 @@ fn definition(label: &str, identifier: bool) -> (SurveyGraph, QuestionId) {
                 id: question,
                 kind: QuestionKind::Text,
                 label: label.to_owned(),
-                required: true,
+                required,
                 options: Vec::new(),
                 max_photos: None,
                 identifier,
@@ -180,7 +189,7 @@ async fn draft_survey(
         .expect("the survey is drafted");
     world
         .surveys()
-        .update_draft(
+        .update(
             organization_id,
             id,
             SurveyPatch {
@@ -386,12 +395,14 @@ async fn a_campaign(world: &mut SurveyWorld, name: String, from: String, to: Str
 
 #[given(expr = "the survey {string} belongs to the campaign {string}")]
 async fn the_survey_belongs_to(world: &mut SurveyWorld, survey: String, campaign: String) {
+    let mut campaign_ids = stored_survey(world, &survey).campaign_ids().to_vec();
+    campaign_ids.push(campaign_named(world, &campaign));
     world
         .surveys()
-        .attach_campaign(
+        .set_campaigns(
             world.organization_id(),
             survey_named(world, &survey),
-            Some(campaign_named(world, &campaign)),
+            campaign_ids,
         )
         .await
         .expect("the campaign is attached");
@@ -401,7 +412,7 @@ async fn the_survey_belongs_to(world: &mut SurveyWorld, survey: String, campaign
 async fn the_survey_allows_multiple(world: &mut SurveyWorld, survey: String) {
     world
         .surveys()
-        .update_draft(
+        .update(
             world.organization_id(),
             survey_named(world, &survey),
             SurveyPatch {
@@ -416,6 +427,19 @@ async fn the_survey_allows_multiple(world: &mut SurveyWorld, survey: String) {
 #[given(expr = "the survey {string} is opened")]
 async fn the_survey_is_opened(world: &mut SurveyWorld, survey: String) {
     open_survey(world, &survey).await.expect("the survey opens");
+}
+
+#[given(expr = "the survey {string} is closed")]
+async fn the_survey_is_closed(world: &mut SurveyWorld, survey: String) {
+    world
+        .surveys()
+        .close(
+            world.organization_id(),
+            survey_named(world, &survey),
+            world.now(),
+        )
+        .await
+        .expect("the survey closes");
 }
 
 #[given(expr = "the campaign {string} carries the metadata {string} equal to {string}")]
@@ -442,13 +466,14 @@ async fn the_campaign_carries(world: &mut SurveyWorld, name: String, key: String
 
 #[given(expr = "the survey {string} carries the metadata {string} equal to {string}")]
 async fn the_survey_carries(world: &mut SurveyWorld, title: String, key: String, value: String) {
-    let SurveyRecord::Draft(draft) = stored_survey(world, &title) else {
-        panic!("the survey `{title}` is no longer a draft");
+    let metadata = match stored_survey(world, &title) {
+        SurveyRecord::Draft(survey) => with_entry(survey.metadata().iter(), &key, &value),
+        SurveyRecord::Opened(survey) => with_entry(survey.metadata().iter(), &key, &value),
+        SurveyRecord::Closed(survey) => with_entry(survey.metadata().iter(), &key, &value),
     };
-    let metadata = with_entry(draft.metadata().iter(), &key, &value);
     world
         .surveys()
-        .update_draft(
+        .update(
             world.organization_id(),
             survey_named(world, &title),
             SurveyPatch {
@@ -505,11 +530,111 @@ async fn the_artisan_opens(world: &mut SurveyWorld, survey: String) {
 async fn the_artisan_retitles(world: &mut SurveyWorld, survey: String, title: String) {
     let result = world
         .surveys()
-        .update_draft(
+        .update(
             world.organization_id(),
             survey_named(world, &survey),
             SurveyPatch {
                 title: Some(title),
+                ..SurveyPatch::default()
+            },
+        )
+        .await;
+    keep(world, result);
+}
+
+#[when(
+    expr = "the artisan replaces the question {string} of the survey {string} by an optional question {string}"
+)]
+async fn the_artisan_replaces(
+    world: &mut SurveyWorld,
+    _former: String,
+    survey: String,
+    label: String,
+) {
+    let (graph, question) = drawn(&label, false, false);
+    let result = world
+        .surveys()
+        .update(
+            world.organization_id(),
+            survey_named(world, &survey),
+            SurveyPatch {
+                graph: Some(Some(graph)),
+                ..SurveyPatch::default()
+            },
+        )
+        .await;
+    world.questions.insert((survey, label), question);
+    keep(world, result);
+}
+
+#[when(
+    expr = "the artisan turns the question {string} of the survey {string} into an optional choice between {string} and {string}"
+)]
+async fn the_artisan_turns_into_a_choice(
+    world: &mut SurveyWorld,
+    label: String,
+    survey: String,
+    first: String,
+    second: String,
+) {
+    let question = question_named(world, &survey, &label);
+    let end = QuestionId(generate_uuid_v7());
+    let graph = SurveyGraph::new(
+        vec![
+            SurveyNode::Question(SurveyQuestionNode {
+                id: question,
+                kind: QuestionKind::SingleChoice,
+                label,
+                required: false,
+                options: vec![first, second],
+                max_photos: None,
+                identifier: false,
+            }),
+            SurveyNode::End(SurveyEndNode {
+                id: end,
+                message: None,
+            }),
+        ],
+        vec![SurveyEdge {
+            from: question,
+            to: end,
+            branch: SurveyBranch::Next,
+        }],
+        question,
+    )
+    .expect("the scenario draws a valid graph");
+    let result = world
+        .surveys()
+        .update(
+            world.organization_id(),
+            survey_named(world, &survey),
+            SurveyPatch {
+                graph: Some(Some(graph)),
+                ..SurveyPatch::default()
+            },
+        )
+        .await;
+    keep(world, result);
+}
+
+#[when(expr = "the response of {string} to the survey {string} is deleted")]
+async fn the_response_is_deleted(world: &mut SurveyWorld, who: String, survey: String) {
+    let id = response_of(world, &who, &survey);
+    let result = repository::responses(&world.store)
+        .delete(world.organization_id(), id)
+        .await;
+    keep(world, result);
+}
+
+#[when(expr = "the artisan makes the survey {string} {word}")]
+async fn the_artisan_makes(world: &mut SurveyWorld, survey: String, kind: String) {
+    let result = world
+        .surveys()
+        .update(
+            world.organization_id(),
+            survey_named(world, &survey),
+            SurveyPatch {
+                visibility: Some(visibility(&kind)),
                 ..SurveyPatch::default()
             },
         )
@@ -645,6 +770,14 @@ async fn the_survey_is(world: &mut SurveyWorld, survey: String, state: String) {
     assert_eq!(state_of(&stored_survey(world, &survey)), state);
 }
 
+#[then(expr = "the survey {string} stays visible to {word}")]
+async fn the_survey_stays_visible_to(world: &mut SurveyWorld, survey: String, kind: String) {
+    assert_eq!(
+        stored_survey(world, &survey).visibility(),
+        visibility(&kind)
+    );
+}
+
 #[then(expr = "the survey {string} is titled {string}")]
 async fn the_survey_is_titled(world: &mut SurveyWorld, survey: String, title: String) {
     assert_eq!(title_of(&stored_survey(world, &survey)), title);
@@ -719,19 +852,36 @@ async fn every_survey_event_carries_survey(
     every_event_carries(world, "survey.", &pointer, &expected);
 }
 
-#[then(expr = "every survey event carries the id of the campaign {string} at {string}")]
-async fn every_survey_event_carries_campaign(
+#[then(expr = "every survey event carries the campaigns {string} at {string}")]
+async fn every_survey_event_carries_campaigns(
     world: &mut SurveyWorld,
-    campaign: String,
+    campaigns: String,
     pointer: String,
 ) {
-    let expected = json!(campaign_named(world, &campaign).0);
+    let expected = json!(
+        expected_names(&campaigns)
+            .iter()
+            .map(|name| campaign_named(world, name).0)
+            .collect::<Vec<_>>()
+    );
     every_event_carries(world, "survey.", &pointer, &expected);
 }
 
-#[then(expr = "every survey event carries a null {string}")]
-async fn every_survey_event_carries_null(world: &mut SurveyWorld, pointer: String) {
-    every_event_carries(world, "survey.", &pointer, &serde_json::Value::Null);
+#[then(expr = "every survey event carries an empty {string}")]
+async fn every_survey_event_carries_empty(world: &mut SurveyWorld, pointer: String) {
+    every_event_carries(world, "survey.", &pointer, &json!([]));
+}
+
+#[then(expr = "the event {string} carries an empty {string}")]
+async fn event_carries_empty(world: &mut SurveyWorld, name: String, pointer: String) {
+    let envelope = world.emitter.only(&name);
+    assert_eq!(envelope.payload.pointer(&pointer), Some(&json!([])));
+}
+
+#[then(expr = "the event {string} carries the number {int} at {string}")]
+async fn event_carries_number(world: &mut SurveyWorld, name: String, number: u32, pointer: String) {
+    let envelope = world.emitter.only(&name);
+    assert_eq!(envelope.payload.pointer(&pointer), Some(&json!(number)));
 }
 
 #[then(expr = "every campaign event carries the id of the campaign {string} at {string}")]
@@ -777,6 +927,81 @@ async fn the_refusal_mentions(world: &mut SurveyWorld, fragment: String) {
         "`{}` does not mention `{fragment}`",
         describe(refusal)
     );
+}
+
+#[then(expr = "the refusal reason is {string}")]
+async fn the_refusal_reason_is(world: &mut SurveyWorld, reason: String) {
+    match world.refusal.as_ref().expect("the action was refused") {
+        CoreError::Refused(refusal) => assert_eq!(refusal.reason, reason),
+        other => panic!("expected a refusal with a reason, got {other:?}"),
+    }
+}
+
+#[then(expr = "the survey {string} is at graph version {int}")]
+async fn the_survey_is_at_version(world: &mut SurveyWorld, survey: String, version: u32) {
+    assert_eq!(
+        stored_survey(world, &survey).graph_version(),
+        Some(self::version(version))
+    );
+}
+
+#[then(expr = "the response of {string} to the survey {string} was given on graph version {int}")]
+async fn the_response_was_given_on(
+    world: &mut SurveyWorld,
+    who: String,
+    survey: String,
+    version: u32,
+) {
+    let record = stored_response(world, response_of(world, &who, &survey));
+    assert_eq!(record.graph_version(), Some(self::version(version)));
+}
+
+#[then(expr = "the graph version {int} of the survey {string} asks the question {string}")]
+async fn the_graph_version_asks(
+    world: &mut SurveyWorld,
+    version: u32,
+    survey: String,
+    label: String,
+) {
+    let stored = stored_survey(world, &survey);
+    let graph = match stored.graph() {
+        Some(current) if stored.graph_version() == Some(self::version(version)) => current.clone(),
+        _ => repository::surveys(&world.store)
+            .find_graph_version(
+                world.organization_id(),
+                survey_named(world, &survey),
+                self::version(version),
+            )
+            .await
+            .expect("no infrastructure failure here")
+            .expect("the version is stored"),
+    };
+    let question = question_named(world, &survey, &label);
+    assert_eq!(
+        graph.question(&question).map(|node| node.label.as_str()),
+        Some(label.as_str())
+    );
+}
+
+#[then(expr = "the campaign {string} holds the surveys {string}")]
+async fn the_campaign_holds(world: &mut SurveyWorld, campaign: String, surveys: String) {
+    let (listed, _) = repository::surveys(&world.store)
+        .list_by_campaign(
+            world.organization_id(),
+            campaign_named(world, &campaign),
+            100,
+            0,
+        )
+        .await
+        .expect("no infrastructure failure here");
+    let mut titles: Vec<String> = listed
+        .iter()
+        .map(|record| title_of(record).to_owned())
+        .collect();
+    titles.sort();
+    let mut expected = expected_names(&surveys);
+    expected.sort();
+    assert_eq!(titles, expected);
 }
 
 #[then("nothing is refused")]

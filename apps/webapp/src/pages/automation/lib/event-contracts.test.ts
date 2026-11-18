@@ -126,17 +126,19 @@ describe('eventContractSource', () => {
 		}
 	})
 
-	it('describes the survey payloads with a nullable campaign and merged metadata', () => {
+	it('describes the survey payloads with their campaigns, graph version and merged metadata', () => {
 		for (const name of [
 			'survey.opened',
 			'survey.response_submitted',
 			'survey.response_completed',
 		]) {
 			const fields = payloadContractFields(name)
-			expect(fields.slice(0, 2), name).toEqual([
+			expect(fields.slice(0, 3), name).toEqual([
 				'survey_id: Uuid',
-				'campaign_id: Uuid | null',
+				'campaign_ids: Uuid[]',
+				'graph_version: number',
 			])
+			expect(fields.join('\n'), name).not.toContain('campaign_id:')
 			expect(fields, name).toContain('metadata: Record<string, string>')
 		}
 	})

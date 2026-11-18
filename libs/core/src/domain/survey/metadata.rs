@@ -22,8 +22,14 @@ impl Metadata {
     }
 
     pub fn merged(campaign: &Metadata, survey: &Metadata) -> Metadata {
-        let mut entries = campaign.0.clone();
-        entries.extend(survey.0.iter().map(|(k, v)| (k.clone(), v.clone())));
+        Self::merged_all(&[campaign], survey)
+    }
+
+    pub fn merged_all(campaigns: &[&Metadata], survey: &Metadata) -> Metadata {
+        let mut entries = BTreeMap::new();
+        for metadata in campaigns.iter().copied().chain([survey]) {
+            entries.extend(metadata.0.iter().map(|(k, v)| (k.clone(), v.clone())));
+        }
         Metadata(entries)
     }
 

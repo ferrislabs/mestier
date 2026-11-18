@@ -152,6 +152,7 @@ async fn photo_survey(
             organization_id: fixture.organization_id,
             title: "Photos".to_owned(),
             visibility,
+            campaign_ids: Vec::new(),
         })
         .await
         .unwrap()
@@ -165,7 +166,7 @@ async fn photo_survey(
                 graph: Some(Some(photo_graph())),
                 ..SurveyPatch::default()
             },
-            campaign_id: campaign.then_some(Some(fixture.campaign_id)),
+            campaign_ids: campaign.then(|| vec![fixture.campaign_id]),
         })
         .await
         .unwrap();

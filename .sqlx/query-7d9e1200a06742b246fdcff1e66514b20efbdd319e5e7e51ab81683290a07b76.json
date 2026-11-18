@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,\n                   identifier_value, unique_respondent, completed_at, created_at\n            FROM survey.response\n            WHERE org_id = $1 AND id = $2\n            ",
+  "query": "\n            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,\n                   identifier_value, unique_respondent, completed_at, created_at, graph_version\n            FROM survey.response\n            WHERE org_id = $1 AND id = $2 AND status = 'IN_PROGRESS' AND updated_at < $3\n            FOR UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -57,12 +57,18 @@
         "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "graph_version",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Uuid",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -76,8 +82,9 @@
       true,
       false,
       true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "e68c9450a58b201a5f59db15580dea7792a7cbabe1d339e91f7b635cf8500c8a"
+  "hash": "7d9e1200a06742b246fdcff1e66514b20efbdd319e5e7e51ab81683290a07b76"
 }

@@ -471,7 +471,11 @@ function deleted(field: string): PayloadContract {
 	return { fields: [`${field}: Uuid`], uses: ['Uuid'] }
 }
 
-const SURVEY_IDS = ['survey_id: Uuid', 'campaign_id: Uuid | null']
+const SURVEY_IDS = [
+	'survey_id: Uuid',
+	'campaign_ids: Uuid[]',
+	'graph_version: number',
+]
 
 const SURVEY_METADATA = 'metadata: Record<string, string>'
 

@@ -8,7 +8,9 @@ use crate::domain::feature_flag::ports::FeatureFlagRepository;
 use crate::domain::member::ports::MemberRepository;
 use crate::domain::role::ports::RoleRepository;
 use crate::domain::survey::ports::SurveyRepository;
-use crate::domain::survey::{PublicSlug, ResumeToken, SurveyError, SurveyRecord, Visibility};
+use crate::domain::survey::{
+    GraphVersion, PublicSlug, ResumeToken, SurveyError, SurveyRecord, VersionedGraph, Visibility,
+};
 use crate::{FeatureFlag, MemberId, OrganizationId};
 
 mod clock;
@@ -21,6 +23,52 @@ mod response;
 mod photos_tests;
 #[cfg(test)]
 mod tests;
+
+async fn former_graphs<S: SurveyRepository>(
+    surveys: &mut S,
+    survey: &SurveyRecord,
+    versions: Vec<GraphVersion>,
+) -> Result<(Vec<VersionedGraph>, Vec<GraphVersion>), CoreError> {
+    let mut found: Vec<VersionedGraph> = Vec::new();
+    let mut missing: Vec<GraphVersion> = Vec::new();
+    for version in versions {
+        if survey.graph_version() == Some(version)
+            || missing.contains(&version)
+            || found.iter().any(|stored| stored.version() == version)
+        {
+            continue;
+        }
+        match surveys
+            .find_graph_version(survey.organization_id(), survey.id(), version)
+            .await?
+        {
+            Some(graph) => found.push(VersionedGraph::new(version, graph)),
+            None => missing.push(version),
+        }
+    }
+    Ok((found, missing))
+}
+
+async fn require_graphs<S: SurveyRepository>(
+    surveys: &mut S,
+    survey: &SurveyRecord,
+    versions: Vec<GraphVersion>,
+) -> Result<(), CoreError> {
+    let mut checked: Vec<GraphVersion> = Vec::new();
+    for version in versions {
+        if survey.graph_version() == Some(version) || checked.contains(&version) {
+            continue;
+        }
+        if !surveys
+            .has_graph_version(survey.organization_id(), survey.id(), version)
+            .await?
+        {
+            return Err(SurveyError::GraphVersionNotFound.into());
+        }
+        checked.push(version);
+    }
+    Ok(())
+}
 
 const PUBLIC_SLUG_BYTES: usize = 16;
 const RESUME_TOKEN_BYTES: usize = 32;

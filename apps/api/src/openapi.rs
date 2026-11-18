@@ -510,11 +510,13 @@ impl Modify for SecurityAddon {
         survey::survey::open::handler,
         survey::survey::close::handler,
         survey::survey::duplicate::handler,
+        survey::survey::graph_version::handler,
         survey::campaign::list::handler,
         survey::campaign::create::handler,
         survey::campaign::get_one::handler,
         survey::campaign::update::handler,
         survey::campaign::delete::handler,
+        survey::campaign::surveys::handler,
         survey::response::list::handler,
         survey::response::get_one::handler,
         survey::response::delete::handler,
@@ -1090,6 +1092,8 @@ mod tests {
             "/api/v1/organizations/{organization_id}/surveys/{survey_id}/responses",
             "/api/v1/organizations/{organization_id}/survey-campaigns",
             "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}",
+            "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}/surveys",
+            "/api/v1/organizations/{organization_id}/surveys/{survey_id}/graph-versions/{version}",
             "/api/v1/organizations/{organization_id}/survey-responses/{response_id}",
             "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}",
             "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}/responses",
@@ -1148,6 +1152,35 @@ mod tests {
                 assert!(!data.contains(hidden), "{path} exposes {hidden}: {data}");
             }
         }
+    }
+
+    #[test]
+    fn the_survey_update_documents_the_campaign_set_and_the_campaign_listing_pages() {
+        let json = serde_json::to_value(ApiDoc::openapi()).expect("the document serializes");
+        let update =
+            &json["paths"]["/api/v1/organizations/{organization_id}/surveys/{survey_id}"]["patch"];
+        let described = update["requestBody"]["description"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            described.contains("campaign_ids absent or null leaves the campaigns unchanged"),
+            "{described}"
+        );
+        assert!(described.contains("replaces the whole set"), "{described}");
+        assert!(described.contains("unknown field"), "{described}");
+        let listing = &json["paths"]["/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}/surveys"]
+            ["get"];
+        let parameters: Vec<&str> = listing["parameters"]
+            .as_array()
+            .map(|parameters| {
+                parameters
+                    .iter()
+                    .filter_map(|parameter| parameter["name"].as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert!(parameters.contains(&"page"), "{parameters:?}");
+        assert!(parameters.contains(&"per_page"), "{parameters:?}");
     }
 
     #[test]

@@ -14,8 +14,8 @@ use crate::infrastructure::automation::connectors::test_support::assert_same_sha
 use crate::infrastructure::automation::connectors::world_support;
 use crate::infrastructure::automation::postgres::run::RUN_CLAIM_LOCK;
 use crate::{
-    CreateCampaignCommand, CreateSurveyCommand, SurveyCommand, SurveyPatch,
-    SurveyResponseCompleted, UpdateSurveyCommand,
+    CreateCampaignCommand, CreateSurveyCommand, SetSurveyCampaignsCommand, SurveyCommand,
+    SurveyPatch, SurveyResponseCompleted, UpdateSurveyCommand,
 };
 
 fn qid(n: u128) -> QuestionId {
@@ -188,6 +188,7 @@ async fn draft(
             organization_id: organization,
             title: "Bilan".to_owned(),
             visibility,
+            campaign_ids: Vec::new(),
         })
         .await
         .unwrap();
@@ -201,7 +202,7 @@ async fn draft(
                     graph: Some(graph),
                     ..SurveyPatch::default()
                 },
-                campaign_id: None,
+                campaign_ids: None,
             })
             .await
             .unwrap();
@@ -291,7 +292,7 @@ async fn a_public_survey_is_opened_linked_answered_listed_and_closed_by_actions(
     let SurveyRecord::Opened(frozen) = stored(&usecase, acme, survey).await else {
         panic!("the survey is opened");
     };
-    let event = SurveyResponseCompleted::new(&frozen, None, &completed[2])
+    let event = SurveyResponseCompleted::new(&frozen, &[], &completed[2])
         .unwrap()
         .payload();
     let closed = produced(run(&registry, "mestier.survey.close", acme, &target).await);
@@ -419,7 +420,7 @@ async fn another_organization_reaches_neither_the_survey_nor_lends_its_campaign(
     let SurveyRecord::Draft(untouched) = stored(&usecase, acme, survey).await else {
         panic!("the survey is still a draft");
     };
-    assert_eq!(untouched.campaign_id(), None);
+    assert!(untouched.campaign_ids().is_empty());
 }
 
 #[tokio::test]
@@ -451,7 +452,7 @@ async fn a_failed_opening_leaves_the_draft_out_of_the_campaign() {
     let SurveyRecord::Draft(untouched) = stored(&usecase, acme, survey).await else {
         panic!("the survey is still a draft");
     };
-    assert_eq!(untouched.campaign_id(), None);
+    assert!(untouched.campaign_ids().is_empty());
 }
 
 #[tokio::test]
@@ -480,7 +481,45 @@ async fn a_members_survey_is_opened_in_its_campaign_and_has_no_public_link() {
     );
     let link = failure(run(&registry, "mestier.survey.get_link", acme, &target(survey)).await);
 
-    assert_eq!(opened["campaign_id"], json!(spring.0));
+    assert_eq!(opened["campaign_ids"], json!([spring.0]));
     assert_eq!(opened["public_slug"], json!(null));
     assert!(link.contains("MEMBERS"), "{link}");
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn opening_in_a_campaign_adds_it_to_the_campaigns_of_the_survey() {
+    let _guard = RUN_CLAIM_LOCK.lock().await;
+    let pool = automation_pool().await;
+    let acme = world_support::organization(&pool, "survey-campaign-add").await;
+    enable_surveys(&pool, acme).await;
+    let registry = registry(&pool);
+    let usecase = usecase(&pool);
+    let spring = campaign(&usecase, acme).await;
+    let autumn = campaign(&usecase, acme).await;
+    let survey = draft(&usecase, acme, Visibility::Members, Some(two_questions())).await;
+    usecase
+        .set_survey_campaigns(SetSurveyCampaignsCommand {
+            actor: authz::Subject::system(),
+            organization_id: acme,
+            id: survey,
+            campaign_ids: vec![spring],
+        })
+        .await
+        .unwrap();
+
+    let opened = produced(
+        run(
+            &registry,
+            "mestier.survey.open",
+            acme,
+            &config(&[
+                ("survey_id", json!(survey.0.to_string())),
+                ("campaign_id", json!(autumn.0.to_string())),
+            ]),
+        )
+        .await,
+    );
+
+    assert_eq!(opened["campaign_ids"], json!([spring.0, autumn.0]));
 }

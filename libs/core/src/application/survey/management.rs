@@ -4,18 +4,18 @@ use mestier_macros::transactional;
 
 use super::commands::{
     CampaignCommand, CompletedSurveyResponses, CreateCampaignCommand, CreateSurveyCommand,
-    ListCampaignsCommand, ListSurveyResponsesCommand, ListSurveysCommand,
-    OpenSurveyInCampaignCommand, SurveyCommand, SurveyResponseCommand, UpdateCampaignCommand,
-    UpdateSurveyCommand,
+    ListCampaignSurveysCommand, ListCampaignsCommand, ListSurveyResponsesCommand,
+    ListSurveysCommand, OpenSurveyInCampaignCommand, SetSurveyCampaignsCommand, SurveyCommand,
+    SurveyGraphVersionCommand, SurveyResponseCommand, UpdateCampaignCommand, UpdateSurveyCommand,
 };
-use super::{guard_manage, guard_read, new_public_slug};
+use super::{former_graphs, guard_manage, guard_read, new_public_slug, require_graphs};
 use crate::application::MestierUseCase;
 use crate::domain::file_storage::{ports::FileStorage, service::FileStorageService};
 use crate::domain::survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository};
 use crate::domain::survey::service::{CampaignService, ResponseService, SurveyService};
 use crate::domain::survey::{
     Campaign, CampaignId, Closed, Draft, Opened, ResponseRecord, Survey, SurveyError, SurveyId,
-    SurveyRecord, Visibility,
+    SurveyRecord, SurveySummary, VersionedGraph, Visibility,
 };
 
 impl MestierUseCase {
@@ -36,21 +36,33 @@ impl MestierUseCase {
 
         let mut service =
             SurveyService::new(survey_repository, survey_campaign_repository, emitter);
-        service
+        let created = service
             .create(
                 command.organization_id,
                 SurveyId(generate_uuid_v7()),
                 command.title,
                 command.visibility,
             )
-            .await
+            .await?;
+        if command.campaign_ids.is_empty() {
+            return Ok(created);
+        }
+        match service
+            .set_campaigns(command.organization_id, created.id(), command.campaign_ids)
+            .await?
+        {
+            SurveyRecord::Draft(survey) => Ok(survey),
+            SurveyRecord::Opened(_) | SurveyRecord::Closed(_) => {
+                Err(SurveyError::SurveyNotDraft.into())
+            }
+        }
     }
 
     #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn update_survey(
         &self,
         command: UpdateSurveyCommand,
-    ) -> Result<Survey<Draft>, CoreError> {
+    ) -> Result<SurveyRecord, CoreError> {
         guard_manage(
             command.actor,
             command.organization_id,
@@ -64,16 +76,101 @@ impl MestierUseCase {
         let mut service =
             SurveyService::new(survey_repository, survey_campaign_repository, emitter);
         let updated = service
-            .update_draft(command.organization_id, command.id, command.patch)
+            .update(command.organization_id, command.id, command.patch)
             .await?;
-        match command.campaign_id {
-            Some(campaign_id) => {
+        match command.campaign_ids {
+            Some(campaign_ids) => {
                 service
-                    .attach_campaign(command.organization_id, command.id, campaign_id)
+                    .set_campaigns(command.organization_id, command.id, campaign_ids)
                     .await
             }
             None => Ok(updated),
         }
+    }
+
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
+    pub async fn set_survey_campaigns(
+        &self,
+        command: SetSurveyCampaignsCommand,
+    ) -> Result<SurveyRecord, CoreError> {
+        guard_manage(
+            command.actor,
+            command.organization_id,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
+            authz,
+        )
+        .await?;
+
+        let mut service =
+            SurveyService::new(survey_repository, survey_campaign_repository, emitter);
+        service
+            .set_campaigns(command.organization_id, command.id, command.campaign_ids)
+            .await
+    }
+
+    #[transactional(survey, feature_flag, member, role, authz)]
+    pub async fn get_survey_graph_version(
+        &self,
+        command: SurveyGraphVersionCommand,
+    ) -> Result<VersionedGraph, CoreError> {
+        let mut survey_repository = survey_repository;
+        guard_read(
+            command.actor,
+            command.organization_id,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
+            authz,
+        )
+        .await?;
+
+        let survey = survey_repository
+            .find(command.organization_id, command.id)
+            .await?
+            .ok_or(SurveyError::SurveyNotFound)?;
+        if survey.graph_version() == Some(command.version)
+            && let Some(graph) = survey.graph()
+        {
+            return Ok(VersionedGraph::new(command.version, graph.clone()));
+        }
+        let graph = survey_repository
+            .find_graph_version(command.organization_id, command.id, command.version)
+            .await?
+            .ok_or(SurveyError::GraphVersionNotFound)?;
+        Ok(VersionedGraph::new(command.version, graph))
+    }
+
+    #[transactional(survey, survey_campaign, feature_flag, member, role, authz)]
+    pub async fn list_campaign_surveys(
+        &self,
+        command: ListCampaignSurveysCommand,
+    ) -> Result<(Vec<SurveySummary>, u64), CoreError> {
+        let mut survey_repository = survey_repository;
+        let mut survey_campaign_repository = survey_campaign_repository;
+        guard_read(
+            command.actor,
+            command.organization_id,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
+            authz,
+        )
+        .await?;
+
+        survey_campaign_repository
+            .find(command.organization_id, command.id)
+            .await?
+            .ok_or(SurveyError::CampaignNotFound)?;
+        survey_repository
+            .list_summaries_by_campaign(
+                command.organization_id,
+                command.id,
+                command.limit,
+                command.offset,
+            )
+            .await
     }
 
     #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
@@ -123,15 +220,16 @@ impl MestierUseCase {
         let mut service =
             SurveyService::new(survey_repository, survey_campaign_repository, emitter);
         let attached = service
-            .attach_campaign(
-                command.organization_id,
-                command.id,
-                Some(command.campaign_id),
-            )
+            .add_campaign(command.organization_id, command.id, command.campaign_id)
             .await?;
-        let public_slug = match attached.visibility() {
-            Visibility::Public => Some(new_public_slug()?),
-            Visibility::Members => None,
+        let public_slug = match attached {
+            SurveyRecord::Draft(survey) => match survey.visibility() {
+                Visibility::Public => Some(new_public_slug()?),
+                Visibility::Members => None,
+            },
+            SurveyRecord::Opened(_) | SurveyRecord::Closed(_) => {
+                return Err(SurveyError::SurveyNotDraft.into());
+            }
         };
         service
             .open(command.organization_id, command.id, Utc::now(), public_slug)
@@ -216,9 +314,23 @@ impl MestierUseCase {
         )
         .await?;
 
-        survey_repository
-            .list(command.organization_id, command.limit, command.offset)
-            .await
+        match command.campaign_id {
+            Some(campaign_id) => {
+                survey_repository
+                    .list_by_campaign(
+                        command.organization_id,
+                        campaign_id,
+                        command.limit,
+                        command.offset,
+                    )
+                    .await
+            }
+            None => {
+                survey_repository
+                    .list(command.organization_id, command.limit, command.offset)
+                    .await
+            }
+        }
     }
 
     #[transactional(survey, feature_flag, member, role, authz)]
@@ -370,18 +482,28 @@ impl MestierUseCase {
         )
         .await?;
 
-        survey_repository
+        let survey = survey_repository
             .find(command.organization_id, command.survey_id)
             .await?
             .ok_or(SurveyError::SurveyNotFound)?;
-        survey_response_repository
+        let (responses, total) = survey_response_repository
             .list_for_survey(
                 command.organization_id,
                 command.survey_id,
                 command.limit,
                 command.offset,
             )
-            .await
+            .await?;
+        require_graphs(
+            &mut survey_repository,
+            &survey,
+            responses
+                .iter()
+                .filter_map(ResponseRecord::graph_version)
+                .collect(),
+        )
+        .await?;
+        Ok((responses, total))
     }
 
     #[transactional(survey, survey_response, feature_flag, member, role, authz)]
@@ -413,10 +535,20 @@ impl MestierUseCase {
                 command.offset,
             )
             .await?;
+        let (versions, _) = former_graphs(
+            &mut survey_repository,
+            &survey,
+            responses
+                .iter()
+                .map(|response| response.graph_version())
+                .collect(),
+        )
+        .await?;
         Ok(CompletedSurveyResponses {
             survey,
             responses,
             total,
+            versions,
         })
     }
 

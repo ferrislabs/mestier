@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM survey.survey_campaign\n            WHERE org_id = $1 AND survey_id = $2 AND NOT (campaign_id = ANY($3::uuid[]))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3976a5351bbcd6a67ec4b0264e01e92deff16f3e4bf7c5505ec23c4161f46591"
+}

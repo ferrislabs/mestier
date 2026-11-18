@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM survey.survey WHERE org_id = $1 AND id = $2\n            ) AS \"exists!\"\n            ",
+  "query": "\n                    SELECT EXISTS (\n                        SELECT 1 FROM survey.survey WHERE org_id = $1 AND id = $2\n                    ) AS \"exists!\"\n                    ",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       null
     ]
   },
-  "hash": "f083194d2afc07738abe96587b5b6b9aa279db640b4a981deed787504a6f6c21"
+  "hash": "ad245e44dec545b92bea9b4ca9ccb306ac4bd6cccac9877cadfe4b45f421233d"
 }

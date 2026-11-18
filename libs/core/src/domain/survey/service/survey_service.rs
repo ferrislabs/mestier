@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 use events::EventEmitter;
 
-use super::{SurveyPatch, campaign_of};
+use super::{SurveyPatch, campaigns_of};
 use crate::OrganizationId;
 use crate::domain::survey::aggregate::Stage;
 use crate::domain::survey::events::SurveyOpened;
@@ -58,20 +58,20 @@ fn copy_of<St: Stage>(survey: &Survey<St>, id: SurveyId) -> Result<Survey<Draft>
     copy.edit_allow_multiple_responses(survey.allow_multiple_responses());
     copy.edit_response_cap(survey.response_cap());
     copy.edit_metadata(survey.metadata().clone());
-    copy.edit_campaign(survey.campaign_id());
+    copy.edit_campaigns(survey.campaign_ids().to_vec());
     copy.edit_graph(survey.graph().cloned());
     Ok(copy)
 }
 
-fn apply(survey: &mut Survey<Draft>, patch: SurveyPatch) -> Result<(), SurveyError> {
-    if let Some(title) = patch.title {
+fn apply_settings<St: Stage>(
+    survey: &mut Survey<St>,
+    patch: &mut SurveyPatch,
+) -> Result<(), SurveyError> {
+    if let Some(title) = patch.title.take() {
         survey.edit_title(title)?;
     }
-    if let Some(description) = patch.description {
+    if let Some(description) = patch.description.take() {
         survey.edit_description(description);
-    }
-    if let Some(visibility) = patch.visibility {
-        survey.edit_visibility(visibility);
     }
     if let Some(allowed) = patch.allow_multiple_responses {
         survey.edit_allow_multiple_responses(allowed);
@@ -79,13 +79,52 @@ fn apply(survey: &mut Survey<Draft>, patch: SurveyPatch) -> Result<(), SurveyErr
     if let Some(cap) = patch.response_cap {
         survey.edit_response_cap(cap);
     }
-    if let Some(metadata) = patch.metadata {
+    if let Some(metadata) = patch.metadata.take() {
         survey.edit_metadata(metadata);
     }
-    if let Some(graph) = patch.graph {
+    Ok(())
+}
+
+fn frozen_visibility<St: Stage>(
+    survey: &Survey<St>,
+    visibility: Option<Visibility>,
+) -> Result<(), SurveyError> {
+    match visibility {
+        Some(visibility) if visibility != survey.visibility() => {
+            Err(SurveyError::SurveyVisibilityFrozen)
+        }
+        _ => Ok(()),
+    }
+}
+
+fn change_graph<St: Stage>(
+    survey: &mut Survey<St>,
+    graph: St::Input,
+    frozen: bool,
+) -> Result<(), SurveyError> {
+    if frozen {
+        survey.revise_graph(graph)?;
+    } else {
         survey.edit_graph(graph);
     }
     Ok(())
+}
+
+fn with_campaigns(record: SurveyRecord, campaign_ids: Vec<CampaignId>) -> SurveyRecord {
+    match record {
+        SurveyRecord::Draft(mut survey) => {
+            survey.edit_campaigns(campaign_ids);
+            SurveyRecord::Draft(survey)
+        }
+        SurveyRecord::Opened(mut survey) => {
+            survey.edit_campaigns(campaign_ids);
+            SurveyRecord::Opened(survey)
+        }
+        SurveyRecord::Closed(mut survey) => {
+            survey.edit_campaigns(campaign_ids);
+            SurveyRecord::Closed(survey)
+        }
+    }
 }
 
 impl<S, C, E> SurveyService<S, C, E>
@@ -113,9 +152,36 @@ where
             .ok_or_else(|| SurveyError::SurveyNotFound.into())
     }
 
-    async fn save_draft(&mut self, survey: Survey<Draft>) -> Result<Survey<Draft>, CoreError> {
-        let saved = self.surveys.update(&survey.into()).await?;
-        Ok(draft_of(saved)?)
+    async fn graph_frozen(
+        &mut self,
+        record: &SurveyRecord,
+        patch: &SurveyPatch,
+    ) -> Result<bool, CoreError> {
+        if matches!(record, SurveyRecord::Draft(_)) {
+            return Ok(false);
+        }
+        match (record.graph_version(), &patch.graph) {
+            (Some(version), Some(_)) => {
+                self.surveys
+                    .has_graph_version(record.organization_id(), record.id(), version)
+                    .await
+            }
+            _ => Ok(false),
+        }
+    }
+
+    async fn store_campaigns(
+        &mut self,
+        record: SurveyRecord,
+        campaign_ids: Vec<CampaignId>,
+    ) -> Result<SurveyRecord, CoreError> {
+        let organization_id = record.organization_id();
+        campaigns_of(&mut self.campaigns, organization_id, &campaign_ids).await?;
+        let edited = with_campaigns(record, campaign_ids);
+        self.surveys
+            .save_campaigns(organization_id, edited.id(), edited.campaign_ids())
+            .await?;
+        Ok(edited)
     }
 
     pub async fn create(
@@ -130,15 +196,69 @@ where
         Ok(draft_of(saved)?)
     }
 
-    pub async fn update_draft(
+    pub async fn update(
         &mut self,
         organization_id: OrganizationId,
         id: SurveyId,
-        patch: SurveyPatch,
-    ) -> Result<Survey<Draft>, CoreError> {
-        let mut survey = draft_of(self.find_locked(organization_id, id).await?)?;
-        apply(&mut survey, patch)?;
-        self.save_draft(survey).await
+        mut patch: SurveyPatch,
+    ) -> Result<SurveyRecord, CoreError> {
+        let record = self.find_locked(organization_id, id).await?;
+        let frozen = self.graph_frozen(&record, &patch).await?;
+        let edited = match record {
+            SurveyRecord::Draft(mut survey) => {
+                apply_settings(&mut survey, &mut patch)?;
+                if let Some(visibility) = patch.visibility {
+                    survey.edit_visibility(visibility);
+                }
+                if let Some(graph) = patch.graph {
+                    change_graph(&mut survey, graph, frozen)?;
+                }
+                SurveyRecord::Draft(survey)
+            }
+            SurveyRecord::Opened(mut survey) => {
+                frozen_visibility(&survey, patch.visibility)?;
+                apply_settings(&mut survey, &mut patch)?;
+                if let Some(graph) = patch.graph {
+                    let graph = graph.ok_or(SurveyError::SurveyWithoutGraph)?;
+                    change_graph(&mut survey, graph, frozen)?;
+                }
+                SurveyRecord::Opened(survey)
+            }
+            SurveyRecord::Closed(mut survey) => {
+                frozen_visibility(&survey, patch.visibility)?;
+                apply_settings(&mut survey, &mut patch)?;
+                if let Some(graph) = patch.graph {
+                    let graph = graph.ok_or(SurveyError::SurveyWithoutGraph)?;
+                    change_graph(&mut survey, graph, frozen)?;
+                }
+                SurveyRecord::Closed(survey)
+            }
+        };
+        self.surveys.update(&edited).await
+    }
+
+    pub async fn set_campaigns(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        campaign_ids: Vec<CampaignId>,
+    ) -> Result<SurveyRecord, CoreError> {
+        let record = self.find_locked(organization_id, id).await?;
+        self.store_campaigns(record, campaign_ids).await
+    }
+
+    pub async fn add_campaign(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        campaign_id: CampaignId,
+    ) -> Result<SurveyRecord, CoreError> {
+        let record = self.find_locked(organization_id, id).await?;
+        let mut campaign_ids = record.campaign_ids().to_vec();
+        if !campaign_ids.contains(&campaign_id) {
+            campaign_ids.push(campaign_id);
+        }
+        self.store_campaigns(record, campaign_ids).await
     }
 
     pub async fn duplicate(
@@ -164,13 +284,13 @@ where
         public_slug: Option<PublicSlug>,
     ) -> Result<Survey<Opened>, CoreError> {
         let survey = draft_of(self.find_locked(organization_id, id).await?)?;
-        let campaign =
-            campaign_of(&mut self.campaigns, organization_id, survey.campaign_id()).await?;
+        let campaigns =
+            campaigns_of(&mut self.campaigns, organization_id, survey.campaign_ids()).await?;
         let opened = survey.open(now, public_slug)?;
         let saved = opened_of(self.surveys.update(&opened.into()).await?)?;
         self.emitter.emit(
             saved.organization_id(),
-            &SurveyOpened::new(&saved, campaign.as_ref())?,
+            &SurveyOpened::new(&saved, &campaigns)?,
         )?;
         Ok(saved)
     }
@@ -197,17 +317,5 @@ where
             return Err(SurveyError::SurveyHasResponses.into());
         }
         self.surveys.delete(organization_id, id).await
-    }
-
-    pub async fn attach_campaign(
-        &mut self,
-        organization_id: OrganizationId,
-        id: SurveyId,
-        campaign_id: Option<CampaignId>,
-    ) -> Result<Survey<Draft>, CoreError> {
-        let mut survey = draft_of(self.find_locked(organization_id, id).await?)?;
-        campaign_of(&mut self.campaigns, organization_id, campaign_id).await?;
-        survey.edit_campaign(campaign_id);
-        self.save_draft(survey).await
     }
 }

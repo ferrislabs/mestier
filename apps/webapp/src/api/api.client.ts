@@ -903,7 +903,11 @@ export namespace Schemas {
   };
   export type CreateSupportApiKeyRequest = { name: string };
   export type Visibility = "PUBLIC" | "MEMBERS";
-  export type CreateSurveyRequest = { title: string; visibility: Visibility };
+  export type CreateSurveyRequest = {
+    campaign_ids?: Array<CampaignId> | undefined;
+    title: string;
+    visibility: Visibility;
+  };
   export type CreateTableColumnRequest = { config?: ColumnConfig | undefined; kind: ColumnKind; name: string };
   export type TableColumnId = string;
   export type FilterOperator =
@@ -3162,7 +3166,7 @@ export namespace Schemas {
   };
   export type UpdateSurveyRequest = Partial<{
     allow_multiple_responses: boolean | null;
-    campaign_id: null | CampaignId;
+    campaign_ids: Array<CampaignId> | null;
     description: string | null;
     graph: null | SurveyGraphSchema;
     metadata: Record<string, string> | null;
@@ -13756,6 +13760,24 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type get_ListSurveyCampaignSurveys = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}/surveys";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ page: number; per_page: number }>;
+      path: { organization_id: string; campaign_id: string };
+    };
+    responses: {
+      200: {
+        data: Array<{ id: Schemas.SurveyId; status: Schemas.SurveyStatus; title: string }>;
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_GetSurveyResponse = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/survey-responses/{response_id}";
@@ -13768,6 +13790,7 @@ export namespace Endpoints {
         data: {
           answers: Record<string, unknown>;
           completed_at?: (string | null) | undefined;
+          graph_version?: (number | null) | undefined;
           id: Schemas.ResponseId;
           member_id?: (null | Schemas.MemberId) | undefined;
           started_at: string;
@@ -13795,17 +13818,18 @@ export namespace Endpoints {
     path: "/api/v1/organizations/{organization_id}/surveys";
     requestFormat: "json";
     parameters: {
-      query: Partial<{ page: number; per_page: number }>;
+      query: Partial<{ page: number; per_page: number; campaign_id: string }>;
       path: { organization_id: string };
     };
     responses: {
       200: {
         data: Array<{
           allow_multiple_responses: boolean;
-          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          campaign_ids: Array<Schemas.CampaignId>;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
           graph?: (null | Schemas.SurveyGraphSchema) | undefined;
+          graph_version?: (number | null) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13836,10 +13860,11 @@ export namespace Endpoints {
       201: {
         data: {
           allow_multiple_responses: boolean;
-          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          campaign_ids: Array<Schemas.CampaignId>;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
           graph?: (null | Schemas.SurveyGraphSchema) | undefined;
+          graph_version?: (number | null) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13869,10 +13894,11 @@ export namespace Endpoints {
       200: {
         data: {
           allow_multiple_responses: boolean;
-          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          campaign_ids: Array<Schemas.CampaignId>;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
           graph?: (null | Schemas.SurveyGraphSchema) | undefined;
+          graph_version?: (number | null) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13912,10 +13938,11 @@ export namespace Endpoints {
       200: {
         data: {
           allow_multiple_responses: boolean;
-          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          campaign_ids: Array<Schemas.CampaignId>;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
           graph?: (null | Schemas.SurveyGraphSchema) | undefined;
+          graph_version?: (number | null) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13946,10 +13973,11 @@ export namespace Endpoints {
       200: {
         data: {
           allow_multiple_responses: boolean;
-          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          campaign_ids: Array<Schemas.CampaignId>;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
           graph?: (null | Schemas.SurveyGraphSchema) | undefined;
+          graph_version?: (number | null) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -13979,10 +14007,11 @@ export namespace Endpoints {
       201: {
         data: {
           allow_multiple_responses: boolean;
-          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          campaign_ids: Array<Schemas.CampaignId>;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
           graph?: (null | Schemas.SurveyGraphSchema) | undefined;
+          graph_version?: (number | null) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -14001,6 +14030,23 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type get_GetSurveyGraphVersion = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}/graph-versions/{version}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; survey_id: string; version: number };
+    };
+    responses: {
+      200: {
+        data: { graph: Schemas.SurveyGraphSchema; version: number };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type post_OpenSurvey = {
     method: "POST";
     path: "/api/v1/organizations/{organization_id}/surveys/{survey_id}/open";
@@ -14012,10 +14058,11 @@ export namespace Endpoints {
       200: {
         data: {
           allow_multiple_responses: boolean;
-          campaign_id?: (null | Schemas.CampaignId) | undefined;
+          campaign_ids: Array<Schemas.CampaignId>;
           closed_at?: (string | null) | undefined;
           description?: (string | null) | undefined;
           graph?: (null | Schemas.SurveyGraphSchema) | undefined;
+          graph_version?: (number | null) | undefined;
           id: Schemas.SurveyId;
           metadata: Record<string, string>;
           opened_at?: (string | null) | undefined;
@@ -14047,6 +14094,7 @@ export namespace Endpoints {
         data: Array<{
           answers: Record<string, unknown>;
           completed_at?: (string | null) | undefined;
+          graph_version?: (number | null) | undefined;
           id: Schemas.ResponseId;
           member_id?: (null | Schemas.MemberId) | undefined;
           started_at: string;
@@ -16055,9 +16103,11 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/surcharges": Endpoints.get_ListSurcharges;
     "/api/v1/organizations/{organization_id}/survey-campaigns": Endpoints.get_ListSurveyCampaigns;
     "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}": Endpoints.get_GetSurveyCampaign;
+    "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}/surveys": Endpoints.get_ListSurveyCampaignSurveys;
     "/api/v1/organizations/{organization_id}/survey-responses/{response_id}": Endpoints.get_GetSurveyResponse;
     "/api/v1/organizations/{organization_id}/surveys": Endpoints.get_ListSurveys;
     "/api/v1/organizations/{organization_id}/surveys/{survey_id}": Endpoints.get_GetSurvey;
+    "/api/v1/organizations/{organization_id}/surveys/{survey_id}/graph-versions/{version}": Endpoints.get_GetSurveyGraphVersion;
     "/api/v1/organizations/{organization_id}/surveys/{survey_id}/responses": Endpoints.get_ListSurveyResponses;
     "/api/v1/organizations/{organization_id}/task-labels": Endpoints.get_ListTaskLabels;
     "/api/v1/organizations/{organization_id}/task-recurrences": Endpoints.get_ListTaskRecurrences;

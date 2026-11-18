@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use common::CoreError;
 
-use super::record::{ResponseRecord, SurveyRecord};
+use super::record::{ResponseRecord, SurveyRecord, SurveySummary};
 use super::{
-    Campaign, CampaignId, Completed, PublicSlug, Response, ResponseId, ResumeToken, SurveyId,
+    Campaign, CampaignId, Completed, Graph, GraphVersion, PublicSlug, Response, ResponseId,
+    ResumeToken, SurveyId,
 };
 use crate::{MemberId, OrganizationId};
 
@@ -36,7 +37,24 @@ pub trait SurveyRepository: Send {
         &mut self,
         organization_id: OrganizationId,
         campaign_id: CampaignId,
-    ) -> impl Future<Output = Result<Vec<SurveyRecord>, CoreError>> + Send;
+        limit: u64,
+        offset: u64,
+    ) -> impl Future<Output = Result<(Vec<SurveyRecord>, u64), CoreError>> + Send;
+
+    fn list_summaries_by_campaign(
+        &mut self,
+        organization_id: OrganizationId,
+        campaign_id: CampaignId,
+        limit: u64,
+        offset: u64,
+    ) -> impl Future<Output = Result<(Vec<SurveySummary>, u64), CoreError>> + Send;
+
+    fn save_campaigns(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        campaign_ids: &[CampaignId],
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 
     fn find_by_public_slug(
         &mut self,
@@ -60,6 +78,28 @@ pub trait SurveyRepository: Send {
         organization_id: OrganizationId,
         id: SurveyId,
     ) -> impl Future<Output = Result<Option<SurveyRecord>, CoreError>> + Send;
+
+    fn has_graph_version(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: GraphVersion,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
+
+    fn store_graph_version(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: GraphVersion,
+        graph: &Graph,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn find_graph_version(
+        &mut self,
+        organization_id: OrganizationId,
+        id: SurveyId,
+        version: GraphVersion,
+    ) -> impl Future<Output = Result<Option<Graph>, CoreError>> + Send;
 }
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]

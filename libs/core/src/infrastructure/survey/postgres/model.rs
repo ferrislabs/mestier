@@ -5,7 +5,7 @@ use common::CoreError;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::{Campaign, PublicSlug, ResponseRecord, SurveyError, SurveyRecord};
+use crate::{Campaign, PublicSlug, ResponseRecord, SurveyError, SurveyGraphVersion, SurveyRecord};
 
 pub const UNIQUE_RESPONDENT_CONSTRAINTS: [&str; 2] =
     ["uq_response_unique_member", "uq_response_unique_identifier"];
@@ -36,11 +36,12 @@ pub fn map_response_error(error: sqlx::Error) -> CoreError {
 pub struct SurveyRow {
     pub id: Uuid,
     pub org_id: Uuid,
-    pub campaign_id: Option<Uuid>,
+    pub campaign_ids: Vec<Uuid>,
     pub title: String,
     pub description: Option<String>,
     pub visibility: String,
     pub graph: Option<Value>,
+    pub graph_version: Option<i32>,
     pub allow_multiple_responses: bool,
     pub response_cap: Option<i32>,
     pub metadata: Value,
@@ -73,11 +74,12 @@ impl TryFrom<SurveyRow> for SurveyRecord {
             "allow_multiple_responses": row.allow_multiple_responses,
             "response_cap": response_cap,
             "metadata": row.metadata,
-            "campaign_id": row.campaign_id,
+            "campaign_ids": row.campaign_ids,
             "public_slug": row.public_slug,
             "opened_at": row.opened_at,
             "closed_at": row.closed_at,
             "graph": row.graph,
+            "graph_version": row.graph_version,
         });
         let record = match row.status.as_str() {
             "DRAFT" => serde_json::from_value(value).map(Self::Draft),
@@ -92,11 +94,12 @@ impl TryFrom<SurveyRow> for SurveyRecord {
 pub struct SurveyColumns<'a> {
     pub id: Uuid,
     pub org_id: Uuid,
-    pub campaign_id: Option<Uuid>,
+    pub campaign_ids: Vec<Uuid>,
     pub title: &'a str,
     pub description: Option<&'a str>,
     pub visibility: &'static str,
     pub graph: Option<Value>,
+    pub graph_version: Option<i32>,
     pub allow_multiple_responses: bool,
     pub response_cap: Option<i32>,
     pub metadata: Value,
@@ -121,13 +124,21 @@ impl<'a> TryFrom<&'a SurveyRecord> for SurveyColumns<'a> {
                 Self {
                     id,
                     org_id: $survey.organization_id().0,
-                    campaign_id: $survey.campaign_id().map(|campaign| campaign.0),
+                    campaign_ids: $survey
+                        .campaign_ids()
+                        .iter()
+                        .map(|campaign| campaign.0)
+                        .collect(),
                     title: $survey.title(),
                     description: $survey.description(),
                     visibility: $survey.visibility().as_str(),
                     graph: $survey
                         .graph()
                         .map(|graph| encode("survey", id, graph))
+                        .transpose()?,
+                    graph_version: $survey
+                        .graph_version()
+                        .map(|version| version_column("survey", id, version))
                         .transpose()?,
                     allow_multiple_responses: $survey.allow_multiple_responses(),
                     response_cap: cap_column(id, $survey.response_cap())?,
@@ -195,6 +206,7 @@ pub struct ResponseRow {
     pub unique_respondent: bool,
     pub completed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub graph_version: Option<i32>,
 }
 
 impl TryFrom<ResponseRow> for ResponseRecord {
@@ -213,6 +225,7 @@ impl TryFrom<ResponseRow> for ResponseRecord {
             "completed_at": row.completed_at,
             "identifier_value": row.identifier_value,
             "unique_respondent": row.unique_respondent,
+            "graph_version": row.graph_version,
         });
         let record = match row.status.as_str() {
             "IN_PROGRESS" => serde_json::from_value(value).map(Self::InProgress),
@@ -235,6 +248,15 @@ pub struct ResponseColumns<'a> {
     pub unique_respondent: bool,
     pub completed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub graph_version: Option<i32>,
+}
+
+pub fn version_column(
+    table: &str,
+    id: Uuid,
+    version: SurveyGraphVersion,
+) -> Result<i32, CoreError> {
+    i32::try_from(version.get()).map_err(|_| corrupt(table, id, "graph_version"))
 }
 
 impl<'a> TryFrom<&'a ResponseRecord> for ResponseColumns<'a> {
@@ -251,6 +273,10 @@ impl<'a> TryFrom<&'a ResponseRecord> for ResponseColumns<'a> {
             ),
         };
         let id = response_id.0;
+        let graph_version = record
+            .graph_version()
+            .map(|version| version_column("response", id, version))
+            .transpose()?;
         macro_rules! columns {
             ($response:expr) => {
                 Self {
@@ -265,6 +291,7 @@ impl<'a> TryFrom<&'a ResponseRecord> for ResponseColumns<'a> {
                     unique_respondent,
                     completed_at: $response.completed_at(),
                     created_at: $response.started_at(),
+                    graph_version,
                 }
             };
         }

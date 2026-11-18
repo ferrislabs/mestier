@@ -12,6 +12,7 @@ pub mod create;
 pub mod delete;
 pub mod get_one;
 pub mod list;
+pub mod surveys;
 pub mod update;
 
 pub fn router(_state: &AppState) -> Router<AppState> {
@@ -21,6 +22,7 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .typed_get(get_one::handler)
         .typed_patch(update::handler)
         .typed_delete(delete::handler)
+        .typed_get(surveys::handler)
 }
 
 #[derive(TypedPath, Deserialize)]
@@ -32,6 +34,13 @@ pub struct CampaignsPath {
 #[derive(TypedPath, Deserialize)]
 #[typed_path("/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}")]
 pub struct CampaignPath {
+    pub organization_id: OrganizationId,
+    pub campaign_id: CampaignId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path("/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}/surveys")]
+pub struct CampaignSurveysPath {
     pub organization_id: OrganizationId,
     pub campaign_id: CampaignId,
 }

@@ -1,6 +1,7 @@
 use events::{DomainEvent, EventSubject};
 use serde_json::{Value, json};
 
+use super::response::Phase;
 use super::{
     Answer, Answers, Campaign, CampaignId, Completed, Graph, InProgress, Metadata, Opened,
     Response, Survey, SurveyError,
@@ -12,16 +13,17 @@ pub use super::descriptors::emitted_events;
 
 fn merged_metadata(
     survey: &Survey<Opened>,
-    campaign: Option<&Campaign>,
+    campaigns: &[Campaign],
 ) -> Result<Metadata, SurveyError> {
-    survey.check_campaign(campaign)?;
-    Ok(campaign.map_or_else(
-        || survey.metadata().clone(),
-        |campaign| Metadata::merged(campaign.metadata(), survey.metadata()),
-    ))
+    let ordered = survey.ordered_campaigns(campaigns)?;
+    let layers: Vec<&Metadata> = ordered.iter().map(|campaign| campaign.metadata()).collect();
+    Ok(Metadata::merged_all(&layers, survey.metadata()))
 }
 
-fn ensure_response<S>(survey: &Survey<Opened>, response: &Response<S>) -> Result<(), SurveyError> {
+fn ensure_response<S: Phase>(
+    survey: &Survey<Opened>,
+    response: &Response<S>,
+) -> Result<(), SurveyError> {
     if response.survey_id() == survey.id() {
         Ok(())
     } else {
@@ -35,12 +37,9 @@ pub struct SurveyOpened<'a> {
 }
 
 impl<'a> SurveyOpened<'a> {
-    pub fn new(
-        survey: &'a Survey<Opened>,
-        campaign: Option<&Campaign>,
-    ) -> Result<Self, SurveyError> {
+    pub fn new(survey: &'a Survey<Opened>, campaigns: &[Campaign]) -> Result<Self, SurveyError> {
         Ok(Self {
-            metadata: merged_metadata(survey, campaign)?,
+            metadata: merged_metadata(survey, campaigns)?,
             survey,
         })
     }
@@ -63,7 +62,8 @@ impl DomainEvent for SurveyOpened<'_> {
         let survey = self.survey;
         json!({
             "survey_id": survey.id().0,
-            "campaign_id": campaign_id(survey.campaign_id()),
+            "campaign_ids": campaign_ids(survey.campaign_ids()),
+            "graph_version": survey.version(),
             "metadata": metadata_payload(&self.metadata),
             "survey": {
                 "id": survey.id().0,
@@ -88,12 +88,12 @@ pub struct SurveyResponseSubmitted<'a> {
 impl<'a> SurveyResponseSubmitted<'a> {
     pub fn new(
         survey: &'a Survey<Opened>,
-        campaign: Option<&Campaign>,
+        campaigns: &[Campaign],
         response: &'a Response<InProgress>,
     ) -> Result<Self, SurveyError> {
         ensure_response(survey, response)?;
         Ok(Self {
-            metadata: merged_metadata(survey, campaign)?,
+            metadata: merged_metadata(survey, campaigns)?,
             survey,
             response,
         })
@@ -117,7 +117,8 @@ impl DomainEvent for SurveyResponseSubmitted<'_> {
         let response = self.response;
         json!({
             "survey_id": self.survey.id().0,
-            "campaign_id": campaign_id(self.survey.campaign_id()),
+            "campaign_ids": campaign_ids(self.survey.campaign_ids()),
+            "graph_version": self.survey.version(),
             "metadata": metadata_payload(&self.metadata),
             "response": {
                 "id": response.id().0,
@@ -138,12 +139,15 @@ pub struct SurveyResponseCompleted<'a> {
 impl<'a> SurveyResponseCompleted<'a> {
     pub fn new(
         survey: &'a Survey<Opened>,
-        campaign: Option<&Campaign>,
+        campaigns: &[Campaign],
         response: &'a Response<Completed>,
     ) -> Result<Self, SurveyError> {
         ensure_response(survey, response)?;
+        if response.graph_version() != survey.version() {
+            return Err(SurveyError::ResponseGraphVersionMismatch);
+        }
         Ok(Self {
-            metadata: merged_metadata(survey, campaign)?,
+            metadata: merged_metadata(survey, campaigns)?,
             survey,
             response,
         })
@@ -184,7 +188,8 @@ impl DomainEvent for SurveyResponseCompleted<'_> {
         let response = self.response;
         json!({
             "survey_id": self.survey.id().0,
-            "campaign_id": campaign_id(self.survey.campaign_id()),
+            "campaign_ids": campaign_ids(self.survey.campaign_ids()),
+            "graph_version": response.graph_version(),
             "survey": { "id": self.survey.id().0, "title": self.survey.title() },
             "response": {
                 "id": response.id().0,
@@ -242,8 +247,8 @@ impl DomainEvent for SurveyCampaignEnded {
     }
 }
 
-fn campaign_id(id: Option<CampaignId>) -> Value {
-    id.map_or(Value::Null, |id| json!(id.0))
+fn campaign_ids(ids: &[CampaignId]) -> Value {
+    Value::Array(ids.iter().map(|id| json!(id.0)).collect())
 }
 
 fn metadata_payload(metadata: &Metadata) -> Value {

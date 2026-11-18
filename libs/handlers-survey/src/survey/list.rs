@@ -8,12 +8,20 @@ use handlers::{
     ApiError, AppState, DataEnvelope, Page, PaginationMetadata, PaginationParams, Response,
     resolve_actor,
 };
-use mestier_core::ListSurveysCommand;
+use mestier_core::{CampaignId, ListSurveysCommand};
+use serde::Deserialize;
+use utoipa::IntoParams;
 
 use crate::{
     require_org_membership,
     survey::{SurveyView, SurveysPath},
 };
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct SurveyListFilter {
+    campaign_id: Option<CampaignId>,
+}
 
 #[utoipa::path(
     get,
@@ -23,9 +31,10 @@ use crate::{
     params(
         ("organization_id" = mestier_core::OrganizationId, Path, description = "Organization identifier"),
         PaginationParams,
+        SurveyListFilter,
     ),
     responses(
-        (status = 200, description = "Paginated surveys of the organization", body = inline(DataEnvelope<Vec<SurveyView>>)),
+        (status = 200, description = "Paginated surveys of the organization, only those of a campaign when campaign_id is given", body = inline(DataEnvelope<Vec<SurveyView>>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Requires survey.view or survey.manage"),
         (status = 404, description = "Surveys are not enabled for this organization"),
@@ -37,6 +46,7 @@ pub async fn handler(
     State(state): State<AppState>,
     Extension(identity): Extension<Identity>,
     Query(pagination): Query<PaginationParams>,
+    Query(filter): Query<SurveyListFilter>,
 ) -> Result<HttpResponse, ApiError> {
     require_org_membership(&state, &identity, path.organization_id).await?;
     let (user_id, actor) = resolve_actor(&state, &identity).await?;
@@ -48,6 +58,7 @@ pub async fn handler(
         .list_surveys(ListSurveysCommand {
             actor,
             organization_id: path.organization_id,
+            campaign_id: filter.campaign_id,
             limit: per_page,
             offset: pagination.offset(),
         })

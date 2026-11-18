@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, campaign_id, title, description, visibility, graph,\n                   allow_multiple_responses, response_cap, metadata, status, public_slug,\n                   opened_at, closed_at\n            FROM survey.survey\n            WHERE org_id = $1 AND campaign_id = $2\n            ORDER BY created_at DESC, id DESC\n            ",
+  "query": "\n            SELECT s.id, s.org_id,\n                   COALESCE(\n                       (SELECT array_agg(sc.campaign_id ORDER BY sc.position, sc.attached_at)\n                        FROM survey.survey_campaign sc\n                        WHERE sc.org_id = s.org_id AND sc.survey_id = s.id),\n                       '{}'\n                   ) AS \"campaign_ids!\",\n                   s.title, s.description, s.visibility, s.graph, s.graph_version,\n                   s.allow_multiple_responses, s.response_cap, s.metadata, s.status,\n                   s.public_slug, s.opened_at, s.closed_at\n            FROM survey.survey s\n            WHERE s.org_id = $1\n            ORDER BY s.created_at DESC, s.id DESC\n            LIMIT $2 OFFSET $3\n            ",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "campaign_id",
-        "type_info": "Uuid"
+        "name": "campaign_ids!",
+        "type_info": "UuidArray"
       },
       {
         "ordinal": 3,
@@ -40,36 +40,41 @@
       },
       {
         "ordinal": 7,
+        "name": "graph_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
         "name": "allow_multiple_responses",
         "type_info": "Bool"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "response_cap",
         "type_info": "Int4"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "metadata",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "status",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "public_slug",
         "type_info": "Text"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "opened_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "closed_at",
         "type_info": "Timestamptz"
       }
@@ -77,16 +82,18 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
       false,
       false,
-      true,
+      null,
       false,
       true,
       false,
+      true,
       true,
       false,
       true,
@@ -97,5 +104,5 @@
       true
     ]
   },
-  "hash": "8548bdfc1036c6e26345a0c653c7bbe21ec08d1bd4763fb10c51f918238ce1ef"
+  "hash": "add7bcf0565655751a200cbbfaf997c1306469e67e9e3d6d9f3d48586926ccfc"
 }

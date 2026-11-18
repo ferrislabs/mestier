@@ -1,4 +1,5 @@
 mod campaign;
+mod editable;
 mod features;
 mod harness;
 mod issuer;

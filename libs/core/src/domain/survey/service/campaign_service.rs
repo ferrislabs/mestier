@@ -125,8 +125,11 @@ where
         id: CampaignId,
     ) -> Result<(), CoreError> {
         self.find_locked(organization_id, id).await?;
-        let attached = self.surveys.list_by_campaign(organization_id, id).await?;
-        if !attached.is_empty() {
+        let (_, attached) = self
+            .surveys
+            .list_summaries_by_campaign(organization_id, id, 1, 0)
+            .await?;
+        if attached > 0 {
             return Err(SurveyError::CampaignHasSurveys.into());
         }
         self.campaigns.delete(organization_id, id).await

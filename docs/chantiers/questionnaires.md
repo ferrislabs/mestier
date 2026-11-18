@@ -40,10 +40,10 @@ Décisions prises avec le demandeur (2026-11-14) :
 
 Choix de l'assistant (à corriger) :
 
-- Une campagne regroupe un ou plusieurs questionnaires. Un questionnaire appartient à une campagne au plus.
+- Une campagne regroupe un ou plusieurs questionnaires. Un questionnaire appartient à zéro, une ou plusieurs campagnes (amendé en C1).
 - Une réponse est « en cours » dès son premier enregistrement, puis « complète » à la soumission finale.
-- La définition des questions est un JSON versionné, figé à l'ouverture. Les réponses sont en JSONB.
-- Un questionnaire de campagne accepte des réponses s'il est ouvert **et** que la campagne est dans sa fenêtre.
+- La définition des questions est un JSON versionné, modifiable après l'ouverture (amendé en C1, voir Décisions C1). Les réponses sont en JSONB.
+- Un questionnaire de campagne accepte des réponses s'il est ouvert **et** que l'une au moins de ses campagnes est dans sa fenêtre.
 - Le répondant ne voit pas de note. Il voit un message de fin configuré par l'auteur.
 
 ## Glossary
@@ -59,10 +59,12 @@ Fenêtre : intervalle début-fin d'une campagne pendant lequel les réponses son
 
 - Toute requête est filtrée par `org_id`.  [test : une requête sans `org_id` ne compile pas avec `query!` ; le filtre est vérifié par test d'intégration]
 - Une campagne dont la fin précède le début n'existe pas.  [type : constructeur `Window::new` renvoie `Result`]
-- Un questionnaire n'a des questions modifiables qu'à l'état brouillon. Après ouverture la définition est figée.  [type : `Survey<Draft>` expose l'édition, pas `Survey<Opened>`]
+- Un questionnaire reste modifiable dans tous ses états (titre, description, graphe, réglages, métadonnées, campagnes). Un questionnaire ouvert ou fermé a toujours un graphe valide.  [type : les éditeurs sont communs à `Survey<S: Stage>` ; hors brouillon, `edit_graph` prend un `Graph` et non un `Option<Graph>`]
+- Un graphe modifié alors que le questionnaire a une réponse complète sur sa version courante conserve la version précédente et incrémente `graph_version` ; sinon il est remplacé sur place.  [test : service et intégration Postgres]
 - Une réponse complète ne change plus.  [type : état `Completed` sans méthode de modification]
-- Une réponse n'est acceptée que si le questionnaire est ouvert et, s'il est dans une campagne, que l'instant est dans la fenêtre.  [test : garde dans le cas d'usage de soumission ; l'horloge est injectée]
-- Une réponse ne peut pas être complète si une question obligatoire **du chemin parcouru** est sans réponse, ou si le chemin ne se termine pas sur un nœud `End`.  [test : validation de la réponse contre la définition figée]
+- Une réponse n'est acceptée que si le questionnaire est ouvert et, s'il est dans des campagnes, que l'instant est dans la fenêtre d'au moins une.  [test : garde dans le cas d'usage de soumission ; l'horloge est injectée]
+- Une réponse ne peut pas être complète si une question obligatoire **du chemin parcouru** est sans réponse, ou si le chemin ne se termine pas sur un nœud `End`.  [test : validation de la réponse contre le graphe courant]
+- Une réponse complète porte la version du graphe sur laquelle elle a été complétée, et ce graphe reste lisible.  [test : `graph_version` requis par une contrainte quand la réponse est complète ; `get_survey_graph_version`]
 - Un graphe n'a pas de cycle, a un seul nœud de départ, et chaque nœud mène à un `End`.  [type : `Graph::new` renvoie `Result`, la définition ne se construit pas autrement]
 - Une condition ne référence qu'une question de choix posée sur tous les chemins qui y mènent, et une option qui existe.  [type : vérifié dans `Graph::new`]
 - Une réponse hors du chemin parcouru n'est ni conservée ni envoyée dans un événement.  [test]
@@ -75,7 +77,7 @@ Fenêtre : intervalle début-fin d'une campagne pendant lequel les réponses son
 - `survey.response_completed` part au plus une fois par réponse.  [test]
 - Un questionnaire `MEMBERS` ne reçoit jamais de réponse d'un non-membre de son organisation.  [test d'intégration sur la route]
 - Une route publique ne révèle rien de l'organisation au-delà du questionnaire ouvert (pas d'identifiant d'organisation, pas de liste).  [test]
-- La visibilité d'un questionnaire ne change plus après sa première ouverture.  [type : visibilité absente de `Survey<Opened>` en écriture] — *choix de l'assistant, à confirmer*
+- La visibilité et le lien public d'un questionnaire ne changent plus après sa première ouverture.  [type : `edit_visibility` n'existe que sur `Survey<Draft>` ; le service refuse une autre visibilité avec `survey_visibility_frozen`, 409]
 - Les réponses ne sont écrites que dans le schéma `survey`.  [test : migration et revue, aucun autre schéma ne référence ses tables en écriture]
 
 ## Out of scope
@@ -99,17 +101,17 @@ Fenêtre : intervalle début-fin d'une campagne pendant lequel les réponses son
 
 Entités :
 
-- `Survey` : id, `org_id`, titre, description, visibilité, définition (questions), message de fin, réglages (`allow_multiple_responses`, plafond de réponses optionnel), métadonnées privées, état (`Draft`, `Opened`, `Closed`), `campaign_id` optionnel, `opened_at` et `closed_at` (audit).
+- `Survey` : id, `org_id`, titre, description, visibilité, définition (questions) et sa version `graph_version`, message de fin, réglages (`allow_multiple_responses`, plafond de réponses optionnel), métadonnées privées, état (`Draft`, `Opened`, `Closed`), `campaign_ids` (ordre de rattachement, sans doublon), `opened_at` et `closed_at` (audit).
 - `Question` (dans la définition JSON versionnée) : id stable, type (`TEXT`, `LONG_TEXT`, `NUMBER`, `SINGLE_CHOICE`, `MULTIPLE_CHOICE`, `DATE`, `DATETIME`, `PHONE`, `EMAIL`, `PHOTO`), libellé, obligatoire, options pour les choix, indicateur « identifiant » (voir Unicité), nombre maximal de photos pour `PHOTO`.
 - `Graph` (la définition d'un questionnaire, JSONB versionné, voir Arbre de décision) : nœuds `Question`, `Condition` et `End`, et arêtes.
-- `Campaign` : id, `org_id`, nom, `Window` optionnelle (début et fin chacun optionnel), métadonnées privées, état (`Scheduled`, `Running`, `Ended`). Les métadonnées d'un questionnaire de campagne se superposent à celles de la campagne (celles du questionnaire gagnent).
-- `Response` : id, `org_id`, `survey_id`, `member_id` optionnel (rempli en mode membres), réponses (JSONB indexé par id de question), état (`InProgress`, `Completed`), jeton de reprise (mode public).
+- `Campaign` : id, `org_id`, nom, `Window` optionnelle (début et fin chacun optionnel), métadonnées privées, état (`Scheduled`, `Running`, `Ended`). Les métadonnées d'un questionnaire se superposent à celles de ses campagnes, prises dans l'ordre de rattachement (une campagne plus tardive gagne, le questionnaire gagne sur toutes).
+- `Response` : id, `org_id`, `survey_id`, `member_id` optionnel (rempli en mode membres), réponses (JSONB indexé par id de question), état (`InProgress`, `Completed`), jeton de reprise (mode public), `graph_version` (réponse complète seulement).
 
 Valeurs : `Visibility`, `Window`, `QuestionId`, `Answer` (enum aligné sur les types de question).
 
 Cas d'usage (`application/survey/`, méthodes `#[transactional]` sur `MestierUseCase`) :
 
-- gestion : créer, modifier (brouillon), ouvrir, fermer, supprimer un questionnaire ; créer, modifier, supprimer une campagne ; rattacher un questionnaire à une campagne ;
+- gestion : créer, modifier (tous états), ouvrir, fermer, supprimer un questionnaire ; créer, modifier, supprimer une campagne ; fixer les campagnes d'un questionnaire (`set_survey_campaigns`) ; lire une version du graphe (`get_survey_graph_version`) ; lister les questionnaires d'une campagne ;
 - réponse : enregistrer une réponse (création au premier appel, mise à jour ensuite), compléter une réponse ;
 - lecture : lister les réponses d'un questionnaire, lire une réponse ;
 - horloge : avancer l'état des campagnes (`Scheduled` → `Running` → `Ended`) et émettre `survey_campaign.started` et `survey_campaign.ended`.
@@ -125,7 +127,7 @@ La définition d'un questionnaire est un **graphe orienté sans cycle**, constru
 - **Chemin** : le chemin d'une réponse est calculé par le backend en suivant le graphe à partir des réponses. Une réponse donnée sur un chemin abandonné (le répondant est revenu en arrière et a changé une réponse de choix) est écartée à l'enregistrement.
 - **Validation de la complétion** : seules les questions obligatoires **du chemin parcouru** doivent être renseignées, et le chemin doit se terminer sur un nœud `End`.
 - Les payloads d'événements ne contiennent que les réponses du chemin parcouru, dans l'ordre du chemin.
-- Le graphe fait partie de la définition figée à l'ouverture.
+- Le graphe reste modifiable après l'ouverture ; il est versionné (voir Décisions C1).
 
 **Où se fait le calcul du chemin.** Le backend fait foi, à chaque enregistrement et à la complétion. Le navigateur doit aussi trouver la question suivante sans attendre le réseau, donc il suit le graphe lui aussi. Pour qu'il n'y ait pas deux vérités, un même jeu de cas de test (fichier JSON de graphes, réponses et chemins attendus) est exécuté par les tests Rust et par les tests vitest.
 
@@ -164,7 +166,7 @@ Ajoutés au catalogue (un `EventDescriptor` par événement, une ligne dans `emi
 
 **Identifiants portés par chaque événement :**
 
-- Les trois événements de questionnaire (`survey.opened`, `survey.response_submitted`, `survey.response_completed`) portent `survey_id` et `campaign_id`. `campaign_id` est `null` pour un questionnaire indépendant, jamais absent du payload.
+- Les trois événements de questionnaire (`survey.opened`, `survey.response_submitted`, `survey.response_completed`) portent `survey_id`, `campaign_ids` et `graph_version`. `campaign_ids` est `[]` pour un questionnaire indépendant, jamais absent du payload (amendé en C1, remplace `campaign_id`). `graph_version` n'est jamais nul (un questionnaire ouvert a toujours un graphe) ; pour `survey.response_completed` c'est la version de la réponse.
 - Les deux événements de campagne portent `campaign_id`.
 - Le contrat est figé en S0 et décrit dans `event-contracts.ts`, pour que le sélecteur de l'éditeur propose ces deux champs.
 
@@ -205,13 +207,13 @@ Une énumération par frontière : `SurveyError` (domaine), erreurs de handler v
 @spec-survey-1  Scenario: un questionnaire public ouvert reçoit une réponse sans compte
 @spec-survey-2  Scenario: un questionnaire membres refuse un répondant non authentifié
 @spec-survey-3  Scenario: un questionnaire membres refuse un membre d'une autre organisation
-@spec-survey-4  Scenario: ouvrir un questionnaire fige sa définition et émet survey.opened
+@spec-survey-4  Scenario: ouvrir un questionnaire émet survey.opened avec la version de son graphe ; un questionnaire ouvert reste modifiable
 @spec-survey-5  Scenario: enregistrer une réponse en cours émet survey.response_submitted
 @spec-survey-6  Scenario: compléter une réponse émet survey.response_completed avec toutes les réponses, une seule fois
 @spec-survey-7  Scenario: compléter sans réponse à une question obligatoire est refusé
 @spec-survey-8  Scenario: une réponse complète ne peut plus être modifiée
-@spec-survey-9  Scenario: un questionnaire de campagne refuse une réponse avant le début de la fenêtre
-@spec-survey-10 Scenario: un questionnaire de campagne refuse une réponse après la fin de la fenêtre
+@spec-survey-9  Scenario: un questionnaire de campagne refuse une réponse avant le début de la fenêtre (raison campaign_not_started)
+@spec-survey-10 Scenario: un questionnaire de campagne refuse une réponse après la fin de la fenêtre (raison campaign_ended)
 @spec-survey-11 Scenario: l'horloge démarre la campagne à sa date de début et émet survey_campaign.started
 @spec-survey-12 Scenario: l'horloge termine la campagne à sa date de fin et émet survey_campaign.ended
 @spec-survey-13 Scenario: une campagne dont la fin précède le début est refusée
@@ -225,8 +227,8 @@ Une énumération par frontière : `SurveyError` (domaine), erreurs de handler v
 @spec-survey-21 Scenario: un e-mail, un téléphone ou une date invalides sont refusés à l'enregistrement
 @spec-survey-22 Scenario: une photo est normalisée et stockée, et la réponse en porte la clé
 @spec-survey-23 Scenario: un fichier qui n'est pas une image est refusé
-@spec-survey-24 Scenario: les métadonnées du questionnaire et de la campagne sont dans le payload des événements et jamais dans une route de réponse
-@spec-survey-25 Scenario: chaque événement de questionnaire porte survey_id et campaign_id, null pour un questionnaire indépendant
+@spec-survey-24 Scenario: les métadonnées du questionnaire et de ses campagnes sont dans le payload des événements et jamais dans une route de réponse
+@spec-survey-25 Scenario: chaque événement de questionnaire porte survey_id et campaign_ids, [] pour un questionnaire indépendant
 @spec-survey-26 Scenario: chaque événement de campagne porte campaign_id
 @spec-survey-27 Scenario: la branche Then ou Else d'une condition décide de la question suivante
 @spec-survey-28 Scenario: une question obligatoire hors du chemin parcouru n'empêche pas la complétion
@@ -235,6 +237,12 @@ Une énumération par frontière : `SurveyError` (domaine), erreurs de handler v
 @spec-survey-31 Scenario: deux branches qui se rejoignent sur une question commune sont acceptées
 @spec-survey-32 Scenario: le navigateur et le backend calculent le même chemin sur le jeu de cas partagé
 @spec-survey-33 Scenario: un chemin qui ne se termine pas sur un nœud End empêche la complétion
+@spec-survey-34 Scenario: un questionnaire dans deux campagnes accepte tant que l'une est dans sa fenêtre ; refuse campaign_ended si les deux sont finies, campaign_not_started si l'une est finie et l'autre à venir
+@spec-survey-35 Scenario: les métadonnées de deux campagnes sont fusionnées dans l'ordre de rattachement, puis le questionnaire gagne
+@spec-survey-36 Scenario: une campagne contient deux questionnaires
+@spec-survey-37 Scenario: après modification d'un questionnaire ouvert, une réponse en cours perd la réponse à une question supprimée et se complète
+@spec-survey-38 Scenario: les réponses complètes gardent leur graph_version et l'ancien graphe reste lisible ; deux modifications sans nouvelle réponse complète écrasent sur place ; un questionnaire fermé se modifie et reste fermé
+@spec-survey-39 Scenario: la visibilité d'un questionnaire ouvert ne change pas (survey_visibility_frozen)
 ```
 
 Chaque ligne devient un test avant le code. Les scénarios 1 à 17 sont écrits en Gherkin quand le workstream S0 démarre.
@@ -291,6 +299,7 @@ pub enum SurveyError
 pub struct Metadata(BTreeMap<String, String>);
 pub fn new(entries: BTreeMap<String, String>) -> Result<Self, SurveyError>
 pub fn merged(campaign: &Metadata, survey: &Metadata) -> Metadata
+pub fn merged_all(campaigns: &[&Metadata], survey: &Metadata) -> Metadata  // C1
 pub fn get(&self, key: &str) -> Option<&str>
 pub fn iter(&self) -> impl Iterator<Item = (&str, &str)>
 
@@ -348,26 +357,33 @@ pub fn visibility(&self) -> Visibility
 pub fn allow_multiple_responses(&self) -> bool
 pub fn response_cap(&self) -> Option<NonZeroU32>
 pub fn metadata(&self) -> &Metadata
-pub fn campaign_id(&self) -> Option<CampaignId>
+pub fn campaign_ids(&self) -> &[CampaignId]                       // C1, remplace campaign_id()
 pub fn graph(&self) -> Option<&Graph>
+pub fn graph_version(&self) -> Option<u32>                        // C1
 pub fn opened_at(&self) -> Option<DateTime<Utc>>
 pub fn closed_at(&self) -> Option<DateTime<Utc>>
 pub fn new( id: SurveyId, organization_id: OrganizationId, title: String, visibility: Visibility, ) -> Result<Self, SurveyError>
-pub fn edit_title(&mut self, title: String) -> Result<(), SurveyError>
-pub fn edit_description(&mut self, description: Option<String>)
-pub fn edit_visibility(&mut self, visibility: Visibility)
-pub fn edit_allow_multiple_responses(&mut self, allowed: bool)
-pub fn edit_response_cap(&mut self, cap: Option<NonZeroU32>)
-pub fn edit_metadata(&mut self, metadata: Metadata)
-pub fn edit_campaign(&mut self, campaign_id: Option<CampaignId>)
-pub fn edit_graph(&mut self, graph: Option<Graph>)
+pub fn edit_title(&mut self, title: String) -> Result<(), SurveyError>       // C1 : tous états
+pub fn edit_description(&mut self, description: Option<String>)             // C1 : tous états
+pub fn edit_visibility(&mut self, visibility: Visibility)                   // brouillon seulement
+pub fn edit_allow_multiple_responses(&mut self, allowed: bool)              // C1 : tous états
+pub fn edit_response_cap(&mut self, cap: Option<NonZeroU32>)                // C1 : tous états
+pub fn edit_metadata(&mut self, metadata: Metadata)                         // C1 : tous états
+pub fn edit_campaigns(&mut self, campaign_ids: Vec<CampaignId>)             // C1, remplace edit_campaign
+pub fn edit_graph(&mut self, graph: S::Input)                               // C1 : Option<Graph> en brouillon, Graph sinon
+pub fn revise_graph(&mut self, graph: S::Input) -> Option<GraphVersion>     // C1
 pub fn open( mut self, at: DateTime<Utc>, public_slug: Option<PublicSlug>, ) -> Result<Survey<Opened>, SurveyError>
 pub fn definition(&self) -> &Graph
+pub fn version(&self) -> u32                                                // C1
 pub fn public_slug(&self) -> Option<&PublicSlug>
 pub fn close(mut self, at: DateTime<Utc>) -> Result<Survey<Closed>, SurveyError>
-pub fn accepts( &self, campaign: Option<&Campaign>, now: DateTime<Utc>, ) -> Result<(), SurveyError>
+pub fn accepts(&self, campaigns: &[Campaign], now: DateTime<Utc>) -> Result<(), SurveyError>   // C1
 pub fn public_slug(&self) -> Option<&PublicSlug>
-pub fn accepts( &self, _campaign: Option<&Campaign>, _now: DateTime<Utc>, ) -> Result<(), SurveyError>
+pub fn accepts(&self, _campaigns: &[Campaign], _now: DateTime<Utc>) -> Result<(), SurveyError> // C1
+pub struct GraphVersion                                                      // C1, exporté SurveyGraphVersion
+pub fn new(version: u32, graph: Graph) -> Result<Self, SurveyError>
+pub fn version(&self) -> u32
+pub fn graph(&self) -> &Graph
 
 // response.rs
 pub struct InProgress;
@@ -389,6 +405,7 @@ pub fn save( &mut self, survey: &Survey<Opened>, mut answers: Answers, ) -> Resu
 pub fn complete( mut self, survey: &Survey<Opened>, at: DateTime<Utc>, ) -> Result<Response<Completed>, SurveyError>
 pub fn identifier_value(&self) -> Option<&str>
 pub fn unique_respondent(&self) -> bool
+pub fn graph_version(&self) -> u32                                          // C1, Response<Completed>
 
 // record.rs
 pub enum SurveyRecord
@@ -406,11 +423,11 @@ pub trait ResponseRepository: Send
 
 // events.rs
 pub struct SurveyOpened<'a>
-pub fn new( survey: &'a Survey<Opened>, campaign: Option<&Campaign>, ) -> Result<Self, SurveyError>
+pub fn new(survey: &'a Survey<Opened>, campaigns: &[Campaign]) -> Result<Self, SurveyError>                                              // C1
 pub struct SurveyResponseSubmitted<'a>
-pub fn new( survey: &'a Survey<Opened>, campaign: Option<&Campaign>, response: &'a Response<InProgress>, ) -> Result<Self, SurveyError>
+pub fn new(survey: &'a Survey<Opened>, campaigns: &[Campaign], response: &'a Response<InProgress>) -> Result<Self, SurveyError>        // C1
 pub struct SurveyResponseCompleted<'a>
-pub fn new( survey: &'a Survey<Opened>, campaign: Option<&Campaign>, response: &'a Response<Completed>, ) -> Result<Self, SurveyError>
+pub fn new(survey: &'a Survey<Opened>, campaigns: &[Campaign], response: &'a Response<Completed>) -> Result<Self, SurveyError>         // C1
 pub struct SurveyCampaignStarted
 pub struct SurveyCampaignEnded
 ```
@@ -418,9 +435,9 @@ pub struct SurveyCampaignEnded
 Payloads des cinq événements (exemples complets dans `survey/descriptors.rs`) :
 
 ```text
-survey.opened                sujet survey          {survey_id, campaign_id|null, metadata, survey: {id, organization_id, title, description, visibility, allow_multiple_responses, response_cap|null, opened_at}}
-survey.response_submitted    sujet survey_response {survey_id, campaign_id|null, metadata, response: {id, member_id|null, status}, answered_questions}
-survey.response_completed    sujet survey_response {survey_id, campaign_id|null, survey: {id, title}, response: {id, member_id|null, completed_at, identifier_value|null}, metadata, answers: [{question_id, label, kind, value}]}
+survey.opened                sujet survey          {survey_id, campaign_ids: [], graph_version, metadata, survey: {id, organization_id, title, description, visibility, allow_multiple_responses, response_cap|null, opened_at}}
+survey.response_submitted    sujet survey_response {survey_id, campaign_ids: [], graph_version, metadata, response: {id, member_id|null, status}, answered_questions}
+survey.response_completed    sujet survey_response {survey_id, campaign_ids: [], graph_version, survey: {id, title}, response: {id, member_id|null, completed_at, identifier_value|null}, metadata, answers: [{question_id, label, kind, value}]}
 survey_campaign.started      sujet survey_campaign {campaign_id, campaign: {id, organization_id, name, starts_at|null, ends_at|null, metadata}}
 survey_campaign.ended        sujet survey_campaign {campaign_id, campaign: {id, organization_id, name, starts_at|null, ends_at|null, metadata}}
 ```
@@ -495,12 +512,23 @@ Décisions S6 :
 - **Non vérifié sans navigateur** : barre d'actions collante face au clavier iOS, invite caméra, conversion HEIC sur un vrai fichier iPhone, contrastes dans les deux thèmes, annonces de lecteur d'écran, CORS derrière la passerelle.
 - **Suites à donner** : exposer `allow_multiple_responses` dans la vue du répondant pour afficher « Réponse déjà envoyée » au rechargement d'un questionnaire à réponse unique (aujourd'hui le jeton est effacé à la complétion, un rechargement rouvre un formulaire vierge) ; route de gestion qui présigne les photos de réponse ; listing des questionnaires ouverts d'un membre ; index d'unicité des réponses en cours par membre ; lien membre copiable depuis la liste de gestion.
 
+Décisions C1 (branche `feat/surveys-editable`) :
+
+- **Questionnaire modifiable** : en brouillon, ouvert ou fermé, le titre, la description, le graphe, `allow_multiple_responses`, le plafond, les métadonnées et les campagnes se modifient. La visibilité et le lien public sont figés dès l'ouverture : une autre visibilité est refusée avec `survey_visibility_frozen` (409) ; la même visibilité est acceptée sans effet. Un questionnaire ouvert ou fermé ne perd pas son graphe (`survey_without_graph`). Chaque modification charge le questionnaire `FOR UPDATE` et garde l'état (un questionnaire fermé reste fermé). Aucun événement de modification.
+- **Versions du graphe** : `survey.survey.graph_version` (nul seulement en brouillon sans graphe, contrainte `(graph IS NULL) = (graph_version IS NULL)`) et la table `survey.survey_version (org_id, survey_id, version, graph, created_at)`. Règle exacte (amendée par la vague de correction C1) : **une version est figée si et seulement si sa ligne existe dans `survey_version`**. La ligne est écrite à la complétion : quand une réponse est complétée, elle reçoit la version courante et la ligne de cette version est créée avec le graphe courant si elle manque (si elle existe, elle porte déjà ce graphe, puisqu'une version figée ne s'écrase jamais). Quand le graphe d'un questionnaire ouvert ou fermé change, `has_graph_version(version courante)` décide : ligne présente, la version est figée et le nouveau graphe prend `version + 1` ; ligne absente, le graphe est remplacé sur place, sans incrément. Supprimer des réponses ne défige jamais une version : une réponse de test complétée puis supprimée coûte seulement un numéro de version, et les vraies réponses suivantes sont lues sur leur propre graphe. Un brouillon démarre à la version 1 dès qu'il a un graphe ; une copie repart à 1. La version est typée `GraphVersion(NonZeroU32)` dans le domaine ; l'incrément est vérifié (`checked_add`) et refuse avec `graph_version_exhausted` (409) au-delà de `u32::MAX` ; la colonne `INTEGER` est convertie par un `try_from` vérifié. L'événement `survey.response_completed` refuse (`response_graph_version_mismatch`, erreur interne) une réponse dont la version n'est pas la version courante du questionnaire.
+- **Réponses en cours** : elles suivent toujours le graphe courant. À la complétion, une réponse enregistrée (non renvoyée dans la requête) est écartée sans erreur quand sa question n'existe plus ou ne l'accepte plus après une modification du graphe : type changé (`answer_kind_mismatch`), option retirée (`answer_unknown_option`) ou plafond de photos abaissé (`answer_too_many_photos`) ; le répondant n'est donc pas bloqué par une modification. Une réponse hors chemin est écartée comme avant. Une photo étrangère ou vide et un nombre non fini stockés restent refusés. Une réponse envoyée par le client (sauvegarde) est toujours validée et refusée si elle ne convient pas (`answer_unknown_question`, `answer_kind_mismatch`, etc.). Une question supprimée n'est par construction sur aucun chemin : le filtre du chemin l'écarte déjà.
+- **Lecture d'une version** : `get_survey_graph_version(survey_id, version)` (lecture de gestion) renvoie le graphe courant quand la version est la courante, sinon la ligne de `survey_version`, sinon 404 `graph_version_not_found` (une version 0 dans le chemin donne aussi 404). Route `GET /api/v1/organizations/{organization_id}/surveys/{survey_id}/graph-versions/{version}` → `{version, graph}`. `get_survey_response` et `list_survey_responses` exposent `graph_version` (nul pour une réponse en cours). Une ligne de version manquante n'est jamais silencieuse : `list_survey_responses` refuse avec `graph_version_not_found` (404) si une réponse complète porte une version ancienne sans ligne ; `list_completed_survey_responses` joint les graphes des versions anciennes en lisant chaque version une seule fois (les absences sont mémorisées) et `CompletedSurveyResponses::graph_of` renvoie `graph_version_not_found` pour une version sans ligne ; l'action `mestier.survey.list_responses` calcule `answers` sur le graphe de chaque réponse, renvoie `graph_version` et échoue en nommant la réponse si son graphe manque, au lieu de renvoyer `answers: []`.
+- **Plusieurs campagnes** : la table `survey.survey_campaign (org_id, survey_id, campaign_id, position, attached_at)` remplace `survey.survey.campaign_id` (migration avec copie, `.down.sql` qui recopie la première campagne). `position` garde l'ordre de rattachement, `attached_at` seul ne le départage pas dans une même transaction. `Survey::campaign_ids()` suit cet ordre, sans doublon ; `edit_campaigns` dédoublonne en gardant la première occurrence. Supprimer une campagne reste refusé tant qu'un questionnaire y est rattaché. Concurrence de l'ensemble de campagnes : `find_for_update` pose d'abord un verrou nu (`SELECT 1 … FOR UPDATE`) puis relit le questionnaire par une nouvelle requête, donc un nouvel instantané sous READ COMMITTED : la sous-requête corrélée sur `survey_campaign` ne renvoie plus un ensemble périmé après l'attente du verrou. Les lignes de `survey_campaign` ne sont réécrites que par le port dédié `save_campaigns(organization_id, survey_id, &[CampaignId])`, appelé seulement par `set_campaigns`, `add_campaign` (ouverture dans une campagne) et la création (insertion, copie comprise) ; `update` ne touche plus la table de jointure, si bien qu'une modification du titre qui attendait le verrou ne perd pas les campagnes posées entre-temps. Chaque sous-requête corrélée filtre aussi `sc.org_id = s.org_id`.
+- **Acceptation** : `accepts(&[Campaign], now)` sur un questionnaire ouvert. Sans campagne, il accepte ; sinon il accepte si l'une au moins des fenêtres contient `now`. Sinon `campaign_not_started` si l'une des campagnes n'a pas encore commencé, `campaign_ended` sinon. Les campagnes passées doivent être exactement celles du questionnaire (`survey_campaign_mismatch`, `survey_campaign_organization_mismatch`).
+- **Métadonnées** : `Metadata::merged_all(campagnes, questionnaire)` fusionne les campagnes dans l'ordre de rattachement (une plus tardive gagne), puis le questionnaire gagne sur toutes.
+- **API** : les vues de questionnaire exposent `campaign_ids` et `graph_version` ; création et modification acceptent `campaign_ids`. En modification, `campaign_ids` absent ou `null` laisse les campagnes inchangées et un tableau (même vide) remplace tout l'ensemble, dans l'ordre donné. `UpdateSurveyRequest` est `#[serde(deny_unknown_fields)]` : un ancien client qui envoie `campaign_id` reçoit 422 au lieu d'être ignoré en silence (documenté dans la description OpenAPI). `set_survey_campaigns` (toutes doivent exister dans l'organisation, sinon 404). Listes de campagne paginées en SQL : `GET .../survey-campaigns/{campaign_id}/surveys` renvoie un résumé `{id, title, status}` lu par une requête dédiée sans charger les graphes, borné par `LIMIT/OFFSET` (`per_page` 50 par défaut, 200 au plus, `page` à partir de 1) avec un bloc `pagination` comme les autres listes ; `GET .../surveys?campaign_id=` pagine en SQL par la jointure (plus de pagination en mémoire). L'action `mestier.survey.open` garde son champ `campaign_id` optionnel et **ajoute** la campagne à celles du questionnaire sous le verrou du questionnaire (`SurveyService::add_campaign` : chargement `find_for_update`, ajout si absente, `save_campaigns`) avant de l'ouvrir, dans une transaction ; ses sorties portent `campaign_ids`. Les routes de répondant n'exposent toujours ni campagne ni version.
+
 ## Risks / open questions
 
 Choix de l'assistant après relecture (à corriger) :
 
 - **Dates d'un questionnaire** : `opened_at` et `closed_at` sont des horodatages d'audit. Seule une campagne a une fenêtre programmée. Un questionnaire indépendant s'ouvre et se ferme à la main ou par une action d'automatisation.
-- **Cycle de vie** : `Draft` → `Opened` → `Closed`. Pas de réouverture. Pour corriger une faute dans un questionnaire ouvert, on le **duplique** en brouillon. Un questionnaire sans réponse peut être supprimé ; avec des réponses, il peut seulement être fermé.
+- **Cycle de vie** : `Draft` → `Opened` → `Closed`. Pas de réouverture. Un questionnaire ouvert ou fermé se corrige sur place (amendé en C1) ; on ne le **duplique** que pour changer sa visibilité. Un questionnaire sans réponse peut être supprimé ; avec des réponses, il peut seulement être fermé.
 - **Payload de `survey.response_completed`** : `response_id`, `survey_id`, titre du questionnaire, `member_id` (mode membres), les métadonnées fusionnées (campagne puis questionnaire), et pour chaque question son id, son libellé, son type, la réponse et, pour un choix, le libellé de l'option. Le payload est lisible sans la définition.
 - **Abus du public** : limitation de débit, plus un plafond de réponses optionnel par questionnaire (valeur choisie par l'auteur). Pas de captcha dans ce lot. `survey.response_submitted` part aussi pour une réponse anonyme.
 - **Données personnelles** : l'auteur peut supprimer une réponse. Pas de purge automatique dans ce lot. À rouvrir si les payloads d'événements doivent aussi être purgés.
@@ -538,3 +566,5 @@ Amended: 2026-11-14 décisions de S1 consignées (horloge, deux temps, vue du r�
 Amended: 2026-11-14 décisions de S2 et S4 consignées (routes, raisons d erreur, chemin public, actions).
 Amended: 2026-11-14 décisions de S3 et S5 consignées.
 Amended: 2026-11-14 décisions de S6 consignées.
+Amended: 2026-11-15 C1 : un questionnaire ouvert ou fermé reste modifiable (visibilité et lien figés), son graphe est versionné et une réponse complète porte sa version ; un questionnaire appartient à plusieurs campagnes, les événements portent `campaign_ids` et `graph_version` au lieu de `campaign_id`.
+Amended: 2026-11-15 vague de correction C1 : une version est figée si et seulement si sa ligne existe (écrite à la complétion, jamais défigée par une suppression) ; verrou nu puis relecture et `save_campaigns` dédié pour l'ensemble de campagnes ; réponses enregistrées périmées écartées à la complétion ; `GraphVersion(NonZeroU32)` ; versions manquantes signalées ; `deny_unknown_fields` sur la modification ; listes de campagne paginées en SQL.

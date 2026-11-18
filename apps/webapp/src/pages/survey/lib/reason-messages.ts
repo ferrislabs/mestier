@@ -81,8 +81,7 @@ export const REASON_MESSAGES = {
 	survey_not_found: 'Ce questionnaire est introuvable.',
 	campaign_not_found: 'Cette campagne est introuvable.',
 	response_not_found: 'Cette réponse est introuvable.',
-	survey_not_draft:
-		'Le questionnaire n’est plus un brouillon : sa définition est figée.',
+	survey_not_draft: 'Le questionnaire n’est plus un brouillon.',
 	survey_not_opened: 'Le questionnaire n’est pas ouvert.',
 	survey_has_responses:
 		'Ce questionnaire a déjà des réponses : fermez-le plutôt que de le supprimer.',
@@ -95,6 +94,14 @@ export const REASON_MESSAGES = {
 		'Le questionnaire a changé entre-temps. Rechargez la page puis réessayez.',
 	response_photo_cap_reached:
 		'Cette réponse a atteint le nombre maximal de photos déposées.',
+	survey_visibility_frozen:
+		'La visibilité d’un questionnaire ouvert ne change plus : dupliquez-le pour en changer.',
+	graph_version_invalid: 'Cette version du questionnaire n’est pas valide.',
+	graph_version_not_found: 'Cette version du questionnaire est introuvable.',
+	graph_version_exhausted:
+		'Ce questionnaire a atteint son dernier numéro de version : dupliquez-le pour continuer à le modifier.',
+	response_graph_version_mismatch:
+		'La réponse ne correspond pas à la version actuelle du questionnaire. Rechargez la page puis réessayez.',
 } as const satisfies Record<string, string>
 
 export type BackendReason = keyof typeof REASON_MESSAGES

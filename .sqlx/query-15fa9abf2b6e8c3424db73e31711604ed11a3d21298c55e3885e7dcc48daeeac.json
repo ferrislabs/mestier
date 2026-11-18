@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,\n                   identifier_value, unique_respondent, completed_at, created_at\n            FROM survey.response\n            WHERE org_id = $1 AND survey_id = $2 AND member_id = $3 AND status = 'COMPLETED'\n            ORDER BY completed_at DESC, id DESC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,\n                   identifier_value, unique_respondent, completed_at, created_at, graph_version\n            FROM survey.response\n            WHERE org_id = $1 AND survey_id = $2 AND member_id = $3 AND status = 'COMPLETED'\n            ORDER BY completed_at DESC, id DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -57,6 +57,11 @@
         "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "graph_version",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -77,8 +82,9 @@
       true,
       false,
       true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "fa417a505caebb5a48f7f466ab8c0ec1c1495ab45b973b40395304b94bcc3116"
+  "hash": "15fa9abf2b6e8c3424db73e31711604ed11a3d21298c55e3885e7dcc48daeeac"
 }

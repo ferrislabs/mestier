@@ -67,9 +67,11 @@ export function SurveysListFeature() {
 		)
 		return (surveys.data?.data ?? []).map((survey) => ({
 			survey,
-			campaignName: survey.campaign_id
-				? (names.get(survey.campaign_id) ?? null)
-				: null,
+			campaignName:
+				survey.campaign_ids
+					.map((id) => names.get(id))
+					.filter((name) => name !== undefined)
+					.join(', ') || null,
 		}))
 	}, [surveys.data, campaigns.data])
 

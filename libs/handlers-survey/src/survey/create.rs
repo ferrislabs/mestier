@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response as HttpResponse},
 };
 use handlers::{ApiError, AppState, DataEnvelope, Response, resolve_actor};
-use mestier_core::{CreateSurveyCommand, Visibility};
+use mestier_core::{CampaignId, CreateSurveyCommand, Visibility};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -18,6 +18,8 @@ use crate::{
 pub struct CreateSurveyRequest {
     pub title: String,
     pub visibility: Visibility,
+    #[serde(default)]
+    pub campaign_ids: Vec<CampaignId>,
 }
 
 #[utoipa::path(
@@ -33,7 +35,7 @@ pub struct CreateSurveyRequest {
         (status = 201, description = "Draft survey created", body = inline(DataEnvelope<SurveyView>)),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Requires survey.manage"),
-        (status = 404, description = "Surveys are not enabled for this organization"),
+        (status = 404, description = "A campaign is not found, or surveys are not enabled for this organization"),
         (status = 422, description = "Blank title"),
     ),
     security(("bearer_auth" = []))
@@ -55,6 +57,7 @@ pub async fn handler(
             organization_id: path.organization_id,
             title: payload.title,
             visibility: payload.visibility,
+            campaign_ids: payload.campaign_ids,
         })
         .await?;
 

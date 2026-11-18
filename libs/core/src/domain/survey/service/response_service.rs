@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use common::{CoreError, generate_uuid_v7};
 use events::EventEmitter;
 
-use super::{ResponseLocator, StartedResponse, campaign_of};
+use super::{ResponseLocator, StartedResponse, campaigns_of};
 use crate::domain::file_storage::{ports::FileStorage, service::FileStorageService};
 use crate::domain::photo_library::normalize::STORED_MIME_TYPE;
 use crate::domain::survey::events::{SurveyResponseCompleted, SurveyResponseSubmitted};
@@ -85,7 +85,7 @@ where
         survey_id: SurveyId,
         visibility: Visibility,
         now: DateTime<Utc>,
-    ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
+    ) -> Result<(Survey<Opened>, Vec<Campaign>), CoreError> {
         let record = self.surveys.find(organization_id, survey_id).await?;
         self.accept(organization_id, record, visibility, now).await
     }
@@ -96,7 +96,7 @@ where
         survey_id: SurveyId,
         visibility: Visibility,
         now: DateTime<Utc>,
-    ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
+    ) -> Result<(Survey<Opened>, Vec<Campaign>), CoreError> {
         let record = self
             .surveys
             .find_for_update(organization_id, survey_id)
@@ -110,7 +110,7 @@ where
         record: Option<SurveyRecord>,
         visibility: Visibility,
         now: DateTime<Utc>,
-    ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
+    ) -> Result<(Survey<Opened>, Vec<Campaign>), CoreError> {
         let record = record.filter(|record| record.visibility() == visibility);
         let survey = match record {
             Some(SurveyRecord::Opened(survey)) => survey,
@@ -118,10 +118,10 @@ where
             Some(SurveyRecord::Closed(_)) => return Err(SurveyError::SurveyClosed.into()),
             None => return Err(SurveyError::SurveyNotFound.into()),
         };
-        let campaign =
-            campaign_of(&mut self.campaigns, organization_id, survey.campaign_id()).await?;
-        survey.accepts(campaign.as_ref(), now)?;
-        Ok((survey, campaign))
+        let campaigns =
+            campaigns_of(&mut self.campaigns, organization_id, survey.campaign_ids()).await?;
+        survey.accepts(&campaigns, now)?;
+        Ok((survey, campaigns))
     }
 
     async fn locate(
@@ -230,7 +230,7 @@ where
         now: DateTime<Utc>,
     ) -> Result<Response<InProgress>, CoreError> {
         let mut response = self.locate(organization_id, locator).await?;
-        let (survey, campaign) = self
+        let (survey, campaigns) = self
             .accepting(
                 organization_id,
                 response.survey_id(),
@@ -244,7 +244,7 @@ where
         let saved = in_progress_of(self.responses.update(&response.into()).await?)?;
         self.emitter.emit(
             saved.organization_id(),
-            &SurveyResponseSubmitted::new(&survey, campaign.as_ref(), &saved)?,
+            &SurveyResponseSubmitted::new(&survey, &campaigns, &saved)?,
         )?;
         Ok(saved)
     }
@@ -282,7 +282,7 @@ where
     ) -> Result<Response<Completed>, CoreError> {
         let response = self.locate(organization_id, locator).await?;
         let survey_id = response.survey_id();
-        let (survey, campaign) = self
+        let (survey, campaigns) = self
             .accepting_locked(organization_id, survey_id, locator.visibility(), now)
             .await?;
         if let Some(cap) = survey.response_cap()
@@ -301,9 +301,17 @@ where
             return Err(SurveyError::RespondentAlreadyAnswered.into());
         }
         let saved = completed_of(self.responses.update(&completed.into()).await?)?;
+        self.surveys
+            .store_graph_version(
+                organization_id,
+                survey_id,
+                saved.graph_version(),
+                survey.definition(),
+            )
+            .await?;
         self.emitter.emit(
             saved.organization_id(),
-            &SurveyResponseCompleted::new(&survey, campaign.as_ref(), &saved)?,
+            &SurveyResponseCompleted::new(&survey, &campaigns, &saved)?,
         )?;
         Ok(saved)
     }

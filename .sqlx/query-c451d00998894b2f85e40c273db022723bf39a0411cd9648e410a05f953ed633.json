@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE survey.response\n            SET answers = $3, status = $4, identifier_value = $5, unique_respondent = $6,\n                completed_at = $7, updated_at = now()\n            WHERE org_id = $1 AND id = $2 AND status = 'IN_PROGRESS'\n            RETURNING id, org_id, survey_id, member_id, answers, status, resume_token,\n                      identifier_value, unique_respondent, completed_at, created_at\n            ",
+  "query": "\n            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,\n                   identifier_value, unique_respondent, completed_at, created_at, graph_version\n            FROM survey.response\n            WHERE status = 'IN_PROGRESS' AND updated_at < $1\n            ORDER BY updated_at, id\n            LIMIT $2\n            ",
   "describe": {
     "columns": [
       {
@@ -57,17 +57,17 @@
         "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "graph_version",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Jsonb",
-        "Text",
-        "Text",
-        "Bool",
-        "Timestamptz"
+        "Timestamptz",
+        "Int8"
       ]
     },
     "nullable": [
@@ -81,8 +81,9 @@
       true,
       false,
       true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "bf07700c9136076256475481009d6bac32ffaa3bddfb273b183e742c1d9062d7"
+  "hash": "c451d00998894b2f85e40c273db022723bf39a0411cd9648e410a05f953ed633"
 }
