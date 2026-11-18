@@ -473,6 +473,19 @@ Décisions S2 et S4 :
 - **Actions d'automatisation (S4)** : `mestier.survey.open`, `.close`, `.get_link`, `.list_responses`, exécutées en acteur système, la portée d'organisation vient du workflow. `open` rattache à la campagne et ouvre dans une seule transaction. `list_responses` renvoie `{ total, responses }`, réponses complètes seulement, les plus récentes d'abord, `limit` par défaut 50, plafond 100, mêmes entrées `answers` que `survey.response_completed`.
 - **Pour S5 et S6** : la disposition du canevas n'a pas encore de stockage (colonne et API à décider au début de S5) ; aucun listing des questionnaires ouverts d'un membre ; pas de filtre sur les listes ; `Graph::new` refuse un libellé vide, donc un brouillon ne s'enregistre pas avec une question sans libellé.
 
+Décisions S3 :
+
+- **Routes publiques** (sans compte) sous `/api/v1/public/surveys/{slug}` : lire le questionnaire, `POST .../responses` (démarrer, le seul endroit qui renvoie le jeton de reprise), `GET`/`PUT .../responses/{jeton}`, `POST .../responses/{jeton}/complete`, `POST .../responses/{jeton}/photos`. Le slug et le jeton sont retirés des traces (chemin et requête). Un slug inconnu ou invalide, un brouillon, un questionnaire `MEMBERS`, une organisation sans le flag et un jeton invalide répondent par le même 404, au même corps. Un questionnaire fermé répond 409 `details.reason` (`survey_closed`, `campaign_not_started`, `campaign_ended`, `response_already_completed`).
+- **Limites** : par adresse client (adresse lue dans `X-Forwarded-For` seulement si elle se parse comme une IP, sinon l'adresse du pair) et par slug (indépendante de l'en-tête) sur démarrage, envoi de photo et enregistrement ; 429 au-delà. Hypothèse de confiance : la passerelle réécrit `X-Forwarded-For` avec l'adresse réelle du client. Les réponses en cours restent non bornées par questionnaire.
+- **Photos** : 20 envois au plus par réponse (409 `response_photo_cap_reached`), distincts de `max_photos` par question (5 par défaut). Octets bruts JPEG, PNG ou WebP (HEIC converti dans le navigateur), type détecté sur le contenu, EXIF et GPS retirés, 50 mégapixels et 12 000 px de côté au plus, vérifiés avant décodage ; normalisation bornée (2 à la fois en public, délai de 2 s puis 503). Clé stockée : `<racine du stockage>/survey-<org>/<survey>/<réponse>/<uuid>.jpg`. Une réponse `PHOTO` n'accepte qu'une clé enregistrée dans `survey.response_photo` pour cette réponse (422 `answer_foreign_photo` sinon). La suppression d'une réponse efface ses fichiers d'abord, puis ses lignes.
+- **Purge** : les réponses en cours, publiques ou membres, non modifiées depuis 30 jours sont supprimées avec leurs fichiers enregistrés, sur le tick du worker ; un échec de stockage sur l'une ne bloque pas les autres. Une réponse reprise après purge répond 404 : S6 la traite comme « expirée ». Migration `20261125000001` (`survey.response_photo`).
+
+Décisions S5 :
+
+- **Routes** : `/o/$organizationSlug/questionnaires` (liste), `/questionnaires/$surveyId` (éditeur), `/questionnaires/$surveyId/reponses`, `/questionnaires/campagnes` et `/questionnaires/campagnes/$campaignId` (le préfixe du module doit rester `/questionnaires`).
+- Le module est visible avec `VIEW_SURVEYS` et le flag `surveys`. La disposition du canevas se recalcule à chaque chargement : rien n'est stocké. L'éditeur contrôle côté client les règles de `Graph::new` ; un brouillon ne s'enregistre pas tant que son graphe est refusé par le serveur.
+- **Manques de l'API** : pas de nombre de réponses ni de nombre de questionnaires par campagne (comptés côté client sur les 100 premiers), pas de route de gestion pour lire une photo de réponse (l'interface affiche la clé). Une route de gestion qui présigne uniquement les clés de `survey.response_photo` reste à écrire.
+
 ## Risks / open questions
 
 Choix de l'assistant après relecture (à corriger) :
@@ -514,3 +527,4 @@ Amended: 2026-11-14 la définition du questionnaire devient un graphe sans cycle
 Amended: 2026-11-14 contrats figés régénérés après la relecture finale de S0 (réponse liée au questionnaire ouvert, campagne à statut persisté, métadonnées fusionnées dans les événements, clés étrangères avec org_id, index d unicité par répondant).
 Amended: 2026-11-14 décisions de S1 consignées (horloge, deux temps, vue du répondant, verrous, erreurs).
 Amended: 2026-11-14 décisions de S2 et S4 consignées (routes, raisons d erreur, chemin public, actions).
+Amended: 2026-11-14 décisions de S3 et S5 consignées.

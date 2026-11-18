@@ -16,6 +16,7 @@ pub struct State {
     pub surveys: HashMap<SurveyId, SurveyRecord>,
     pub campaigns: HashMap<CampaignId, Campaign>,
     pub responses: HashMap<ResponseId, ResponseRecord>,
+    pub photos: HashMap<ResponseId, Vec<String>>,
 }
 
 pub type Store = Arc<Mutex<State>>;
@@ -555,7 +556,65 @@ impl ResponseRepository for MemoryResponses {
             .is_some_and(|record| record.organization_id() == organization_id)
         {
             guard.responses.remove(&id);
+            guard.photos.remove(&id);
         }
         Ok(())
+    }
+
+    async fn count_photos_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+    ) -> Result<u64, CoreError> {
+        let guard = state(&self.store);
+        guard
+            .responses
+            .get(&id)
+            .filter(|record| record.organization_id() == organization_id && !is_completed(record))
+            .ok_or(CoreError::NotFound)?;
+        Ok(guard.photos.get(&id).map_or(0, Vec::len) as u64)
+    }
+
+    async fn insert_photo(
+        &mut self,
+        _organization_id: OrganizationId,
+        id: ResponseId,
+        key: &str,
+    ) -> Result<(), CoreError> {
+        state(&self.store)
+            .photos
+            .entry(id)
+            .or_default()
+            .push(key.to_owned());
+        Ok(())
+    }
+
+    async fn photo_keys(
+        &mut self,
+        _organization_id: OrganizationId,
+        id: ResponseId,
+    ) -> Result<Vec<String>, CoreError> {
+        Ok(state(&self.store)
+            .photos
+            .get(&id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn list_abandoned(
+        &mut self,
+        _before: DateTime<Utc>,
+        _limit: u64,
+    ) -> Result<Vec<ResponseRecord>, CoreError> {
+        Ok(Vec::new())
+    }
+
+    async fn find_abandoned_for_update(
+        &mut self,
+        _organization_id: OrganizationId,
+        _id: ResponseId,
+        _before: DateTime<Utc>,
+    ) -> Result<Option<ResponseRecord>, CoreError> {
+        Ok(None)
     }
 }

@@ -46,6 +46,28 @@ where
         self.storage.upload(upload).await
     }
 
+    #[tracing::instrument(skip(self, mime_type, bytes), fields(size_bytes = bytes.len()), err)]
+    pub async fn upload_at(
+        &self,
+        relative_key: &str,
+        mime_type: &str,
+        bytes: Vec<u8>,
+    ) -> Result<StoredFile, CoreError> {
+        validate_key(relative_key)?;
+        let key = if self.key_prefix.is_empty() {
+            relative_key.to_owned()
+        } else {
+            format!("{}/{}", self.key_prefix, relative_key)
+        };
+        self.storage
+            .upload(FileUpload {
+                key,
+                mime_type: normalize_mime_type(mime_type.to_owned()),
+                bytes,
+            })
+            .await
+    }
+
     #[tracing::instrument(skip(self), fields(key = %key), err)]
     pub async fn get(&self, key: &str) -> Result<FileObject, CoreError> {
         validate_key(key)?;
@@ -181,6 +203,30 @@ mod tests {
         async fn delete(&self, _key: &str) -> Result<(), CoreError> {
             Ok(())
         }
+    }
+
+    #[tokio::test]
+    async fn an_upload_at_a_relative_key_lands_under_the_configured_prefix() {
+        let storage = FakeStorage::default();
+        let service = FileStorageService::new(storage.clone(), "uploads");
+        let bare = FileStorageService::new(storage.clone(), "");
+
+        let stored = service
+            .upload_at("survey-a/b/c/d.jpg", "image/jpeg", vec![1])
+            .await
+            .unwrap();
+        let unprefixed = bare
+            .upload_at("survey-a/b/c/e.jpg", "image/jpeg", vec![1])
+            .await
+            .unwrap();
+        let refused = service
+            .upload_at("../escape.jpg", "image/jpeg", vec![1])
+            .await;
+
+        assert_eq!(stored.key, "uploads/survey-a/b/c/d.jpg");
+        assert_eq!(unprefixed.key, "survey-a/b/c/e.jpg");
+        assert!(refused.is_err());
+        assert_eq!(storage.uploads.lock().unwrap().len(), 2);
     }
 
     #[tokio::test]

@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use common::CoreError;
 use mestier_macros::repository;
 
@@ -419,5 +420,145 @@ impl<'tx> ResponseRepository for PgResponseRepository<'tx> {
         } else {
             Ok(())
         }
+    }
+
+    async fn count_photos_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+    ) -> Result<u64, CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar!(
+            r#"
+            SELECT id FROM survey.response
+            WHERE org_id = $1 AND id = $2 AND status = 'IN_PROGRESS'
+            FOR UPDATE
+            "#,
+            organization_id.0,
+            id.0,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?
+        .ok_or(CoreError::NotFound)?;
+        let total = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) AS "count!"
+            FROM survey.response_photo
+            WHERE org_id = $1 AND response_id = $2
+            "#,
+            organization_id.0,
+            id.0,
+        )
+        .fetch_one(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(u64::try_from(total).unwrap_or(0))
+    }
+
+    async fn insert_photo(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+        key: &str,
+    ) -> Result<(), CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query!(
+            r#"
+            INSERT INTO survey.response_photo (org_id, response_id, key)
+            VALUES ($1, $2, $3)
+            "#,
+            organization_id.0,
+            id.0,
+            key,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+        sqlx::query!(
+            "UPDATE survey.response SET updated_at = now() WHERE org_id = $1 AND id = $2",
+            organization_id.0,
+            id.0,
+        )
+        .execute(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+
+    async fn photo_keys(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+    ) -> Result<Vec<String>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        sqlx::query_scalar!(
+            r#"
+            SELECT key FROM survey.response_photo
+            WHERE org_id = $1 AND response_id = $2
+            ORDER BY created_at, key
+            "#,
+            organization_id.0,
+            id.0,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)
+    }
+
+    async fn list_abandoned(
+        &mut self,
+        before: DateTime<Utc>,
+        limit: u64,
+    ) -> Result<Vec<ResponseRecord>, CoreError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let mut tx = self.tx.lock().await;
+        let rows = sqlx::query_as!(
+            ResponseRow,
+            r#"
+            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
+                   identifier_value, unique_respondent, completed_at, created_at
+            FROM survey.response
+            WHERE status = 'IN_PROGRESS' AND updated_at < $1
+            ORDER BY updated_at, id
+            LIMIT $2
+            "#,
+            before,
+            limit,
+        )
+        .fetch_all(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        records(rows)
+    }
+
+    async fn find_abandoned_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+        before: DateTime<Utc>,
+    ) -> Result<Option<ResponseRecord>, CoreError> {
+        let mut tx = self.tx.lock().await;
+        let row = sqlx::query_as!(
+            ResponseRow,
+            r#"
+            SELECT id, org_id, survey_id, member_id, answers, status, resume_token,
+                   identifier_value, unique_respondent, completed_at, created_at
+            FROM survey.response
+            WHERE org_id = $1 AND id = $2 AND status = 'IN_PROGRESS' AND updated_at < $3
+            FOR UPDATE
+            "#,
+            organization_id.0,
+            id.0,
+            before,
+        )
+        .fetch_optional(&mut ***tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(ResponseRecord::try_from).transpose()
     }
 }

@@ -100,23 +100,32 @@ pub fn router(state: AppState) -> Result<Router, ApiError> {
 
 const WEBHOOK_PREFIX: &str = "/webhooks";
 const REDACTED_WEBHOOK_PATH: &str = "/webhooks/{redacted}";
+const PUBLIC_SURVEY_PREFIX: &str = survey::response::public::PUBLIC_SURVEYS_PREFIX;
+const REDACTED_PUBLIC_SURVEY_PATH: &str = "/api/v1/public/surveys/{redacted}";
 const OAUTH_CALLBACK_PATH: &str = "/oauth/callback";
 
-fn is_webhook_path(path: &str) -> bool {
-    path == WEBHOOK_PREFIX
+fn under(prefix: &str, path: &str) -> bool {
+    path == prefix
         || path
-            .strip_prefix(WEBHOOK_PREFIX)
+            .strip_prefix(prefix)
             .is_some_and(|rest| rest.starts_with('/'))
+}
+
+fn redacted_path(path: &str) -> Option<&'static str> {
+    if under(WEBHOOK_PREFIX, path) {
+        Some(REDACTED_WEBHOOK_PATH)
+    } else if under(PUBLIC_SURVEY_PREFIX, path) {
+        Some(REDACTED_PUBLIC_SURVEY_PATH)
+    } else {
+        None
+    }
 }
 
 fn request_span(request: &Request) -> tracing::Span {
     let method = request.method();
-    let redacted = is_webhook_path(request.uri().path());
-    let path = if redacted {
-        REDACTED_WEBHOOK_PATH
-    } else {
-        request.uri().path()
-    };
+    let redaction = redacted_path(request.uri().path());
+    let redacted = redaction.is_some();
+    let path = redaction.unwrap_or(request.uri().path());
     let span = info_span!(
         "http_request",
         otel.name = %format!("{method} {path}"),
@@ -228,6 +237,39 @@ mod tests {
             "{output}"
         );
         assert!(output.contains("archived=true"), "{output}");
+    }
+
+    #[test]
+    fn a_public_survey_call_is_traced_without_its_slug_its_token_or_its_query() {
+        for uri in [
+            "/api/v1/public/surveys/slug-secret-7f3a",
+            "/api/v1/public/surveys/slug-secret-7f3a/responses",
+            "/api/v1/public/surveys/slug-secret-7f3a/responses/token-secret-9b1c",
+            "/api/v1/public/surveys/slug-secret-7f3a/responses/token-secret-9b1c/complete",
+            "/api/v1/public/surveys/slug-secret-7f3a/responses/token-secret-9b1c/photos?x=hunter2",
+            "/api/v1/public/surveys/%ff-secret-7f3a",
+            "/api/v1/public/surveys",
+            "/api/v1/public/surveys/",
+        ] {
+            let output = traced(uri);
+
+            assert!(
+                output.contains("/api/v1/public/surveys/{redacted}"),
+                "{uri}: {output}"
+            );
+            assert!(!output.contains("slug-secret"), "{uri}: {output}");
+            assert!(!output.contains("token-secret"), "{uri}: {output}");
+            assert!(!output.contains("secret-7f3a"), "{uri}: {output}");
+            assert!(!output.contains("hunter2"), "{uri}: {output}");
+            assert!(!output.contains("url.query"), "{uri}: {output}");
+        }
+    }
+
+    #[test]
+    fn a_path_that_only_starts_like_the_public_survey_prefix_is_not_redacted() {
+        let output = traced("/api/v1/public/surveysfoo/bar");
+
+        assert!(output.contains("/api/v1/public/surveysfoo/bar"), "{output}");
     }
 
     #[test]

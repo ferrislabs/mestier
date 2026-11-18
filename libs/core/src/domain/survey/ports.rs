@@ -186,4 +186,36 @@ pub trait ResponseRepository: Send {
         organization_id: OrganizationId,
         id: ResponseId,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn count_photos_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+    ) -> impl Future<Output = Result<u64, CoreError>> + Send;
+
+    fn insert_photo(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+        key: &str,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn photo_keys(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+    ) -> impl Future<Output = Result<Vec<String>, CoreError>> + Send;
+
+    fn list_abandoned(
+        &mut self,
+        before: DateTime<Utc>,
+        limit: u64,
+    ) -> impl Future<Output = Result<Vec<ResponseRecord>, CoreError>> + Send;
+
+    fn find_abandoned_for_update(
+        &mut self,
+        organization_id: OrganizationId,
+        id: ResponseId,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<ResponseRecord>, CoreError>> + Send;
 }

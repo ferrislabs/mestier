@@ -12,6 +12,7 @@ pub use application::survey::commands::{
     ListCampaignsCommand, ListSurveyResponsesCommand, ListSurveysCommand,
     OpenSurveyInCampaignCommand, SaveMemberResponseCommand, StartMemberResponseCommand,
     SurveyCommand, SurveyResponseCommand, UpdateCampaignCommand, UpdateSurveyCommand,
+    UploadMemberResponsePhotoCommand,
 };
 pub use application::*;
 pub use domain::automation::collection::{
@@ -239,8 +240,8 @@ pub use domain::{
     },
     survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository},
     survey::service::{
-        CampaignPatch, CampaignService, ResponseLocator, ResponseService, StartedResponse,
-        SurveyPatch, SurveyService,
+        CampaignPatch, CampaignService, MAX_UPLOADED_PHOTOS as MAX_UPLOADED_SURVEY_PHOTOS,
+        ResponseLocator, ResponseService, StartedResponse, SurveyPatch, SurveyService,
     },
     validate_api_key_name,
 };
@@ -290,7 +291,10 @@ pub use domain::{
         MAX_PLACEMENTS, PlaceLibraryPhotosCommand, PlacementRequest, PlacementTargetKind,
         UpdateLibraryPhotoCommand, UploadLibraryPhotoCommand,
     },
-    photo_library::normalize::{NormalizedImage, normalize_image},
+    photo_library::normalize::{
+        DecodeLimits, LIBRARY_DECODE_LIMITS, NormalizedImage, PixelBudget, SURVEY_DECODE_LIMITS,
+        normalize_image, normalize_image_with,
+    },
 };
 
 pub use domain::knowledge::documents::{

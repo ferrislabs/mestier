@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 pub mod complete;
 pub mod open;
+pub mod photo;
 pub mod save;
 pub mod start;
 
@@ -33,6 +34,15 @@ pub struct MemberResponsePath {
     "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/complete"
 )]
 pub struct MemberResponseCompletionPath {
+    pub organization_id: OrganizationId,
+    pub response_id: ResponseId,
+}
+
+#[derive(TypedPath, Deserialize)]
+#[typed_path(
+    "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/photos"
+)]
+pub struct MemberResponsePhotosPath {
     pub organization_id: OrganizationId,
     pub response_id: ResponseId,
 }

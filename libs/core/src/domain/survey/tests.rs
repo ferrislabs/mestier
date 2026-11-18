@@ -77,6 +77,7 @@ fn a_state_conflict_stays_a_conflict_for_the_core() {
         SurveyError::RespondentAlreadyAnswered,
         SurveyError::ResponseAlreadyCompleted,
         SurveyError::ResponseCapReached,
+        SurveyError::ResponsePhotoCapReached,
         SurveyError::CampaignNotStarted,
         SurveyError::CampaignEnded,
         SurveyError::SurveyNotDraft,
@@ -121,6 +122,7 @@ fn a_respondent_input_error_is_a_validation_error_for_the_core() {
         SurveyError::AnswerKindMismatch(question),
         SurveyError::AnswerUnknownOption(question),
         SurveyError::AnswerTooManyPhotos(question),
+        SurveyError::AnswerForeignPhoto(question),
     ] {
         let refusal = refusal_of(error);
         assert_eq!(
@@ -213,6 +215,7 @@ fn every_survey_error() -> Vec<SurveyError> {
         SurveyError::AnswerDuplicateOption(q),
         SurveyError::AnswerTooManyPhotos(q),
         SurveyError::AnswerEmptyPhoto(q),
+        SurveyError::AnswerForeignPhoto(q),
         SurveyError::PublicSlugInvalid,
         SurveyError::SurveyPublicSlugRequired,
         SurveyError::SurveyPublicSlugForbidden,
@@ -235,6 +238,7 @@ fn every_survey_error() -> Vec<SurveyError> {
         SurveyError::ResponseCapReached,
         SurveyError::RespondentAlreadyAnswered,
         SurveyError::SurveyStateChanged,
+        SurveyError::ResponsePhotoCapReached,
     ]
 }
 
@@ -1572,7 +1576,93 @@ mod lifecycle {
     }
 
     fn photos(count: usize) -> Answer {
-        Answer::Photos((0..count).map(|n| format!("p{n}")).collect())
+        let directory = response().photo_directory();
+        Answer::Photos(
+            (0..count)
+                .map(|n| format!("{directory}/p{n}.jpg"))
+                .collect(),
+        )
+    }
+
+    fn photo(key: &str) -> Answer {
+        Answer::Photos(vec![key.to_string()])
+    }
+
+    #[test]
+    fn the_photo_directory_of_a_response_names_its_organization_survey_and_response() {
+        let response = response();
+        assert_eq!(
+            response.photo_directory(),
+            format!(
+                "survey-{}/{}/{}",
+                response.organization_id().0,
+                response.survey_id().0,
+                response.id().0
+            )
+        );
+    }
+
+    #[test]
+    fn a_photo_stored_under_the_response_directory_is_accepted() {
+        let graph = one(QuestionKind::Photo, &[], None);
+        let directory = response().photo_directory();
+        for key in [
+            format!("{directory}/a.jpg"),
+            format!("uploads/{directory}/a.jpg"),
+            format!("env/uploads/{directory}/0195f0a0-0000-7000-8000-000000000001.jpg"),
+        ] {
+            assert_eq!(answer_one(&graph, photo(&key)), Ok(()), "{key}");
+        }
+    }
+
+    #[test]
+    fn a_photo_of_another_response_survey_or_organization_is_refused() {
+        let graph = one(QuestionKind::Photo, &[], None);
+        let response = response();
+        let organization = response.organization_id().0;
+        let survey = response.survey_id().0;
+        let own = response.id().0;
+        let other = Uuid::from_u128(99);
+        for key in [
+            format!("survey-{organization}/{survey}/{other}/a.jpg"),
+            format!("survey-{organization}/{other}/{own}/a.jpg"),
+            format!("survey-{other}/{survey}/{own}/a.jpg"),
+            format!("library-{organization}/a.jpg"),
+            format!("survey-{organization}/{survey}/{own}"),
+            format!("survey-{organization}/{survey}/{own}/"),
+            format!("survey-{organization}/{survey}/{own}/sub/a.jpg"),
+            format!("survey-{organization}/{survey}/{own}/.."),
+            format!("../survey-{organization}/{survey}/{own}/a.jpg"),
+            format!("/survey-{organization}/{survey}/{own}/a.jpg"),
+            format!("x/survey-{organization}/{survey}/{own}x/a.jpg"),
+            format!("xsurvey-{organization}/{survey}/{own}/a.jpg"),
+            format!("survey-{other}/{other}/{other}/survey-{organization}/{survey}/{own}/a.jpg"),
+            format!(
+                "uploads/survey-{other}/{other}/{other}/survey-{organization}/{survey}/{own}/a.jpg"
+            ),
+            format!("library-{other}/survey-{organization}/{survey}/{own}/a.jpg"),
+            format!("uploads/library-{other}/survey-{organization}/{survey}/{own}/a.jpg"),
+            "a.jpg".to_string(),
+        ] {
+            assert_eq!(
+                answer_one(&graph, photo(&key)),
+                Err(SurveyError::AnswerForeignPhoto(qid(1))),
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stored_foreign_photo_is_refused_at_completion() {
+        let survey = survey_of(one(QuestionKind::Photo, &[], None));
+        let mut json = serde_json::to_value(response_to(&survey)).unwrap();
+        json["answers"] =
+            serde_json::json!({ qid(1).to_string(): { "Photos": ["library-x/a.jpg"] } });
+        let response = serde_json::from_value::<Response<InProgress>>(json).unwrap();
+        assert_eq!(
+            response.complete(&survey, at(2)).err(),
+            Some(SurveyError::AnswerForeignPhoto(qid(1)))
+        );
     }
 
     #[test]

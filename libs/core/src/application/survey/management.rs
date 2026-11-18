@@ -10,6 +10,7 @@ use super::commands::{
 };
 use super::{guard_manage, guard_read, new_public_slug};
 use crate::application::MestierUseCase;
+use crate::domain::file_storage::{ports::FileStorage, service::FileStorageService};
 use crate::domain::survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository};
 use crate::domain::survey::service::{CampaignService, ResponseService, SurveyService};
 use crate::domain::survey::{
@@ -451,9 +452,10 @@ impl MestierUseCase {
         authz,
         emitter
     )]
-    pub async fn delete_survey_response(
+    pub async fn delete_survey_response<F: FileStorage>(
         &self,
         command: SurveyResponseCommand,
+        storage: &FileStorageService<F>,
     ) -> Result<(), CoreError> {
         guard_manage(
             command.actor,
@@ -471,6 +473,8 @@ impl MestierUseCase {
             survey_campaign_repository,
             emitter,
         );
-        service.delete(command.organization_id, command.id).await
+        service
+            .delete(command.organization_id, command.id, storage)
+            .await
     }
 }

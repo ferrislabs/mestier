@@ -2,8 +2,8 @@ use std::io::Cursor;
 
 use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
 use image::{
-    DynamicImage, ImageFormat, ImageReader, Limits, RgbImage, codecs::jpeg::JpegEncoder,
-    imageops::FilterType, metadata::Orientation,
+    DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits, RgbImage,
+    codecs::jpeg::JpegEncoder, imageops::FilterType, metadata::Orientation,
 };
 use sha2::{Digest, Sha256};
 
@@ -15,8 +15,37 @@ pub const STORED_MIME_TYPE: &str = "image/jpeg";
 
 const IMAGE_QUALITY: u8 = 85;
 const THUMBNAIL_QUALITY: u8 = 75;
-const MAX_DECODED_SIDE: u32 = 20_000;
-const MAX_DECODED_BYTES: u64 = 768 * 1024 * 1024;
+const RESIZE_BYTES_PER_PIXEL: u64 = 16;
+const FLATTENED_BYTES_PER_PIXEL: u64 = 3;
+const ALPHA_CONVERSION_BYTES_PER_PIXEL: u64 = 4;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PixelBudget {
+    pub max_pixels: u64,
+    pub max_working_bytes: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecodeLimits {
+    pub max_side: u32,
+    pub max_alloc: u64,
+    pub pixel_budget: Option<PixelBudget>,
+}
+
+pub const LIBRARY_DECODE_LIMITS: DecodeLimits = DecodeLimits {
+    max_side: 20_000,
+    max_alloc: 768 * 1024 * 1024,
+    pixel_budget: None,
+};
+
+pub const SURVEY_DECODE_LIMITS: DecodeLimits = DecodeLimits {
+    max_side: 12_000,
+    max_alloc: 640 * 1024 * 1024,
+    pixel_budget: Some(PixelBudget {
+        max_pixels: 50_000_000,
+        max_working_bytes: 640 * 1024 * 1024,
+    }),
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NormalizedImage {
@@ -29,6 +58,13 @@ pub struct NormalizedImage {
 }
 
 pub fn normalize_image(input: &[u8]) -> PhotoLibraryOutcome<NormalizedImage> {
+    normalize_image_with(input, LIBRARY_DECODE_LIMITS)
+}
+
+pub fn normalize_image_with(
+    input: &[u8],
+    limits: DecodeLimits,
+) -> PhotoLibraryOutcome<NormalizedImage> {
     if input.is_empty() {
         return Err(PhotoLibraryError::EmptyImage);
     }
@@ -44,14 +80,14 @@ pub fn normalize_image(input: &[u8]) -> PhotoLibraryOutcome<NormalizedImage> {
         return Err(PhotoLibraryError::CorruptImage);
     }
 
+    if let Some(budget) = limits.pixel_budget {
+        within_budget(input, format, limits, budget)?;
+    }
+
     let metadata = read_metadata(input);
 
     let mut reader = ImageReader::with_format(Cursor::new(input), format);
-    let mut limits = Limits::default();
-    limits.max_image_width = Some(MAX_DECODED_SIDE);
-    limits.max_image_height = Some(MAX_DECODED_SIDE);
-    limits.max_alloc = Some(MAX_DECODED_BYTES);
-    reader.limits(limits);
+    reader.limits(decoder_limits(limits));
     let mut decoded = reader
         .decode()
         .map_err(|_| PhotoLibraryError::CorruptImage)?;
@@ -76,6 +112,64 @@ pub fn normalize_image(input: &[u8]) -> PhotoLibraryOutcome<NormalizedImage> {
         thumbnail,
         taken_at: metadata.taken_at,
     })
+}
+
+fn decoder_limits(limits: DecodeLimits) -> Limits {
+    let mut decoder = Limits::default();
+    decoder.max_image_width = Some(limits.max_side);
+    decoder.max_image_height = Some(limits.max_side);
+    decoder.max_alloc = Some(limits.max_alloc);
+    decoder
+}
+
+fn within_budget(
+    input: &[u8],
+    format: ImageFormat,
+    limits: DecodeLimits,
+    budget: PixelBudget,
+) -> PhotoLibraryOutcome<()> {
+    let mut reader = ImageReader::with_format(Cursor::new(input), format);
+    reader.limits(decoder_limits(limits));
+    let decoder = reader.into_decoder().map_err(|error| match error {
+        ImageError::Limits(_) => PhotoLibraryError::ImageTooLarge,
+        _ => PhotoLibraryError::CorruptImage,
+    })?;
+    let (width, height) = decoder.dimensions();
+    let color = decoder.color_type();
+    let fits = width.max(height) <= limits.max_side
+        && u64::from(width) * u64::from(height) <= budget.max_pixels
+        && working_bytes(
+            width,
+            height,
+            u64::from(color.bytes_per_pixel()),
+            color.has_alpha(),
+        ) <= budget.max_working_bytes;
+    if fits {
+        Ok(())
+    } else {
+        Err(PhotoLibraryError::ImageTooLarge)
+    }
+}
+
+pub fn working_bytes(width: u32, height: u32, bytes_per_pixel: u64, has_alpha: bool) -> u64 {
+    let pixels = u64::from(width) * u64::from(height);
+    let decoded = pixels.saturating_mul(bytes_per_pixel);
+    let oriented = decoded.saturating_mul(2);
+    let conversion = if has_alpha {
+        ALPHA_CONVERSION_BYTES_PER_PIXEL + FLATTENED_BYTES_PER_PIXEL
+    } else {
+        FLATTENED_BYTES_PER_PIXEL
+    };
+    let flattened = decoded.saturating_add(pixels.saturating_mul(conversion));
+    let intermediate = if width.max(height) > MAX_SIDE {
+        u64::from(width.min(height)) * u64::from(MAX_SIDE) * RESIZE_BYTES_PER_PIXEL
+    } else {
+        0
+    };
+    let resized = pixels
+        .saturating_mul(FLATTENED_BYTES_PER_PIXEL)
+        .saturating_add(intermediate);
+    oriented.max(flattened).max(resized)
 }
 
 fn jpeg_is_complete(bytes: &[u8]) -> bool {
@@ -449,6 +543,95 @@ mod tests {
             normalize_image(&source),
             Err(PhotoLibraryError::CorruptImage)
         );
+    }
+
+    fn crc32(bytes: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFFu32;
+        for byte in bytes {
+            crc ^= u32::from(*byte);
+            for _ in 0..8 {
+                crc = if crc & 1 == 1 {
+                    (crc >> 1) ^ 0xEDB8_8320
+                } else {
+                    crc >> 1
+                };
+            }
+        }
+        !crc
+    }
+
+    fn png_declaring(width: u32, height: u32) -> Vec<u8> {
+        let mut png = png_of(&RgbaImage::from_pixel(1, 1, Rgba([1, 2, 3, 255])));
+        png[16..20].copy_from_slice(&width.to_be_bytes());
+        png[20..24].copy_from_slice(&height.to_be_bytes());
+        let crc = crc32(&png[12..29]);
+        png[29..33].copy_from_slice(&crc.to_be_bytes());
+        png
+    }
+
+    #[test]
+    fn the_library_keeps_its_decode_limits() {
+        assert_eq!(
+            LIBRARY_DECODE_LIMITS,
+            DecodeLimits {
+                max_side: 20_000,
+                max_alloc: 768 * 1024 * 1024,
+                pixel_budget: None,
+            }
+        );
+        assert_eq!(
+            normalize_image(&png_declaring(30_000, 30_000)),
+            Err(PhotoLibraryError::CorruptImage)
+        );
+    }
+
+    #[test]
+    fn a_survey_photo_declaring_thirty_thousand_pixels_a_side_is_refused_from_its_header() {
+        assert_eq!(
+            normalize_image_with(&png_declaring(30_000, 30_000), SURVEY_DECODE_LIMITS),
+            Err(PhotoLibraryError::ImageTooLarge)
+        );
+    }
+
+    #[test]
+    fn a_survey_photo_over_fifty_megapixels_is_refused_before_decoding() {
+        assert_eq!(
+            normalize_image_with(&png_declaring(11_000, 11_000), SURVEY_DECODE_LIMITS),
+            Err(PhotoLibraryError::ImageTooLarge)
+        );
+        assert_eq!(
+            normalize_image_with(&png_declaring(12_001, 100), SURVEY_DECODE_LIMITS),
+            Err(PhotoLibraryError::ImageTooLarge)
+        );
+    }
+
+    #[test]
+    fn a_survey_photo_within_the_budget_is_decoded() {
+        let normalized =
+            normalize_image_with(&jpeg_of(&gradient(3000, 1000)), SURVEY_DECODE_LIMITS).unwrap();
+
+        assert_eq!((normalized.width, normalized.height), (2400, 800));
+        assert_eq!(
+            normalize_image_with(&png_declaring(4000, 3000), SURVEY_DECODE_LIMITS),
+            Err(PhotoLibraryError::CorruptImage)
+        );
+    }
+
+    #[test]
+    fn the_survey_budget_counts_the_resize_buffer_and_fits_a_fifty_megapixel_photo() {
+        let Some(budget) = SURVEY_DECODE_LIMITS.pixel_budget else {
+            panic!("the survey limits carry a pixel budget");
+        };
+        assert_eq!(budget.max_pixels, 50_000_000);
+        assert_eq!(SURVEY_DECODE_LIMITS.max_side, 12_000);
+        assert!(working_bytes(8165, 6124, 3, false) <= budget.max_working_bytes);
+        assert!(working_bytes(7071, 7071, 4, true) <= budget.max_working_bytes);
+        assert!(working_bytes(7071, 7071, 8, true) > budget.max_working_bytes);
+        assert_eq!(
+            working_bytes(10_000, 2_000, 3, false),
+            10_000 * 2_000 * 3 + 2_000 * 2_400 * 16
+        );
+        assert_eq!(working_bytes(2_000, 1_000, 3, false), 2_000 * 1_000 * 6);
     }
 
     #[test]

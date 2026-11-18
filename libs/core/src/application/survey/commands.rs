@@ -1,6 +1,7 @@
 use authz::Subject;
 
 use crate::OrganizationId;
+use crate::domain::photo_library::normalize::NormalizedImage;
 use crate::domain::survey::service::{CampaignPatch, SurveyPatch};
 use crate::domain::survey::{
     Answers, CampaignId, Completed, Metadata, Response, ResponseId, SurveyId, SurveyRecord,
@@ -115,4 +116,12 @@ pub struct SaveMemberResponseCommand {
     pub organization_id: OrganizationId,
     pub id: ResponseId,
     pub answers: Answers,
+}
+
+#[derive(Debug, Clone)]
+pub struct UploadMemberResponsePhotoCommand {
+    pub actor: Subject,
+    pub organization_id: OrganizationId,
+    pub id: ResponseId,
+    pub image: NormalizedImage,
 }

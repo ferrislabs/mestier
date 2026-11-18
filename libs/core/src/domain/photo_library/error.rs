@@ -6,6 +6,8 @@ pub enum PhotoLibraryError {
     UnsupportedImage,
     #[error("image: the file could not be decoded")]
     CorruptImage,
+    #[error("image: the picture has too many pixels to be processed")]
+    ImageTooLarge,
     #[error("tags: a tag cannot be empty")]
     TagEmpty,
     #[error("tags: a tag holds at most 40 characters")]

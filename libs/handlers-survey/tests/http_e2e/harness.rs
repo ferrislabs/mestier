@@ -146,6 +146,25 @@ impl App {
         (status, json)
     }
 
+    pub async fn send(
+        &self,
+        method: Method,
+        path: &str,
+        client_ip: &str,
+        body: Option<(&'static str, Vec<u8>)>,
+    ) -> (StatusCode, String) {
+        let mut request = self
+            .client
+            .request(method, format!("{}/api/v1{path}", self.base_url))
+            .header("x-forwarded-for", client_ip);
+        if let Some((content_type, bytes)) = body {
+            request = request.header("content-type", content_type).body(bytes);
+        }
+        let response = request.send().await.expect("the api answers");
+        let status = response.status();
+        (status, response.text().await.expect("the api sends a body"))
+    }
+
     pub fn org(&self, suffix: &str) -> String {
         format!("/organizations/{}{suffix}", self.organization_id)
     }
@@ -223,6 +242,15 @@ impl App {
             .await;
         assert_eq!(status, StatusCode::OK, "{body}");
         id
+    }
+
+    pub async fn recorded_photos(&self, response_id: &str) -> i64 {
+        let id = Uuid::parse_str(response_id).expect("a response id is a uuid");
+        sqlx::query_scalar("SELECT count(*) FROM survey.response_photo WHERE response_id = $1")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
+            .expect("count the recorded photos")
     }
 
     pub async fn cleanup(&self) {

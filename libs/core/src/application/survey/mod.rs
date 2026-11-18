@@ -14,8 +14,11 @@ use crate::{FeatureFlag, MemberId, OrganizationId};
 mod clock;
 pub mod commands;
 mod management;
+mod photos;
 mod response;
 
+#[cfg(test)]
+mod photos_tests;
 #[cfg(test)]
 mod tests;
 
