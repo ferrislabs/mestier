@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
+import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppAdminIndexRouteImport } from './routes/_app.admin.index'
@@ -41,6 +42,7 @@ import { Route as AppOOrganizationSlugRhTempsDeTravailRouteImport } from './rout
 import { Route as AppOOrganizationSlugRhPlanningRouteImport } from './routes/_app.o.$organizationSlug.rh.planning'
 import { Route as AppOOrganizationSlugRhMaterielRouteImport } from './routes/_app.o.$organizationSlug.rh.materiel'
 import { Route as AppOOrganizationSlugRhDroitsRouteImport } from './routes/_app.o.$organizationSlug.rh.droits'
+import { Route as AppOOrganizationSlugRepondreSurveyIdRouteImport } from './routes/_app.o.$organizationSlug.repondre.$surveyId'
 import { Route as AppOOrganizationSlugPurchaseSuppliersRouteImport } from './routes/_app.o.$organizationSlug.purchase.suppliers'
 import { Route as AppOOrganizationSlugProjetPhotosRouteImport } from './routes/_app.o.$organizationSlug.projet.photos'
 import { Route as AppOOrganizationSlugProjetNewRouteImport } from './routes/_app.o.$organizationSlug.projet.new'
@@ -127,6 +129,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const SSlugRoute = SSlugRouteImport.update({
+  id: '/s/$slug',
+  path: '/s/$slug',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
   id: '/invite/$token',
@@ -300,6 +307,12 @@ const AppOOrganizationSlugRhDroitsRoute =
   AppOOrganizationSlugRhDroitsRouteImport.update({
     id: '/rh/droits',
     path: '/rh/droits',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
+const AppOOrganizationSlugRepondreSurveyIdRoute =
+  AppOOrganizationSlugRepondreSurveyIdRouteImport.update({
+    id: '/repondre/$surveyId',
+    path: '/repondre/$surveyId',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
 const AppOOrganizationSlugPurchaseSuppliersRoute =
@@ -775,6 +788,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/admin': typeof AppAdminRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
+  '/s/$slug': typeof SSlugRoute
   '/admin/news': typeof AppAdminNewsRoute
   '/admin/utilisateurs': typeof AppAdminUtilisateursRoute
   '/field/$organizationSlug': typeof AppFieldOrganizationSlugRoute
@@ -811,6 +825,7 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/projet/new': typeof AppOOrganizationSlugProjetNewRoute
   '/o/$organizationSlug/projet/photos': typeof AppOOrganizationSlugProjetPhotosRoute
   '/o/$organizationSlug/purchase/suppliers': typeof AppOOrganizationSlugPurchaseSuppliersRoute
+  '/o/$organizationSlug/repondre/$surveyId': typeof AppOOrganizationSlugRepondreSurveyIdRoute
   '/o/$organizationSlug/rh/droits': typeof AppOOrganizationSlugRhDroitsRoute
   '/o/$organizationSlug/rh/materiel': typeof AppOOrganizationSlugRhMaterielRoute
   '/o/$organizationSlug/rh/planning': typeof AppOOrganizationSlugRhPlanningRoute
@@ -883,6 +898,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
+  '/s/$slug': typeof SSlugRoute
   '/': typeof AppIndexRoute
   '/admin/news': typeof AppAdminNewsRoute
   '/admin/utilisateurs': typeof AppAdminUtilisateursRoute
@@ -918,6 +934,7 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/projet/new': typeof AppOOrganizationSlugProjetNewRoute
   '/o/$organizationSlug/projet/photos': typeof AppOOrganizationSlugProjetPhotosRoute
   '/o/$organizationSlug/purchase/suppliers': typeof AppOOrganizationSlugPurchaseSuppliersRoute
+  '/o/$organizationSlug/repondre/$surveyId': typeof AppOOrganizationSlugRepondreSurveyIdRoute
   '/o/$organizationSlug/rh/droits': typeof AppOOrganizationSlugRhDroitsRoute
   '/o/$organizationSlug/rh/materiel': typeof AppOOrganizationSlugRhMaterielRoute
   '/o/$organizationSlug/rh/planning': typeof AppOOrganizationSlugRhPlanningRoute
@@ -993,6 +1010,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/_app/admin': typeof AppAdminRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
+  '/s/$slug': typeof SSlugRoute
   '/_app/': typeof AppIndexRoute
   '/_app/admin/news': typeof AppAdminNewsRoute
   '/_app/admin/utilisateurs': typeof AppAdminUtilisateursRoute
@@ -1030,6 +1048,7 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/projet/new': typeof AppOOrganizationSlugProjetNewRoute
   '/_app/o/$organizationSlug/projet/photos': typeof AppOOrganizationSlugProjetPhotosRoute
   '/_app/o/$organizationSlug/purchase/suppliers': typeof AppOOrganizationSlugPurchaseSuppliersRoute
+  '/_app/o/$organizationSlug/repondre/$surveyId': typeof AppOOrganizationSlugRepondreSurveyIdRoute
   '/_app/o/$organizationSlug/rh/droits': typeof AppOOrganizationSlugRhDroitsRoute
   '/_app/o/$organizationSlug/rh/materiel': typeof AppOOrganizationSlugRhMaterielRoute
   '/_app/o/$organizationSlug/rh/planning': typeof AppOOrganizationSlugRhPlanningRoute
@@ -1106,6 +1125,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/invite/$token'
+    | '/s/$slug'
     | '/admin/news'
     | '/admin/utilisateurs'
     | '/field/$organizationSlug'
@@ -1142,6 +1162,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/projet/new'
     | '/o/$organizationSlug/projet/photos'
     | '/o/$organizationSlug/purchase/suppliers'
+    | '/o/$organizationSlug/repondre/$surveyId'
     | '/o/$organizationSlug/rh/droits'
     | '/o/$organizationSlug/rh/materiel'
     | '/o/$organizationSlug/rh/planning'
@@ -1214,6 +1235,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/invite/$token'
+    | '/s/$slug'
     | '/'
     | '/admin/news'
     | '/admin/utilisateurs'
@@ -1249,6 +1271,7 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/projet/new'
     | '/o/$organizationSlug/projet/photos'
     | '/o/$organizationSlug/purchase/suppliers'
+    | '/o/$organizationSlug/repondre/$surveyId'
     | '/o/$organizationSlug/rh/droits'
     | '/o/$organizationSlug/rh/materiel'
     | '/o/$organizationSlug/rh/planning'
@@ -1323,6 +1346,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/_app/admin'
     | '/invite/$token'
+    | '/s/$slug'
     | '/_app/'
     | '/_app/admin/news'
     | '/_app/admin/utilisateurs'
@@ -1360,6 +1384,7 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/projet/new'
     | '/_app/o/$organizationSlug/projet/photos'
     | '/_app/o/$organizationSlug/purchase/suppliers'
+    | '/_app/o/$organizationSlug/repondre/$surveyId'
     | '/_app/o/$organizationSlug/rh/droits'
     | '/_app/o/$organizationSlug/rh/materiel'
     | '/_app/o/$organizationSlug/rh/planning'
@@ -1434,6 +1459,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   InviteTokenRoute: typeof InviteTokenRoute
+  SSlugRoute: typeof SSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1451,6 +1477,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/s/$slug': {
+      id: '/s/$slug'
+      path: '/s/$slug'
+      fullPath: '/s/$slug'
+      preLoaderRoute: typeof SSlugRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
       id: '/invite/$token'
@@ -1660,6 +1693,13 @@ declare module '@tanstack/react-router' {
       path: '/rh/droits'
       fullPath: '/o/$organizationSlug/rh/droits'
       preLoaderRoute: typeof AppOOrganizationSlugRhDroitsRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/repondre/$surveyId': {
+      id: '/_app/o/$organizationSlug/repondre/$surveyId'
+      path: '/repondre/$surveyId'
+      fullPath: '/o/$organizationSlug/repondre/$surveyId'
+      preLoaderRoute: typeof AppOOrganizationSlugRepondreSurveyIdRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
     '/_app/o/$organizationSlug/purchase/suppliers': {
@@ -2289,6 +2329,7 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugProjetNewRoute: typeof AppOOrganizationSlugProjetNewRoute
   AppOOrganizationSlugProjetPhotosRoute: typeof AppOOrganizationSlugProjetPhotosRoute
   AppOOrganizationSlugPurchaseSuppliersRoute: typeof AppOOrganizationSlugPurchaseSuppliersRoute
+  AppOOrganizationSlugRepondreSurveyIdRoute: typeof AppOOrganizationSlugRepondreSurveyIdRoute
   AppOOrganizationSlugRhDroitsRoute: typeof AppOOrganizationSlugRhDroitsRoute
   AppOOrganizationSlugRhMaterielRoute: typeof AppOOrganizationSlugRhMaterielRoute
   AppOOrganizationSlugRhPlanningRoute: typeof AppOOrganizationSlugRhPlanningRoute
@@ -2400,6 +2441,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
   AppOOrganizationSlugProjetPhotosRoute: AppOOrganizationSlugProjetPhotosRoute,
   AppOOrganizationSlugPurchaseSuppliersRoute:
     AppOOrganizationSlugPurchaseSuppliersRoute,
+  AppOOrganizationSlugRepondreSurveyIdRoute:
+    AppOOrganizationSlugRepondreSurveyIdRoute,
   AppOOrganizationSlugRhDroitsRoute: AppOOrganizationSlugRhDroitsRoute,
   AppOOrganizationSlugRhMaterielRoute: AppOOrganizationSlugRhMaterielRoute,
   AppOOrganizationSlugRhPlanningRoute: AppOOrganizationSlugRhPlanningRoute,
@@ -2549,6 +2592,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   InviteTokenRoute: InviteTokenRoute,
+  SSlugRoute: SSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
