@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import {
 	Dialog,
@@ -19,7 +20,6 @@ import {
 } from '#/hooks/use-surveys'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
-import { useNotice } from '#/pages/customers/feature/use-notice'
 import { CampaignFormFeature } from '#/pages/survey/feature/campaign-form-feature'
 import {
 	type CampaignFormValues,
@@ -39,10 +39,8 @@ export function CampaignsListFeature() {
 	const organizationId = activeOrganization.id
 	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_SURVEYS')
-	const notice = useNotice()
 	const [creating, setCreating] = useState(false)
 	const [deleting, setDeleting] = useState<CampaignRow | null>(null)
-	const [actionError, setActionError] = useState<string | null>(null)
 
 	const campaigns = useCampaigns(organizationId)
 	const surveys = useSurveys(organizationId)
@@ -99,21 +97,20 @@ export function CampaignsListFeature() {
 			body: campaignRequest(values),
 		})
 		setCreating(false)
-		notice.show('Campagne créée.')
+		toast.success('Campagne créée.')
 	}
 
 	const remove = async () => {
 		if (!deleting) return
 		const row = deleting
 		setDeleting(null)
-		setActionError(null)
 		try {
 			await deleteCampaign.mutateAsync({
 				path: { organization_id: organizationId, campaign_id: row.campaign.id },
 			})
-			notice.show('Campagne supprimée.')
+			toast.success('Campagne supprimée.')
 		} catch (failure) {
-			setActionError(refusalOf(failure).message)
+			toast.error(refusalOf(failure).message, { duration: 6000 })
 		}
 	}
 
@@ -123,13 +120,8 @@ export function CampaignsListFeature() {
 				table={table}
 				isEmpty={rows.length === 0}
 				isLoading={campaigns.isLoading}
-				error={
-					actionError ??
-					(campaigns.error ? mutationErrorMessage(campaigns.error) : null)
-				}
+				error={campaigns.error ? mutationErrorMessage(campaigns.error) : null}
 				canManage={canManage}
-				notice={notice.message}
-				onDismissNotice={notice.clear}
 				onCreate={() => {
 					createCampaign.reset()
 					setCreating(true)

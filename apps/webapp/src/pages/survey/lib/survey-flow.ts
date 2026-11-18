@@ -29,9 +29,18 @@ export interface FlowData extends Record<string, unknown> {
 	readOnly: boolean
 	sentence: string
 	isStart: boolean
+	openExits: ExitHandle[]
 }
 
-export type FlowNodeType = 'start' | 'question' | 'condition' | 'end'
+export type FlowNodeType =
+	| 'start'
+	| 'question'
+	| 'condition'
+	| 'end'
+	| 'placeholder'
+
+export const PLACEHOLDER_ID = '__first_question__'
+export const PLACEHOLDER_GAP_X = 220
 
 export type SurveyFlowNode = Node<FlowData, FlowNodeType>
 
@@ -84,6 +93,7 @@ export function buildFlowNodes({
 			readOnly,
 			sentence: '',
 			isStart: false,
+			openExits: graph.start ? [] : [START_HANDLE],
 		},
 	}
 	return [
@@ -103,6 +113,12 @@ export function buildFlowNodes({
 				sentence:
 					node.type === 'CONDITION' ? conditionSentence(graph, node) : '',
 				isStart: node.id === graph.start,
+				openExits: exitsOf(node).filter(
+					(branch) =>
+						!graph.edges.some(
+							(edge) => edge.from === node.id && edge.branch === branch,
+						),
+				),
 			},
 		})),
 	]
@@ -173,4 +189,53 @@ export function layoutPositions(
 			sourceHandle: edge.sourceHandle,
 		})),
 	)
+}
+
+export function withFirstQuestionPlaceholder(
+	nodes: SurveyFlowNode[],
+	edges: Edge[],
+	start: NodePosition,
+	measured: { width: number; height: number } | undefined,
+): { nodes: SurveyFlowNode[]; edges: Edge[] } {
+	return {
+		nodes: [
+			...nodes.map((node) =>
+				node.id === START_ID
+					? { ...node, data: { ...node.data, openExits: [] } }
+					: node,
+			),
+			{
+				id: PLACEHOLDER_ID,
+				type: 'placeholder',
+				position: { x: start.x + PLACEHOLDER_GAP_X, y: start.y },
+				draggable: false,
+				selectable: false,
+				deletable: false,
+				connectable: false,
+				measured,
+				data: {
+					node: null,
+					issues: [],
+					highlighted: false,
+					readOnly: false,
+					sentence: '',
+					isStart: false,
+					openExits: [],
+				},
+			},
+		],
+		edges: [
+			...edges,
+			{
+				id: `${START_ID}:${PLACEHOLDER_ID}`,
+				source: START_ID,
+				sourceHandle: START_HANDLE,
+				target: PLACEHOLDER_ID,
+				deletable: false,
+				selectable: false,
+				focusable: false,
+				style: { strokeDasharray: '6 6' },
+			},
+		],
+	}
 }

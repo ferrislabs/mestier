@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFlowTestEnvironment } from '#/pages/automation/test/flow-test-env'
 import { SurveyEditorFeature } from '#/pages/survey/feature/survey-editor-feature'
 import { REASON_MESSAGES } from '#/pages/survey/lib/reason-messages'
@@ -11,8 +11,17 @@ import {
 } from '#/pages/survey/test/survey-harness'
 import type { Survey } from '#/pages/survey/types'
 
+const toastMock = vi.hoisted(() => ({
+	success: vi.fn(),
+	error: vi.fn(),
+}))
+
+vi.mock('sonner', () => ({ toast: toastMock }))
+
 beforeEach(() => {
 	installFlowTestEnvironment()
+	toastMock.success.mockClear()
+	toastMock.error.mockClear()
 })
 
 const GRAPH: NonNullable<Survey['graph']> = {
@@ -74,8 +83,21 @@ function patchBodies(calls: { method: string; params: unknown }[]) {
 		.map((call) => (call.params as PatchCall).body)
 }
 
+async function openDetails(region: string | RegExp) {
+	fireEvent.doubleClick(await screen.findByRole('region', { name: region }))
+	return screen.findByRole('dialog')
+}
+
+async function closeDetails() {
+	fireEvent.keyDown(document.activeElement ?? document.body, {
+		key: 'Escape',
+		code: 'Escape',
+	})
+	await waitFor(() => expect(screen.queryByRole('dialog')).toBe(null))
+}
+
 async function editLabel(region: string, label: string) {
-	fireEvent.click(await screen.findByRole('region', { name: region }))
+	await openDetails(region)
 	fireEvent.change(await screen.findByLabelText('Libellé'), {
 		target: { value: label },
 	})
@@ -83,7 +105,7 @@ async function editLabel(region: string, label: string) {
 
 function flowNode(region: string) {
 	const node = screen
-		.getByRole('region', { name: region })
+		.getByRole('region', { name: region, hidden: true })
 		.closest('.react-flow__node')
 	if (!node) throw new Error(`no flow node for ${region}`)
 	return node as HTMLElement
@@ -108,11 +130,10 @@ describe('SurveyEditorFeature', () => {
 			}),
 		).toBeTruthy()
 		expect(screen.getByRole('region', { name: 'Fin : Merci' })).toBeTruthy()
-		expect(
-			screen.getByText(
-				'Le parcours est complet : chaque chemin mène à une fin.',
-			),
-		).toBeTruthy()
+		expect(screen.getByText('Parcours complet').getAttribute('title')).toBe(
+			'Le parcours est complet : chaque chemin mène à une fin.',
+		)
+		expect(screen.queryByRole('button', { name: /^Vérification/ })).toBe(null)
 	})
 
 	it('lets a manager edit a draft', async () => {
@@ -159,7 +180,7 @@ describe('SurveyEditorFeature', () => {
 			null,
 		)
 
-		fireEvent.click(screen.getByRole('region', { name: 'Fin : Merci' }))
+		await openDetails('Fin : Merci')
 		const message = await screen.findByLabelText('Message de fin')
 		expect((message as HTMLTextAreaElement).disabled).toBe(true)
 		expect(screen.queryByRole('button', { name: 'Supprimer le nœud' })).toBe(
@@ -178,11 +199,17 @@ describe('SurveyEditorFeature', () => {
 		})
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
+		fireEvent.click(
+			await screen.findByRole('button', { name: /^Vérification/ }),
+		)
 		expect(
 			await screen.findByText(
 				'Ce nœud n’a pas de suite : reliez chacune de ses sorties.',
 			),
 		).toBeTruthy()
+		fireEvent.keyDown(document.activeElement ?? document.body, {
+			key: 'Escape',
+		})
 		await waitFor(() =>
 			expect(
 				(
@@ -199,17 +226,33 @@ describe('SurveyEditorFeature', () => {
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
 		fireEvent.click(
-			await screen.findByRole('button', { name: 'Ajouter une question' }),
+			await screen.findByRole('button', {
+				name: /Ajoutez votre première question/,
+			}),
 		)
-		fireEvent.click(screen.getByRole('button', { name: 'E-mail' }))
+		const picker = await screen.findByRole('dialog', {
+			name: 'Ajouter un nœud',
+		})
+		fireEvent.click(within(picker).getByRole('button', { name: 'E-mail' }))
 
 		expect(
-			await screen.findByRole('region', {
+			await screen.findByRole('dialog', { name: 'E-mail sans libellé' }),
+		).toBeTruthy()
+		expect(screen.getByLabelText(/^Identifiant du répondant/)).toBeTruthy()
+		await closeDetails()
+		expect(
+			screen.getByRole('region', {
 				name: 'Question E-mail : Question sans libellé',
 			}),
 		).toBeTruthy()
-		expect(screen.getByText('Départ', { selector: 'span' })).toBeTruthy()
-		expect(screen.getByLabelText(/^Identifiant du répondant/)).toBeTruthy()
+		expect(
+			screen.getByRole('region', { name: 'Départ du questionnaire' }),
+		).toBeTruthy()
+		await waitFor(() =>
+			expect(
+				document.querySelector('.react-flow__edge[data-id="__start__:START"]'),
+			).not.toBe(null),
+		)
 	})
 
 	it('sends the backend graph contract on save', async () => {
@@ -223,6 +266,7 @@ describe('SurveyEditorFeature', () => {
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
 		await editLabel('Question Texte court : Immatriculation', 'Plaque')
+		await closeDetails()
 		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
 		await waitFor(() => expect(patchBodies(api.calls)).toHaveLength(1))
@@ -263,10 +307,11 @@ describe('SurveyEditorFeature', () => {
 			'Question Texte court : Immatriculation',
 			'Fin : Merci',
 		]) {
-			fireEvent.click(await screen.findByRole('region', { name: region }))
+			await openDetails(region)
 			fireEvent.click(
 				await screen.findByRole('button', { name: 'Supprimer le nœud' }),
 			)
+			await waitFor(() => expect(screen.queryByRole('dialog')).toBe(null))
 		}
 		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
@@ -285,6 +330,7 @@ describe('SurveyEditorFeature', () => {
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
 		await editLabel('Question Texte court : Immatriculation', 'Plaque')
+		await closeDetails()
 		fireEvent.click(screen.getByRole('region', { name: 'Fin : Merci' }))
 		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
 
@@ -297,9 +343,13 @@ describe('SurveyEditorFeature', () => {
 		expect(node.classList.contains('selected')).toBe(true)
 		expect(
 			screen
-				.getByRole('region', { name: 'Question Texte court : Plaque' })
+				.getByRole('region', {
+					name: 'Question Texte court : Plaque',
+					hidden: true,
+				})
 				.getAttribute('data-highlighted'),
 		).toBe('true')
+		expect(await screen.findByRole('dialog', { name: 'Plaque' })).toBeTruthy()
 		expect(
 			(screen.getByLabelText('Libellé') as HTMLTextAreaElement).value,
 		).toBe('Plaque')
@@ -327,7 +377,61 @@ describe('SurveyEditorFeature', () => {
 			within(dialog).getByRole('button', { name: 'Ouvrir et figer' }),
 		)
 
-		expect(await screen.findByText(REASON_MESSAGES.survey_closed)).toBeTruthy()
+		await waitFor(() =>
+			expect(toastMock.error).toHaveBeenCalledWith(
+				REASON_MESSAGES.survey_closed,
+				{
+					duration: 6000,
+				},
+			),
+		)
+	})
+
+	it('toasts the saved questionnaire', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		api.mockMutation('patch', PATHS.survey, () => ({
+			data: survey({ graph: GRAPH }),
+		}))
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await editLabel('Question Texte court : Immatriculation', 'Plaque')
+		await closeDetails()
+		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() =>
+			expect(toastMock.success).toHaveBeenCalledWith(
+				'Questionnaire enregistré.',
+			),
+		)
+		expect(screen.queryByText('Questionnaire enregistré.')).toBe(null)
+	})
+
+	it('toasts a failed save with the French message', async () => {
+		const api = installSurveyApi({
+			permissions: MANAGER,
+			surveys: [survey({ graph: GRAPH })],
+		})
+		api.mockMutation('patch', PATHS.survey, () => {
+			throw refusal(409, 'survey_closed')
+		})
+		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
+
+		await editLabel('Question Texte court : Immatriculation', 'Plaque')
+		await closeDetails()
+		fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+		await waitFor(() =>
+			expect(toastMock.error).toHaveBeenCalledWith(
+				REASON_MESSAGES.survey_closed,
+				{
+					duration: 6000,
+				},
+			),
+		)
+		expect(toastMock.success).not.toHaveBeenCalled()
 	})
 
 	it('removes a selected node and an unrelated selected edge deleted together', async () => {
@@ -434,9 +538,7 @@ describe('SurveyEditorFeature', () => {
 		})
 		await renderSurveyPage(<SurveyEditorFeature surveyId="survey-1" />)
 
-		fireEvent.click(
-			await screen.findByRole('region', { name: /^Condition : / }),
-		)
+		await openDetails(/^Condition : /)
 		const select = (await screen.findByLabelText(
 			'Question testée',
 		)) as HTMLSelectElement

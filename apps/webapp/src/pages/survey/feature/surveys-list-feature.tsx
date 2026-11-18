@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
@@ -15,7 +16,6 @@ import {
 } from '#/hooks/use-surveys'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
-import { useNotice } from '#/pages/customers/feature/use-notice'
 import {
 	SurveyCreateDialogFeature,
 	type SurveyCreateValues,
@@ -47,10 +47,8 @@ export function SurveysListFeature() {
 	const organizationId = activeOrganization.id
 	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_SURVEYS')
-	const notice = useNotice()
 	const [creating, setCreating] = useState(false)
 	const [pending, setPending] = useState<Pending | null>(null)
-	const [actionError, setActionError] = useState<string | null>(null)
 
 	const surveys = useSurveys(organizationId)
 	const campaigns = useCampaigns(organizationId)
@@ -79,12 +77,11 @@ export function SurveysListFeature() {
 		navigate({ to: buildOrgPath(activeOrganization.slug, path) })
 
 	const run = async (work: () => Promise<unknown>, done: string) => {
-		setActionError(null)
 		try {
 			await work()
-			notice.show(done)
+			toast.success(done)
 		} catch (error) {
-			setActionError(refusalOf(error).message)
+			toast.error(refusalOf(error).message, { duration: 6000 })
 		}
 	}
 
@@ -174,13 +171,8 @@ export function SurveysListFeature() {
 				table={table}
 				isEmpty={rows.length === 0}
 				isLoading={surveys.isLoading}
-				error={
-					actionError ??
-					(surveys.error ? mutationErrorMessage(surveys.error) : null)
-				}
+				error={surveys.error ? mutationErrorMessage(surveys.error) : null}
 				canManage={canManage}
-				notice={notice.message}
-				onDismissNotice={notice.clear}
 				onCreate={() => {
 					createSurvey.reset()
 					setCreating(true)

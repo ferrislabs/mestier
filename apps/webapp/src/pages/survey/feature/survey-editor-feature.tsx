@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
@@ -12,19 +13,17 @@ import {
 } from '#/hooks/use-surveys'
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
-import { useNotice } from '#/pages/customers/feature/use-notice'
-import { Notice } from '#/pages/customers/ui/notice'
 import { UnsavedGuard } from '#/pages/projects/ui/unsaved-guard'
 import { SurveyCanvasFeature } from '#/pages/survey/feature/survey-canvas-feature'
+import { SurveyNodeDetailsFeature } from '#/pages/survey/feature/survey-node-details-feature'
 import {
 	type GraphIssue,
 	issuesByNode,
 	validateSentGraph,
 } from '#/pages/survey/lib/graph-validation'
 import { lifecycleCopy } from '#/pages/survey/lib/lifecycle'
-import { questionKindEntry } from '#/pages/survey/lib/question-kinds'
+import { nodeTitle } from '#/pages/survey/lib/node-catalogue'
 import { refusalOf } from '#/pages/survey/lib/reason-messages'
-import { conditionSentence } from '#/pages/survey/lib/survey-flow'
 import {
 	publicSurveyUrl,
 	surveyPath,
@@ -32,13 +31,8 @@ import {
 	surveysPath,
 } from '#/pages/survey/lib/survey-format'
 import {
-	connect,
 	fromSchema,
-	precedingChoiceQuestions,
 	removeNodes,
-	replaceNode,
-	START_HANDLE,
-	START_ID,
 	toSchema,
 } from '#/pages/survey/lib/survey-graph'
 import {
@@ -48,17 +42,11 @@ import {
 	settingsPatch,
 	settingsSignature,
 } from '#/pages/survey/lib/survey-settings'
-import type {
-	Campaign,
-	EditorGraph,
-	GraphNode,
-	Survey,
-} from '#/pages/survey/types'
-import { GraphProblems } from '#/pages/survey/ui/graph-problems'
-import { NodeDetailsPanel } from '#/pages/survey/ui/node-details-panel'
+import type { Campaign, EditorGraph, Survey } from '#/pages/survey/types'
 import {
 	ReadOnlyBanner,
 	SurveyEditorHeader,
+	VerificationControl,
 } from '#/pages/survey/ui/survey-editor-header'
 import { SurveySettingsSheet } from '#/pages/survey/ui/survey-settings-sheet'
 import { ErrorBanner, LoadingCard } from '#/pages/survey/ui/surveys-list'
@@ -101,17 +89,6 @@ function graphSignature(graph: EditorGraph): string {
 	return JSON.stringify(toSchema(graph))
 }
 
-function nodeTitle(node: GraphNode | undefined): string {
-	if (!node) return 'Nœud'
-	if (node.type === 'QUESTION') {
-		return node.label.trim() === ''
-			? `${questionKindEntry(node.kind).title} sans libellé`
-			: node.label
-	}
-	if (node.type === 'CONDITION') return 'Condition'
-	return 'Fin'
-}
-
 export function SurveyEditorWorkspace({
 	survey,
 	campaigns,
@@ -123,7 +100,6 @@ export function SurveyEditorWorkspace({
 	const organizationId = activeOrganization.id
 	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_SURVEYS')
-	const notice = useNotice()
 	const updateSurvey = useUpdateSurvey()
 	const openSurvey = useOpenSurvey()
 	const duplicateSurvey = useDuplicateSurvey()
@@ -144,10 +120,12 @@ export function SurveyEditorWorkspace({
 	const [error, setError] = useState<string | null>(null)
 	const [settingsOpen, setSettingsOpen] = useState(false)
 	const [confirmOpen, setConfirmOpen] = useState(false)
-	const [optionKeys, setOptionKeys] = useState<{
-		nodeId: string | null
-		keys: string[]
-	}>({ nodeId: null, keys: [] })
+	const [openNodeId, setOpenNodeId] = useState<string | null>(null)
+	const [verificationOpen, setVerificationOpen] = useState(false)
+	const [focusRequest, setFocusRequest] = useState<{
+		nodeId: string
+		key: number
+	} | null>(null)
 
 	const issues = useMemo(
 		() => (graph.nodes.length === 0 ? [] : validateSentGraph(graph)),
@@ -175,18 +153,18 @@ export function SurveyEditorWorkspace({
 		[graph],
 	)
 	const nodeLabel = (nodeId: string) => nodeTitle(byId.get(nodeId))
-	const selected = selectedId ? byId.get(selectedId) : undefined
+	const openNode = openNodeId ? byId.get(openNodeId) : undefined
+	const allIssues = serverIssue ? [serverIssue, ...issues] : issues
 
-	const keysFor = (node: GraphNode | undefined): string[] => {
-		if (node?.type !== 'QUESTION') return []
-		const count = node.options?.length ?? 0
-		const current = optionKeys.nodeId === node.id ? optionKeys.keys : []
-		if (current.length === count) return current
-		return Array.from(
-			{ length: count },
-			(_, position) => current[position] ?? `${node.id}:${position}`,
-		)
+	const focusNode = (nodeId: string) => {
+		setSelectedId(nodeId)
+		setFocusRequest((current) => ({ nodeId, key: (current?.key ?? 0) + 1 }))
 	}
+
+	const openDetails = useCallback((nodeId: string) => {
+		setSelectedId(nodeId)
+		setOpenNodeId(nodeId)
+	}, [])
 
 	const changeGraph = (update: (current: EditorGraph) => EditorGraph) => {
 		setGraph(update)
@@ -206,8 +184,11 @@ export function SurveyEditorWorkspace({
 				message: refusal.message,
 			})
 			setSelectedId(refusal.questionId)
+			setOpenNodeId(refusal.questionId)
+			setError(refusal.message)
+			return
 		}
-		setError(refusal.message)
+		toast.error(refusal.message, { duration: 6000 })
 	}
 
 	const save = async (): Promise<boolean> => {
@@ -229,7 +210,7 @@ export function SurveyEditorWorkspace({
 				graph: graphSignature(graph),
 				settings: settingsSignature(settings),
 			})
-			notice.show('Questionnaire enregistré.')
+			toast.success('Questionnaire enregistré.')
 			return true
 		} catch (failure) {
 			refuse(failure)
@@ -258,7 +239,7 @@ export function SurveyEditorWorkspace({
 			await openSurvey.mutateAsync({
 				path: { organization_id: organizationId, survey_id: survey.id },
 			})
-			notice.show(lifecycleCopy('open', survey.title).done)
+			toast.success(lifecycleCopy('open', survey.title).done)
 		} catch (failure) {
 			refuse(failure)
 		}
@@ -271,7 +252,7 @@ export function SurveyEditorWorkspace({
 			})
 			await goTo(surveyPath(created.data.id))
 		} catch (failure) {
-			setError(mutationErrorMessage(failure))
+			toast.error(mutationErrorMessage(failure), { duration: 6000 })
 		}
 	}
 
@@ -281,16 +262,11 @@ export function SurveyEditorWorkspace({
 			? () =>
 					void navigator.clipboard
 						.writeText(publicSurveyUrl(window.location.origin, slug))
-						.then(() => notice.show('Lien public copié.'))
-						.catch(() => setError('Le lien n’a pas pu être copié.'))
+						.then(() => toast.success('Lien public copié.'))
+						.catch(() =>
+							toast.error('Le lien n’a pas pu être copié.', { duration: 6000 }),
+						)
 			: null
-
-	const updateNode = (node: GraphNode) => {
-		if (node.type === 'QUESTION' && node.options) {
-			setOptionKeys({ nodeId: node.id, keys: keysFor(node) })
-		}
-		changeGraph((current) => replaceNode(current, node))
-	}
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
@@ -303,6 +279,19 @@ export function SurveyEditorWorkspace({
 				saving={updateSurvey.isPending || openSurvey.isPending}
 				duplicating={duplicateSurvey.isPending}
 				canSave={canSave}
+				verification={
+					<VerificationControl
+						issues={allIssues}
+						nodeLabel={nodeLabel}
+						open={verificationOpen}
+						onOpenChange={setVerificationOpen}
+						onSelect={(nodeId) => {
+							setVerificationOpen(false)
+							focusNode(nodeId)
+							setOpenNodeId(nodeId)
+						}}
+					/>
+				}
 				onBack={() => void goTo(surveysPath())}
 				onSettings={() => setSettingsOpen(true)}
 				onResponses={() => void goTo(surveyResponsesPath(survey.id))}
@@ -312,10 +301,9 @@ export function SurveyEditorWorkspace({
 				onCopyLink={copyLink}
 			/>
 			<ReadOnlyBanner survey={survey} canManage={canManage} />
-			{error || notice.message ? (
+			{error ? (
 				<div className="grid gap-2 border-b px-4 py-2">
 					<ErrorBanner message={error} />
-					<Notice message={notice.message} onDismiss={notice.clear} />
 				</div>
 			) : null}
 			<div className="flex min-h-[480px] flex-1">
@@ -325,90 +313,34 @@ export function SurveyEditorWorkspace({
 					issues={nodeIssues}
 					highlightedId={serverIssue?.nodeId ?? null}
 					selectedId={selectedId}
+					focusRequest={focusRequest}
 					nodeLabel={nodeLabel}
 					onSelect={setSelectedId}
+					onOpenNode={openDetails}
 					onGraphChange={changeGraph}
 				/>
-				<aside className="flex w-[340px] shrink-0 flex-col overflow-y-auto border-l bg-background">
-					{selected ? (
-						<NodeDetailsPanel
-							key={selected.id}
-							node={selected}
-							issues={nodeIssues.get(selected.id) ?? []}
-							choiceQuestions={precedingChoiceQuestions(graph, selected.id)}
-							conditionQuestion={
-								selected.type === 'CONDITION'
-									? (byId.get(selected.question) ?? null)
-									: null
-							}
-							sentence={
-								selected.type === 'CONDITION'
-									? conditionSentence(graph, selected)
-									: ''
-							}
-							optionKeys={keysFor(selected)}
-							otherIdentifier={graph.nodes.some(
-								(node) =>
-									node.type === 'QUESTION' &&
-									node.id !== selected.id &&
-									Boolean(node.identifier),
-							)}
-							isStart={graph.start === selected.id}
-							readOnly={readOnly}
-							onChange={updateNode}
-							onAddOption={() => {
-								if (selected.type !== 'QUESTION') return
-								setOptionKeys({
-									nodeId: selected.id,
-									keys: [...keysFor(selected), crypto.randomUUID()],
-								})
-								changeGraph((current) =>
-									replaceNode(current, {
-										...selected,
-										options: [...(selected.options ?? []), ''],
-									}),
-								)
-							}}
-							onRemoveOption={(position) => {
-								if (selected.type !== 'QUESTION') return
-								setOptionKeys({
-									nodeId: selected.id,
-									keys: keysFor(selected).filter(
-										(_, index) => index !== position,
-									),
-								})
-								changeGraph((current) =>
-									replaceNode(current, {
-										...selected,
-										options: (selected.options ?? []).filter(
-											(_, index) => index !== position,
-										),
-									}),
-								)
-							}}
-							onMakeStart={() =>
-								changeGraph((current) =>
-									connect(current, START_ID, START_HANDLE, selected.id),
-								)
-							}
-							onDelete={() => {
-								setSelectedId(null)
-								changeGraph((current) =>
-									removeNodes(current, new Set([selected.id])),
-								)
-							}}
-							onClose={() => setSelectedId(null)}
-						/>
-					) : (
-						<GraphProblems
-							issues={issues}
-							serverIssue={serverIssue}
-							nodeLabel={nodeLabel}
-							onSelect={setSelectedId}
-						/>
-					)}
-				</aside>
 			</div>
+			{openNode ? (
+				<SurveyNodeDetailsFeature
+					graph={graph}
+					node={openNode}
+					surveyTitle={settings.title.trim() || survey.title}
+					issues={nodeIssues.get(openNode.id) ?? []}
+					readOnly={readOnly}
+					onGraphChange={changeGraph}
+					onNavigate={(nodeId) => {
+						focusNode(nodeId)
+						setOpenNodeId(nodeId)
+					}}
+					onDelete={() => {
+						const removed = openNode.id
+						setOpenNodeId(null)
+						setSelectedId(null)
+						changeGraph((current) => removeNodes(current, new Set([removed])))
+					}}
+					onClose={() => setOpenNodeId(null)}
+				/>
+			) : null}
 			<SurveySettingsSheet
 				open={settingsOpen}
 				settings={settings}
