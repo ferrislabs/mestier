@@ -18,6 +18,7 @@ mod planning_b;
 mod referentiel;
 mod reporting;
 mod support;
+mod survey;
 mod tables;
 mod terrain;
 
@@ -168,6 +169,9 @@ async fn run(kind: &str, context: ActionContext<'_>) -> Option<Result<Value, Str
         return Some(result);
     }
     if let Some(result) = tables::run(kind, &context).await {
+        return Some(result);
+    }
+    if let Some(result) = survey::run(kind, &context).await {
         return Some(result);
     }
     None

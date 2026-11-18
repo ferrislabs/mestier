@@ -18,6 +18,8 @@ const DOMAIN_DESCRIPTIONS: Record<string, string> = {
 	Entretien: 'Contrats, grilles et interventions d’entretien',
 	Factures: 'Émettre, suivre et encaisser des factures',
 	Planning: 'Projets, tâches, modèles, récurrences et rythmes de travail',
+	Questionnaires:
+		'Ouvrir, fermer, partager et lire les réponses d’un questionnaire.',
 	Rapports: 'Rentabilité et heures travaillées',
 	Référentiel: 'Produits, équipements, tarifs, coûts et absences',
 	Support: 'Tickets, brouillons, badges et notes',

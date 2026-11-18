@@ -1,10 +1,10 @@
 # Événements émis
 
-Référence des 46 événements que Mestier émet, et de leur disponibilité dans le déclencheur « Événements » d'un workflow (`TriggerKind::Events`).
+Référence des 51 événements que Mestier émet, et de leur disponibilité dans le déclencheur « Événements » d'un workflow (`TriggerKind::Events`).
 
 Source de vérité : le descripteur de chaque module (`libs/core/src/domain/<module>/events.rs`), assemblé par `event_catalogue()` dans `libs/core/src/domain/automation/catalogue.rs`. Tous sont en version 1.
 
-## Les 46 événements
+## Les 51 événements
 
 | Événement | Libellé | Sujet | Émis par |
 |---|---|---|---|
@@ -54,10 +54,17 @@ Source de vérité : le descripteur de chaque module (`libs/core/src/domain/<mod
 | `extra_period.approved` | Heures supplémentaires approuvées | `extra_period` | `domain/extra_period/service.rs` (`approve`, et `create` quand la période naît approuvée) |
 | `extra_period.rejected` | Heures supplémentaires refusées | `extra_period` | `domain/extra_period/service.rs` (`reject`) |
 | `extra_period.cancelled` | Heures supplémentaires annulées | `extra_period` | `domain/extra_period/service.rs` (`cancel`) |
+| `survey.opened` | Questionnaire ouvert | `survey` | `domain/survey/service/survey_service.rs` (`open`) |
+| `survey.response_submitted` | Réponse enregistrée | `survey_response` | `domain/survey/service/response_service.rs` (`save`) |
+| `survey.response_completed` | Réponse complète | `survey_response` | `domain/survey/service/response_service.rs` (`complete`) |
+| `survey_campaign.started` | Campagne démarrée | `survey_campaign` | `domain/survey/service/campaign_service.rs` (`emit_steps`, depuis `create`, `update` et `advance`) |
+| `survey_campaign.ended` | Campagne terminée | `survey_campaign` | `domain/survey/service/campaign_service.rs` (`emit_steps`, depuis `create`, `update` et `advance`) |
 
 `deal.stage_changed` porte `from` et `to` (les noms d'étapes `NEW`, `VISIT`, `QUOTE_SENT`, `NEGOTIATION`, `WON`, `LOST`) et le deal dans son état final, dont `lost_reason`. Il part aussi pour chaque deal ouvert que l'archivage d'un client perd, et ne part pas quand le deal est déjà à l'étape demandée. Gagner un deal convertit un prospect en client sans émettre d'event : `deal.stage_changed` à `WON` est le signal.
 
 Les absences et les heures supplémentaires suivent la même forme : `*.requested` part à chaque création, avec la demande dans son statut d'arrivée, puis un événement nommé par décision (`approved`, `rejected`, `cancelled`) qui porte `from` et `to` (`PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`) et le modèle dans son état final, dont `decision_comment` pour un refus. Une demande créée directement approuvée (création par un gestionnaire) émet `requested` puis `approved` avec `from` à `PENDING`. Une décision refusée par le domaine (déjà décidée, commentaire vide) n'émet rien, ni la modification ou la suppression d'une absence.
+
+Les trois événements de questionnaire (`survey.opened`, `survey.response_submitted`, `survey.response_completed`) portent toujours `survey_id` et `campaign_id` : `campaign_id` vaut `null` pour un questionnaire indépendant, il n'est jamais absent. Leur `metadata` est la fusion des métadonnées privées de la campagne puis du questionnaire (le questionnaire gagne sur une même clé). `survey.response_completed` liste dans `answers` les seules questions du chemin parcouru, dans l'ordre du chemin, chacune avec `question_id`, `label`, `kind` et `value` (`null` si la question est restée sans réponse) : le payload se lit sans la définition. Les deux événements de campagne portent `campaign_id` et la campagne avec ses propres métadonnées.
 
 Les transitions n'ont pas toutes un nom : un devis ou une facture qui repasse en `DRAFT`, un devis `SUPERSEDED`, une facture fournisseur `RECEIVED` n'émettent rien (`event_name` renvoie `None`).
 
@@ -70,7 +77,7 @@ Chaîne vérifiée, de l'émission au déclencheur :
 3. **API** : `GET /api/v1/organizations/{organization_id}/automation/events` renvoie tout le catalogue (`libs/handlers-automation/src/catalogue.rs`), sans filtre.
 4. **Validation** : un workflow dont le déclencheur nomme un événement hors catalogue est refusé (`GraphError::UnknownEventName`, `domain/automation/workflow/validation.rs`).
 5. **Abonnement** : à la publication, les noms du déclencheur sont écrits dans `automation.subscription` (`infrastructure/automation/postgres/subscription.rs`).
-6. **Éditeur** : le sélecteur lit l'API. `apps/webapp/src/pages/automation/lib/event-search.ts` range les 46 noms par domaine, et un événement inconnu tomberait dans « Autres » plutôt que de disparaître. `event-contracts.ts` décrit les 46 payloads.
+6. **Éditeur** : le sélecteur lit l'API. `apps/webapp/src/pages/automation/lib/event-search.ts` range les 51 noms par domaine, et un événement inconnu tomberait dans « Autres » plutôt que de disparaître. `event-contracts.ts` décrit les 51 payloads.
 
 ## Ce qui n'émet pas d'événement
 

@@ -2,8 +2,8 @@ use events::{DomainEvent, EventSubject};
 use serde_json::{Value, json};
 
 use super::{
-    Answer, Campaign, CampaignId, Completed, InProgress, Metadata, Opened, Response, Survey,
-    SurveyError,
+    Answer, Answers, Campaign, CampaignId, Completed, Graph, InProgress, Metadata, Opened,
+    Response, Survey, SurveyError,
 };
 
 pub use super::descriptors::descriptors;
@@ -148,25 +148,23 @@ impl<'a> SurveyResponseCompleted<'a> {
             response,
         })
     }
+}
 
-    fn answers_payload(&self) -> Vec<Value> {
-        let graph = self.survey.definition();
-        let answers = self.response.answers();
-        graph
-            .path(answers)
-            .questions
-            .iter()
-            .filter_map(|id| graph.question(id))
-            .map(|question| {
-                json!({
-                    "question_id": question.id.0,
-                    "label": question.label,
-                    "kind": question.kind.as_str(),
-                    "value": answers.get(&question.id).map_or(Value::Null, answer_value),
-                })
+pub(crate) fn answers_payload(graph: &Graph, answers: &Answers) -> Vec<Value> {
+    graph
+        .path(answers)
+        .questions
+        .iter()
+        .filter_map(|id| graph.question(id))
+        .map(|question| {
+            json!({
+                "question_id": question.id.0,
+                "label": question.label,
+                "kind": question.kind.as_str(),
+                "value": answers.get(&question.id).map_or(Value::Null, answer_value),
             })
-            .collect()
-    }
+        })
+        .collect()
 }
 
 impl DomainEvent for SurveyResponseCompleted<'_> {
@@ -195,7 +193,7 @@ impl DomainEvent for SurveyResponseCompleted<'_> {
                 "identifier_value": response.identifier_value(),
             },
             "metadata": metadata_payload(&self.metadata),
-            "answers": self.answers_payload(),
+            "answers": answers_payload(self.survey.definition(), response.answers()),
         })
     }
 }

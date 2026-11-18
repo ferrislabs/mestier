@@ -176,6 +176,26 @@ Feature: Surveys, the questionnaires answered by members and by the public
     And the company sees 1 response of the survey "Satisfaction"
 
   @spec-survey-17
+  Scenario: Only the completed responses are listed, the most recent first
+    Given another company registered on Mestier
+    And an opened PUBLIC survey "Satisfaction" with a required question "Nom"
+    And a visitor "Anne"
+    And a visitor "Bruno"
+    And a visitor "Chloé"
+    And a visitor "Denis"
+    And a visitor "Emma"
+    And the clock reads "2026-03-10T09:00:00Z"
+    And "Anne" has completed a response to the survey "Satisfaction" answering "Arnaud" to the question "Nom"
+    And the clock reads "2026-03-10T11:00:00Z"
+    And "Bruno" has completed a response to the survey "Satisfaction" answering "Bernard" to the question "Nom"
+    And the clock reads "2026-03-10T10:00:00Z"
+    And "Chloé" has completed a response to the survey "Satisfaction" answering "Colin" to the question "Nom"
+    And "Denis" has started a response to the survey "Satisfaction"
+    And "Emma" has started a response to the survey "Satisfaction"
+    Then the company lists 3 completed responses of the survey "Satisfaction" answering "Bernard, Colin, Arnaud"
+    And the other company lists 0 completed responses of the survey "Satisfaction" answering ""
+
+  @spec-survey-17
   Scenario: Another company cannot answer on behalf of a member
     Given another company registered on Mestier
     And an opened MEMBERS survey "Satisfaction" with a required question "Nom"

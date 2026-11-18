@@ -2,7 +2,9 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 
 use super::record::{ResponseRecord, SurveyRecord};
-use super::{Campaign, CampaignId, PublicSlug, ResponseId, ResumeToken, SurveyId};
+use super::{
+    Campaign, CampaignId, Completed, PublicSlug, Response, ResponseId, ResumeToken, SurveyId,
+};
 use crate::{MemberId, OrganizationId};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -136,6 +138,14 @@ pub trait ResponseRepository: Send {
         limit: u64,
         offset: u64,
     ) -> impl Future<Output = Result<(Vec<ResponseRecord>, u64), CoreError>> + Send;
+
+    fn list_completed_for_survey(
+        &mut self,
+        organization_id: OrganizationId,
+        survey_id: SurveyId,
+        limit: u64,
+        offset: u64,
+    ) -> impl Future<Output = Result<(Vec<Response<Completed>>, u64), CoreError>> + Send;
 
     fn find_by_resume_token(
         &mut self,

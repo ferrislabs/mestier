@@ -1,4 +1,4 @@
-import { Wrench } from 'lucide-react'
+import { ClipboardList, Wrench } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import type { CreatorKind } from '#/pages/automation/lib/creator'
 import {
@@ -55,6 +55,16 @@ describe('creatorDomains', () => {
 		})
 		expect(unknown.icon).toBe(Wrench)
 		expect(domainCopy('Zèbre').hue).toBe(220)
+	})
+
+	it('describes and draws the Questionnaires domain', () => {
+		const copy = domainCopy('Questionnaires')
+
+		expect(copy.description).toBe(
+			'Ouvrir, fermer, partager et lire les réponses d’un questionnaire.',
+		)
+		expect(copy.icon).toBe(ClipboardList)
+		expect(copy.hue).not.toBe(220)
 	})
 
 	it('gathers the actions without a group under Autres', () => {

@@ -462,6 +462,68 @@ pub(crate) async fn response_contract<S: SurveyRepository, R: ResponseRepository
     Ok(())
 }
 
+pub(crate) async fn completed_listing_contract<S: SurveyRepository, R: ResponseRepository>(
+    surveys: &mut S,
+    responses: &mut R,
+    tenants: &Tenants,
+) -> Result<(), CoreError> {
+    let org = tenants.organization;
+    let now = now_storable();
+    let survey = opened(org, Visibility::Public, false, now);
+    surveys.insert(&SurveyRecord::from(survey.clone())).await?;
+    let mut completed = Vec::new();
+    for minutes in [10, 30, 20] {
+        let mut response = SurveyResponse::start(
+            ResponseId(generate_uuid_v7()),
+            &survey,
+            None,
+            Some(token()),
+            now,
+        )?;
+        response.save(&survey, answers("Claire"))?;
+        let done = response.complete(&survey, now + Duration::minutes(minutes))?;
+        responses
+            .insert(&ResponseRecord::from(done.clone()))
+            .await?;
+        completed.push(done);
+    }
+    for _ in 0..2 {
+        let response = SurveyResponse::start(
+            ResponseId(generate_uuid_v7()),
+            &survey,
+            None,
+            Some(token()),
+            now + Duration::minutes(40),
+        )?;
+        responses.insert(&ResponseRecord::from(response)).await?;
+    }
+    let newest_first = vec![
+        completed[1].clone(),
+        completed[2].clone(),
+        completed[0].clone(),
+    ];
+
+    assert_eq!(
+        responses
+            .list_completed_for_survey(org, survey.id(), 10, 0)
+            .await?,
+        (newest_first.clone(), 3)
+    );
+    assert_eq!(
+        responses
+            .list_completed_for_survey(org, survey.id(), 1, 1)
+            .await?,
+        (vec![newest_first[1].clone()], 3)
+    );
+    assert_eq!(
+        responses
+            .list_completed_for_survey(tenants.other, survey.id(), 10, 0)
+            .await?,
+        (vec![], 0)
+    );
+    Ok(())
+}
+
 pub(crate) async fn member_uniqueness_contract<S: SurveyRepository, R: ResponseRepository>(
     surveys: &mut S,
     responses: &mut R,
@@ -625,6 +687,21 @@ async fn survey_postgres_honours_the_response_contract() {
     run(async |tx| {
         let tenants = seed_tenants(&tx).await;
         response_contract(
+            &mut PgSurveyRepository::new(&tx),
+            &mut PgResponseRepository::new(&tx),
+            &tenants,
+        )
+        .await
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
+async fn survey_postgres_lists_only_the_completed_responses_newest_first() {
+    run(async |tx| {
+        let tenants = seed_tenants(&tx).await;
+        completed_listing_contract(
             &mut PgSurveyRepository::new(&tx),
             &mut PgResponseRepository::new(&tx),
             &tenants,

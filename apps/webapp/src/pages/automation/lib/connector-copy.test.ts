@@ -299,6 +299,7 @@ describe('describeConnector — generated Mestier actions', () => {
 			'Entretien',
 			'Factures',
 			'Planning',
+			'Questionnaires',
 			'Rapports',
 			'Référentiel',
 			'Support',
