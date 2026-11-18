@@ -26,7 +26,7 @@ import {
 
 export interface SurveyRow {
 	survey: Survey
-	campaignName: string | null
+	campaignNames: string[]
 }
 
 export type SurveyAction =
@@ -164,9 +164,20 @@ export function surveyColumns({
 		},
 		{
 			id: 'campaign',
-			header: 'Campagne',
+			header: 'Campagnes',
 			cell: ({ row }) =>
-				row.original.campaignName ?? (
+				row.original.campaignNames.length > 0 ? (
+					<ul className="flex flex-wrap gap-1">
+						{row.original.campaignNames.map((name) => (
+							<li
+								key={name}
+								className="rounded-md bg-muted px-2 py-0.5 text-xs"
+							>
+								{name}
+							</li>
+						))}
+					</ul>
+				) : (
 					<span className="text-muted-foreground">Indépendant</span>
 				),
 		},

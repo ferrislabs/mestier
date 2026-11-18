@@ -36,8 +36,8 @@ describe('QuestionStep', () => {
 	it.each([
 		['TEXT', 'text'],
 		['NUMBER', 'text'],
-		['DATE', 'date'],
-		['DATETIME', 'datetime-local'],
+		['DATE', 'button'],
+		['DATETIME', 'button'],
 		['PHONE', 'tel'],
 		['EMAIL', 'email'],
 	] as const)('binds the label of a %s question to a %s input', (kind, type) => {

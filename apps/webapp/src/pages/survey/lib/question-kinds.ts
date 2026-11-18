@@ -5,15 +5,13 @@ import {
 	CalendarClock,
 	Camera,
 	CircleDot,
-	Flag,
 	Hash,
 	ListChecks,
 	type LucideIcon,
 	Phone,
-	Split,
 	Type,
 } from 'lucide-react'
-import type { NodeChoice, QuestionKind } from '#/pages/survey/types'
+import type { QuestionKind } from '#/pages/survey/types'
 
 export interface CatalogueEntry {
 	icon: LucideIcon
@@ -24,10 +22,6 @@ export interface CatalogueEntry {
 
 export interface QuestionKindEntry extends CatalogueEntry {
 	kind: QuestionKind
-}
-
-export interface NodeChoiceEntry extends CatalogueEntry {
-	choice: NodeChoice
 }
 
 export const QUESTION_KINDS: readonly QuestionKindEntry[] = [
@@ -103,24 +97,6 @@ export const QUESTION_KINDS: readonly QuestionKindEntry[] = [
 	},
 ]
 
-export const CONDITION_ENTRY: NodeChoiceEntry = {
-	choice: 'CONDITION',
-	icon: Split,
-	title: 'Condition',
-	description:
-		'Oriente la suite selon qu’une option d’une question à choix est cochée ou non.',
-	hue: 285,
-}
-
-export const END_ENTRY: NodeChoiceEntry = {
-	choice: 'END',
-	icon: Flag,
-	title: 'Fin',
-	description:
-		'Termine le questionnaire et affiche votre message de fin au répondant.',
-	hue: 10,
-}
-
 const BY_KIND = new Map(QUESTION_KINDS.map((entry) => [entry.kind, entry]))
 
 export function questionKindEntry(kind: QuestionKind): QuestionKindEntry {
@@ -135,12 +111,4 @@ export function isChoiceKind(kind: QuestionKind): boolean {
 
 export function isIdentifierKind(kind: QuestionKind): boolean {
 	return kind === 'TEXT' || kind === 'EMAIL' || kind === 'PHONE'
-}
-
-export function nodeChoices(): NodeChoiceEntry[] {
-	return [
-		...QUESTION_KINDS.map(({ kind, ...entry }) => ({ ...entry, choice: kind })),
-		CONDITION_ENTRY,
-		END_ENTRY,
-	]
 }

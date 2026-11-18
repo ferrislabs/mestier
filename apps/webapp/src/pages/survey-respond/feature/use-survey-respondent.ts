@@ -234,14 +234,16 @@ export function useSurveyRespondent(
 		if (restored?.status === 'COMPLETED') source.forget()
 	}, [restored, source])
 
+	const preview = source.mode === 'preview'
+
 	useEffect(() => {
-		if (!survey) return
+		if (!survey || preview) return
 		const previous = document.title
 		document.title = `${survey.title} · Mestier`
 		return () => {
 			document.title = previous
 		}
-	}, [survey])
+	}, [survey, preview])
 
 	useEffect(() => {
 		if (stepChange === 0 && override === null) return
@@ -658,6 +660,8 @@ export function useSurveyRespondent(
 		latestAnswers.current = null
 		for (const controller of uploads.current.values()) controller.abort()
 		uploads.current.clear()
+		for (const url of objectUrls.current) URL.revokeObjectURL(url)
+		objectUrls.current.clear()
 		setDrafts({})
 		updatePhotos(() => ({}))
 		setPhotoNotice({})
@@ -678,6 +682,7 @@ export function useSurveyRespondent(
 
 	const view: RespondentView = {
 		phase,
+		preview,
 		survey,
 		current,
 		draft: current ? effectiveDrafts[current.id] : undefined,

@@ -1,11 +1,12 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '#/components/confirm-dialog'
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import {
 	useCampaigns,
+	useCloseSurvey,
 	useDuplicateSurvey,
 	useOpenSurvey,
 	useSurvey,
@@ -14,27 +15,33 @@ import {
 import { mutationErrorMessage } from '#/lib/api-error'
 import { buildOrgPath } from '#/modules/org-path'
 import { UnsavedGuard } from '#/pages/projects/ui/unsaved-guard'
-import { SurveyCanvasFeature } from '#/pages/survey/feature/survey-canvas-feature'
-import { SurveyNodeDetailsFeature } from '#/pages/survey/feature/survey-node-details-feature'
+import { SortableQuestionList } from '#/pages/survey/feature/sortable-question-list'
+import { SurveyPreviewFeature } from '#/pages/survey/feature/survey-preview-feature'
+import { useSurveyFormEditor } from '#/pages/survey/feature/use-survey-form-editor'
+import { useWideScreen } from '#/pages/survey/feature/use-wide-screen'
+import { buildGraph, parseGraph } from '#/pages/survey/lib/form-graph'
 import {
-	type GraphIssue,
-	issuesByNode,
-	validateSentGraph,
-} from '#/pages/survey/lib/graph-validation'
+	type FormProblem,
+	formProblems,
+	problemsByQuestion,
+	questionOfNode,
+} from '#/pages/survey/lib/form-validation'
 import { lifecycleCopy } from '#/pages/survey/lib/lifecycle'
-import { nodeTitle } from '#/pages/survey/lib/node-catalogue'
 import { refusalOf } from '#/pages/survey/lib/reason-messages'
+import {
+	dependentsOf,
+	emptyForm,
+	isRuleSource,
+	ruleSources,
+	type SurveyForm,
+} from '#/pages/survey/lib/survey-form'
 import {
 	publicSurveyUrl,
 	surveyPath,
 	surveyResponsesPath,
 	surveysPath,
 } from '#/pages/survey/lib/survey-format'
-import {
-	fromSchema,
-	removeNodes,
-	toSchema,
-} from '#/pages/survey/lib/survey-graph'
+import { fromSchema, toSchema } from '#/pages/survey/lib/survey-graph'
 import {
 	type SurveySettings,
 	settingsErrors,
@@ -42,13 +49,24 @@ import {
 	settingsPatch,
 	settingsSignature,
 } from '#/pages/survey/lib/survey-settings'
-import type { Campaign, EditorGraph, Survey } from '#/pages/survey/types'
+import type { Campaign, Survey } from '#/pages/survey/types'
+import { questionLabelId } from '#/pages/survey/ui/question-card'
 import {
-	ReadOnlyBanner,
+	ProblemsSummary,
 	SurveyEditorHeader,
-	VerificationControl,
 } from '#/pages/survey/ui/survey-editor-header'
-import { SurveySettingsSheet } from '#/pages/survey/ui/survey-settings-sheet'
+import {
+	ADD_QUESTION_ID,
+	AdvancedGraphNotice,
+	OpenedBanner,
+	ReadOnlyBanner,
+	SurveyFormEditor,
+} from '#/pages/survey/ui/survey-form-editor'
+import type { PreviewProblem } from '#/pages/survey/ui/survey-preview-panel'
+import {
+	SurveySettingsPanel,
+	SurveySettingsSheet,
+} from '#/pages/survey/ui/survey-settings-sheet'
 import { ErrorBanner, LoadingCard } from '#/pages/survey/ui/surveys-list'
 
 export function SurveyEditorFeature({ surveyId }: { surveyId: string }) {
@@ -85,9 +103,37 @@ export function SurveyEditorFeature({ surveyId }: { surveyId: string }) {
 	)
 }
 
-function graphSignature(graph: EditorGraph): string {
-	return JSON.stringify(toSchema(graph))
+interface InitialState {
+	form: SurveyForm
+	advanced: number | null
 }
+
+function initialState(survey: Survey): InitialState {
+	if (!survey.graph) {
+		return { form: emptyForm(crypto.randomUUID()), advanced: null }
+	}
+	const parsed = parseGraph(fromSchema(survey.graph))
+	return parsed.kind === 'form'
+		? { form: parsed.form, advanced: null }
+		: { form: emptyForm(''), advanced: parsed.questionCount }
+}
+
+function formSignature(form: SurveyForm): string {
+	return JSON.stringify(toSchema(buildGraph(form)))
+}
+
+function questionTitle(form: SurveyForm, id: string): string {
+	const position = form.questions.findIndex((item) => item.id === id)
+	const label = form.questions[position]?.label.trim()
+	return `Question ${position + 1}${label ? ` : ${label}` : ''}`
+}
+
+const END_MESSAGE_NEEDS_QUESTION =
+	'Ajoutez une question pour enregistrer le message de fin'
+
+const UNSAVED_DESCRIPTION = 'Vos modifications non enregistrées seront perdues.'
+
+type Confirmation = 'open' | 'close'
 
 export function SurveyEditorWorkspace({
 	survey,
@@ -102,91 +148,90 @@ export function SurveyEditorWorkspace({
 	const canManage = useHasPermission('MANAGE_SURVEYS')
 	const updateSurvey = useUpdateSurvey()
 	const openSurvey = useOpenSurvey()
+	const closeSurvey = useCloseSurvey()
 	const duplicateSurvey = useDuplicateSurvey()
 
-	const readOnly = survey.status !== 'DRAFT' || !canManage
-	const [graph, setGraph] = useState<EditorGraph>(() =>
-		fromSchema(survey.graph),
-	)
+	const [initial] = useState(() => initialState(survey))
+	const advanced = initial.advanced
+	const readOnly = !canManage || advanced !== null
+	const draft = survey.status === 'DRAFT'
+	const [serverIssue, setServerIssue] = useState<FormProblem | null>(null)
+	const editor = useSurveyFormEditor(initial.form, () => setServerIssue(null))
+	const form = editor.form
 	const [settings, setSettings] = useState<SurveySettings>(() =>
 		settingsOf(survey),
 	)
-	const [baseline, setBaseline] = useState(() => ({
-		graph: graphSignature(fromSchema(survey.graph)),
-		settings: settingsSignature(settingsOf(survey)),
+	const [saved, setSaved] = useState(() => ({
+		form: initial.form,
+		settings: settingsOf(survey),
 	}))
-	const [selectedId, setSelectedId] = useState<string | null>(null)
-	const [serverIssue, setServerIssue] = useState<GraphIssue | null>(null)
-	const [error, setError] = useState<string | null>(null)
+	const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
 	const [settingsOpen, setSettingsOpen] = useState(false)
-	const [confirmOpen, setConfirmOpen] = useState(false)
-	const [openNodeId, setOpenNodeId] = useState<string | null>(null)
-	const [verificationOpen, setVerificationOpen] = useState(false)
-	const [focusRequest, setFocusRequest] = useState<{
-		nodeId: string
-		key: number
-	} | null>(null)
+	const wide = useWideScreen()
+	const [previewing, setPreviewing] = useState(false)
 
-	const issues = useMemo(
-		() => (graph.nodes.length === 0 ? [] : validateSentGraph(graph)),
-		[graph],
+	const problems = useMemo(
+		() => (advanced === null ? formProblems(form, !draft) : []),
+		[advanced, form, draft],
 	)
-	const nodeIssues = useMemo(() => {
-		const grouped = issuesByNode(issues)
-		if (serverIssue?.nodeId) {
-			grouped.set(serverIssue.nodeId, [
-				serverIssue.message,
-				...(grouped.get(serverIssue.nodeId) ?? []),
-			])
-		}
-		return grouped
-	}, [issues, serverIssue])
+	const allProblems = useMemo(
+		() => (serverIssue ? [serverIssue, ...problems] : problems),
+		[serverIssue, problems],
+	)
+	const byQuestion = useMemo(
+		() => problemsByQuestion(allProblems),
+		[allProblems],
+	)
+	const savedSignature = useMemo(() => formSignature(saved.form), [saved.form])
 	const errors = settingsErrors(settings)
 	const settingsInvalid = Object.keys(errors).length > 0
-	const dirty =
-		graphSignature(graph) !== baseline.graph ||
-		settingsSignature(settings) !== baseline.settings
-	const canSave = issues.length === 0 && !settingsInvalid
-
-	const byId = useMemo(
-		() => new Map(graph.nodes.map((node) => [node.id, node])),
-		[graph],
+	const endMessageStranded =
+		advanced === null &&
+		form.questions.length === 0 &&
+		form.endMessage !== saved.form.endMessage
+	const formDirty =
+		advanced === null &&
+		(endMessageStranded || formSignature(form) !== savedSignature)
+	const settingsDirty =
+		settingsSignature(settings) !== settingsSignature(saved.settings)
+	const dirty = canManage && (formDirty || settingsDirty)
+	const saveBlockedReason =
+		problems.length > 0
+			? 'Corrigez les problèmes signalés avant d’enregistrer.'
+			: settingsInvalid
+				? 'Corrigez les réglages avant d’enregistrer.'
+				: endMessageStranded
+					? END_MESSAGE_NEEDS_QUESTION
+					: null
+	const graph = useMemo(
+		() => (advanced === null ? toSchema(buildGraph(form)) : survey.graph),
+		[advanced, form, survey.graph],
 	)
-	const nodeLabel = (nodeId: string) => nodeTitle(byId.get(nodeId))
-	const openNode = openNodeId ? byId.get(openNodeId) : undefined
-	const allIssues = serverIssue ? [serverIssue, ...issues] : issues
-
-	const focusNode = (nodeId: string) => {
-		setSelectedId(nodeId)
-		setFocusRequest((current) => ({ nodeId, key: (current?.key ?? 0) + 1 }))
-	}
-
-	const openDetails = useCallback((nodeId: string) => {
-		setSelectedId(nodeId)
-		setOpenNodeId(nodeId)
-	}, [])
-
-	const changeGraph = (update: (current: EditorGraph) => EditorGraph) => {
-		setGraph(update)
-		setServerIssue(null)
-		setError(null)
-	}
+	const title = settings.title.trim() || survey.title
+	const { requestFocus } = editor
 
 	const goTo = (path: string) =>
 		navigate({ to: buildOrgPath(activeOrganization.slug, path) })
 
+	const focusFirstProblem = () => {
+		const first = allProblems[0]
+		if (!first) {
+			if (settingsInvalid) setSettingsOpen(true)
+			else if (endMessageStranded) requestFocus(ADD_QUESTION_ID)
+			return
+		}
+		requestFocus(
+			first.questionId ? questionLabelId(first.questionId) : ADD_QUESTION_ID,
+		)
+	}
+
 	const refuse = (failure: unknown) => {
 		const refusal = refusalOf(failure)
 		if (refusal.questionId) {
-			setServerIssue({
-				code: refusal.reason ?? 'refused',
-				nodeId: refusal.questionId,
-				message: refusal.message,
-			})
-			setSelectedId(refusal.questionId)
-			setOpenNodeId(refusal.questionId)
-			setError(refusal.message)
-			return
+			const questionId =
+				questionOfNode(form, refusal.questionId) ?? refusal.questionId
+			setServerIssue({ questionId, message: refusal.message })
+			requestFocus(questionLabelId(questionId))
 		}
 		toast.error(refusal.message, { duration: 6000 })
 	}
@@ -196,20 +241,19 @@ export function SurveyEditorWorkspace({
 			setSettingsOpen(true)
 			return false
 		}
-		if (issues.length > 0) {
-			setError('Corrigez les problèmes signalés avant d’enregistrer.')
+		if (problems.length > 0 || endMessageStranded) {
+			focusFirstProblem()
 			return false
 		}
-		setError(null)
 		try {
 			await updateSurvey.mutateAsync({
 				path: { organization_id: organizationId, survey_id: survey.id },
-				body: { ...settingsPatch(settings, true), graph: toSchema(graph) },
+				body: {
+					...settingsPatch(settings, saved.settings, draft),
+					...(formDirty ? { graph: toSchema(buildGraph(form)) } : {}),
+				},
 			})
-			setBaseline({
-				graph: graphSignature(graph),
-				settings: settingsSignature(settings),
-			})
+			setSaved({ form, settings })
 			toast.success('Questionnaire enregistré.')
 			return true
 		} catch (failure) {
@@ -219,27 +263,33 @@ export function SurveyEditorWorkspace({
 	}
 
 	const requestOpen = () => {
-		if (graph.nodes.length === 0) {
-			setError('Ajoutez au moins une question avant d’ouvrir le questionnaire.')
-			return
-		}
-		if (issues.length > 0 || settingsInvalid) {
-			setError(
-				'Corrigez les problèmes signalés avant d’ouvrir le questionnaire.',
+		if (advanced === null && form.questions.length === 0) {
+			toast.error(
+				'Ajoutez au moins une question avant d’ouvrir le questionnaire.',
+				{
+					duration: 6000,
+				},
 			)
+			requestFocus(ADD_QUESTION_ID)
 			return
 		}
-		setConfirmOpen(true)
+		if (problems.length > 0 || settingsInvalid) {
+			focusFirstProblem()
+			return
+		}
+		setConfirmation('open')
 	}
 
-	const open = async () => {
-		setConfirmOpen(false)
-		if (dirty && !(await save())) return
+	const confirmLifecycle = async () => {
+		const action = confirmation
+		setConfirmation(null)
+		if (!action) return
+		const path = { organization_id: organizationId, survey_id: survey.id }
+		if (action === 'open' && dirty && !(await save())) return
 		try {
-			await openSurvey.mutateAsync({
-				path: { organization_id: organizationId, survey_id: survey.id },
-			})
-			toast.success(lifecycleCopy('open', survey.title).done)
+			if (action === 'open') await openSurvey.mutateAsync({ path })
+			else await closeSurvey.mutateAsync({ path })
+			toast.success(lifecycleCopy(action, survey.title).done)
 		} catch (failure) {
 			refuse(failure)
 		}
@@ -250,6 +300,7 @@ export function SurveyEditorWorkspace({
 			const created = await duplicateSurvey.mutateAsync({
 				path: { organization_id: organizationId, survey_id: survey.id },
 			})
+			toast.success('Questionnaire dupliqué en brouillon.')
 			await goTo(surveyPath(created.data.id))
 		} catch (failure) {
 			toast.error(mutationErrorMessage(failure), { duration: 6000 })
@@ -268,101 +319,169 @@ export function SurveyEditorWorkspace({
 						)
 			: null
 
+	const previewProblems: PreviewProblem[] = allProblems.map(
+		(problem, index) => ({
+			key: `${index}:${problem.questionId ?? 'form'}`,
+			label: problem.questionId
+				? questionTitle(form, problem.questionId)
+				: null,
+			message: problem.message,
+		}),
+	)
+	const deleting = editor.deleting
+	const dependents = deleting ? dependentsOf(form, deleting.id).length : 0
+	const pendingKind = editor.pendingKind
+	const lifecycle = confirmation ? lifecycleCopy(confirmation, title) : null
+
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
-			<UnsavedGuard dirty={dirty && !readOnly} />
-			<SurveyEditorHeader
-				survey={survey}
-				title={settings.title.trim() || survey.title}
-				canManage={canManage}
-				dirty={dirty && !readOnly}
-				saving={updateSurvey.isPending || openSurvey.isPending}
-				duplicating={duplicateSurvey.isPending}
-				canSave={canSave}
-				verification={
-					<VerificationControl
-						issues={allIssues}
-						nodeLabel={nodeLabel}
-						open={verificationOpen}
-						onOpenChange={setVerificationOpen}
-						onSelect={(nodeId) => {
-							setVerificationOpen(false)
-							focusNode(nodeId)
-							setOpenNodeId(nodeId)
-						}}
-					/>
-				}
-				onBack={() => void goTo(surveysPath())}
-				onSettings={() => setSettingsOpen(true)}
-				onResponses={() => void goTo(surveyResponsesPath(survey.id))}
-				onSave={() => void save()}
-				onOpen={requestOpen}
-				onDuplicate={() => void duplicate()}
-				onCopyLink={copyLink}
-			/>
-			<ReadOnlyBanner survey={survey} canManage={canManage} />
-			{error ? (
-				<div className="grid gap-2 border-b px-4 py-2">
-					<ErrorBanner message={error} />
-				</div>
-			) : null}
-			<div className="flex min-h-[480px] flex-1">
-				<SurveyCanvasFeature
-					graph={graph}
-					readOnly={readOnly}
-					issues={nodeIssues}
-					highlightedId={serverIssue?.nodeId ?? null}
-					selectedId={selectedId}
-					focusRequest={focusRequest}
-					nodeLabel={nodeLabel}
-					onSelect={setSelectedId}
-					onOpenNode={openDetails}
-					onGraphChange={changeGraph}
+		<div className="flex min-h-0 flex-1">
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+				<UnsavedGuard dirty={dirty} description={UNSAVED_DESCRIPTION} />
+				<SurveyEditorHeader
+					survey={survey}
+					title={settings.title}
+					titleEditable={canManage}
+					canManage={canManage}
+					dirty={dirty}
+					saving={
+						updateSurvey.isPending ||
+						openSurvey.isPending ||
+						closeSurvey.isPending
+					}
+					duplicating={duplicateSurvey.isPending}
+					saveBlockedReason={saveBlockedReason}
+					problems={
+						advanced === null && canManage ? (
+							<ProblemsSummary
+								count={allProblems.length}
+								onFocusFirst={focusFirstProblem}
+							/>
+						) : null
+					}
+					onTitle={(value) =>
+						setSettings((current) => ({ ...current, title: value }))
+					}
+					onBack={() => void goTo(surveysPath())}
+					previewing={previewing}
+					onPreviewing={setPreviewing}
+					onSettings={() => setSettingsOpen(true)}
+					onResponses={() => void goTo(surveyResponsesPath(survey.id))}
+					onSave={() => void save()}
+					onOpen={requestOpen}
+					onClose={() => setConfirmation('close')}
+					onDuplicate={() => void duplicate()}
+					onCopyLink={copyLink}
 				/>
+				{!canManage ? (
+					<ReadOnlyBanner />
+				) : survey.status === 'OPENED' ? (
+					<OpenedBanner />
+				) : null}
+				<p aria-live="polite" className="sr-only">
+					{editor.announcement}
+				</p>
+				<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/30">
+					{previewing ? (
+						<SurveyPreviewFeature
+							title={title}
+							description={settings.description.trim() || null}
+							graph={graph ?? null}
+							problems={previewProblems}
+						/>
+					) : advanced !== null ? (
+						<div className="px-3 py-6">
+							<AdvancedGraphNotice questionCount={advanced} />
+						</div>
+					) : (
+						<SurveyFormEditor
+							form={form}
+							readOnly={readOnly}
+							list={
+								<SortableQuestionList
+									form={form}
+									readOnly={readOnly}
+									highlightedId={serverIssue?.questionId ?? null}
+									contextOf={(question) => ({
+										problems: byQuestion.get(question.id) ?? [],
+										sources: ruleSources(form, question.id),
+										isSource: isRuleSource(form, question.id),
+										logicOpen: editor.logicOpen(question),
+									})}
+									onQuestionAction={editor.onQuestionAction}
+									onInsert={editor.insert}
+									onDragEnd={editor.onDragEnd}
+								/>
+							}
+							onInsert={editor.insert}
+							onEndMessage={editor.setEndMessage}
+						/>
+					)}
+				</div>
 			</div>
-			{openNode ? (
-				<SurveyNodeDetailsFeature
-					graph={graph}
-					node={openNode}
-					surveyTitle={settings.title.trim() || survey.title}
-					issues={nodeIssues.get(openNode.id) ?? []}
-					readOnly={readOnly}
-					onGraphChange={changeGraph}
-					onNavigate={(nodeId) => {
-						focusNode(nodeId)
-						setOpenNodeId(nodeId)
-					}}
-					onDelete={() => {
-						const removed = openNode.id
-						setOpenNodeId(null)
-						setSelectedId(null)
-						changeGraph((current) => removeNodes(current, new Set([removed])))
-					}}
-					onClose={() => setOpenNodeId(null)}
+			{wide ? (
+				<SurveySettingsPanel
+					settings={settings}
+					errors={errors}
+					campaigns={campaigns}
+					readOnly={!canManage}
+					visibilityLocked={!draft || Boolean(survey.opened_at)}
+					onChange={(patch) =>
+						setSettings((current) => ({ ...current, ...patch }))
+					}
 				/>
 			) : null}
 			<SurveySettingsSheet
-				open={settingsOpen}
+				open={settingsOpen && !wide}
 				settings={settings}
 				errors={errors}
 				campaigns={campaigns}
-				readOnly={readOnly}
-				visibilityLocked={
-					survey.status !== 'DRAFT' || Boolean(survey.opened_at)
-				}
+				readOnly={!canManage}
+				visibilityLocked={!draft || Boolean(survey.opened_at)}
 				onOpenChange={setSettingsOpen}
-				onChange={(patch) => {
+				onChange={(patch) =>
 					setSettings((current) => ({ ...current, ...patch }))
-					setError(null)
-				}}
+				}
 			/>
 			<ConfirmDialog
-				open={confirmOpen}
-				onOpenChange={setConfirmOpen}
-				title={lifecycleCopy('open', survey.title).title}
-				description={lifecycleCopy('open', survey.title).description}
-				confirmLabel={lifecycleCopy('open', survey.title).confirmLabel}
-				onConfirm={() => void open()}
+				open={deleting !== undefined}
+				onOpenChange={(open) => {
+					if (!open) editor.cancelDelete()
+				}}
+				title="Supprimer cette question ?"
+				description={
+					deleting
+						? `Elle sert de condition à ${dependents === 1 ? 'une autre question' : `${dependents} autres questions`} : ces conditions seront retirées.`
+						: ''
+				}
+				confirmLabel="Supprimer la question"
+				destructive
+				onConfirm={editor.confirmDelete}
+			/>
+			<ConfirmDialog
+				open={pendingKind !== null}
+				onOpenChange={(open) => {
+					if (!open) editor.cancelKind()
+				}}
+				title="Changer le type de cette question ?"
+				description={
+					pendingKind
+						? `Ce type n’a pas d’options : ${pendingKind.drops === 1 ? 'la condition qui en dépend sera retirée' : `les ${pendingKind.drops} conditions qui en dépendent seront retirées`}. Les options saisies sont conservées si vous revenez à un choix.`
+						: ''
+				}
+				confirmLabel="Changer le type"
+				destructive
+				onConfirm={editor.confirmKind}
+			/>
+			<ConfirmDialog
+				open={lifecycle !== null}
+				onOpenChange={(open) => {
+					if (!open) setConfirmation(null)
+				}}
+				title={lifecycle?.title ?? ''}
+				description={lifecycle?.description ?? ''}
+				confirmLabel={lifecycle?.confirmLabel ?? ''}
+				destructive={lifecycle?.destructive}
+				onConfirm={() => void confirmLifecycle()}
 			/>
 		</div>
 	)

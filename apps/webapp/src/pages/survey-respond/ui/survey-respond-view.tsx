@@ -105,9 +105,20 @@ function Body({ view }: { view: RespondentView }) {
 				<RespondMessage
 					icon={CircleCheck}
 					tone="success"
-					title="Réponse envoyée"
+					title={view.preview ? 'Fin de l’aperçu' : 'Réponse envoyée'}
 					message={phase.message}
 					headingRef={view.headingRef}
+					action={
+						view.preview ? (
+							<Button
+								type="button"
+								className={ACTION_CLASS}
+								onClick={view.restart}
+							>
+								Recommencer
+							</Button>
+						) : undefined
+					}
 				/>
 			)
 		case 'answering':
@@ -130,27 +141,30 @@ function Body({ view }: { view: RespondentView }) {
 						view.next()
 					}}
 				>
-					<QuestionStep
-						key={view.current.id}
-						question={view.current}
-						draft={view.draft}
-						photos={view.photos}
-						photoNotice={view.photoNotice}
-						progress={view.progress}
-						error={view.stepError}
-						headingRef={view.headingRef}
-						onChange={(draft) => {
-							if (view.current) view.setDraft(view.current.id, draft)
-						}}
-						onSubmit={view.next}
-						onAddPhotos={(files) => {
-							if (view.current) view.addPhotos(view.current.id, files)
-						}}
-						onRemovePhoto={(id) => {
-							if (view.current) view.removePhoto(view.current.id, id)
-						}}
-					/>
+					<div className="rounded-xl border bg-card p-4 shadow-xs sm:p-6">
+						<QuestionStep
+							key={view.current.id}
+							question={view.current}
+							draft={view.draft}
+							photos={view.photos}
+							photoNotice={view.photoNotice}
+							progress={view.progress}
+							error={view.stepError}
+							headingRef={view.headingRef}
+							onChange={(draft) => {
+								if (view.current) view.setDraft(view.current.id, draft)
+							}}
+							onSubmit={view.next}
+							onAddPhotos={(files) => {
+								if (view.current) view.addPhotos(view.current.id, files)
+							}}
+							onRemovePhoto={(id) => {
+								if (view.current) view.removePhoto(view.current.id, id)
+							}}
+						/>
+					</div>
 					<RespondActionBar
+						preview={view.preview}
 						isFirst={view.isFirst}
 						isLast={view.isLast}
 						busy={view.busy}
@@ -176,6 +190,7 @@ export function SurveyRespondView({
 	return (
 		<RespondLayout
 			variant={variant}
+			embedded={view.preview}
 			title={view.survey?.title ?? null}
 			description={view.survey?.description}
 		>

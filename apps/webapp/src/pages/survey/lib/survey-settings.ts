@@ -13,8 +13,7 @@ export interface SurveySettings {
 	visibility: Visibility
 	allowMultiple: boolean
 	responseCap: string
-	campaignId: string
-	otherCampaignIds: string[]
+	campaignIds: string[]
 	metadata: MetadataEntry[]
 }
 
@@ -31,17 +30,18 @@ export function settingsOf(survey: Survey): SurveySettings {
 		visibility: survey.visibility,
 		allowMultiple: survey.allow_multiple_responses,
 		responseCap: survey.response_cap == null ? '' : String(survey.response_cap),
-		campaignId: survey.campaign_ids[0] ?? '',
-		otherCampaignIds: survey.campaign_ids.slice(1),
+		campaignIds: [...survey.campaign_ids],
 		metadata: entriesOf(survey.metadata),
 	}
 }
 
-function campaignIdsOf(settings: SurveySettings): string[] {
-	const others = settings.otherCampaignIds.filter(
-		(id) => id !== settings.campaignId,
-	)
-	return settings.campaignId === '' ? others : [settings.campaignId, ...others]
+export function toggleCampaign(
+	settings: SurveySettings,
+	campaignId: string,
+	attached: boolean,
+): string[] {
+	const others = settings.campaignIds.filter((id) => id !== campaignId)
+	return attached ? [...others, campaignId] : others
 }
 
 function parsedCap(raw: string): number | null | undefined {
@@ -63,22 +63,45 @@ export function settingsErrors(settings: SurveySettings): SettingsErrors {
 	return errors
 }
 
-export function settingsPatch(
-	settings: SurveySettings,
-	draft: boolean,
-): Schemas.UpdateSurveyRequest {
+function fullPatch(settings: SurveySettings): Schemas.UpdateSurveyRequest {
 	const description = settings.description.trim()
 	return {
 		title: settings.title.trim(),
 		description: description === '' ? null : description,
-		...(draft ? { visibility: settings.visibility } : {}),
+		visibility: settings.visibility,
 		allow_multiple_responses: settings.allowMultiple,
 		response_cap: parsedCap(settings.responseCap) ?? null,
-		campaign_ids: campaignIdsOf(settings),
+		campaign_ids: [...new Set(settings.campaignIds)].sort(),
 		metadata: recordOf(settings.metadata),
 	}
 }
 
+export function settingsPatch(
+	settings: SurveySettings,
+	saved: SurveySettings,
+	draft: boolean,
+): Schemas.UpdateSurveyRequest {
+	const next = fullPatch(settings)
+	const previous = fullPatch(saved)
+	const changed = (key: keyof Schemas.UpdateSurveyRequest) =>
+		JSON.stringify(next[key]) !== JSON.stringify(previous[key])
+	return {
+		...(changed('title') ? { title: next.title } : {}),
+		...(changed('description') ? { description: next.description } : {}),
+		...(draft && changed('visibility')
+			? { visibility: settings.visibility }
+			: {}),
+		...(changed('allow_multiple_responses')
+			? { allow_multiple_responses: settings.allowMultiple }
+			: {}),
+		...(changed('response_cap') ? { response_cap: next.response_cap } : {}),
+		...(changed('campaign_ids')
+			? { campaign_ids: [...new Set(settings.campaignIds)] }
+			: {}),
+		...(changed('metadata') ? { metadata: next.metadata } : {}),
+	}
+}
+
 export function settingsSignature(settings: SurveySettings): string {
-	return JSON.stringify(settingsPatch(settings, true))
+	return JSON.stringify(fullPatch(settings))
 }

@@ -31,6 +31,7 @@ export interface StepProgress {
 
 export interface RespondentView {
 	phase: RespondPhase
+	preview: boolean
 	survey: { title: string; description?: string | null } | null
 	current: QuestionNode | null
 	draft: Draft | undefined

@@ -9,6 +9,7 @@ import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useHasPermission } from '#/hooks/use-permissions'
 import {
 	useCampaign,
+	useCampaignSurveys,
 	useDeleteCampaign,
 	useUpdateCampaign,
 } from '#/hooks/use-surveys'
@@ -20,7 +21,8 @@ import {
 	campaignValuesOf,
 } from '#/pages/survey/lib/campaign-form'
 import { refusalOf } from '#/pages/survey/lib/reason-messages'
-import { campaignsPath } from '#/pages/survey/lib/survey-format'
+import { campaignsPath, surveyPath } from '#/pages/survey/lib/survey-format'
+import { CampaignSurveys } from '#/pages/survey/ui/campaign-surveys'
 import { CampaignStatusBadge } from '#/pages/survey/ui/survey-badges'
 import { ErrorBanner, LoadingCard } from '#/pages/survey/ui/surveys-list'
 
@@ -30,6 +32,8 @@ export function CampaignEditFeature({ campaignId }: { campaignId: string }) {
 	const navigate = useNavigate()
 	const canManage = useHasPermission('MANAGE_SURVEYS')
 	const campaign = useCampaign(organizationId, campaignId)
+	const [surveyPages, setSurveyPages] = useState(1)
+	const surveys = useCampaignSurveys(organizationId, campaignId, surveyPages)
 	const updateCampaign = useUpdateCampaign()
 	const deleteCampaign = useDeleteCampaign()
 	const [confirmDelete, setConfirmDelete] = useState(false)
@@ -114,6 +118,22 @@ export function CampaignEditFeature({ campaignId }: { campaignId: string }) {
 					/>
 				</SectionCard>
 			)}
+			{data ? (
+				<CampaignSurveys
+					surveys={surveys.items}
+					total={surveys.total}
+					hasMore={surveys.hasMore}
+					isLoading={surveys.isLoading}
+					isLoadingMore={surveys.isFetchingMore}
+					error={surveys.error ? refusalOf(surveys.error).message : null}
+					onLoadMore={() => setSurveyPages((count) => count + 1)}
+					onOpen={(surveyId) =>
+						void navigate({
+							to: buildOrgPath(activeOrganization.slug, surveyPath(surveyId)),
+						})
+					}
+				/>
+			) : null}
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}

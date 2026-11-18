@@ -2,6 +2,7 @@ import { Input } from '#/components/ui/input'
 import { Textarea } from '#/components/ui/textarea'
 import { cn } from '#/lib/utils'
 import type { QuestionKind } from '#/pages/survey/types'
+import { DateField } from '#/pages/survey-respond/ui/date-field'
 
 type FieldKind = Exclude<
 	QuestionKind,
@@ -9,7 +10,7 @@ type FieldKind = Exclude<
 >
 
 const FIELD_PROPS: Record<
-	Exclude<FieldKind, 'LONG_TEXT'>,
+	Exclude<FieldKind, 'LONG_TEXT' | 'DATE' | 'DATETIME'>,
 	{
 		type: string
 		inputMode?: 'text' | 'decimal' | 'tel' | 'email'
@@ -19,8 +20,6 @@ const FIELD_PROPS: Record<
 > = {
 	TEXT: { type: 'text', inputMode: 'text' },
 	NUMBER: { type: 'text', inputMode: 'decimal', placeholder: 'Par exemple 12' },
-	DATE: { type: 'date' },
-	DATETIME: { type: 'datetime-local' },
 	PHONE: {
 		type: 'tel',
 		inputMode: 'tel',
@@ -68,6 +67,18 @@ export function AnswerInput({
 				aria-describedby={describedBy}
 				className="min-h-36 rounded-lg px-4 py-3 text-base shadow-none md:text-base"
 				onChange={(event) => onChange(event.target.value)}
+			/>
+		)
+	}
+	if (kind === 'DATE' || kind === 'DATETIME') {
+		return (
+			<DateField
+				id={id}
+				withTime={kind === 'DATETIME'}
+				value={value}
+				invalid={invalid}
+				describedBy={describedBy}
+				onChange={onChange}
 			/>
 		)
 	}

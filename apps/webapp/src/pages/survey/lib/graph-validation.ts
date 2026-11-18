@@ -258,16 +258,3 @@ export function validateGraph(graph: EditorGraph): GraphIssue[] {
 export function validateSentGraph(graph: EditorGraph): GraphIssue[] {
 	return validateGraph(normalizeGraph(graph))
 }
-
-export function issuesByNode(
-	issues: readonly GraphIssue[],
-): Map<string, string[]> {
-	const grouped = new Map<string, string[]>()
-	for (const item of issues) {
-		if (!item.nodeId) continue
-		const messages = grouped.get(item.nodeId) ?? []
-		if (!messages.includes(item.message)) messages.push(item.message)
-		grouped.set(item.nodeId, messages)
-	}
-	return grouped
-}

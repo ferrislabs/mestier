@@ -9,6 +9,7 @@ import { useReferenceCatalog } from '#/hooks/use-reference-catalog'
 import {
 	useDeleteSurveyResponse,
 	useSurvey,
+	useSurveyGraphVersion,
 	useSurveyResponses,
 } from '#/hooks/use-surveys'
 import { buildOrgPath } from '#/modules/org-path'
@@ -54,6 +55,7 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 		() => fromSchema(survey.data?.data.graph),
 		[survey.data],
 	)
+	const currentVersion = survey.data?.data.graph_version ?? null
 	const rows = useMemo<ResponseRow[]>(() => {
 		const identifier = identifierQuestion(graph)
 		const names = new Map(
@@ -69,12 +71,15 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 			const member = response.member_id
 				? (names.get(response.member_id) ?? 'Membre de l’organisation')
 				: null
+			const version = response.graph_version ?? null
 			return {
 				response,
 				respondent: identified ?? member ?? 'Répondant anonyme',
+				olderVersion:
+					version !== null && version !== currentVersion ? version : null,
 			}
 		})
-	}, [graph, members.data, responses.data])
+	}, [graph, members.data, responses.data, currentVersion])
 
 	const table = useReactTable({
 		data: rows,
@@ -85,6 +90,16 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 
 	const pagination = responses.data?.pagination
 	const opened = rows.find((row) => row.response.id === openId) ?? null
+	const versionQuery = useSurveyGraphVersion(
+		organizationId,
+		surveyId,
+		opened?.olderVersion ?? null,
+	)
+	const openedGraph = useMemo(() => {
+		if (!opened?.olderVersion || versionQuery.isError) return graph
+		const version = versionQuery.data?.data
+		return version ? fromSchema(version.graph) : null
+	}, [opened, graph, versionQuery.data, versionQuery.isError])
 
 	const remove = async () => {
 		if (!opened) return
@@ -125,7 +140,18 @@ export function SurveyResponsesFeature({ surveyId }: { surveyId: string }) {
 			/>
 			<ResponseDetailSheet
 				row={opened}
-				path={opened ? answeredPath(graph, opened.response.answers) : []}
+				path={
+					opened && openedGraph
+						? answeredPath(openedGraph, opened.response.answers)
+						: []
+				}
+				pathLoading={opened?.olderVersion != null && versionQuery.isLoading}
+				missingVersion={
+					opened?.olderVersion != null && versionQuery.isError
+						? opened.olderVersion
+						: null
+				}
+				currentVersion={currentVersion}
 				canManage={canManage}
 				onClose={() => setOpenId(null)}
 				onDelete={() => setConfirmDelete(true)}

@@ -27,6 +27,15 @@ import { ErrorBanner, LoadingCard } from '#/pages/survey/ui/surveys-list'
 export interface ResponseRow {
 	response: SurveyResponse
 	respondent: string
+	olderVersion: number | null
+}
+
+function VersionBadge({ version }: { version: number }) {
+	return (
+		<span className="rounded-md bg-muted px-2 py-0.5 font-medium text-muted-foreground text-xs tabular-nums">
+			Version {version}
+		</span>
+	)
 }
 
 export function responseColumns(): ColumnDef<ResponseRow>[] {
@@ -42,7 +51,12 @@ export function responseColumns(): ColumnDef<ResponseRow>[] {
 			id: 'respondent',
 			header: 'Répondant',
 			cell: ({ row }) => (
-				<span className="font-medium">{row.original.respondent}</span>
+				<span className="flex flex-wrap items-center gap-2">
+					<span className="font-medium">{row.original.respondent}</span>
+					{row.original.olderVersion !== null ? (
+						<VersionBadge version={row.original.olderVersion} />
+					) : null}
+				</span>
 			),
 		},
 		{
@@ -187,12 +201,18 @@ function AnswerValue({ view }: { view: AnswerView }) {
 export function ResponseDetailSheet({
 	row,
 	path,
+	pathLoading,
+	missingVersion,
+	currentVersion,
 	canManage,
 	onClose,
 	onDelete,
 }: {
 	row: ResponseRow | null
 	path: readonly QuestionNode[]
+	pathLoading: boolean
+	missingVersion: number | null
+	currentVersion: number | null
 	canManage: boolean
 	onClose: () => void
 	onDelete: () => void
@@ -219,6 +239,26 @@ export function ResponseDetailSheet({
 								) : null}
 							</SheetDescription>
 						</SheetHeader>
+						{row.olderVersion !== null ? (
+							<p className="flex flex-wrap items-center gap-2 px-4 text-muted-foreground text-xs">
+								<VersionBadge version={row.olderVersion} />
+								Cette réponse porte sur une version antérieure du questionnaire
+								{currentVersion !== null
+									? `, aujourd’hui en version ${currentVersion}.`
+									: '.'}
+							</p>
+						) : null}
+						{missingVersion !== null ? (
+							<output className="mx-4 block rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning">
+								Version {missingVersion} introuvable : affichage sur la version
+								actuelle.
+							</output>
+						) : null}
+						{pathLoading ? (
+							<p className="px-4 text-muted-foreground text-sm">
+								Chargement de la version du questionnaire…
+							</p>
+						) : null}
 						<ol className="grid gap-4 px-4" aria-label="Réponses du parcours">
 							{path.map((question) => {
 								const entry = questionKindEntry(question.kind)

@@ -3,9 +3,11 @@ import {
 	CircleCheck,
 	Copy,
 	CopyPlus,
+	DoorClosed,
 	DoorOpen,
+	Eye,
 	Inbox,
-	Lock,
+	MoreHorizontal,
 	Save,
 	Settings2,
 	TriangleAlert,
@@ -13,251 +15,247 @@ import {
 import type { ReactNode } from 'react'
 import { Button } from '#/components/ui/button'
 import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from '#/components/ui/popover'
-import type { GraphIssue } from '#/pages/survey/lib/graph-validation'
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu'
+import { Switch } from '#/components/ui/switch'
 import type { Survey } from '#/pages/survey/types'
 import {
 	SurveyStatusBadge,
 	VisibilityBadge,
 } from '#/pages/survey/ui/survey-badges'
 
-export function VerificationControl({
-	issues,
-	nodeLabel,
-	open,
-	onOpenChange,
-	onSelect,
+export const SAVE_REASON_ID = 'survey-save-blocked-reason'
+
+export function ProblemsSummary({
+	count,
+	onFocusFirst,
 }: {
-	issues: readonly GraphIssue[]
-	nodeLabel: (nodeId: string) => string
-	open: boolean
-	onOpenChange: (open: boolean) => void
-	onSelect: (nodeId: string) => void
+	count: number
+	onFocusFirst: () => void
 }) {
-	if (issues.length === 0) {
+	if (count === 0) {
 		return (
-			<span
-				title="Le parcours est complet : chaque chemin mène à une fin."
-				className="inline-flex items-center gap-1.5 rounded-md bg-success-soft px-2.5 py-1 font-medium text-success text-xs"
-			>
+			<span className="inline-flex items-center gap-1.5 rounded-md bg-success-soft px-2.5 py-1 font-medium text-success text-xs">
 				<CircleCheck className="size-3.5" aria-hidden />
-				Parcours complet
+				Prêt
 			</span>
 		)
 	}
 	return (
-		<Popover open={open} onOpenChange={onOpenChange}>
-			<PopoverTrigger asChild>
-				<Button
-					variant="outline"
-					size="sm"
-					className="border-destructive/40 text-destructive"
-					aria-label={`Vérification : ${issues.length === 1 ? 'un problème' : `${issues.length} problèmes`}`}
-				>
-					<TriangleAlert aria-hidden />
-					Vérification
-					<span className="rounded-full bg-destructive px-1.5 text-[11px] text-white tabular-nums">
-						{issues.length}
-					</span>
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent align="center" className="w-96 p-0">
-				<section
-					aria-label="Problèmes du questionnaire"
-					className="grid gap-2 p-3"
-				>
-					<h2 className="font-medium text-sm">Vérification</h2>
-					<p className="text-muted-foreground text-xs">
-						{issues.length === 1
-							? 'Un problème empêche l’enregistrement et l’ouverture.'
-							: `${issues.length} problèmes empêchent l’enregistrement et l’ouverture.`}
-					</p>
-					<ul className="grid max-h-80 gap-1 overflow-y-auto">
-						{issues.map((item) => {
-							const nodeId = item.nodeId
-							const content = (
-								<>
-									<TriangleAlert
-										className="mt-0.5 size-3.5 shrink-0 text-destructive"
-										aria-hidden
-									/>
-									<span>
-										{nodeId ? (
-											<span className="block font-medium">
-												{nodeLabel(nodeId)}
-											</span>
-										) : null}
-										<span className="block text-muted-foreground">
-											{item.message}
-										</span>
-									</span>
-								</>
-							)
-							return (
-								<li key={`${item.code}:${nodeId ?? 'graph'}`}>
-									{nodeId ? (
-										<button
-											type="button"
-											className="flex w-full gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent"
-											onClick={() => onSelect(nodeId)}
-										>
-											{content}
-										</button>
-									) : (
-										<div className="flex gap-2 px-2 py-1.5 text-xs">
-											{content}
-										</div>
-									)}
-								</li>
-							)
-						})}
-					</ul>
-				</section>
-			</PopoverContent>
-		</Popover>
+		<Button
+			type="button"
+			variant="outline"
+			size="sm"
+			className="min-h-11 border-destructive/40 text-destructive sm:min-h-8"
+			onClick={onFocusFirst}
+		>
+			<TriangleAlert aria-hidden />
+			{count === 1 ? '1 problème à corriger' : `${count} problèmes à corriger`}
+		</Button>
 	)
 }
 
 export function SurveyEditorHeader({
 	survey,
 	title,
+	titleEditable,
 	canManage,
 	dirty,
 	saving,
 	duplicating,
-	canSave,
-	verification,
+	saveBlockedReason,
+	problems,
+	onTitle,
 	onBack,
+	previewing,
+	onPreviewing,
 	onSettings,
 	onResponses,
 	onSave,
 	onOpen,
+	onClose,
 	onDuplicate,
 	onCopyLink,
 }: {
 	survey: Survey
 	title: string
+	titleEditable: boolean
 	canManage: boolean
 	dirty: boolean
 	saving: boolean
 	duplicating: boolean
-	canSave: boolean
-	verification: ReactNode
+	saveBlockedReason: string | null
+	problems: ReactNode
+	onTitle: (title: string) => void
 	onBack: () => void
+	previewing: boolean
+	onPreviewing: (previewing: boolean) => void
 	onSettings: () => void
 	onResponses: () => void
 	onSave: () => void
 	onOpen: () => void
+	onClose: () => void
 	onDuplicate: () => void
 	onCopyLink: (() => void) | null
 }) {
 	const draft = survey.status === 'DRAFT'
+	const blocked = saveBlockedReason !== null
 	return (
-		<header className="grid min-h-[52px] shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-border border-b bg-card px-4 py-2">
-			<div className="flex min-w-0 items-center gap-2">
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Retour aux questionnaires"
-					onClick={onBack}
-				>
-					<ArrowLeft aria-hidden />
-				</Button>
-				<nav
-					aria-label="Fil d’Ariane"
-					className="flex min-w-0 items-center gap-1 text-base"
-				>
-					<span className="hidden text-muted-foreground md:inline">
-						Questionnaires
-					</span>
-					<span className="hidden text-muted-foreground md:inline" aria-hidden>
-						/
-					</span>
-					<h1 className="truncate font-medium">{title}</h1>
-				</nav>
-				<SurveyStatusBadge status={survey.status} />
-				<VisibilityBadge visibility={survey.visibility} />
-				{dirty ? (
-					<span className="hidden text-muted-foreground text-xs lg:inline">
-						Modifications non enregistrées
-					</span>
-				) : null}
-			</div>
-			<div className="flex items-center justify-center">{verification}</div>
-			<div className="flex flex-wrap items-center justify-end gap-2">
-				<Button variant="ghost" size="sm" onClick={onSettings}>
-					<Settings2 aria-hidden />
-					Réglages
-				</Button>
-				<Button variant="ghost" size="sm" onClick={onResponses}>
-					<Inbox aria-hidden />
-					Réponses
-				</Button>
-				{onCopyLink ? (
-					<Button variant="outline" size="sm" onClick={onCopyLink}>
-						<Copy aria-hidden />
-						Copier le lien public
+		<header className="@container shrink-0 border-border border-b bg-card">
+			<div className="grid gap-2 px-3 py-2 sm:px-4 @3xl:grid-cols-[minmax(0,1fr)_auto] @3xl:items-center">
+				<div className="flex min-w-0 items-center gap-2">
+					<Button
+						variant="ghost"
+						size="icon"
+						className="size-11 shrink-0 sm:size-8"
+						aria-label="Retour aux questionnaires"
+						onClick={onBack}
+					>
+						<ArrowLeft aria-hidden />
 					</Button>
-				) : null}
-				{canManage && draft ? (
-					<>
-						<Button
-							variant={dirty ? 'default' : 'outline'}
-							size="sm"
-							disabled={!dirty || saving || !canSave}
-							onClick={onSave}
+					<h1 className="sr-only">{title}</h1>
+					{titleEditable ? (
+						<input
+							aria-label="Titre du questionnaire"
+							value={title}
+							placeholder="Questionnaire sans titre"
+							className="min-h-11 min-w-0 flex-1 truncate rounded-md bg-transparent px-2 font-medium text-base outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:min-h-8"
+							onChange={(event) => onTitle(event.target.value)}
+						/>
+					) : (
+						<span aria-hidden className="min-w-0 truncate font-medium">
+							{title}
+						</span>
+					)}
+					<span className="shrink-0">
+						<SurveyStatusBadge status={survey.status} />
+					</span>
+					<span className="hidden sm:inline-flex">
+						<VisibilityBadge visibility={survey.visibility} />
+					</span>
+					{dirty ? (
+						<span className="hidden text-muted-foreground text-xs xl:inline">
+							Modifications non enregistrées
+						</span>
+					) : null}
+				</div>
+				<div className="flex flex-wrap items-center gap-1.5 @3xl:justify-end">
+					{problems}
+					{canManage && blocked ? (
+						<span
+							id={SAVE_REASON_ID}
+							className="max-w-64 text-muted-foreground text-xs"
 						>
-							<Save aria-hidden />
-							Enregistrer
-						</Button>
-						<Button size="sm" disabled={saving || !canSave} onClick={onOpen}>
-							<DoorOpen aria-hidden />
-							Ouvrir aux réponses
-						</Button>
-					</>
-				) : null}
-				{canManage && !draft ? (
-					<Button size="sm" disabled={duplicating} onClick={onDuplicate}>
-						<CopyPlus aria-hidden />
-						Dupliquer pour corriger
+							{saveBlockedReason}
+						</span>
+					) : null}
+					<label
+						htmlFor="survey-preview-switch"
+						className="flex min-h-11 items-center gap-2 px-2 text-sm sm:min-h-8"
+					>
+						<Eye className="size-4" aria-hidden />
+						Aperçu
+						<Switch
+							id="survey-preview-switch"
+							checked={previewing}
+							onCheckedChange={onPreviewing}
+						/>
+					</label>
+					<Button
+						variant="ghost"
+						size="sm"
+						className="min-h-11 sm:min-h-8 lg:hidden"
+						onClick={onSettings}
+					>
+						<Settings2 aria-hidden />
+						Réglages
 					</Button>
-				) : null}
+					<Button
+						variant="ghost"
+						size="sm"
+						className="min-h-11 sm:min-h-8"
+						onClick={onResponses}
+					>
+						<Inbox aria-hidden />
+						Réponses
+					</Button>
+					{canManage ? (
+						<>
+							<Button
+								variant={dirty ? 'default' : 'outline'}
+								size="sm"
+								className="min-h-11 aria-disabled:opacity-50 sm:min-h-8"
+								disabled={!dirty || saving}
+								aria-disabled={blocked || undefined}
+								aria-describedby={blocked ? SAVE_REASON_ID : undefined}
+								onClick={onSave}
+							>
+								<Save aria-hidden />
+								Enregistrer
+							</Button>
+							{draft ? (
+								<Button
+									size="sm"
+									className="min-h-11 aria-disabled:opacity-50 sm:min-h-8"
+									disabled={saving}
+									aria-disabled={blocked || undefined}
+									aria-describedby={blocked ? SAVE_REASON_ID : undefined}
+									onClick={onOpen}
+								>
+									<DoorOpen aria-hidden />
+									Ouvrir aux réponses
+								</Button>
+							) : null}
+							{survey.status === 'OPENED' ? (
+								<Button
+									variant="outline"
+									size="sm"
+									className="min-h-11 sm:min-h-8"
+									disabled={saving}
+									onClick={onClose}
+								>
+									<DoorClosed aria-hidden />
+									Fermer
+								</Button>
+							) : null}
+						</>
+					) : null}
+					{canManage || onCopyLink ? (
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="size-11 sm:size-8"
+									aria-label="Plus d’actions"
+								>
+									<MoreHorizontal aria-hidden />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								{onCopyLink ? (
+									<DropdownMenuItem onSelect={onCopyLink}>
+										<Copy aria-hidden />
+										Copier le lien public
+									</DropdownMenuItem>
+								) : null}
+								{canManage ? (
+									<DropdownMenuItem
+										disabled={duplicating}
+										onSelect={onDuplicate}
+									>
+										<CopyPlus aria-hidden />
+										Dupliquer
+									</DropdownMenuItem>
+								) : null}
+							</DropdownMenuContent>
+						</DropdownMenu>
+					) : null}
+				</div>
 			</div>
 		</header>
-	)
-}
-
-export function ReadOnlyBanner({
-	survey,
-	canManage,
-}: {
-	survey: Survey
-	canManage: boolean
-}) {
-	if (survey.status === 'DRAFT') {
-		if (canManage) return null
-		return (
-			<output className="flex items-start gap-2 border-b bg-warning-soft px-4 py-2 text-sm text-warning">
-				<Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
-				<span>
-					Lecture seule : vous n’avez pas la permission de modifier ce
-					questionnaire.
-				</span>
-			</output>
-		)
-	}
-	return (
-		<output className="flex items-start gap-2 border-b bg-warning-soft px-4 py-2 text-sm text-warning">
-			<Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
-			<span>
-				{survey.status === 'OPENED'
-					? 'Ce questionnaire est ouvert : sa définition est figée pour que toutes les réponses portent sur les mêmes questions.'
-					: 'Ce questionnaire est fermé : sa définition est figée.'}{' '}
-				Pour corriger une question, dupliquez-le en brouillon.
-			</span>
-		</output>
 	)
 }

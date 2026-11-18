@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+	useMutation,
+	useQueries,
+	useQuery,
+	useQueryClient,
+} from '@tanstack/react-query'
 
 const SURVEYS_PATH = '/api/v1/organizations/{organization_id}/surveys'
 const SURVEY_PATH =
@@ -17,6 +22,10 @@ const CAMPAIGNS_PATH =
 	'/api/v1/organizations/{organization_id}/survey-campaigns'
 const CAMPAIGN_PATH =
 	'/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}'
+const CAMPAIGN_SURVEYS_PATH =
+	'/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}/surveys'
+const SURVEY_GRAPH_VERSION_PATH =
+	'/api/v1/organizations/{organization_id}/surveys/{survey_id}/graph-versions/{version}'
 
 const SURVEY_KEYS = new Set<string>([
 	SURVEYS_PATH,
@@ -25,10 +34,52 @@ const SURVEY_KEYS = new Set<string>([
 	SURVEY_RESPONSE_PATH,
 	CAMPAIGNS_PATH,
 	CAMPAIGN_PATH,
+	CAMPAIGN_SURVEYS_PATH,
 ])
 
 export const SURVEY_LIST_PAGE_SIZE = 100
 export const RESPONSES_PAGE_SIZE = 25
+export const CAMPAIGN_SURVEYS_PAGE_SIZE = 200
+
+interface PagedResponse<T> {
+	data: T[]
+	pagination?: {
+		next_page?: number | null
+		total?: number | null
+	} | null
+}
+
+export interface PagedList<T> {
+	items: T[]
+	total: number | null
+	hasMore: boolean
+	isLoading: boolean
+	isFetchingMore: boolean
+	error: unknown
+}
+
+function mergePages<T>(
+	results: readonly {
+		data?: PagedResponse<T>
+		isLoading: boolean
+		error: unknown
+	}[],
+): PagedList<T> {
+	const last = results[results.length - 1]
+	const pagination = last?.data?.pagination
+	return {
+		items: results.flatMap((result) => result.data?.data ?? []),
+		total: pagination?.total ?? null,
+		hasMore: pagination?.next_page != null,
+		isLoading: results[0]?.isLoading ?? false,
+		isFetchingMore: results.length > 1 && (last?.isLoading ?? false),
+		error: results.find((result) => result.error)?.error ?? null,
+	}
+}
+
+function pageNumbers(pageCount: number): number[] {
+	return Array.from({ length: Math.max(pageCount, 1) }, (_, index) => index + 1)
+}
 
 function useSurveyInvalidation() {
 	const queryClient = useQueryClient()
@@ -80,6 +131,62 @@ export function useCampaign(organizationId: string, campaignId: string) {
 			path: { organization_id: organizationId, campaign_id: campaignId },
 		}).queryOptions,
 		enabled: Boolean(organizationId) && Boolean(campaignId),
+	})
+}
+
+export function useCampaignSurveys(
+	organizationId: string,
+	campaignId: string,
+	pageCount: number,
+) {
+	return useQueries({
+		queries: pageNumbers(pageCount).map((page) => ({
+			...window.tanstackApi.get(CAMPAIGN_SURVEYS_PATH, {
+				path: { organization_id: organizationId, campaign_id: campaignId },
+				query: { page, per_page: CAMPAIGN_SURVEYS_PAGE_SIZE },
+			}).queryOptions,
+			enabled: Boolean(organizationId) && Boolean(campaignId),
+		})),
+		combine: mergePages,
+	})
+}
+
+export function useCampaignSurveyList(
+	organizationId: string,
+	campaignId: string | null,
+	pageCount: number,
+) {
+	return useQueries({
+		queries: pageNumbers(pageCount).map((page) => ({
+			...window.tanstackApi.get(SURVEYS_PATH, {
+				path: { organization_id: organizationId },
+				query: {
+					page,
+					per_page: SURVEY_LIST_PAGE_SIZE,
+					campaign_id: campaignId ?? '',
+				},
+			}).queryOptions,
+			enabled: Boolean(organizationId) && Boolean(campaignId),
+		})),
+		combine: mergePages,
+	})
+}
+
+export function useSurveyGraphVersion(
+	organizationId: string,
+	surveyId: string,
+	version: number | null,
+) {
+	return useQuery({
+		...window.tanstackApi.get(SURVEY_GRAPH_VERSION_PATH, {
+			path: {
+				organization_id: organizationId,
+				survey_id: surveyId,
+				version: version ?? 0,
+			},
+		}).queryOptions,
+		enabled: Boolean(organizationId) && Boolean(surveyId) && version !== null,
+		staleTime: Number.POSITIVE_INFINITY,
 	})
 }
 
