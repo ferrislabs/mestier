@@ -1,8 +1,10 @@
 mod bundle;
+mod daf;
 mod docx;
 mod recap;
 mod world;
 
+pub use daf::TypstDafRenderer;
 pub use docx::DocxDoeRenderer;
 pub use recap::{MaintenanceRecap, RecapContact, RecapRow, TypstRecapRenderer};
 
