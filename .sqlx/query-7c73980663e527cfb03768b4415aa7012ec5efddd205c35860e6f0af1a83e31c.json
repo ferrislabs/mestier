@@ -1,0 +1,148 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, org_id, project_id, number, designation, price_ref, source_product_id, supplier, installer, specs, observations, photo_key, attachments, project_owner, project_manager, status, sent_on, issued_on, returned_on, review_note, created_at, updated_at\n            FROM dafs\n            WHERE project_id = $1\n            ORDER BY number\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "designation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "price_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "source_product_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "supplier",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "installer",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "specs",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "observations",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "photo_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "attachments",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "project_owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "project_manager",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "sent_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 17,
+        "name": "issued_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 18,
+        "name": "returned_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 19,
+        "name": "review_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "7c73980663e527cfb03768b4415aa7012ec5efddd205c35860e6f0af1a83e31c"
+}

@@ -9,6 +9,7 @@ pub mod custom_unit;
 pub mod customer;
 pub mod customer_contact;
 pub mod customer_context;
+pub mod daf;
 pub mod day_override;
 pub mod deal;
 pub mod direct_channel;

@@ -1,0 +1,63 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO daf_dossiers (project_id, org_id, title, issuer, project_owner, project_manager)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT (project_id) DO UPDATE\n            SET title = EXCLUDED.title, issuer = EXCLUDED.issuer,\n                project_owner = EXCLUDED.project_owner,\n                project_manager = EXCLUDED.project_manager,\n                updated_at = now()\n            WHERE daf_dossiers.org_id = EXCLUDED.org_id\n            RETURNING project_id, org_id, title, issuer, project_owner, project_manager, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "issuer",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "project_owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "project_manager",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "af698adaf053a617f5fb3015ccf2aaf2438570231222924b9c62bb841b6bc548"
+}
