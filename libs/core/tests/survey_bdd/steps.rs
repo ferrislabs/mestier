@@ -32,7 +32,8 @@ fn visibility(word: &str) -> Visibility {
 fn describe(error: &CoreError) -> String {
     match error {
         CoreError::NotFound => "not found".to_owned(),
-        CoreError::Conflict(message) => message.clone(),
+        CoreError::Conflict(message) | CoreError::Validation(message) => message.clone(),
+        CoreError::Refused(refusal) => refusal.message.clone(),
         other => other.to_string(),
     }
 }
@@ -248,12 +249,11 @@ async fn start_response(
         .cloned()
         .unwrap_or_else(|| panic!("the scenario never introduced `{who}`"));
     let started = match respondent {
-        Respondent::Member(member_id) => {
-            world
-                .responses()
-                .start_member(organization_id, survey_id, id, member_id, world.now())
-                .await?
-        }
+        Respondent::Member(member_id) => world
+            .responses()
+            .start_member(organization_id, survey_id, id, member_id, world.now())
+            .await?
+            .into_response(),
         Respondent::Visitor(token) => {
             world
                 .responses()

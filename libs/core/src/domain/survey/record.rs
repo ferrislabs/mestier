@@ -1,4 +1,7 @@
-use super::{Closed, Completed, Draft, InProgress, Opened, Response, ResponseId, Survey, SurveyId};
+use super::{
+    Closed, Completed, Draft, InProgress, Opened, Response, ResponseId, Survey, SurveyId,
+    Visibility,
+};
 use crate::OrganizationId;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,6 +25,14 @@ impl SurveyRecord {
             Self::Draft(survey) => survey.organization_id(),
             Self::Opened(survey) => survey.organization_id(),
             Self::Closed(survey) => survey.organization_id(),
+        }
+    }
+
+    pub fn visibility(&self) -> Visibility {
+        match self {
+            Self::Draft(survey) => survey.visibility(),
+            Self::Opened(survey) => survey.visibility(),
+            Self::Closed(survey) => survey.visibility(),
         }
     }
 }

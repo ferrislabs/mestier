@@ -1,4 +1,4 @@
-use common::CoreError;
+use common::{CoreError, Refusal, RefusalKind};
 
 use super::value::QuestionId;
 
@@ -140,13 +140,231 @@ pub enum SurveyError {
     SurveyStateChanged,
 }
 
+impl SurveyError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::EmailInvalid => "email_invalid",
+            Self::PhoneInvalid => "phone_invalid",
+            Self::GraphEmpty => "graph_empty",
+            Self::GraphWithoutEnd => "graph_without_end",
+            Self::GraphDuplicateNode(_) => "graph_duplicate_node",
+            Self::GraphUnknownStart => "graph_unknown_start",
+            Self::GraphStartNotQuestion => "graph_start_not_question",
+            Self::GraphUnknownEdgeNode(_) => "graph_unknown_edge_node",
+            Self::GraphInvalidBranch(_) => "graph_invalid_branch",
+            Self::GraphDuplicateExit(_) => "graph_duplicate_exit",
+            Self::GraphDeadEnd(_) => "graph_dead_end",
+            Self::GraphCycle(_) => "graph_cycle",
+            Self::GraphUnreachableNode(_) => "graph_unreachable_node",
+            Self::GraphSecondIdentifier(_) => "graph_second_identifier",
+            Self::GraphIdentifierOnInvalidKind(_) => "graph_identifier_on_invalid_kind",
+            Self::GraphMaxPhotosOnInvalidKind(_) => "graph_max_photos_on_invalid_kind",
+            Self::GraphZeroMaxPhotos(_) => "graph_zero_max_photos",
+            Self::GraphChoiceWithoutOptions(_) => "graph_choice_without_options",
+            Self::GraphQuestionLabelEmpty(_) => "graph_question_label_empty",
+            Self::GraphOptionEmpty(_) => "graph_option_empty",
+            Self::GraphDuplicateOption(_) => "graph_duplicate_option",
+            Self::ConditionUnknownQuestion(_) => "condition_unknown_question",
+            Self::ConditionOnNonChoice(_) => "condition_on_non_choice",
+            Self::ConditionUnknownOption(_) => "condition_unknown_option",
+            Self::ConditionQuestionNotAsked(_) => "condition_question_not_asked",
+            Self::WindowInverted => "window_inverted",
+            Self::MetadataEmptyKey => "metadata_empty_key",
+            Self::MetadataEmptyValue => "metadata_empty_value",
+            Self::SurveyTitleEmpty => "survey_title_empty",
+            Self::SurveyWithoutGraph => "survey_without_graph",
+            Self::SurveyClosed => "survey_closed",
+            Self::CampaignNotStarted => "campaign_not_started",
+            Self::CampaignEnded => "campaign_ended",
+            Self::SurveyInconsistentState => "survey_inconsistent_state",
+            Self::ResumeTokenEmpty => "resume_token_empty",
+            Self::RequiredQuestionUnanswered(_) => "required_question_unanswered",
+            Self::AnswerNotFinite(_) => "answer_not_finite",
+            Self::ResponseInconsistentState => "response_inconsistent_state",
+            Self::SurveyClosedBeforeOpened => "survey_closed_before_opened",
+            Self::AnswerUnknownQuestion(_) => "answer_unknown_question",
+            Self::AnswerKindMismatch(_) => "answer_kind_mismatch",
+            Self::AnswerUnknownOption(_) => "answer_unknown_option",
+            Self::AnswerDuplicateOption(_) => "answer_duplicate_option",
+            Self::AnswerTooManyPhotos(_) => "answer_too_many_photos",
+            Self::AnswerEmptyPhoto(_) => "answer_empty_photo",
+            Self::PublicSlugInvalid => "public_slug_invalid",
+            Self::SurveyPublicSlugRequired => "survey_public_slug_required",
+            Self::SurveyPublicSlugForbidden => "survey_public_slug_forbidden",
+            Self::SurveyCampaignMismatch => "survey_campaign_mismatch",
+            Self::SurveyCampaignOrganizationMismatch => "survey_campaign_organization_mismatch",
+            Self::CampaignNameEmpty => "campaign_name_empty",
+            Self::ResponseSurveyMismatch => "response_survey_mismatch",
+            Self::ResponseMemberRequired => "response_member_required",
+            Self::ResponseMemberForbidden => "response_member_forbidden",
+            Self::ResponseResumeTokenRequired => "response_resume_token_required",
+            Self::ResponseResumeTokenForbidden => "response_resume_token_forbidden",
+            Self::SurveyNotFound => "survey_not_found",
+            Self::CampaignNotFound => "campaign_not_found",
+            Self::ResponseNotFound => "response_not_found",
+            Self::SurveyNotDraft => "survey_not_draft",
+            Self::SurveyNotOpened => "survey_not_opened",
+            Self::SurveyHasResponses => "survey_has_responses",
+            Self::CampaignHasSurveys => "campaign_has_surveys",
+            Self::ResponseAlreadyCompleted => "response_already_completed",
+            Self::ResponseCapReached => "response_cap_reached",
+            Self::RespondentAlreadyAnswered => "respondent_already_answered",
+            Self::SurveyStateChanged => "survey_state_changed",
+        }
+    }
+
+    pub fn question_id(&self) -> Option<QuestionId> {
+        match self {
+            Self::GraphDuplicateNode(id)
+            | Self::GraphUnknownEdgeNode(id)
+            | Self::GraphInvalidBranch(id)
+            | Self::GraphDuplicateExit(id)
+            | Self::GraphDeadEnd(id)
+            | Self::GraphCycle(id)
+            | Self::GraphUnreachableNode(id)
+            | Self::GraphSecondIdentifier(id)
+            | Self::GraphIdentifierOnInvalidKind(id)
+            | Self::GraphMaxPhotosOnInvalidKind(id)
+            | Self::GraphZeroMaxPhotos(id)
+            | Self::GraphChoiceWithoutOptions(id)
+            | Self::GraphQuestionLabelEmpty(id)
+            | Self::GraphOptionEmpty(id)
+            | Self::GraphDuplicateOption(id)
+            | Self::ConditionUnknownQuestion(id)
+            | Self::ConditionOnNonChoice(id)
+            | Self::ConditionUnknownOption(id)
+            | Self::ConditionQuestionNotAsked(id)
+            | Self::RequiredQuestionUnanswered(id)
+            | Self::AnswerNotFinite(id)
+            | Self::AnswerUnknownQuestion(id)
+            | Self::AnswerKindMismatch(id)
+            | Self::AnswerUnknownOption(id)
+            | Self::AnswerDuplicateOption(id)
+            | Self::AnswerTooManyPhotos(id)
+            | Self::AnswerEmptyPhoto(id) => Some(*id),
+            Self::EmailInvalid
+            | Self::PhoneInvalid
+            | Self::GraphEmpty
+            | Self::GraphWithoutEnd
+            | Self::GraphUnknownStart
+            | Self::GraphStartNotQuestion
+            | Self::WindowInverted
+            | Self::MetadataEmptyKey
+            | Self::MetadataEmptyValue
+            | Self::SurveyTitleEmpty
+            | Self::SurveyWithoutGraph
+            | Self::SurveyClosed
+            | Self::CampaignNotStarted
+            | Self::CampaignEnded
+            | Self::SurveyInconsistentState
+            | Self::ResumeTokenEmpty
+            | Self::ResponseInconsistentState
+            | Self::SurveyClosedBeforeOpened
+            | Self::PublicSlugInvalid
+            | Self::SurveyPublicSlugRequired
+            | Self::SurveyPublicSlugForbidden
+            | Self::SurveyCampaignMismatch
+            | Self::SurveyCampaignOrganizationMismatch
+            | Self::CampaignNameEmpty
+            | Self::ResponseSurveyMismatch
+            | Self::ResponseMemberRequired
+            | Self::ResponseMemberForbidden
+            | Self::ResponseResumeTokenRequired
+            | Self::ResponseResumeTokenForbidden
+            | Self::SurveyNotFound
+            | Self::CampaignNotFound
+            | Self::ResponseNotFound
+            | Self::SurveyNotDraft
+            | Self::SurveyNotOpened
+            | Self::SurveyHasResponses
+            | Self::CampaignHasSurveys
+            | Self::ResponseAlreadyCompleted
+            | Self::ResponseCapReached
+            | Self::RespondentAlreadyAnswered
+            | Self::SurveyStateChanged => None,
+        }
+    }
+
+    fn refused(self, kind: RefusalKind) -> CoreError {
+        CoreError::Refused(Refusal {
+            kind,
+            reason: self.code(),
+            question_id: self.question_id().map(|id| id.0),
+            message: self.to_string(),
+        })
+    }
+}
+
 impl From<SurveyError> for CoreError {
     fn from(error: SurveyError) -> Self {
         match error {
             SurveyError::SurveyNotFound
             | SurveyError::CampaignNotFound
             | SurveyError::ResponseNotFound => Self::NotFound,
-            _ => Self::Conflict(error.to_string()),
+            SurveyError::EmailInvalid
+            | SurveyError::PhoneInvalid
+            | SurveyError::GraphEmpty
+            | SurveyError::GraphWithoutEnd
+            | SurveyError::GraphDuplicateNode(_)
+            | SurveyError::GraphUnknownStart
+            | SurveyError::GraphStartNotQuestion
+            | SurveyError::GraphUnknownEdgeNode(_)
+            | SurveyError::GraphInvalidBranch(_)
+            | SurveyError::GraphDuplicateExit(_)
+            | SurveyError::GraphDeadEnd(_)
+            | SurveyError::GraphCycle(_)
+            | SurveyError::GraphUnreachableNode(_)
+            | SurveyError::GraphSecondIdentifier(_)
+            | SurveyError::GraphIdentifierOnInvalidKind(_)
+            | SurveyError::GraphMaxPhotosOnInvalidKind(_)
+            | SurveyError::GraphZeroMaxPhotos(_)
+            | SurveyError::GraphChoiceWithoutOptions(_)
+            | SurveyError::GraphQuestionLabelEmpty(_)
+            | SurveyError::GraphOptionEmpty(_)
+            | SurveyError::GraphDuplicateOption(_)
+            | SurveyError::ConditionUnknownQuestion(_)
+            | SurveyError::ConditionOnNonChoice(_)
+            | SurveyError::ConditionUnknownOption(_)
+            | SurveyError::ConditionQuestionNotAsked(_)
+            | SurveyError::WindowInverted
+            | SurveyError::MetadataEmptyKey
+            | SurveyError::MetadataEmptyValue
+            | SurveyError::SurveyTitleEmpty
+            | SurveyError::CampaignNameEmpty
+            | SurveyError::PublicSlugInvalid
+            | SurveyError::ResumeTokenEmpty
+            | SurveyError::RequiredQuestionUnanswered(_)
+            | SurveyError::AnswerNotFinite(_)
+            | SurveyError::AnswerUnknownQuestion(_)
+            | SurveyError::AnswerKindMismatch(_)
+            | SurveyError::AnswerUnknownOption(_)
+            | SurveyError::AnswerDuplicateOption(_)
+            | SurveyError::AnswerTooManyPhotos(_)
+            | SurveyError::AnswerEmptyPhoto(_) => error.refused(RefusalKind::Validation),
+            SurveyError::ResponseMemberRequired
+            | SurveyError::ResponseMemberForbidden
+            | SurveyError::ResponseResumeTokenRequired
+            | SurveyError::ResponseResumeTokenForbidden
+            | SurveyError::SurveyInconsistentState
+            | SurveyError::ResponseInconsistentState => Self::Internal(error.to_string()),
+            SurveyError::SurveyWithoutGraph
+            | SurveyError::SurveyClosed
+            | SurveyError::CampaignNotStarted
+            | SurveyError::CampaignEnded
+            | SurveyError::SurveyClosedBeforeOpened
+            | SurveyError::SurveyPublicSlugRequired
+            | SurveyError::SurveyPublicSlugForbidden
+            | SurveyError::SurveyCampaignMismatch
+            | SurveyError::SurveyCampaignOrganizationMismatch
+            | SurveyError::ResponseSurveyMismatch
+            | SurveyError::SurveyNotDraft
+            | SurveyError::SurveyNotOpened
+            | SurveyError::SurveyHasResponses
+            | SurveyError::CampaignHasSurveys
+            | SurveyError::ResponseAlreadyCompleted
+            | SurveyError::ResponseCapReached
+            | SurveyError::RespondentAlreadyAnswered
+            | SurveyError::SurveyStateChanged => error.refused(RefusalKind::Conflict),
         }
     }
 }

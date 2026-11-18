@@ -48,23 +48,209 @@ fn a_public_slug_is_validated_on_deserialization() {
     assert_eq!(serde_json::from_str::<PublicSlug>(&json).unwrap(), slug);
 }
 
+fn refusal_of(error: SurveyError) -> Option<common::Refusal> {
+    match common::CoreError::from(error) {
+        common::CoreError::Refused(refusal) => Some(refusal),
+        _ => None,
+    }
+}
+
 #[test]
 fn a_survey_error_is_a_conflict_for_the_core() {
     assert_eq!(
         common::CoreError::from(SurveyError::SurveyClosed).to_string(),
-        common::CoreError::Conflict(SurveyError::SurveyClosed.to_string()).to_string()
+        format!("conflict: {}", SurveyError::SurveyClosed)
     );
 }
 
 #[test]
-fn a_state_change_and_a_respondent_input_error_stay_conflicts_for_the_core() {
+fn a_state_conflict_stays_a_conflict_for_the_core() {
     for error in [
         SurveyError::SurveyStateChanged,
         SurveyError::RespondentAlreadyAnswered,
-        SurveyError::SurveyTitleEmpty,
+        SurveyError::ResponseAlreadyCompleted,
+        SurveyError::ResponseCapReached,
+        SurveyError::CampaignNotStarted,
+        SurveyError::CampaignEnded,
+        SurveyError::SurveyNotDraft,
+        SurveyError::SurveyHasResponses,
+        SurveyError::CampaignHasSurveys,
+        SurveyError::SurveyWithoutGraph,
+        SurveyError::SurveyClosed,
     ] {
-        let expected = common::CoreError::Conflict(error.to_string()).to_string();
-        assert_eq!(common::CoreError::from(error).to_string(), expected);
+        let refusal = refusal_of(error);
+        assert_eq!(
+            refusal,
+            Some(common::Refusal {
+                kind: common::RefusalKind::Conflict,
+                reason: error.code(),
+                question_id: None,
+                message: error.to_string(),
+            }),
+            "{error:?}"
+        );
+    }
+}
+
+#[test]
+fn a_respondent_input_error_is_a_validation_error_for_the_core() {
+    let question = super::QuestionId(uuid::Uuid::from_u128(7));
+    for error in [
+        SurveyError::SurveyTitleEmpty,
+        SurveyError::CampaignNameEmpty,
+        SurveyError::EmailInvalid,
+        SurveyError::PhoneInvalid,
+        SurveyError::MetadataEmptyKey,
+        SurveyError::MetadataEmptyValue,
+        SurveyError::PublicSlugInvalid,
+        SurveyError::WindowInverted,
+        SurveyError::GraphEmpty,
+        SurveyError::GraphCycle(question),
+        SurveyError::GraphQuestionLabelEmpty(question),
+        SurveyError::GraphOptionEmpty(question),
+        SurveyError::ConditionQuestionNotAsked(question),
+        SurveyError::RequiredQuestionUnanswered(question),
+        SurveyError::AnswerUnknownQuestion(question),
+        SurveyError::AnswerKindMismatch(question),
+        SurveyError::AnswerUnknownOption(question),
+        SurveyError::AnswerTooManyPhotos(question),
+    ] {
+        let refusal = refusal_of(error);
+        assert_eq!(
+            refusal,
+            Some(common::Refusal {
+                kind: common::RefusalKind::Validation,
+                reason: error.code(),
+                question_id: error.question_id().map(|id| id.0),
+                message: error.to_string(),
+            }),
+            "{error:?}"
+        );
+    }
+}
+
+#[test]
+fn a_required_question_refusal_names_its_question() {
+    let question = super::QuestionId(uuid::Uuid::from_u128(7));
+    let refusal = refusal_of(SurveyError::RequiredQuestionUnanswered(question));
+    assert_eq!(
+        refusal.map(|refusal| (refusal.reason, refusal.question_id)),
+        Some(("required_question_unanswered", Some(question.0)))
+    );
+    assert_eq!(SurveyError::SurveyClosed.code(), "survey_closed");
+    assert_eq!(SurveyError::SurveyClosed.question_id(), None);
+}
+
+#[test]
+fn an_invariant_violation_or_a_corrupted_record_is_internal_for_the_core() {
+    for error in [
+        SurveyError::ResponseMemberRequired,
+        SurveyError::ResponseMemberForbidden,
+        SurveyError::ResponseResumeTokenRequired,
+        SurveyError::ResponseResumeTokenForbidden,
+        SurveyError::SurveyInconsistentState,
+        SurveyError::ResponseInconsistentState,
+    ] {
+        assert!(
+            matches!(common::CoreError::from(error), common::CoreError::Internal(ref message) if *message == error.to_string()),
+            "{error:?}"
+        );
+    }
+}
+
+fn every_survey_error() -> Vec<SurveyError> {
+    let q = super::QuestionId(uuid::Uuid::from_u128(7));
+    vec![
+        SurveyError::EmailInvalid,
+        SurveyError::PhoneInvalid,
+        SurveyError::GraphEmpty,
+        SurveyError::GraphWithoutEnd,
+        SurveyError::GraphDuplicateNode(q),
+        SurveyError::GraphUnknownStart,
+        SurveyError::GraphStartNotQuestion,
+        SurveyError::GraphUnknownEdgeNode(q),
+        SurveyError::GraphInvalidBranch(q),
+        SurveyError::GraphDuplicateExit(q),
+        SurveyError::GraphDeadEnd(q),
+        SurveyError::GraphCycle(q),
+        SurveyError::GraphUnreachableNode(q),
+        SurveyError::GraphSecondIdentifier(q),
+        SurveyError::GraphIdentifierOnInvalidKind(q),
+        SurveyError::GraphMaxPhotosOnInvalidKind(q),
+        SurveyError::GraphZeroMaxPhotos(q),
+        SurveyError::GraphChoiceWithoutOptions(q),
+        SurveyError::GraphQuestionLabelEmpty(q),
+        SurveyError::GraphOptionEmpty(q),
+        SurveyError::GraphDuplicateOption(q),
+        SurveyError::ConditionUnknownQuestion(q),
+        SurveyError::ConditionOnNonChoice(q),
+        SurveyError::ConditionUnknownOption(q),
+        SurveyError::ConditionQuestionNotAsked(q),
+        SurveyError::WindowInverted,
+        SurveyError::MetadataEmptyKey,
+        SurveyError::MetadataEmptyValue,
+        SurveyError::SurveyTitleEmpty,
+        SurveyError::SurveyWithoutGraph,
+        SurveyError::SurveyClosed,
+        SurveyError::CampaignNotStarted,
+        SurveyError::CampaignEnded,
+        SurveyError::SurveyInconsistentState,
+        SurveyError::ResumeTokenEmpty,
+        SurveyError::RequiredQuestionUnanswered(q),
+        SurveyError::AnswerNotFinite(q),
+        SurveyError::ResponseInconsistentState,
+        SurveyError::SurveyClosedBeforeOpened,
+        SurveyError::AnswerUnknownQuestion(q),
+        SurveyError::AnswerKindMismatch(q),
+        SurveyError::AnswerUnknownOption(q),
+        SurveyError::AnswerDuplicateOption(q),
+        SurveyError::AnswerTooManyPhotos(q),
+        SurveyError::AnswerEmptyPhoto(q),
+        SurveyError::PublicSlugInvalid,
+        SurveyError::SurveyPublicSlugRequired,
+        SurveyError::SurveyPublicSlugForbidden,
+        SurveyError::SurveyCampaignMismatch,
+        SurveyError::SurveyCampaignOrganizationMismatch,
+        SurveyError::CampaignNameEmpty,
+        SurveyError::ResponseSurveyMismatch,
+        SurveyError::ResponseMemberRequired,
+        SurveyError::ResponseMemberForbidden,
+        SurveyError::ResponseResumeTokenRequired,
+        SurveyError::ResponseResumeTokenForbidden,
+        SurveyError::SurveyNotFound,
+        SurveyError::CampaignNotFound,
+        SurveyError::ResponseNotFound,
+        SurveyError::SurveyNotDraft,
+        SurveyError::SurveyNotOpened,
+        SurveyError::SurveyHasResponses,
+        SurveyError::CampaignHasSurveys,
+        SurveyError::ResponseAlreadyCompleted,
+        SurveyError::ResponseCapReached,
+        SurveyError::RespondentAlreadyAnswered,
+        SurveyError::SurveyStateChanged,
+    ]
+}
+
+#[test]
+fn every_survey_error_has_a_unique_snake_case_code() {
+    let errors = every_survey_error();
+    let codes: std::collections::BTreeSet<&str> = errors.iter().map(|e| e.code()).collect();
+    assert_eq!(codes.len(), errors.len());
+    for code in codes {
+        assert!(!code.is_empty());
+        assert!(
+            code.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
+            "{code}"
+        );
+    }
+}
+
+#[test]
+fn every_survey_error_carrying_a_question_exposes_it() {
+    let q = super::QuestionId(uuid::Uuid::from_u128(7));
+    for error in every_survey_error() {
+        let carries = format!("{error:?}").contains('(');
+        assert_eq!(error.question_id(), carries.then_some(q), "{error:?}");
     }
 }
 

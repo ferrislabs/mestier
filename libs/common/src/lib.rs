@@ -75,6 +75,12 @@ pub enum CoreError {
     #[error("conflict: {0}")]
     Conflict(String),
 
+    #[error("validation: {0}")]
+    Validation(String),
+
+    #[error("{0}")]
+    Refused(Refusal),
+
     /// The actor was authenticated but the policy engine refused the
     /// action. `reason` carries an optional, human-readable explanation
     /// for logs and (when safe) for the API response.
@@ -86,6 +92,29 @@ pub enum CoreError {
 
     #[error("internal error: {0}")]
     Internal(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefusalKind {
+    Conflict,
+    Validation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refusal {
+    pub kind: RefusalKind,
+    pub reason: &'static str,
+    pub question_id: Option<Uuid>,
+    pub message: String,
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind {
+            RefusalKind::Conflict => write!(f, "conflict: {}", self.message),
+            RefusalKind::Validation => write!(f, "validation: {}", self.message),
+        }
+    }
 }
 
 /// Shared monotonic counter so that uuid v7 ids minted within the same

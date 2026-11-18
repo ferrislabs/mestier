@@ -8,7 +8,7 @@ use super::commands::{
 use super::{new_resume_token, public_survey, require_member, require_surveys};
 use crate::application::MestierUseCase;
 use crate::domain::survey::ports::{ResponseRepository, SurveyRepository};
-use crate::domain::survey::service::{ResponseLocator, ResponseService};
+use crate::domain::survey::service::{ResponseLocator, ResponseService, StartedResponse};
 use crate::domain::survey::{
     Answers, Completed, InProgress, PublicSlug, RespondentSurvey, Response, ResponseId,
     ResponseRecord, ResumeToken, SurveyError, SurveyRecord, Visibility,
@@ -27,7 +27,7 @@ impl MestierUseCase {
     pub async fn start_member_response(
         &self,
         command: StartMemberResponseCommand,
-    ) -> Result<Response<InProgress>, CoreError> {
+    ) -> Result<StartedResponse, CoreError> {
         let mut feature_flag_repository = feature_flag_repository;
         let mut member_repository = member_repository;
         let mut role_repository = role_repository;

@@ -10,7 +10,7 @@ mod response_service;
 mod survey_service;
 
 pub use campaign_service::CampaignService;
-pub use commands::{CampaignPatch, ResponseLocator, SurveyPatch};
+pub use commands::{CampaignPatch, ResponseLocator, StartedResponse, SurveyPatch};
 pub use response_service::ResponseService;
 pub use survey_service::SurveyService;
 

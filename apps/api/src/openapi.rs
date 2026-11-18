@@ -19,6 +19,7 @@ use handlers_quote as quote;
 use handlers_reference as reference;
 use handlers_reporting as reporting;
 use handlers_support as support;
+use handlers_survey as survey;
 
 pub struct SecurityAddon;
 
@@ -500,6 +501,26 @@ impl Modify for SecurityAddon {
         support::intake::post_message::handler,
         support::intake::attach_file::handler,
         support::intake::attachment_url::handler,
+        survey::survey::list::handler,
+        survey::survey::create::handler,
+        survey::survey::get_one::handler,
+        survey::survey::update::handler,
+        survey::survey::delete::handler,
+        survey::survey::open::handler,
+        survey::survey::close::handler,
+        survey::survey::duplicate::handler,
+        survey::campaign::list::handler,
+        survey::campaign::create::handler,
+        survey::campaign::get_one::handler,
+        survey::campaign::update::handler,
+        survey::campaign::delete::handler,
+        survey::response::list::handler,
+        survey::response::get_one::handler,
+        survey::response::delete::handler,
+        survey::response::member::open::handler,
+        survey::response::member::start::handler,
+        survey::response::member::save::handler,
+        survey::response::member::complete::handler,
     ),
     components(schemas(
         knowledge::response::KnowledgeArticleResponse,
@@ -1028,6 +1049,7 @@ impl Modify for SecurityAddon {
         (name = "news", description = "Product news: published to every user, written from a back-office reserved to platform administrators"),
         (name = "admin", description = "Platform back-office, reserved to platform administrators: organizations, users, feature flags and global counts"),
         (name = "support", description = "Support tickets — kanban, thread, intake by organization API key"),
+        (name = "surveys", description = "Questionnaires — surveys, campagnes and réponses: management, and answering as a member of the organization"),
         (name = "discord", description = "Chat — categories, channels, threads, messages, reactions, webhooks, presence, typing, read states, channel permission overwrites, notifications"),
     )
 )]
@@ -1044,6 +1066,79 @@ mod tests {
     /// reach the document — and the webapp's client is generated from the
     /// document, not from the router. This catches the omission here rather
     /// than as a missing function three commits later.
+    #[test]
+    fn every_survey_route_reaches_the_document_and_respondents_see_no_organization() {
+        let document = ApiDoc::openapi();
+        let paths = &document.paths.paths;
+        for path in [
+            "/api/v1/organizations/{organization_id}/surveys",
+            "/api/v1/organizations/{organization_id}/surveys/{survey_id}",
+            "/api/v1/organizations/{organization_id}/surveys/{survey_id}/open",
+            "/api/v1/organizations/{organization_id}/surveys/{survey_id}/close",
+            "/api/v1/organizations/{organization_id}/surveys/{survey_id}/duplicate",
+            "/api/v1/organizations/{organization_id}/surveys/{survey_id}/responses",
+            "/api/v1/organizations/{organization_id}/survey-campaigns",
+            "/api/v1/organizations/{organization_id}/survey-campaigns/{campaign_id}",
+            "/api/v1/organizations/{organization_id}/survey-responses/{response_id}",
+            "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}",
+            "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}/responses",
+            "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}",
+            "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/complete",
+        ] {
+            assert!(
+                paths.contains_key(path),
+                "{path} is missing from the document"
+            );
+        }
+
+        let json = serde_json::to_value(&document).expect("the document serializes");
+        for (path, method) in [
+            (
+                "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}",
+                "get",
+            ),
+            (
+                "/api/v1/organizations/{organization_id}/member-surveys/{survey_id}/responses",
+                "post",
+            ),
+            (
+                "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}",
+                "put",
+            ),
+            (
+                "/api/v1/organizations/{organization_id}/member-survey-responses/{response_id}/complete",
+                "post",
+            ),
+        ] {
+            let operation = &json["paths"][path][method];
+            assert_eq!(operation["tags"], json!(["surveys"]), "{path}");
+            let success = operation["responses"]
+                .as_object()
+                .and_then(|responses| responses.get("200").or_else(|| responses.get("201")))
+                .expect("a success response");
+            let data = &success["content"]["application/json"]["schema"]["properties"]["data"];
+            let data = match data["$ref"].as_str().and_then(|r| r.rsplit('/').next()) {
+                Some(name) => json["components"]["schemas"][name].to_string(),
+                None => data.to_string(),
+            };
+            assert!(
+                data.contains("\"id\""),
+                "{path} has no readable data schema: {data}"
+            );
+            for hidden in [
+                "organization_id",
+                "metadata",
+                "allow_multiple_responses",
+                "response_cap",
+                "campaign_id",
+                "resume_token",
+                "member_id",
+            ] {
+                assert!(!data.contains(hidden), "{path} exposes {hidden}: {data}");
+            }
+        }
+    }
+
     #[test]
     fn every_project_route_reaches_the_document() {
         let document = ApiDoc::openapi();

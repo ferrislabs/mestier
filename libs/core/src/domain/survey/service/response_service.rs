@@ -2,12 +2,12 @@ use chrono::{DateTime, Utc};
 use common::CoreError;
 use events::EventEmitter;
 
-use super::{ResponseLocator, campaign_of};
+use super::{ResponseLocator, StartedResponse, campaign_of};
 use crate::domain::survey::events::{SurveyResponseCompleted, SurveyResponseSubmitted};
 use crate::domain::survey::ports::{CampaignRepository, ResponseRepository, SurveyRepository};
 use crate::domain::survey::{
     Answers, Campaign, Completed, InProgress, Opened, Response, ResponseId, ResponseRecord,
-    ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord,
+    ResumeToken, Survey, SurveyError, SurveyId, SurveyRecord, Visibility,
 };
 use crate::{MemberId, OrganizationId};
 
@@ -66,31 +66,35 @@ where
         &mut self,
         organization_id: OrganizationId,
         survey_id: SurveyId,
+        visibility: Visibility,
         now: DateTime<Utc>,
     ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
         let record = self.surveys.find(organization_id, survey_id).await?;
-        self.accept(organization_id, record, now).await
+        self.accept(organization_id, record, visibility, now).await
     }
 
     async fn accepting_locked(
         &mut self,
         organization_id: OrganizationId,
         survey_id: SurveyId,
+        visibility: Visibility,
         now: DateTime<Utc>,
     ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
         let record = self
             .surveys
             .find_for_update(organization_id, survey_id)
             .await?;
-        self.accept(organization_id, record, now).await
+        self.accept(organization_id, record, visibility, now).await
     }
 
     async fn accept(
         &mut self,
         organization_id: OrganizationId,
         record: Option<SurveyRecord>,
+        visibility: Visibility,
         now: DateTime<Utc>,
     ) -> Result<(Survey<Opened>, Option<Campaign>), CoreError> {
+        let record = record.filter(|record| record.visibility() == visibility);
         let survey = match record {
             Some(SurveyRecord::Opened(survey)) => survey,
             Some(SurveyRecord::Draft(_)) => return Err(SurveyError::SurveyNotFound.into()),
@@ -140,7 +144,9 @@ where
         resume_token: ResumeToken,
         now: DateTime<Utc>,
     ) -> Result<Response<InProgress>, CoreError> {
-        let (survey, _) = self.accepting(organization_id, survey_id, now).await?;
+        let (survey, _) = self
+            .accepting(organization_id, survey_id, Visibility::Public, now)
+            .await?;
         if let Some(existing) = self
             .responses
             .find_by_resume_token(organization_id, survey_id, &resume_token)
@@ -159,14 +165,16 @@ where
         id: ResponseId,
         member_id: MemberId,
         now: DateTime<Utc>,
-    ) -> Result<Response<InProgress>, CoreError> {
-        let (survey, _) = self.accepting(organization_id, survey_id, now).await?;
+    ) -> Result<StartedResponse, CoreError> {
+        let (survey, _) = self
+            .accepting(organization_id, survey_id, Visibility::Members, now)
+            .await?;
         if let Some(existing) = self
             .responses
             .find_in_progress_by_member(organization_id, survey_id, member_id)
             .await?
         {
-            return Ok(in_progress_of(existing)?);
+            return Ok(StartedResponse::Resumed(in_progress_of(existing)?));
         }
         if !survey.allow_multiple_responses()
             && self
@@ -178,7 +186,7 @@ where
             return Err(SurveyError::RespondentAlreadyAnswered.into());
         }
         let response = Response::start(id, &survey, Some(member_id), None, now)?;
-        self.insert(response).await
+        Ok(StartedResponse::Created(self.insert(response).await?))
     }
 
     pub async fn save(
@@ -190,7 +198,12 @@ where
     ) -> Result<Response<InProgress>, CoreError> {
         let mut response = self.locate(organization_id, locator).await?;
         let (survey, campaign) = self
-            .accepting(organization_id, response.survey_id(), now)
+            .accepting(
+                organization_id,
+                response.survey_id(),
+                locator.visibility(),
+                now,
+            )
             .await?;
         response.save(&survey, answers)?;
         let saved = in_progress_of(self.responses.update(&response.into()).await?)?;
@@ -235,7 +248,7 @@ where
         let response = self.locate(organization_id, locator).await?;
         let survey_id = response.survey_id();
         let (survey, campaign) = self
-            .accepting_locked(organization_id, survey_id, now)
+            .accepting_locked(organization_id, survey_id, locator.visibility(), now)
             .await?;
         if let Some(cap) = survey.response_cap()
             && self

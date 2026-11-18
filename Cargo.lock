@@ -135,6 +135,7 @@ dependencies = [
  "handlers-reference",
  "handlers-reporting",
  "handlers-support",
+ "handlers-survey",
  "http 1.4.0",
  "mestier-core",
  "serde_json",
@@ -3397,6 +3398,30 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "url",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "handlers-survey"
+version = "0.1.0"
+dependencies = [
+ "args",
+ "auth",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "clap",
+ "common",
+ "handlers",
+ "jsonwebtoken",
+ "mestier-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
  "url",
  "utoipa",
  "uuid",

@@ -458,6 +458,34 @@ async fn delete_campaign_refuses_a_member_without_survey_manage() {
 
 #[tokio::test]
 #[ignore = "requires live postgres"]
+async fn get_campaign_reads_a_campaign_of_its_organization_only() {
+    with_fixture(true, async |usecase, fixture| {
+        forbidden(usecase.get_campaign(campaign_command(&fixture)).await);
+        let read = usecase
+            .get_campaign(CampaignCommand {
+                actor: Subject::system(),
+                ..campaign_command(&fixture)
+            })
+            .await
+            .unwrap();
+        assert_eq!(read.id(), fixture.campaign_id);
+        assert_eq!(read.name(), "Printemps");
+        not_found(
+            usecase
+                .get_campaign(CampaignCommand {
+                    actor: Subject::system(),
+                    organization_id: OrganizationId(fixture.organizations[1]),
+                    id: fixture.campaign_id,
+                })
+                .await,
+        );
+        fixture
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires live postgres"]
 async fn list_campaigns_refuses_a_member_without_survey_view() {
     with_fixture(true, async |usecase, fixture| {
         forbidden(
@@ -603,8 +631,12 @@ async fn a_member_answers_a_members_survey_once_without_any_survey_permission() 
             survey_id,
         };
 
-        let started = usecase.start_member_response(start()).await.unwrap();
-        let resumed = usecase.start_member_response(start()).await.unwrap();
+        let created = usecase.start_member_response(start()).await.unwrap();
+        let again = usecase.start_member_response(start()).await.unwrap();
+        assert!(!created.is_resumed());
+        assert!(again.is_resumed());
+        let started = created.into_response();
+        let resumed = again.into_response();
         usecase
             .save_member_response(SaveMemberResponseCommand {
                 actor: fixture.member.clone(),
@@ -626,7 +658,10 @@ async fn a_member_answers_a_members_survey_once_without_any_survey_permission() 
 
         assert_eq!(resumed.id(), started.id());
         assert_eq!(completed.answers(), &answers("Claire"));
-        assert!(matches!(again, Err(CoreError::Conflict(_))), "{again:?}");
+        assert!(
+            matches!(again, Err(CoreError::Refused(ref refusal)) if refusal.reason == "respondent_already_answered"),
+            "{again:?}"
+        );
         fixture
     })
     .await;
@@ -902,4 +937,75 @@ async fn a_member_survey_read_answers_not_found_when_the_flag_is_off() {
         fixture
     })
     .await;
+}
+
+struct EnabledFlags;
+
+impl crate::domain::feature_flag::ports::FeatureFlagRepository for EnabledFlags {
+    async fn list_enabled(
+        &mut self,
+        _organization_id: OrganizationId,
+    ) -> Result<Vec<crate::FeatureActivation>, CoreError> {
+        Ok(Vec::new())
+    }
+
+    async fn is_enabled(
+        &mut self,
+        _organization_id: OrganizationId,
+        _flag: crate::FeatureFlag,
+    ) -> Result<bool, CoreError> {
+        Ok(true)
+    }
+
+    async fn enable(
+        &mut self,
+        _organization_id: OrganizationId,
+        _flag: crate::FeatureFlag,
+        _by: UserId,
+    ) -> Result<bool, CoreError> {
+        Ok(true)
+    }
+
+    async fn disable(
+        &mut self,
+        _organization_id: OrganizationId,
+        _flag: crate::FeatureFlag,
+    ) -> Result<bool, CoreError> {
+        Ok(true)
+    }
+}
+
+fn surveys_found_by_slug(
+    record: crate::SurveyRecord,
+) -> crate::domain::survey::ports::MockSurveyRepository {
+    let mut surveys = crate::domain::survey::ports::MockSurveyRepository::new();
+    surveys.expect_find_by_public_slug().returning(move |_| {
+        let found = record.clone();
+        Box::pin(async move { Ok(Some(found)) })
+    });
+    surveys
+}
+
+fn opened_members_survey() -> crate::SurveyRecord {
+    let mut survey = crate::Survey::new(
+        SurveyId(Uuid::from_u128(1)),
+        OrganizationId(Uuid::from_u128(2)),
+        "Satisfaction".to_owned(),
+        Visibility::Members,
+    )
+    .unwrap();
+    survey.edit_graph(Some(graph()));
+    survey.open(chrono::Utc::now(), None).unwrap().into()
+}
+
+#[tokio::test]
+async fn the_public_use_cases_do_not_find_an_opened_members_survey() {
+    let slug = PublicSlug::new("abcdefgh".to_owned()).unwrap();
+    let refused = super::public_survey(
+        &mut surveys_found_by_slug(opened_members_survey()),
+        &mut EnabledFlags,
+        &slug,
+    )
+    .await;
+    assert!(matches!(refused, Err(CoreError::NotFound)), "{refused:?}");
 }

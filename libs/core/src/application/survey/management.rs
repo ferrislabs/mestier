@@ -234,6 +234,25 @@ impl MestierUseCase {
             .await
     }
 
+    #[transactional(survey_campaign, feature_flag, member, role, authz)]
+    pub async fn get_campaign(&self, command: CampaignCommand) -> Result<Campaign, CoreError> {
+        let mut survey_campaign_repository = survey_campaign_repository;
+        guard_read(
+            command.actor,
+            command.organization_id,
+            feature_flag_repository,
+            member_repository,
+            role_repository,
+            authz,
+        )
+        .await?;
+
+        survey_campaign_repository
+            .find(command.organization_id, command.id)
+            .await?
+            .ok_or_else(|| SurveyError::CampaignNotFound.into())
+    }
+
     #[transactional(survey, survey_campaign, feature_flag, member, role, authz, emitter)]
     pub async fn update_campaign(
         &self,
