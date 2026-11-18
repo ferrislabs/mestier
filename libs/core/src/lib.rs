@@ -152,6 +152,7 @@ pub use domain::{
     customer::ports::MockCustomerRepository,
     customer_contact::ports::MockCustomerContactRepository,
     customer_context::ports::MockCustomerContextRepository,
+    daf::ports::MockDafRepository,
     day_override::ports::MockDayOverrideRepository,
     deal::ports::MockDealRepository,
     doe::ports::MockDoeRepository,
@@ -329,6 +330,17 @@ pub use domain::knowledge::tables::{
     TableOutcome, TableRow, TableRowId, TableSchema, TableView, TableViewId,
     UpdateKnowledgeTableCommand, UpdateTableColumnCommand, UpdateTableRowCommand,
     UpdateTableViewCommand, ViewConfig, ViewKind,
+};
+
+pub use domain::{
+    Daf, DafAttachment, DafDesignation, DafDossier, DafId, DafNumber, DafStatus, DafSummary,
+    MAX_ATTACHMENTS as DAF_MAX_ATTACHMENTS, MAX_DAFS_PER_PROJECT,
+    daf::commands::{
+        CreateDafCommand, DeleteDafCommand, PlaceDafPhotoCommand, UpdateDafCommand,
+        UpdateDafDossierCommand,
+    },
+    daf::ports::DafRenderer,
+    daf::render::{DafDocument, DafSheet, DafSummaryPage, DafSummaryRow},
 };
 
 pub use domain::{

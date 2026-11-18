@@ -23,3 +23,6 @@ Visibility: `PUBLIC` (anyone with the link) or `MEMBERS` (authenticated members 
 Response: all the answers of one respondent to a survey, shown as "réponse". Rejected: "soumission", kept for the act of saving.
 Window: start-end interval of a campaign during which responses are accepted, shown as "fenêtre".
 Self-service feature: feature flag an organization can turn on or off itself, shown as "fonctionnalité". Rejected: "module", a front-end navigation unit.
+DAF: "demande d'agrément de fourniture", the sheet of one supply submitted to the project manager (MOE) for approval before it is installed. Rejected: "fiche agrément".
+DAF dossier: header shared by the DAF of one project (title, issuer, project owner, project manager). Rejected: "registre".
+DAF status: the project manager's answer to a DAF (pending, accepted, rejected with comments, rejected). Rejected: "visa", the signed box on paper.
