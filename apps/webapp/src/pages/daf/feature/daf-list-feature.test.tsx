@@ -105,7 +105,7 @@ describe('@spec-daf-10 DafListFeature', () => {
 		expect(scope.getByText('2.4.1')).toBeDefined()
 		expect(scope.getByText('19/11/2026')).toBeDefined()
 		expect(scope.getByText('Visa sans réserve')).toBeDefined()
-		expect(screen.getByRole('button', { name: /PDF du dossier/ })).toBeDefined()
+		expect(screen.getByRole('link', { name: /PDF du dossier/ })).toBeDefined()
 		expect(screen.getByRole('button', { name: /Nouvelle DAF/ })).toBeDefined()
 	})
 

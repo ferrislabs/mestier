@@ -3,13 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import type { Schemas } from '#/api/api.client'
 import { useUploadFile } from '#/hooks/use-customers'
-import {
-	type Daf,
-	dafPdfPath,
-	openDafPdf,
-	useDeleteDaf,
-	useUpdateDaf,
-} from '#/hooks/use-daf'
+import { type Daf, useDeleteDaf, useUpdateDaf } from '#/hooks/use-daf'
 import { useDirtyBaseline } from '#/hooks/use-dirty'
 import { useFileUrls } from '#/hooks/use-file-url'
 import { useHasPermission } from '#/hooks/use-permissions'
@@ -58,8 +52,6 @@ export function DafEditorFeature({
 	const [token, setToken] = useState(daf.updated_at)
 	const [notice, setNotice] = useState<string | null>(null)
 	const [uploadError, setUploadError] = useState<string | null>(null)
-	const [pdfError, setPdfError] = useState<string | null>(null)
-	const [isDownloading, setIsDownloading] = useState(false)
 	const [uploading, setUploading] = useState<'photo' | 'attachments' | null>(
 		null,
 	)
@@ -132,18 +124,6 @@ export function DafEditorFeature({
 		setNotice('Enregistré')
 	}
 
-	const downloadPdf = async () => {
-		setPdfError(null)
-		setIsDownloading(true)
-		try {
-			await openDafPdf(dafPdfPath(organizationId, daf.id))
-		} catch (error) {
-			setPdfError(mutationErrorMessage(error))
-		} finally {
-			setIsDownloading(false)
-		}
-	}
-
 	return (
 		<>
 			<DafEditorUI
@@ -155,11 +135,10 @@ export function DafEditorFeature({
 				status={values.status}
 				isDirty={dirty.isDirty}
 				isSaving={updateDaf.isPending}
-				isDownloading={isDownloading}
 				canSave={canSave(values)}
 				notice={notice}
 				errors={formErrors(values)}
-				error={mutationErrorMessage(updateDaf.error) ?? pdfError ?? uploadError}
+				error={mutationErrorMessage(updateDaf.error) ?? uploadError}
 				form={{
 					values,
 					dossierOwner: dossier.project_owner ?? '',
@@ -202,8 +181,14 @@ export function DafEditorFeature({
 				onSave={() => {
 					void save().catch(() => {})
 				}}
-				onDownload={() => {
-					void downloadPdf()
+				onPreview={() => {
+					void navigate({
+						to: buildOrgPath(
+							organizationSlug,
+							'/projet/$projectId/daf/$dafId/preview',
+						),
+						params: { projectId, dafId: daf.id },
+					})
 				}}
 				onDelete={() => setDeleteOpen(true)}
 			/>

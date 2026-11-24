@@ -1,6 +1,7 @@
 import { useActiveOrganization } from '#/hooks/use-active-organization'
 import { useProject } from '#/hooks/use-projects'
 import { DafListFeature } from '#/pages/daf/feature/daf-list-feature'
+import { DafBackLink } from '#/pages/daf/ui/daf-back-link'
 import { DafBreadcrumb } from '#/pages/daf/ui/daf-breadcrumb'
 import { Page } from '#/pages/projects/ui/page'
 
@@ -12,6 +13,11 @@ export function DafFeature({ projectId }: { projectId: string }) {
 	return (
 		<div className="h-full min-h-0 overflow-y-auto">
 			<Page>
+				<DafBackLink
+					organizationSlug={activeOrganization.slug}
+					projectId={projectId}
+					to="project"
+				/>
 				<header className="mb-6">
 					<DafBreadcrumb
 						organizationSlug={activeOrganization.slug}

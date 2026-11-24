@@ -2,6 +2,7 @@ import { AlertCircle, FileText, Loader2, Save, Trash2 } from 'lucide-react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
 import { type DafStatus, dafNumberLabel } from '#/pages/daf/lib/daf-status'
+import { DafBackLink } from '#/pages/daf/ui/daf-back-link'
 import { DafBreadcrumb } from '#/pages/daf/ui/daf-breadcrumb'
 import {
 	DafEditorForm,
@@ -19,14 +20,13 @@ export interface DafEditorUIProps {
 	status: DafStatus
 	isDirty: boolean
 	isSaving: boolean
-	isDownloading: boolean
 	canSave: boolean
 	notice: string | null
 	errors: readonly string[]
 	error: string | null
 	form: DafEditorFormProps
 	onSave: () => void
-	onDownload: () => void
+	onPreview: () => void
 	onDelete: () => void
 }
 
@@ -39,19 +39,23 @@ export function DafEditorUI({
 	status,
 	isDirty,
 	isSaving,
-	isDownloading,
 	canSave,
 	notice,
 	errors,
 	error,
 	form,
 	onSave,
-	onDownload,
+	onPreview,
 	onDelete,
 }: DafEditorUIProps) {
 	return (
 		<div className="h-full min-h-0 overflow-y-auto">
 			<Page>
+				<DafBackLink
+					organizationSlug={organizationSlug}
+					projectId={projectId}
+					to="list"
+				/>
 				<header className="mb-6 flex flex-wrap items-end justify-between gap-4">
 					<div className="min-w-0">
 						<DafBreadcrumb
@@ -72,15 +76,10 @@ export function DafEditorUI({
 							type="button"
 							variant="outline"
 							size="sm"
-							disabled={isDownloading}
-							onClick={onDownload}
+							onClick={onPreview}
 						>
-							{isDownloading ? (
-								<Loader2 className="animate-spin" />
-							) : (
-								<FileText aria-hidden />
-							)}
-							PDF
+							<FileText aria-hidden />
+							Aperçu du PDF
 						</Button>
 						<RequirePermission permission="MANAGE_PLANNING">
 							<Button

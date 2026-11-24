@@ -112,7 +112,7 @@ export function dafDossierPdfPath(
 	return `/api/v1/organizations/${organizationId}/projects/${projectId}/dafs/pdf`
 }
 
-async function fetchPdf(path: string): Promise<Blob> {
+export async function fetchDafPdf(path: string): Promise<Blob> {
 	const headers = new Headers()
 	const accessToken = authStore.state.accessToken
 	if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
@@ -134,14 +134,19 @@ async function fetchPdf(path: string): Promise<Blob> {
 	return response.blob()
 }
 
-export async function openDafPdf(path: string): Promise<void> {
-	const tab = window.open('', '_blank')
+export async function downloadDafPdf(
+	path: string,
+	filename: string,
+): Promise<void> {
+	const objectUrl = URL.createObjectURL(await fetchDafPdf(path))
 	try {
-		const objectUrl = URL.createObjectURL(await fetchPdf(path))
-		if (tab) tab.location.href = objectUrl
-		else window.open(objectUrl, '_blank')
-	} catch (error) {
-		tab?.close()
-		throw error
+		const link = document.createElement('a')
+		link.href = objectUrl
+		link.download = filename
+		document.body.appendChild(link)
+		link.click()
+		link.remove()
+	} finally {
+		setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
 	}
 }

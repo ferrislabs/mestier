@@ -1,9 +1,11 @@
+import { Link } from '@tanstack/react-router'
 import { FileText, Loader2, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { RequirePermission } from '#/components/require-permission'
 import { Button } from '#/components/ui/button'
-import { dafDossierPdfPath, openDafPdf, useProjectDafs } from '#/hooks/use-daf'
+import { useProjectDafs } from '#/hooks/use-daf'
 import { mutationErrorMessage } from '#/lib/api-error'
+import { buildOrgPath } from '#/modules/org-path'
 import { DafCreateFeature } from '#/pages/daf/feature/daf-create-feature'
 import { DafDossierFeature } from '#/pages/daf/feature/daf-dossier-feature'
 import { DafEmptyState } from '#/pages/daf/ui/daf-empty-state'
@@ -21,20 +23,6 @@ export function DafListFeature({
 }) {
 	const listing = useProjectDafs(organizationId, projectId)
 	const [createOpen, setCreateOpen] = useState(false)
-	const [pdfError, setPdfError] = useState<string | null>(null)
-	const [isOpeningPdf, setIsOpeningPdf] = useState(false)
-
-	const openPdf = async () => {
-		setPdfError(null)
-		setIsOpeningPdf(true)
-		try {
-			await openDafPdf(dafDossierPdfPath(organizationId, projectId))
-		} catch (error) {
-			setPdfError(mutationErrorMessage(error))
-		} finally {
-			setIsOpeningPdf(false)
-		}
-	}
 
 	if (listing.isLoading) {
 		return (
@@ -80,27 +68,25 @@ export function DafListFeature({
 							Nouvelle DAF
 						</Button>
 					</RequirePermission>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={isOpeningPdf || dafs.length === 0}
-						onClick={() => {
-							void openPdf()
-						}}
-					>
-						{isOpeningPdf ? (
-							<Loader2 className="animate-spin" />
-						) : (
+					{dafs.length === 0 ? (
+						<Button type="button" variant="outline" size="sm" disabled>
 							<FileText aria-hidden />
-						)}
-						PDF du dossier
-					</Button>
-					{pdfError ? (
-						<p role="alert" className="text-[13px] text-destructive">
-							{pdfError}
-						</p>
-					) : null}
+							PDF du dossier
+						</Button>
+					) : (
+						<Button variant="outline" size="sm" asChild>
+							<Link
+								to={buildOrgPath(
+									organizationSlug,
+									'/projet/$projectId/daf/preview',
+								)}
+								params={{ projectId }}
+							>
+								<FileText aria-hidden />
+								PDF du dossier
+							</Link>
+						</Button>
+					)}
 				</div>
 				{dafs.length === 0 ? (
 					<DafEmptyState />

@@ -119,9 +119,11 @@ import { Route as AppOOrganizationSlugRhMembresMemberIdIndexRouteImport } from '
 import { Route as AppOOrganizationSlugAutomatisationWorkflowIdExecutionsIndexRouteImport } from './routes/_app.o.$organizationSlug.automatisation.$workflowId.executions.index'
 import { Route as AppOOrganizationSlugRhMembresMemberIdTempsDeTravailRouteImport } from './routes/_app.o.$organizationSlug.rh.membres.$memberId.temps-de-travail'
 import { Route as AppOOrganizationSlugProjetProjectIdDoePreviewRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId_.doe_.preview'
+import { Route as AppOOrganizationSlugProjetProjectIdDafPreviewRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId_.daf_.preview'
 import { Route as AppOOrganizationSlugProjetProjectIdDafDafIdRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId_.daf_.$dafId'
 import { Route as AppOOrganizationSlugCrmDevisQuoteIdPassationRouteImport } from './routes/_app.o.$organizationSlug.crm.devis.$quoteId.passation'
 import { Route as AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRouteImport } from './routes/_app.o.$organizationSlug.automatisation.$workflowId.executions.$runId'
+import { Route as AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRouteImport } from './routes/_app.o.$organizationSlug.projet.$projectId_.daf_.$dafId_.preview'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -777,6 +779,12 @@ const AppOOrganizationSlugProjetProjectIdDoePreviewRoute =
     path: '/projet/$projectId/doe/preview',
     getParentRoute: () => AppOOrganizationSlugRoute,
   } as any)
+const AppOOrganizationSlugProjetProjectIdDafPreviewRoute =
+  AppOOrganizationSlugProjetProjectIdDafPreviewRouteImport.update({
+    id: '/projet/$projectId_/daf_/preview',
+    path: '/projet/$projectId/daf/preview',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 const AppOOrganizationSlugProjetProjectIdDafDafIdRoute =
   AppOOrganizationSlugProjetProjectIdDafDafIdRouteImport.update({
     id: '/projet/$projectId_/daf_/$dafId',
@@ -797,6 +805,12 @@ const AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute =
       getParentRoute: () => AppOOrganizationSlugRoute,
     } as any,
   )
+const AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRoute =
+  AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRouteImport.update({
+    id: '/projet/$projectId_/daf_/$dafId_/preview',
+    path: '/projet/$projectId/daf/$dafId/preview',
+    getParentRoute: () => AppOOrganizationSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -907,10 +921,12 @@ export interface FileRoutesByFullPath {
   '/o/$organizationSlug/automatisation/$workflowId/executions/$runId': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute
   '/o/$organizationSlug/crm/devis/$quoteId/passation': typeof AppOOrganizationSlugCrmDevisQuoteIdPassationRoute
   '/o/$organizationSlug/projet/$projectId/daf/$dafId': typeof AppOOrganizationSlugProjetProjectIdDafDafIdRoute
+  '/o/$organizationSlug/projet/$projectId/daf/preview': typeof AppOOrganizationSlugProjetProjectIdDafPreviewRoute
   '/o/$organizationSlug/projet/$projectId/doe/preview': typeof AppOOrganizationSlugProjetProjectIdDoePreviewRoute
   '/o/$organizationSlug/rh/membres/$memberId/temps-de-travail': typeof AppOOrganizationSlugRhMembresMemberIdTempsDeTravailRoute
   '/o/$organizationSlug/automatisation/$workflowId/executions/': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsIndexRoute
   '/o/$organizationSlug/rh/membres/$memberId/': typeof AppOOrganizationSlugRhMembresMemberIdIndexRoute
+  '/o/$organizationSlug/projet/$projectId/daf/$dafId/preview': typeof AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRoute
 }
 export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
@@ -1018,10 +1034,12 @@ export interface FileRoutesByTo {
   '/o/$organizationSlug/automatisation/$workflowId/executions/$runId': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute
   '/o/$organizationSlug/crm/devis/$quoteId/passation': typeof AppOOrganizationSlugCrmDevisQuoteIdPassationRoute
   '/o/$organizationSlug/projet/$projectId/daf/$dafId': typeof AppOOrganizationSlugProjetProjectIdDafDafIdRoute
+  '/o/$organizationSlug/projet/$projectId/daf/preview': typeof AppOOrganizationSlugProjetProjectIdDafPreviewRoute
   '/o/$organizationSlug/projet/$projectId/doe/preview': typeof AppOOrganizationSlugProjetProjectIdDoePreviewRoute
   '/o/$organizationSlug/rh/membres/$memberId/temps-de-travail': typeof AppOOrganizationSlugRhMembresMemberIdTempsDeTravailRoute
   '/o/$organizationSlug/automatisation/$workflowId/executions': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsIndexRoute
   '/o/$organizationSlug/rh/membres/$memberId': typeof AppOOrganizationSlugRhMembresMemberIdIndexRoute
+  '/o/$organizationSlug/projet/$projectId/daf/$dafId/preview': typeof AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1134,10 +1152,12 @@ export interface FileRoutesById {
   '/_app/o/$organizationSlug/automatisation/$workflowId/executions/$runId': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute
   '/_app/o/$organizationSlug/crm/devis/$quoteId/passation': typeof AppOOrganizationSlugCrmDevisQuoteIdPassationRoute
   '/_app/o/$organizationSlug/projet/$projectId_/daf_/$dafId': typeof AppOOrganizationSlugProjetProjectIdDafDafIdRoute
+  '/_app/o/$organizationSlug/projet/$projectId_/daf_/preview': typeof AppOOrganizationSlugProjetProjectIdDafPreviewRoute
   '/_app/o/$organizationSlug/projet/$projectId_/doe_/preview': typeof AppOOrganizationSlugProjetProjectIdDoePreviewRoute
   '/_app/o/$organizationSlug/rh/membres/$memberId/temps-de-travail': typeof AppOOrganizationSlugRhMembresMemberIdTempsDeTravailRoute
   '/_app/o/$organizationSlug/automatisation/$workflowId/executions/': typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsIndexRoute
   '/_app/o/$organizationSlug/rh/membres/$memberId/': typeof AppOOrganizationSlugRhMembresMemberIdIndexRoute
+  '/_app/o/$organizationSlug/projet/$projectId_/daf_/$dafId_/preview': typeof AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1250,10 +1270,12 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/automatisation/$workflowId/executions/$runId'
     | '/o/$organizationSlug/crm/devis/$quoteId/passation'
     | '/o/$organizationSlug/projet/$projectId/daf/$dafId'
+    | '/o/$organizationSlug/projet/$projectId/daf/preview'
     | '/o/$organizationSlug/projet/$projectId/doe/preview'
     | '/o/$organizationSlug/rh/membres/$memberId/temps-de-travail'
     | '/o/$organizationSlug/automatisation/$workflowId/executions/'
     | '/o/$organizationSlug/rh/membres/$memberId/'
+    | '/o/$organizationSlug/projet/$projectId/daf/$dafId/preview'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/invite/$token'
@@ -1361,10 +1383,12 @@ export interface FileRouteTypes {
     | '/o/$organizationSlug/automatisation/$workflowId/executions/$runId'
     | '/o/$organizationSlug/crm/devis/$quoteId/passation'
     | '/o/$organizationSlug/projet/$projectId/daf/$dafId'
+    | '/o/$organizationSlug/projet/$projectId/daf/preview'
     | '/o/$organizationSlug/projet/$projectId/doe/preview'
     | '/o/$organizationSlug/rh/membres/$memberId/temps-de-travail'
     | '/o/$organizationSlug/automatisation/$workflowId/executions'
     | '/o/$organizationSlug/rh/membres/$memberId'
+    | '/o/$organizationSlug/projet/$projectId/daf/$dafId/preview'
   id:
     | '__root__'
     | '/_app'
@@ -1476,10 +1500,12 @@ export interface FileRouteTypes {
     | '/_app/o/$organizationSlug/automatisation/$workflowId/executions/$runId'
     | '/_app/o/$organizationSlug/crm/devis/$quoteId/passation'
     | '/_app/o/$organizationSlug/projet/$projectId_/daf_/$dafId'
+    | '/_app/o/$organizationSlug/projet/$projectId_/daf_/preview'
     | '/_app/o/$organizationSlug/projet/$projectId_/doe_/preview'
     | '/_app/o/$organizationSlug/rh/membres/$memberId/temps-de-travail'
     | '/_app/o/$organizationSlug/automatisation/$workflowId/executions/'
     | '/_app/o/$organizationSlug/rh/membres/$memberId/'
+    | '/_app/o/$organizationSlug/projet/$projectId_/daf_/$dafId_/preview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -2260,6 +2286,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOOrganizationSlugProjetProjectIdDoePreviewRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
+    '/_app/o/$organizationSlug/projet/$projectId_/daf_/preview': {
+      id: '/_app/o/$organizationSlug/projet/$projectId_/daf_/preview'
+      path: '/projet/$projectId/daf/preview'
+      fullPath: '/o/$organizationSlug/projet/$projectId/daf/preview'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetProjectIdDafPreviewRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
     '/_app/o/$organizationSlug/projet/$projectId_/daf_/$dafId': {
       id: '/_app/o/$organizationSlug/projet/$projectId_/daf_/$dafId'
       path: '/projet/$projectId/daf/$dafId'
@@ -2279,6 +2312,13 @@ declare module '@tanstack/react-router' {
       path: '/automatisation/$workflowId/executions/$runId'
       fullPath: '/o/$organizationSlug/automatisation/$workflowId/executions/$runId'
       preLoaderRoute: typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRouteImport
+      parentRoute: typeof AppOOrganizationSlugRoute
+    }
+    '/_app/o/$organizationSlug/projet/$projectId_/daf_/$dafId_/preview': {
+      id: '/_app/o/$organizationSlug/projet/$projectId_/daf_/$dafId_/preview'
+      path: '/projet/$projectId/daf/$dafId/preview'
+      fullPath: '/o/$organizationSlug/projet/$projectId/daf/$dafId/preview'
+      preLoaderRoute: typeof AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRouteImport
       parentRoute: typeof AppOOrganizationSlugRoute
     }
   }
@@ -2435,10 +2475,12 @@ interface AppOOrganizationSlugRouteChildren {
   AppOOrganizationSlugRhMembresIndexRoute: typeof AppOOrganizationSlugRhMembresIndexRoute
   AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute: typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute
   AppOOrganizationSlugProjetProjectIdDafDafIdRoute: typeof AppOOrganizationSlugProjetProjectIdDafDafIdRoute
+  AppOOrganizationSlugProjetProjectIdDafPreviewRoute: typeof AppOOrganizationSlugProjetProjectIdDafPreviewRoute
   AppOOrganizationSlugProjetProjectIdDoePreviewRoute: typeof AppOOrganizationSlugProjetProjectIdDoePreviewRoute
   AppOOrganizationSlugRhMembresMemberIdTempsDeTravailRoute: typeof AppOOrganizationSlugRhMembresMemberIdTempsDeTravailRoute
   AppOOrganizationSlugAutomatisationWorkflowIdExecutionsIndexRoute: typeof AppOOrganizationSlugAutomatisationWorkflowIdExecutionsIndexRoute
   AppOOrganizationSlugRhMembresMemberIdIndexRoute: typeof AppOOrganizationSlugRhMembresMemberIdIndexRoute
+  AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRoute: typeof AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRoute
 }
 
 const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
@@ -2606,6 +2648,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugAutomatisationWorkflowIdExecutionsRunIdRoute,
   AppOOrganizationSlugProjetProjectIdDafDafIdRoute:
     AppOOrganizationSlugProjetProjectIdDafDafIdRoute,
+  AppOOrganizationSlugProjetProjectIdDafPreviewRoute:
+    AppOOrganizationSlugProjetProjectIdDafPreviewRoute,
   AppOOrganizationSlugProjetProjectIdDoePreviewRoute:
     AppOOrganizationSlugProjetProjectIdDoePreviewRoute,
   AppOOrganizationSlugRhMembresMemberIdTempsDeTravailRoute:
@@ -2614,6 +2658,8 @@ const AppOOrganizationSlugRouteChildren: AppOOrganizationSlugRouteChildren = {
     AppOOrganizationSlugAutomatisationWorkflowIdExecutionsIndexRoute,
   AppOOrganizationSlugRhMembresMemberIdIndexRoute:
     AppOOrganizationSlugRhMembresMemberIdIndexRoute,
+  AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRoute:
+    AppOOrganizationSlugProjetProjectIdDafDafIdPreviewRoute,
 }
 
 const AppOOrganizationSlugRouteWithChildren =
