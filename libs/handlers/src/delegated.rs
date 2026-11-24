@@ -22,6 +22,38 @@ const DELEGATED_ROUTES: &[(Method, &str)] = &[
         Method::POST,
         "/api/v1/organizations/{organization_id}/projects/{project_id}/doe",
     ),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/dafs",
+    ),
+    (
+        Method::PUT,
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/daf-dossier",
+    ),
+    (
+        Method::POST,
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/dafs",
+    ),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/dafs/pdf",
+    ),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/dafs/{daf_id}",
+    ),
+    (
+        Method::PUT,
+        "/api/v1/organizations/{organization_id}/dafs/{daf_id}",
+    ),
+    (
+        Method::POST,
+        "/api/v1/organizations/{organization_id}/dafs/{daf_id}/photo/place",
+    ),
+    (
+        Method::GET,
+        "/api/v1/organizations/{organization_id}/dafs/{daf_id}/pdf",
+    ),
     (Method::GET, "/api/v1/organizations/{organization_id}/does"),
     (
         Method::GET,
@@ -153,6 +185,30 @@ mod tests {
         assert!(delegated_route_allowed(
             &Method::PUT,
             "/api/v1/organizations/{organization_id}/does/{doe_id}"
+        ));
+    }
+
+    #[test]
+    fn the_assistant_works_the_daf_but_never_deletes_one() {
+        const ORG: &str = "/api/v1/organizations/{organization_id}";
+        for (method, path) in [
+            (Method::GET, "/projects/{project_id}/dafs"),
+            (Method::POST, "/projects/{project_id}/dafs"),
+            (Method::PUT, "/projects/{project_id}/daf-dossier"),
+            (Method::GET, "/projects/{project_id}/dafs/pdf"),
+            (Method::GET, "/dafs/{daf_id}"),
+            (Method::PUT, "/dafs/{daf_id}"),
+            (Method::POST, "/dafs/{daf_id}/photo/place"),
+            (Method::GET, "/dafs/{daf_id}/pdf"),
+        ] {
+            assert!(
+                delegated_route_allowed(&method, &format!("{ORG}{path}")),
+                "{method} {path}"
+            );
+        }
+        assert!(!delegated_route_allowed(
+            &Method::DELETE,
+            &format!("{ORG}/dafs/{{daf_id}}")
         ));
     }
 

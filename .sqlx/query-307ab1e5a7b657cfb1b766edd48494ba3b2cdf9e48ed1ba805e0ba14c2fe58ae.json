@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, number, designation, price_ref, status, sent_on, issued_on, returned_on, review_note, updated_at\n            FROM dafs\n            WHERE project_id = $1\n            ORDER BY number\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "designation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "price_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "sent_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "issued_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "returned_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 8,
+        "name": "review_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "307ab1e5a7b657cfb1b766edd48494ba3b2cdf9e48ed1ba805e0ba14c2fe58ae"
+}

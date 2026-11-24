@@ -591,6 +591,8 @@ export namespace Schemas {
     vat_number?: (string | null) | undefined;
     website?: (string | null) | undefined;
   };
+  export type ProductId = string;
+  export type CreateDafRequest = Partial<{ designation: string | null; product_id: null | ProductId }>;
   export type CreateDealRequest = {
     amount_cents?: number | undefined;
     customer_id: CustomerId;
@@ -711,7 +713,6 @@ export namespace Schemas {
     postal_code: string;
   };
   export type InvoiceKind = "STANDARD" | "DEPOSIT" | "FINAL" | "CREDIT_NOTE";
-  export type ProductId = string;
   export type ServiceRateId = string;
   export type InvoiceLineRequest = {
     discount_percent?: (string | null) | undefined;
@@ -1133,6 +1134,58 @@ export namespace Schemas {
     oldest_due_at?: (string | null) | undefined;
     outstanding_cents: number;
   };
+  export type DafAttachment = { key: string; name: string };
+  export type DafDossierResponse = {
+    issuer: string;
+    project_id: ProjectId;
+    project_manager?: (string | null) | undefined;
+    project_owner?: (string | null) | undefined;
+    title: string;
+    updated_at?: (string | null) | undefined;
+  };
+  export type DafId = string;
+  export type DafStatus = "pending" | "accepted" | "rejected_with_comments" | "rejected";
+  export type SupplierSnapshot = {
+    address?: (string | null) | undefined;
+    email?: (string | null) | undefined;
+    name: string;
+    phone?: (string | null) | undefined;
+  };
+  export type DafResponse = {
+    attachments: Array<DafAttachment>;
+    created_at: string;
+    designation: string;
+    id: DafId;
+    installer?: (string | null) | undefined;
+    issued_on: string;
+    number: number;
+    observations?: (string | null) | undefined;
+    photo_key?: (string | null) | undefined;
+    price_ref?: (string | null) | undefined;
+    project_id: ProjectId;
+    project_manager?: (string | null) | undefined;
+    project_owner?: (string | null) | undefined;
+    returned_on?: (string | null) | undefined;
+    review_note?: (string | null) | undefined;
+    sent_on?: (string | null) | undefined;
+    source_product_id?: (null | ProductId) | undefined;
+    specs?: (string | null) | undefined;
+    status: DafStatus;
+    supplier?: (null | SupplierSnapshot) | undefined;
+    updated_at: string;
+  };
+  export type DafSummaryResponse = {
+    designation: string;
+    id: DafId;
+    issued_on: string;
+    number: number;
+    price_ref?: (string | null) | undefined;
+    returned_on?: (string | null) | undefined;
+    review_note?: (string | null) | undefined;
+    sent_on?: (string | null) | undefined;
+    status: DafStatus;
+    updated_at: string;
+  };
   export type DayLogId = string;
   export type EmployeeId = string;
   export type DayLogResponse = {
@@ -1247,12 +1300,6 @@ export namespace Schemas {
   };
   export type Revision = string;
   export type SupplyPhotoColumns = "one" | "two" | "three";
-  export type SupplierSnapshot = {
-    address?: (string | null) | undefined;
-    email?: (string | null) | undefined;
-    name: string;
-    phone?: (string | null) | undefined;
-  };
   export type DoeSupply = {
     datasheet_keys: Array<string>;
     designation: string;
@@ -2207,6 +2254,7 @@ export namespace Schemas {
   };
   export type PatchTaskResponse = { detached: boolean; task: TaskResponse };
   export type PayExpenseRequest = { method: PaymentMethod; paid_on: string };
+  export type PlaceDafPhotoRequest = { photo_id: LibraryPhotoId };
   export type PlacementTarget = "section" | "supply" | "cover";
   export type PlacementItem = {
     caption?: (string | null) | undefined;
@@ -2384,6 +2432,7 @@ export namespace Schemas {
     topic?: (string | null) | undefined;
     updated_at: string;
   };
+  export type ProjectDafsResponse = { dafs: Array<DafSummaryResponse>; dossier: DafDossierResponse };
   export type ProjectDoeStyleResponse = { inherited: DoeStyle; style?: (null | DoeStyle) | undefined };
   export type ProjectSupplierCostLineResponse = {
     allocation_id: SupplierInvoiceLineAllocationId;
@@ -3000,6 +3049,31 @@ export namespace Schemas {
     status: CustomerStatus;
     vat_number?: (string | null) | undefined;
     website?: (string | null) | undefined;
+  };
+  export type UpdateDafDossierRequest = {
+    issuer: string;
+    project_manager?: (string | null) | undefined;
+    project_owner?: (string | null) | undefined;
+    title: string;
+  };
+  export type UpdateDafRequest = {
+    attachments?: Array<DafAttachment> | undefined;
+    designation: string;
+    expected_updated_at?: (string | null) | undefined;
+    installer?: (string | null) | undefined;
+    issued_on: string;
+    number: number;
+    observations?: (string | null) | undefined;
+    photo_key?: (string | null) | undefined;
+    price_ref?: (string | null) | undefined;
+    project_manager?: (string | null) | undefined;
+    project_owner?: (string | null) | undefined;
+    returned_on?: (string | null) | undefined;
+    review_note?: (string | null) | undefined;
+    sent_on?: (string | null) | undefined;
+    specs?: (string | null) | undefined;
+    status: DafStatus;
+    supplier?: (null | SupplierSnapshot) | undefined;
   };
   export type UpdateDealRequest = {
     amount_cents: number;
@@ -8012,6 +8086,146 @@ export namespace Endpoints {
       422: unknown;
     };
   };
+  export type get_GetDaf = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/dafs/{daf_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; daf_id: string };
+    };
+    responses: {
+      200: {
+        data: {
+          attachments: Array<Schemas.DafAttachment>;
+          created_at: string;
+          designation: string;
+          id: Schemas.DafId;
+          installer?: (string | null) | undefined;
+          issued_on: string;
+          number: number;
+          observations?: (string | null) | undefined;
+          photo_key?: (string | null) | undefined;
+          price_ref?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          project_manager?: (string | null) | undefined;
+          project_owner?: (string | null) | undefined;
+          returned_on?: (string | null) | undefined;
+          review_note?: (string | null) | undefined;
+          sent_on?: (string | null) | undefined;
+          source_product_id?: (null | Schemas.ProductId) | undefined;
+          specs?: (string | null) | undefined;
+          status: Schemas.DafStatus;
+          supplier?: (null | Schemas.SupplierSnapshot) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type put_UpdateDaf = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/dafs/{daf_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; daf_id: string };
+
+      body: Schemas.UpdateDafRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          attachments: Array<Schemas.DafAttachment>;
+          created_at: string;
+          designation: string;
+          id: Schemas.DafId;
+          installer?: (string | null) | undefined;
+          issued_on: string;
+          number: number;
+          observations?: (string | null) | undefined;
+          photo_key?: (string | null) | undefined;
+          price_ref?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          project_manager?: (string | null) | undefined;
+          project_owner?: (string | null) | undefined;
+          returned_on?: (string | null) | undefined;
+          review_note?: (string | null) | undefined;
+          sent_on?: (string | null) | undefined;
+          source_product_id?: (null | Schemas.ProductId) | undefined;
+          specs?: (string | null) | undefined;
+          status: Schemas.DafStatus;
+          supplier?: (null | Schemas.SupplierSnapshot) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type delete_DeleteDaf = {
+    method: "DELETE";
+    path: "/api/v1/organizations/{organization_id}/dafs/{daf_id}";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; daf_id: string };
+    };
+    responses: { 204: unknown; 401: unknown; 403: unknown; 404: unknown };
+  };
+  export type get_ExportDafPdf = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/dafs/{daf_id}/pdf";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; daf_id: string };
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
+  export type post_PlaceDafPhoto = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/dafs/{daf_id}/photo/place";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; daf_id: string };
+
+      body: Schemas.PlaceDafPhotoRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          attachments: Array<Schemas.DafAttachment>;
+          created_at: string;
+          designation: string;
+          id: Schemas.DafId;
+          installer?: (string | null) | undefined;
+          issued_on: string;
+          number: number;
+          observations?: (string | null) | undefined;
+          photo_key?: (string | null) | undefined;
+          price_ref?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          project_manager?: (string | null) | undefined;
+          project_owner?: (string | null) | undefined;
+          returned_on?: (string | null) | undefined;
+          review_note?: (string | null) | undefined;
+          sent_on?: (string | null) | undefined;
+          source_product_id?: (null | Schemas.ProductId) | undefined;
+          specs?: (string | null) | undefined;
+          status: Schemas.DafStatus;
+          supplier?: (null | Schemas.SupplierSnapshot) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
   export type get_ListDayOverrides = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/day-overrides";
@@ -12324,6 +12538,101 @@ export namespace Endpoints {
       409: unknown;
     };
   };
+  export type put_SaveDafDossier = {
+    method: "PUT";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/daf-dossier";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+
+      body: Schemas.UpdateDafDossierRequest;
+    };
+    responses: {
+      200: {
+        data: {
+          issuer: string;
+          project_id: Schemas.ProjectId;
+          project_manager?: (string | null) | undefined;
+          project_owner?: (string | null) | undefined;
+          title: string;
+          updated_at?: (string | null) | undefined;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ListDafs = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/dafs";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+    };
+    responses: {
+      200: {
+        data: { dafs: Array<Schemas.DafSummaryResponse>; dossier: Schemas.DafDossierResponse };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+    };
+  };
+  export type post_CreateDaf = {
+    method: "POST";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/dafs";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+
+      body: Schemas.CreateDafRequest;
+    };
+    responses: {
+      201: {
+        data: {
+          attachments: Array<Schemas.DafAttachment>;
+          created_at: string;
+          designation: string;
+          id: Schemas.DafId;
+          installer?: (string | null) | undefined;
+          issued_on: string;
+          number: number;
+          observations?: (string | null) | undefined;
+          photo_key?: (string | null) | undefined;
+          price_ref?: (string | null) | undefined;
+          project_id: Schemas.ProjectId;
+          project_manager?: (string | null) | undefined;
+          project_owner?: (string | null) | undefined;
+          returned_on?: (string | null) | undefined;
+          review_note?: (string | null) | undefined;
+          sent_on?: (string | null) | undefined;
+          source_product_id?: (null | Schemas.ProductId) | undefined;
+          specs?: (string | null) | undefined;
+          status: Schemas.DafStatus;
+          supplier?: (null | Schemas.SupplierSnapshot) | undefined;
+          updated_at: string;
+        };
+        pagination?: (null | Schemas.PaginationMetadata) | undefined;
+      };
+      401: unknown;
+      403: unknown;
+      404: unknown;
+      409: unknown;
+    };
+  };
+  export type get_ExportDafDossierPdf = {
+    method: "GET";
+    path: "/api/v1/organizations/{organization_id}/projects/{project_id}/dafs/pdf";
+    requestFormat: "json";
+    parameters: {
+      path: { organization_id: string; project_id: string };
+    };
+    responses: { 200: unknown; 401: unknown; 403: unknown; 404: unknown; 409: unknown };
+  };
   export type get_GetProjectDoe = {
     method: "GET";
     path: "/api/v1/organizations/{organization_id}/projects/{project_id}/doe";
@@ -16019,6 +16328,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.get_GetOrganizationBillingSettings;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.get_ListCustomUnits;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.get_ListCustomers;
+    "/api/v1/organizations/{organization_id}/dafs/{daf_id}": Endpoints.get_GetDaf;
+    "/api/v1/organizations/{organization_id}/dafs/{daf_id}/pdf": Endpoints.get_ExportDafPdf;
     "/api/v1/organizations/{organization_id}/day-overrides": Endpoints.get_ListDayOverrides;
     "/api/v1/organizations/{organization_id}/deals": Endpoints.get_ListDeals;
     "/api/v1/organizations/{organization_id}/deals/summary": Endpoints.get_GetDealSummary;
@@ -16084,6 +16395,8 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/projects": Endpoints.get_ListProjects;
     "/api/v1/organizations/{organization_id}/projects/{project_id}": Endpoints.get_GetProject;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/channel": Endpoints.get_GetProjectChannel;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/dafs": Endpoints.get_ListDafs;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/dafs/pdf": Endpoints.get_ExportDafDossierPdf;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/doe": Endpoints.get_GetProjectDoe;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.get_GetProjectDoeStyle;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.get_ListQuotes;
@@ -16183,6 +16496,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/runs": Endpoints.post_StartRun;
     "/api/v1/organizations/{organization_id}/custom-units": Endpoints.post_CreateCustomUnit;
     "/api/v1/organizations/{organization_id}/customers": Endpoints.post_CreateCustomer;
+    "/api/v1/organizations/{organization_id}/dafs/{daf_id}/photo/place": Endpoints.post_PlaceDafPhoto;
     "/api/v1/organizations/{organization_id}/deals": Endpoints.post_CreateDeal;
     "/api/v1/organizations/{organization_id}/doe-models": Endpoints.post_CreateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-models/from-starter": Endpoints.post_CreateDoeModelFromStarter;
@@ -16247,6 +16561,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/restore": Endpoints.post_RestoreProjectTemplate;
     "/api/v1/organizations/{organization_id}/projects": Endpoints.post_CreateProject;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/channel": Endpoints.post_CreateProjectChannel;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/dafs": Endpoints.post_CreateDaf;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/doe": Endpoints.post_CreateDoe;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/restore": Endpoints.post_RestoreProject;
     "/api/v1/organizations/{organization_id}/quotes": Endpoints.post_CreateQuote;
@@ -16311,6 +16626,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/settings": Endpoints.put_UpdateAutomationSettings;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}/versions": Endpoints.put_SaveWorkflowVersion;
     "/api/v1/organizations/{organization_id}/billing-settings": Endpoints.put_ReplaceOrganizationBillingSettings;
+    "/api/v1/organizations/{organization_id}/dafs/{daf_id}": Endpoints.put_UpdateDaf;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.put_UpdateDoeModel;
     "/api/v1/organizations/{organization_id}/doe-settings": Endpoints.put_UpdateDoeSettings;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.put_UpdateDoe;
@@ -16325,6 +16641,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/members/{member_id}/profile": Endpoints.put_PutMemberProfile;
     "/api/v1/organizations/{organization_id}/numbering/{kind}": Endpoints.put_SetOrganizationNextNumber;
     "/api/v1/organizations/{organization_id}/project-templates/{project_template_id}/tasks": Endpoints.put_ReplaceProjectTemplateTasks;
+    "/api/v1/organizations/{organization_id}/projects/{project_id}/daf-dossier": Endpoints.put_SaveDafDossier;
     "/api/v1/organizations/{organization_id}/projects/{project_id}/doe-style": Endpoints.put_UpdateProjectDoeStyle;
     "/api/v1/organizations/{organization_id}/suppliers/{supplier_id}": Endpoints.put_UpdateSupplier;
     "/api/v1/organizations/{organization_id}/support/settings": Endpoints.put_ReplaceSupportSettings;
@@ -16363,6 +16680,7 @@ export type EndpointByMethod = {
     "/api/v1/organizations/{organization_id}/automation/credentials/{credential_id}": Endpoints.delete_DeleteAutomationCredential;
     "/api/v1/organizations/{organization_id}/automation/folders/{folder_id}": Endpoints.delete_DeleteWorkflowFolder;
     "/api/v1/organizations/{organization_id}/automation/workflows/{workflow_id}": Endpoints.delete_DeleteWorkflow;
+    "/api/v1/organizations/{organization_id}/dafs/{daf_id}": Endpoints.delete_DeleteDaf;
     "/api/v1/organizations/{organization_id}/doe-models/{doe_model_id}": Endpoints.delete_ArchiveDoeModel;
     "/api/v1/organizations/{organization_id}/does/{doe_id}": Endpoints.delete_DeleteDoe;
     "/api/v1/organizations/{organization_id}/knowledge/articles/{article_id}": Endpoints.delete_DeleteKnowledgeArticle;

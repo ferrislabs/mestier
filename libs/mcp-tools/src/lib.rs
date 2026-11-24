@@ -138,10 +138,17 @@ pub enum Tool {
     ListTableRows,
     CreateTableRow,
     UpdateTableRow,
+    ListDafs,
+    GetDaf,
+    CreateDaf,
+    UpdateDaf,
+    UpdateDafDossier,
+    PlaceDafPhoto,
+    ExportDafPdf,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 80] = [
+    pub const ALL: [Tool; 87] = [
         Tool::ListOrganizations,
         Tool::ListProjects,
         Tool::GetProject,
@@ -222,6 +229,13 @@ impl Tool {
         Tool::ListTableRows,
         Tool::CreateTableRow,
         Tool::UpdateTableRow,
+        Tool::ListDafs,
+        Tool::GetDaf,
+        Tool::CreateDaf,
+        Tool::UpdateDaf,
+        Tool::UpdateDafDossier,
+        Tool::PlaceDafPhoto,
+        Tool::ExportDafPdf,
     ];
 
     /// The name MCP clients call the tool by.
@@ -307,6 +321,13 @@ impl Tool {
             Self::ListTableRows => "list_table_rows",
             Self::CreateTableRow => "create_table_row",
             Self::UpdateTableRow => "update_table_row",
+            Self::ListDafs => "list_dafs",
+            Self::GetDaf => "get_daf",
+            Self::CreateDaf => "create_daf",
+            Self::UpdateDaf => "update_daf",
+            Self::UpdateDafDossier => "update_daf_dossier",
+            Self::PlaceDafPhoto => "place_daf_photo",
+            Self::ExportDafPdf => "export_daf_pdf",
         }
     }
 
@@ -357,7 +378,11 @@ impl Tool {
             | Self::CreateKnowledgeFolder
             | Self::MoveKnowledgeArticles
             | Self::CreateTableRow
-            | Self::UpdateTableRow => Access::Write,
+            | Self::UpdateTableRow
+            | Self::CreateDaf
+            | Self::UpdateDaf
+            | Self::UpdateDafDossier
+            | Self::PlaceDafPhoto => Access::Write,
             Self::ListOrganizations
             | Self::ListProjects
             | Self::GetProject
@@ -393,7 +418,10 @@ impl Tool {
             | Self::ListKnowledgeFolder
             | Self::ListTables
             | Self::GetTable
-            | Self::ListTableRows => Access::Read,
+            | Self::ListTableRows
+            | Self::ListDafs
+            | Self::GetDaf
+            | Self::ExportDafPdf => Access::Read,
         }
     }
 
@@ -438,7 +466,14 @@ impl Tool {
             | Self::ExportDoePdf
             | Self::SearchPhotoLibrary
             | Self::TagLibraryPhotos
-            | Self::PlaceDoeFiles => "doe",
+            | Self::PlaceDoeFiles
+            | Self::ListDafs
+            | Self::GetDaf
+            | Self::CreateDaf
+            | Self::UpdateDaf
+            | Self::UpdateDafDossier
+            | Self::PlaceDafPhoto
+            | Self::ExportDafPdf => "doe",
             Self::SearchKnowledge
             | Self::GetKnowledgeArticle
             | Self::CreateKnowledgeNote
@@ -573,6 +608,7 @@ mod tests {
                 "add_task_comment",
                 "create_customer",
                 "create_customer_contact",
+                "create_daf",
                 "create_deal",
                 "create_doe",
                 "create_knowledge_folder",
@@ -591,12 +627,15 @@ mod tests {
                 "link_knowledge_article",
                 "move_deal_stage",
                 "move_knowledge_articles",
+                "place_daf_photo",
                 "place_doe_files",
                 "reorder_doe_sections",
                 "set_quote_status",
                 "tag_library_photos",
                 "update_customer",
                 "update_customer_contact",
+                "update_daf",
+                "update_daf_dossier",
                 "update_deal",
                 "update_doe_file",
                 "update_doe_header",
@@ -612,6 +651,26 @@ mod tests {
                 "update_task",
             ]
         );
+    }
+
+    #[test]
+    fn the_daf_tools_share_the_doe_domain_and_never_delete() {
+        let expected = [
+            (Tool::ListDafs, Access::Read),
+            (Tool::GetDaf, Access::Read),
+            (Tool::CreateDaf, Access::Write),
+            (Tool::UpdateDaf, Access::Write),
+            (Tool::UpdateDafDossier, Access::Write),
+            (Tool::PlaceDafPhoto, Access::Write),
+            (Tool::ExportDafPdf, Access::Read),
+        ];
+        for (tool, access) in expected {
+            assert_eq!(tool.access(), access, "{tool}");
+            assert_eq!(tool.domain(), "doe", "{tool}");
+            assert!(tool.is_organization_scoped(), "{tool}");
+            assert!(tool.name().contains("daf"), "{tool}");
+            assert!(!tool.name().contains("delete"), "{tool}");
+        }
     }
 
     #[test]

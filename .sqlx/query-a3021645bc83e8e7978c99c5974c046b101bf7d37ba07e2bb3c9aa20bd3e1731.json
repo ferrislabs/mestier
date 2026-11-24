@@ -1,0 +1,166 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE dafs\n            SET number = $2, designation = $3, price_ref = $4, source_product_id = $5, supplier = $6,\n                installer = $7, specs = $8, observations = $9, photo_key = $10, attachments = $11,\n                project_owner = $12, project_manager = $13, status = $14, sent_on = $15,\n                issued_on = $16, returned_on = $17, review_note = $18, updated_at = $19\n            WHERE id = $1\n            RETURNING id, org_id, project_id, number, designation, price_ref, source_product_id, supplier, installer, specs, observations, photo_key, attachments, project_owner, project_manager, status, sent_on, issued_on, returned_on, review_note, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "designation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "price_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "source_product_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "supplier",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "installer",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "specs",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "observations",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "photo_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "attachments",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "project_owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "project_manager",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "sent_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 17,
+        "name": "issued_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 18,
+        "name": "returned_on",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 19,
+        "name": "review_note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text",
+        "Text",
+        "Uuid",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "Date",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "a3021645bc83e8e7978c99c5974c046b101bf7d37ba07e2bb3c9aa20bd3e1731"
+}

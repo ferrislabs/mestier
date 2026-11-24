@@ -192,6 +192,31 @@ function DoeCard({
 	)
 }
 
+function DafCard({
+	organizationSlug,
+	projectId,
+}: {
+	organizationSlug: string
+	projectId: string
+}) {
+	return (
+		<div className="grid gap-3">
+			<p className="text-[13px] text-muted-foreground">
+				Demandes d’agrément de fourniture et leur sommaire.
+			</p>
+			<Button size="sm" variant="outline" className="w-fit" asChild>
+				<Link
+					to={buildOrgPath(organizationSlug, '/projet/$projectId/daf')}
+					params={{ projectId }}
+				>
+					<FileText aria-hidden />
+					Ouvrir les DAF
+				</Link>
+			</Button>
+		</div>
+	)
+}
+
 function CustomerBlock({ customer }: { customer: ProjectCustomerInfo | null }) {
 	if (!customer)
 		return (
@@ -383,6 +408,14 @@ export function ProjectDetailUI({
 							canOpenDoe={canOpenDoe}
 						/>
 					</SectionCard>
+					{canOpenDoe ? (
+						<SectionCard title="DAF">
+							<DafCard
+								organizationSlug={organizationSlug}
+								projectId={project.id}
+							/>
+						</SectionCard>
+					) : null}
 					<SectionCard title="Informations">
 						<DetailList>
 							<DetailRow label="Client">

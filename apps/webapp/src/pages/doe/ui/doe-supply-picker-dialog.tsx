@@ -25,6 +25,7 @@ interface DoeSupplyPickerDialogProps {
 	search: string
 	pickedIds: ReadonlySet<string>
 	isDrafting: boolean
+	description?: string
 	error: string | null
 	onSearchChange: (search: string) => void
 	onToggle: (productId: string, checked: boolean) => void
@@ -38,6 +39,7 @@ export function DoeSupplyPickerDialog({
 	search,
 	pickedIds,
 	isDrafting,
+	description = 'Cocher un produit en copie la fiche dans ce DOE. Décocher la retire.',
 	error,
 	onSearchChange,
 	onToggle,
@@ -49,9 +51,7 @@ export function DoeSupplyPickerDialog({
 			<DialogContent className="flex max-h-[85dvh] flex-col gap-0 p-0 sm:max-w-xl">
 				<DialogHeader className="border-b px-6 py-4 pr-12">
 					<DialogTitle>Piocher dans le catalogue</DialogTitle>
-					<DialogDescription>
-						Cocher un produit en copie la fiche dans ce DOE. Décocher la retire.
-					</DialogDescription>
+					<DialogDescription>{description}</DialogDescription>
 				</DialogHeader>
 				<div className="grid gap-2 px-6 py-4">
 					<Label htmlFor={`${baseId}-search`} className="sr-only">
