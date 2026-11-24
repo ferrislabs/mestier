@@ -5,9 +5,9 @@
 #let primary = rgb(style.primary)
 #let secondary = rgb(style.secondary)
 #let on_primary = rgb(style.on_primary)
-#let value_fill = secondary.lighten(82%)
-#let label_fill = luma(238)
-#let band_fill = luma(214)
+#let value_fill = white
+#let label_fill = white
+#let band_fill = white
 #let rule = 0.5pt + luma(150)
 
 #set text(lang: "fr", font: style.body_font, size: 9.5pt)
@@ -35,6 +35,10 @@
 } else {
   value.replace("\r", "").split("\n").join(linebreak())
 }
+
+// A price reference does not wrap ("-" before a digit is no break point),
+// so a long one shrinks to stay inside its column.
+#let reference(value) = text(size: if value.len() > 16 { 6.5pt } else if value.len() > 13 { 7.5pt } else { 8.5pt }, value)
 
 #let arrow = box(baseline: 1pt, polygon(fill: primary, stroke: none, (0pt, 0pt), (5pt, 3pt), (0pt, 6pt)))
 #let label(body) = table.cell(fill: label_fill)[
@@ -90,13 +94,16 @@
   if length > 1400 { 6.5pt } else if length > 900 { 7.5pt } else if length > 450 { 8.5pt } else { 9.5pt }
 }
 
-#let sheet_page(sheet) = {
+#let visa_height = 1.6cm
+#let specs_min = 4.6cm
+
+#let sheet_body(sheet, specs_height) = {
   banner(sheet.label, sheet.issued_on)
   v(8pt)
   let supplier = sheet.supplier
   let names = sheet.attachments.map(attachment => attachment.name)
   let photo = if sheet.photo_key != none {
-    block(width: 100%, height: 6.5cm, align(center + horizon, picture(
+    block(width: 100%, height: specs_height, align(center + horizon, picture(
       sheet.photo_key,
       width: 100%,
       height: 100%,
@@ -130,13 +137,13 @@
     table.cell(fill: value_fill)[
       #grid(
         columns: (0pt, 1fr),
-        box(height: 4.6cm),
+        box(height: specs_height),
         text(size: specs_size(sheet.specs), multiline(sheet.specs)),
       )
     ],
-    table.cell(rowspan: 2, align: center + horizon, photo),
+    table.cell(align: center + horizon, photo),
     label([Pièces jointes]),
-    table.cell(fill: value_fill, if names.len() > 0 { names.join(linebreak()) }),
+    table.cell(colspan: 2, fill: value_fill, text(size: 8.5pt, names.join([ · ]))),
     band([OBSERVATIONS]),
     table.cell(colspan: 3, fill: value_fill)[
       #grid(
@@ -165,11 +172,19 @@
     )[#text(weight: "bold", head)]),
     ..([Maîtrise d'Ouvrage], [Maîtrise d'Œuvre]).map(party => (
       label(party),
-      table.cell(inset: (x: 7pt, y: 14pt), text(size: 8.5pt, [date :])),
-      table.cell(inset: (x: 7pt, y: 14pt), text(size: 8.5pt, [date :])),
-      table.cell(inset: (x: 7pt, y: 14pt), text(size: 8.5pt, [date :])),
+      ..range(3).map(_ => table.cell(align: top, box(height: visa_height - 14pt, text(size: 8.5pt, [date :])))),
     )).flatten(),
   )
+}
+
+// The technical specs stretch to fill whatever the page leaves free.
+#let sheet_page(sheet) = {
+  layout(size => {
+    let first = size.height - measure(width: size.width, sheet_body(sheet, 0pt)).height
+    let guess = calc.max(specs_min, first)
+    let gap = size.height - measure(width: size.width, sheet_body(sheet, guess)).height
+    sheet_body(sheet, calc.max(specs_min, guess + gap - 2pt))
+  })
   for attachment in sheet.attachments { attachment_pages(attachment.key) }
 }
 
@@ -204,7 +219,7 @@
     #titled(primary, weight: "bold", size: 11pt, [Récapitulatif des D.A.F])
   ]
   table(
-    columns: (2.5cm, 1.7cm, 1fr, 1.9cm, 1.9cm, 2.2cm, 2.4cm),
+    columns: (2.3cm, 2.6cm, 1fr, 2.05cm, 2.05cm, 2.1cm, 2.4cm),
     stroke: rule,
     inset: (x: 5pt, y: 6pt),
     align: horizon,
@@ -218,7 +233,7 @@
     ),
     ..summary.rows.map(row => (
       text(weight: "bold", row.label),
-      if row.price_ref != none { row.price_ref },
+      if row.price_ref != none { reference(row.price_ref) },
       row.designation,
       fr(row.sent_on),
       fr(row.issued_on),
